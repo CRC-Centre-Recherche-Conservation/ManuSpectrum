@@ -1,0 +1,2256 @@
+
+> build_development
+> npm run eslint:check && npm run ts:check && cross-env NODE_OPTIONS=--max-old-space-size=2048 webpack --config ./webpack/webpack.config.dev.js
+
+
+> eslint:check
+> eslint **/src
+
+
+> ts:check
+> vue-tsc --noEmit
+
+Data imported from .frontend-configuration-settings.json: {
+  _comment: 'This is a generated file. Do not edit directly.',
+  APP_ROOT: '/home/rayondemiel/manuspectrum/manuspectrum',
+  ARCHES_APPLICATIONS: [ 'manuspectrum', 'arches_for_science' ],
+  ARCHES_APPLICATIONS_PATHS: {
+    manuspectrum: '/home/rayondemiel/manuspectrum/manuspectrum',
+    arches_for_science: '/home/rayondemiel/venv/lib/python3.11/site-packages/arches_for_science'
+  },
+  SITE_PACKAGES_DIRECTORY: '/home/rayondemiel/venv/lib/python3.11/site-packages',
+  PUBLIC_SERVER_ADDRESS: 'http://localhost:8000/',
+  ROOT_DIR: '/home/rayondemiel/venv/lib/python3.11/site-packages/arches',
+  STATIC_URL: '/static/',
+  WEBPACK_DEVELOPMENT_SERVER_PORT: 9000
+}
+Loading "/templates/views/report-templates/default.htm" from Django server...
+Loading "/templates/views/report-templates/map.htm" from Django server...
+Loading "/templates/views/report-templates/tabbed.htm" from Django server...
+Loading "/templates/views/report-templates/image.htm" from Django server...
+Loading "/templates/views/components/map.htm" from Django server...
+Loading "/templates/views/components/map-popup.htm" from Django server...
+Loading "/templates/views/components/icon-selector.htm" from Django server...
+Loading "/templates/views/components/resource-report-abstract.htm" from Django server...
+Loading "/templates/views/components/notification.htm" from Django server...
+Loading "/templates/views/components/language-switcher.htm" from Django server...
+Loading "/templates/views/components/nodegroup-selector.htm" from Django server...
+Loading "/templates/views/components/related-resources-graph.htm" from Django server...
+Loading "/templates/views/components/related-instance-creator.htm" from Django server...
+Loading "/templates/views/components/simple-switch.htm" from Django server...
+Loading "/templates/views/components/iiif-popup.htm" from Django server...
+Loading "/templates/views/components/cards/default.htm" from Django server...
+Loading "/templates/views/components/cards/file-viewer.htm" from Django server...
+Loading "/templates/views/components/plugins/workflow-step.htm" from Django server...
+Loading "/templates/views/components/iiif-viewer.htm" from Django server...
+Loading "/templates/views/components/cards/map.htm" from Django server...
+Loading "/templates/views/components/cards/photo-gallery-card.htm" from Django server...
+Loading "/templates/views/components/cards/grouping.htm" from Django server...
+Loading "/templates/views/components/cards/iiif-card.htm" from Django server...
+Loading "/templates/views/components/datatypes/boolean.htm" from Django server...
+Loading "/templates/views/components/cards/related-resources-map.htm" from Django server...
+Loading "/templates/views/components/datatypes/concept.htm" from Django server...
+Loading "/templates/views/components/cards/related-resources-map-popup.htm" from Django server...
+Loading "/templates/views/components/datatypes/domain-value.htm" from Django server...
+Loading "/templates/views/components/datatypes/date.htm" from Django server...
+Loading "/templates/views/components/datatypes/edtf.htm" from Django server...
+Loading "/templates/views/components/datatypes/file-list.htm" from Django server...
+Loading "/templates/views/components/datatypes/node-value.htm" from Django server...
+Loading "/templates/views/components/datatypes/geojson-feature-collection.htm" from Django server...
+Loading "/templates/views/components/cards/file-renderers/imagereader.htm" from Django server...
+Loading "/templates/views/components/datatypes/non-localized-string.htm" from Django server...
+Loading "/templates/views/components/datatypes/url.htm" from Django server...
+Loading "/templates/views/components/datatypes/number.htm" from Django server...
+Loading "/templates/views/components/datatypes/resource-instance.htm" from Django server...
+Loading "/templates/views/components/cards/file-renderers/pdfreader.htm" from Django server...
+Loading "/templates/views/components/datatypes/string.htm" from Django server...
+Loading "/templates/views/components/etl_modules/branch-excel-exporter.htm" from Django server...
+Loading "/templates/views/components/etl_modules/base-bulk-string-editor.htm" from Django server...
+Loading "/templates/views/components/etl_modules/branch-excel-importer.htm" from Django server...
+Loading "/templates/views/components/etl_modules/bulk-data-deletion.htm" from Django server...
+Loading "/templates/views/components/etl_modules/tile-excel-exporter.htm" from Django server...
+Loading "/templates/views/components/etl_modules/bulk_edit_concept.htm" from Django server...
+Loading "/templates/views/components/etl_modules/jsonld-importer.htm" from Django server...
+Loading "/templates/views/components/etl_modules/tile-excel-importer.htm" from Django server...
+Loading "/templates/views/components/etl_modules/import-single-csv.htm" from Django server...
+Loading "/templates/views/components/plugins/etl-manager.htm" from Django server...
+Loading "/templates/views/components/plugins/map.htm" from Django server...
+Loading "/templates/views/components/functions/primary-descriptors.htm" from Django server...
+Loading "/templates/views/components/plugins/manifest-manager.htm" from Django server...
+Loading "/templates/views/components/geocoders/geocoder.htm" from Django server...
+Loading "/templates/views/components/search/related-resources-filter.htm" from Django server...
+Loading "/templates/views/components/functions/local-file-storage.htm" from Django server...
+Loading "/templates/views/components/search/paging-filter.htm" from Django server...
+Loading "/templates/views/components/search/advanced-search.htm" from Django server...
+Loading "/templates/views/components/search/saved-searches.htm" from Django server...
+Loading "/templates/views/components/search/provisional-filter.htm" from Django server...
+Loading "/templates/views/components/search/resource-type-filter.htm" from Django server...
+Loading "/templates/views/components/search/search-result-details.htm" from Django server...
+Loading "/templates/views/components/search/search-export.htm" from Django server...
+Loading "/templates/views/components/search/sort-results.htm" from Django server...
+Loading "/templates/views/components/search/time-filter.htm" from Django server...
+Loading "/templates/views/components/search/map-filter.htm" from Django server...
+Loading "/templates/views/components/search/standard-search-view.htm" from Django server...
+Loading "/templates/views/components/search/term-filter.htm" from Django server...
+Loading "/templates/views/components/search/search-results.htm" from Django server...
+Loading "/templates/views/components/widgets/checkbox.htm" from Django server...
+Loading "/templates/views/components/widgets/concept-select.htm" from Django server...
+Loading "/templates/views/components/widgets/datepicker.htm" from Django server...
+Loading "/templates/views/components/widgets/select.htm" from Django server...
+Loading "/templates/views/components/widgets/radio.htm" from Django server...
+Loading "/templates/views/components/widgets/map.htm" from Django server...
+Loading "/templates/views/components/widgets/iiif.htm" from Django server...
+Loading "/templates/views/components/widgets/edtf.htm" from Django server...
+Loading "/templates/views/components/map-widget-editor.htm" from Django server...
+Loading "/templates/views/components/widgets/file.htm" from Django server...
+Loading "/templates/views/components/widgets/number.htm" from Django server...
+Loading "/templates/views/components/widgets/non-localized-text.htm" from Django server...
+Loading "/templates/views/components/widgets/switch.htm" from Django server...
+Loading "/templates/views/components/widgets/node-value-select.htm" from Django server...
+Loading "/templates/views/components/widgets/rich-text.htm" from Django server...
+Loading "/templates/views/components/workbench.htm" from Django server...
+Loading "/templates/views/components/widgets/resource-instance-select.htm" from Django server...
+Loading "/templates/views/components/widgets/urldatatype.htm" from Django server...
+Loading "/templates/views/components/widgets/text.htm" from Django server...
+Loading "/templates/views/components/workflows/final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/new-multi-tile-step.htm" from Django server...
+Loading "/templates/views/components/workflows/new-tile-step.htm" from Django server...
+Loading "/templates/views/components/widgets/radio-boolean.htm" from Django server...
+Loading "/templates/views/components/workflows/workflow-component-abstract.htm" from Django server...
+Loading "/templates/views/resource/permissions/permissions-manager.htm" from Django server...
+Loading "/templates/views/resource/related-resources/related-resources-manager.htm" from Django server...
+Loading "/templates/views/components/file-upload.htm" from Django server...
+Loading "/templates/views/components/annotation-summary.htm" from Django server...
+Loading "/templates/views/components/card_components/aws-file-viewer.htm" from Django server...
+Loading "/templates/views/components/resource-instance-creator.htm" from Django server...
+Loading "/templates/views/components/functions/multicard-resource-descriptor.htm" from Django server...
+Loading "/templates/views/components/functions/file-to-iiif.htm" from Django server...
+Loading "/templates/views/components/plugins/add-chemical-analysis-images-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/project-collection-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/analysis-areas-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/chemical-analysis-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/create-project-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/project-report-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/review-dataset-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/sample-taking-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/upload-dataset-workflow.htm" from Django server...
+Loading "/templates/views/components/plugins/file-configuration.htm" from Django server...
+Loading "/templates/views/components/plugins/importer-configuration.htm" from Django server...
+Loading "/templates/views/components/plugins/init-workflow.htm" from Django server...
+Loading "/templates/views/components/cards/file-renderers/pdbreader.htm" from Django server...
+Loading "/templates/views/components/cards/file-renderers/afs-reader.htm" from Django server...
+Loading "/templates/views/components/cards/file-renderers/pcdreader.htm" from Django server...
+Loading "/templates/views/components/cards/file-renderers/xy-reader.htm" from Django server...
+Loading "/templates/views/components/reports/collection-set.htm" from Django server...
+Loading "/templates/views/components/reports/digital-resource.htm" from Django server...
+Loading "/templates/views/components/reports/period.htm" from Django server...
+Loading "/templates/views/components/reports/instrument.htm" from Django server...
+Loading "/templates/views/components/reports/modification.htm" from Django server...
+Loading "/templates/views/components/reports/place.htm" from Django server...
+Loading "/templates/views/components/reports/provenance-activity.htm" from Django server...
+Loading "/templates/views/components/reports/person.htm" from Django server...
+Loading "/templates/views/components/reports/sampling-activity.htm" from Django server...
+Loading "/templates/views/components/reports/textual-work.htm" from Django server...
+Loading "/templates/views/components/reports/visual-work.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/communication.htm" from Django server...
+Loading "/templates/views/components/reports/group.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/annotation-parts.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/description.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/default.htm" from Django server...
+Loading "/templates/views/components/reports/project.htm" from Django server...
+Loading "/templates/views/report-templates/thematic.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/json.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/keyvalue.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/documentation.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/substance.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/name.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/location.htm" from Django server...
+Loading "/templates/views/components/reports/observation.htm" from Django server...
+Loading "/templates/views/components/reports/scenes/existence.htm" from Django server...
+Loading "/templates/views/components/workflows/select-observation-step.htm" from Django server...
+Loading "/templates/views/components/workflows/select-phys-thing-step.htm" from Django server...
+Loading "/templates/views/components/reports/physical-thing.htm" from Django server...
+Loading "/templates/views/components/workflows/add-chemical-analysis-images-workflow/add-chemical-analysis-images-final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/add-chemical-analysis-images-workflow/add-chemical-analysis-images-image-step.htm" from Django server...
+Loading "/templates/views/components/workflows/analysis-areas-workflow/analysis-areas-annotation-step.htm" from Django server...
+Loading "/templates/views/components/workflows/analysis-areas-workflow/analysis-areas-final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/analysis-areas-workflow/analysis-areas-image-step.htm" from Django server...
+Loading "/templates/views/components/workflows/chemical-analysis-workflow/ca-final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/chemical-analysis-workflow/ca-upload-files-step.htm" from Django server...
+Loading "/templates/views/components/workflows/chemical-analysis-workflow/ca-instrument-info-step.htm" from Django server...
+Loading "/templates/views/components/workflows/project-collection-workflow/project-collection-final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/create-project-workflow/create-project-final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/create-project-workflow/project-name-step.htm" from Django server...
+Loading "/templates/views/components/workflows/create-project-workflow/add-things-step.htm" from Django server...
+Loading "/templates/views/components/workflows/project-report-workflow/report-template-select.htm" from Django server...
+Loading "/templates/views/components/workflows/project-report-workflow/project-report-select.htm" from Django server...
+Loading "/templates/views/components/workflows/project-report-workflow/download-report.htm" from Django server...
+Loading "/templates/views/components/workflows/project-report-workflow/download-project-files.htm" from Django server...
+Loading "/templates/views/components/workflows/project-report-workflow/add-annotations.htm" from Django server...
+Loading "/templates/views/components/workflows/review-dataset/select-dataset.htm" from Django server...
+Loading "/templates/views/components/workflows/upload-dataset/upload-dataset-final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/review-dataset/review-dataset-final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/upload-dataset/dataset-step.htm" from Django server...
+Loading "/templates/views/components/functions/multi-descriptor.htm" from Django server...
+Loading "/templates/views/components/workflows/upload-dataset/select-renderer-step.htm" from Django server...
+Loading "/templates/views/components/workflows/upload-dataset/instrument-info-step.htm" from Django server...
+Loading "/templates/views/components/workflows/upload-dataset/file-interpretation-step.htm" from Django server...
+Loading "/templates/views/components/workflows/upload-dataset/select-dataset-files-step.htm" from Django server...
+Loading "/templates/views/components/workflows/upload-dataset/upload-files-step.htm" from Django server...
+Loading "/templates/views/components/workflows/sample-taking-workflow/sample-taking-image-step.htm" from Django server...
+Loading "/templates/views/components/workflows/sample-taking-workflow/sample-taking-final-step.htm" from Django server...
+Loading "/templates/views/components/workflows/sample-taking-workflow/sample-taking-sample-location-step.htm" from Django server...
+Loading "/templates/views/components/workflows/sample-taking-workflow/sampling-info-step.htm" from Django server...
+assets by status 152 KiB [cached] 2 assets
+assets by path js/ 1.9 GiB 391 assets
+assets by path css/ 2 MiB 147 assets
+assets by path img/ 2.9 MiB
+  assets by path img/*.png 128 KiB 46 assets
+  assets by path img/*.ttf 645 KiB 9 assets
+  assets by path img/*.svg 1.35 MiB 6 assets
+  assets by path img/*.eot 372 KiB 5 assets
+  assets by path img/*.woff 315 KiB 5 assets
+  assets by path img/*.woff2 122 KiB 3 assets
+  asset img/56d4c7ce2d3591a02107.gif 1.81 KiB [emitted] [immutable] [from: ../venv/lib/python3.11/site-packages/arches/app/media/img/select2-spinner.gif] (auxiliary name: css/arches, css/jqtree)
+
+WARNING in ../venv/lib/python3.11/site-packages/arches_for_science/media/js/views/components/cards/aws-file-viewer.js 33:8-35:10
+Critical dependency: the request of a dependency is an expression
+
+WARNING in ./manuspectrum/media/css/themes/_project.scss (./manuspectrum/media/css/themes/_project.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!./manuspectrum/media/css/themes/_project.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ./manuspectrum/media/css/themes/_project.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_breakpoint-settings.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_breakpoint-settings.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_breakpoint-settings.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_breakpoint-settings.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss 1:9      root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "functions";
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/accessibility.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/accessibility.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/accessibility.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/accessibility.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/app.css (../venv/lib/python3.11/site-packages/arches/app/media/css/app.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/app.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/app.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 8604:5               root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 8604:5              root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 8604:5              root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 24, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:24:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+24 | @import "abstracts";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 25:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 25, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:25:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+25 | @import "sidenav";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 26:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 26, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:26:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+26 | @import "edit-history";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 27:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 27, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:27:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+27 | @import "tree";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 28:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 28, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:28:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+28 | @import "jqtree";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 29:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 11996, column 30 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:11996:30:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.adjust instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+11996 |             background-color: lighten($controls-background, 15%);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 11997:31  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 11996, column 30 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:11996:30:
+lighten() is deprecated. Suggestions:
+
+color.scale($color, $lightness: 100%)
+color.adjust($color, $lightness: 15%)
+
+More info: https://sass-lang.com/d/color-functions
+
+11996 |             background-color: lighten($controls-background, 15%);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 11997:31  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 11999, column 30 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:11999:30:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.adjust instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+11999 |             background-color: lighten($controls-background, 8%);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 12000:31  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 11999, column 30 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:11999:30:
+lighten() is deprecated. Suggestions:
+
+color.scale($color, $lightness: 100%)
+color.adjust($color, $lightness: 8%)
+
+More info: https://sass-lang.com/d/color-functions
+
+11999 |             background-color: lighten($controls-background, 8%);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 12000:31  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 12070, column 15 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:12070:15:
+darken() is deprecated. Suggestions:
+
+color.scale($color, $lightness: -100%)
+color.adjust($color, $lightness: -100%)
+
+More info: https://sass-lang.com/d/color-functions
+
+12070 |         color: darken(#213e5f, 100%);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 12071:16  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 12167, column 23 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:12167:23:
+darken() is deprecated. Suggestions:
+
+color.scale($color, $lightness: -100%)
+color.adjust($color, $lightness: -100%)
+
+More info: https://sass-lang.com/d/color-functions
+
+12167 |                 color: darken(rgb(29, 61, 116), 100%);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 12168:24  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 12177, column 27 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss:12177:27:
+darken() is deprecated. Suggestions:
+
+color.scale($color, $lightness: -26.9841269841%)
+color.adjust($color, $lightness: -20%)
+
+More info: https://sass-lang.com/d/color-functions
+
+12177 |                     color: darken($accent-color, 20%);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss 12178:28  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+14 repetitive deprecation warnings omitted.
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/arches.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base-manager.css (../venv/lib/python3.11/site-packages/arches/app/media/css/base-manager.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base-manager.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base-manager.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 1:9        root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts/functions";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5          root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5         root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5         root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 1:9        @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9           root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts/functions";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 1:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9     root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "elements";
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5          @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9             root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5         @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9            root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5         @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9            root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss 1:9   root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts/functions";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss 37:5    root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss 37:5   root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss 37:5   root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_dropdown.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_dropdown.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_dropdown.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_dropdown.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_icon-selector.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_icon-selector.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_icon-selector.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_icon-selector.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "buttons";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 1, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss:1:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+1 | @import "dropdown";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss 2:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 2, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss:2:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+2 | @import "datatypes";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss 3:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 3, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss:3:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+3 | @import "icon-selector";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss 4:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 4, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss:4:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+4 | @import "links";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss 5:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss 37:5    @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss 1:9       root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss 37:5   @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss 1:9      root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_buttons.scss 37:5   @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss 1:9      root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+23 repetitive deprecation warnings omitted.
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_links.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_links.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_links.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_links.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_map.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/_map.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/_map.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/_map.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_geojson-feature-collection.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_geojson-feature-collection.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_geojson-feature-collection.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_geojson-feature-collection.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "geojson-feature-collection";
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/datatypes/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9                @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts/functions";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17              break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss 6:2  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9               break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss 6:2  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9               break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss 6:2  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "advanced-search";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 1, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss:1:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+1 | @import "time-filter";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss 2:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 2, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss:2:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+2 | @import "term-search";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss 3:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 3, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss:3:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+3 | @import "related-resources";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss 4:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 4, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss:4:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+4 | @import "search-results";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss 5:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17              break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss 6:2  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss 1:9            root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9               break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss 6:2  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss 1:9            root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9               break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_advanced-search.scss 6:2  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss 1:9            root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+4 repetitive deprecation warnings omitted.
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9                  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts/functions";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17                break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss 5:3  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9                 break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss 5:3  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9                 break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss 5:3  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_related-resources.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9               @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts/functions.scss";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17             break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss 5:5  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9              break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss 5:5  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9              break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss 5:5  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_search-results.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_term-search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_term-search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_term-search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_term-search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_time-filter.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_time-filter.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_time-filter.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/search/_time-filter.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_checkbox.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_checkbox.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_checkbox.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_checkbox.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_datepicker.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_datepicker.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_datepicker.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_datepicker.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_edtf.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_edtf.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_edtf.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_edtf.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_file.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_file.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_file.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_file.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "number";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 1, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss:1:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+1 | @import "checkbox";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss 2:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 2, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss:2:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+2 | @import "datepicker";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss 3:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 3, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss:3:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+3 | @import "file";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss 4:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 4, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss:4:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+4 | @import "edtf";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss 5:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+4 repetitive deprecation warnings omitted.
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_map.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_map.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_map.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_map.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_number.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_number.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_number.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_number.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_radio.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_radio.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_radio.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_radio.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_switch.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_switch.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_switch.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_switch.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_text.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_text.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_text.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/components/widgets/_text.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/core.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 1, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/core.scss:1:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+1 | @import "base";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss 2:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 2, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/core.scss:2:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+2 | @import "pages";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss 3:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 3, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/core.scss:3:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+3 | @import "components";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss 4:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 4, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/core.scss:4:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+4 | @import "layout";
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss 5:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5          @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9             @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss 2:9                    root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5         @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9            @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss 2:9                   root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_elements.scss 5:5         @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/base/_index.scss 1:9            @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss 2:9                   root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+44 repetitive deprecation warnings omitted.
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/core.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/edit-history.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/edit-history.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/edit-history.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/edit-history.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/index-slider-legacy.css (../venv/lib/python3.11/site-packages/arches/app/media/css/index-slider-legacy.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/index-slider-legacy.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/index-slider-legacy.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/index-slider.css (../venv/lib/python3.11/site-packages/arches/app/media/css/index-slider.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/index-slider.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/index-slider.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/index.css (../venv/lib/python3.11/site-packages/arches/app/media/css/index.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/index.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/index.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/jqtree.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/jqtree.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/jqtree.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/jqtree.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "leftnav"
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_leftnav.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_leftnav.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_leftnav.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/layout/_leftnav.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/main.css (../venv/lib/python3.11/site-packages/arches/app/media/css/main.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/main.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/main.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/nifty.css (../venv/lib/python3.11/site-packages/arches/app/media/css/nifty.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/nifty.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/nifty.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/package.css (../venv/lib/python3.11/site-packages/arches/app/media/css/package.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/package.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/package.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/page_job_inner.css (../venv/lib/python3.11/site-packages/arches/app/media/css/page_job_inner.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/page_job_inner.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/page_job_inner.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/page_404_error3.css (../venv/lib/python3.11/site-packages/arches/app/media/css/page_404_error3.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/page_404_error3.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/page_404_error3.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "themes/default";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "colors";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss 1:9        @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 7, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss:7:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+7 | @import "themes/project";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss 8:9        @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_authentication.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_base.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_base.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_base.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_base.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "base";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 1, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss:1:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+1 | @import "landingpage";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss 2:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 2, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss:2:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+2 | @import "authentication";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss 3:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 3, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss:3:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+3 | @import "profile-manager";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss 4:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 4, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss:4:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+4 | @import "search";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss 5:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss 4:5           @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss 5:9            root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss 4:5          @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss 5:9           root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss 4:5          @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss 5:9           root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+8 repetitive deprecation warnings omitted.
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_landingpage.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_landingpage.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_landingpage.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_landingpage.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_profile-manager.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_profile-manager.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_profile-manager.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_profile-manager.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_rdm.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_rdm.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_rdm.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_rdm.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss 1:9         root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts/functions";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss 9:17          root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss 9:17         root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss 9:17         root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_report.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import 'breakpoint-settings';
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 1:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss 1:9         root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "abstracts/functions";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 14, column 16 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:14:16:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use map.get instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+14 |     $raw-query: map-get($breakpoints, $breakpoint);
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 15:17  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss 4:5           root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 18, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:18:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.type-of instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+18 |         type-of($raw-query) == 'string',
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 19:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss 4:5          root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 20, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss:20:8:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use meta.inspect instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+20 |         inspect($raw-query)
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/abstracts/_functions.scss 21:9  break-at()
+../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss 4:5          root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/pages/_search.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins.css (../venv/lib/python3.11/site-packages/arches/app/media/css/plugins.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/plugins.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/animate.css (../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/animate.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/animate.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/animate.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/box-shadows.css (../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/box-shadows.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/box-shadows.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/box-shadows.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/custom-sky-forms.css (../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/custom-sky-forms.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/custom-sky-forms.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/custom-sky-forms.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/custom-hover-effects.css (../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/custom-hover-effects.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/custom-hover-effects.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/custom-hover-effects.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/hover-min.css (../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/hover-min.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/hover-min.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/hover-min.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/hover.css (../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/hover.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/hover.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/plugins/hover-effect/css/hover.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/rdm.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/rdm.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/rdm.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/rdm.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/rtl.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/rtl.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/rtl.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/rtl.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/sidenav.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/sidenav.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/sidenav.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/sidenav.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_colors.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_colors.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_colors.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_colors.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "colors";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 7, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss:7:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+7 | @import "themes/project";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss 8:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "colors";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss 1:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss 1:9    root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 0, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss:0:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+0 | @import "default";
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss 1:9  root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation Warning on line 7, column 8 of file:///home/rayondemiel/venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss:7:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+7 | @import "themes/project";
+
+
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_default.scss 8:9  @import
+../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss 1:9    root stylesheet
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/themes/_index.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/tree.scss (../venv/lib/python3.11/site-packages/arches/app/media/css/tree.scss.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/tree.scss)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/tree.scss
+
+WARNING in ../venv/lib/python3.11/site-packages/arches/app/media/css/tree/tree.css (../venv/lib/python3.11/site-packages/arches/app/media/css/tree/tree.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches/app/media/css/tree/tree.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches/app/media/css/tree/tree.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches_for_science/media/css/project.css (../venv/lib/python3.11/site-packages/arches_for_science/media/css/project.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches_for_science/media/css/project.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches_for_science/media/css/project.css
+
+WARNING in ../venv/lib/python3.11/site-packages/arches_for_science/media/css/report_templates.css (../venv/lib/python3.11/site-packages/arches_for_science/media/css/report_templates.css.webpack[javascript/auto]!=!./node_modules/css-loader/dist/cjs.js!./node_modules/postcss-loader/dist/cjs.js!./node_modules/sass-loader/dist/cjs.js??clonedRuleSet-5.use[3]!../venv/lib/python3.11/site-packages/arches_for_science/media/css/report_templates.css)
+Module Warning (from ./node_modules/sass-loader/dist/cjs.js):
+Deprecation The legacy JS API is deprecated and will be removed in Dart Sass 2.0.0.
+
+More info: https://sass-lang.com/d/legacy-js-api
+ @ ../venv/lib/python3.11/site-packages/arches_for_science/media/css/report_templates.css
+
+1 warning has detailed information that is not shown.
+Use 'stats.errorDetails: true' resp. '--stats-error-details' to show it.
+
+webpack 5.97.1 compiled with 185 warnings in 36976 ms
