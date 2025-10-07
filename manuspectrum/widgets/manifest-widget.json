@@ -1,0 +1,7 @@
+{
+    "name": "manifest-widget",
+    "component": "views/components/widgets/manifest-widget",
+    "defaultconfig": {},
+    "helptext": null,
+    "datatype": "manifest"
+}

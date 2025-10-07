@@ -1,0 +1,197 @@
+{% extends "views/components/widgets/base.htm" %}
+{% load i18n %}
+
+{% block display_value %}
+<!-- Display in editor tree -->
+<span data-bind="text: manifestLabel() || 'IIIF Manifest'"></span>
+<span style="color: #999; font-size: 0.9em;" data-bind="if: manifestUrl">
+    (<span data-bind="text: manifestUrl"></span>)
+</span>
+{% endblock display_value %}
+
+{% block form %}
+<div class="manifest-widget">
+    <div class="form-group">
+        <label class="control-label">
+            {% trans "IIIF Manifest" %}
+        </label>
+        <select class="form-control input-lg widget-input"
+                data-bind="select2Query: { select2Config: manifestSelectConfig }">
+        </select>
+        <small class="help-block">
+            {% trans "Enter Manifest URL" %} / {% trans "Select a manifest" %}
+        </small>
+    </div>
+
+    <!-- Loading indicator -->
+    <!-- ko if: loading() -->
+    <div class="text-center" style="padding: 10px;">
+        <i class="fa fa-spinner fa-spin"></i> {% trans "Loading manifest" %}
+    </div>
+    <!-- /ko -->
+
+    <!-- Error message -->
+    <!-- ko if: manifestError() -->
+    <div class="alert alert-danger">
+        <i class="fa fa-exclamation-triangle"></i>
+        <span data-bind="text: errorMessage"></span>
+    </div>
+    <!-- /ko -->
+
+    <!-- Manifest preview -->
+    <!-- ko if: manifestUrl() && !loading() && !manifestError() -->
+    <div class="manifest-preview">
+        <!-- Thumbnail if available -->
+        <!-- ko if: manifestThumbnail() -->
+        <div class="manifest-thumbnail">
+            <img data-bind="attr: { src: manifestThumbnail(), alt: manifestLabel() || 'IIIF Manifest' }">
+        </div>
+        <!-- /ko -->
+
+        <div class="manifest-info">
+            <h4 data-bind="text: manifestLabel"></h4>
+            <!-- ko if: manifestDescription -->
+            <p data-bind="text: manifestDescription"></p>
+            <!-- /ko -->
+            <small class="text-muted" data-bind="text: manifestUrl"></small>
+        </div>
+
+        <button class="btn btn-sm btn-danger" data-bind="click: clearManifest">
+            <i class="fa fa-trash"></i> {% trans "Clear" %}
+        </button>
+    </div>
+    <!-- /ko -->
+</div>
+{% endblock form %}
+
+<!-- REPORT Manifest IIIF-->
+{% block report %}
+<dt data-bind="text: label, class: nodeCssClasses"></dt>
+<dd>
+    <!-- ko if: manifestUrl -->
+    <div class="manifest-widget-report">
+        <!-- Display manifest title and link -->
+        <div style="margin-bottom: 10px;">
+            <strong data-bind="text: manifestLabel() || 'IIIF Manifest'"></strong><br>
+            <a data-bind="attr: { href: manifestUrl }, text: manifestUrl" target="_blank" style="font-size: 0.9em; color: #5b9bd7;"></a>
+        </div>
+
+        <!-- IIIF Viewer -->
+        <div
+          data-bind="component: {
+              name: 'iiif-viewer',
+              params: {
+                  manifest: manifestUrl(),
+                  expandGallery: expandGallery,
+                  showGallery: showGallery,
+                  editManifest: false
+              }
+          }"
+          style="
+            aspect-ratio: 2 / 1;
+            width: 200%;
+            max-height: 90vh;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+          "
+        ></div>
+    </div>
+    <!-- /ko -->
+    <!-- ko ifnot: manifestUrl -->
+    <span data-bind="text: $root.translations.none || 'None'"></span>
+    <!-- /ko -->
+</dd>
+{% endblock report %}
+
+<style>
+.manifest-widget {
+    padding: 10px;
+}
+
+.manifest-preview {
+    margin-top: 15px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f9f9f9;
+    display: flex;
+    gap: 15px;
+}
+
+.manifest-thumbnail {
+    flex-shrink: 0;
+    width: 120px;
+    height: 120px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.manifest-thumbnail img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.manifest-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.manifest-info h4 {
+    margin: 0 0 10px 0;
+    color: #333;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.manifest-info p {
+    margin: 5px 0;
+    color: #666;
+}
+
+.manifest-info small {
+    word-break: break-all;
+}
+
+/* Fix for select2 input visibility */
+.manifest-widget .select2-container {
+    width: 100% !important;
+}
+
+.manifest-widget .select2-search__field {
+    width: 100% !important;
+}
+
+/* Report mode styles */
+.manifest-widget-report {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.manifest-widget-report .iiif-viewer {
+    width: 100%;
+    position: relative;
+}
+
+.manifest-widget-report .iiif-leaflet {
+    height: 500px !important;
+    width: 100% !important;
+}
+
+.manifest-widget-report .iiif-viewer-gallery {
+    position: relative !important;
+    height: 108px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+.manifest-widget-report .show-gallery-control {
+    position: relative !important;
+}
+</style>
