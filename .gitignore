@@ -12,7 +12,8 @@ manuspectrum/media/build/
 manuspectrum/uploadedfiles/*
 manuspectrum/settings_local.py
 manuspectrum/archestemp/
-manuspectrum/pkg/
+pkg/
+supervisor/
 
 webpack-stats.json
 .vscode/
