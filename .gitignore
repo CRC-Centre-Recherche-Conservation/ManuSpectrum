@@ -1,6 +1,7 @@
 *.pyc
 *.log
 *.pid
+celerybeat-schedule
 node_modules
 coverage/
 manuspectrum/logs
