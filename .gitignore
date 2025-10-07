@@ -1,0 +1,27 @@
+*.pyc
+*.log
+node_modules
+coverage/
+manuspectrum/logs
+manuspectrum/export_deliverables
+manuspectrum/cantaloupe/*
+manuspectrum/staticfiles
+manuspectrum/media/packages
+manuspectrum/media/build/
+manuspectrum/uploadedfiles/*
+manuspectrum/settings_local.py
+manuspectrum/archestemp/
+manuspectrum/pkg/
+
+webpack-stats.json
+.vscode/
+*.egg-info
+.DS_STORE
+CACHE
+.tsconfig-paths.json
+.frontend-configuration-settings.json
+frontend_configuration
+
+# Packaging
+build/
+dist/
