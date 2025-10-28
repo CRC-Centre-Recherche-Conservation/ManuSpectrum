@@ -8,4 +8,4 @@ class ManuspectrumConfig(AppConfig):
 
     def ready(self):
         if settings.APP_NAME.lower() == self.name:
-            pass
+            from manuspectrum.utils import search_thumbnail_fetchers
