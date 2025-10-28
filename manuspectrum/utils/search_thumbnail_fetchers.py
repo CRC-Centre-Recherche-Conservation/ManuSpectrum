@@ -292,7 +292,7 @@ class ComponentThumbnailFetcher(SearchThumbnailFetcher):
             logger.error(f"Error calculating bounding box: {e}")
             return None
 
-    @SearchThumbnailFetcherFactory.register('72ac748a-7368-41e7-9f54-99be41319fac')
+    @SearchThumbnailFetcherFactory.register('60c85aba-f079-45bc-997f-21cdd4f77b6d')
     class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
         """
         Fetcher for analysis resources with manifest or IIIF annotations
