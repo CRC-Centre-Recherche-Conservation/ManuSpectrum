@@ -3,6 +3,8 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path
 
+from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView, IIIFAnnotationPageView, IIIFAnnotationView
+
 urlpatterns = [
     path("reports/", include("arches_templating.urls")),
     #path("", include("arches_controlled_lists.urls")),
@@ -30,3 +32,18 @@ if settings.ROOT_URLCONF == __name__:
         urlpatterns = i18n_patterns(*urlpatterns)
 
     urlpatterns.append(path("i18n/", include("django.conf.urls.i18n")))
+
+
+### Manuspectrum URL
+
+urlpatterns.append(path('iiif/annotation-collection/<uuid:resource_id>',
+         IIIFAnnotationCollectionView.as_view(),
+         name='iiif-annotation-collection'))
+
+urlpatterns.append(path('iiif/annotation/<uuid:resource_id>',
+         IIIFAnnotationView.as_view(),
+         name='iiif-annotation'))
+
+urlpatterns.append(path('iiif/annotation-collection/<uuid:resource_id>/page-<int:page_num>',
+         IIIFAnnotationPageView.as_view(),
+         name='iiif-annotation-page'))
