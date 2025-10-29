@@ -294,3 +294,90 @@ class BBoxCalculator:
         except Exception as e:
             logger.error(f"Error calculating point bbox: {e}")
             return None
+
+    @staticmethod
+    def geometry_to_xywh(geometry, canvas_width, canvas_height, zoom=5, margin=10, radius=10):
+        """
+        Convert a GeoJSON geometry object to an IIIF xywh fragment.
+
+        The behavior automatically adapts depending on the given margin or radius:
+          - If `margin > 0` (for polygons or lines), a visual bbox with margin is computed.
+          - If `margin == 0`, an exact bbox is computed (tight fit, for IIIF or precise data).
+          - If `radius > 0` (for points), a visual bbox is computed around the point.
+          - If `radius == 0`, an exact 1x1 pixel bbox is returned.
+
+        Args:
+            geometry (dict): GeoJSON geometry object.
+            canvas_width (int): Width of the canvas (in pixels).
+            canvas_height (int): Height of the canvas (in pixels).
+            zoom (int, optional): Zoom level (scaling factor = 2 ** zoom). Defaults to 5.
+            margin (int, optional): Margin around polygons/lines (0 = exact). Defaults to 10.
+            radius (int, optional): Radius around points (0 = exact). Defaults to 10.
+
+        Returns:
+            str | None:
+                IIIF fragment string in the form "xywh=x,y,w,h", or None if the geometry is invalid.
+
+        Example:
+            >>> geom = {"type": "Polygon", "coordinates": [[(1.0, 1.0), (2.0, 1.0), (2.0, 2.0), (1.0, 2.0)]]}
+            >>> geometry_to_xywh(geom, 1024, 1024, margin=0)
+            'xywh=32,32,44,44'
+            >>> point = {"type": "Point", "coordinates": [1.5, 2.0]}
+            >>> geometry_to_xywh(point, 1024, 1024, radius=0)
+            'xywh=48,32,1,1'
+        """
+        if not geometry:
+            return None
+
+        geometry_type = geometry.get("type")
+        coordinates = geometry.get("coordinates")
+
+        if not coordinates:
+            return None
+
+        try:
+            # --- Points ---
+            if geometry_type == "Point":
+                bbox = BBoxCalculator.point_bbox(
+                    coordinates,
+                    canvas_width,
+                    canvas_height,
+                    zoom=zoom,
+                    radius=radius,
+                )
+
+            # --- Polygons ---
+            elif geometry_type == "Polygon":
+                bbox = BBoxCalculator.polygon_bbox(
+                    coordinates,
+                    canvas_width,
+                    canvas_height,
+                    zoom=zoom,
+                    margin=margin,
+                )
+
+            # --- Lines (treated like polygons for bbox calculation) ---
+            elif geometry_type == "LineString":
+                poly_coords = [coordinates]
+                bbox = BBoxCalculator.polygon_bbox(
+                    poly_coords,
+                    canvas_width,
+                    canvas_height,
+                    zoom=zoom,
+                    margin=margin,
+                )
+
+            else:
+                logger.warning(f"Unsupported geometry type: {geometry_type}")
+                return None
+
+            if bbox:
+                x, y, w, h = bbox
+                return f"xywh={x},{y},{w},{h}"
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error converting geometry to xywh: {e}")
+            return None
+
