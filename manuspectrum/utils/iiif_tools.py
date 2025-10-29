@@ -149,6 +149,27 @@ class CanvasIIIF:
             return service.get('id')
         return None
 
+    @staticmethod
+    def get_image_service_dimensions(image_service_url):
+        try:
+            info_url = f"{image_service_url}/info.json"
+            response = requests.get(info_url, timeout=10)
+
+            if response.status_code == 200:
+                info_data = response.json()
+                width = info_data.get('width')
+                height = info_data.get('height')
+
+                if width and height:
+                    logger.info(f"Retrieved dimensions from Image Service: {width}x{height}")
+                    return (width, height)
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch dimensions from {image_service_url}: {e}")
+
+        logger.warning(f"Using default dimensions for {image_service_url}")
+        return (1000, 1000)
+
 
 # -------------------
 # BBox Calculator
