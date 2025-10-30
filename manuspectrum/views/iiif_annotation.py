@@ -164,7 +164,7 @@ class IIIFAnnotationMixin:
                     "analysis_label": props.get("label") or "",
                 })
             except Exception as e:
-                logger.error(f"Error parsing annotation: {e}", exc_info=True)
+                logger.error(f"Error parsing annotation: {e}")
         return annotations
 
 
@@ -209,7 +209,7 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
         except Exception as e:
-            logger.error(f"Error generating collection: {e}", exc_info=True)
+            logger.error(f"Error generating collection: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
     def _get_related_analyses(self, resource: ResourceInstance) -> list[Resource]:
@@ -362,7 +362,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
         except Exception as e:
-            logger.error(f"Error generating IIIF page: {e}", exc_info=True)
+            logger.error(f"Error generating IIIF page: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -403,7 +403,7 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
         except Resource.DoesNotExist:
             return JsonResponse({"error": "Annotation not found"}, status=404)
         except Exception as e:
-            logger.error(f"Error generating annotation: {e}", exc_info=True)
+            logger.error(f"Error generating annotation: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -491,7 +491,7 @@ def invalidate_on_vwannotation_change(sender, instance: VwAnnotation, **kwargs):
         analysis_uuid = instance.resourceinstance_id
         _invalidate_for_analysis_id(analysis_uuid)
     except Exception as e:
-        logger.error(f"Cache invalidation (VwAnnotation) failed: {e}", exc_info=True)
+        logger.error(f"Cache invalidation (VwAnnotation) failed: {e}")
 
 
 @receiver([post_save, post_delete], sender=ResourceXResource)
@@ -528,4 +528,4 @@ def invalidate_on_relation_change(sender, instance: ResourceXResource, **kwargs)
                 _delete_page_patterns(doc_id)
 
     except Exception as e:
-        logger.error(f"Cache invalidation (ResourceXResource) failed: {e}", exc_info=True)
+        logger.error(f"Cache invalidation (ResourceXResource) failed: {e}")
