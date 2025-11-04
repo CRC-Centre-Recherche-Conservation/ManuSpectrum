@@ -102,6 +102,7 @@ class IIIFAnnotationSerializer:
 class IIIFAnnotationMixin:
     """Shared helpers: display name, canvas dimensions, conversions, bulk fetching."""
     base_url = settings.PUBLIC_SERVER_ADDRESS + "iiif"
+    CACHE_TIMEOUT = settings.CACHE_BY_USER["anonymous"]
 
     def _get_display_name(self, resource):
         if hasattr(resource, "displayname"):
@@ -186,7 +187,6 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
     ANALYSIS_GRAPH_ID = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
     DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
     COMPONENT_GRAPH_ID = "d47595b4-f8a6-419c-8f33-b388206280c4"
-    CACHE_TIMEOUT = 60 * 60  # 1 hour
 
     def get(self, request, resource_id):
         cache_key = f"iiif_collection_{resource_id}"
@@ -309,7 +309,6 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
     URL: /iiif/annotation-collection/<uuid:resource_id>/page-<int:page_num>
     """
-    CACHE_TIMEOUT = 60 * 60  # 1 hour
 
     def get(self, request, resource_id, page_num: int):
         cache_key = f"iiif_page_{resource_id}_{page_num}"
@@ -377,7 +376,6 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
     URL: /iiif/annotation/<uuid:resource_id>
     """
     ANALYSIS_GRAPH_ID = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
-    CACHE_TIMEOUT = 60 * 60  # 1 hour
 
     def get(self, request, resource_id):
         cache_key = f"iiif_annotation_{resource_id}"
