@@ -18,6 +18,8 @@ from django.dispatch import receiver
 from arches.app.models.models import ResourceInstance, ResourceXResource, VwAnnotation
 from arches.app.models.resource import Resource
 
+from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializer
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,31 +70,6 @@ def get_cached_response(cache_key: str) -> HttpResponse | None:
         resp["ETag"] = etag
     resp["Cache-Control"] = "public, max-age=3600"
     return resp
-
-
-# ======================================================================================
-# Serializer (DRF-like, minimal)
-# ======================================================================================
-
-class IIIFAnnotationSerializer:
-    """Builds a IIIF Presentation v3 Annotation dictionary from internal data."""
-    base_url = settings.PUBLIC_SERVER_ADDRESS + "iiif"
-
-    @classmethod
-    def to_representation(cls, anno_data: dict, target: str) -> dict:
-        return {
-            "@context": "http://iiif.io/api/presentation/3/context.json",
-            "id": f"{cls.base_url}/annotation/{anno_data['id']}",
-            "type": "Annotation",
-            "motivation": "supplementing",
-            "body": {
-                "type": "TextualBody",
-                "value": anno_data.get("analysis_label", ""),
-                "format": "text/plain",
-                "language": "fr",
-            },
-            "target": target,
-        }
 
 
 # ======================================================================================
@@ -201,8 +178,11 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
                 return JsonResponse({"error": "No analyses found"}, status=404)
 
             annotations = self._get_annotations_from_analyses(analyses)
-            grouped = self._group_by_canvas(annotations)
-            collection = self._build_annotation_collection(resource, grouped)
+            if not annotations:
+                return JsonResponse({"error": "No annotations found for analyses"}, status=404)
+
+            grouped_annos = self._group_by_canvas(annotations)
+            collection = self._build_annotation_collection(resource, grouped_annos)
 
             return cached_json_response(cache_key, collection, self.CACHE_TIMEOUT)
 
@@ -258,20 +238,20 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
                 grouped[canvas].append(a)
         return grouped
 
-    def _build_annotation_collection(self, resource: ResourceInstance, grouped: dict) -> dict:
+    def _build_annotation_collection(self, resource: ResourceInstance, grouped_annos: dict) -> dict:
         collection_id = f"{self.base_url}/annotation-collection/{resource.resourceinstanceid}"
         pages = []
-        canvas_uris = list(grouped.keys())
+        canvas_uris = list(grouped_annos.keys())
         total = 0
 
         for idx, canvas_uri in enumerate(canvas_uris):
-            annos = grouped[canvas_uri]
+            annos = grouped_annos[canvas_uri]
             total += len(annos)
 
             items = []
             for a in annos:
                 target = self._convert_geojson_to_iiif_target(a)
-                items.append(IIIFAnnotationSerializer.to_representation(a, target))
+                items.append(IIIFAnnotationSerializer.to_representation(target, resource_id=str(a['analysis_id'])))
 
             page = {
                 "id": f"{collection_id}/page-{idx}",
@@ -338,7 +318,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
             items = []
             for a in annos:
                 target = self._convert_geojson_to_iiif_target(a)
-                items.append(IIIFAnnotationSerializer.to_representation(a, target))
+                items.append(IIIFAnnotationSerializer.to_representation(target, resource_id=str(a['analysis_id'])))
 
             page = {
                 "@context": "http://iiif.io/api/presentation/3/context.json",
@@ -394,7 +374,7 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
             anno = annos[0]  # 1 analysis -> 1 annotation (your data model)
             target = self._convert_geojson_to_iiif_target(anno)
-            iiif_annotation = IIIFAnnotationSerializer.to_representation(anno, target)
+            iiif_annotation = IIIFAnnotationSerializer.to_representation(target, resource_id=str(resource_id))
 
             return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
 
@@ -426,9 +406,7 @@ def _delete_page_patterns(resource_id):
     pattern = f"iiif_page_{resource_id}_*"
     try:
         cache.delete_pattern(pattern)
-        # ETags for pages are not kept separately by pattern; they get dropped with payloads.
     except Exception:
-        # Fallback (if backend doesn't support delete_pattern): do nothing.
         pass
 
 
@@ -438,11 +416,8 @@ def _invalidate_for_analysis_id(analysis_uuid):
       - the single annotation cache for this analysis
       - any collections/pages that include this analysis via Component and/or Document.
     """
-    # Drop the single-annotation cache
     _delete_cache_keys([f"iiif_annotation_{analysis_uuid}"])
 
-    # Find directly linked Components or Documents:
-    # Analysis (from) -> Component/Document (to)
     ANALYSIS_GRAPH = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
     DOCUMENT_GRAPH = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
     COMPONENT_GRAPH = "d47595b4-f8a6-419c-8f33-b388206280c4"
@@ -453,14 +428,12 @@ def _invalidate_for_analysis_id(analysis_uuid):
     component_ids = set()
 
     for r in rels:
-        # to_resource_graph_id may be None; best-effort approach
         to_gid = str(r.to_resource_graph_id) if r.to_resource_graph_id else None
         if to_gid == DOCUMENT_GRAPH:
             doc_ids.add(r.to_resource_id)
         elif to_gid == COMPONENT_GRAPH:
             component_ids.add(r.to_resource_id)
 
-    # For Components, find their parent Documents (Component -> Document)
     if component_ids:
         comp_to_doc = ResourceXResource.objects.filter(
             from_resource_id__in=list(component_ids)
@@ -473,7 +446,6 @@ def _invalidate_for_analysis_id(analysis_uuid):
     if not doc_ids:
         return
 
-    # Invalidate collection + pages for each document
     for doc_id in doc_ids:
         _delete_cache_keys([f"iiif_collection_{doc_id}"])
         _delete_page_patterns(doc_id)
@@ -504,22 +476,17 @@ def invalidate_on_relation_change(sender, instance: ResourceXResource, **kwargs)
         is_analysis_to = str(instance.to_resource_graph_id) == ANALYSIS_GRAPH
 
         if is_analysis_from:
-            # Analysis (from) -> something (to): we know the analysis id
             _invalidate_for_analysis_id(instance.from_resource_id)
 
         elif is_analysis_to:
-            # Something (from) -> Analysis (to): affected analysis is 'to'
             _invalidate_for_analysis_id(instance.to_resource_id)
 
         else:
-            # If Components are re-linked to Documents, Collections might change.
-            # Invalidate doc collections/pages broadly in that case.
             DOCUMENT_GRAPH = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
             COMPONENT_GRAPH = "d47595b4-f8a6-419c-8f33-b388206280c4"
             to_gid = str(instance.to_resource_graph_id) if instance.to_resource_graph_id else None
             from_gid = str(instance.from_resource_graph_id) if instance.from_resource_graph_id else None
 
-            # Component -> Document adjustment
             if from_gid == COMPONENT_GRAPH and to_gid == DOCUMENT_GRAPH:
                 doc_id = instance.to_resource_id
                 _delete_cache_keys([f"iiif_collection_{doc_id}"])
