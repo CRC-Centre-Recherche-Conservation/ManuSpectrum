@@ -6,7 +6,6 @@ from django.urls import include, path
 from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView, IIIFAnnotationPageView, IIIFAnnotationView
 
 urlpatterns = [
-    path("reports/", include("arches_templating.urls")),
     #path("", include("arches_controlled_lists.urls")),
     path("", include("arches_component_lab.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
