@@ -525,7 +525,6 @@ class TestManifestValidation(TestCase):
     def test_validate_nonexistent_manifest_id(self, mock_manifest_model):
         """Validating a non-existent manifest UUID should return an error."""
         test_uuid = str(uuid.uuid4())
-        # Setup DoesNotExist as a real exception class before using as side_effect
         mock_manifest_model.DoesNotExist = Exception
         mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist("Not found")
 
@@ -715,7 +714,6 @@ class TestTransformValueForTile(TestCase):
     @patch('manuspectrum.datatypes.manifest.IIIFManifest')
     def test_transform_nonexistent_url_returns_none(self, mock_manifest_model):
         """Transforming a URL that doesn't exist should return None."""
-        # Setup DoesNotExist as a real exception class before using as side_effect
         mock_manifest_model.DoesNotExist = Exception
         mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist("Not found")
 

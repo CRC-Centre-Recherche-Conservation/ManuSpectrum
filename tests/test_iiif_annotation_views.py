@@ -221,7 +221,6 @@ class TestIIIFAnnotationMixin(TestCase):
 
     def test_get_display_name_fallback_to_uuid(self):
         """Should fallback to resourceinstanceid if no displayname."""
-        # Use spec to control which attributes exist
         resource = MagicMock(spec=['resourceinstanceid'])
         resource.resourceinstanceid = uuid.uuid4()
 
@@ -377,7 +376,6 @@ class TestIIIFAnnotationCollectionView(TestCase):
     @patch('manuspectrum.views.iiif_annotation.ResourceInstance')
     def test_returns_404_for_nonexistent_resource(self, mock_ri):
         """Should return 404 when resource doesn't exist."""
-        # Setup the DoesNotExist exception properly
         mock_ri.DoesNotExist = Exception
         mock_ri.objects.select_related.return_value.get.side_effect = mock_ri.DoesNotExist
 
@@ -505,7 +503,6 @@ class TestIIIFAnnotationView(TestCase):
     @patch('manuspectrum.views.iiif_annotation.Resource')
     def test_returns_404_for_nonexistent_resource(self, mock_resource):
         """Should return 404 when resource doesn't exist."""
-        # Setup the DoesNotExist exception properly
         mock_resource.DoesNotExist = Exception
         mock_resource.objects.get.side_effect = mock_resource.DoesNotExist
 
