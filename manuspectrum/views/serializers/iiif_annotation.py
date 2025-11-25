@@ -37,14 +37,11 @@ class IIIFAnnotationSerializer:
         "dataset_uri": "eae46252-7bf0-11ef-b1e5-dd514ecd97bc",
     }
 
-    # Caches pour le batch
+    # caches batch
     _concept_cache: Dict[str, dict] = {}
     _resource_cache: Dict[str, dict] = {}
     _manifest_cache: Dict[str, dict] = {}  # url -> {"label": ...}
     _tiles_cache: Dict[str, dict] = {}
-
-    # Indique qu'on est dans un batch (on NE DOIT PAS requêter la DB en fallback)
-    _batch_mode: bool = False
 
     # ----------------------------------------------------------------------
     # Data extraction helpers
@@ -53,15 +50,13 @@ class IIIFAnnotationSerializer:
     @classmethod
     def _get_resource_tiles(cls, resource_id: str) -> dict:
         """
-        Retourne les tiles d'une ressource :
-
-        - En batch : les données viennent de _tiles_cache (0 requête)
-        - Hors batch : une seule requête ciblée.
+        Returns the tiles of a resource:
+        - In batch mode: data comes from _tiles_cache (0 queries)
+        - Outside batch mode: a single targeted query.
         """
         if resource_id in cls._tiles_cache:
             return cls._tiles_cache[resource_id]
 
-        # Mode "single" : on autorise UNE requête
         tiles_qs = Tile.objects.filter(resourceinstance_id=resource_id).values(
             "resourceinstance_id", "data"
         )
@@ -98,8 +93,6 @@ class IIIFAnnotationSerializer:
         if concept_valueid in cls._concept_cache:
             return cls._concept_cache[concept_valueid]
 
-        # En batch, on NE veut plus faire de requêtes supplémentaires → on crée
-        # une valeur par défaut si ce n'est pas préchargé.
         if cls._batch_mode:
             result = {
                 "uri": f"{cls.base_url}rdm/concepts/values/{concept_valueid}",
@@ -108,7 +101,7 @@ class IIIFAnnotationSerializer:
             cls._concept_cache[concept_valueid] = result
             return result
 
-        # Mode "single" (annotation seule) → on peut faire une requête
+        # Single mode (annotation only)
         try:
             values = (
                 Value.objects.filter(valueid=concept_valueid)
@@ -135,7 +128,7 @@ class IIIFAnnotationSerializer:
             cls._concept_cache[concept_valueid] = result
             return result
 
-        except Exception as e:  # pragma: no cover
+        except Exception as e:
             logger.warning(f"Concept resolution failed for {concept_valueid}: {e}")
             result = {
                 "uri": f"{cls.base_url}rdm/concepts/values/{concept_valueid}",
@@ -154,7 +147,6 @@ class IIIFAnnotationSerializer:
             return cls._resource_cache[resource_id]
 
         if cls._batch_mode:
-            # En batch on ne cherche plus en DB si non préchargé : fallback direct
             result = {
                 "uri": f"{cls.base_url}resources/{resource_id}",
                 "labels": {"en": str(resource_id)},
@@ -162,7 +154,7 @@ class IIIFAnnotationSerializer:
             cls._resource_cache[resource_id] = result
             return result
 
-        # Mode "single" : une seule requête pour une ressource manquante
+        # "single" mode
         try:
             resource = Resource.objects.get(resourceinstanceid=resource_id)
             uri = f"{cls.base_url}resources/{resource_id}"
@@ -223,7 +215,7 @@ class IIIFAnnotationSerializer:
                     )
                 )
         finally:
-            # On nettoie proprement pour ne pas polluer la requête suivante
+            # clean for future request
             cls._batch_mode = False
             cls._clear_caches()
 
@@ -235,7 +227,7 @@ class IIIFAnnotationSerializer:
         if not resource_ids:
             return
 
-        # 1. TILES : une seule requête, pas d'objets Python complets
+        # 1. TILES : only on request
         tiles_qs = Tile.objects.filter(resourceinstance_id__in=resource_ids).values(
             "resourceinstance_id", "data"
         )
@@ -252,7 +244,7 @@ class IIIFAnnotationSerializer:
 
         cls._tiles_cache = tiles_by_resource
 
-        # 2. Collecte des IDs de concepts, ressources référencées, manifests
+        # 2. Collect IDs of concepts, resources, manifests
         all_concept_ids: set[str] = set()
         all_referenced_resource_ids: set[str] = set()
         all_manifest_urls: set[str] = set()
@@ -261,13 +253,13 @@ class IIIFAnnotationSerializer:
         manifest_node = cls.DATATYPE_NODES["manifest"]
 
         for rid, tile_data in tiles_by_resource.items():
-            # Techniques (concepts)
+            # Technics(concepts)
             if technique_node in tile_data:
                 tech_values = tile_data[technique_node]
                 if isinstance(tech_values, list):
                     all_concept_ids.update(str(v) for v in tech_values if v)
 
-            # Ressources référencées
+            # Resources
             for field in ["instrument", "component_observed", "project", "researchers"]:
                 node = cls.DATATYPE_NODES.get(field)
                 if not node or node not in tile_data or not tile_data[node]:
@@ -280,19 +272,19 @@ class IIIFAnnotationSerializer:
                     if res_id:
                         all_referenced_resource_ids.add(res_id)
 
-            # Manifest (tu dis qu'il n'y en a qu'un, mais ça reste générique)
+            # Manifest
             if manifest_node in tile_data and tile_data[manifest_node]:
                 all_manifest_urls.add(tile_data[manifest_node])
 
-        # 3. Batch load des concepts
+        # 3. Batch load of concepts
         if all_concept_ids:
             cls._batch_load_concepts(list(all_concept_ids))
 
-        # 4. Batch load des ressources référencées
+        # 4. Batch load of resources
         if all_referenced_resource_ids:
             cls._batch_load_resources(list(all_referenced_resource_ids))
 
-        # 5. Batch load des manifests
+        # 5. Batch load of manifests
         if all_manifest_urls:
             cls._batch_load_manifests(list(all_manifest_urls))
 
@@ -415,7 +407,7 @@ class IIIFAnnotationSerializer:
                         "format": "application/ld+json",
                         "label": {"en": manifest_resource["label"]},
                     }
-                # Hors batch, fallback : une seule requête possible
+                # Outside batch, fallback: only one request possible
                 if not cls._batch_mode:
                     try:
                         m = IIIFManifest.objects.get(url=manifest_url)
@@ -499,7 +491,7 @@ class IIIFAnnotationSerializer:
                         all_labels.setdefault(lang, []).append(f"{label} ({res_data['uri']})")
             return all_labels or {"en": [str(raw_value)]}
 
-        # Researchers (noms concaténés)
+        # Researchers
         if field_key == "researchers":
             all_names: Dict[str, List[str]] = {}
             items = raw_value if isinstance(raw_value, list) else [raw_value]
