@@ -477,13 +477,20 @@ def _delete_cache_keys(keys: list[str]):
 def _delete_page_patterns(resource_id):
     """
     Delete all page caches for a given resource_id.
-    Requires a cache backend with delete_pattern (django-redis provides it).
     """
-    pattern = f"iiif_page_{resource_id}_*"
-    try:
-        cache.delete_pattern(pattern)
-    except Exception:
-        pass
+    list_key = f"iiif_page_list_{resource_id}"
+    page_nums = cache.get(list_key)
+
+    if not page_nums:
+        return
+
+    # Delete each page individually
+    for num in page_nums:
+        cache.delete(f"iiif_page_{resource_id}_{num}")
+        cache.delete(f"iiif_page_{resource_id}_{num}__etag")
+
+    # Delete the index list itself
+    cache.delete(list_key)
 
 
 def _invalidate_for_analysis_id(analysis_uuid):
