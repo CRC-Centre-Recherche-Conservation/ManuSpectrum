@@ -148,7 +148,7 @@ INSTALLED_APPS = (
     "django_celery_results",
     # "silk",
     "manuspectrum",  # Ensure the project is listed before any other arches applications
-    "arches_templating",
+    # "arches_templating",
     "pgtrigger",
     "django_migrate_sql",
     "arches_querysets",
