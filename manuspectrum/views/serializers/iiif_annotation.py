@@ -1,0 +1,653 @@
+import logging
+from typing import Dict, List
+
+from django.conf import settings
+from arches.app.models.resource import Resource
+from arches.app.models.tile import Tile
+from arches.app.models.models import Value, IIIFManifest
+
+logger = logging.getLogger(__name__)
+
+
+class IIIFAnnotationSerializer:
+    """
+    Builds a IIIF Presentation API v3 Annotation
+    from internal Arches resource data.
+
+    This serializer is used to represent analytical resources
+    (datasets, manifests, instruments, etc.) as IIIF Annotations
+    with multilingual metadata and links to related resources.
+    """
+
+    base_url = settings.PUBLIC_SERVER_ADDRESS
+    base_url_iiif = base_url + "iiif"
+
+    DATATYPE_NODES = {
+        "manifest": "9764a2c7-fc1b-46dd-8b4a-8b86588a0294",
+        "file_list": "8fe5161a-7bf2-11ef-b1e5-dd514ecd97bc",
+        "technique": "3bcb6798-7b55-11ef-ba46-5b6797b92ed6",
+        "instrument": "8fc653e6-7b53-11ef-ba46-5b6797b92ed6",
+        "acquisition_date": "7da25ec4-a8be-11ef-8106-d32727aece17",
+        "researchers": "482cf800-7b53-11ef-ba46-5b6797b92ed6",
+        "component_observed": "9c807052-7b4f-11ef-ba46-5b6797b92ed6",
+        "metadata_fields": "b382167d-7b4c-11ef-ba46-5b6797b92ed6",
+        "project": "80a46fd8-7b4e-11ef-ba46-5b6797b92ed6",
+        "name": "020b3a16-7b4e-11ef-ba46-5b6797b92ed6",
+        "mime_type": "2edf2f2a-e887-11ef-9bfc-0debd0685137",
+        "dataset_uri": "eae46252-7bf0-11ef-b1e5-dd514ecd97bc",
+    }
+
+    # caches batch
+    _concept_cache: Dict[str, dict] = {}
+    _resource_cache: Dict[str, dict] = {}
+    _manifest_cache: Dict[str, dict] = {}  # url -> {"label": ...}
+    _tiles_cache: Dict[str, dict] = {}
+
+    # ----------------------------------------------------------------------
+    # Data extraction helpers
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _get_resource_tiles(cls, resource_id: str) -> dict:
+        """
+        Returns the tiles of a resource:
+        - In batch mode: data comes from _tiles_cache (0 queries)
+        - Outside batch mode: a single targeted query.
+        """
+        if resource_id in cls._tiles_cache:
+            return cls._tiles_cache[resource_id]
+
+        tiles_qs = Tile.objects.filter(resourceinstance_id=resource_id).values(
+            "resourceinstance_id", "data"
+        )
+
+        data: dict = {}
+        for row in tiles_qs:
+            tile_data = row.get("data") or {}
+            for node_id, value in tile_data.items():
+                if value is not None:
+                    data[node_id] = value
+
+        cls._tiles_cache[resource_id] = data
+        return data
+
+    @classmethod
+    def _extract_resource_id(cls, value) -> str:
+        """Extract the UUID from a resource-instance type value."""
+        if isinstance(value, dict):
+            return value.get("resourceId", "")
+        if isinstance(value, str):
+            return value
+        return ""
+
+    # ----------------------------------------------------------------------
+    # Concept and resource resolution
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _resolve_concept_multilingual(cls, concept_valueid: str) -> dict:
+        """
+        Resolve a concept value to multilingual labels with URI.
+        Returns: {"uri": "...", "labels": {"en": "label", "fr": "étiquette"}}
+        """
+        if concept_valueid in cls._concept_cache:
+            return cls._concept_cache[concept_valueid]
+
+        if cls._batch_mode:
+            result = {
+                "uri": f"{cls.base_url}rdm/concepts/values/{concept_valueid}",
+                "labels": {"en": str(concept_valueid)},
+            }
+            cls._concept_cache[concept_valueid] = result
+            return result
+
+        # Single mode (annotation only)
+        try:
+            values = (
+                Value.objects.filter(valueid=concept_valueid)
+                .select_related("concept")
+                .values("valueid", "language_id", "value", "concept__conceptid")
+            )
+
+            labels: dict = {}
+            uri = None
+
+            for v in values:
+                val = v.get("value")
+                if val:
+                    lang = v.get("language_id") or "en"
+                    labels[lang] = val
+                concept_id = v.get("concept__conceptid")
+                if concept_id and not uri:
+                    uri = f"{cls.base_url}rdm/concepts/{concept_id}"
+
+            result = {
+                "uri": uri or f"{cls.base_url}rdm/concepts/values/{concept_valueid}",
+                "labels": labels or {"en": str(concept_valueid)},
+            }
+            cls._concept_cache[concept_valueid] = result
+            return result
+
+        except Exception as e:
+            logger.warning(f"Concept resolution failed for {concept_valueid}: {e}")
+            result = {
+                "uri": f"{cls.base_url}rdm/concepts/values/{concept_valueid}",
+                "labels": {"en": str(concept_valueid)},
+            }
+            cls._concept_cache[concept_valueid] = result
+            return result
+
+    @classmethod
+    def _resolve_resource_multilingual(cls, resource_id: str) -> dict:
+        """
+        Resolve a resource instance to multilingual labels with URI.
+        Returns: {"uri": "...", "labels": {"en": "label", "fr": "étiquette"}}
+        """
+        if resource_id in cls._resource_cache:
+            return cls._resource_cache[resource_id]
+
+        if cls._batch_mode:
+            result = {
+                "uri": f"{cls.base_url}resources/{resource_id}",
+                "labels": {"en": str(resource_id)},
+            }
+            cls._resource_cache[resource_id] = result
+            return result
+
+        # "single" mode
+        try:
+            resource = Resource.objects.get(resourceinstanceid=resource_id)
+            uri = f"{cls.base_url}resources/{resource_id}"
+
+            displayname = resource.displayname() if callable(resource.displayname) else resource.displayname
+            if isinstance(displayname, dict):
+                labels = {
+                    lang: info["value"]
+                    for lang, info in displayname.items()
+                    if isinstance(info, dict) and info.get("value")
+                }
+            else:
+                labels = {"en": str(displayname)}
+
+            result = {"uri": uri, "labels": labels}
+            cls._resource_cache[resource_id] = result
+            return result
+
+        except Resource.DoesNotExist:
+            logger.info(f"Referenced resource not found: {resource_id}")
+        except Exception as e:  # pragma: no cover
+            logger.warning(f"Resource resolution failed for {resource_id}: {e}")
+
+        result = {
+            "uri": f"{cls.base_url}resources/{resource_id}",
+            "labels": {"en": str(resource_id)},
+        }
+        cls._resource_cache[resource_id] = result
+        return result
+
+    # ----------------------------------------------------------------------
+    # Batch processing methods
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def batch_to_representation(cls, annotations_data: List[Dict]) -> List[Dict]:
+        """
+        Process multiple annotations in batch to optimize queries.
+
+        Args:
+            annotations_data: List of dicts with 'target' and 'resource_id'
+
+        Returns:
+            List of IIIF annotation representations
+        """
+        resource_ids = [a["resource_id"] for a in annotations_data if a.get("resource_id")]
+
+        cls._batch_mode = True
+        try:
+            cls._prefetch_all_data(resource_ids)
+
+            results: List[dict] = []
+            for anno_data in annotations_data:
+                results.append(
+                    cls.to_representation(
+                        anno_data["target"],
+                        anno_data["resource_id"],
+                    )
+                )
+        finally:
+            # clean for future request
+            cls._batch_mode = False
+            cls._clear_caches()
+
+        return results
+
+    @classmethod
+    def _prefetch_all_data(cls, resource_ids: List[str]):
+        """Prefetch all needed data in minimal queries."""
+        if not resource_ids:
+            return
+
+        # 1. TILES : only on request
+        tiles_qs = Tile.objects.filter(resourceinstance_id__in=resource_ids).values(
+            "resourceinstance_id", "data"
+        )
+
+        tiles_by_resource: Dict[str, dict] = {}
+        for row in tiles_qs:
+            rid = str(row["resourceinstance_id"])
+            tile_data = row.get("data") or {}
+            if rid not in tiles_by_resource:
+                tiles_by_resource[rid] = {}
+            for node_id, value in tile_data.items():
+                if value is not None:
+                    tiles_by_resource[rid][node_id] = value
+
+        cls._tiles_cache = tiles_by_resource
+
+        # 2. Collect IDs of concepts, resources, manifests
+        all_concept_ids: set[str] = set()
+        all_referenced_resource_ids: set[str] = set()
+        all_manifest_urls: set[str] = set()
+
+        technique_node = cls.DATATYPE_NODES["technique"]
+        manifest_node = cls.DATATYPE_NODES["manifest"]
+
+        for rid, tile_data in tiles_by_resource.items():
+            # Technics(concepts)
+            if technique_node in tile_data:
+                tech_values = tile_data[technique_node]
+                if isinstance(tech_values, list):
+                    all_concept_ids.update(str(v) for v in tech_values if v)
+
+            # Resources
+            for field in ["instrument", "component_observed", "project", "researchers"]:
+                node = cls.DATATYPE_NODES.get(field)
+                if not node or node not in tile_data or not tile_data[node]:
+                    continue
+                values = tile_data[node]
+                if not isinstance(values, list):
+                    values = [values]
+                for v in values:
+                    res_id = cls._extract_resource_id(v)
+                    if res_id:
+                        all_referenced_resource_ids.add(res_id)
+
+            # Manifest
+            if manifest_node in tile_data and tile_data[manifest_node]:
+                all_manifest_urls.add(tile_data[manifest_node])
+
+        # 3. Batch load of concepts
+        if all_concept_ids:
+            cls._batch_load_concepts(list(all_concept_ids))
+
+        # 4. Batch load of resources
+        if all_referenced_resource_ids:
+            cls._batch_load_resources(list(all_referenced_resource_ids))
+
+        # 5. Batch load of manifests
+        if all_manifest_urls:
+            cls._batch_load_manifests(list(all_manifest_urls))
+
+    @classmethod
+    def _batch_load_concepts(cls, concept_ids: List[str]):
+        """Load all concepts and their translations in one query."""
+        values = (
+            Value.objects.filter(valueid__in=concept_ids)
+            .select_related("concept")
+            .values("valueid", "language_id", "value", "concept__conceptid")
+        )
+
+        concepts_data: Dict[str, dict] = {}
+        for v in values:
+            vid = str(v["valueid"])
+            concepts_data.setdefault(vid, {"labels": {}, "uri": None})
+
+            val = v.get("value")
+            if val:
+                lang = v.get("language_id") or "en"
+                concepts_data[vid]["labels"][lang] = val
+
+            concept_id = v.get("concept__conceptid")
+            if concept_id and not concepts_data[vid]["uri"]:
+                concepts_data[vid]["uri"] = f"{cls.base_url}rdm/concepts/{concept_id}"
+
+        for cid in concept_ids:
+            if cid not in concepts_data:
+                concepts_data[cid] = {
+                    "uri": f"{cls.base_url}rdm/concepts/values/{cid}",
+                    "labels": {"en": str(cid)},
+                }
+            elif not concepts_data[cid]["uri"]:
+                concepts_data[cid]["uri"] = f"{cls.base_url}rdm/concepts/values/{cid}"
+
+        cls._concept_cache = concepts_data
+
+    @classmethod
+    def _batch_load_resources(cls, resource_ids: List[str]):
+        """Load all resources in one query."""
+        resources = Resource.objects.filter(resourceinstanceid__in=resource_ids)
+
+        cache_data: Dict[str, dict] = {}
+        for resource in resources:
+            rid = str(resource.resourceinstanceid)
+            uri = f"{cls.base_url}resources/{rid}"
+
+            displayname = resource.displayname() if callable(resource.displayname) else resource.displayname
+            if isinstance(displayname, dict):
+                labels = {
+                    lang: info["value"]
+                    for lang, info in displayname.items()
+                    if isinstance(info, dict) and info.get("value")
+                }
+            else:
+                labels = {"en": str(displayname)}
+
+            cache_data[rid] = {
+                "uri": uri,
+                "labels": labels,
+            }
+
+        for rid in resource_ids:
+            if rid not in cache_data:
+                cache_data[rid] = {
+                    "uri": f"{cls.base_url}resources/{rid}",
+                    "labels": {"en": str(rid)},
+                }
+
+        cls._resource_cache = cache_data
+
+    @classmethod
+    def _batch_load_manifests(cls, manifest_urls: List[str]):
+        """Load all manifests in one query."""
+        manifests = IIIFManifest.objects.filter(url__in=manifest_urls).values("url", "label")
+        cls._manifest_cache = {m["url"]: {"label": m["label"]} for m in manifests}
+
+    @classmethod
+    def _clear_caches(cls):
+        """Clear all batch caches."""
+        cls._concept_cache.clear()
+        cls._resource_cache.clear()
+        cls._manifest_cache.clear()
+        cls._tiles_cache.clear()
+
+    # ----------------------------------------------------------------------
+    # Value & label helpers
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _get_localized_string(cls, data: dict) -> dict:
+        """Extract localized strings from a multilingual value."""
+        if isinstance(data, dict):
+            out = {
+                lang: [info["value"]]
+                for lang, info in data.items()
+                if isinstance(info, dict) and info.get("value", "").strip()
+            }
+            if out:
+                return out
+        return {"en": [str(data)]}
+
+    # ----------------------------------------------------------------------
+    # IIIF Body, Metadata, and SeeAlso builders
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _build_body(cls, tiles_data: dict) -> dict:
+        """Builds the IIIF `body` based on the available datatype nodes."""
+        # 1) Manifest
+        manifest_node = cls.DATATYPE_NODES.get("manifest")
+        if manifest_node and manifest_node in tiles_data:
+            manifest_url = tiles_data[manifest_node]
+            if manifest_url:
+                if manifest_url in cls._manifest_cache:
+                    manifest_resource = cls._manifest_cache[manifest_url]
+                    return {
+                        "id": manifest_url,
+                        "type": "Manifest",
+                        "format": "application/ld+json",
+                        "label": {"en": manifest_resource["label"]},
+                    }
+                # Outside batch, fallback: only one request possible
+                if not cls._batch_mode:
+                    try:
+                        m = IIIFManifest.objects.get(url=manifest_url)
+                        return {
+                            "id": manifest_url,
+                            "type": "Manifest",
+                            "format": "application/ld+json",
+                            "label": {"en": m.label},
+                        }
+                    except IIIFManifest.DoesNotExist:
+                        logger.info(f"Manifest not found for URL: {manifest_url}")
+
+        # 2) Dataset (file list)
+        filelist_node = cls.DATATYPE_NODES.get("file_list")
+        if filelist_node and filelist_node in tiles_data:
+            file_data = tiles_data[filelist_node]
+            if isinstance(file_data, list) and file_data:
+                first_file = file_data[0]
+                mime_type = tiles_data.get(
+                    cls.DATATYPE_NODES.get("mime_type"),
+                    "application/octet-stream",
+                )
+                name_node = cls.DATATYPE_NODES.get("name")
+                label = cls._get_localized_string(
+                    tiles_data.get(
+                        name_node,
+                        {"en": {"value": "Dataset file"}},
+                    )
+                )
+                return {
+                    "id": settings.PUBLIC_SERVER_ADDRESS + first_file.get("url", "").lstrip("/"),
+                    "type": "Dataset",
+                    "format": mime_type,
+                    "label": label,
+                }
+
+        # 3) Fallback: TextualBody
+        name_node = cls.DATATYPE_NODES.get("name")
+        value = "No data available"
+        if name_node and name_node in tiles_data:
+            name_data = tiles_data[name_node]
+            if isinstance(name_data, dict):
+                for lang_info in name_data.values():
+                    if isinstance(lang_info, dict) and lang_info.get("value"):
+                        value = lang_info["value"]
+                        break
+
+        return {
+            "type": "TextualBody",
+            "value": value,
+            "format": "text/plain",
+            "language": "fr",
+        }
+
+    # ----------------------------------------------------------------------
+    # Metadata helpers
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _format_metadata_value(cls, raw_value, field_key: str) -> dict:
+        """Format a metadata field according to its data type."""
+        # Concept lists
+        if field_key == "technique":
+            if isinstance(raw_value, list):
+                all_labels: Dict[str, List[str]] = {}
+                for concept_id in raw_value:
+                    concept_data = cls._resolve_concept_multilingual(str(concept_id))
+                    for lang, label in concept_data["labels"].items():
+                        all_labels.setdefault(lang, []).append(f"{label} ({concept_data['uri']})")
+                return all_labels or {"en": [str(raw_value)]}
+
+        # Resource-instance fields
+        if field_key in ["instrument", "component_observed", "project"]:
+            all_labels: Dict[str, List[str]] = {}
+            items = raw_value if isinstance(raw_value, list) else [raw_value]
+            for item in items:
+                resource_id = cls._extract_resource_id(item)
+                if resource_id:
+                    res_data = cls._resolve_resource_multilingual(resource_id)
+                    for lang, label in res_data["labels"].items():
+                        all_labels.setdefault(lang, []).append(f"{label} ({res_data['uri']})")
+            return all_labels or {"en": [str(raw_value)]}
+
+        # Researchers
+        if field_key == "researchers":
+            all_names: Dict[str, List[str]] = {}
+            items = raw_value if isinstance(raw_value, list) else [raw_value]
+            for item in items:
+                resource_id = cls._extract_resource_id(item)
+                if resource_id:
+                    res_data = cls._resolve_resource_multilingual(resource_id)
+                    for lang, label in res_data["labels"].items():
+                        all_names.setdefault(lang, []).append(label)
+            if all_names:
+                return {lang: ["; ".join(names)] for lang, names in all_names.items()}
+            return {"en": [str(raw_value)]}
+
+        # Date
+        if field_key == "acquisition_date":
+            return {"en": [str(raw_value)]}
+
+        # Localized strings
+        if isinstance(raw_value, dict):
+            out = {
+                lang: [info["value"]]
+                for lang, info in raw_value.items()
+                if isinstance(info, dict) and info.get("value")
+            }
+            if out:
+                return out
+
+        return {"en": [str(raw_value)]}
+
+    @classmethod
+    def _build_metadata(cls, tiles_data: dict) -> list:
+        """Builds the IIIF `metadata` section."""
+        metadata: List[dict] = []
+
+        fields = {
+            "technique": "Technique",
+            "instrument": "Instrument",
+            "project": "Project",
+            "acquisition_date": "Acquisition date",
+            "researchers": "Researchers",
+            "component_observed": "Component observed",
+        }
+
+        for field, label in fields.items():
+            node = cls.DATATYPE_NODES.get(field)
+            if node and node in tiles_data and tiles_data[node]:
+                try:
+                    formatted_value = cls._format_metadata_value(tiles_data[node], field)
+                    metadata.append(
+                        {
+                            "label": {"en": [label]},
+                            "value": formatted_value,
+                        }
+                    )
+                except Exception as e:  # pragma: no cover
+                    logger.warning(f"Failed to format metadata field '{field}': {e}")
+
+        # Instrumental metadata
+        meta_node = cls.DATATYPE_NODES.get("metadata_fields")
+        if meta_node and meta_node in tiles_data:
+            instr_data = tiles_data[meta_node]
+            if isinstance(instr_data, dict):
+                value_dict = {
+                    lang: [info["value"]]
+                    for lang, info in instr_data.items()
+                    if isinstance(info, dict) and info.get("value")
+                }
+                metadata.append(
+                    {
+                        "label": {"en": ["Instrumental metadata"]},
+                        "value": value_dict,
+                    }
+                )
+            else:
+                metadata.append(
+                    {
+                        "label": {"en": ["Instrumental metadata"]},
+                        "value": {"en": [str(instr_data)]},
+                    }
+                )
+
+        return metadata
+
+    @classmethod
+    def _build_see_also(cls, tiles_data: dict, analysis_id: str) -> list:
+        """Builds the IIIF `seeAlso` section with related links."""
+        see_also = [
+            {
+                "id": f"{cls.base_url}report/{analysis_id}",
+                "type": "Text",
+                "format": "text/html",
+                "label": {"en": ["Detailed analysis report"]},
+            }
+        ]
+
+        doi_node = cls.DATATYPE_NODES.get("dataset_uri")
+        if doi_node and doi_node in tiles_data and tiles_data[doi_node]:
+            uri = tiles_data[doi_node]
+            see_also.append(
+                {
+                    "id": uri,
+                    "type": "Dataset",
+                    "format": "text/html",
+                    "label": {"en": ["Published dataset"]},
+                }
+            )
+
+        return see_also
+
+    # ----------------------------------------------------------------------
+    # Public API
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def to_representation(cls, target: str, resource_id: str) -> dict:
+        """
+        Build a full IIIF Annotation representation for a given Arches resource.
+
+        Args:
+            target (str): The IIIF target (e.g., Canvas URL + #xywh).
+            resource_id (str): The Arches resource UUID.
+
+        Returns:
+            dict: A IIIF Presentation API v3 compliant annotation.
+        """
+        annotation: dict = {
+            "@context": "http://iiif.io/api/presentation/3/context.json",
+            "id": f"{cls.base_url_iiif}/annotation/{resource_id}",
+            "type": "Annotation",
+            "motivation": "supplementing",
+            "target": target,
+        }
+
+        if not resource_id:
+            annotation["body"] = {
+                "type": "TextualBody",
+                "value": "No data available",
+                "format": "text/plain",
+                "language": "fr",
+            }
+            return annotation
+
+        tiles_data = cls._get_resource_tiles(resource_id)
+
+        label_node = cls.DATATYPE_NODES.get("name")
+        if label_node and label_node in tiles_data:
+            annotation["label"] = cls._get_localized_string(tiles_data[label_node])
+
+        annotation["body"] = cls._build_body(tiles_data)
+
+        metadata = cls._build_metadata(tiles_data)
+        if metadata:
+            annotation["metadata"] = metadata
+
+        see_also = cls._build_see_also(tiles_data, resource_id)
+        if see_also:
+            annotation["seeAlso"] = see_also
+
+        return annotation

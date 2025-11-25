@@ -148,7 +148,6 @@ INSTALLED_APPS = (
     "django_celery_results",
     # "silk",
     "manuspectrum",  # Ensure the project is listed before any other arches applications
-    "arches_templating",
     "pgtrigger",
     "django_migrate_sql",
     "arches_querysets",
@@ -375,6 +374,12 @@ RENDERERS = [
         "exclude": "tif,tiff,psd",
     },
 ]
+
+#THUMBNAIL
+SEARCH_THUMBNAILS = True
+THUMBNAIL_GENERATOR = "arches.app.utils.thumbnail_generator.ThumbnailGenerator"
+GENERATE_THUMBNAILS_ON_DEMAND = True
+MIN_FILE_SIZE_T0_GENERATE_THUMBNAIL = 150000  # 150kb
 
 # By setting RESTRICT_MEDIA_ACCESS to True, media file requests outside of Arches will checked against nodegroup permissions.
 RESTRICT_MEDIA_ACCESS = False
