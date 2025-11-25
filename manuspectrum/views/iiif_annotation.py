@@ -99,9 +99,18 @@ class IIIFAnnotationMixin:
         CanvasIIIF.get_image_service_dimensions() peut faire des appels
         externes ou des requêtes DB, donc on le met derrière un LRU cache.
         """
+        cache_key = f"iiif_canvas_dim:{canvas_uri}"
+
+        dims = cache.get(cache_key)
+        if dims and isinstance(dims, (list, tuple)) and len(dims) == 2:
+            return dims[0], dims[1]
+
         from manuspectrum.utils.iiif_tools import CanvasIIIF
 
-        return CanvasIIIF.get_image_service_dimensions(canvas_uri)
+        width, height = CanvasIIIF.get_image_service_dimensions(canvas_uri)
+        cache.set(cache_key, (width, height), timeout=self.CACHE_TIMEOUT)
+
+        return width, height
 
     def _convert_geojson_to_iiif_target(self, annotation: dict, zoom: int = 5) -> str:
         """
