@@ -1,13 +1,18 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
-from django.urls import include, path
+from django.urls import include, path, re_path
 
 from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView, IIIFAnnotationPageView, IIIFAnnotationView
+from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 
 urlpatterns = [
     #path("", include("arches_controlled_lists.urls")),
     path("", include("arches_component_lab.urls")),
+    re_path(r"^renderer/(?P<renderer_id>[^\/]+)", RendererView.as_view(), name="renderer"),
+    re_path(r"^renderer_config/(?P<renderer_config_id>[^\/]+)", RendererConfigView.as_view(),
+                          name="renderer_config"),
+    re_path(r"^renderer_config/", RendererConfigView.as_view(), name="renderer_config"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Adds URL pattern to serve media files during development

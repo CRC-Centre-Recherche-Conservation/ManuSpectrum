@@ -438,7 +438,21 @@ SHOW_LANGUAGE_SWITCH = len(LANGUAGES) > 1
 # See tests.views.search_tests.TestEsMappingModifier class for example
 # ES_MAPPING_MODIFIER_CLASSES = ["manuspectrum.search.es_mapping_modifier.EsMappingModifier"]
 
-FILE_TYPES += ["h5", "eln", "hdf5", "md", ".xlsx"]
+RENDERERS += [
+    {
+        "name": "xy-reader",
+        "title": "XY Data File Reader",
+        "description": "Use for all instrument outputs with x-y data",
+        "id": "e93b7b27-40d8-4141-996e-e59ff08742f3",
+        "iconclass": "fa fa-bolt",
+        "component": "views/components/cards/file-renderers/xy-reader",
+        "ext": "txt",
+        "type": "text/plain",
+        "exclude": "",
+    },
+]
+
+FILE_TYPES += ["h5", "eln", "hdf5", "md", ".xlsx", "txt"]
 
 XY_TEXT_FILE_FORMATS = ["txt"]
 
