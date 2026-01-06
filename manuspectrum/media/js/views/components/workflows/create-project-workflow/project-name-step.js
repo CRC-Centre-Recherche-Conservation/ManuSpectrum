@@ -27,7 +27,8 @@ const viewModel = function(params) {
     this.projectResourceId = ko.observable(getProp('projectResourceId'));
     this.typeValue = ko.observable(getProp('type', 'value'));
     this.nameValue = ko.observable(getProp('name', 'value', true));
-    this.projectEventTypeRdmCollection = ko.observable('26d7ce44-20e5-44fb-a3c1-dfbe6bdd521b');
+    // rdmCollection UUID from: pkg/graphs/resource_models/Project.json > nodes > Type (nodeid: 67d1c39e-7021-11ef-8753-0575b5bada34) > config.rdmCollection
+    this.projectEventTypeRdmCollection = ko.observable('194f514f-9088-4152-b52e-3e7d938f9185');
 
     const snapshot = {
         typeValue: self.typeValue(),
