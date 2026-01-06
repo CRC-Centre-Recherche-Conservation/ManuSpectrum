@@ -178,21 +178,143 @@
 
         <!-- Workflow Icons -->
         <!-- ko if: $data.workflows().length -->
-        <div class="afs-workflow-layout" style="height: calc(100vh - 100px); overflow-y: scroll; background: #f9f9f9;">
-            <div class="workflow-select-card-container" style="padding: 20px 20px 0px 20px;">
-                <div class="workflow-group-title">{% trans "Manage Projects" %}</div>
-                <!-- ko with: workflows().find(workflow => workflow.pluginid === "a1667717-b7bd-4570-b27a-ec352c767e0e") -->
-                <a data-bind="attr: {href: $data.url, title: $data.name}" href="#">
-                    <div data-bind="style: {'background-color': $data.config.thumbnailBackgroundColor}" class="workflow-select-card">
-                        <h4 class="workflow-select-title" data-bind="text: $data.name"></h4>
-                        <div data-bind="style: {'background-color': $data.config.thumbnailCircleColor}" class="workflow-select-wf-circle">
-                            <span><i data-bind="attr:{class: ('fa '+$data.icon +' workflow-select-wf-icon')}"></i></span>
-                        </div>
-                        <p data-bind="text: $data.config.description" class="workflow-select-desc"></p>
+        <style>
+            .workflow-accordion {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                margin-bottom: 15px;
+                overflow: hidden;
+            }
+            .workflow-accordion-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 18px;
+                background: #f8f8f8;
+                border-bottom: 1px solid #ddd;
+                cursor: pointer;
+                transition: background-color 0.2s ease;
+            }
+            .workflow-accordion-header:hover {
+                background: #efefef;
+            }
+            .workflow-accordion-header.collapsed {
+                border-bottom: none;
+            }
+            .workflow-accordion-title {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+            }
+            .workflow-accordion-title i {
+                color: #13a5ac;
+                font-size: 16px;
+            }
+            .workflow-accordion-badge {
+                background: #13a5ac;
+                color: #fff;
+                padding: 3px 10px;
+                border-radius: 10px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+            .workflow-accordion-chevron {
+                color: #666;
+                font-size: 12px;
+                transition: transform 0.3s ease;
+            }
+            .workflow-accordion-chevron.open {
+                transform: rotate(180deg);
+            }
+            .workflow-accordion-content {
+                padding: 20px;
+                background: #fff;
+            }
+            .workflow-cards-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+            }
+            .workflow-card {
+                width: 220px;
+                border-radius: 6px;
+                overflow: hidden;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                text-decoration: none;
+            }
+            .workflow-card:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            .workflow-card-body {
+                padding: 20px;
+                text-align: center;
+            }
+            .workflow-card-icon {
+                width: 60px;
+                height: 60px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 15px;
+            }
+            .workflow-card-icon i {
+                font-size: 24px;
+                color: #fff;
+            }
+            .workflow-card-title {
+                font-size: 15px;
+                font-weight: 600;
+                color: #fff;
+                margin: 0 0 8px 0;
+            }
+            .workflow-card-desc {
+                font-size: 12px;
+                color: rgba(255,255,255,0.85);
+                margin: 0;
+                line-height: 1.4;
+            }
+        </style>
+
+        <div style="height: calc(100vh - 100px); overflow-y: auto; background: #f5f6f7; padding: 25px;">
+
+            <!-- Workflow Group: Manage Projects -->
+            <div class="workflow-accordion">
+                <div class="workflow-accordion-header"
+                     data-bind="click: function() { $data.showProjectsGroup(!$data.showProjectsGroup()); }, css: { 'collapsed': !$data.showProjectsGroup() }">
+                    <div class="workflow-accordion-title">
+                        <i class="fa fa-folder-open"></i>
+                        <span>{% trans "Manage Projects" %}</span>
+                        <span class="workflow-accordion-badge" data-bind="text: $data.workflows().length"></span>
                     </div>
-                </a>
+                    <i class="fa fa-chevron-down workflow-accordion-chevron" data-bind="css: { 'open': $data.showProjectsGroup() }"></i>
+                </div>
+
+                <!-- ko if: $data.showProjectsGroup() -->
+                <div class="workflow-accordion-content">
+                    <div class="workflow-cards-grid">
+                        <!-- ko foreach: $data.workflows -->
+                        <a class="workflow-card" data-bind="attr: {href: $data.url, title: $data.name}">
+                            <div class="workflow-card-body" data-bind="style: {'background-color': $data.config.thumbnailBackgroundColor || '#9591ef'}">
+                                <div class="workflow-card-icon" data-bind="style: {'background-color': $data.config.thumbnailCircleColor || '#b0adf3'}">
+                                    <i data-bind="attr: {class: 'fa ' + $data.icon}"></i>
+                                </div>
+                                <h4 class="workflow-card-title" data-bind="text: $data.name"></h4>
+                                <p class="workflow-card-desc" data-bind="text: $data.config.description"></p>
+                            </div>
+                        </a>
+                        <!-- /ko -->
+                    </div>
+                </div>
                 <!-- /ko -->
             </div>
+
         </div>
         <!-- /ko -->
     </div>
