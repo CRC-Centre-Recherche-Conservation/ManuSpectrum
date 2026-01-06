@@ -9,42 +9,14 @@
             <select data-bind="select2Query: {select2Config: targetResourceSelectConfig}"></select>
         </div>
         <div class="workflow-search-count">
-            <div class="count-number" data-bind="text: totalResults()"></div><div>{% trans "Physical Things" %}</div>
-        </div>
-        <div class="child-exclusion">
-            <div
-            data-bind="
-                component: {
-                    name: 'views/components/simple-switch',
-                    params: {
-                        value: includeSamples,
-                        config: {
-                            label: '{% trans 'Include samples' %}',
-                        }
-                    }
-                }
-            "
-            ></div>
-            <div
-                data-bind="
-                    component: {
-                        name: 'views/components/simple-switch',
-                        params: {
-                            value: includeAnalysisAreas,
-                            config: {
-                                label: '{% trans 'Include analysis areas' %}',
-                            }
-                        }
-                    }
-                "
-            ></div>
+            <div class="count-number" data-bind="text: totalResults()"></div><div>{% trans "Documents" %}</div>
         </div>
         <div style="flex: 1"></div>
         <div data-bind="component:{
             name: 'views/components/widgets/resource-instance-creator',
             params: {
                 graphids: [
-                    physicalThingGraphId,
+                    documentGraphId,
                 ],
                 value: newResourceInstance,
                 disabled: locked,
@@ -89,11 +61,11 @@
                 <div style="padding: 24px 24px 0px 24px;">
                 <!-- ko if: selectedResources().length === 0 && !dirty() -->
                 <div class="wf-multi-tile-step-list-empty">
-                    <p>{% trans "You have not added any Physical Things to this Collection/Set" %}</p>
+                    <p>{% trans "You have not added any Documents to this Project" %}</p>
                 </div>
                 <!--/ko -->
                 <!-- ko foreach: selectedResources -->
-                <div class="wf-multi-tile-step-card" data-bind="css: { child: $parent.resourceIsSampleOrAnalysis($data) }">
+                <div class="wf-multi-tile-step-card">
                     <div class="wf-multi-tile-card-info">
                         <!-- <div class="workflow-step-icon complete"><span><i class="fa fa-hashtag"></i></span></div> -->
                         <div class="wf-multi-tile-card-info-details">

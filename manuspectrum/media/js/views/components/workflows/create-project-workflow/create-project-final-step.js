@@ -2,82 +2,109 @@
 // GPL-3.0 license
 // https://github.com/archesproject/arches-for-science
 
-define([
-    'knockout',
-    'arches',
-    'views/components/workflows/summary-step',
-    'templates/views/components/workflows/create-project-workflow/create-project-final-step.htm'
-], function(ko, arches, SummaryStep, createProjectFinalStepTemplate) {
+import ko from 'knockout';
+import arches from 'arches';
+import SummaryStep from 'views/components/workflows/summary-step';
+import createProjectFinalStepTemplate from 'templates/views/components/workflows/create-project-workflow/create-project-final-step.htm';
 
-    function viewModel(params) {
-        var self = this;
-        SummaryStep.apply(this, [params]);
+const DOCUMENT_GRAPH_ID = '0c8226c1-11a9-4c48-9601-a7a0c6f2df6b';
 
-        this.resourceLoading = ko.observable(true);
-        this.collectionLoading = ko.observable(true);
+const viewModel = function(params) {
+    const self = this;
+    SummaryStep.apply(this, [params]);
 
-        this.collectionResourceId = params.collectionResourceId;
-        this.collectionData = ko.observableArray();
-        this.collectionOfDocs = ko.observableArray();
+    this.resourceLoading = ko.observable(true);
+    this.documentsLoading = ko.observable(true);
 
-        this.getRelatedResources(this.collectionResourceId, this.collectionData);
+    this.documentGraphId = params.documentGraphId || DOCUMENT_GRAPH_ID;
+    this.studiedDocuments = ko.observableArray();
 
-        this.collectionData.subscribe(function(val){
-            var documentId = '9519cb4f-b25b-11e9-8c7b-a4d18cec433a'; // 0c8226c1-11a9-4c48-9601-a7a0c6f2df6b
-            val["related_resources"].forEach(function(rr){
-                if (rr.graph_id === documentId) {
-                    self.collectionOfDocs.push({
-                        resourceid: rr.resourceinstanceid,
-                        name: rr.displayname,
-                    });
-                }
-            });
-            this.collectionLoading(false);
-            if (!this.resourceLoading()){
-                this.loading(false);
-            }
-        }, this);
+    this.loadRelatedDocuments = async () => {
+        try {
+            const response = await window.fetch(`${arches.urls.related_resources}${self.resourceid}`);
+            const data = await response.json();
 
-        this.resourceData.subscribe(function(val){
-            this.displayName = val['displayname'] || 'unnamed';
-            this.displaydescription = val['displaydescription'] || "none";
-            this.reportVals = {
-                projectName: {'name': arches.translations.projectName, 'value': this.getResourceValue(val.resource['Name'][0],['Name_content','@display_value'])}, //['label_of_name','@display_value']
-                projectTimespan: {'name': arches.translations.projectTimespan, 'value': this.getResourceValue(val.resource, ['TimeSpan','TimeSpan_begin of the begin','@display_value'])},
-                projectTeam: {'name': arches.translations.projectTeam, 'value': this.getResourceValue(val.resource, ['carried out by','@display_value'])},
-                //collection: {'name': arches.translations.relatedCollectionSets, 'value': this.getResourceValue(val.resource['Used Set'], ['@display_value'])},
-            };
+            const documents = data.related_resources.related_resources.filter(
+                rr => rr.graph_id === self.documentGraphId
+            );
 
-            var findStatement= function(type){
-                try {
-                    self.reportVals.statements = val.resource['Statement'].map(function(statement){
-                        return {
-                            content:  {'name': arches.translations.projectStatement, 'value': self.getResourceValue(statement, ['Statement_content','@display_value'])},
-                            type: {'name': arches.translations.type, 'value': self.getResourceValue(statement, ['Statement_type','@display_value'])}
-                        };
-                    });
-                } catch(e) {
-                    self.reportVals.statements = [];
-                }
-                var foundStatement = self.reportVals.statements.find(function(statement) {
-                    return statement.type.value.split(",").indexOf(type) > -1;
+            documents.forEach((doc) => {
+                self.studiedDocuments.push({
+                    resourceid: doc.resourceinstanceid,
+                    name: doc.displayname,
                 });
-                return foundStatement ? foundStatement.content : {'name': arches.translations.projectStatement, 'value': 'None'};
-            };
+            });
 
-            this.reportVals.projectStatement = findStatement('description');
-
-            this.resourceLoading(false);
-            if (!this.collectionLoading()){
-                this.loading(false);
+            self.documentsLoading(false);
+            if (!self.resourceLoading()) {
+                self.loading(false);
             }
-        }, this);
+        } catch (e) {
+            console.error('Error loading related documents:', e);
+            self.documentsLoading(false);
+        }
+    };
 
-    }
+    this.loadRelatedDocuments();
 
-    ko.components.register('create-project-final-step', {
-        viewModel: viewModel,
-        template: createProjectFinalStepTemplate
-    });
-    return viewModel;
+    this.resourceData.subscribe(function(val) {
+        this.displayName = val.displayname || 'unnamed';
+        this.displaydescription = val.displaydescription || "none";
+
+        this.reportVals = {
+            projectName: {
+                name: arches.translations.projectName,
+                value: this.getResourceValue(val.resource['Name']?.[0], ['Label of Name', '@display_value']) ||
+                       this.getResourceValue(val.resource['Name']?.[0], ['Name_content', '@display_value']) ||
+                       this.displayName
+            },
+            projectTimespan: {
+                name: arches.translations.projectTimespan,
+                value: this.getResourceValue(val.resource, ['Period activity', 'Start date of period activity', '@display_value']) ||
+                       this.getResourceValue(val.resource, ['TimeSpan', 'TimeSpan_begin of the begin', '@display_value'])
+            },
+            projectTeam: {
+                name: arches.translations.projectTeam,
+                value: this.getResourceValue(val.resource, ['Carried out by Actor', '@display_value']) ||
+                       this.getResourceValue(val.resource, ['carried out by', '@display_value'])
+            },
+        };
+
+        const findStatement = (type) => {
+            try {
+                self.reportVals.statements = val.resource['Statement']?.map((statement) => ({
+                    content: {
+                        name: arches.translations.projectStatement,
+                        value: self.getResourceValue(statement, ['Content of Statement', '@display_value']) ||
+                               self.getResourceValue(statement, ['Statement_content', '@display_value'])
+                    },
+                    type: {
+                        name: arches.translations.type,
+                        value: self.getResourceValue(statement, ['Type of Statement', '@display_value']) ||
+                               self.getResourceValue(statement, ['Statement_type', '@display_value'])
+                    }
+                })) || [];
+            } catch (e) {
+                self.reportVals.statements = [];
+            }
+            const foundStatement = self.reportVals.statements.find((statement) => {
+                return statement.type?.value?.split(",").indexOf(type) > -1;
+            });
+            return foundStatement ? foundStatement.content : { name: arches.translations.projectStatement, value: 'None' };
+        };
+
+        this.reportVals.projectStatement = findStatement('description');
+
+        this.resourceLoading(false);
+        if (!this.documentsLoading()) {
+            this.loading(false);
+        }
+    }, this);
+};
+
+ko.components.register('create-project-final-step', {
+    viewModel: viewModel,
+    template: createProjectFinalStepTemplate
 });
+
+export default viewModel;
