@@ -1,0 +1,28 @@
+{% extends "javascript.htm" %}
+
+{% load static %}
+{% load l10n %}
+{% load i18n %}
+
+{% block arches_translations %}
+{{ block.super }}
+<div class='arches-translations'
+    style="display: none;"
+    project-name='{% trans "Project Name" as projectName %} "{{ projectName|escapejs }}"'
+    project-statement='{% trans "Project Statement" as projectStatement %} "{{ projectStatement|escapejs }}"'
+    project-start='{% trans "Project Start" as projectStart %} "{{ projectStart|escapejs }}"'
+    project-team='{% trans "Project Team" as projectTeam %} "{{ projectTeam|escapejs }}"'
+    project-timespan='{% trans "Project Timespan" as projectTimespan %} "{{ projectTimespan|escapejs }}"'
+    add-objects='{% trans "Add Objects" as addObjects %} "{{ addObjects|escapejs }}"'
+    summary='{% trans "Summary" as summary %} "{{ summary|escapejs }}"'
+    type='{% trans "Type" as type %} "{{ type|escapejs }}"'
+    document-placeholder='{% trans "Search for a document..." as documentPlaceholder %} "{{ documentPlaceholder|escapejs }}"'
+    select-primary-description-identifier-card='{% trans "Select a primary description identifier card" as selectPrimaryDescriptionIdentifierCard %} "{{ selectPrimaryDescriptionIdentifierCard|escapejs }}"'
+    issue-saving-workflow-step='{% trans "There was an issue saving the workflow step." as issueSavingWorkflowStep %} "{{ issueSavingWorkflowStep|escapejs }}"'
+    cleaning-up='{% trans "Cleaning up..." as cleaningUp %} "{{ cleaningUp|escapejs }}"'
+></div>
+{% endblock arches_translations %}
+
+{% block project_modules %}
+{{ block.super }}
+{% endblock project_modules %}
