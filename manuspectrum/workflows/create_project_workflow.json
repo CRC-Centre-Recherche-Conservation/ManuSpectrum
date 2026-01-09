@@ -5,7 +5,7 @@
     "component": "views/components/plugins/create-project-workflow",
     "componentname": "create-project-workflow",
     "config": {
-                "show": true,
+                "show": false,
                 "is_workflow": true,
                 "thumbnailBackgroundColor": "#9591ef",
                 "thumbnailCircleColor": "#b0adf3",
