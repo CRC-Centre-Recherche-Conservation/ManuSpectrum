@@ -13,7 +13,7 @@
         </div>
         <div style="flex: 1"></div>
         <div data-bind="component:{
-            name: 'views/components/widgets/resource-instance-creator',
+            name: 'resource-instance-creator',
             params: {
                 graphids: [
                     documentGraphId,
@@ -30,12 +30,12 @@
                     <div data-bind="css: {'loading-mask': reportDataLoading}">
                         <div class="afs-project-search-result-details-container" data-bind="foreach: targetResources">
                             <div class="search-result-item" data-bind="css: {'selected-instance': $parent.value().findIndex(
-                                res => res.resourceinstanceid === $data['_source']['resourceinstanceid']) >= 0},
-                            click: function(){$parent.updateTileData($data._source)}">
+                                res => res.resourceinstanceid === $data.resourceinstanceid) >= 0},
+                            click: function(){$parent.updateTileData($data)}">
                                 <div style="display: inline-flex;justify-content: space-between; align-items: baseline; width: 100%;">
-                                    <div class="summary-report-title" data-bind="text: $parent.getStringValue($data._source.displayname)"></div>
+                                    <div class="summary-report-title" data-bind="text: $parent.getStringValue($data.displayname)"></div>
                                 </div>
-                                <div class="summary-report-description" data-bind="html: $parent.stripTags($parent.getStringValue($data._source.displaydescription)) || '{% trans 'No description' as noDescription %}'"></div>
+                                <div class="summary-report-description" data-bind="html: $parent.stripTags($parent.getStringValue($data.displaydescription)) || '{% trans 'No description' as noDescription %}'"></div>
                             </div>
                         </div>
                     </div>

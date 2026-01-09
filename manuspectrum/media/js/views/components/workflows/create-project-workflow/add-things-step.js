@@ -48,8 +48,8 @@ const viewModel = function(params) {
             selected: true,
             inverted: false
         });
-        if (this.targetResources()?.[0]?._source) {
-            this.updateTileData(this.targetResources()[0]._source);
+        if (this.targetResources()?.[0]) {
+            this.updateTileData(this.targetResources()[0]);
         }
         self.updateSearchResults(self.termFilter());
     });
