@@ -97,8 +97,7 @@ const viewModel = function(params) {
         const nameTileData = {
             "da931fea-7020-11ef-8753-0575b5bada34": self.nameValue(),
             "da931fe9-7020-11ef-8753-0575b5bada34": null,
-            "da931feb-7020-11ef-8753-0575b5bada34": null,
-            "da931fec-7020-11ef-8753-0575b5bada34": null
+            "da931feb-7020-11ef-8753-0575b5bada34": null
         };
 
         const typeTileData = {
