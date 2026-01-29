@@ -196,7 +196,8 @@ class IIIFAnnotationSerializer:
         Process multiple annotations in batch to optimize queries.
 
         Args:
-            annotations_data: List of dicts with 'target' and 'resource_id'
+            annotations_data: List of dicts with 'target', 'resource_id',
+                              and optionally 'canvas_uri' and 'manifest_url'
 
         Returns:
             List of IIIF annotation representations
@@ -213,6 +214,8 @@ class IIIFAnnotationSerializer:
                     cls.to_representation(
                         anno_data["target"],
                         anno_data["resource_id"],
+                        canvas_uri=anno_data.get("canvas_uri"),
+                        manifest_url=anno_data.get("manifest_url"),
                     )
                 )
         finally:
@@ -634,27 +637,103 @@ class IIIFAnnotationSerializer:
         return see_also
 
     # ----------------------------------------------------------------------
+    # Target builder
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _build_target(
+        cls, target_string: str, canvas_uri: str | None = None, manifest_url: str | None = None
+    ) -> dict | str:
+        """
+        Build a IIIF SpecificResource target from a target string.
+
+        Args:
+            target_string: The target URL, possibly with #xywh fragment
+            canvas_uri: The canvas URI (without fragment)
+            manifest_url: The manifest URL
+
+        Returns:
+            dict: A IIIF SpecificResource target, or str if no fragment
+        """
+        if not target_string:
+            return target_string
+
+        # Parse the target string to extract canvas and fragment
+        fragment = None
+        base_canvas = canvas_uri
+
+        if "#" in target_string:
+            parts = target_string.split("#", 1)
+            if not base_canvas:
+                base_canvas = parts[0]
+            fragment = parts[1] if len(parts) > 1 else None
+        elif not base_canvas:
+            base_canvas = target_string
+
+        # If no fragment, return simple target (just the canvas URI)
+        if not fragment:
+            return base_canvas or target_string
+
+        # Build the SpecificResource target
+        source: dict = {
+            "id": base_canvas,
+            "type": "Canvas",
+        }
+
+        # Add partOf with manifest reference if available
+        if manifest_url:
+            source["partOf"] = [
+                {
+                    "id": manifest_url,
+                    "type": "Manifest",
+                }
+            ]
+
+        target: dict = {
+            "type": "SpecificResource",
+            "source": source,
+            "selector": {
+                "type": "FragmentSelector",
+                "conformsTo": "http://www.w3.org/TR/media-frags/",
+                "value": fragment,
+            },
+        }
+
+        return target
+
+    # ----------------------------------------------------------------------
     # Public API
     # ----------------------------------------------------------------------
 
     @classmethod
-    def to_representation(cls, target: str, resource_id: str) -> dict:
+    def to_representation(
+        cls,
+        target: str,
+        resource_id: str,
+        canvas_uri: str | None = None,
+        manifest_url: str | None = None,
+    ) -> dict:
         """
         Build a full IIIF Annotation representation for a given Arches resource.
 
         Args:
             target (str): The IIIF target (e.g., Canvas URL + #xywh).
             resource_id (str): The Arches resource UUID.
+            canvas_uri (str, optional): The canvas URI (without fragment).
+            manifest_url (str, optional): The manifest URL for partOf reference.
 
         Returns:
             dict: A IIIF Presentation API v3 compliant annotation.
         """
+        # Build structured target
+        structured_target = cls._build_target(target, canvas_uri, manifest_url)
+
         annotation: dict = {
             "@context": "http://iiif.io/api/presentation/3/context.json",
             "id": f"{cls.base_url_iiif}/annotation/{resource_id}",
             "type": "Annotation",
             "motivation": "supplementing",
-            "target": target,
+            "target": structured_target,
         }
 
         if not resource_id:

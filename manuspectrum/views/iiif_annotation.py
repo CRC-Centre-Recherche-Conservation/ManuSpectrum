@@ -224,6 +224,8 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
                         {
                             "target": self._convert_geojson_to_iiif_target(a),
                             "resource_id": str(a["analysis_id"]),
+                            "canvas_uri": canvas_uri,
+                            "manifest_url": a.get("manifest"),
                         }
                     )
                     canvas_mapping.setdefault(canvas_uri, []).append(idx)
@@ -384,6 +386,8 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
                 {
                     "target": self._convert_geojson_to_iiif_target(a),
                     "resource_id": str(a["analysis_id"]),
+                    "canvas_uri": canvas_uri,
+                    "manifest_url": a.get("manifest"),
                 }
                 for a in annos
             ]
@@ -449,7 +453,12 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
             anno = annos[0]  # 1 analysis -> 1 annotation
             target = self._convert_geojson_to_iiif_target(anno)
-            iiif_annotation = IIIFAnnotationSerializer.to_representation(target, resource_id=str(resource_id))
+            iiif_annotation = IIIFAnnotationSerializer.to_representation(
+                target,
+                resource_id=str(resource_id),
+                canvas_uri=anno.get("canvas"),
+                manifest_url=anno.get("manifest"),
+            )
 
             return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
 
