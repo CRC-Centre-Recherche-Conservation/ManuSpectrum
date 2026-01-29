@@ -415,87 +415,138 @@ class IIIFAnnotationSerializer:
     # ----------------------------------------------------------------------
 
     @classmethod
-    def _build_body(cls, tiles_data: dict) -> dict:
-        """Builds the IIIF `body` based on the available datatype nodes."""
-        # 1) Manifest
+    def _build_body(cls, tiles_data: dict) -> dict | list:
+        """
+        Builds the IIIF `body` based on the available datatype nodes.
+
+        Returns a single body dict if only one, or a list if multiple.
+        Per IIIF spec, body can be either a single resource or an array.
+        """
+        bodies: List[dict] = []
+
+        # 1) Manifest(s)
+        manifest_body = cls._build_manifest_body(tiles_data)
+        if manifest_body:
+            bodies.append(manifest_body)
+
+        # 2) Dataset files (can be multiple)
+        file_bodies = cls._build_file_bodies(tiles_data)
+        bodies.extend(file_bodies)
+
+        # 3) Fallback: TextualBody if no other body found
+        if not bodies:
+            name_node = cls.DATATYPE_NODES.get("name")
+            value = "No data available"
+            if name_node and name_node in tiles_data:
+                name_data = tiles_data[name_node]
+                if isinstance(name_data, dict):
+                    for lang_info in name_data.values():
+                        if isinstance(lang_info, dict) and lang_info.get("value"):
+                            value = lang_info["value"]
+                            break
+
+            bodies.append({
+                "type": "TextualBody",
+                "value": value,
+                "format": "text/plain",
+                "language": "fr",
+            })
+
+        # Return single object if only one, list if multiple (cleaner JSON output)
+        return bodies[0] if len(bodies) == 1 else bodies
+
+    @classmethod
+    def _build_manifest_body(cls, tiles_data: dict) -> dict | None:
+        """Build a Manifest body if present in tiles data."""
         manifest_node = cls.DATATYPE_NODES.get("manifest")
-        if manifest_node and manifest_node in tiles_data:
-            manifest_url = tiles_data[manifest_node]
-            if manifest_url:
-                if manifest_url in cls._manifest_cache:
-                    manifest_resource = cls._manifest_cache[manifest_url]
-                    label = manifest_resource["label"]
+        if not manifest_node or manifest_node not in tiles_data:
+            return None
+
+        manifest_url = tiles_data[manifest_node]
+        if not manifest_url:
+            return None
+
+        # Check cache first
+        if manifest_url in cls._manifest_cache:
+            manifest_resource = cls._manifest_cache[manifest_url]
+            label = manifest_resource["label"]
+            return {
+                "id": manifest_url,
+                "type": "Manifest",
+                "format": "application/ld+json",
+                "label": {"en": [label] if label else ["Manifest"]},
+            }
+
+        # Outside batch, fallback: try exact URL then relative path
+        if not cls._batch_mode:
+            from urllib.parse import urlparse
+
+            urls_to_try = [manifest_url]
+            if manifest_url.startswith(("http://", "https://")):
+                relative_path = urlparse(manifest_url).path
+                if relative_path:
+                    urls_to_try.append(relative_path)
+
+            for url_variant in urls_to_try:
+                try:
+                    m = IIIFManifest.objects.get(url=url_variant)
                     return {
                         "id": manifest_url,
                         "type": "Manifest",
                         "format": "application/ld+json",
-                        "label": {"en": [label] if label else ["Manifest"]},
+                        "label": {"en": [m.label] if m.label else ["Manifest"]},
                     }
-                # Outside batch, fallback: try exact URL then relative path
-                if not cls._batch_mode:
-                    from urllib.parse import urlparse
+                except IIIFManifest.DoesNotExist:
+                    continue
 
-                    urls_to_try = [manifest_url]
-                    if manifest_url.startswith(("http://", "https://")):
-                        relative_path = urlparse(manifest_url).path
-                        if relative_path:
-                            urls_to_try.append(relative_path)
+            logger.info(f"Manifest not found for URL: {manifest_url}")
 
-                    for url_variant in urls_to_try:
-                        try:
-                            m = IIIFManifest.objects.get(url=url_variant)
-                            return {
-                                "id": manifest_url,
-                                "type": "Manifest",
-                                "format": "application/ld+json",
-                                "label": {"en": [m.label] if m.label else ["Manifest"]},
-                            }
-                        except IIIFManifest.DoesNotExist:
-                            continue
+        return None
 
-                    logger.info(f"Manifest not found for URL: {manifest_url}")
+    @classmethod
+    def _build_file_bodies(cls, tiles_data: dict) -> List[dict]:
+        """Build Dataset bodies for all files in file_list."""
+        bodies: List[dict] = []
 
-        # 2) Dataset (file list)
         filelist_node = cls.DATATYPE_NODES.get("file_list")
-        if filelist_node and filelist_node in tiles_data:
-            file_data = tiles_data[filelist_node]
-            if isinstance(file_data, list) and file_data:
-                first_file = file_data[0]
-                mime_type = tiles_data.get(
-                    cls.DATATYPE_NODES.get("mime_type"),
-                    "application/octet-stream",
-                )
-                name_node = cls.DATATYPE_NODES.get("name")
-                label = cls._get_localized_string(
-                    tiles_data.get(
-                        name_node,
-                        {"en": {"value": "Dataset file"}},
-                    )
-                )
-                return {
-                    "id": settings.PUBLIC_SERVER_ADDRESS + first_file.get("url", "").lstrip("/"),
-                    "type": "Dataset",
-                    "format": mime_type,
-                    "label": label,
-                }
+        if not filelist_node or filelist_node not in tiles_data:
+            return bodies
 
-        # 3) Fallback: TextualBody
+        file_data = tiles_data[filelist_node]
+        if not isinstance(file_data, list) or not file_data:
+            return bodies
+
+        mime_type = tiles_data.get(
+            cls.DATATYPE_NODES.get("mime_type"),
+            "application/octet-stream",
+        )
         name_node = cls.DATATYPE_NODES.get("name")
-        value = "No data available"
-        if name_node and name_node in tiles_data:
-            name_data = tiles_data[name_node]
-            if isinstance(name_data, dict):
-                for lang_info in name_data.values():
-                    if isinstance(lang_info, dict) and lang_info.get("value"):
-                        value = lang_info["value"]
-                        break
+        base_label = cls._get_localized_string(
+            tiles_data.get(name_node, {"en": {"value": "Dataset file"}})
+        )
 
-        return {
-            "type": "TextualBody",
-            "value": value,
-            "format": "text/plain",
-            "language": "fr",
-        }
+        for idx, file_item in enumerate(file_data):
+            file_url = file_item.get("url", "")
+            if not file_url:
+                continue
+
+            # Add index to label if multiple files
+            if len(file_data) > 1:
+                label = {
+                    lang: [f"{vals[0]} ({idx + 1}/{len(file_data)})"]
+                    for lang, vals in base_label.items()
+                }
+            else:
+                label = base_label
+
+            bodies.append({
+                "id": settings.PUBLIC_SERVER_ADDRESS + file_url.lstrip("/"),
+                "type": "Dataset",
+                "format": mime_type,
+                "label": label,
+            })
+
+        return bodies
 
     # ----------------------------------------------------------------------
     # Metadata helpers
