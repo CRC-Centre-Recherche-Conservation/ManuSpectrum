@@ -32,3 +32,8 @@ dist/
 
 # Manuspectrum (other)
 *.csv
+
+
+CLAUDE.md
+docs_claude/
+.claude/
