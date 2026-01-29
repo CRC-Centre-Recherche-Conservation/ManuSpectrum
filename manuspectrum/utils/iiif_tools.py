@@ -124,6 +124,38 @@ class CanvasIIIF:
         return uri
 
     @staticmethod
+    def _get_image_service_url_v2(canvas: dict) -> str | None:
+        """Extract the image service URL from a v2 canvas."""
+        images = canvas.get('images', [])
+        if images:
+            resource = images[0].get('resource', {})
+            service = resource.get('service', {})
+            if isinstance(service, list):
+                service = service[0] if service else {}
+            return service.get('@id')
+        return None
+
+    @staticmethod
+    def _get_image_service_url_v3(canvas: dict) -> str | None:
+        """Extract the image service URL from a v3 canvas."""
+        items = canvas.get('items', [])
+        if not items:
+            return None
+        first_item = items[0]
+        inner_items = first_item.get('items', [])
+        if not inner_items:
+            return None
+        body = inner_items[0].get('body', {})
+        if isinstance(body, list):
+            body = body[0] if body else {}
+        service = body.get('service', [])
+        if isinstance(service, list):
+            service = service[0] if service else {}
+        if isinstance(service, dict):
+            return service.get('id') or service.get('@id')
+        return None
+
+    @staticmethod
     def get_canvas_index(manifest_data, canvas_url):
         """
         Finds the 1-based index of a canvas in a IIIF v2/v3 manifest.
@@ -131,9 +163,13 @@ class CanvasIIIF:
         Returns the position (1-indexed) of the canvas in the manifest's
         sequences[0].canvases (v2) or items (v3) list.
 
+        Tries to match by:
+        1. Canvas ID (exact or normalized)
+        2. Image service URL inside the canvas
+
         Args:
             manifest_data: The parsed manifest JSON
-            canvas_url: The canvas URI to find
+            canvas_url: The canvas URI or image service URL to find
 
         Returns:
             int: 1-based index of the canvas, or None if not found
@@ -148,9 +184,13 @@ class CanvasIIIF:
             items = manifest_data.get('items', [])
             for idx, canvas in enumerate(items):
                 canvas_id = canvas.get('id', '')
-                # Try exact match first, then normalized match
+                # Try canvas ID match
                 if canvas_id == canvas_url or CanvasIIIF._normalize_uri(canvas_id) == normalized_target:
                     return idx + 1  # 1-indexed
+                # Try image service URL match
+                service_url = CanvasIIIF._get_image_service_url_v3(canvas)
+                if service_url and (service_url == canvas_url or CanvasIIIF._normalize_uri(service_url) == normalized_target):
+                    return idx + 1
             return None
         else:
             sequences = manifest_data.get('sequences', [])
@@ -158,9 +198,13 @@ class CanvasIIIF:
                 canvases = sequences[0].get('canvases', [])
                 for idx, canvas in enumerate(canvases):
                     canvas_id = canvas.get('@id', '')
-                    # Try exact match first, then normalized match
+                    # Try canvas ID match
                     if canvas_id == canvas_url or CanvasIIIF._normalize_uri(canvas_id) == normalized_target:
                         return idx + 1  # 1-indexed
+                    # Try image service URL match
+                    service_url = CanvasIIIF._get_image_service_url_v2(canvas)
+                    if service_url and (service_url == canvas_url or CanvasIIIF._normalize_uri(service_url) == normalized_target):
+                        return idx + 1
             return None
 
     @staticmethod
