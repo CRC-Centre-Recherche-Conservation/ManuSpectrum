@@ -359,9 +359,28 @@ class IIIFAnnotationSerializer:
 
     @classmethod
     def _batch_load_manifests(cls, manifest_urls: List[str]):
-        """Load all manifests in one query."""
-        manifests = IIIFManifest.objects.filter(url__in=manifest_urls).values("url", "label")
-        cls._manifest_cache = {m["url"]: {"label": m["label"]} for m in manifests}
+        """Load all manifests in one query, handling both full URLs and relative paths."""
+        from urllib.parse import urlparse
+
+        # Build list of all URL variants to search (full URLs + relative paths)
+        all_variants = set(manifest_urls)
+        url_to_relative = {}
+        for url in manifest_urls:
+            if url.startswith(("http://", "https://")):
+                relative_path = urlparse(url).path
+                if relative_path:
+                    all_variants.add(relative_path)
+                    url_to_relative[url] = relative_path
+
+        manifests = IIIFManifest.objects.filter(url__in=list(all_variants)).values("url", "label")
+        cache = {m["url"]: {"label": m["label"]} for m in manifests}
+
+        # Map original full URLs to their data (found via relative path)
+        for full_url, relative_path in url_to_relative.items():
+            if full_url not in cache and relative_path in cache:
+                cache[full_url] = cache[relative_path]
+
+        cls._manifest_cache = cache
 
     @classmethod
     def _clear_caches(cls):
@@ -402,24 +421,36 @@ class IIIFAnnotationSerializer:
             if manifest_url:
                 if manifest_url in cls._manifest_cache:
                     manifest_resource = cls._manifest_cache[manifest_url]
+                    label = manifest_resource["label"]
                     return {
                         "id": manifest_url,
                         "type": "Manifest",
                         "format": "application/ld+json",
-                        "label": {"en": manifest_resource["label"]},
+                        "label": {"en": [label] if label else ["Manifest"]},
                     }
-                # Outside batch, fallback: only one request possible
+                # Outside batch, fallback: try exact URL then relative path
                 if not cls._batch_mode:
-                    try:
-                        m = IIIFManifest.objects.get(url=manifest_url)
-                        return {
-                            "id": manifest_url,
-                            "type": "Manifest",
-                            "format": "application/ld+json",
-                            "label": {"en": m.label},
-                        }
-                    except IIIFManifest.DoesNotExist:
-                        logger.info(f"Manifest not found for URL: {manifest_url}")
+                    from urllib.parse import urlparse
+
+                    urls_to_try = [manifest_url]
+                    if manifest_url.startswith(("http://", "https://")):
+                        relative_path = urlparse(manifest_url).path
+                        if relative_path:
+                            urls_to_try.append(relative_path)
+
+                    for url_variant in urls_to_try:
+                        try:
+                            m = IIIFManifest.objects.get(url=url_variant)
+                            return {
+                                "id": manifest_url,
+                                "type": "Manifest",
+                                "format": "application/ld+json",
+                                "label": {"en": [m.label] if m.label else ["Manifest"]},
+                            }
+                        except IIIFManifest.DoesNotExist:
+                            continue
+
+                    logger.info(f"Manifest not found for URL: {manifest_url}")
 
         # 2) Dataset (file list)
         filelist_node = cls.DATATYPE_NODES.get("file_list")
