@@ -38,6 +38,7 @@ class IIIFAnnotationSerializer:
     }
 
     # caches batch
+    _batch_mode: bool = False
     _concept_cache: Dict[str, dict] = {}
     _resource_cache: Dict[str, dict] = {}
     _manifest_cache: Dict[str, dict] = {}  # url -> {"label": ...}
