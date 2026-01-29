@@ -601,23 +601,23 @@ class TestCacheInvalidation(TestCase):
         _delete_cache_keys(["nonexistent_key"])
 
     def test_delete_page_patterns(self):
-        """Should delete all cached pages for a resource."""
+        """Should delete all cached pages for a resource (v3 by default)."""
         from manuspectrum.views.iiif_annotation import _delete_page_patterns
 
         resource_id = str(uuid.uuid4())
 
-        # Setup cached pages
-        cache.set(f"iiif_page_list_{resource_id}", [0, 1, 2])
-        cache.set(f"iiif_page_{resource_id}_0", "page0")
-        cache.set(f"iiif_page_{resource_id}_1", "page1")
-        cache.set(f"iiif_page_{resource_id}_2", "page2")
+        # Setup cached pages with version prefix
+        cache.set(f"iiif_v3_page_list_{resource_id}", [0, 1, 2])
+        cache.set(f"iiif_v3_page_{resource_id}_0", "page0")
+        cache.set(f"iiif_v3_page_{resource_id}_1", "page1")
+        cache.set(f"iiif_v3_page_{resource_id}_2", "page2")
 
-        _delete_page_patterns(resource_id)
+        _delete_page_patterns(resource_id, "v3")
 
-        self.assertIsNone(cache.get(f"iiif_page_list_{resource_id}"))
-        self.assertIsNone(cache.get(f"iiif_page_{resource_id}_0"))
-        self.assertIsNone(cache.get(f"iiif_page_{resource_id}_1"))
-        self.assertIsNone(cache.get(f"iiif_page_{resource_id}_2"))
+        self.assertIsNone(cache.get(f"iiif_v3_page_list_{resource_id}"))
+        self.assertIsNone(cache.get(f"iiif_v3_page_{resource_id}_0"))
+        self.assertIsNone(cache.get(f"iiif_v3_page_{resource_id}_1"))
+        self.assertIsNone(cache.get(f"iiif_v3_page_{resource_id}_2"))
 
     def test_delete_page_patterns_no_list(self):
         """Should handle case when page list doesn't exist."""
@@ -643,7 +643,7 @@ class TestCacheInvalidationSignals(TestCase):
     @patch('manuspectrum.views.iiif_annotation.ResourceXResource')
     @patch('manuspectrum.views.iiif_annotation._delete_cache_keys')
     def test_invalidate_for_analysis_id(self, mock_delete, mock_rxr):
-        """Should invalidate annotation cache and related collections."""
+        """Should invalidate annotation cache and related collections (v2 and v3)."""
         from manuspectrum.views.iiif_annotation import _invalidate_for_analysis_id
 
         analysis_id = uuid.uuid4()
@@ -658,8 +658,11 @@ class TestCacheInvalidationSignals(TestCase):
 
         _invalidate_for_analysis_id(analysis_id)
 
-        # Should delete annotation cache
-        mock_delete.assert_any_call([f"iiif_annotation_{analysis_id}"])
+        # Should delete annotation cache for both v2 and v3
+        mock_delete.assert_any_call([
+            f"iiif_v3_annotation_{analysis_id}",
+            f"iiif_v2_annotation_{analysis_id}",
+        ])
 
     @patch('manuspectrum.views.iiif_annotation._invalidate_for_analysis_id')
     def test_signal_handler_vwannotation(self, mock_invalidate):
