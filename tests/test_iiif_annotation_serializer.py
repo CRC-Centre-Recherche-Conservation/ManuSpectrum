@@ -44,8 +44,14 @@ class TestToRepresentation(TestCase):
         self.assertEqual(result["@context"], "http://iiif.io/api/presentation/3/context.json")
         self.assertEqual(result["type"], "Annotation")
         self.assertEqual(result["motivation"], "supplementing")
-        self.assertEqual(result["target"], target)
         self.assertIn(resource_id, result["id"])
+
+        # Target with fragment should be a SpecificResource (IIIF v3)
+        self.assertEqual(result["target"]["type"], "SpecificResource")
+        self.assertEqual(result["target"]["source"]["id"], "https://example.com/canvas/1")
+        self.assertEqual(result["target"]["source"]["type"], "Canvas")
+        self.assertEqual(result["target"]["selector"]["type"], "FragmentSelector")
+        self.assertEqual(result["target"]["selector"]["value"], "xywh=100,100,200,200")
 
     def test_annotation_without_resource_id(self):
         """Annotation without resource_id should have fallback body."""
@@ -136,6 +142,33 @@ class TestBuildBody(TestCase):
 
         self.assertEqual(result["type"], "Dataset")
         self.assertIn("data.csv", result["id"])
+
+    def test_body_with_multiple_files(self):
+        """Body should be a list when multiple files are present."""
+        filelist_node = self.serializer.DATATYPE_NODES["file_list"]
+        name_node = self.serializer.DATATYPE_NODES["name"]
+
+        tiles_data = {
+            filelist_node: [
+                {"url": "/files/spectrum1.h5", "name": "spectrum1.h5"},
+                {"url": "/files/spectrum2.h5", "name": "spectrum2.h5"},
+                {"url": "/files/spectrum3.h5", "name": "spectrum3.h5"},
+            ],
+            name_node: {"en": {"value": "Multi-file Dataset"}}
+        }
+
+        result = self.serializer._build_body(tiles_data)
+
+        # Should return a list of 3 bodies
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 3)
+
+        # Each body should be a Dataset
+        for idx, body in enumerate(result):
+            self.assertEqual(body["type"], "Dataset")
+            self.assertIn(f"spectrum{idx + 1}.h5", body["id"])
+            # Label should include index (1/3, 2/3, 3/3)
+            self.assertIn(f"({idx + 1}/3)", body["label"]["en"][0])
 
     def test_body_fallback_to_textual(self):
         """Body should fallback to TextualBody when no manifest or files."""
