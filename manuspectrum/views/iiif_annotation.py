@@ -579,136 +579,6 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
 
 # ======================================================================================
-# Cache invalidation signals
-# ======================================================================================
-
-
-def _delete_cache_keys(keys: list[str]):
-    for key in keys:
-        try:
-            cache.delete(key)
-            cache.delete(_cache_etag_key(key))
-        except Exception:
-            pass
-
-
-def _delete_page_patterns(resource_id, version: str = "v3"):
-    """
-    Delete all page caches for a given resource_id and version.
-    """
-    list_key = f"iiif_{version}_page_list_{resource_id}"
-    page_nums = cache.get(list_key)
-
-    if not page_nums:
-        return
-
-    # Delete each page individually
-    for num in page_nums:
-        cache.delete(f"iiif_{version}_page_{resource_id}_{num}")
-        cache.delete(f"iiif_{version}_page_{resource_id}_{num}__etag")
-
-    # Delete the index list itself
-    cache.delete(list_key)
-
-
-def _invalidate_for_analysis_id(analysis_uuid):
-    """
-    Invalidate:
-      - the single annotation cache for this analysis (v2 and v3)
-      - any collections/pages that include this analysis via Component and/or Document.
-    """
-    _delete_cache_keys([
-        f"iiif_v3_annotation_{analysis_uuid}",
-        f"iiif_v2_annotation_{analysis_uuid}",
-    ])
-
-    DOCUMENT_GRAPH = IIIFAnnotationMixin.DOCUMENT_GRAPH_ID
-    COMPONENT_GRAPH = IIIFAnnotationMixin.COMPONENT_GRAPH_ID
-
-    rels = ResourceXResource.objects.filter(from_resource_id=analysis_uuid)
-
-    doc_ids: set = set()
-    component_ids: set = set()
-
-    for r in rels:
-        to_gid = str(r.to_resource_graph_id) if r.to_resource_graph_id else None
-        if to_gid == DOCUMENT_GRAPH:
-            doc_ids.add(r.to_resource_id)
-        elif to_gid == COMPONENT_GRAPH:
-            component_ids.add(r.to_resource_id)
-
-    if component_ids:
-        comp_to_doc = ResourceXResource.objects.filter(
-            from_resource_id__in=list(component_ids)
-        )
-        for r in comp_to_doc:
-            to_gid = str(r.to_resource_graph_id) if r.to_resource_graph_id else None
-            if to_gid == DOCUMENT_GRAPH:
-                doc_ids.add(r.to_resource_id)
-
-    if not doc_ids:
-        return
-
-    for doc_id in doc_ids:
-        _delete_cache_keys([
-            f"iiif_v3_collection_{doc_id}",
-            f"iiif_v2_collection_{doc_id}",
-        ])
-        _delete_page_patterns(doc_id, "v3")
-        _delete_page_patterns(doc_id, "v2")
-
-
-@receiver([post_save, post_delete], sender=VwAnnotation)
-def invalidate_on_vwannotation_change(sender, instance: VwAnnotation, **kwargs):
-    """
-    Any change to a VwAnnotation affects the corresponding Analysis and
-    thus any Collections/Pages that include it.
-    """
-    try:
-        analysis_uuid = instance.resourceinstance_id
-        _invalidate_for_analysis_id(analysis_uuid)
-    except Exception as e:  # pragma: no cover
-        logger.error(f"Cache invalidation (VwAnnotation) failed: {e}")
-
-
-@receiver([post_save, post_delete], sender=ResourceXResource)
-def invalidate_on_relation_change(sender, instance: ResourceXResource, **kwargs):
-    """
-    If a relation is created/removed involving an Analysis -> Component/Document,
-    we must invalidate Collections/Pages that depend on this linkage.
-    """
-    try:
-        ANALYSIS_GRAPH = IIIFAnnotationMixin.ANALYSIS_GRAPH_ID
-        DOCUMENT_GRAPH = IIIFAnnotationMixin.DOCUMENT_GRAPH_ID
-        COMPONENT_GRAPH = IIIFAnnotationMixin.COMPONENT_GRAPH_ID
-
-        is_analysis_from = str(instance.from_resource_graph_id) == ANALYSIS_GRAPH
-        is_analysis_to = str(instance.to_resource_graph_id) == ANALYSIS_GRAPH
-
-        if is_analysis_from:
-            _invalidate_for_analysis_id(instance.from_resource_id)
-
-        elif is_analysis_to:
-            _invalidate_for_analysis_id(instance.to_resource_id)
-
-        else:
-            to_gid = str(instance.to_resource_graph_id) if instance.to_resource_graph_id else None
-            from_gid = str(instance.from_resource_graph_id) if instance.from_resource_graph_id else None
-
-            if from_gid == COMPONENT_GRAPH and to_gid == DOCUMENT_GRAPH:
-                doc_id = instance.to_resource_id
-                _delete_cache_keys([
-                    f"iiif_v3_collection_{doc_id}",
-                    f"iiif_v2_collection_{doc_id}",
-                ])
-                _delete_page_patterns(doc_id, "v3")
-                _delete_page_patterns(doc_id, "v2")
-
-    except Exception as e:  # pragma: no cover
-        logger.error(f"Cache invalidation (ResourceXResource) failed: {e}")
-
-
-# ======================================================================================
 # V2 Views (IIIF Presentation API 2.0 / Open Annotation)
 # ======================================================================================
 
@@ -911,3 +781,134 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
         except Exception as e:  # pragma: no cover
             logger.error(f"Error generating v2 annotation: {e}")
             return JsonResponse({"error": str(e)}, status=500)
+
+
+# ======================================================================================
+# Cache invalidation signals
+# ======================================================================================
+
+
+def _delete_cache_keys(keys: list[str]):
+    for key in keys:
+        try:
+            cache.delete(key)
+            cache.delete(_cache_etag_key(key))
+        except Exception:
+            pass
+
+
+def _delete_page_patterns(resource_id, version: str = "v3"):
+    """
+    Delete all page caches for a given resource_id and version.
+    """
+    list_key = f"iiif_{version}_page_list_{resource_id}"
+    page_nums = cache.get(list_key)
+
+    if not page_nums:
+        return
+
+    # Delete each page individually
+    for num in page_nums:
+        cache.delete(f"iiif_{version}_page_{resource_id}_{num}")
+        cache.delete(f"iiif_{version}_page_{resource_id}_{num}__etag")
+
+    # Delete the index list itself
+    cache.delete(list_key)
+
+
+def _invalidate_for_analysis_id(analysis_uuid):
+    """
+    Invalidate:
+      - the single annotation cache for this analysis (v2 and v3)
+      - any collections/pages that include this analysis via Component and/or Document.
+    """
+    _delete_cache_keys([
+        f"iiif_v3_annotation_{analysis_uuid}",
+        f"iiif_v2_annotation_{analysis_uuid}",
+    ])
+
+    DOCUMENT_GRAPH = IIIFAnnotationMixin.DOCUMENT_GRAPH_ID
+    COMPONENT_GRAPH = IIIFAnnotationMixin.COMPONENT_GRAPH_ID
+
+    rels = ResourceXResource.objects.filter(from_resource_id=analysis_uuid)
+
+    doc_ids: set = set()
+    component_ids: set = set()
+
+    for r in rels:
+        to_gid = str(r.to_resource_graph_id) if r.to_resource_graph_id else None
+        if to_gid == DOCUMENT_GRAPH:
+            doc_ids.add(r.to_resource_id)
+        elif to_gid == COMPONENT_GRAPH:
+            component_ids.add(r.to_resource_id)
+
+    if component_ids:
+        comp_to_doc = ResourceXResource.objects.filter(
+            from_resource_id__in=list(component_ids)
+        )
+        for r in comp_to_doc:
+            to_gid = str(r.to_resource_graph_id) if r.to_resource_graph_id else None
+            if to_gid == DOCUMENT_GRAPH:
+                doc_ids.add(r.to_resource_id)
+
+    if not doc_ids:
+        return
+
+    for doc_id in doc_ids:
+        _delete_cache_keys([
+            f"iiif_v3_collection_{doc_id}",
+            f"iiif_v2_collection_{doc_id}",
+        ])
+        _delete_page_patterns(doc_id, "v3")
+        _delete_page_patterns(doc_id, "v2")
+
+
+@receiver([post_save, post_delete], sender=VwAnnotation)
+def invalidate_on_vwannotation_change(sender, instance: VwAnnotation, **kwargs):
+    """
+    Any change to a VwAnnotation affects the corresponding Analysis and
+    thus any Collections/Pages that include it.
+    """
+    try:
+        analysis_uuid = instance.resourceinstance_id
+        _invalidate_for_analysis_id(analysis_uuid)
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Cache invalidation (VwAnnotation) failed: {e}")
+
+
+@receiver([post_save, post_delete], sender=ResourceXResource)
+def invalidate_on_relation_change(sender, instance: ResourceXResource, **kwargs):
+    """
+    If a relation is created/removed involving an Analysis -> Component/Document,
+    we must invalidate Collections/Pages that depend on this linkage.
+    """
+    try:
+        ANALYSIS_GRAPH = IIIFAnnotationMixin.ANALYSIS_GRAPH_ID
+        DOCUMENT_GRAPH = IIIFAnnotationMixin.DOCUMENT_GRAPH_ID
+        COMPONENT_GRAPH = IIIFAnnotationMixin.COMPONENT_GRAPH_ID
+
+        is_analysis_from = str(instance.from_resource_graph_id) == ANALYSIS_GRAPH
+        is_analysis_to = str(instance.to_resource_graph_id) == ANALYSIS_GRAPH
+
+        if is_analysis_from:
+            _invalidate_for_analysis_id(instance.from_resource_id)
+
+        elif is_analysis_to:
+            _invalidate_for_analysis_id(instance.to_resource_id)
+
+        else:
+            to_gid = str(instance.to_resource_graph_id) if instance.to_resource_graph_id else None
+            from_gid = str(instance.from_resource_graph_id) if instance.from_resource_graph_id else None
+
+            if from_gid == COMPONENT_GRAPH and to_gid == DOCUMENT_GRAPH:
+                doc_id = instance.to_resource_id
+                _delete_cache_keys([
+                    f"iiif_v3_collection_{doc_id}",
+                    f"iiif_v2_collection_{doc_id}",
+                ])
+                _delete_page_patterns(doc_id, "v3")
+                _delete_page_patterns(doc_id, "v2")
+
+    except Exception as e:  # pragma: no cover
+        logger.error(f"Cache invalidation (ResourceXResource) failed: {e}")
+
