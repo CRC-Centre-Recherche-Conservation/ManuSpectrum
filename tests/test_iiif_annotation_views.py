@@ -813,3 +813,187 @@ class TestGetRelatedAnalyses(TestCase):
         result = self.view._get_related_analyses(resource)
 
         self.assertEqual(result, [])
+
+
+# =============================================================================
+# CANVAS INDEX TESTS (iiif_tools.py)
+# =============================================================================
+
+
+class TestGetCanvasIndex(TestCase):
+    """Tests for CanvasIIIF.get_canvas_index function."""
+
+    def test_finds_canvas_in_v3_manifest(self):
+        """Should find canvas position in IIIF v3 manifest."""
+        from manuspectrum.utils.iiif_tools import CanvasIIIF
+
+        manifest_v3 = {
+            "@context": "http://iiif.io/api/presentation/3/context.json",
+            "id": "https://example.com/manifest",
+            "type": "Manifest",
+            "items": [
+                {"id": "https://example.com/canvas/1", "type": "Canvas"},
+                {"id": "https://example.com/canvas/2", "type": "Canvas"},
+                {"id": "https://example.com/canvas/3", "type": "Canvas"},
+            ]
+        }
+
+        # First canvas = position 1
+        self.assertEqual(CanvasIIIF.get_canvas_index(manifest_v3, "https://example.com/canvas/1"), 1)
+        # Second canvas = position 2
+        self.assertEqual(CanvasIIIF.get_canvas_index(manifest_v3, "https://example.com/canvas/2"), 2)
+        # Third canvas = position 3
+        self.assertEqual(CanvasIIIF.get_canvas_index(manifest_v3, "https://example.com/canvas/3"), 3)
+
+    def test_finds_canvas_in_v2_manifest(self):
+        """Should find canvas position in IIIF v2 manifest."""
+        from manuspectrum.utils.iiif_tools import CanvasIIIF
+
+        manifest_v2 = {
+            "@context": "http://iiif.io/api/presentation/2/context.json",
+            "@id": "https://example.com/manifest",
+            "@type": "sc:Manifest",
+            "sequences": [{
+                "@id": "https://example.com/sequence/1",
+                "canvases": [
+                    {"@id": "https://example.com/canvas/1", "@type": "sc:Canvas"},
+                    {"@id": "https://example.com/canvas/2", "@type": "sc:Canvas"},
+                    {"@id": "https://example.com/canvas/3", "@type": "sc:Canvas"},
+                ]
+            }]
+        }
+
+        # First canvas = position 1
+        self.assertEqual(CanvasIIIF.get_canvas_index(manifest_v2, "https://example.com/canvas/1"), 1)
+        # Second canvas = position 2
+        self.assertEqual(CanvasIIIF.get_canvas_index(manifest_v2, "https://example.com/canvas/2"), 2)
+        # Third canvas = position 3
+        self.assertEqual(CanvasIIIF.get_canvas_index(manifest_v2, "https://example.com/canvas/3"), 3)
+
+    def test_returns_none_for_unknown_canvas(self):
+        """Should return None when canvas is not found."""
+        from manuspectrum.utils.iiif_tools import CanvasIIIF
+
+        manifest_v3 = {
+            "@context": "http://iiif.io/api/presentation/3/context.json",
+            "items": [
+                {"id": "https://example.com/canvas/1", "type": "Canvas"},
+            ]
+        }
+
+        result = CanvasIIIF.get_canvas_index(manifest_v3, "https://example.com/canvas/unknown")
+        self.assertIsNone(result)
+
+    def test_handles_normalized_uri_http_https(self):
+        """Should match canvas URIs with different http/https schemes."""
+        from manuspectrum.utils.iiif_tools import CanvasIIIF
+
+        manifest_v3 = {
+            "@context": "http://iiif.io/api/presentation/3/context.json",
+            "items": [
+                {"id": "https://example.com/canvas/1", "type": "Canvas"},
+            ]
+        }
+
+        # Search with http:// but manifest has https://
+        result = CanvasIIIF.get_canvas_index(manifest_v3, "http://example.com/canvas/1")
+        self.assertEqual(result, 1)
+
+    def test_handles_trailing_slashes(self):
+        """Should match canvas URIs regardless of trailing slashes."""
+        from manuspectrum.utils.iiif_tools import CanvasIIIF
+
+        manifest_v3 = {
+            "@context": "http://iiif.io/api/presentation/3/context.json",
+            "items": [
+                {"id": "https://example.com/canvas/1", "type": "Canvas"},
+            ]
+        }
+
+        # Search with trailing slash
+        result = CanvasIIIF.get_canvas_index(manifest_v3, "https://example.com/canvas/1/")
+        self.assertEqual(result, 1)
+
+    def test_returns_none_for_empty_manifest(self):
+        """Should return None for empty or None manifest."""
+        from manuspectrum.utils.iiif_tools import CanvasIIIF
+
+        self.assertIsNone(CanvasIIIF.get_canvas_index(None, "https://example.com/canvas/1"))
+        self.assertIsNone(CanvasIIIF.get_canvas_index({}, "https://example.com/canvas/1"))
+
+    def test_returns_none_for_empty_canvas_url(self):
+        """Should return None for empty canvas URL."""
+        from manuspectrum.utils.iiif_tools import CanvasIIIF
+
+        manifest_v3 = {
+            "@context": "http://iiif.io/api/presentation/3/context.json",
+            "items": [{"id": "https://example.com/canvas/1", "type": "Canvas"}]
+        }
+
+        self.assertIsNone(CanvasIIIF.get_canvas_index(manifest_v3, None))
+        self.assertIsNone(CanvasIIIF.get_canvas_index(manifest_v3, ""))
+
+
+class TestGetCanvasPageNumbers(TestCase):
+    """Tests for _get_canvas_page_numbers method in views."""
+
+    def setUp(self):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
+        self.view = IIIFAnnotationCollectionView()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch.object(
+        __import__('manuspectrum.views.iiif_annotation', fromlist=['IIIFAnnotationCollectionView']).IIIFAnnotationCollectionView,
+        '_get_manifest_data'
+    )
+    def test_maps_canvas_to_manifest_position(self, mock_get_manifest):
+        """Should map canvas URIs to their position in the manifest."""
+        # Mock manifest data
+        mock_get_manifest.return_value = {
+            "@context": "http://iiif.io/api/presentation/3/context.json",
+            "items": [
+                {"id": "https://example.com/canvas/1", "type": "Canvas"},
+                {"id": "https://example.com/canvas/2", "type": "Canvas"},
+                {"id": "https://example.com/canvas/3", "type": "Canvas"},
+            ]
+        }
+
+        # Grouped annotations - canvas/2 and canvas/3 have annotations
+        grouped_annos = {
+            "https://example.com/canvas/2": [{"manifest": "https://example.com/manifest"}],
+            "https://example.com/canvas/3": [{"manifest": "https://example.com/manifest"}],
+        }
+
+        result = self.view._get_canvas_page_numbers(grouped_annos)
+
+        # canvas/2 is at position 2, canvas/3 is at position 3
+        self.assertEqual(result["https://example.com/canvas/2"], 2)
+        self.assertEqual(result["https://example.com/canvas/3"], 3)
+
+    @patch.object(
+        __import__('manuspectrum.views.iiif_annotation', fromlist=['IIIFAnnotationCollectionView']).IIIFAnnotationCollectionView,
+        '_get_manifest_data'
+    )
+    def test_uses_fallback_when_canvas_not_found(self, mock_get_manifest):
+        """Should use hash fallback when canvas is not found in manifest."""
+        mock_get_manifest.return_value = {
+            "@context": "http://iiif.io/api/presentation/3/context.json",
+            "items": [
+                {"id": "https://example.com/canvas/1", "type": "Canvas"},
+            ]
+        }
+
+        grouped_annos = {
+            "https://example.com/canvas/unknown": [{"manifest": "https://example.com/manifest"}],
+        }
+
+        result = self.view._get_canvas_page_numbers(grouped_annos)
+
+        # Should use hash fallback (not None, and between 1 and 10001)
+        page_num = result["https://example.com/canvas/unknown"]
+        self.assertIsNotNone(page_num)
+        self.assertGreaterEqual(page_num, 1)
+        self.assertLessEqual(page_num, 10001)
