@@ -302,6 +302,7 @@ class TestGetAnnotationsFromAnalyses(TestCase):
 
         mock_annotation = MagicMock()
         mock_annotation.resourceinstance_id = analysis_id
+        mock_annotation.canvas = "https://example.com/canvas/1"  # Direct attribute from VwAnnotation
         mock_annotation.feature = {
             "properties": {
                 "canvas": "https://example.com/canvas/1",
