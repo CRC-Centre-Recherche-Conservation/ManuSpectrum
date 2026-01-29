@@ -564,3 +564,304 @@ class TestExtractResourceId(TestCase):
         """Should return empty string for None."""
         result = self.serializer._extract_resource_id(None)
         self.assertEqual(result, "")
+
+
+# ======================================================================================
+# Tests for IIIFAnnotationSerializerV2
+# ======================================================================================
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestIIIFAnnotationSerializerV2Setup(TestCase):
+    """Base class with common setup for v2 serializer tests."""
+
+    def setUp(self):
+        from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2
+        self.serializer._clear_caches()
+        self.serializer._batch_mode = False
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestV2ToRepresentation(TestCase):
+    """Tests for the v2 to_representation method."""
+
+    def setUp(self):
+        from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2
+        self.serializer._clear_caches()
+        self.serializer._batch_mode = False
+
+    def test_v2_basic_annotation_structure(self):
+        """V2 Annotation should have required IIIF v2 fields."""
+        resource_id = str(uuid.uuid4())
+        target = "https://example.com/canvas/1#xywh=100,100,200,200"
+
+        with patch.object(self.serializer, '_get_resource_tiles', return_value={}):
+            result = self.serializer.to_representation(target, resource_id)
+
+        # V2 uses @context, @id, @type instead of context, id, type
+        self.assertEqual(result["@context"], "http://iiif.io/api/presentation/2/context.json")
+        self.assertEqual(result["@type"], "oa:Annotation")
+        self.assertEqual(result["motivation"], "oa:commenting")
+        self.assertIn(resource_id, result["@id"])
+        self.assertIn("/v2/annotation/", result["@id"])
+
+        # V2 uses 'on' instead of 'target'
+        self.assertIn("on", result)
+        self.assertNotIn("target", result)
+
+        # V2 uses 'resource' instead of 'body'
+        self.assertIn("resource", result)
+        self.assertNotIn("body", result)
+
+    def test_v2_annotation_without_resource_id(self):
+        """V2 Annotation without resource_id should have fallback resource."""
+        target = "https://example.com/canvas/1"
+
+        result = self.serializer.to_representation(target, resource_id="")
+
+        self.assertEqual(result["resource"]["@type"], "cnt:ContentAsText")
+        self.assertEqual(result["resource"]["chars"], "No data available")
+        self.assertEqual(result["resource"]["format"], "text/plain")
+
+    @patch('manuspectrum.views.serializers.iiif_annotation.Tile')
+    def test_v2_annotation_with_name_label(self, mock_tile):
+        """V2 Annotation should include label as simple string."""
+        resource_id = str(uuid.uuid4())
+        name_node = self.serializer.DATATYPE_NODES["name"]
+
+        tiles_data = {
+            name_node: {
+                "en": {"value": "Analysis Name"},
+                "fr": {"value": "Nom de l'analyse"}
+            }
+        }
+
+        with patch.object(self.serializer, '_get_resource_tiles', return_value=tiles_data):
+            result = self.serializer.to_representation(
+                "https://example.com/canvas/1",
+                resource_id
+            )
+
+        # V2 label is a simple string, not a dict
+        self.assertIn("label", result)
+        self.assertIsInstance(result["label"], str)
+        self.assertEqual(result["label"], "Analysis Name")
+
+    def test_v2_annotation_includes_see_also(self):
+        """V2 Annotation should include seeAlso with report link."""
+        resource_id = str(uuid.uuid4())
+
+        with patch.object(self.serializer, '_get_resource_tiles', return_value={}):
+            result = self.serializer.to_representation(
+                "https://example.com/canvas/1",
+                resource_id
+            )
+
+        self.assertIn("seeAlso", result)
+        # V2 seeAlso uses @id and @type
+        self.assertTrue(any("@id" in item for item in result["seeAlso"]))
+        self.assertTrue(any("@type" in item for item in result["seeAlso"]))
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestV2ConvertLabelToV2(TestCase):
+    """Tests for the _convert_label_to_v2 method."""
+
+    def setUp(self):
+        from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2
+
+    def test_convert_v3_label_dict_to_string(self):
+        """Should convert v3 label dict to simple string."""
+        label_v3 = {"en": ["English Label"], "fr": ["French Label"]}
+        result = self.serializer._convert_label_to_v2(label_v3)
+        self.assertEqual(result, "English Label")
+
+    def test_convert_v3_label_prefers_english(self):
+        """Should prefer English label when available."""
+        label_v3 = {"fr": ["French"], "en": ["English"], "de": ["German"]}
+        result = self.serializer._convert_label_to_v2(label_v3)
+        self.assertEqual(result, "English")
+
+    def test_convert_v3_label_fallback_to_french(self):
+        """Should fallback to French if English not available."""
+        label_v3 = {"fr": ["French"], "de": ["German"]}
+        result = self.serializer._convert_label_to_v2(label_v3)
+        self.assertEqual(result, "French")
+
+    def test_convert_string_returns_same(self):
+        """Should return string as-is."""
+        result = self.serializer._convert_label_to_v2("Simple Label")
+        self.assertEqual(result, "Simple Label")
+
+    def test_convert_none_returns_none(self):
+        """Should return None for None input."""
+        result = self.serializer._convert_label_to_v2(None)
+        self.assertIsNone(result)
+
+    def test_convert_empty_dict_returns_string(self):
+        """Should handle empty dict gracefully."""
+        result = self.serializer._convert_label_to_v2({})
+        self.assertEqual(result, "{}")
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestV2BuildBodyV2(TestCase):
+    """Tests for the _build_body_v2 method."""
+
+    def setUp(self):
+        from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2
+        self.serializer._clear_caches()
+        self.serializer._batch_mode = False
+
+    @patch('manuspectrum.views.serializers.iiif_annotation.IIIFManifest')
+    def test_v2_body_with_manifest(self, mock_manifest_model):
+        """V2 resource should be sc:Manifest type when manifest node is present."""
+        manifest_node = self.serializer.DATATYPE_NODES["manifest"]
+        manifest_url = "https://example.com/manifest.json"
+
+        mock_manifest = MagicMock()
+        mock_manifest.label = "Test Manifest"
+        mock_manifest_model.objects.get.return_value = mock_manifest
+
+        tiles_data = {manifest_node: manifest_url}
+
+        result = self.serializer._build_body_v2(tiles_data)
+
+        self.assertEqual(result["@type"], "sc:Manifest")
+        self.assertEqual(result["@id"], manifest_url)
+        self.assertEqual(result["format"], "application/ld+json")
+
+    def test_v2_body_with_file_list(self):
+        """V2 resource should be dctypes:Dataset type when file_list node is present."""
+        filelist_node = self.serializer.DATATYPE_NODES["file_list"]
+        name_node = self.serializer.DATATYPE_NODES["name"]
+
+        tiles_data = {
+            filelist_node: [{"url": "/files/data.csv", "name": "data.csv"}],
+            name_node: {"en": {"value": "My Dataset"}}
+        }
+
+        result = self.serializer._build_body_v2(tiles_data)
+
+        self.assertEqual(result["@type"], "dctypes:Dataset")
+        self.assertIn("data.csv", result["@id"])
+
+    def test_v2_body_fallback_to_textual(self):
+        """V2 resource should fallback to cnt:ContentAsText when no manifest or files."""
+        name_node = self.serializer.DATATYPE_NODES["name"]
+
+        tiles_data = {
+            name_node: {"en": {"value": "Simple Analysis"}}
+        }
+
+        result = self.serializer._build_body_v2(tiles_data)
+
+        self.assertEqual(result["@type"], "cnt:ContentAsText")
+        self.assertEqual(result["chars"], "Simple Analysis")
+        self.assertEqual(result["format"], "text/plain")
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestV2BuildTargetV2(TestCase):
+    """Tests for the _build_target_v2 method."""
+
+    def setUp(self):
+        from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2
+
+    def test_v2_target_with_fragment_returns_string(self):
+        """V2 'on' should be simple URI string with fragment."""
+        target = "https://example.com/canvas/1#xywh=100,100,200,200"
+        result = self.serializer._build_target_v2(target)
+        self.assertEqual(result, target)
+        self.assertIsInstance(result, str)
+
+    def test_v2_target_without_fragment_returns_canvas_uri(self):
+        """V2 'on' should return canvas_uri when no fragment."""
+        target = "https://example.com/canvas/1"
+        canvas_uri = "https://example.com/canvas/1"
+        result = self.serializer._build_target_v2(target, canvas_uri)
+        self.assertEqual(result, canvas_uri)
+
+    def test_v2_target_empty_returns_canvas_uri(self):
+        """V2 'on' should return canvas_uri when target is empty."""
+        canvas_uri = "https://example.com/canvas/1"
+        result = self.serializer._build_target_v2("", canvas_uri)
+        self.assertEqual(result, canvas_uri)
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestV2ConvertMetadataToV2(TestCase):
+    """Tests for the _convert_metadata_to_v2 method."""
+
+    def setUp(self):
+        from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2
+
+    def test_convert_metadata_to_v2_format(self):
+        """Should convert v3 metadata format to v2 simple format."""
+        metadata_v3 = [
+            {
+                "label": {"en": ["Technique"]},
+                "value": {"en": ["XRF Spectroscopy"]}
+            },
+            {
+                "label": {"en": ["Date"]},
+                "value": {"en": ["2024-01-15"]}
+            }
+        ]
+
+        result = self.serializer._convert_metadata_to_v2(metadata_v3)
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["label"], "Technique")
+        self.assertEqual(result[0]["value"], "XRF Spectroscopy")
+        self.assertEqual(result[1]["label"], "Date")
+        self.assertEqual(result[1]["value"], "2024-01-15")
+
+    def test_convert_metadata_empty_list(self):
+        """Should return empty list for empty input."""
+        result = self.serializer._convert_metadata_to_v2([])
+        self.assertEqual(result, [])
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestV2BatchProcessing(TestCase):
+    """Tests for v2 batch processing methods."""
+
+    def setUp(self):
+        from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2
+        self.serializer._clear_caches()
+        self.serializer._batch_mode = False
+
+    @patch('manuspectrum.views.serializers.iiif_annotation.Tile')
+    @patch('manuspectrum.views.serializers.iiif_annotation.Value')
+    @patch('manuspectrum.views.serializers.iiif_annotation.Resource')
+    @patch('manuspectrum.views.serializers.iiif_annotation.IIIFManifest')
+    def test_v2_batch_to_representation_processes_multiple(
+        self, mock_manifest, mock_resource, mock_value, mock_tile
+    ):
+        """V2 batch_to_representation should process multiple annotations."""
+        mock_tile.objects.filter.return_value.values.return_value = []
+        mock_value.objects.filter.return_value.select_related.return_value.values.return_value = []
+        mock_resource.objects.filter.return_value = []
+        mock_manifest.objects.filter.return_value.values.return_value = []
+
+        annotations_data = [
+            {"target": "https://example.com/canvas/1#xywh=0,0,100,100", "resource_id": str(uuid.uuid4())},
+            {"target": "https://example.com/canvas/1#xywh=100,100,100,100", "resource_id": str(uuid.uuid4())},
+        ]
+
+        results = self.serializer.batch_to_representation(annotations_data)
+
+        self.assertEqual(len(results), 2)
+        for result in results:
+            # V2 format checks
+            self.assertEqual(result["@type"], "oa:Annotation")
+            self.assertIn("@context", result)
+            self.assertEqual(result["@context"], "http://iiif.io/api/presentation/2/context.json")
