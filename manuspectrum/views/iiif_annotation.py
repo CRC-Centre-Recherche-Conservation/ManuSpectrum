@@ -19,7 +19,10 @@ from django.db.models import Q
 from arches.app.models.models import ResourceInstance, ResourceXResource, VwAnnotation
 from arches.app.models.resource import Resource
 
-from manuspectrum.views.serializers.iiif_annotation import IIIFAnnotationSerializer
+from manuspectrum.views.serializers.iiif_annotation import (
+    IIIFAnnotationSerializer,
+    IIIFAnnotationSerializerV2,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -180,13 +183,13 @@ class IIIFAnnotationMixin:
 
 class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
     """
-    Returns a IIIF AnnotationCollection for a Document or a Component.
+    Returns a IIIF v3 AnnotationCollection for a Document or a Component.
 
     - Groups annotations by Canvas => each group becomes an AnnotationPage.
     - Adds pagination (first/last + items list with next/prev on each page).
     - Heavy responses are cached (compressed) with ETag headers.
 
-    URL: /iiif/annotation-collection/<uuid:resource_id>
+    URL: /iiif/v3/annotation-collection/<uuid:resource_id>
     """
 
     ANALYSIS_GRAPH_ID = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
@@ -194,7 +197,7 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
     COMPONENT_GRAPH_ID = "d47595b4-f8a6-419c-8f33-b388206280c4"
 
     def get(self, request, resource_id):
-        cache_key = f"iiif_collection_{resource_id}"
+        cache_key = f"iiif_v3_collection_{resource_id}"
         cached = get_cached_response(cache_key)
         if cached:
             return cached
@@ -306,7 +309,7 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
         return grouped
 
     def _build_annotation_collection(self, resource: ResourceInstance, grouped_annos: dict) -> dict:
-        collection_id = f"{self.base_url}/annotation-collection/{resource.resourceinstanceid}"
+        collection_id = f"{self.base_url}/v3/annotation-collection/{resource.resourceinstanceid}"
         pages: list[dict] = []
         canvas_uris = list(grouped_annos.keys())
         total = 0
@@ -348,10 +351,10 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
 class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
     """
-    Returns a single IIIF AnnotationPage belonging to a collection.
+    Returns a single IIIF v3 AnnotationPage belonging to a collection.
     Cached independently to avoid re-sending large collections.
 
-    URL: /iiif/annotation-collection/<uuid:resource_id>/page-<int:page_num>
+    URL: /iiif/v3/annotation-collection/<uuid:resource_id>/page-<int:page_num>
     """
 
     ANALYSIS_GRAPH_ID = IIIFAnnotationCollectionView.ANALYSIS_GRAPH_ID
@@ -359,7 +362,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
     COMPONENT_GRAPH_ID = IIIFAnnotationCollectionView.COMPONENT_GRAPH_ID
 
     def get(self, request, resource_id, page_num: int):
-        cache_key = f"iiif_page_{resource_id}_{page_num}"
+        cache_key = f"iiif_v3_page_{resource_id}_{page_num}"
         cached = get_cached_response(cache_key)
         if cached:
             return cached
@@ -394,7 +397,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
             items = IIIFAnnotationSerializer.batch_to_representation(annotation_data)
 
-            collection_id = f"{self.base_url}/annotation-collection/{resource_id}"
+            collection_id = f"{self.base_url}/v3/annotation-collection/{resource_id}"
             page_id = f"{collection_id}/page-{page_num}"
 
             page: dict = {
@@ -431,13 +434,13 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
     """
     Returns a single IIIF Annotation for a given 'Analysis' resource.
 
-    URL: /iiif/annotation/<uuid:resource_id>
+    URL: /iiif/v3/annotation/<uuid:resource_id>
     """
 
     ANALYSIS_GRAPH_ID = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
 
     def get(self, request, resource_id):
-        cache_key = f"iiif_annotation_{resource_id}"
+        cache_key = f"iiif_v3_annotation_{resource_id}"
         cached = get_cached_response(cache_key)
         if cached:
             return cached
@@ -483,11 +486,11 @@ def _delete_cache_keys(keys: list[str]):
             pass
 
 
-def _delete_page_patterns(resource_id):
+def _delete_page_patterns(resource_id, version: str = "v3"):
     """
-    Delete all page caches for a given resource_id.
+    Delete all page caches for a given resource_id and version.
     """
-    list_key = f"iiif_page_list_{resource_id}"
+    list_key = f"iiif_{version}_page_list_{resource_id}"
     page_nums = cache.get(list_key)
 
     if not page_nums:
@@ -495,8 +498,8 @@ def _delete_page_patterns(resource_id):
 
     # Delete each page individually
     for num in page_nums:
-        cache.delete(f"iiif_page_{resource_id}_{num}")
-        cache.delete(f"iiif_page_{resource_id}_{num}__etag")
+        cache.delete(f"iiif_{version}_page_{resource_id}_{num}")
+        cache.delete(f"iiif_{version}_page_{resource_id}_{num}__etag")
 
     # Delete the index list itself
     cache.delete(list_key)
@@ -505,10 +508,13 @@ def _delete_page_patterns(resource_id):
 def _invalidate_for_analysis_id(analysis_uuid):
     """
     Invalidate:
-      - the single annotation cache for this analysis
+      - the single annotation cache for this analysis (v2 and v3)
       - any collections/pages that include this analysis via Component and/or Document.
     """
-    _delete_cache_keys([f"iiif_annotation_{analysis_uuid}"])
+    _delete_cache_keys([
+        f"iiif_v3_annotation_{analysis_uuid}",
+        f"iiif_v2_annotation_{analysis_uuid}",
+    ])
 
     DOCUMENT_GRAPH = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
     COMPONENT_GRAPH = "d47595b4-f8a6-419c-8f33-b388206280c4"
@@ -538,8 +544,12 @@ def _invalidate_for_analysis_id(analysis_uuid):
         return
 
     for doc_id in doc_ids:
-        _delete_cache_keys([f"iiif_collection_{doc_id}"])
-        _delete_page_patterns(doc_id)
+        _delete_cache_keys([
+            f"iiif_v3_collection_{doc_id}",
+            f"iiif_v2_collection_{doc_id}",
+        ])
+        _delete_page_patterns(doc_id, "v3")
+        _delete_page_patterns(doc_id, "v2")
 
 
 @receiver([post_save, post_delete], sender=VwAnnotation)
@@ -580,8 +590,209 @@ def invalidate_on_relation_change(sender, instance: ResourceXResource, **kwargs)
 
             if from_gid == COMPONENT_GRAPH and to_gid == DOCUMENT_GRAPH:
                 doc_id = instance.to_resource_id
-                _delete_cache_keys([f"iiif_collection_{doc_id}"])
-                _delete_page_patterns(doc_id)
+                _delete_cache_keys([
+                    f"iiif_v3_collection_{doc_id}",
+                    f"iiif_v2_collection_{doc_id}",
+                ])
+                _delete_page_patterns(doc_id, "v3")
+                _delete_page_patterns(doc_id, "v2")
 
     except Exception as e:  # pragma: no cover
         logger.error(f"Cache invalidation (ResourceXResource) failed: {e}")
+
+
+# ======================================================================================
+# V2 Views (IIIF Presentation API 2.0 / Open Annotation)
+# ======================================================================================
+
+
+class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
+    """
+    Returns a IIIF v2 sc:Layer for a Document or a Component.
+
+    - Groups annotations by Canvas => each group becomes an sc:AnnotationList.
+    - The Layer references all AnnotationLists via otherContent.
+    - Heavy responses are cached (compressed) with ETag headers.
+
+    URL: /iiif/v2/annotation-collection/<uuid:resource_id>
+    """
+
+    ANALYSIS_GRAPH_ID = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
+    DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
+    COMPONENT_GRAPH_ID = "d47595b4-f8a6-419c-8f33-b388206280c4"
+
+    def get(self, request, resource_id):
+        cache_key = f"iiif_v2_collection_{resource_id}"
+        cached = get_cached_response(cache_key)
+        if cached:
+            return cached
+
+        try:
+            resource = ResourceInstance.objects.select_related("graph").get(
+                resourceinstanceid=resource_id
+            )
+
+            # Reuse v3 logic for fetching analyses
+            collection_view = IIIFAnnotationCollectionView()
+            analyses = collection_view._get_related_analyses(resource)
+            if not analyses:
+                return JsonResponse({"error": "No analyses found"}, status=404)
+
+            annotations = self._get_annotations_from_analyses(analyses)
+            if not annotations:
+                return JsonResponse({"error": "No annotations found for analyses"}, status=404)
+
+            grouped_annos = collection_view._group_by_canvas(annotations)
+
+            # Build v2 Layer structure
+            layer = self._build_layer(resource, grouped_annos)
+
+            return cached_json_response(cache_key, layer, self.CACHE_TIMEOUT)
+
+        except ResourceInstance.DoesNotExist:
+            return JsonResponse({"error": "Resource not found"}, status=404)
+        except Exception as e:  # pragma: no cover
+            logger.error(f"Error generating v2 collection: {e}")
+            return JsonResponse({"error": str(e)}, status=500)
+
+    def _build_layer(self, resource: ResourceInstance, grouped_annos: dict) -> dict:
+        """Build a sc:Layer structure referencing all AnnotationLists."""
+        layer_id = f"{self.base_url}/v2/annotation-collection/{resource.resourceinstanceid}"
+        canvas_uris = list(grouped_annos.keys())
+
+        other_content = []
+        for idx, canvas_uri in enumerate(canvas_uris):
+            other_content.append({
+                "@id": f"{layer_id}/page-{idx}",
+                "@type": "sc:AnnotationList",
+            })
+
+        layer: dict = {
+            "@context": "http://iiif.io/api/presentation/2/context.json",
+            "@id": layer_id,
+            "@type": "sc:Layer",
+            "label": f"Analyses pour {self._get_display_name(resource)}",
+        }
+
+        if other_content:
+            layer["otherContent"] = other_content
+
+        return layer
+
+
+class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
+    """
+    Returns a single IIIF v2 sc:AnnotationList belonging to a Layer.
+    Cached independently to avoid re-sending large collections.
+
+    URL: /iiif/v2/annotation-collection/<uuid:resource_id>/page-<int:page_num>
+    """
+
+    ANALYSIS_GRAPH_ID = IIIFAnnotationCollectionView.ANALYSIS_GRAPH_ID
+    DOCUMENT_GRAPH_ID = IIIFAnnotationCollectionView.DOCUMENT_GRAPH_ID
+    COMPONENT_GRAPH_ID = IIIFAnnotationCollectionView.COMPONENT_GRAPH_ID
+
+    def get(self, request, resource_id, page_num: int):
+        cache_key = f"iiif_v2_page_{resource_id}_{page_num}"
+        cached = get_cached_response(cache_key)
+        if cached:
+            return cached
+
+        try:
+            resource = ResourceInstance.objects.select_related("graph").get(resourceinstanceid=resource_id)
+
+            collection_view = IIIFAnnotationCollectionView()
+            analyses = collection_view._get_related_analyses(resource)
+            if not analyses:
+                return JsonResponse({"error": "No analyses found"}, status=404)
+
+            annotations = self._get_annotations_from_analyses(analyses)
+            grouped = collection_view._group_by_canvas(annotations)
+
+            canvas_uris = list(grouped.keys())
+            if page_num < 0 or page_num >= len(canvas_uris):
+                return JsonResponse({"error": "Page not found"}, status=404)
+
+            canvas_uri = canvas_uris[page_num]
+            annos = grouped[canvas_uri]
+
+            annotation_data = [
+                {
+                    "target": self._convert_geojson_to_iiif_target(a),
+                    "resource_id": str(a["analysis_id"]),
+                    "canvas_uri": canvas_uri,
+                    "manifest_url": a.get("manifest"),
+                }
+                for a in annos
+            ]
+
+            # Use v2 serializer
+            items = IIIFAnnotationSerializerV2.batch_to_representation(annotation_data)
+
+            layer_id = f"{self.base_url}/v2/annotation-collection/{resource_id}"
+            list_id = f"{layer_id}/page-{page_num}"
+
+            annotation_list: dict = {
+                "@context": "http://iiif.io/api/presentation/2/context.json",
+                "@id": list_id,
+                "@type": "sc:AnnotationList",
+                "label": f"Analyses page {page_num}",
+                "resources": items,
+                "within": {
+                    "@id": layer_id,
+                    "@type": "sc:Layer",
+                    "label": f"Analyses pour {self._get_display_name(resource)}",
+                },
+            }
+
+            return cached_json_response(cache_key, annotation_list, self.CACHE_TIMEOUT)
+
+        except ResourceInstance.DoesNotExist:
+            return JsonResponse({"error": "Resource not found"}, status=404)
+        except Exception as e:  # pragma: no cover
+            logger.error(f"Error generating v2 IIIF page: {e}")
+            return JsonResponse({"error": str(e)}, status=500)
+
+
+class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
+    """
+    Returns a single IIIF v2 Annotation for a given 'Analysis' resource.
+
+    URL: /iiif/v2/annotation/<uuid:resource_id>
+    """
+
+    ANALYSIS_GRAPH_ID = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
+
+    def get(self, request, resource_id):
+        cache_key = f"iiif_v2_annotation_{resource_id}"
+        cached = get_cached_response(cache_key)
+        if cached:
+            return cached
+
+        try:
+            analysis = Resource.objects.get(resourceinstanceid=resource_id)
+            if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
+                return JsonResponse({"error": "Resource is not an Analysis"}, status=400)
+
+            annos = self._get_annotations_from_analyses([analysis])
+            if not annos:
+                return JsonResponse({"error": "No annotation data"}, status=404)
+
+            anno = annos[0]  # 1 analysis -> 1 annotation
+            target = self._convert_geojson_to_iiif_target(anno)
+
+            # Use v2 serializer
+            iiif_annotation = IIIFAnnotationSerializerV2.to_representation(
+                target,
+                resource_id=str(resource_id),
+                canvas_uri=anno.get("canvas"),
+                manifest_url=anno.get("manifest"),
+            )
+
+            return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
+
+        except Resource.DoesNotExist:
+            return JsonResponse({"error": "Annotation not found"}, status=404)
+        except Exception as e:  # pragma: no cover
+            logger.error(f"Error generating v2 annotation: {e}")
+            return JsonResponse({"error": str(e)}, status=500)
