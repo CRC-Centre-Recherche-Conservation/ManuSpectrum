@@ -56,10 +56,11 @@ DATABASES = {
 
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "test-cache",
     },
     "user_permission": {
-        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "user_permission_cache",
     },
 }
@@ -72,7 +73,3 @@ TEST_RUNNER = "arches.test.runner.ArchesTestRunner"
 SILENCED_SYSTEM_CHECKS.append(
     "arches.W001",  # Cache backend does not support rate-limiting
 )
-
-ELASTICSEARCH_HOSTS = [
-    {"scheme": "http", "host": "localhost", "port": ELASTICSEARCH_HTTP_PORT}
-]
