@@ -3,8 +3,16 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path, re_path
 
-from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView, IIIFAnnotationPageView, IIIFAnnotationView
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
+from manuspectrum.views.iiif_annotation import (
+    IIIFAnnotationCollectionView,
+    IIIFAnnotationPageView,
+    IIIFAnnotationView,
+    IIIFAnnotationCollectionViewV2,
+    IIIFAnnotationPageViewV2,
+    IIIFAnnotationViewV2,
+)
+
 
 urlpatterns = [
     #path("", include("arches_controlled_lists.urls")),
@@ -38,16 +46,30 @@ if settings.ROOT_URLCONF == __name__:
     urlpatterns.append(path("i18n/", include("django.conf.urls.i18n")))
 
 
-### Manuspectrum URL
+### Manuspectrum URL - IIIF Annotations
 
-urlpatterns.append(path('iiif/annotation-collection/<uuid:resource_id>',
+# V3 endpoints (IIIF Presentation API 3.0 / Web Annotation)
+urlpatterns.append(path('iiif/v3/annotation-collection/<uuid:resource_id>',
          IIIFAnnotationCollectionView.as_view(),
-         name='iiif-annotation-collection'))
+         name='iiif-v3-annotation-collection'))
 
-urlpatterns.append(path('iiif/annotation/<uuid:resource_id>',
+urlpatterns.append(path('iiif/v3/annotation/<uuid:resource_id>',
          IIIFAnnotationView.as_view(),
-         name='iiif-annotation'))
+         name='iiif-v3-annotation'))
 
-urlpatterns.append(path('iiif/annotation-collection/<uuid:resource_id>/page-<int:page_num>',
+urlpatterns.append(path('iiif/v3/annotation-collection/<uuid:resource_id>/page-<int:page_num>',
          IIIFAnnotationPageView.as_view(),
-         name='iiif-annotation-page'))
+         name='iiif-v3-annotation-page'))
+
+# V2 endpoints (IIIF Presentation API 2.0 / Open Annotation)
+urlpatterns.append(path('iiif/v2/annotation-collection/<uuid:resource_id>',
+         IIIFAnnotationCollectionViewV2.as_view(),
+         name='iiif-v2-annotation-collection'))
+
+urlpatterns.append(path('iiif/v2/annotation/<uuid:resource_id>',
+         IIIFAnnotationViewV2.as_view(),
+         name='iiif-v2-annotation'))
+
+urlpatterns.append(path('iiif/v2/annotation-collection/<uuid:resource_id>/page-<int:page_num>',
+         IIIFAnnotationPageViewV2.as_view(),
+         name='iiif-v2-annotation-page'))
