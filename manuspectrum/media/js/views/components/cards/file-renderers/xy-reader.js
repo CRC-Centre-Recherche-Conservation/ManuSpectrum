@@ -111,6 +111,31 @@ export default ko.components.register('xy-reader', {
 
         rendererConfigRefresh();
 
+        this.onConfigSaved = async () => {
+            await rendererConfigRefresh();
+            if (self.selectedConfig()) {
+                self.selectedConfiguration = self.rendererConfigs().find(
+                    (c) => c.configid === self.selectedConfig()
+                );
+                self.render();
+                self.chartTitle(
+                    self.selectedConfiguration?.config?.display?.chartTitle
+                        ? self.selectedConfiguration.config.display.chartTitle
+                        : arches.translations.data
+                );
+                self.xAxisLabel(
+                    self.selectedConfiguration?.config?.display?.xAxisLabel
+                        ? self.selectedConfiguration.config.display.xAxisLabel
+                        : arches.translations.xAxis
+                );
+                self.yAxisLabel(
+                    self.selectedConfiguration?.config?.display?.yAxisLabel
+                        ? self.selectedConfiguration.config.display.yAxisLabel
+                        : arches.translations.yAxis
+                );
+            }
+        };
+
         this.delimiterCharacter.subscribe((x) => {
             try {
                 const valueRegex =
@@ -157,8 +182,19 @@ export default ko.components.register('xy-reader', {
             try {
                 const parsedData = XyParser.parse(text, config);
                 this.invalidDelimiter(false);
-                series.value.push(...parsedData.x);
-                series.count.push(...parsedData.y);
+
+                if (parsedData.ys) {
+                    series.value.push(...parsedData.x);
+                    series.count.push(...parsedData.ys[0]);
+                    series.multiSeries = parsedData.ys.map((yArr, i) => ({
+                        value: [...parsedData.x],
+                        count: yArr,
+                        name: parsedData.seriesNames[i]
+                    }));
+                } else {
+                    series.value.push(...parsedData.x);
+                    series.count.push(...parsedData.y);
+                }
             } catch (e) {
                 this.invalidDelimiter(true);
                 throw e;

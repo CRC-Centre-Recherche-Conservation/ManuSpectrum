@@ -46,7 +46,7 @@ const vm = function (params) {
 
     this.xyTransformations = ko.observable(transformations);
     this.selectedTransformation = ko.observable();
-    this.selectedTransformation.subscribe((val) => console.log(val));
+    this.onConfigSaved = params.onConfigSaved;
 
     this.dataDelimiterRadio.subscribe((value) => {
         if (value !== 'other') {
@@ -118,7 +118,10 @@ const vm = function (params) {
         );
 
         if (configSaveResponse.ok) {
-            rendererConfigRefresh();
+            await rendererConfigRefresh();
+            if (this.onConfigSaved) {
+                this.onConfigSaved();
+            }
         }
 
         this.showConfigurationPanel(false);
@@ -200,7 +203,10 @@ const vm = function (params) {
         if (configDeleteResponse.ok) {
             const responseJson = await configDeleteResponse.json();
             if (responseJson.deleted) {
-                rendererConfigRefresh();
+                await rendererConfigRefresh();
+                if (this.onConfigSaved) {
+                    this.onConfigSaved();
+                }
             } else {
                 this.alert(
                     new AlertViewModel(
