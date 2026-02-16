@@ -6,7 +6,9 @@
 
 
 import logging
-from django.views.generic import View
+from django.utils.decorators import method_decorator
+from arches.app.utils.decorators import group_required
+from arches.app.views.api import APIBase
 from manuspectrum.models import RendererConfig
 from arches.app.models import models
 from arches.app.utils.response import JSONResponse
@@ -17,8 +19,18 @@ from arches.app.utils.betterJSONSerializer import JSONSerializer, JSONDeserializ
 
 logger = logging.getLogger(__name__)
 
+EDITOR_GROUPS = (
+    "Resource Editor",
+    "Resource Reviewer",
+    "RDM Administrator",
+    "Application Administrator",
+    "System Administrator",
+    "Graph Editor",
+    "Resource Exporter",
+)
 
-class RendererView(View):
+
+class RendererView(APIBase):
     def get(self, request, renderer_id=None):
         renderer = {}
         if renderer_id is None:
@@ -33,7 +45,7 @@ class RendererView(View):
                 return HttpResponseNotFound(_("<h1>Renderers do not exist</h1>"))
 
 
-class RendererConfigView(View):
+class RendererConfigView(APIBase):
     def get(self, request, renderer_config_id=None):
         if renderer_config_id is None:
             return JSONResponse(RendererConfig.objects.all().values())
@@ -46,6 +58,7 @@ class RendererConfigView(View):
             else:
                 return HttpResponseNotFound(_("<h1>Renderers config does not exist</h1>"))
 
+    @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
     def post(self, request, renderer_config_id=None):
         body = JSONDeserializer().deserialize(request.body)
         if renderer_config_id:
@@ -65,6 +78,7 @@ class RendererConfigView(View):
 
         return JSONResponse(response_dict)
 
+    @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
     def delete(self, request, renderer_config_id):
         file_nodegroup_id = "7c486328-d380-11e9-b88e-a4d18cec433a" #TODO
         renderer_config = RendererConfig.objects.get(configid=renderer_config_id)
