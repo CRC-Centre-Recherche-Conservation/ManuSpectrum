@@ -163,7 +163,19 @@ const vm = function(params) {
         const config = this.selectedConfiguration();
         const currentConfig = this.rendererConfigs().find(conf => conf.configid == config);
         const parsedArrays = xyParser.parse(this.codeMirrorText(), currentConfig.config);
-        this.parsedData(parsedArrays.x.map((xItem, index) => `X: ${xItem} Y: ${parsedArrays.y[index]}`).join('\n'));
+
+        if (parsedArrays.ys) {
+            this.parsedData(
+                parsedArrays.x.map((xItem, index) => {
+                    const yParts = parsedArrays.ys
+                        .map((yArr, si) => `${parsedArrays.seriesNames[si]}: ${yArr[index]}`)
+                        .join(' ');
+                    return `X: ${xItem} ${yParts}`;
+                }).join('\n')
+            );
+        } else {
+            this.parsedData(parsedArrays.x.map((xItem, index) => `X: ${xItem} Y: ${parsedArrays.y[index]}`).join('\n'));
+        }
     };
 
     this.codeMirrorText.subscribe(() => {

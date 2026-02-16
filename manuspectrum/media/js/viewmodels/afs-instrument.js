@@ -200,7 +200,17 @@ define(['jquery',
                     dataType: "text"})
                     .done(function(data) {
                         self.parse(data, series);
-                        self.seriesData.push({tileid: tileid, data: series, name: name});
+                        if (series.multiSeries && series.multiSeries.length > 1) {
+                            series.multiSeries.forEach(function(s) {
+                                self.seriesData.push({
+                                    tileid: tileid,
+                                    data: s,
+                                    name: name + ' - ' + s.name
+                                });
+                            });
+                        } else {
+                            self.seriesData.push({tileid: tileid, data: series, name: name});
+                        }
                     }, this);
             }
         };
@@ -236,18 +246,41 @@ define(['jquery',
                     self.displayContent.validRenderer(true);
                     try {
                         self.parse(data, series);
-                        // clear the data before you add new data, this fixes a bug in the 
-                        // afs file-interpretation step where data wouldn't be updated until 
+                        // clear the data before you add new data, this fixes a bug in the
+                        // afs file-interpretation step where data wouldn't be updated until
                         // the file was selected a second time
-                        self.chartData(undefined);  
-                        self.chartData(series);
+                        self.chartData(undefined);
+
+                        if (series.multiSeries && series.multiSeries.length > 1) {
+                            self.chartData({
+                                series: series.multiSeries.map(function(s) {
+                                    return {
+                                        value: s.value,
+                                        count: s.count,
+                                        name: self.displayContent.name + ' - ' + s.name
+                                    };
+                                })
+                            });
+                        } else {
+                            self.chartData(series);
+                        }
+
                         if(self.fileViewer){
                             self.loadSeriesDataFromLocalStorage();
                         } else {
-                            if (series.count == 0) {
+                            if (series.count.length === 0) {
                                 self.displayContent.validRenderer(false);
                             }
-                            self.seriesData.push({data: series, name: self.displayContent.name});
+                            if (series.multiSeries && series.multiSeries.length > 1) {
+                                series.multiSeries.forEach(function(s) {
+                                    self.seriesData.push({
+                                        data: s,
+                                        name: self.displayContent.name + ' - ' + s.name
+                                    });
+                                });
+                            } else {
+                                self.seriesData.push({data: series, name: self.displayContent.name});
+                            }
                         }
                     } catch(e) {
                         self.displayContent.validRenderer(false);

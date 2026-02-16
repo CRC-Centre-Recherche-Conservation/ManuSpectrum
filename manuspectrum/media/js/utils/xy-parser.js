@@ -17,8 +17,8 @@ const transformations = () => {
 
 const parse = (text, config) => {
     let values;
+    let headerLine = null;
     let workingText = text;
-    const parsedData = { x: [], y: [] };
 
     try {
         if (config?.footerDelimiter) {
@@ -28,12 +28,18 @@ const parse = (text, config) => {
         }
 
         if (config?.headerDelimiter) {
-            values = workingText
-                .split(config.headerDelimiter)[1]
-                .trim()
-                .split('\n');
+            const parts = workingText.split(config.headerDelimiter);
+            const headerPart = parts[0].trim();
+            if (headerPart) {
+                const headerLines = headerPart.split('\n');
+                headerLine = headerLines[headerLines.length - 1];
+            }
+            values = parts[1].trim().split('\n');
         } else if (config?.headerFixedLines) {
             const lines = workingText.split('\n');
+            if (config.headerFixedLines > 0) {
+                headerLine = lines[config.headerFixedLines - 1];
+            }
             values = lines.slice(config.headerFixedLines);
         } else {
             values = workingText.trim().split('\n');
@@ -41,6 +47,9 @@ const parse = (text, config) => {
     } catch {
         values = workingText.trim().split('\n');
     }
+
+    // Filter out empty/blank lines
+    values = values.filter(line => line.trim() !== '');
 
     const delimiterCharacter = config?.delimiterCharacter ?? ',';
 
@@ -51,6 +60,55 @@ const parse = (text, config) => {
                 : new RegExp(`${delimiterCharacter}`);
 
         const transform = config?.transformation ?? 'basic';
+
+        const firstRec = values[0]?.trim().split(valueRegex).filter(el => el !== '');
+        const yColumnCount = firstRec ? firstRec.length - 1 : 0;
+
+        if (yColumnCount > 1 && transform !== 'mean') {
+            const seriesNames = [];
+            if (headerLine) {
+                const headerTokens = headerLine
+                    .trim()
+                    .split(valueRegex)
+                    .filter(el => el !== '');
+                if (headerTokens.length >= yColumnCount + 1) {
+                    for (let i = 1; i <= yColumnCount; i++) {
+                        seriesNames.push(headerTokens[i]);
+                    }
+                }
+            }
+            if (seriesNames.length !== yColumnCount) {
+                seriesNames.length = 0;
+                for (let i = 0; i < yColumnCount; i++) {
+                    seriesNames.push(`Y${i + 1}`);
+                }
+            }
+
+            const parsedMulti = { x: [], ys: [], seriesNames };
+            for (let i = 0; i < yColumnCount; i++) {
+                parsedMulti.ys.push([]);
+            }
+
+            values.forEach(val => {
+                const rec = val
+                    .trim()
+                    .split(valueRegex)
+                    .filter(element => element !== '');
+
+                parsedMulti.x.push(parseFloat(rec[0]));
+
+                const yValues = rec.slice(1).map(v => parseFloat(v));
+                for (let i = 0; i < yColumnCount; i++) {
+                    parsedMulti.ys[i].push(
+                        i < yValues.length ? yValues[i] : NaN
+                    );
+                }
+            });
+
+            return parsedMulti;
+        }
+
+        const parsedData = { x: [], y: [] };
 
         values.forEach(val => {
             const rec = val

@@ -9,18 +9,40 @@ import Plotly from 'plotly.js-dist';
 const plotlyBinding = {
     init(element, valueAccessor) {
         const config = ko.unwrap(valueAccessor());
+        const data = config.data();
 
-        const chartData = {
-            x: config.data().value,
-            y: config.data().count,
-            type: 'scatter',
-            mode: 'lines',
-            name: config.data().name,
-            line: {
-                color: config.primarySeriesColor,
-                width: 3
-            }
-        };
+        const multiSeriesColors = [
+            config.primarySeriesColor || '#3333ff',
+            '#ff6633', '#33cc33', '#cc33ff', '#ffcc00',
+            '#00cccc', '#ff3366', '#6633ff'
+        ];
+
+        let traces;
+        if (data.series && Array.isArray(data.series)) {
+            traces = data.series.map((s, i) => ({
+                x: s.value,
+                y: s.count,
+                type: 'scatter',
+                mode: 'lines',
+                name: s.name,
+                line: {
+                    color: multiSeriesColors[i % multiSeriesColors.length],
+                    width: i === 0 ? 3 : 2
+                }
+            }));
+        } else {
+            traces = [{
+                x: data.value,
+                y: data.count,
+                type: 'scatter',
+                mode: 'lines',
+                name: data.name,
+                line: {
+                    color: config.primarySeriesColor,
+                    width: 3
+                }
+            }];
+        }
 
         const layout = {
             title: {
@@ -85,7 +107,7 @@ const plotlyBinding = {
             }]
         };
 
-        Plotly.newPlot(element, [chartData], layout, chartConfig);
+        Plotly.newPlot(element, traces, layout, chartConfig);
 
         $(window).on('resize.plotlyBinding', () => {
             layout.width = $(element).width() - 2;
