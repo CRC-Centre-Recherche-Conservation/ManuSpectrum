@@ -1,0 +1,9 @@
+{% extends "arches_urls.htm" %}
+
+{% block arches_urls %}
+{{ block.super }}
+<div class="arches-urls"
+    renderer_config = "{% url 'renderer_config' %}"
+    renderer = '(rendererid)=>{return "{% url "renderer" "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" %}".replace("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", rendererid)}',
+></div>
+{% endblock arches_urls %}
