@@ -136,8 +136,8 @@ msgid "Transformations"
 msgstr "Transformations"
 
 #: manuspectrum/templates/views/components/plugins/importer-configuration.htm
-msgid "Optionally define a transformation for \"y\" data"
-msgstr "Définissez optionnellement une transformation pour les données « y »"
+msgid "If your file has multiple Y columns, they are displayed as separate series. Use \"mean\" to average them into a single series instead."
+msgstr "Si votre fichier a plusieurs colonnes Y, elles sont affichées comme des séries distinctes. Utilisez « mean » pour les moyenner en une seule série."
 
 #: manuspectrum/templates/views/components/plugins/importer-configuration.htm
 msgid "Data Column Delimiter"
