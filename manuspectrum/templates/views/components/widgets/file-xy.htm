@@ -38,9 +38,13 @@
     <!-- /ko -->
 </dd>
 <!-- /ko -->
-{% endblock report %}
 
 <style>
+.rp-report-tile:has(.report-xy-chart-container) {
+    flex: 1;
+    min-width: 0;
+}
+
 .report-xy-chart-container {
     margin-left: 0 !important;
     clear: both;
@@ -76,3 +80,4 @@
     min-height: 400px;
 }
 </style>
+{% endblock report %}
