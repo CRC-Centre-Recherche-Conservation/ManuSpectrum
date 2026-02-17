@@ -104,8 +104,36 @@ const plotlyBinding = {
 
                     Plotly.relayout(element, layout);
                 }
+            }, {
+                name: 'fullscreen',
+                icon: {
+                    width: 1000,
+                    height: 1000,
+                    path: "M200 800V600H0v350q0 21 14.5 35.5T50 1000h350V800H200zM0 400h200V200h200V0H50Q29 0 14.5 14.5T0 50v350zm800 400H600v200h350q21 0 35.5-14.5T1000 950V600H800v200zM600 0v200h200v200h200V50q0-21-14.5-35.5T950 0H600z"
+                },
+                click() {
+                    if (!document.fullscreenElement) {
+                        element.requestFullscreen().then(() => {
+                            element.style.background = '#fff';
+                            layout.width = window.innerWidth - 20;
+                            layout.height = window.innerHeight - 20;
+                            Plotly.relayout(element, layout);
+                        });
+                    } else {
+                        document.exitFullscreen();
+                    }
+                }
             }]
         };
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && element.isConnected) {
+                element.style.background = '';
+                layout.width = $(element).width() - 2;
+                delete layout.height;
+                Plotly.relayout(element, layout);
+            }
+        });
 
         Plotly.newPlot(element, traces, layout, chartConfig);
 
