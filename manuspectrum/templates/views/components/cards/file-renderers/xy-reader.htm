@@ -3,6 +3,17 @@
 
 {% block renderer_configuration %}
 <div style="padding: 10px;">
+
+<!-- ko if: batchMode() -->
+<div class="alert alert-info" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 14px;">
+    <i class="fa fa-files-o"></i>
+    <span>
+        <strong data-bind="text: stagedXyTileCount()"></strong> {% trans "XY file(s) staged" %}
+        &mdash; {% trans "select a config below then apply to all" %}
+    </span>
+</div>
+<!-- /ko -->
+
 <!-- ko component: {
     name: 'importer-configuration',
     params: {
@@ -12,5 +23,29 @@
     }
 } -->
 <!-- /ko -->
+
+<!-- ko if: canApplyBatch() -->
+<div style="margin-top: 12px;">
+    <button class="btn btn-primary btn-block"
+            data-bind="click: applyConfigToStaged, disable: batchApplying()">
+        <!-- ko ifnot: batchApplying() -->
+        <i class="fa fa-check-square-o"></i>
+        {% trans "Apply to" %} <span data-bind="text: stagedXyTileCount()"></span> {% trans "staged file(s)" %}
+        <!-- /ko -->
+        <!-- ko if: batchApplying() -->
+        <i class="fa fa-spinner fa-spin"></i>
+        {% trans "Applying..." %}
+        <!-- /ko -->
+    </button>
+</div>
+<!-- /ko -->
+
+<!-- ko if: batchResult() -->
+<div class="alert" style="margin-top: 8px; padding: 8px 12px;"
+     data-bind="css: { 'alert-success': batchResult().indexOf('error') === -1, 'alert-danger': batchResult().indexOf('error') !== -1 }">
+    <span data-bind="text: batchResult()"></span>
+</div>
+<!-- /ko -->
+
 </div>
 {% endblock renderer_configuration %}

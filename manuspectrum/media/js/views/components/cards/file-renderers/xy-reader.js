@@ -110,6 +110,100 @@ export default ko.components.register('xy-reader', {
 
         rendererConfigRefresh();
 
+        // --- Batch apply config to staged tiles ---
+        this.batchApplying = ko.observable(false);
+        this.batchResult = ko.observable('');
+
+        this.stagedXyTileCount = ko.pureComputed(() => {
+            const card = self.fileViewer?.card;
+            if (!card || !card.staging) return 0;
+            const stagingIds = card.staging();
+            if (!stagingIds.length) return 0;
+            const tiles = card.tiles();
+            let count = 0;
+            stagingIds.forEach((tileid) => {
+                const tile = tiles.find((t) => t.tileid == tileid);
+                if (tile) {
+                    const node = ko.unwrap(
+                        tile.data[self.fileViewer.fileListNodeId]
+                    );
+                    if (
+                        node &&
+                        node.length > 0 &&
+                        ko.unwrap(node[0].renderer) === self.renderer
+                    ) {
+                        count++;
+                    }
+                }
+            });
+            return count;
+        });
+
+        this.batchMode = ko.pureComputed(
+            () => self.stagedXyTileCount() > 0
+        );
+
+        this.canApplyBatch = ko.pureComputed(
+            () => self.stagedXyTileCount() > 0 && !!self.selectedConfig()
+        );
+
+        this.applyConfigToStaged = async () => {
+            const card = self.fileViewer?.card;
+            if (!card || !card.staging) return;
+
+            const configId = self.selectedConfig();
+            if (!configId) return;
+
+            self.batchApplying(true);
+            self.batchResult('');
+
+            const stagingIds = card.staging();
+            const tiles = card.tiles();
+            let applied = 0;
+            let errors = 0;
+
+            for (const tileid of stagingIds) {
+                const tile = tiles.find((t) => t.tileid == tileid);
+                if (!tile) continue;
+                const node = ko.unwrap(
+                    tile.data[self.fileViewer.fileListNodeId]
+                );
+                if (
+                    !node ||
+                    !node.length ||
+                    ko.unwrap(node[0].renderer) !== self.renderer
+                ) {
+                    continue;
+                }
+                try {
+                    node[0].rendererConfig = configId;
+                    await tile.save();
+                    applied++;
+                } catch (e) {
+                    console.error('Batch config save error:', tileid, e);
+                    errors++;
+                }
+            }
+
+            self.batchApplying(false);
+            if (errors > 0) {
+                self.batchResult(
+                    applied +
+                        ' applied, ' +
+                        errors +
+                        ' error(s)'
+                );
+            } else {
+                self.batchResult(
+                    'Config applied to ' + applied + ' file(s)'
+                );
+            }
+
+            setTimeout(() => {
+                self.batchResult('');
+            }, 5000);
+        };
+
         this.onConfigSaved = async () => {
             await rendererConfigRefresh();
             if (self.selectedConfig()) {
