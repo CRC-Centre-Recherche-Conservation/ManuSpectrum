@@ -11,7 +11,6 @@ import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
 import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
 import 'bindings/plotly';
-import 'bindings/select2-query';
 import 'views/components/plugins/importer-configuration';
 
 export default ko.components.register('xy-reader', {
