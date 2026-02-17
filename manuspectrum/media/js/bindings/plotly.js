@@ -113,6 +113,8 @@ const plotlyBinding = {
                 },
                 click() {
                     if (!document.fullscreenElement) {
+                        element._savedWidth = $(element).parent().width() - 2;
+                        element._savedHeight = layout.height;
                         element.requestFullscreen().then(() => {
                             element.style.background = '#fff';
                             layout.width = window.innerWidth - 20;
@@ -129,8 +131,8 @@ const plotlyBinding = {
         document.addEventListener('fullscreenchange', () => {
             if (!document.fullscreenElement && element.isConnected) {
                 element.style.background = '';
-                layout.width = $(element).width() - 2;
-                delete layout.height;
+                layout.width = element._savedWidth || $(element).parent().width() - 2;
+                layout.height = element._savedHeight || 450;
                 Plotly.relayout(element, layout);
             }
         });
