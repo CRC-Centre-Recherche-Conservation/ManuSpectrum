@@ -37,7 +37,7 @@
     <i class="fa fa-cog"></i>
     <span class="map-sidebar-text">{% trans "Config" %}</span>
 </div>
-
+{% block extra_tabs %}{% endblock %}
 <!--/ko-->
 
 
@@ -50,4 +50,5 @@
         {% endblock renderer_configuration %}
     </div>
     <!--/ko-->
+    {% block extra_tab_contents %}{% endblock %}
 <!--/ko-->

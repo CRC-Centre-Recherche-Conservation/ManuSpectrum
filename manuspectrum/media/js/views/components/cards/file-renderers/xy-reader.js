@@ -110,6 +110,22 @@ export default ko.components.register('xy-reader', {
 
         rendererConfigRefresh();
 
+        // Rename the core "Edit" tab to "Visualization"
+        setTimeout(() => {
+            $('.workbench-card-sidebar-tab').each(function () {
+                const bind = $(this).attr('data-bind') || '';
+                if (bind.includes("toggleTab('edit')")) {
+                    $(this)
+                        .find('i.fa')
+                        .removeClass('fa-pencil')
+                        .addClass('fa-eye');
+                    $(this)
+                        .find('.map-sidebar-text')
+                        .text('Viz');
+                }
+            });
+        }, 0);
+
         // --- Batch apply config to staged tiles ---
         this.batchApplying = ko.observable(false);
         this.batchResult = ko.observable('');
@@ -203,6 +219,71 @@ export default ko.components.register('xy-reader', {
                 self.batchResult('');
             }, 5000);
         };
+
+        // --- Feature 1: Staged XY files with config status ---
+        this.stagedXyFiles = ko.pureComputed(() => {
+            const card = self.fileViewer?.card;
+            if (!card || !card.staging) return [];
+            const stagingIds = card.staging();
+            const tiles = card.tiles();
+            const configs = self.rendererConfigs();
+            return stagingIds
+                .map((tileid) => {
+                    const tile = tiles.find((t) => t.tileid == tileid);
+                    if (!tile) return null;
+                    const node = ko.unwrap(
+                        tile.data[self.fileViewer.fileListNodeId]
+                    );
+                    if (
+                        !node?.length ||
+                        ko.unwrap(node[0].renderer) !== self.renderer
+                    )
+                        return null;
+                    const configId = ko.unwrap(node[0].rendererConfig);
+                    const cfg = configs.find(
+                        (c) => c.configid === configId
+                    );
+                    return {
+                        name: ko.unwrap(node[0].name) || 'Unknown',
+                        hasConfig: !!configId,
+                        configName: cfg?.name || null,
+                        tileid: tileid,
+                    };
+                })
+                .filter(Boolean);
+        });
+
+        // --- Feature 4: All XY files overview ---
+        this.allXyFiles = ko.pureComputed(() => {
+            const card = self.fileViewer?.card;
+            if (!card) return [];
+            const tiles = card.tiles();
+            const configs = self.rendererConfigs();
+            return tiles
+                .map((tile) => {
+                    const node = ko.unwrap(
+                        tile.data[self.fileViewer.fileListNodeId]
+                    );
+                    if (
+                        !node?.length ||
+                        ko.unwrap(node[0].renderer) !== self.renderer
+                    )
+                        return null;
+                    const configId = ko.unwrap(node[0].rendererConfig);
+                    const cfg = configs.find(
+                        (c) => c.configid === configId
+                    );
+                    return {
+                        name: ko.unwrap(node[0].name) || 'Unknown',
+                        hasConfig: !!configId,
+                        configName: cfg?.name || null,
+                        configId: configId,
+                        tileid: tile.tileid,
+                        url: ko.unwrap(node[0].url),
+                    };
+                })
+                .filter(Boolean);
+        });
 
         this.onConfigSaved = async () => {
             await rendererConfigRefresh();

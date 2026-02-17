@@ -1,16 +1,46 @@
 {% extends "views/components/cards/file-renderers/afs-reader.htm" %}
 {% load i18n %}
 
+{% block extra_tabs %}
+<div class="workbench-card-sidebar-tab" data-bind="click: function() {
+    fileViewer.toggleTab('xy-files');
+}, css: {
+    'active': fileViewer.activeTab() === 'xy-files'
+}">
+    <i class="fa fa-list"></i>
+    <span class="map-sidebar-text">{% trans "Status" %}</span>
+</div>
+{% endblock extra_tabs %}
+
 {% block renderer_configuration %}
 <div style="padding: 10px;">
 
-<!-- ko if: batchMode() -->
-<div class="alert alert-info" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 14px;">
-    <i class="fa fa-files-o"></i>
-    <span>
-        <strong data-bind="text: stagedXyTileCount()"></strong> {% trans "XY file(s) staged" %}
-        &mdash; {% trans "select a config below then apply to all" %}
-    </span>
+<!-- Feature 1: Staged XY files status -->
+<!-- ko if: stagedXyFiles().length > 0 -->
+<div style="margin-bottom: 14px; border: 1px solid #d9edf7; border-radius: 4px; overflow: hidden;">
+    <div style="background: #d9edf7; padding: 6px 10px; font-weight: bold; font-size: 12px;">
+        <i class="fa fa-files-o"></i>
+        <span data-bind="text: stagedXyTileCount()"></span> {% trans "XY file(s) staged" %}
+    </div>
+    <div style="max-height: 150px; overflow-y: auto;">
+    <!-- ko foreach: stagedXyFiles() -->
+    <div style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12px; border-top: 1px solid #eee;">
+        <!-- ko if: hasConfig -->
+        <i class="fa fa-check-circle" style="color: #5cb85c;"></i>
+        <!-- /ko -->
+        <!-- ko ifnot: hasConfig -->
+        <i class="fa fa-exclamation-circle" style="color: #f0ad4e;"></i>
+        <!-- /ko -->
+        <span data-bind="text: name" style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+        <!-- ko if: configName -->
+        <span class="label label-default" data-bind="text: configName"></span>
+        <!-- /ko -->
+        <!-- ko ifnot: configName -->
+        <span class="label label-warning">{% trans "No config" %}</span>
+        <!-- /ko -->
+    </div>
+    <!-- /ko -->
+    </div>
 </div>
 <!-- /ko -->
 
@@ -49,3 +79,48 @@
 
 </div>
 {% endblock renderer_configuration %}
+
+{% block extra_tab_contents %}
+
+<!-- Feature 4: Files overview tab -->
+<!--ko if: fileViewer.activeTab() === 'xy-files' -->
+<div class="workbench-card-sidepanel-header-container file-workbench">
+    <h4 class="workbench-card-sidepanel-header" data-bind="click: fileViewer.hideSidePanel">
+        {% trans 'XY Files' %}
+    </h4>
+</div>
+<div style="padding: 10px;">
+    <!-- ko if: allXyFiles().length === 0 -->
+    <div class="alert alert-warning" style="padding: 10px;">
+        <i class="fa fa-info-circle"></i> {% trans "No XY files found. Assign the XY renderer to files in the Manage tab." %}
+    </div>
+    <!-- /ko -->
+
+    <!-- ko if: allXyFiles().length > 0 -->
+    <div style="margin-bottom: 8px; font-size: 12px; color: #888;">
+        <span data-bind="text: allXyFiles().length"></span> {% trans "XY file(s)" %}
+    </div>
+    <div style="max-height: 400px; overflow-y: auto;">
+    <!-- ko foreach: allXyFiles() -->
+    <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid #eee; font-size: 12px;">
+        <!-- ko if: hasConfig -->
+        <i class="fa fa-check-circle" style="color: #5cb85c;" title="Config assigned"></i>
+        <!-- /ko -->
+        <!-- ko ifnot: hasConfig -->
+        <i class="fa fa-exclamation-circle" style="color: #f0ad4e;" title="No config"></i>
+        <!-- /ko -->
+        <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" data-bind="text: name, attr: { title: name }"></span>
+        <!-- ko if: configName -->
+        <span class="label label-info" data-bind="text: configName"></span>
+        <!-- /ko -->
+        <!-- ko ifnot: configName -->
+        <span class="label label-warning">{% trans "none" %}</span>
+        <!-- /ko -->
+    </div>
+    <!-- /ko -->
+    </div>
+    <!-- /ko -->
+</div>
+<!--/ko-->
+
+{% endblock extra_tab_contents %}
