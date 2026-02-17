@@ -1,0 +1,78 @@
+{% extends "views/components/widgets/file.htm" %}
+{% load i18n %}
+
+{% block report %}
+{{ block.super }}
+
+<!-- XY Charts Report -->
+<!-- ko foreach: xyCharts() -->
+<dd class="report-xy-chart-container">
+
+    <!-- ko if: loading() -->
+    <div class="report-xy-chart-loading">
+        <i class="fa fa-spinner fa-spin"></i>
+        <span>{% trans "Loading chart..." %}</span>
+    </div>
+    <!-- /ko -->
+
+    <!-- ko if: error() -->
+    <div class="report-xy-chart-error">
+        <i class="fa fa-exclamation-triangle"></i>
+        <span data-bind="text: error()"></span>
+    </div>
+    <!-- /ko -->
+
+    <!-- ko if: chartData() -->
+    <div class="report-xy-chart" data-bind='plotly: {
+        data: chartData,
+        title: title,
+        titleSize: titleSize,
+        xAxisLabel: xAxisLabel,
+        xAxisLabelSize: xAxisLabelSize,
+        yAxisLabel: yAxisLabel,
+        yAxisLabelSize: yAxisLabelSize,
+        seriesStyles: seriesStyles,
+        primarySeriesColor: primarySeriesColor,
+        seriesData: seriesData
+    }'></div>
+    <!-- /ko -->
+</dd>
+<!-- /ko -->
+{% endblock report %}
+
+<style>
+.report-xy-chart-container {
+    margin-left: 0 !important;
+    clear: both;
+    padding: 10px 0;
+}
+
+.report-xy-chart-loading {
+    padding: 20px;
+    text-align: center;
+    color: #999;
+}
+
+.report-xy-chart-loading i {
+    margin-right: 5px;
+}
+
+.report-xy-chart-error {
+    padding: 10px 15px;
+    margin: 5px 0;
+    background-color: #fef0ef;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    color: #721c24;
+}
+
+.report-xy-chart-error i {
+    margin-right: 5px;
+    color: #dc3545;
+}
+
+.report-xy-chart {
+    width: 100%;
+    min-height: 400px;
+}
+</style>
