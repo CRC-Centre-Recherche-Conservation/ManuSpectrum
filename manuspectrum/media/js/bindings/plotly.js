@@ -9,39 +9,45 @@ import Plotly from 'plotly.js-dist';
 const plotlyBinding = {
     init(element, valueAccessor) {
         const config = ko.unwrap(valueAccessor());
-        const data = config.data();
-
-        const multiSeriesColors = [
-            config.primarySeriesColor || '#3333ff',
-            '#ff6633', '#33cc33', '#cc33ff', '#ffcc00',
-            '#00cccc', '#ff3366', '#6633ff'
-        ];
+        const useTracesMode = typeof config.traces === 'function';
 
         let traces;
-        if (data.series && Array.isArray(data.series)) {
-            traces = data.series.map((s, i) => ({
-                x: s.value,
-                y: s.count,
-                type: 'scatter',
-                mode: 'lines',
-                name: s.name,
-                line: {
-                    color: multiSeriesColors[i % multiSeriesColors.length],
-                    width: i === 0 ? 3 : 2
-                }
-            }));
+        if (useTracesMode) {
+            traces = ko.unwrap(config.traces) || [];
         } else {
-            traces = [{
-                x: data.value,
-                y: data.count,
-                type: 'scatter',
-                mode: 'lines',
-                name: data.name,
-                line: {
-                    color: config.primarySeriesColor,
-                    width: 3
-                }
-            }];
+            const data = config.data();
+
+            const multiSeriesColors = [
+                config.primarySeriesColor || '#3333ff',
+                '#ff6633', '#33cc33', '#cc33ff', '#ffcc00',
+                '#00cccc', '#ff3366', '#6633ff'
+            ];
+
+            if (data.series && Array.isArray(data.series)) {
+                traces = data.series.map((s, i) => ({
+                    x: s.value,
+                    y: s.count,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: s.name,
+                    line: {
+                        color: multiSeriesColors[i % multiSeriesColors.length],
+                        width: i === 0 ? 3 : 2
+                    }
+                }));
+            } else {
+                traces = [{
+                    x: data.value,
+                    y: data.count,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: data.name,
+                    line: {
+                        color: config.primarySeriesColor,
+                        width: 3
+                    }
+                }];
+            }
         }
 
         const layout = {
@@ -174,55 +180,61 @@ const plotlyBinding = {
             Plotly.relayout(element, layout);
         });
 
-        config.seriesStyles.subscribe(val => {
-            if (val.length >= 1) {
-                val.forEach(style => {
-                    let traceIndices = [];
-                    element.data.forEach((trace, i) => {
-                        if (trace.tileid === style.tileid) {
-                            traceIndices = [i];
-                        }
-                    });
-                    if (traceIndices.length === 1) {
-                        Plotly.restyle(
-                            element,
-                            { 'marker.color': style.color },
-                            traceIndices
-                        );
-                    }
-                });
-            }
-        });
-
-        config.seriesData.subscribe(val => {
-            val.forEach(series => {
-                if (series.status === 'added') {
-                    const style = config.seriesStyles().find(
-                        el => el.tileid === series.value.tileid
-                    );
-                    if (style) {
-                        Plotly.addTraces(
-                            element,
-                            {
-                                x: series.value.data.value,
-                                y: series.value.data.count,
-                                opacity: 0.9,
-                                marker: { color: style.color },
-                                name: series.value.name,
-                                tileid: series.value.tileid
-                            },
-                            element.data.length
-                        );
-                    }
-                } else {
-                    element.data.forEach((trace, i) => {
-                        if (trace.name === series.value.name) {
-                            Plotly.deleteTraces(element, i);
+        if (useTracesMode) {
+            config.traces.subscribe(newTraces => {
+                Plotly.react(element, newTraces || [], layout, chartConfig);
+            });
+        } else {
+            config.seriesStyles.subscribe(val => {
+                if (val.length >= 1) {
+                    val.forEach(style => {
+                        let traceIndices = [];
+                        element.data.forEach((trace, i) => {
+                            if (trace.tileid === style.tileid) {
+                                traceIndices = [i];
+                            }
+                        });
+                        if (traceIndices.length === 1) {
+                            Plotly.restyle(
+                                element,
+                                { 'marker.color': style.color },
+                                traceIndices
+                            );
                         }
                     });
                 }
             });
-        }, this, 'arrayChange');
+
+            config.seriesData.subscribe(val => {
+                val.forEach(series => {
+                    if (series.status === 'added') {
+                        const style = config.seriesStyles().find(
+                            el => el.tileid === series.value.tileid
+                        );
+                        if (style) {
+                            Plotly.addTraces(
+                                element,
+                                {
+                                    x: series.value.data.value,
+                                    y: series.value.data.count,
+                                    opacity: 0.9,
+                                    marker: { color: style.color },
+                                    name: series.value.name,
+                                    tileid: series.value.tileid
+                                },
+                                element.data.length
+                            );
+                        }
+                    } else {
+                        element.data.forEach((trace, i) => {
+                            if (trace.name === series.value.name) {
+                                Plotly.deleteTraces(element, i);
+                            }
+                        });
+                    }
+                });
+            }, this, 'arrayChange');
+        }
 
         ko.utils.domNodeDisposal.addDisposeCallback(element, () => {
             $(window).off('resize.plotlyBinding');
