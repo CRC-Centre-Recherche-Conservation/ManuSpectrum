@@ -446,15 +446,15 @@ RENDERERS += [
         "id": "e93b7b27-40d8-4141-996e-e59ff08742f3",
         "iconclass": "fa fa-bolt",
         "component": "views/components/cards/file-renderers/xy-reader",
-        "ext": "txt",
-        "type": "text/plain",
+        "ext": "csv,tsv",
+        "type": "text/csv,text/tab-separated-values",
         "exclude": "",
     },
 ]
 
-FILE_TYPES += ["h5", "eln", "hdf5", "md", ".xlsx", "txt"]
+FILE_TYPES += ["csv", "tsv"]
 
-XY_TEXT_FILE_FORMATS = ["txt"]
+XY_TEXT_FILE_FORMATS = ["csv", "tsv"]
 
 PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT),'pkg')
 
