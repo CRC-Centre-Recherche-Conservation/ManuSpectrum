@@ -371,22 +371,27 @@ const vm = function(params) {
         this.fileFormatRenderers.forEach(function(renderer){
             var excludeExtensions = renderer.exclude ? renderer.exclude.split(",") : [];
             var rawFileType = type;
+            var rawExtension;
             try {
                 rawExtension = ko.unwrap(file).split('.').pop();
             } catch (error) {
-                var rawExtension = file.name ? ko.unwrap(file.name).split('.').pop() : undefined;
+                rawExtension = file.name ? ko.unwrap(file.name).split('.').pop() : undefined;
             }
-            if (renderer.type === rawFileType && renderer.ext === rawExtension)  {
+            var rendererTypes = renderer.type ? renderer.type.split(',') : [];
+            var rendererExts = renderer.ext ? renderer.ext.split(',') : [];
+            if (rendererTypes.indexOf(rawFileType) > -1 && rendererExts.indexOf(rawExtension) > -1) {
                 defaultRenderers.push(renderer);
             }
-            var splitFileType = ko.unwrap(type).split('/');
-            var fileType = splitFileType[0];
-            var splitAllowableType = renderer.type.split('/');
-            var allowableType = splitAllowableType[0];
-            var allowableSubType = splitAllowableType[1];
-            if (allowableSubType === '*' && fileType === allowableType && excludeExtensions.indexOf(rawExtension) < 0) {
-                defaultRenderers.push(renderer);
-            }
+            rendererTypes.forEach(function(rType) {
+                var splitAllowableType = rType.split('/');
+                var allowableType = splitAllowableType[0];
+                var allowableSubType = splitAllowableType[1];
+                var splitFileType = ko.unwrap(type).split('/');
+                var fileType = splitFileType[0];
+                if (allowableSubType === '*' && fileType === allowableType && excludeExtensions.indexOf(rawExtension) < 0) {
+                    defaultRenderers.push(renderer);
+                }
+            });
         });
         return defaultRenderers;
     };
