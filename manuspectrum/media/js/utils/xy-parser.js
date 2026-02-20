@@ -159,7 +159,6 @@ const parse = (text, config) => {
     }
 
     // Handle headerDelimiter: split text before PapaParse so header region is isolated
-    let preParsedValues = null;
     if (config?.headerDelimiter) {
         const parts = workingText.split(config.headerDelimiter);
         const headerPart = parts[0].trim();
