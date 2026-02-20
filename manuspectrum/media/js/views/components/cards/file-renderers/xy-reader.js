@@ -506,12 +506,13 @@ export default ko.components.register('xy-reader', {
             }
         };
 
-        this.delimiterCharacter.subscribe((x) => {
+        this.delimiterCharacter.subscribe(() => {
             try {
-                const valueRegex =
-                    this.delimiterCharacter().length < 2
-                        ? new RegExp(`[${this.delimiterCharacter()}\\s]+`)
-                        : new RegExp(`${this.delimiterCharacter()}`);
+                if (this.delimiterCharacter().length < 2) {
+                    new RegExp(`[${this.delimiterCharacter()}\\s]+`);
+                } else {
+                    new RegExp(`${this.delimiterCharacter()}`);
+                }
                 this.invalidDelimiter(false);
             } catch {
                 this.invalidDelimiter(true);

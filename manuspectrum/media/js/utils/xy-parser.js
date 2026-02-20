@@ -122,10 +122,6 @@ const detectDataStart = (rows) => {
             dataStartIndex = i;
             break;
         }
-        // If we reach the end without finding numeric data, start at 0
-        if (i === rows.length - 1) {
-            dataStartIndex = 0;
-        }
     }
 
     let headerLine = null;

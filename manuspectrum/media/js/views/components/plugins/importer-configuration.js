@@ -140,15 +140,6 @@ const vm = function (params) {
             const renderers = await rendererResponse.json();
             const configs = renderers?.configs;
             this.rendererConfigs(configs);
-
-            // if (self.fileViewer.displayContent()) {
-            //     const tile = self.fileViewer.displayContent().tile;
-            //     const node = ko.unwrap(tile.data[self.fileViewer.fileListNodeId]);
-            //     const configId = ko.unwrap(node[0].rendererConfig);
-            //     if(configId){
-            //         this.selectedConfig(configId);
-            //     }
-            // }
         } else {
             this.rendererConfigs([]);
         }

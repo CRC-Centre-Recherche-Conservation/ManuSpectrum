@@ -146,8 +146,6 @@ const vm = function(params) {
     this.dataDelimiterRadio = ko.observable();
     this.dataDelimiter = ko.observable();
 
-    this.rendererConfigs = ko.observableArray();
-
     this.dataDelimiterRadio.subscribe(value => {
         if(value === 'auto'){
             this.dataDelimiter(undefined);
