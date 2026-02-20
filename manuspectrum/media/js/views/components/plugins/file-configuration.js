@@ -148,6 +148,12 @@ const vm = function(params) {
 
     this.rendererConfigs = ko.observableArray();
 
+    // Per-file parsing overrides
+    this.fileDelimiterOverride = ko.observable();
+    this.fileHeaderOverride = ko.observable();
+    this.fileFooterOverride = ko.observable();
+    this.showParsingOverrides = ko.observable(false);
+
     this.dataDelimiterRadio.subscribe(value => {
         if(value != 'other'){
             this.dataDelimiter(value);
@@ -162,7 +168,15 @@ const vm = function(params) {
         }
         const config = this.selectedConfiguration();
         const currentConfig = this.rendererConfigs().find(conf => conf.configid == config);
-        const parsedArrays = xyParser.parse(this.codeMirrorText(), currentConfig.config);
+
+        // Merge per-file overrides for preview
+        const overrides = {};
+        if (this.fileDelimiterOverride()) overrides.delimiterCharacter = this.fileDelimiterOverride();
+        if (this.fileHeaderOverride()) overrides.headerFixedLines = this.fileHeaderOverride();
+        if (this.fileFooterOverride()) overrides.footerDelimiter = this.fileFooterOverride();
+        const effectiveConfig = Object.assign({}, currentConfig.config, overrides);
+
+        const parsedArrays = xyParser.parse(this.codeMirrorText(), effectiveConfig);
 
         if (parsedArrays.ys) {
             this.parsedData(
@@ -322,6 +336,14 @@ const vm = function(params) {
                 const currentFile = fileNode.find(currentFile => currentFile.file_id == file.fileid);
                 currentFile.rendererConfig = rendererConfigId;
                 currentFile.renderer = this.renderer;
+
+                // Save per-file parsing overrides (only non-empty values)
+                const overrides = {};
+                if (this.fileDelimiterOverride()) overrides.delimiterCharacter = this.fileDelimiterOverride();
+                if (this.fileHeaderOverride()) overrides.headerFixedLines = this.fileHeaderOverride();
+                if (this.fileFooterOverride()) overrides.footerDelimiter = this.fileFooterOverride();
+                currentFile.parsingOverrides = Object.keys(overrides).length > 0 ? overrides : undefined;
+
                 (new TileModel(tile)).save();
                 this.rendererConfigs.valueHasMutated();
             }
@@ -364,6 +386,13 @@ const vm = function(params) {
     this.selectedFile.subscribe((file) => {
         this.selectedConfiguration(ko.unwrap(file?.details?.rendererConfig));
         this.selectedFiles([file?.details?.file_id]);
+
+        // Load existing parsing overrides for this file
+        const overrides = file?.details?.parsingOverrides || {};
+        this.fileDelimiterOverride(overrides.delimiterCharacter || '');
+        this.fileHeaderOverride(overrides.headerFixedLines || '');
+        this.fileFooterOverride(overrides.footerDelimiter || '');
+        this.showParsingOverrides(false);
     });
 
     this.getDefaultRenderers = function(type, file){

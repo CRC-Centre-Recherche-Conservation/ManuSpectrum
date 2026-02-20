@@ -69,6 +69,26 @@
                 }"></div>
             </div>
         </div>
+        <div data-bind="visible: selectedFile() && (selectedFiles().length == 1) && fileMode() == 'data'" style="margin-bottom: 10px;">
+            <div style="cursor:pointer; display:flex; align-items:center; padding: 5px 0;" data-bind="click: () => { showParsingOverrides(!showParsingOverrides()); }">
+                <i class="fa" data-bind="css: {'fa-caret-right': !showParsingOverrides(), 'fa-caret-down': showParsingOverrides()}"></i>
+                <span style="margin-left: 5px; font-weight: bold;">{% trans "Parsing overrides (this file)" %}</span>
+            </div>
+            <div data-bind="visible: showParsingOverrides" style="border: 1px solid #ddd; padding: 10px; background: #fafafa;">
+                <div style="margin-bottom: 8px;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 3px;">{% trans "Delimiter" %}</label>
+                    <input type="text" style="width: 100%;" data-bind="textInput: fileDelimiterOverride" placeholder="{% trans 'Auto-detect (leave empty)' %}">
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 3px;">{% trans "Header fixed lines" %}</label>
+                    <input type="text" style="width: 100%;" data-bind="textInput: fileHeaderOverride" placeholder="{% trans 'Auto-detect (leave empty)' %}">
+                </div>
+                <div>
+                    <label style="font-weight: bold; display: block; margin-bottom: 3px;">{% trans "Footer delimiter" %}</label>
+                    <input type="text" style="width: 100%;" data-bind="textInput: fileFooterOverride" placeholder="{% trans 'Auto-detect (leave empty)' %}">
+                </div>
+            </div>
+        </div>
         <div data-bind="visible: parsedData() && selectedConfiguration() && (selectedFiles().length == 1) && fileMode() == 'data'">
             <h4>{% trans "Import Preview" %}</h4>
             <div style="display: flex;flex-direction: column; flex: 1" class="parsing-preview">
