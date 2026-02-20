@@ -15,6 +15,10 @@
 {% block renderer_configuration %}
 <div style="padding: 10px;">
 
+<span style="display: block; margin-bottom: 10px; font-size: 11px; color: #777;">
+    <i class="fa fa-info-circle"></i> {% trans "Select or create a shared configuration that applies to all XY files. For per-file adjustments, use the Status tab." %}
+</span>
+
 <!-- Feature 1: Staged XY files status -->
 <!-- ko if: stagedXyFiles().length > 0 -->
 <div style="margin-bottom: 14px; border: 1px solid #d9edf7; border-radius: 4px; overflow: hidden;">
@@ -86,10 +90,14 @@
 <!--ko if: fileViewer.activeTab() === 'xy-files' -->
 <div class="workbench-card-sidepanel-header-container file-workbench">
     <h4 class="workbench-card-sidepanel-header" data-bind="click: fileViewer.hideSidePanel">
-        {% trans 'XY Files' %}
+        {% trans 'Files Status' %}
     </h4>
 </div>
 <div style="padding: 10px;">
+    <span style="display: block; margin-bottom: 10px; font-size: 11px; color: #777;">
+        <i class="fa fa-info-circle"></i> {% trans "Check which files have a configuration applied. Select file(s) to customize parsing settings individually, overriding the shared config." %}
+    </span>
+
     <!-- ko if: allXyFiles().length === 0 -->
     <div class="alert alert-warning" style="padding: 10px;">
         <i class="fa fa-info-circle"></i> {% trans "No XY files found. Assign the XY renderer to files in the Manage tab." %}
