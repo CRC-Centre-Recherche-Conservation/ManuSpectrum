@@ -352,9 +352,18 @@ export default ko.components.register('xy-reader', {
         };
 
         this.parse = function (text, series) {
-            const config = this.selectedConfiguration?.config;
+            const fileOverrides = this.displayContent?.parsingOverrides || {};
+            const baseConfig = this.selectedConfiguration?.config || {};
+            const effectiveConfig = { ...baseConfig, ...fileOverrides };
+
+            const validation = XyParser.validateContent(text);
+            if (!validation.valid) {
+                this.invalidDelimiter(true);
+                throw new Error('Validation: ' + validation.error);
+            }
+
             try {
-                const parsedData = XyParser.parse(text, config);
+                const parsedData = XyParser.parse(text, effectiveConfig);
                 this.invalidDelimiter(false);
 
                 if (parsedData.ys) {
