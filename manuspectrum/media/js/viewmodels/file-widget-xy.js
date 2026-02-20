@@ -286,7 +286,8 @@ var FileWidgetXYViewModel = function (params) {
                 results.forEach(function (r) {
                     if (!r) return;
                     try {
-                        var fileOverrides = ko.unwrap(r.entry.file.parsingOverrides) || {};
+                        var rawOv = ko.unwrap(r.entry.file.parsingOverrides);
+                        var fileOverrides = (rawOv && typeof rawOv === 'object') ? ko.toJS(rawOv) : {};
                         var effectiveConfig = Object.assign({}, r.config.config, fileOverrides);
 
                         var validation = XyParser.validateContent(r.text);

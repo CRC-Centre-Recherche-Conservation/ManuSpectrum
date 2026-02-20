@@ -154,7 +154,8 @@ const parse = (text, config) => {
     let workingText = text;
 
     // Phase 1: Pre-processing — strip footer
-    if (config?.footerDelimiter) {
+    // 'none' = explicit "end of file" override, skip footer stripping
+    if (config?.footerDelimiter && config.footerDelimiter !== 'none') {
         workingText = workingText.split(config.footerDelimiter)[0].trim();
     }
 
@@ -176,10 +177,11 @@ const parse = (text, config) => {
     };
 
     // If config has a single-char delimiter, use it as override
-    if (config?.delimiterCharacter && config.delimiterCharacter.length === 1) {
+    // 'auto' = explicit auto-detect override, skip delimiter config
+    if (config?.delimiterCharacter && config.delimiterCharacter !== 'auto' && config.delimiterCharacter.length === 1) {
         papaConfig.delimiter = config.delimiterCharacter;
     }
-    // If no delimiter is configured, PapaParse auto-detects
+    // If no delimiter is configured (or 'auto'), PapaParse auto-detects
 
     const result = Papa.parse(workingText, papaConfig);
     let rows = result.data;
@@ -203,7 +205,7 @@ const parse = (text, config) => {
             }
         }
         dataRows = rows;
-    } else if (config?.headerFixedLines) {
+    } else if (config?.headerFixedLines && config.headerFixedLines !== 'auto') {
         const skip = parseInt(config.headerFixedLines, 10);
         if (skip > 0 && skip <= rows.length) {
             headerLine = rows[skip - 1];

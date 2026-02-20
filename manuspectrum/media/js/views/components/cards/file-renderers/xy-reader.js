@@ -273,17 +273,213 @@ export default ko.components.register('xy-reader', {
                     const cfg = configs.find(
                         (c) => c.configid === configId
                     );
+                    const rawOv = ko.unwrap(node[0].parsingOverrides);
+                    const overrides = (rawOv && typeof rawOv === 'object') ? ko.toJS(rawOv) : {};
                     return {
                         name: ko.unwrap(node[0].name) || 'Unknown',
                         hasConfig: !!configId,
                         configName: cfg?.name || null,
                         configId: configId,
+                        configObj: cfg?.config || {},
                         tileid: tile.tileid,
+                        tile: tile,
+                        node: node,
                         url: ko.unwrap(node[0].url),
+                        hasOverrides: Object.keys(overrides).length > 0,
+                        overrides: overrides,
                     };
                 })
                 .filter(Boolean);
         });
+
+        // --- Per-file overrides in Status tab ---
+        this.statusSelectedFiles = ko.observableArray([]);
+        this.showOverridePanel = ko.observable(false);
+        this.overrideDelimiterRadio = ko.observable('config');
+        this.overrideDelimiterCustom = ko.observable('');
+        this.overrideHeaderRadio = ko.observable('config');
+        this.overrideHeader = ko.observable('');
+        this.overrideFooterRadio = ko.observable('config');
+        this.overrideFooter = ko.observable('');
+        this.overrideSaving = ko.observable(false);
+
+        // Dynamic label for button + panel title
+        this.overrideTargetLabel = ko.pureComputed(() => {
+            const files = self.statusSelectedFiles();
+            if (files.length === 0) return '';
+            if (files.length === 1) return files[0].name;
+            return files.length + ' files';
+        });
+
+        // Read overrides live from node data (not cached snapshot)
+        // After tile.save(), koMapping.fromJS() wraps nested props as observables,
+        // so we use ko.toJS() to deeply unwrap all nested observables.
+        const getFileOverrides = (file) => {
+            const raw = ko.unwrap(file.node?.[0]?.parsingOverrides);
+            if (!raw || typeof raw !== 'object') return {};
+            return ko.toJS(raw);
+        };
+
+        // Load radio state from a file's existing overrides
+        const loadOverridesFromFile = (file) => {
+            const ov = getFileOverrides(file);
+            // Delimiter
+            if (!ov.delimiterCharacter) {
+                self.overrideDelimiterRadio('config');
+                self.overrideDelimiterCustom('');
+            } else if (ov.delimiterCharacter === 'auto') {
+                self.overrideDelimiterRadio('auto');
+                self.overrideDelimiterCustom('');
+            } else if (ov.delimiterCharacter === ',') {
+                self.overrideDelimiterRadio(',');
+            } else if (ov.delimiterCharacter === '\t') {
+                self.overrideDelimiterRadio('tab');
+            } else {
+                self.overrideDelimiterRadio('other');
+                self.overrideDelimiterCustom(ov.delimiterCharacter);
+            }
+            // Header
+            if (!ov.headerFixedLines) {
+                self.overrideHeaderRadio('config');
+                self.overrideHeader('');
+            } else if (ov.headerFixedLines === 'auto') {
+                self.overrideHeaderRadio('auto');
+                self.overrideHeader('');
+            } else {
+                self.overrideHeaderRadio('fixed');
+                self.overrideHeader(ov.headerFixedLines);
+            }
+            // Footer
+            if (!ov.footerDelimiter) {
+                self.overrideFooterRadio('config');
+                self.overrideFooter('');
+            } else if (ov.footerDelimiter === 'none') {
+                self.overrideFooterRadio('none');
+                self.overrideFooter('');
+            } else {
+                self.overrideFooterRadio('delimited');
+                self.overrideFooter(ov.footerDelimiter);
+            }
+        };
+
+        const resetOverrideRadios = () => {
+            self.overrideDelimiterRadio('config');
+            self.overrideDelimiterCustom('');
+            self.overrideHeaderRadio('config');
+            self.overrideHeader('');
+            self.overrideFooterRadio('config');
+            self.overrideFooter('');
+        };
+
+        // React to selection changes (checkbox or row click)
+        this.statusSelectedFiles.subscribe((files) => {
+            if (files.length === 1) {
+                loadOverridesFromFile(files[0]);
+            } else {
+                resetOverrideRadios();
+            }
+        });
+
+        this.toggleStatusFile = (file) => {
+            const idx = self.statusSelectedFiles.indexOf(file);
+            if (idx > -1) {
+                self.statusSelectedFiles.splice(idx, 1);
+            } else {
+                self.statusSelectedFiles.push(file);
+            }
+        };
+
+        this.statusSelectAll = () => {
+            self.statusSelectedFiles(self.allXyFiles().slice());
+        };
+
+        this.statusDeselectAll = () => {
+            self.statusSelectedFiles([]);
+            self.showOverridePanel(false);
+        };
+
+        this.overridePlaceholder = ko.pureComputed(() => {
+            const files = self.statusSelectedFiles();
+            if (files.length === 1) {
+                const cfg = files[0].configObj || {};
+                return {
+                    delimiter: cfg.delimiterCharacter
+                        ? '(' + cfg.delimiterCharacter + ')'
+                        : '(auto)',
+                    header: cfg.headerFixedLines
+                        ? '(' + cfg.headerFixedLines + ' lines)'
+                        : '(auto)',
+                    footer: cfg.footerDelimiter
+                        ? '(' + cfg.footerDelimiter + ')'
+                        : '(none)',
+                };
+            }
+            return { delimiter: '', header: '', footer: '' };
+        });
+
+        this.hasOverrideValues = ko.pureComputed(() => {
+            return self.overrideDelimiterRadio() !== 'config' ||
+                   self.overrideHeaderRadio() !== 'config' ||
+                   self.overrideFooterRadio() !== 'config';
+        });
+
+        this.clearOverrides = () => {
+            resetOverrideRadios();
+        };
+
+        // Build the overrides object from radio state
+        const buildOverrides = () => {
+            const overrides = {};
+            const delRadio = self.overrideDelimiterRadio();
+            if (delRadio === 'auto') {
+                overrides.delimiterCharacter = 'auto';
+            } else if (delRadio === ',') {
+                overrides.delimiterCharacter = ',';
+            } else if (delRadio === 'tab') {
+                overrides.delimiterCharacter = '\t';
+            } else if (delRadio === 'other' && self.overrideDelimiterCustom()) {
+                overrides.delimiterCharacter = self.overrideDelimiterCustom();
+            }
+            // 'config' = don't override, key not set
+
+            if (self.overrideHeaderRadio() === 'auto') {
+                overrides.headerFixedLines = 'auto';
+            } else if (self.overrideHeaderRadio() === 'fixed' && self.overrideHeader()) {
+                overrides.headerFixedLines = self.overrideHeader();
+            }
+            // 'config' = don't override, key not set
+
+            if (self.overrideFooterRadio() === 'none') {
+                overrides.footerDelimiter = 'none';
+            } else if (self.overrideFooterRadio() === 'delimited' && self.overrideFooter()) {
+                overrides.footerDelimiter = self.overrideFooter();
+            }
+            // 'config' = don't override, key not set
+
+            return Object.keys(overrides).length > 0 ? overrides : undefined;
+        };
+
+        this.saveOverrides = async () => {
+            const files = self.statusSelectedFiles();
+            if (!files.length) return;
+            self.overrideSaving(true);
+
+            const value = buildOverrides();
+
+            for (const file of files) {
+                try {
+                    file.node[0].parsingOverrides = value || {};
+                    await file.tile.save();
+                } catch (e) {
+                    console.error('Override save error:', file.name, e);
+                }
+            }
+
+            self.overrideSaving(false);
+            self.showOverridePanel(false);
+            self.statusSelectedFiles([]);
+            self.render();
+        };
 
         this.onConfigSaved = async () => {
             await rendererConfigRefresh();
@@ -352,7 +548,17 @@ export default ko.components.register('xy-reader', {
         };
 
         this.parse = function (text, series) {
-            const fileOverrides = this.displayContent?.parsingOverrides || {};
+            // Read overrides from tile data (where they're actually stored),
+            // same path as rendererConfigRefresh reads rendererConfig.
+            let fileOverrides = {};
+            const dc = self.fileViewer?.displayContent() || self.displayContent;
+            if (dc?.tile) {
+                const node = ko.unwrap(dc.tile.data[self.fileViewer.fileListNodeId]);
+                const rawOv = ko.unwrap(node?.[0]?.parsingOverrides);
+                if (rawOv && typeof rawOv === 'object') {
+                    fileOverrides = ko.toJS(rawOv);
+                }
+            }
             const baseConfig = this.selectedConfiguration?.config || {};
             const effectiveConfig = { ...baseConfig, ...fileOverrides };
 
