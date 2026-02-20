@@ -286,7 +286,17 @@ var FileWidgetXYViewModel = function (params) {
                 results.forEach(function (r) {
                     if (!r) return;
                     try {
-                        var parsed = XyParser.parse(r.text, r.config.config);
+                        var fileOverrides = ko.unwrap(r.entry.file.parsingOverrides) || {};
+                        var effectiveConfig = Object.assign({}, r.config.config, fileOverrides);
+
+                        var validation = XyParser.validateContent(r.text);
+                        if (!validation.valid) {
+                            r.entry.error('Validation: ' + validation.error);
+                            r.entry.loading(false);
+                            return;
+                        }
+
+                        var parsed = XyParser.parse(r.text, effectiveConfig);
 
                         r.entry.chartData(
                             parsed.ys
