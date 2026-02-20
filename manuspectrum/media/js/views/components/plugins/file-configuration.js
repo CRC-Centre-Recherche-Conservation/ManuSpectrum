@@ -155,7 +155,9 @@ const vm = function(params) {
     this.showParsingOverrides = ko.observable(false);
 
     this.dataDelimiterRadio.subscribe(value => {
-        if(value != 'other'){
+        if(value === 'auto'){
+            this.dataDelimiter(undefined);
+        } else if(value != 'other'){
             this.dataDelimiter(value);
         } else {
             this.dataDelimiter("");
@@ -290,7 +292,7 @@ const vm = function(params) {
             this.headerConfig('none');
         }
 
-        const radioValue = ((!delimiterCharacter) ? '' : delimiterCharacter == ',' || delimiterCharacter == '|' ? delimiterCharacter : 'other');
+        const radioValue = ((!delimiterCharacter) ? 'auto' : delimiterCharacter == ',' || delimiterCharacter == '|' ? delimiterCharacter : 'other');
         this.dataDelimiterRadio(radioValue);
         if(radioValue == "other"){
             this.dataDelimiter(delimiterCharacter);

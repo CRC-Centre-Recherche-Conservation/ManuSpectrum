@@ -49,7 +49,9 @@ const vm = function (params) {
     this.onConfigSaved = params.onConfigSaved;
 
     this.dataDelimiterRadio.subscribe((value) => {
-        if (value !== 'other') {
+        if (value === 'auto') {
+            this.dataDelimiter(undefined);
+        } else if (value !== 'other') {
             this.dataDelimiter(value);
         } else {
             this.dataDelimiter('');
@@ -64,6 +66,10 @@ const vm = function (params) {
     };
 
     this.dataDelimiter.subscribe((newDelimiter) => {
+        if (!newDelimiter) {
+            this.invalidDelimiter(false);
+            return;
+        }
         try {
             const valueRegex =
                 newDelimiter.length < 2
@@ -170,7 +176,7 @@ const vm = function (params) {
         }
 
         const radioValue = !delimiterCharacter
-            ? ''
+            ? 'auto'
             : delimiterCharacter === ',' || delimiterCharacter === '|'
                 ? delimiterCharacter
                 : 'other';
