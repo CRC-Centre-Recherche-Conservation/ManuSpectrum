@@ -319,6 +319,155 @@ msgstr "Chargement du manifeste"
 msgid "Clear"
 msgstr "Effacer"
 
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Status"
+msgstr "Statut"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Select or create a shared configuration that applies to all XY files. For per-file adjustments, use the Status tab."
+msgstr "Sélectionnez ou créez une configuration partagée qui s'applique à tous les fichiers XY. Pour des ajustements par fichier, utilisez l'onglet Statut."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "XY file(s) staged"
+msgstr "fichier(s) XY en attente"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "No config"
+msgstr "Aucune config"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Apply to"
+msgstr "Appliquer à"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "staged file(s)"
+msgstr "fichier(s) en attente"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Applying..."
+msgstr "Application en cours..."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Files Status"
+msgstr "Statut des fichiers"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Check which files have a configuration applied. Select file(s) to customize parsing settings individually, overriding the shared config."
+msgstr "Vérifiez quels fichiers ont une configuration appliquée. Sélectionnez un ou plusieurs fichiers pour personnaliser les paramètres d'analyse individuellement, en remplaçant la configuration partagée."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
+msgstr "Aucun fichier XY trouvé. Assignez le rendu XY aux fichiers dans l'onglet Gérer."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "file(s)"
+msgstr "fichier(s)"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "All"
+msgstr "Tous"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "None"
+msgstr "Aucun"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Has custom parsing"
+msgstr "A un parsing personnalisé"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "none"
+msgstr "aucune"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Adjust parsing for"
+msgstr "Ajuster le parsing pour"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Custom parsing:"
+msgstr "Parsing personnalisé :"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "These settings override the shared config for the selected file(s) only. Choose 'Use config' to keep the shared config value."
+msgstr "Ces paramètres remplacent la configuration partagée uniquement pour le(s) fichier(s) sélectionné(s). Choisissez « Utiliser la config » pour conserver la valeur de la configuration partagée."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Delimiter"
+msgstr "Délimiteur"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Use config"
+msgstr "Utiliser la config"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Auto-detect"
+msgstr "Détection automatique"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Tab"
+msgstr "Tabulation"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Other:"
+msgstr "Autre :"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Custom delimiter"
+msgstr "Délimiteur personnalisé"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Fixed lines:"
+msgstr "Lignes fixes :"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Number of lines"
+msgstr "Nombre de lignes"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "End of file"
+msgstr "Fin du fichier"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "After text:"
+msgstr "Après le texte :"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Footer text"
+msgstr "Texte du pied de page"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Reset to config"
+msgstr "Réinitialiser à la config"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Apply & re-render"
+msgstr "Appliquer et re-rendre"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Files"
+msgstr "Fichiers"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Select all"
+msgstr "Tout sélectionner"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Deselect all"
+msgstr "Tout désélectionner"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Loading charts..."
+msgstr "Chargement des graphiques..."
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Unable to load chart data"
+msgstr "Impossible de charger les données du graphique"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Select files to display"
+msgstr "Sélectionnez les fichiers à afficher"
+
 #: manuspectrum/views/renderer_config.py
 msgid "<h1>Renderers do not exist</h1>"
 msgstr "<h1>Les rendus n'existent pas</h1>"
