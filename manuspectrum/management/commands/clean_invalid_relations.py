@@ -72,30 +72,30 @@ import csv
 
 
 class Command(BaseCommand):
-    help = 'Nettoie les relations invalides depuis un CSV'
+    help = "Nettoie les relations invalides depuis un CSV"
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--input',
+            "--input",
             type=str,
             required=True,
-            help='Fichier CSV exporté avec les relations',
+            help="Fichier CSV exporté avec les relations",
         )
         parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Simule le nettoyage sans modifier',
+            "--dry-run",
+            action="store_true",
+            help="Simule le nettoyage sans modifier",
         )
         parser.add_argument(
-            '--delete-tiles',
-            action='store_true',
-            help='Supprime les tiles entièrement corrompus',
+            "--delete-tiles",
+            action="store_true",
+            help="Supprime les tiles entièrement corrompus",
         )
 
     def handle(self, *args, **options):
-        input_file = options['input']
-        dry_run = options['dry_run']
-        delete_tiles = options['delete_tiles']
+        input_file = options["input"]
+        dry_run = options["dry_run"]
+        delete_tiles = options["delete_tiles"]
 
         self.stdout.write("=" * 80)
         self.stdout.write("NETTOYAGE DES RELATIONS INVALIDES")
@@ -107,22 +107,21 @@ class Command(BaseCommand):
         # Lire le CSV et grouper par tile
         tiles_to_clean = {}
 
-        with open(input_file, 'r', encoding='utf-8') as csvfile:
+        with open(input_file, "r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
 
             for row in reader:
-                if row['status'] in ['INVALID_TARGET', 'ERROR']:
-                    tile_id = row['tile_id']
-                    node_id = row['node_id']
-                    invalid_uuid = row['target_id']
+                if row["status"] in ["INVALID_TARGET", "ERROR"]:
+                    tile_id = row["tile_id"]
+                    node_id = row["node_id"]
+                    invalid_uuid = row["target_id"]
 
                     if tile_id not in tiles_to_clean:
                         tiles_to_clean[tile_id] = []
 
-                    tiles_to_clean[tile_id].append({
-                        'node_id': node_id,
-                        'invalid_uuid': invalid_uuid
-                    })
+                    tiles_to_clean[tile_id].append(
+                        {"node_id": node_id, "invalid_uuid": invalid_uuid}
+                    )
 
         self.stdout.write(f"Tiles à nettoyer: {len(tiles_to_clean)}\n")
 
@@ -137,7 +136,8 @@ class Command(BaseCommand):
 
                 self.stdout.write(f"\nTile: {tile_id}")
                 self.stdout.write(
-                    f"  Ressource: {resource.name if callable(resource.name) else str(resource.name)}")
+                    f"  Ressource: {resource.name if callable(resource.name) else str(resource.name)}"
+                )
                 self.stdout.write(f"  Valeurs invalides: {len(invalid_items)}")
 
                 if not tile.data:
@@ -151,15 +151,17 @@ class Command(BaseCommand):
                         with transaction.atomic():
                             tile.delete()
                     deleted_count += 1
-                    self.stdout.write(self.style.ERROR(f"  ✗ TILE SUPPRIMÉ (trop corrompu)"))
+                    self.stdout.write(
+                        self.style.ERROR(f"  ✗ TILE SUPPRIMÉ (trop corrompu)")
+                    )
 
                 else:
                     # Nettoyer juste les valeurs invalides
                     modified = False
 
                     for invalid_item in invalid_items:
-                        node_id = invalid_item['node_id']
-                        invalid_uuid = invalid_item['invalid_uuid']
+                        node_id = invalid_item["node_id"]
+                        invalid_uuid = invalid_item["invalid_uuid"]
 
                         if node_id in tile.data:
                             value = tile.data[node_id]
@@ -169,18 +171,27 @@ class Command(BaseCommand):
                                 if not dry_run:
                                     del tile.data[node_id]
                                 modified = True
-                                self.stdout.write(f"    ✓ Supprimé node {node_id[:8]}... (valeur simple)")
+                                self.stdout.write(
+                                    f"    ✓ Supprimé node {node_id[:8]}... (valeur simple)"
+                                )
 
                             # Cas 2: Liste
                             elif isinstance(value, list):
                                 new_list = []
                                 for item in value:
-                                    if isinstance(item, dict) and item.get('resourceId') == invalid_uuid:
+                                    if (
+                                        isinstance(item, dict)
+                                        and item.get("resourceId") == invalid_uuid
+                                    ):
                                         modified = True
-                                        self.stdout.write(f"    ✓ Supprimé {invalid_uuid[:8]}... de la liste")
+                                        self.stdout.write(
+                                            f"    ✓ Supprimé {invalid_uuid[:8]}... de la liste"
+                                        )
                                     elif isinstance(item, str) and item == invalid_uuid:
                                         modified = True
-                                        self.stdout.write(f"    ✓ Supprimé {invalid_uuid[:8]}... de la liste")
+                                        self.stdout.write(
+                                            f"    ✓ Supprimé {invalid_uuid[:8]}... de la liste"
+                                        )
                                     else:
                                         new_list.append(item)
 

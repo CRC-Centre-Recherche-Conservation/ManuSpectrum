@@ -9,6 +9,7 @@ class RendererConfig(models.Model):
     GPL-3.0 license
     https://github.com/archesproject/arches-for-science
     """
+
     configid = models.UUIDField(primary_key=True, unique=True)
     rendererid = models.UUIDField()
     name = models.TextField(blank=False, null=False)
@@ -23,4 +24,3 @@ class RendererConfig(models.Model):
         super(RendererConfig, self).__init__(*args, **kwargs)
         if not self.configid:
             self.configid = uuid.uuid4()
-

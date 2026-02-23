@@ -34,7 +34,9 @@ class RendererView(APIBase):
     def get(self, request, renderer_id=None):
         renderer = {}
         if renderer_id is None:
-            return JSONResponse([])  # this should be fixed later to return all renderers; not currently used.
+            return JSONResponse(
+                []
+            )  # this should be fixed later to return all renderers; not currently used.
         else:
             renderer_config = RendererConfig.objects.filter(rendererid=renderer_id)
 
@@ -56,7 +58,9 @@ class RendererConfigView(APIBase):
             if renderer_config:
                 return JSONResponse(renderer_config.values())
             else:
-                return HttpResponseNotFound(_("<h1>Renderers config does not exist</h1>"))
+                return HttpResponseNotFound(
+                    _("<h1>Renderers config does not exist</h1>")
+                )
 
     @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
     def post(self, request, renderer_config_id=None):
@@ -72,7 +76,9 @@ class RendererConfigView(APIBase):
             renderer_config.config = body
             renderer_config.save()
         else:
-            renderer_config = RendererConfig.objects.create(rendererid=body["rendererId"], name=body["name"], config=body)
+            renderer_config = RendererConfig.objects.create(
+                rendererid=body["rendererId"], name=body["name"], config=body
+            )
 
         response_dict = JSONSerializer().serialize(renderer_config)
 
@@ -80,7 +86,7 @@ class RendererConfigView(APIBase):
 
     @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
     def delete(self, request, renderer_config_id):
-        file_nodegroup_id = "7c486328-d380-11e9-b88e-a4d18cec433a" #TODO
+        file_nodegroup_id = "7c486328-d380-11e9-b88e-a4d18cec433a"  # TODO
         renderer_config = RendererConfig.objects.get(configid=renderer_config_id)
         query = Q(
             **{

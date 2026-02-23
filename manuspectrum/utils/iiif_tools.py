@@ -3,6 +3,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 # -------------------------------
 # IIIF Canvas
 # -------------------------------
@@ -22,8 +23,8 @@ class CanvasIIIF:
     @staticmethod
     def detect_version(manifest_data):
         """Detects IIIF version (2 or 3) from context or structure."""
-        ctx = manifest_data.get('@context', '')
-        if 'presentation/3' in ctx or 'iiif.io/api/presentation/3' in ctx:
+        ctx = manifest_data.get("@context", "")
+        if "presentation/3" in ctx or "iiif.io/api/presentation/3" in ctx:
             return 3
         return 2
 
@@ -37,24 +38,24 @@ class CanvasIIIF:
 
         # --- v3 ---
         if version == 3:
-            thumb = manifest_data.get('thumbnail')
+            thumb = manifest_data.get("thumbnail")
             if thumb:
                 if isinstance(thumb, list):
                     thumb = thumb[0]
                 if isinstance(thumb, dict):
-                    return thumb.get('id')
+                    return thumb.get("id")
                 if isinstance(thumb, str):
                     return thumb
 
-            items = manifest_data.get('items', [])
+            items = manifest_data.get("items", [])
             if items:
                 first_canvas = items[0]
-                canvas_thumb = first_canvas.get('thumbnail')
+                canvas_thumb = first_canvas.get("thumbnail")
                 if canvas_thumb:
                     if isinstance(canvas_thumb, list):
                         canvas_thumb = canvas_thumb[0]
                     if isinstance(canvas_thumb, dict):
-                        return canvas_thumb.get('id')
+                        return canvas_thumb.get("id")
                     if isinstance(canvas_thumb, str):
                         return canvas_thumb
 
@@ -66,22 +67,22 @@ class CanvasIIIF:
 
         # --- v2 ---
         else:
-            thumb = manifest_data.get('thumbnail')
+            thumb = manifest_data.get("thumbnail")
             if isinstance(thumb, str):
                 return thumb
-            if isinstance(thumb, dict) and '@id' in thumb:
-                return thumb['@id']
+            if isinstance(thumb, dict) and "@id" in thumb:
+                return thumb["@id"]
 
-            sequences = manifest_data.get('sequences', [])
+            sequences = manifest_data.get("sequences", [])
             if sequences:
-                canvases = sequences[0].get('canvases', [])
+                canvases = sequences[0].get("canvases", [])
                 if canvases:
                     first_canvas = canvases[0]
-                    thumb = first_canvas.get('thumbnail')
+                    thumb = first_canvas.get("thumbnail")
                     if isinstance(thumb, str):
                         return thumb
-                    if isinstance(thumb, dict) and '@id' in thumb:
-                        return thumb['@id']
+                    if isinstance(thumb, dict) and "@id" in thumb:
+                        return thumb["@id"]
 
                     # Build from IIIF service
                     service = CanvasIIIF._get_service_from_canvas_v2(first_canvas)
@@ -98,14 +99,14 @@ class CanvasIIIF:
         version = CanvasIIIF.detect_version(manifest_data)
 
         if version == 3:
-            for canvas in manifest_data.get('items', []):
-                if canvas.get('id') == canvas_url:
+            for canvas in manifest_data.get("items", []):
+                if canvas.get("id") == canvas_url:
                     return canvas
             return None
         else:
-            for seq in manifest_data.get('sequences', []):
-                for canvas in seq.get('canvases', []):
-                    if canvas.get('@id') == canvas_url:
+            for seq in manifest_data.get("sequences", []):
+                for canvas in seq.get("canvases", []):
+                    if canvas.get("@id") == canvas_url:
                         return canvas
             return None
 
@@ -115,44 +116,44 @@ class CanvasIIIF:
         if not uri:
             return ""
         # Remove trailing slashes
-        uri = uri.rstrip('/')
+        uri = uri.rstrip("/")
         # Normalize http/https for comparison
-        if uri.startswith('https://'):
+        if uri.startswith("https://"):
             return uri[8:]  # Remove https://
-        if uri.startswith('http://'):
+        if uri.startswith("http://"):
             return uri[7:]  # Remove http://
         return uri
 
     @staticmethod
     def _get_image_service_url_v2(canvas: dict) -> str | None:
         """Extract the image service URL from a v2 canvas."""
-        images = canvas.get('images', [])
+        images = canvas.get("images", [])
         if images:
-            resource = images[0].get('resource', {})
-            service = resource.get('service', {})
+            resource = images[0].get("resource", {})
+            service = resource.get("service", {})
             if isinstance(service, list):
                 service = service[0] if service else {}
-            return service.get('@id')
+            return service.get("@id")
         return None
 
     @staticmethod
     def _get_image_service_url_v3(canvas: dict) -> str | None:
         """Extract the image service URL from a v3 canvas."""
-        items = canvas.get('items', [])
+        items = canvas.get("items", [])
         if not items:
             return None
         first_item = items[0]
-        inner_items = first_item.get('items', [])
+        inner_items = first_item.get("items", [])
         if not inner_items:
             return None
-        body = inner_items[0].get('body', {})
+        body = inner_items[0].get("body", {})
         if isinstance(body, list):
             body = body[0] if body else {}
-        service = body.get('service', [])
+        service = body.get("service", [])
         if isinstance(service, list):
             service = service[0] if service else {}
         if isinstance(service, dict):
-            return service.get('id') or service.get('@id')
+            return service.get("id") or service.get("@id")
         return None
 
     @staticmethod
@@ -181,29 +182,41 @@ class CanvasIIIF:
         normalized_target = CanvasIIIF._normalize_uri(canvas_url)
 
         if version == 3:
-            items = manifest_data.get('items', [])
+            items = manifest_data.get("items", [])
             for idx, canvas in enumerate(items):
-                canvas_id = canvas.get('id', '')
+                canvas_id = canvas.get("id", "")
                 # Try canvas ID match
-                if canvas_id == canvas_url or CanvasIIIF._normalize_uri(canvas_id) == normalized_target:
+                if (
+                    canvas_id == canvas_url
+                    or CanvasIIIF._normalize_uri(canvas_id) == normalized_target
+                ):
                     return idx + 1  # 1-indexed
                 # Try image service URL match
                 service_url = CanvasIIIF._get_image_service_url_v3(canvas)
-                if service_url and (service_url == canvas_url or CanvasIIIF._normalize_uri(service_url) == normalized_target):
+                if service_url and (
+                    service_url == canvas_url
+                    or CanvasIIIF._normalize_uri(service_url) == normalized_target
+                ):
                     return idx + 1
             return None
         else:
-            sequences = manifest_data.get('sequences', [])
+            sequences = manifest_data.get("sequences", [])
             if sequences:
-                canvases = sequences[0].get('canvases', [])
+                canvases = sequences[0].get("canvases", [])
                 for idx, canvas in enumerate(canvases):
-                    canvas_id = canvas.get('@id', '')
+                    canvas_id = canvas.get("@id", "")
                     # Try canvas ID match
-                    if canvas_id == canvas_url or CanvasIIIF._normalize_uri(canvas_id) == normalized_target:
+                    if (
+                        canvas_id == canvas_url
+                        or CanvasIIIF._normalize_uri(canvas_id) == normalized_target
+                    ):
                         return idx + 1  # 1-indexed
                     # Try image service URL match
                     service_url = CanvasIIIF._get_image_service_url_v2(canvas)
-                    if service_url and (service_url == canvas_url or CanvasIIIF._normalize_uri(service_url) == normalized_target):
+                    if service_url and (
+                        service_url == canvas_url
+                        or CanvasIIIF._normalize_uri(service_url) == normalized_target
+                    ):
                         return idx + 1
             return None
 
@@ -226,18 +239,18 @@ class CanvasIIIF:
         idx = index - 1  # Convert to 0-indexed
 
         if version == 3:
-            items = manifest_data.get('items', [])
+            items = manifest_data.get("items", [])
             if idx < len(items):
                 canvas = items[idx]
-                return canvas, canvas.get('id')
+                return canvas, canvas.get("id")
             return None, None
         else:
-            sequences = manifest_data.get('sequences', [])
+            sequences = manifest_data.get("sequences", [])
             if sequences:
-                canvases = sequences[0].get('canvases', [])
+                canvases = sequences[0].get("canvases", [])
                 if idx < len(canvases):
                     canvas = canvases[idx]
-                    return canvas, canvas.get('@id')
+                    return canvas, canvas.get("@id")
             return None, None
 
     @staticmethod
@@ -245,39 +258,36 @@ class CanvasIIIF:
         """Returns (width, height) with safe defaults."""
         if not canvas_info:
             return (1000, 1000)
-        return (
-            canvas_info.get('width', 1000),
-            canvas_info.get('height', 1000)
-        )
+        return (canvas_info.get("width", 1000), canvas_info.get("height", 1000))
 
     @staticmethod
     def _get_service_from_canvas_v2(canvas):
         """Extracts IIIF image service from v2 canvas."""
-        images = canvas.get('images', [])
+        images = canvas.get("images", [])
         if images:
-            res = images[0].get('resource', {})
-            service = res.get('service', {})
-            return service.get('@id')
+            res = images[0].get("resource", {})
+            service = res.get("service", {})
+            return service.get("@id")
         return None
 
     @staticmethod
     def _get_service_from_canvas_v3(canvas):
         """Extracts IIIF image service from v3 canvas."""
-        items = canvas.get('items', [])
+        items = canvas.get("items", [])
         if not items:
             return None
         first_item = items[0]
-        inner_items = first_item.get('items', [])
+        inner_items = first_item.get("items", [])
         if not inner_items:
             return None
-        body = inner_items[0].get('body', {})
+        body = inner_items[0].get("body", {})
         if isinstance(body, list):
             body = body[0]
-        service = body.get('service', [])
+        service = body.get("service", [])
         if isinstance(service, list):
             service = service[0]
         if isinstance(service, dict):
-            return service.get('id')
+            return service.get("id")
         return None
 
     @staticmethod
@@ -288,11 +298,13 @@ class CanvasIIIF:
 
             if response.status_code == 200:
                 info_data = response.json()
-                width = info_data.get('width')
-                height = info_data.get('height')
+                width = info_data.get("width")
+                height = info_data.get("height")
 
                 if width and height:
-                    logger.info(f"Retrieved dimensions from Image Service: {width}x{height}")
+                    logger.info(
+                        f"Retrieved dimensions from Image Service: {width}x{height}"
+                    )
                     return (width, height)
 
         except Exception as e:
@@ -351,7 +363,7 @@ class BBoxCalculator:
 
         try:
             ring = coordinates[0]
-            scale = 2 ** zoom
+            scale = 2**zoom
             xs = [lng * scale for lng, lat in ring]
             ys = [-lat * scale for lng, lat in ring]
 
@@ -380,7 +392,14 @@ class BBoxCalculator:
             return None
 
     @staticmethod
-    def point_bbox(coordinates, canvas_width, canvas_height, radius=10, zoom=5, context_multiplier=5):
+    def point_bbox(
+        coordinates,
+        canvas_width,
+        canvas_height,
+        radius=10,
+        zoom=5,
+        context_multiplier=5,
+    ):
         """
         Compute the bounding box (bbox) of a point on a canvas.
 
@@ -422,7 +441,7 @@ class BBoxCalculator:
 
         try:
             lng, lat = coordinates[0], coordinates[1]
-            scale = 2 ** zoom
+            scale = 2**zoom
             x_center = lng * scale
             y_center = -lat * scale
 
@@ -448,7 +467,9 @@ class BBoxCalculator:
             return None
 
     @staticmethod
-    def geometry_to_xywh(geometry, canvas_width, canvas_height, zoom=5, margin=10, radius=10):
+    def geometry_to_xywh(
+        geometry, canvas_width, canvas_height, zoom=5, margin=10, radius=10
+    ):
         """
         Convert a GeoJSON geometry object to an IIIF xywh fragment.
 
@@ -532,4 +553,3 @@ class BBoxCalculator:
         except Exception as e:
             logger.error(f"Error converting geometry to xywh: {e}")
             return None
-

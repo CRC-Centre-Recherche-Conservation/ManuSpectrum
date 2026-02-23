@@ -6,6 +6,7 @@ Tests IIIF v2/v3 manifest validation and transformation using real IIIF examples
 Usage:
     python manage.py test manuspectrum.tests.test_manifest_datatype
 """
+
 import uuid
 from unittest.mock import MagicMock, Mock, patch
 
@@ -23,25 +24,19 @@ class ManifestTestData:
         "type": "Manifest",
         "label": {"en": ["Book 1"]},
         "metadata": [
-            {
-                "label": {"en": ["Author"]},
-                "value": {"none": ["Anne Author"]}
-            },
+            {"label": {"en": ["Author"]}, "value": {"none": ["Anne Author"]}},
             {
                 "label": {"en": ["Published"]},
-                "value": {
-                    "en": ["Paris, circa 1400"],
-                    "fr": ["Paris, environ 1400"]
-                }
+                "value": {"en": ["Paris, circa 1400"], "fr": ["Paris, environ 1400"]},
             },
             {
                 "label": {"en": ["Notes"]},
-                "value": {
-                    "en": ["Text of note 1", "Text of note 2"]
-                }
-            }
+                "value": {"en": ["Text of note 1", "Text of note 2"]},
+            },
         ],
-        "summary": {"en": ["Book 1, written be Anne Author, published in Paris around 1400."]},
+        "summary": {
+            "en": ["Book 1, written be Anne Author, published in Paris around 1400."]
+        },
         "thumbnail": [
             {
                 "id": "https://example.org/iiif/book1/page1/full/80,100/0/default.jpg",
@@ -51,9 +46,9 @@ class ManifestTestData:
                     {
                         "id": "https://example.org/iiif/book1/page1",
                         "type": "ImageService3",
-                        "profile": "level1"
+                        "profile": "level1",
                     }
-                ]
+                ],
             }
         ],
         "viewingDirection": "right-to-left",
@@ -62,7 +57,7 @@ class ManifestTestData:
         "rights": "https://creativecommons.org/licenses/by/4.0/",
         "requiredStatement": {
             "label": {"en": ["Attribution"]},
-            "value": {"en": ["Provided by Example Organization"]}
+            "value": {"en": ["Provided by Example Organization"]},
         },
         "provider": [
             {
@@ -74,9 +69,9 @@ class ManifestTestData:
                         "id": "https://example.org/",
                         "type": "Text",
                         "label": {"en": ["Example Organization Homepage"]},
-                        "format": "text/html"
+                        "format": "text/html",
                     }
-                ]
+                ],
             }
         ],
         "items": [
@@ -100,21 +95,21 @@ class ManifestTestData:
                                     "type": "Image",
                                     "format": "image/jpeg",
                                     "height": 2000,
-                                    "width": 1500
+                                    "width": 1500,
                                 },
-                                "target": "https://example.org/iiif/book1/canvas/p1"
+                                "target": "https://example.org/iiif/book1/canvas/p1",
                             }
-                        ]
+                        ],
                     }
-                ]
+                ],
             },
             {
                 "id": "https://example.org/iiif/book1/canvas/p2",
                 "type": "Canvas",
                 "label": {"none": ["p. 2"]},
                 "height": 1000,
-                "width": 750
-            }
+                "width": 750,
+            },
         ],
         "structures": [
             {
@@ -125,11 +120,11 @@ class ManifestTestData:
                     {
                         "id": "https://example.org/iiif/book1/range/r1",
                         "type": "Range",
-                        "label": {"en": ["Introduction"]}
+                        "label": {"en": ["Introduction"]},
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
 
     # Full IIIF Presentation API v2 manifest example
@@ -144,9 +139,9 @@ class ManifestTestData:
                 "label": "Published",
                 "value": [
                     {"@value": "Paris, circa 1400", "@language": "en"},
-                    {"@value": "Paris, environ 14eme siecle", "@language": "fr"}
-                ]
-            }
+                    {"@value": "Paris, environ 14eme siecle", "@language": "fr"},
+                ],
+            },
         ],
         "description": "A longer description of this example book. It should give some real information.",
         "navDate": "1856-01-01T00:00:00Z",
@@ -155,17 +150,17 @@ class ManifestTestData:
         "service": {
             "@context": "http://example.org/ns/jsonld/context.json",
             "@id": "http://example.org/service/example",
-            "profile": "http://example.org/docs/example-service.html"
+            "profile": "http://example.org/docs/example-service.html",
         },
         "seeAlso": {
             "@id": "http://example.org/library/catalog/book1.marc",
             "format": "application/marc",
-            "profile": "http://example.org/profiles/marc21"
+            "profile": "http://example.org/profiles/marc21",
         },
         "rendering": {
             "@id": "http://example.org/iiif/book1.pdf",
             "label": "Download as PDF",
-            "format": "application/pdf"
+            "format": "application/pdf",
         },
         "within": "http://example.org/collections/books/",
         "sequences": [
@@ -191,27 +186,27 @@ class ManifestTestData:
                                     "@type": "dctypes:Image",
                                     "format": "image/jpeg",
                                     "height": 2000,
-                                    "width": 1500
+                                    "width": 1500,
                                 },
-                                "on": "http://example.org/iiif/book1/canvas/p1"
+                                "on": "http://example.org/iiif/book1/canvas/p1",
                             }
-                        ]
+                        ],
                     },
                     {
                         "@id": "http://example.org/iiif/book1/canvas/p2",
                         "@type": "sc:Canvas",
                         "label": "p. 2",
                         "height": 1000,
-                        "width": 750
+                        "width": 750,
                     },
                     {
                         "@id": "http://example.org/iiif/book1/canvas/p3",
                         "@type": "sc:Canvas",
                         "label": "p. 3",
                         "height": 1000,
-                        "width": 750
-                    }
-                ]
+                        "width": 750,
+                    },
+                ],
             }
         ],
         "structures": [
@@ -222,41 +217,38 @@ class ManifestTestData:
                 "canvases": [
                     "http://example.org/iiif/book1/canvas/p1",
                     "http://example.org/iiif/book1/canvas/p2",
-                    "http://example.org/iiif/book1/canvas/p3#xywh=0,0,750,300"
-                ]
+                    "http://example.org/iiif/book1/canvas/p3#xywh=0,0,750,300",
+                ],
             }
-        ]
+        ],
     }
 
     # Invalid manifests for testing error cases
-    INVALID_NO_CONTEXT = {
-        "type": "Manifest",
-        "label": {"en": ["No context manifest"]}
-    }
+    INVALID_NO_CONTEXT = {"type": "Manifest", "label": {"en": ["No context manifest"]}}
 
     INVALID_WRONG_TYPE_V2 = {
         "@context": "http://iiif.io/api/presentation/2/context.json",
         "@type": "sc:Collection",
-        "@id": "http://example.org/collection"
+        "@id": "http://example.org/collection",
     }
 
     INVALID_WRONG_TYPE_V3 = {
         "@context": "http://iiif.io/api/presentation/3/context.json",
         "type": "Collection",
-        "id": "https://example.org/collection"
+        "id": "https://example.org/collection",
     }
 
     # Minimal valid manifests
     MINIMAL_V2 = {
         "@context": "http://iiif.io/api/presentation/2/context.json",
         "@type": "sc:Manifest",
-        "@id": "http://example.org/manifest"
+        "@id": "http://example.org/manifest",
     }
 
     MINIMAL_V3 = {
         "@context": "http://iiif.io/api/presentation/3/context.json",
         "type": "Manifest",
-        "id": "https://example.org/manifest"
+        "id": "https://example.org/manifest",
     }
 
 
@@ -264,12 +256,13 @@ class TestIsIIIFManifest(TestCase):
     """Tests for the is_iiif_manifest static method."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import (
                 ManifestDataType,
-                FailParsingManifestIIIF
+                FailParsingManifestIIIF,
             )
+
             self.ManifestDataType = ManifestDataType
             self.FailParsingManifestIIIF = FailParsingManifestIIIF
 
@@ -314,13 +307,17 @@ class TestIsIIIFManifest(TestCase):
     def test_wrong_type_v2_raises_exception(self):
         """A v2 manifest with wrong @type should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest(ManifestTestData.INVALID_WRONG_TYPE_V2)
+            self.ManifestDataType.is_iiif_manifest(
+                ManifestTestData.INVALID_WRONG_TYPE_V2
+            )
         self.assertIn("invalid @type", str(ctx.exception))
 
     def test_wrong_type_v3_raises_exception(self):
         """A v3 manifest with wrong type should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest(ManifestTestData.INVALID_WRONG_TYPE_V3)
+            self.ManifestDataType.is_iiif_manifest(
+                ManifestTestData.INVALID_WRONG_TYPE_V3
+            )
         self.assertIn("invalid type", str(ctx.exception))
 
     def test_none_raises_exception(self):
@@ -337,7 +334,7 @@ class TestIsIIIFManifest(TestCase):
         """A v2 manifest missing @type should raise FailParsingManifestIIIF."""
         manifest = {
             "@context": "http://iiif.io/api/presentation/2/context.json",
-            "@id": "http://example.org/manifest"
+            "@id": "http://example.org/manifest",
         }
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
             self.ManifestDataType.is_iiif_manifest(manifest)
@@ -347,7 +344,7 @@ class TestIsIIIFManifest(TestCase):
         """A v3 manifest missing type should raise FailParsingManifestIIIF."""
         manifest = {
             "@context": "http://iiif.io/api/presentation/3/context.json",
-            "id": "https://example.org/manifest"
+            "id": "https://example.org/manifest",
         }
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
             self.ManifestDataType.is_iiif_manifest(manifest)
@@ -358,9 +355,10 @@ class TestExtractManifestLabel(TestCase):
     """Tests for manifest label extraction."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.datatype = ManifestDataType()
 
     def test_extract_label_v3_full_manifest(self):
@@ -396,7 +394,7 @@ class TestExtractManifestLabel(TestCase):
         manifest = {
             "label": [
                 {"@value": "English Title", "@language": "en"},
-                {"@value": "Titre français", "@language": "fr"}
+                {"@value": "Titre français", "@language": "fr"},
             ]
         }
         result = self.datatype._extract_manifest_label(manifest)
@@ -435,9 +433,10 @@ class TestExtractManifestDescription(TestCase):
     """Tests for manifest description extraction."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.datatype = ManifestDataType()
 
     def test_extract_description_v2_full_manifest(self):
@@ -445,22 +444,21 @@ class TestExtractManifestDescription(TestCase):
         result = self.datatype._extract_manifest_description(ManifestTestData.VALID_V2)
         self.assertEqual(
             result,
-            "A longer description of this example book. It should give some real information."
+            "A longer description of this example book. It should give some real information.",
         )
 
     def test_extract_summary_v3_full_manifest(self):
         """Extract summary from full v3 manifest (v3 uses 'summary' not 'description')."""
         result = self.datatype._extract_manifest_description(ManifestTestData.VALID_V3)
         self.assertEqual(
-            result,
-            "Book 1, written be Anne Author, published in Paris around 1400."
+            result, "Book 1, written be Anne Author, published in Paris around 1400."
         )
 
     def test_description_takes_precedence_over_summary(self):
         """When both exist, description should be used."""
         manifest = {
             "description": "Description text",
-            "summary": {"en": ["Summary text"]}
+            "summary": {"en": ["Summary text"]},
         }
         result = self.datatype._extract_manifest_description(manifest)
         self.assertEqual(result, "Description text")
@@ -474,9 +472,7 @@ class TestExtractManifestDescription(TestCase):
     def test_extract_description_v2_list_with_language(self):
         """Extract list description with @value objects."""
         manifest = {
-            "description": [
-                {"@value": "English description", "@language": "en"}
-            ]
+            "description": [{"@value": "English description", "@language": "en"}]
         }
         result = self.datatype._extract_manifest_description(manifest)
         self.assertEqual(result, "English description")
@@ -496,9 +492,10 @@ class TestManifestValidation(TestCase):
     """Tests for the validate method."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.datatype = ManifestDataType()
 
     def test_validate_none_returns_empty_errors(self):
@@ -511,7 +508,7 @@ class TestManifestValidation(TestCase):
         errors = self.datatype.validate("")
         self.assertEqual(errors, [])
 
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_validate_existing_manifest_id(self, mock_manifest_model):
         """Validating an existing manifest UUID should succeed."""
         test_uuid = str(uuid.uuid4())
@@ -521,26 +518,28 @@ class TestManifestValidation(TestCase):
         self.assertEqual(errors, [])
         mock_manifest_model.objects.get.assert_called_once_with(id=test_uuid)
 
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_validate_nonexistent_manifest_id(self, mock_manifest_model):
         """Validating a non-existent manifest UUID should return an error."""
         test_uuid = str(uuid.uuid4())
         mock_manifest_model.DoesNotExist = Exception
-        mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist("Not found")
+        mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist(
+            "Not found"
+        )
 
         errors = self.datatype.validate(test_uuid)
         self.assertEqual(len(errors), 1)
-        self.assertEqual(errors[0]['type'], 'ERROR')
-        self.assertIn('does not exist', str(errors[0]['message']))
+        self.assertEqual(errors[0]["type"], "ERROR")
+        self.assertIn("does not exist", str(errors[0]["message"]))
 
     def test_validate_invalid_url_format(self):
         """Validating an invalid URL should return an error."""
         errors = self.datatype.validate("not-a-valid-url")
         self.assertEqual(len(errors), 1)
-        self.assertEqual(errors[0]['type'], 'ERROR')
+        self.assertEqual(errors[0]["type"], "ERROR")
 
-    @patch('manuspectrum.datatypes.manifest.requests.get')
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_validate_url_with_valid_v3_manifest(self, mock_manifest_model, mock_get):
         """Validating a URL that returns a valid v3 manifest should succeed."""
         mock_response = MagicMock()
@@ -552,8 +551,8 @@ class TestManifestValidation(TestCase):
         errors = self.datatype.validate("https://example.org/iiif/book1/manifest")
         self.assertEqual(errors, [])
 
-    @patch('manuspectrum.datatypes.manifest.requests.get')
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_validate_url_with_valid_v2_manifest(self, mock_manifest_model, mock_get):
         """Validating a URL that returns a valid v2 manifest should succeed."""
         mock_response = MagicMock()
@@ -565,8 +564,8 @@ class TestManifestValidation(TestCase):
         errors = self.datatype.validate("http://example.org/iiif/book1/manifest")
         self.assertEqual(errors, [])
 
-    @patch('manuspectrum.datatypes.manifest.requests.get')
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_validate_url_creates_manifest_record(self, mock_manifest_model, mock_get):
         """Validating a URL should create IIIFManifest record with extracted data."""
         mock_response = MagicMock()
@@ -579,19 +578,19 @@ class TestManifestValidation(TestCase):
 
         mock_manifest_model.objects.get_or_create.assert_called_once()
         call_kwargs = mock_manifest_model.objects.get_or_create.call_args
-        defaults = call_kwargs[1]['defaults']
-        self.assertEqual(defaults['label'], "Book 1")
+        defaults = call_kwargs[1]["defaults"]
+        self.assertEqual(defaults["label"], "Book 1")
 
-    @patch('manuspectrum.datatypes.manifest.requests.get')
+    @patch("manuspectrum.datatypes.manifest.requests.get")
     def test_validate_url_timeout(self, mock_get):
         """Validating a URL that times out should return an error."""
         mock_get.side_effect = requests.Timeout()
 
         errors = self.datatype.validate("https://example.org/iiif/book1/manifest")
         self.assertEqual(len(errors), 1)
-        self.assertIn('Timeout', str(errors[0]['message']))
+        self.assertIn("Timeout", str(errors[0]["message"]))
 
-    @patch('manuspectrum.datatypes.manifest.requests.get')
+    @patch("manuspectrum.datatypes.manifest.requests.get")
     def test_validate_url_connection_error(self, mock_get):
         """Validating a URL with connection error should return an error."""
         mock_get.side_effect = requests.ConnectionError()
@@ -599,7 +598,7 @@ class TestManifestValidation(TestCase):
         errors = self.datatype.validate("https://example.org/iiif/book1/manifest")
         self.assertEqual(len(errors), 1)
 
-    @patch('manuspectrum.datatypes.manifest.requests.get')
+    @patch("manuspectrum.datatypes.manifest.requests.get")
     def test_validate_url_invalid_manifest_no_context(self, mock_get):
         """Validating a URL that returns manifest without @context should error."""
         mock_response = MagicMock()
@@ -609,9 +608,9 @@ class TestManifestValidation(TestCase):
 
         errors = self.datatype.validate("https://example.org/iiif/invalid/manifest")
         self.assertEqual(len(errors), 1)
-        self.assertIn('Invalid IIIF manifest', str(errors[0]['message']))
+        self.assertIn("Invalid IIIF manifest", str(errors[0]["message"]))
 
-    @patch('manuspectrum.datatypes.manifest.requests.get')
+    @patch("manuspectrum.datatypes.manifest.requests.get")
     def test_validate_url_wrong_type_v2(self, mock_get):
         """Validating a URL that returns v2 Collection should error."""
         mock_response = MagicMock()
@@ -621,15 +620,15 @@ class TestManifestValidation(TestCase):
 
         errors = self.datatype.validate("http://example.org/collection")
         self.assertEqual(len(errors), 1)
-        self.assertIn('Invalid IIIF manifest', str(errors[0]['message']))
+        self.assertIn("Invalid IIIF manifest", str(errors[0]["message"]))
 
     def test_validate_dict_without_id_or_url_returns_error(self):
         """Validating a dict without manifest_id or manifest_url should error."""
         errors = self.datatype.validate({"invalid_key": "value"})
         self.assertEqual(len(errors), 1)
-        self.assertIn('must have a URL or ID', str(errors[0]['message']))
+        self.assertIn("must have a URL or ID", str(errors[0]["message"]))
 
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_validate_dict_with_manifest_id(self, mock_manifest_model):
         """Validating a dict with manifest_id should check existence."""
         test_uuid = str(uuid.uuid4())
@@ -638,8 +637,8 @@ class TestManifestValidation(TestCase):
         errors = self.datatype.validate({"manifest_id": test_uuid})
         self.assertEqual(errors, [])
 
-    @patch('manuspectrum.datatypes.manifest.requests.get')
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_validate_dict_with_manifest_url(self, mock_manifest_model, mock_get):
         """Validating a dict with manifest_url should fetch and validate."""
         mock_response = MagicMock()
@@ -658,9 +657,10 @@ class TestTransformValueForTile(TestCase):
     """Tests for transform_value_for_tile method."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.datatype = ManifestDataType()
 
     def test_transform_none_returns_none(self):
@@ -685,7 +685,7 @@ class TestTransformValueForTile(TestCase):
         result = self.datatype.transform_value_for_tile({"manifest_id": test_uuid})
         self.assertEqual(result, test_uuid)
 
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_transform_dict_with_manifest_url(self, mock_manifest_model):
         """Transforming a dict with manifest_url should lookup and return UUID."""
         test_uuid = uuid.uuid4()
@@ -698,7 +698,7 @@ class TestTransformValueForTile(TestCase):
         )
         self.assertEqual(result, str(test_uuid))
 
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_transform_url_string(self, mock_manifest_model):
         """Transforming a URL string should lookup and return UUID."""
         test_uuid = uuid.uuid4()
@@ -711,11 +711,13 @@ class TestTransformValueForTile(TestCase):
         )
         self.assertEqual(result, str(test_uuid))
 
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_transform_nonexistent_url_returns_none(self, mock_manifest_model):
         """Transforming a URL that doesn't exist should return None."""
         mock_manifest_model.DoesNotExist = Exception
-        mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist("Not found")
+        mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist(
+            "Not found"
+        )
 
         result = self.datatype.transform_value_for_tile(
             "https://example.org/iiif/unknown/manifest"
@@ -727,12 +729,13 @@ class TestGetDisplayValue(TestCase):
     """Tests for get_display_value method."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.datatype = ManifestDataType()
 
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_get_display_value_with_url(self, mock_manifest_model):
         """Display value should include label and URL."""
         mock_manifest = MagicMock()
@@ -749,7 +752,7 @@ class TestGetDisplayValue(TestCase):
         self.assertIn("Book 1", result)
         self.assertIn("https://example.org/iiif/book1/manifest", result)
 
-    @patch('manuspectrum.datatypes.manifest.IIIFManifest')
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_get_display_value_without_url(self, mock_manifest_model):
         """Display value without URL should show label only."""
         mock_manifest = MagicMock()
@@ -790,9 +793,10 @@ class TestClean(TestCase):
     """Tests for the clean method."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.datatype = ManifestDataType()
 
     def test_clean_empty_string_to_none(self):
@@ -828,9 +832,10 @@ class TestURLRegex(TestCase):
     """Tests for URL regex validation."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.ManifestDataType = ManifestDataType
 
     def test_valid_https_url(self):
@@ -843,21 +848,17 @@ class TestURLRegex(TestCase):
 
     def test_unvalid_https_url(self):
         """Unvalid HTTPS URLs should not match."""
-        self.assertIsNone(
-            self.ManifestDataType.URL_REGEX.match(
-                "iiif/book1/manifest"
-            )
-        )
-
+        self.assertIsNone(self.ManifestDataType.URL_REGEX.match("iiif/book1/manifest"))
 
 
 class TestGetPrefLabel(TestCase):
     """Tests for get_pref_label class method."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.ManifestDataType = ManifestDataType
 
     def test_get_pref_label(self):
@@ -870,9 +871,10 @@ class TestTransformExportValues(TestCase):
     """Tests for transform_export_values method."""
 
     def setUp(self):
-        with patch('arches.app.models.models.Widget') as mock_widget:
+        with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType
+
             self.datatype = ManifestDataType()
 
     def test_transform_export_values_returns_value(self):
