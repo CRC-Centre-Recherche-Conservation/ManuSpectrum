@@ -40,6 +40,7 @@ const getOrCreateRegistry = (nodeId) => {
             xRangeMin: ko.observable(undefined),
             xRangeMax: ko.observable(undefined),
             columnAssignments: null,
+            xColumnMode: null,
             labelsSet: false
         };
     }
@@ -139,6 +140,7 @@ const FileWidgetXYViewModel = function (params) {
         const xMin = self.xRangeMin();
         const xMax = self.xRangeMax();
         const assignments = registry ? registry.columnAssignments : null;
+        const isGenerate = registry && registry.xColumnMode === 'generate';
 
         self.xyFileEntries().forEach((entry) => {
             if (!entry.selected() || !entry.chartData()) return;
@@ -148,10 +150,12 @@ const FileWidgetXYViewModel = function (params) {
 
             if (data.series && Array.isArray(data.series)) {
                 data.series.forEach((s, i) => {
-                    // Column assignment: index i+1 (col 0 is X)
+                    // In standard mode col 0 is X, so series i maps to col i+1
+                    // In generate mode all cols are Y, so series i maps to col i
+                    const colIdx = isGenerate ? i : i + 1;
                     if (assignments) {
                         const colAssign = assignments.find(
-                            (a) => a.columnIndex === i + 1
+                            (a) => a.columnIndex === colIdx
                         );
                         if (colAssign && colAssign.role === 'ignore') return;
                     }
@@ -176,7 +180,7 @@ const FileWidgetXYViewModel = function (params) {
                     };
                     if (assignments) {
                         const colAssign = assignments.find(
-                            (a) => a.columnIndex === i + 1
+                            (a) => a.columnIndex === colIdx
                         );
                         if (colAssign && colAssign.role === 'yRight') {
                             trace.yaxis = 'y2';
@@ -319,6 +323,9 @@ const FileWidgetXYViewModel = function (params) {
                                     registry.columnAssignments =
                                         d.columnAssignments;
                             }
+                            if (config.config.xColumnMode)
+                                registry.xColumnMode =
+                                    config.config.xColumnMode;
                         }
 
                         return $.ajax({
@@ -341,7 +348,9 @@ const FileWidgetXYViewModel = function (params) {
                         const fileOverrides = parseOverrides(ko.unwrap(r.entry.file.parsingOverrides));
                         const effectiveConfig = Object.assign({}, r.config.config, fileOverrides);
 
-                        const validation = XyParser.validateContent(r.text);
+                        const validation = XyParser.validateContent(r.text, {
+                            xColumnMode: effectiveConfig.xColumnMode
+                        });
                         if (!validation.valid) {
                             r.entry.error('Validation: ' + validation.error);
                             r.entry.loading(false);
