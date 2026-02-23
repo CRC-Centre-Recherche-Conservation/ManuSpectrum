@@ -10,6 +10,8 @@ import afsReaderTemplate from 'templates/views/components/cards/file-renderers/x
 import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
 import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
+import dispose from 'utils/dispose';
+import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-cache';
 import 'bindings/plotly';
 import 'views/components/plugins/importer-configuration';
 
@@ -27,6 +29,7 @@ export default ko.components.register('xy-reader', {
         this.selectedFile = params.selectedFile || ko.observable();
         this.selectedConfiguration = undefined;
         AfsInstrumentViewModel.apply(this, [params]);
+        this.disposables = [];
 
         // set defaults for chart title/axis
         this.chartTitle(arches.translations.data);
@@ -37,11 +40,8 @@ export default ko.components.register('xy-reader', {
 
         // on init, get available renderer configs for display to user.
         const rendererConfigRefresh = async () => {
-            const rendererResponse = await fetch(
-                arches.urls.renderer(self.renderer)
-            );
-            if (rendererResponse.ok) {
-                const renderers = await rendererResponse.json();
+            try {
+                const renderers = await getRendererConfig(self.renderer);
                 const configs = renderers?.configs;
                 this.rendererConfigs(configs);
                 const displayContent =
@@ -61,10 +61,12 @@ export default ko.components.register('xy-reader', {
                         this.selectedConfig(ko.unwrap(configId));
                     }
                 }
+            } catch {
+                // fetch failed, leave configs empty
             }
         };
 
-        this.selectedConfig.subscribe((config) => {
+        this.disposables.push(this.selectedConfig.subscribe((config) => {
             if (
                 !config ||
                 (this.selectedFile() &&
@@ -106,7 +108,7 @@ export default ko.components.register('xy-reader', {
                     ? this.selectedConfiguration.config.display.yAxisLabel
                     : arches.translations.yAxis
             );
-        });
+        }));
 
         rendererConfigRefresh();
 
@@ -273,8 +275,7 @@ export default ko.components.register('xy-reader', {
                     const cfg = configs.find(
                         (c) => c.configid === configId
                     );
-                    const rawOv = ko.unwrap(node[0].parsingOverrides);
-                    const overrides = (rawOv && typeof rawOv === 'object') ? ko.toJS(rawOv) : {};
+                    const overrides = parseOverrides(ko.unwrap(node[0].parsingOverrides));
                     return {
                         name: ko.unwrap(node[0].name) || 'Unknown',
                         hasConfig: !!configId,
@@ -315,9 +316,7 @@ export default ko.components.register('xy-reader', {
         // After tile.save(), koMapping.fromJS() wraps nested props as observables,
         // so we use ko.toJS() to deeply unwrap all nested observables.
         const getFileOverrides = (file) => {
-            const raw = ko.unwrap(file.node?.[0]?.parsingOverrides);
-            if (!raw || typeof raw !== 'object') return {};
-            return ko.toJS(raw);
+            return parseOverrides(ko.unwrap(file.node?.[0]?.parsingOverrides));
         };
 
         // Load radio state from a file's existing overrides
@@ -372,13 +371,13 @@ export default ko.components.register('xy-reader', {
         };
 
         // React to selection changes (checkbox or row click)
-        this.statusSelectedFiles.subscribe((files) => {
+        this.disposables.push(this.statusSelectedFiles.subscribe((files) => {
             if (files.length === 1) {
                 loadOverridesFromFile(files[0]);
             } else {
                 resetOverrideRadios();
             }
-        });
+        }));
 
         this.toggleStatusFile = (file) => {
             const idx = self.statusSelectedFiles.indexOf(file);
@@ -468,7 +467,11 @@ export default ko.components.register('xy-reader', {
 
             for (const file of files) {
                 try {
-                    file.node[0].parsingOverrides = value || {};
+                    if (value) {
+                        file.node[0].parsingOverrides = value;
+                    } else {
+                        delete file.node[0].parsingOverrides;
+                    }
                     await file.tile.save();
                 } catch (e) {
                     console.error('Override save error:', file.name, e);
@@ -506,7 +509,7 @@ export default ko.components.register('xy-reader', {
             }
         };
 
-        this.delimiterCharacter.subscribe(() => {
+        this.disposables.push(this.delimiterCharacter.subscribe(() => {
             try {
                 if (this.delimiterCharacter().length < 2) {
                     new RegExp(`[${this.delimiterCharacter()}\\s]+`);
@@ -517,7 +520,7 @@ export default ko.components.register('xy-reader', {
             } catch {
                 this.invalidDelimiter(true);
             }
-        });
+        }));
 
         this.addConfiguration = () => {
             self.showConfigAdd(true);
@@ -543,9 +546,26 @@ export default ko.components.register('xy-reader', {
                 }
             );
             if (configSaveResponse.ok) {
+                invalidate(self.renderer);
                 rendererConfigRefresh();
             }
             self.showConfigAdd(false);
+        };
+
+        // Track computed observables for disposal
+        this.disposables.push(
+            this.stagedXyTileCount,
+            this.batchMode,
+            this.canApplyBatch,
+            this.stagedXyFiles,
+            this.allXyFiles,
+            this.overrideTargetLabel,
+            this.overridePlaceholder,
+            this.hasOverrideValues
+        );
+
+        this.dispose = function () {
+            dispose(self);
         };
 
         this.parse = function (text, series) {
@@ -555,10 +575,7 @@ export default ko.components.register('xy-reader', {
             const dc = self.fileViewer?.displayContent() || self.displayContent;
             if (dc?.tile) {
                 const node = ko.unwrap(dc.tile.data[self.fileViewer.fileListNodeId]);
-                const rawOv = ko.unwrap(node?.[0]?.parsingOverrides);
-                if (rawOv && typeof rawOv === 'object') {
-                    fileOverrides = ko.toJS(rawOv);
-                }
+                fileOverrides = parseOverrides(ko.unwrap(node?.[0]?.parsingOverrides));
             }
             const baseConfig = this.selectedConfiguration?.config || {};
             const effectiveConfig = { ...baseConfig, ...fileOverrides };

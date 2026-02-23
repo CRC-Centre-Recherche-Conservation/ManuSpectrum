@@ -8,6 +8,7 @@ import $ from 'jquery';
 import Cookies from 'js-cookie';
 import xyParser from 'utils/xy-parser';
 import AlertViewModel from 'viewmodels/alert';
+import { getRendererConfig, invalidate } from 'utils/renderer-cache';
 import importerConfigurationTemplate from 'templates/views/components/plugins/importer-configuration.htm';
 import 'bootstrap';
 import 'bindings/select2-query';
@@ -124,6 +125,7 @@ const vm = function (params) {
         );
 
         if (configSaveResponse.ok) {
+            invalidate(this.renderer);
             await rendererConfigRefresh();
             if (this.onConfigSaved) {
                 this.onConfigSaved();
@@ -135,12 +137,11 @@ const vm = function (params) {
     };
 
     const rendererConfigRefresh = async () => {
-        const rendererResponse = await fetch(`/renderer/${this.renderer}`);
-        if (rendererResponse.ok) {
-            const renderers = await rendererResponse.json();
+        try {
+            const renderers = await getRendererConfig(this.renderer);
             const configs = renderers?.configs;
             this.rendererConfigs(configs);
-        } else {
+        } catch {
             this.rendererConfigs([]);
         }
     };
@@ -200,6 +201,7 @@ const vm = function (params) {
         if (configDeleteResponse.ok) {
             const responseJson = await configDeleteResponse.json();
             if (responseJson.deleted) {
+                invalidate(this.renderer);
                 await rendererConfigRefresh();
                 if (this.onConfigSaved) {
                     this.onConfigSaved();

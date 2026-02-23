@@ -3,6 +3,8 @@ import $ from 'jquery';
 import arches from 'arches';
 import FileWidgetViewModel from 'viewmodels/file-widget';
 import XyParser from 'utils/xy-parser';
+import dispose from 'utils/dispose';
+import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 
 const XY_RENDERER_UUID = 'e93b7b27-40d8-4141-996e-e59ff08742f3';
 
@@ -169,6 +171,18 @@ var FileWidgetXYViewModel = function (params) {
         return allTraces;
     });
 
+    // Track computed observables for disposal
+    this.disposables.push(
+        this.reportXYFiles,
+        this.showFileDropdown,
+        this.selectedCount,
+        this.allLoading,
+        this.hasChartData,
+        this.noFilesSelected,
+        this.anyError,
+        this.unifiedChartData
+    );
+
     // Dropdown actions
     this.toggleDropdown = function () {
         self.dropdownOpen(!self.dropdownOpen());
@@ -232,11 +246,7 @@ var FileWidgetXYViewModel = function (params) {
 
     // Fetch renderer config, download files, parse XY data
     this._loadEntryData = function (entries) {
-        fetch('/renderer/' + XY_RENDERER_UUID)
-            .then(function (res) {
-                if (!res.ok) throw new Error('Renderer fetch failed');
-                return res.json();
-            })
+        getRendererConfig(XY_RENDERER_UUID)
             .then(function (rendererData) {
                 var configMap = {};
                 (rendererData.configs || []).forEach(function (cfg) {
@@ -286,8 +296,7 @@ var FileWidgetXYViewModel = function (params) {
                 results.forEach(function (r) {
                     if (!r) return;
                     try {
-                        var rawOv = ko.unwrap(r.entry.file.parsingOverrides);
-                        var fileOverrides = (rawOv && typeof rawOv === 'object') ? ko.toJS(rawOv) : {};
+                        var fileOverrides = parseOverrides(ko.unwrap(r.entry.file.parsingOverrides));
                         var effectiveConfig = Object.assign({}, r.config.config, fileOverrides);
 
                         var validation = XyParser.validateContent(r.text);
@@ -336,23 +345,25 @@ var FileWidgetXYViewModel = function (params) {
 
     // Cleanup on SPA navigation
     this.dispose = function () {
-        if (!registry) return;
+        if (registry) {
+            registry.entries(
+                registry.entries().filter(function (e) {
+                    return e._widget !== self;
+                })
+            );
 
-        registry.entries(
-            registry.entries().filter(function (e) {
-                return e._widget !== self;
-            })
-        );
+            if (self.isChartHost()) {
+                $(document).off('click.xyDropdown', self._closeDropdown);
+                registry.hostWidget = null;
+            }
 
-        if (self.isChartHost()) {
-            $(document).off('click.xyDropdown', self._closeDropdown);
-            registry.hostWidget = null;
+            if (registry.entries().length === 0) {
+                registry.labelsSet = false;
+                delete nodeChartRegistries[nodeId];
+            }
         }
 
-        if (registry.entries().length === 0) {
-            registry.labelsSet = false;
-            delete nodeChartRegistries[nodeId];
-        }
+        dispose(self);
     };
 
     // Init
@@ -366,6 +377,7 @@ var FileWidgetXYViewModel = function (params) {
                     self._registerFiles();
                 }
             });
+            this.disposables.push(sub);
         }
     }
 };

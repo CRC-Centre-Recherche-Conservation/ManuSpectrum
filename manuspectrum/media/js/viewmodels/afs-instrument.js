@@ -72,9 +72,12 @@ define(['jquery',
         };
 
         _.each(chartFormattingDetails, function(val, key) {
-            val.subscribe(function(val){
+            var sub = val.subscribe(function(val){
                 localStore.setItem(renderer + key, val);
             });
+            if (self.disposables) {
+                self.disposables.push(sub);
+            }
         });
 
         this.render  = function() {
