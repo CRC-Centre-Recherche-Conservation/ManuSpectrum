@@ -102,8 +102,8 @@
                 </div>
                 <input type="text" name="delimiterCharacter" placeholder="String or regex, example: [a-zA-Z]+" data-bind="visible: dataDelimiterRadio()=='other', textInput: dataDelimiter">
                 <div style="display: flex; margin: 5px 0;">
-                    <input style="margin: 0px 0px 0px 2px;" type="checkbox" name="includeDelimiter" value="includeDelimiter" data-bind="checked:includeDelimiter">
-                    <label style="margin-top: 2px;" for="header-config-none">{% trans "Include Delimiter in Value" %}</label>
+                    <input id="include-delimiter" style="margin: 0px 0px 0px 2px;" type="checkbox" name="includeDelimiter" value="includeDelimiter" data-bind="checked:includeDelimiter">
+                    <label style="margin-top: 2px;" for="include-delimiter">{% trans "Include Delimiter in Value" %}</label>
                 </div>
             </div>
             <div class="importer-config-panel">
