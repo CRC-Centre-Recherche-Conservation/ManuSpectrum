@@ -38,6 +38,11 @@ const vm = function (params) {
     this.dataDelimiter = ko.observable();
     this.placeholder = arches.translations.selectTransformation;
 
+    // X column mode: 'data' (default) or 'generate'
+    this.xColumnMode = ko.observable('data');
+    this.xGenerateStart = ko.observable();
+    this.xGenerateEnd = ko.observable();
+
     // Feature 1: Spectral range filter
     this.xRangeMin = ko.observable();
     this.xRangeMax = ko.observable();
@@ -147,6 +152,7 @@ const vm = function (params) {
             this.footerDelimiter(undefined); // blank out previous values; don't save them.
         }
 
+        const xMode = this.xColumnMode();
         const newConfiguration = {
             name: this.configurationName(),
             description: this.configurationDescription(),
@@ -156,6 +162,19 @@ const vm = function (params) {
             headerFixedLines: this.headerFixedLines(),
             delimiterCharacter: this.dataDelimiter(),
             transformation: this.selectedTransformation(),
+            xColumnMode: xMode === 'generate' ? 'generate' : undefined,
+            xGenerateStart:
+                xMode === 'generate' &&
+                this.xGenerateStart() !== '' &&
+                this.xGenerateStart() !== undefined
+                    ? parseFloat(this.xGenerateStart())
+                    : undefined,
+            xGenerateEnd:
+                xMode === 'generate' &&
+                this.xGenerateEnd() !== '' &&
+                this.xGenerateEnd() !== undefined
+                    ? parseFloat(this.xGenerateEnd())
+                    : undefined,
             display: {
                 chartTitle: this.chartTitle(),
                 xAxisLabel: this.xAxisLabel(),
@@ -252,6 +271,12 @@ const vm = function (params) {
         this.editConfigurationId(configuration.configid);
         this.includeDelimiter(configuration?.config?.includeDelimiter);
         this.selectedTransformation(configuration?.config?.transformation);
+
+        // X column mode
+        const xMode = configuration?.config?.xColumnMode;
+        this.xColumnMode(xMode === 'generate' ? 'generate' : 'data');
+        this.xGenerateStart(configuration?.config?.xGenerateStart ?? '');
+        this.xGenerateEnd(configuration?.config?.xGenerateEnd ?? '');
         this.chartTitle(configuration?.config?.display?.chartTitle);
         this.xAxisLabel(configuration?.config?.display?.xAxisLabel);
         this.yAxisLabel(configuration?.config?.display?.yAxisLabel);

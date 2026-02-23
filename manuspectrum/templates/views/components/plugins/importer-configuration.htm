@@ -47,6 +47,29 @@
                 <input type="text" name="headerDelimiter" data-bind="visible: footerConfig()=='delimited', textInput: footerDelimiter" placeholder="{% trans 'Ending Text' %}">
             </div>
             <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "X Axis Source" %}</h4>
+                <h5 class="file-config-instructions">{% trans "Define how the X axis values are determined" %}</h5>
+                <div style="display: flex; flex-direction: column; padding-bottom: 5px;">
+                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="x-mode-data" type="radio" name="xColumnMode" value="data" data-bind="checked: xColumnMode"><label for="x-mode-data">{% trans "From data (first column is X)" %}</label></div>
+                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="x-mode-generate" type="radio" name="xColumnMode" value="generate" data-bind="checked: xColumnMode"><label for="x-mode-generate">{% trans "Generate from range (no X column in file)" %}</label></div>
+                </div>
+                <!-- ko if: xColumnMode() === 'generate' -->
+                <h5 class="file-config-instructions">{% trans "The X axis will be evenly spaced between start and end values, based on the number of data rows." %}</h5>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 12px; display: block;">{% trans "Start" %}</label>
+                        <input type="number" step="any" placeholder="{% trans "e.g. -3500" %}"
+                               data-bind="textInput: xGenerateStart" style="width: 100%;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 12px; display: block;">{% trans "End" %}</label>
+                        <input type="number" step="any" placeholder="{% trans "e.g. 500" %}"
+                               data-bind="textInput: xGenerateEnd" style="width: 100%;">
+                    </div>
+                </div>
+                <!-- /ko -->
+            </div>
+            <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Transformations" %}</h4>
                 <h5 class="file-config-instructions">{% trans "If your file has multiple Y columns, they are displayed as separate series. Use \"mean\" to average them into a single series instead." %}</h5>
                 <select style="display:inline-block; flex: 1"
