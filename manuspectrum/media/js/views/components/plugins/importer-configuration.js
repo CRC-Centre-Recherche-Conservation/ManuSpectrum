@@ -38,6 +38,58 @@ const vm = function (params) {
     this.dataDelimiter = ko.observable();
     this.placeholder = arches.translations.selectTransformation;
 
+    // Feature 1: Spectral range filter
+    this.xRangeMin = ko.observable();
+    this.xRangeMax = ko.observable();
+    this.showAdvancedDisplay = ko.observable(false);
+
+    // Feature 2: Axis unit presets
+    this.xAxisPresets = [
+        { text: 'cm\u207b\u00b9', value: 'cm\u207b\u00b9' },
+        { text: 'nm', value: 'nm' },
+        { text: 'eV', value: 'eV' },
+        { text: '\u03bcm', value: '\u03bcm' },
+        { text: 'Raman shift (cm\u207b\u00b9)', value: 'Raman shift (cm\u207b\u00b9)' },
+        { text: 'Wavenumber (cm\u207b\u00b9)', value: 'Wavenumber (cm\u207b\u00b9)' },
+        { text: 'Wavelength (nm)', value: 'Wavelength (nm)' },
+        { text: 'Energy (eV)', value: 'Energy (eV)' },
+    ];
+    this.yAxisPresets = [
+        { text: 'Counts', value: 'Counts' },
+        { text: 'Absorbance', value: 'Absorbance' },
+        { text: 'Transmittance (%)', value: 'Transmittance (%)' },
+        { text: 'Reflectance (%)', value: 'Reflectance (%)' },
+        { text: 'a.u.', value: 'a.u.' },
+        { text: 'Intensity', value: 'Intensity' },
+    ];
+
+    // Feature 3: Column assignment
+    this.yAxisRightLabel = ko.observable();
+    this.columnAssignments = ko.observableArray([]);
+    this.showColumnAssignment = ko.observable(false);
+    this.columnRoleOptions = [
+        { text: 'X', value: 'x' },
+        { text: 'Y \u2190', value: 'yLeft' },
+        { text: 'Y \u2192', value: 'yRight' },
+        { text: 'Ignore', value: 'ignore' },
+    ];
+    this.addColumnAssignment = () => {
+        this.columnAssignments.push({
+            columnIndex: ko.observable(this.columnAssignments().length),
+            role: ko.observable(
+                this.columnAssignments().length === 0 ? 'x' : 'yLeft'
+            ),
+        });
+    };
+    this.removeColumnAssignment = (item) => {
+        this.columnAssignments.remove(item);
+    };
+    this.hasYRightColumn = ko.pureComputed(() =>
+        this.columnAssignments().some(
+            (a) => ko.unwrap(a.role) === 'yRight'
+        )
+    );
+
     const transformations = xyParser.transformations().map((transform) => {
         return {
             text: transform,
@@ -108,6 +160,27 @@ const vm = function (params) {
                 chartTitle: this.chartTitle(),
                 xAxisLabel: this.xAxisLabel(),
                 yAxisLabel: this.yAxisLabel(),
+                xRangeMin:
+                    this.xRangeMin() !== '' &&
+                    this.xRangeMin() !== undefined
+                        ? parseFloat(this.xRangeMin())
+                        : undefined,
+                xRangeMax:
+                    this.xRangeMax() !== '' &&
+                    this.xRangeMax() !== undefined
+                        ? parseFloat(this.xRangeMax())
+                        : undefined,
+                yAxisRightLabel: this.yAxisRightLabel() || undefined,
+                columnAssignments:
+                    this.columnAssignments().length > 0
+                        ? this.columnAssignments().map((a) => ({
+                              columnIndex: parseInt(
+                                  ko.unwrap(a.columnIndex),
+                                  10
+                              ),
+                              role: ko.unwrap(a.role),
+                          }))
+                        : undefined,
             },
             rendererId: this.renderer,
         };
@@ -182,6 +255,33 @@ const vm = function (params) {
         this.chartTitle(configuration?.config?.display?.chartTitle);
         this.xAxisLabel(configuration?.config?.display?.xAxisLabel);
         this.yAxisLabel(configuration?.config?.display?.yAxisLabel);
+
+        // Feature 1: Spectral range
+        const xMin = configuration?.config?.display?.xRangeMin;
+        const xMax = configuration?.config?.display?.xRangeMax;
+        this.xRangeMin(xMin ?? '');
+        this.xRangeMax(xMax ?? '');
+        this.showAdvancedDisplay(xMin !== undefined || xMax !== undefined);
+
+        // Feature 3: Column assignment
+        this.yAxisRightLabel(
+            configuration?.config?.display?.yAxisRightLabel ?? ''
+        );
+        const assignments =
+            configuration?.config?.display?.columnAssignments;
+        if (assignments && Array.isArray(assignments)) {
+            this.columnAssignments(
+                assignments.map((a) => ({
+                    columnIndex: ko.observable(a.columnIndex),
+                    role: ko.observable(a.role),
+                }))
+            );
+            this.showColumnAssignment(true);
+        } else {
+            this.columnAssignments([]);
+            this.showColumnAssignment(false);
+        }
+
         this.showConfigurationPanel(true);
         this.showImporterList(false);
     };

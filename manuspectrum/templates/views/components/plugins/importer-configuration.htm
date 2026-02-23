@@ -84,12 +84,128 @@
             </div>
             <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Display/Charting" %}</h4>
+
                 <h4 class="file-config-header">{% trans "Chart Title" %}</h4>
                 <input type="text" placeholder="{% trans "Title" %}" name="chartTitle" data-bind="textInput: chartTitle">
+
                 <h4 class="file-config-header">{% trans "X Axis Label" %}</h4>
-                <input type="text" placeholder="{% trans "X Axis" %}" name="xAxisLabel" data-bind="textInput: xAxisLabel">
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" placeholder="{% trans "X Axis" %}" name="xAxisLabel"
+                           data-bind="textInput: xAxisLabel" style="flex: 1;">
+                    <select style="width: auto; min-width: 100px;"
+                            data-bind="event: { change: function(data, event) {
+                                if (event.target.value) {
+                                    xAxisLabel(event.target.value);
+                                    event.target.selectedIndex = 0;
+                                }
+                            } }">
+                        <option value="">{% trans "Presets..." %}</option>
+                        <!-- ko foreach: xAxisPresets -->
+                        <option data-bind="value: value, text: text"></option>
+                        <!-- /ko -->
+                    </select>
+                </div>
+
                 <h4 class="file-config-header">{% trans "Y Axis Label" %}</h4>
-                <input type="text" placeholder="{% trans "Y Axis" %}" name="yAxisLabel" data-bind="textInput: yAxisLabel">
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" placeholder="{% trans "Y Axis" %}" name="yAxisLabel"
+                           data-bind="textInput: yAxisLabel" style="flex: 1;">
+                    <select style="width: auto; min-width: 100px;"
+                            data-bind="event: { change: function(data, event) {
+                                if (event.target.value) {
+                                    yAxisLabel(event.target.value);
+                                    event.target.selectedIndex = 0;
+                                }
+                            } }">
+                        <option value="">{% trans "Presets..." %}</option>
+                        <!-- ko foreach: yAxisPresets -->
+                        <option data-bind="value: value, text: text"></option>
+                        <!-- /ko -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Spectral Range Filter (collapsible) -->
+            <div class="importer-config-panel">
+                <h4 class="file-config-header" style="cursor: pointer; user-select: none;"
+                    data-bind="click: function() { showAdvancedDisplay(!showAdvancedDisplay()); }">
+                    <i class="fa" data-bind="css: { 'fa-chevron-right': !showAdvancedDisplay(), 'fa-chevron-down': showAdvancedDisplay() }" style="width: 14px; margin-right: 4px;"></i>
+                    {% trans "Spectral Range" %}
+                </h4>
+                <!-- ko if: showAdvancedDisplay -->
+                <h5 class="file-config-instructions">{% trans "Limit the displayed X range. Leave empty for no limit." %}</h5>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 12px; display: block;">{% trans "Min X" %}</label>
+                        <input type="number" step="any" placeholder="{% trans "e.g. 400" %}"
+                               data-bind="textInput: xRangeMin" style="width: 100%;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 12px; display: block;">{% trans "Max X" %}</label>
+                        <input type="number" step="any" placeholder="{% trans "e.g. 4000" %}"
+                               data-bind="textInput: xRangeMax" style="width: 100%;">
+                    </div>
+                </div>
+                <!-- /ko -->
+            </div>
+
+            <!-- Column Assignment (collapsible) -->
+            <div class="importer-config-panel">
+                <h4 class="file-config-header" style="cursor: pointer; user-select: none;"
+                    data-bind="click: function() { showColumnAssignment(!showColumnAssignment()); }">
+                    <i class="fa" data-bind="css: { 'fa-chevron-right': !showColumnAssignment(), 'fa-chevron-down': showColumnAssignment() }" style="width: 14px; margin-right: 4px;"></i>
+                    {% trans "Column Assignment" %}
+                </h4>
+                <!-- ko if: showColumnAssignment -->
+                <h5 class="file-config-instructions">{% trans "Define which data columns map to X, Y (left axis), or Y (right axis). Leave empty to use the default: column 1 = X, remaining = Y left." %}</h5>
+
+                <!-- ko foreach: columnAssignments -->
+                <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
+                    <label style="font-size: 12px; min-width: 75px; margin: 0;">
+                        {% trans "Column" %} <span data-bind="text: ko.unwrap(columnIndex) + 1"></span>
+                    </label>
+                    <select style="flex: 1;"
+                            data-bind="options: $parent.columnRoleOptions,
+                                       optionsText: 'text',
+                                       optionsValue: 'value',
+                                       value: role">
+                    </select>
+                    <button class="btn btn-xs btn-danger"
+                            data-bind="click: $parent.removeColumnAssignment"
+                            style="padding: 2px 6px;">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <!-- /ko -->
+
+                <button class="btn btn-xs btn-default" style="margin-top: 4px;"
+                        data-bind="click: addColumnAssignment">
+                    <i class="fa fa-plus"></i> {% trans "Add Column" %}
+                </button>
+
+                <!-- Right Y Axis Label -->
+                <!-- ko if: hasYRightColumn -->
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 12px; display: block;">{% trans "Right Y Axis Label" %}</label>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <input type="text" placeholder="{% trans "Right Y Axis" %}"
+                               data-bind="textInput: yAxisRightLabel" style="flex: 1;">
+                        <select style="width: auto; min-width: 100px;"
+                                data-bind="event: { change: function(data, event) {
+                                    if (event.target.value) {
+                                        yAxisRightLabel(event.target.value);
+                                        event.target.selectedIndex = 0;
+                                    }
+                                } }">
+                            <option value="">{% trans "Presets..." %}</option>
+                            <!-- ko foreach: yAxisPresets -->
+                            <option data-bind="value: value, text: text"></option>
+                            <!-- /ko -->
+                        </select>
+                    </div>
+                </div>
+                <!-- /ko -->
+                <!-- /ko -->
             </div>
         </div>
         <div style="display: flex;background-color: #eee;border-top: 1px solid #ddd">
