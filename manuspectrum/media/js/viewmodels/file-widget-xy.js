@@ -153,18 +153,11 @@ const FileWidgetXYViewModel = function (params) {
             if (data.series && Array.isArray(data.series)) {
                 data.series.forEach((s, i) => {
                     // Map series index back to original file column index
-                    let colIdx;
-                    if (isGenerate) {
-                        colIdx = i;
-                    } else {
-                        colIdx = i < xColIdx ? i : i + 1;
-                    }
-                    if (assignments) {
-                        const colAssign = assignments.find(
-                            (a) => a.columnIndex === colIdx
-                        );
-                        if (colAssign && colAssign.role === 'ignore') return;
-                    }
+                    const colIdx = isGenerate ? i : (i < xColIdx ? i : i + 1);
+                    const colAssign = assignments
+                        ? assignments.find((a) => a.columnIndex === colIdx)
+                        : null;
+                    if (colAssign && colAssign.role === 'ignore') return;
 
                     const filtered = XyParser.filterXRange(
                         s.value,
@@ -184,13 +177,8 @@ const FileWidgetXYViewModel = function (params) {
                             dash: DASH_STYLES[i % DASH_STYLES.length],
                         },
                     };
-                    if (assignments) {
-                        const colAssign = assignments.find(
-                            (a) => a.columnIndex === colIdx
-                        );
-                        if (colAssign && colAssign.role === 'yRight') {
-                            trace.yaxis = 'y2';
-                        }
+                    if (colAssign && colAssign.role === 'yRight') {
+                        trace.yaxis = 'y2';
                     }
                     allTraces.push(trace);
                 });
