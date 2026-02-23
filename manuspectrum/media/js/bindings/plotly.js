@@ -24,17 +24,23 @@ const plotlyBinding = {
             ];
 
             if (data.series && Array.isArray(data.series)) {
-                traces = data.series.map((s, i) => ({
-                    x: s.value,
-                    y: s.count,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: s.name,
-                    line: {
-                        color: multiSeriesColors[i % multiSeriesColors.length],
-                        width: i === 0 ? 3 : 2
+                traces = data.series.map((s, i) => {
+                    const trace = {
+                        x: s.value,
+                        y: s.count,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: s.name,
+                        line: {
+                            color: multiSeriesColors[i % multiSeriesColors.length],
+                            width: i === 0 ? 3 : 2
+                        }
+                    };
+                    if (s.yaxis) {
+                        trace.yaxis = s.yaxis;
                     }
-                }));
+                    return trace;
+                });
             } else {
                 traces = [{
                     x: data.value,
@@ -86,8 +92,29 @@ const plotlyBinding = {
                     color: '#7f7f7f'
                 }
             },
-            width: $(element).width() - 2
+            width: $(element).width() - 2,
         };
+
+        // Dual Y axis support
+        const yRightLabel = config.yAxisRightLabel
+            ? ko.unwrap(config.yAxisRightLabel)
+            : '';
+        if (yRightLabel) {
+            layout.yaxis2 = {
+                title: {
+                    text: yRightLabel,
+                    font: {
+                        family: 'Arial, monospace',
+                        size: config.yAxisLabelSize
+                            ? ko.unwrap(config.yAxisLabelSize)
+                            : 17,
+                        color: '#7f7f7f',
+                    },
+                },
+                overlaying: 'y',
+                side: 'right',
+            };
+        }
 
         const chartConfig = {
             responsive: false,
@@ -179,6 +206,30 @@ const plotlyBinding = {
             layout.yaxis.title.font.size = val;
             Plotly.relayout(element, layout);
         });
+
+        if (config.yAxisRightLabel && ko.isObservable(config.yAxisRightLabel)) {
+            config.yAxisRightLabel.subscribe((val) => {
+                if (val) {
+                    if (!layout.yaxis2) {
+                        layout.yaxis2 = {
+                            overlaying: 'y',
+                            side: 'right',
+                            title: {
+                                font: {
+                                    family: 'Arial, monospace',
+                                    size: 17,
+                                    color: '#7f7f7f',
+                                },
+                            },
+                        };
+                    }
+                    layout.yaxis2.title.text = val;
+                } else {
+                    delete layout.yaxis2;
+                }
+                Plotly.relayout(element, layout);
+            });
+        }
 
         if (useTracesMode) {
             config.traces.subscribe(newTraces => {

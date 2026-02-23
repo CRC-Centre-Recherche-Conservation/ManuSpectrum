@@ -32,6 +32,7 @@ const AfsInstrumentViewModel = function(params) {
         'xaxislabelsize': localStore.getItem(renderer + 'xaxislabelsize') || 17,
         'yaxislabel': localStore.getItem(renderer + 'yaxislabel') || "",
         'yaxislabelsize': localStore.getItem(renderer + 'yaxislabelsize') || 17,
+        'yaxisrightlabel': localStore.getItem(renderer + 'yaxisrightlabel') || '',
     };
 
     if ('chartData' in params.state === false) {
@@ -47,6 +48,7 @@ const AfsInstrumentViewModel = function(params) {
         this.commonData.xAxisLabelSize = ko.observable(formatDefaults['xaxislabelsize']);
         this.commonData.yAxisLabel = ko.observable(formatDefaults['yaxislabel']);
         this.commonData.yAxisLabelSize = ko.observable(formatDefaults['yaxislabelsize']);
+        this.commonData.yAxisRightLabel = ko.observable(formatDefaults['yaxisrightlabel']);
     }
 
     this.parsedData = this.commonData.parsedData;
@@ -59,6 +61,7 @@ const AfsInstrumentViewModel = function(params) {
     this.yAxisLabelSize = this.commonData.yAxisLabelSize;
     this.seriesData = this.commonData.seriesData;
     this.seriesStyles = this.commonData.seriesStyles;
+    this.yAxisRightLabel = this.commonData.yAxisRightLabel;
     this.primarySeriesColor = this.fileViewer ? JSON.parse(localStore.getItem(renderer + 'series' + this.fileViewer.tile.tileid))?.color : "#3333ff";
 
     const chartFormattingDetails = {
@@ -67,7 +70,8 @@ const AfsInstrumentViewModel = function(params) {
         'xaxislabel': this.xAxisLabel,
         'xaxislabelsize': this.xAxisLabelSize,
         'yaxislabel': this.yAxisLabel,
-        'yaxislabelsize': this.yAxisLabelSize
+        'yaxislabelsize': this.yAxisLabelSize,
+        'yaxisrightlabel': this.yAxisRightLabel
     };
 
     _.each(chartFormattingDetails, (val, key) => {
@@ -98,11 +102,13 @@ const AfsInstrumentViewModel = function(params) {
                     this.chartData(undefined);
 
                     if (series.multiSeries && series.multiSeries.length > 1) {
+                        const rightStart = series._rightAxisStartIndex ?? series.multiSeries.length;
                         this.chartData({
-                            series: series.multiSeries.map((s) => ({
+                            series: series.multiSeries.map((s, idx) => ({
                                 value: s.value,
                                 count: s.count,
-                                name: this.displayContent.name + ' - ' + s.name
+                                name: this.displayContent.name + ' - ' + s.name,
+                                yaxis: idx >= rightStart ? 'y2' : undefined
                             }))
                         });
                     } else {
