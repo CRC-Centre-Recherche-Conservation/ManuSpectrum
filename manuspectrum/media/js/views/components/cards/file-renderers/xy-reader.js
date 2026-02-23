@@ -564,11 +564,11 @@ export default ko.components.register('xy-reader', {
             this.hasOverrideValues
         );
 
-        this.dispose = function () {
+        this.dispose = () => {
             dispose(self);
         };
 
-        this.parse = function (text, series) {
+        this.parse = (text, series) => {
             // Read overrides from tile data (where they're actually stored),
             // same path as rendererConfigRefresh reads rendererConfig.
             let fileOverrides = {};

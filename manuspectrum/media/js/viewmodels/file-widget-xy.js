@@ -19,9 +19,9 @@ const DASH_STYLES = ['solid', 'dash', 'dot', 'dashdot'];
  * Module-level registry keyed by node ID. Groups XY file entries across
  * widget instances (one per tile) so they share a single Plotly chart.
  */
-var nodeChartRegistries = {};
+const nodeChartRegistries = {};
 
-function getOrCreateRegistry(nodeId) {
+const getOrCreateRegistry = (nodeId) => {
     if (!nodeChartRegistries[nodeId]) {
         nodeChartRegistries[nodeId] = {
             entries: ko.observableArray([]),
@@ -40,7 +40,7 @@ function getOrCreateRegistry(nodeId) {
         };
     }
     return nodeChartRegistries[nodeId];
-}
+};
 
 /**
  * Extends FileWidgetViewModel with unified XY chart rendering in report mode.
@@ -48,21 +48,21 @@ function getOrCreateRegistry(nodeId) {
  * first instance ("chart host") renders the Plotly chart; others contribute
  * data silently.
  */
-var FileWidgetXYViewModel = function (params) {
-    var self = this;
+const FileWidgetXYViewModel = function (params) {
+    const self = this;
 
     FileWidgetViewModel.apply(this, [params]);
 
-    this.reportXYFiles = ko.computed(function () {
-        return self.uploadedFiles().filter(function (file) {
-            var renderer = ko.unwrap(file.renderer);
-            var rendererConfig = ko.unwrap(file.rendererConfig);
+    this.reportXYFiles = ko.computed(() =>
+        self.uploadedFiles().filter((file) => {
+            const renderer = ko.unwrap(file.renderer);
+            const rendererConfig = ko.unwrap(file.rendererConfig);
             return renderer === XY_RENDERER_UUID && !!rendererConfig;
-        });
-    });
+        })
+    );
 
-    var nodeId = params.node ? params.node.nodeid : null;
-    var registry = nodeId ? getOrCreateRegistry(nodeId) : null;
+    const nodeId = params.node ? params.node.nodeid : null;
+    const registry = nodeId ? getOrCreateRegistry(nodeId) : null;
 
     this.isChartHost = ko.observable(false);
     if (registry && !registry.hostWidget) {
@@ -93,56 +93,45 @@ var FileWidgetXYViewModel = function (params) {
     // Dropdown
     this.dropdownOpen = ko.observable(false);
 
-    this.showFileDropdown = ko.computed(function () {
-        return self.xyFileEntries().length > 1;
+    this.showFileDropdown = ko.computed(() =>
+        self.xyFileEntries().length > 1
+    );
+
+    this.selectedCount = ko.computed(() =>
+        self.xyFileEntries().filter((e) => e.selected()).length
+    );
+
+    this.allLoading = ko.computed(() => {
+        const entries = self.xyFileEntries();
+        return entries.length > 0 && entries.every((e) => e.loading());
     });
 
-    this.selectedCount = ko.computed(function () {
-        return self.xyFileEntries().filter(function (e) {
-            return e.selected();
-        }).length;
-    });
+    this.hasChartData = ko.computed(() =>
+        self.xyFileEntries().some((e) => e.chartData() !== null)
+    );
 
-    this.allLoading = ko.computed(function () {
-        var entries = self.xyFileEntries();
-        return (
-            entries.length > 0 &&
-            entries.every(function (e) {
-                return e.loading();
-            })
-        );
-    });
-
-    this.hasChartData = ko.computed(function () {
-        return self.xyFileEntries().some(function (e) {
-            return e.chartData() !== null;
-        });
-    });
-
-    this.noFilesSelected = ko.computed(function () {
+    this.noFilesSelected = ko.computed(() => {
         if (self.xyFileEntries().length === 0 || self.allLoading())
             return false;
         return self.selectedCount() === 0;
     });
 
-    this.anyError = ko.computed(function () {
-        return self.xyFileEntries().some(function (e) {
-            return e.error() && !e.loading();
-        });
-    });
+    this.anyError = ko.computed(() =>
+        self.xyFileEntries().some((e) => e.error() && !e.loading())
+    );
 
     // Unified Plotly traces
-    this.unifiedChartData = ko.computed(function () {
-        var allTraces = [];
+    this.unifiedChartData = ko.computed(() => {
+        const allTraces = [];
 
-        self.xyFileEntries().forEach(function (entry) {
+        self.xyFileEntries().forEach((entry) => {
             if (!entry.selected() || !entry.chartData()) return;
 
-            var color = FILE_COLORS[entry.colorIndex % FILE_COLORS.length];
-            var data = entry.chartData();
+            const color = FILE_COLORS[entry.colorIndex % FILE_COLORS.length];
+            const data = entry.chartData();
 
             if (data.series && Array.isArray(data.series)) {
-                data.series.forEach(function (s, i) {
+                data.series.forEach((s, i) => {
                     allTraces.push({
                         x: s.value,
                         y: s.count,
@@ -184,27 +173,26 @@ var FileWidgetXYViewModel = function (params) {
     );
 
     // Dropdown actions
-    this.toggleDropdown = function () {
+    this.toggleDropdown = () => {
         self.dropdownOpen(!self.dropdownOpen());
     };
-    this.toggleFileSelection = function (entry) {
+    this.toggleFileSelection = (entry) => {
         entry.selected(!entry.selected());
     };
-    this.selectAll = function () {
-        self.xyFileEntries().forEach(function (e) {
+    this.selectAll = () => {
+        self.xyFileEntries().forEach((e) => {
             e.selected(true);
         });
     };
-    this.deselectAll = function () {
-        self.xyFileEntries().forEach(function (e) {
+    this.deselectAll = () => {
+        self.xyFileEntries().forEach((e) => {
             e.selected(false);
         });
     };
-    this.getFileColor = function (colorIndex) {
-        return FILE_COLORS[colorIndex % FILE_COLORS.length];
-    };
+    this.getFileColor = (colorIndex) =>
+        FILE_COLORS[colorIndex % FILE_COLORS.length];
 
-    this._closeDropdown = function (e) {
+    this._closeDropdown = (e) => {
         if (
             self.dropdownOpen() &&
             !$(e.target).closest('.xy-file-dropdown').length
@@ -214,13 +202,13 @@ var FileWidgetXYViewModel = function (params) {
     };
 
     // Register this widget's XY files into the shared registry
-    this._registerFiles = function () {
-        var xyFiles = self.reportXYFiles();
+    this._registerFiles = () => {
+        const xyFiles = self.reportXYFiles();
         if (xyFiles.length === 0 || !registry) return;
 
-        var currentCount = registry.entries().length;
+        const currentCount = registry.entries().length;
 
-        xyFiles.forEach(function (file, index) {
+        xyFiles.forEach((file, index) => {
             registry.entries.push({
                 file: file,
                 fileName:
@@ -240,23 +228,23 @@ var FileWidgetXYViewModel = function (params) {
         }
 
         // Only load the entries this widget just added
-        var all = registry.entries();
+        const all = registry.entries();
         self._loadEntryData(all.slice(all.length - xyFiles.length));
     };
 
     // Fetch renderer config, download files, parse XY data
-    this._loadEntryData = function (entries) {
+    this._loadEntryData = (entries) => {
         getRendererConfig(XY_RENDERER_UUID)
-            .then(function (rendererData) {
-                var configMap = {};
-                (rendererData.configs || []).forEach(function (cfg) {
+            .then((rendererData) => {
+                const configMap = {};
+                (rendererData.configs || []).forEach((cfg) => {
                     configMap[cfg.configid] = cfg;
                 });
 
                 return Promise.all(
-                    entries.map(function (entry) {
-                        var configId = ko.unwrap(entry.file.rendererConfig);
-                        var config = configMap[configId];
+                    entries.map((entry) => {
+                        const configId = ko.unwrap(entry.file.rendererConfig);
+                        const config = configMap[configId];
 
                         if (!config) {
                             entry.error('Configuration not found');
@@ -265,7 +253,7 @@ var FileWidgetXYViewModel = function (params) {
                         }
 
                         if (!registry.labelsSet) {
-                            var d = config.config && config.config.display;
+                            const d = config.config && config.config.display;
                             if (d) {
                                 registry.labelsSet = true;
                                 if (d.chartTitle)
@@ -281,10 +269,8 @@ var FileWidgetXYViewModel = function (params) {
                             url: entry._widget.getFileUrl(entry.file.url),
                             dataType: 'text'
                         })
-                            .then(function (text) {
-                                return { entry: entry, text: text, config: config };
-                            })
-                            .catch(function () {
+                            .then((text) => ({ entry, text, config }))
+                            .catch(() => {
                                 entry.error('Unable to load file data');
                                 entry.loading(false);
                                 return null;
@@ -292,32 +278,30 @@ var FileWidgetXYViewModel = function (params) {
                     })
                 );
             })
-            .then(function (results) {
-                results.forEach(function (r) {
+            .then((results) => {
+                results.forEach((r) => {
                     if (!r) return;
                     try {
-                        var fileOverrides = parseOverrides(ko.unwrap(r.entry.file.parsingOverrides));
-                        var effectiveConfig = Object.assign({}, r.config.config, fileOverrides);
+                        const fileOverrides = parseOverrides(ko.unwrap(r.entry.file.parsingOverrides));
+                        const effectiveConfig = Object.assign({}, r.config.config, fileOverrides);
 
-                        var validation = XyParser.validateContent(r.text);
+                        const validation = XyParser.validateContent(r.text);
                         if (!validation.valid) {
                             r.entry.error('Validation: ' + validation.error);
                             r.entry.loading(false);
                             return;
                         }
 
-                        var parsed = XyParser.parse(r.text, effectiveConfig);
+                        const parsed = XyParser.parse(r.text, effectiveConfig);
 
                         r.entry.chartData(
                             parsed.ys
                                 ? {
-                                      series: parsed.ys.map(function (y, i) {
-                                          return {
-                                              value: parsed.x,
-                                              count: y,
-                                              name: parsed.seriesNames[i]
-                                          };
-                                      })
+                                      series: parsed.ys.map((y, i) => ({
+                                          value: parsed.x,
+                                          count: y,
+                                          name: parsed.seriesNames[i]
+                                      }))
                                   }
                                 : {
                                       value: parsed.x,
@@ -332,9 +316,9 @@ var FileWidgetXYViewModel = function (params) {
                     r.entry.loading(false);
                 });
             })
-            .catch(function (err) {
+            .catch((err) => {
                 console.error('XY chart init failed:', err);
-                entries.forEach(function (entry) {
+                entries.forEach((entry) => {
                     if (entry.loading()) {
                         entry.error('Unable to load chart configuration');
                         entry.loading(false);
@@ -344,12 +328,10 @@ var FileWidgetXYViewModel = function (params) {
     };
 
     // Cleanup on SPA navigation
-    this.dispose = function () {
+    this.dispose = () => {
         if (registry) {
             registry.entries(
-                registry.entries().filter(function (e) {
-                    return e._widget !== self;
-                })
+                registry.entries().filter((e) => e._widget !== self)
             );
 
             if (self.isChartHost()) {
@@ -371,7 +353,7 @@ var FileWidgetXYViewModel = function (params) {
         if (this.reportXYFiles().length > 0) {
             this._registerFiles();
         } else {
-            var sub = this.reportXYFiles.subscribe(function (files) {
+            const sub = this.reportXYFiles.subscribe((files) => {
                 if (files.length > 0) {
                     sub.dispose();
                     self._registerFiles();

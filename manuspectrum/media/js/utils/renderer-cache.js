@@ -17,20 +17,20 @@ const cache = {};
  * @param {string} rendererId - UUID of the renderer
  * @returns {Promise<Object>} - the parsed renderer JSON
  */
-export function getRendererConfig(rendererId) {
+export const getRendererConfig = (rendererId) => {
     if (!cache[rendererId]) {
         cache[rendererId] = fetch('/renderer/' + rendererId)
-            .then(function (res) {
+            .then((res) => {
                 if (!res.ok) throw new Error('Renderer fetch failed: ' + res.status);
                 return res.json();
             })
-            .catch(function (err) {
+            .catch((err) => {
                 delete cache[rendererId];
                 throw err;
             });
     }
     return cache[rendererId];
-}
+};
 
 /**
  * Invalidates the cache for a specific renderer ID.
@@ -38,9 +38,9 @@ export function getRendererConfig(rendererId) {
  *
  * @param {string} rendererId - UUID of the renderer
  */
-export function invalidate(rendererId) {
+export const invalidate = (rendererId) => {
     delete cache[rendererId];
-}
+};
 
 /**
  * Safely parse parsingOverrides from tile data.
@@ -50,11 +50,11 @@ export function invalidate(rendererId) {
  * @param {*} raw - the raw value from ko.unwrap(node.parsingOverrides)
  * @returns {Object} - parsed overrides or empty object
  */
-export function parseOverrides(raw) {
+export const parseOverrides = (raw) => {
     if (!raw) return {};
     if (typeof raw === 'string') {
         try { return JSON.parse(raw); } catch { return {}; }
     }
     if (typeof raw === 'object') return ko.toJS(raw);
     return {};
-}
+};
