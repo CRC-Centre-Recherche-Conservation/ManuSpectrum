@@ -71,7 +71,15 @@ const validateContent = (text, options) => {
     const maxCols = Math.max(...probeData.map(row => row.length));
     const minCols = options?.xColumnMode === 'generate' ? 1 : 2;
     if (maxCols < minCols) {
-        return { valid: false, error: 'Insufficient data: need at least ' + minCols + ' column(s)' };
+        return { valid: false, error: 'Insufficient data: file has ' + maxCols + ' column(s), need at least ' + minCols };
+    }
+
+    // 3b. Validate xColumnIndex is within bounds
+    if (options?.xColumnMode !== 'generate' && options?.xColumnIndex !== undefined) {
+        const reqXCol = parseInt(options.xColumnIndex, 10);
+        if (reqXCol >= maxCols) {
+            return { valid: false, error: 'X column index ' + reqXCol + ' exceeds available columns (max: ' + (maxCols - 1) + ')' };
+        }
     }
 
     // 4. Security scan — detect suspicious patterns in cells
