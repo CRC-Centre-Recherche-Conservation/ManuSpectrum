@@ -112,6 +112,7 @@ export default ko.components.register('xy-reader', {
             this._xRangeMin = display?.xRangeMin;
             this._xRangeMax = display?.xRangeMax;
             this._columnAssignments = display?.columnAssignments || null;
+            this._xColumnMode = this.selectedConfiguration?.config?.xColumnMode || null;
             this.yAxisRightLabel(display?.yAxisRightLabel || '');
         }));
 
@@ -499,6 +500,7 @@ export default ko.components.register('xy-reader', {
                 self._xRangeMin = display?.xRangeMin;
                 self._xRangeMax = display?.xRangeMax;
                 self._columnAssignments = display?.columnAssignments || null;
+                self._xColumnMode = self.selectedConfiguration?.config?.xColumnMode || null;
                 self.yAxisRightLabel(display?.yAxisRightLabel || '');
                 self.render();
                 self.chartTitle(
@@ -590,7 +592,9 @@ export default ko.components.register('xy-reader', {
             const baseConfig = this.selectedConfiguration?.config || {};
             const effectiveConfig = { ...baseConfig, ...fileOverrides };
 
-            const validation = XyParser.validateContent(text);
+            const validation = XyParser.validateContent(text, {
+                xColumnMode: effectiveConfig.xColumnMode
+            });
             if (!validation.valid) {
                 this.invalidDelimiter(true);
                 throw new Error('Validation: ' + validation.error);
@@ -602,14 +606,16 @@ export default ko.components.register('xy-reader', {
                 const assignments = this._columnAssignments;
                 const xMin = this._xRangeMin;
                 const xMax = this._xRangeMax;
+                const isGenerate = effectiveConfig.xColumnMode === 'generate';
 
                 if (parsedData.ys) {
                     if (assignments && assignments.length > 0) {
                         const leftSeries = [];
                         const rightSeries = [];
                         parsedData.ys.forEach((yArr, i) => {
+                            const colIdx = isGenerate ? i : i + 1;
                             const colAssign = assignments.find(
-                                (a) => a.columnIndex === i + 1
+                                (a) => a.columnIndex === colIdx
                             );
                             const role = colAssign ? colAssign.role : 'yLeft';
                             if (role === 'yRight') {
