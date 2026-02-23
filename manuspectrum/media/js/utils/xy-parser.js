@@ -32,7 +32,7 @@ const transformations = () => {
  * Validates file content BEFORE parsing.
  * Returns { valid: boolean, error?: string, detectedDelimiter?: string }
  */
-const validateContent = (text) => {
+const validateContent = (text, options) => {
     if (!text || typeof text !== 'string') {
         return { valid: false, error: 'Empty or invalid content' };
     }
@@ -63,14 +63,15 @@ const validateContent = (text) => {
         }
     }
 
-    // 3. Shape minimum — at least 2 lines and 2 columns
+    // 3. Shape minimum — at least 2 lines; 1 column if generate mode, 2 otherwise
     const probeData = probeResult.data;
     if (probeData.length < 2) {
         return { valid: false, error: 'Insufficient data: need at least 2 rows' };
     }
     const maxCols = Math.max(...probeData.map(row => row.length));
-    if (maxCols < 2) {
-        return { valid: false, error: 'Insufficient data: need at least 2 columns' };
+    const minCols = options?.xColumnMode === 'generate' ? 1 : 2;
+    if (maxCols < minCols) {
+        return { valid: false, error: 'Insufficient data: need at least ' + minCols + ' column(s)' };
     }
 
     // 4. Security scan — detect suspicious patterns in cells
@@ -89,18 +90,26 @@ const validateContent = (text) => {
         }
     }
 
-    // 5. Numeric verification — at least 50% of data rows must have numeric X and Y
+    // 5. Numeric verification — at least 50% of data rows must have numeric values
+    const generateMode = options?.xColumnMode === 'generate';
     let numericCount = 0;
     for (let i = 0; i < probeData.length; i++) {
         const row = probeData[i];
-        if (row.length >= 2 &&
-            !isNaN(parseFloat(row[0])) &&
-            !isNaN(parseFloat(row[1]))) {
-            numericCount++;
+        if (generateMode) {
+            // In generate mode, just need 1 numeric column
+            if (row.length >= 1 && !isNaN(parseFloat(row[0]))) {
+                numericCount++;
+            }
+        } else {
+            if (row.length >= 2 &&
+                !isNaN(parseFloat(row[0])) &&
+                !isNaN(parseFloat(row[1]))) {
+                numericCount++;
+            }
         }
     }
     if (numericCount / probeData.length < MIN_NUMERIC_RATIO) {
-        return { valid: false, error: 'Insufficient numeric data: less than 50% of rows have numeric X/Y values' };
+        return { valid: false, error: 'Insufficient numeric data: less than 50% of rows have numeric values' };
     }
 
     return {
@@ -214,6 +223,65 @@ const parse = (text, config) => {
         dataRows = rows.slice(detected.dataStartIndex);
     }
 
+    // Generate mode: all columns are Y, X is synthesized from a range
+    if (config?.xColumnMode === 'generate') {
+        // Keep rows that have at least 1 numeric cell
+        dataRows = dataRows.filter(row =>
+            row.length >= 1 && !isNaN(parseFloat(row[0]))
+        );
+        if (dataRows.length === 0) {
+            return { x: [], y: [] };
+        }
+
+        const n = dataRows.length;
+        const xStart = parseFloat(config.xGenerateStart ?? 0);
+        const xEnd = parseFloat(config.xGenerateEnd ?? n - 1);
+        const genX = [];
+        for (let i = 0; i < n; i++) {
+            genX.push(n > 1 ? xStart + (i * (xEnd - xStart)) / (n - 1) : xStart);
+        }
+
+        const colCount = dataRows[0].length;
+        const transform = config?.transformation ?? 'basic';
+
+        if (colCount > 1 && transform !== 'mean') {
+            const seriesNames = [];
+            if (headerLine && Array.isArray(headerLine)) {
+                const headerTokens = headerLine.filter(el => el && el.trim() !== '');
+                for (let i = 0; i < Math.min(colCount, headerTokens.length); i++) {
+                    seriesNames.push(headerTokens[i].trim());
+                }
+            }
+            while (seriesNames.length < colCount) {
+                seriesNames.push('Y' + (seriesNames.length + 1));
+            }
+
+            const parsedMulti = { x: genX, ys: [], seriesNames };
+            for (let c = 0; c < colCount; c++) {
+                parsedMulti.ys.push([]);
+            }
+            dataRows.forEach(row => {
+                for (let c = 0; c < colCount; c++) {
+                    parsedMulti.ys[c].push(c < row.length ? parseFloat(row[c]) : NaN);
+                }
+            });
+            return parsedMulti;
+        }
+
+        // Single column or mean transform
+        const parsedData = { x: genX, y: [] };
+        dataRows.forEach(row => {
+            const yValues = row.map(v => parseFloat(v)).filter(v => !isNaN(v));
+            if (yValues.length > 0) {
+                parsedData.y.push(runTransformation(yValues, transform));
+            } else {
+                parsedData.y.push(NaN);
+            }
+        });
+        return parsedData;
+    }
+
+    // Standard mode: first column is X
     // Filter rows that have no numeric first cell (safety)
     dataRows = dataRows.filter(row => row.length >= 1 && !isNaN(parseFloat(row[0])));
 
