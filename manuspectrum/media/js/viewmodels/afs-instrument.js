@@ -13,7 +13,6 @@ import 'bindings/plotly';
 * @param  {string} params - a configuration object
 */
 const AfsInstrumentViewModel = function(params) {
-    const self = this;
     this.params = params;
     this.fileType = 'text/plain';
     this.url = "";
@@ -75,8 +74,8 @@ const AfsInstrumentViewModel = function(params) {
         const sub = val.subscribe((val) => {
             localStore.setItem(renderer + key, val);
         });
-        if (self.disposables) {
-            self.disposables.push(sub);
+        if (this.disposables) {
+            this.disposables.push(sub);
         }
     });
 
@@ -90,46 +89,46 @@ const AfsInstrumentViewModel = function(params) {
             url: this.displayContent.url,
             dataType: "text"})
             .done((data) => {
-                self.displayContent.validRenderer(true);
+                this.displayContent.validRenderer(true);
                 try {
-                    self.parse(data, series);
+                    this.parse(data, series);
                     // clear the data before you add new data, this fixes a bug in the
                     // afs file-interpretation step where data wouldn't be updated until
                     // the file was selected a second time
-                    self.chartData(undefined);
+                    this.chartData(undefined);
 
                     if (series.multiSeries && series.multiSeries.length > 1) {
-                        self.chartData({
+                        this.chartData({
                             series: series.multiSeries.map((s) => ({
                                 value: s.value,
                                 count: s.count,
-                                name: self.displayContent.name + ' - ' + s.name
+                                name: this.displayContent.name + ' - ' + s.name
                             }))
                         });
                     } else {
-                        self.chartData(series);
+                        this.chartData(series);
                     }
 
-                    if (!self.fileViewer) {
+                    if (!this.fileViewer) {
                         if (series.count.length === 0) {
-                            self.displayContent.validRenderer(false);
+                            this.displayContent.validRenderer(false);
                         }
                         if (series.multiSeries && series.multiSeries.length > 1) {
                             series.multiSeries.forEach((s) => {
-                                self.seriesData.push({
+                                this.seriesData.push({
                                     data: s,
-                                    name: self.displayContent.name + ' - ' + s.name
+                                    name: this.displayContent.name + ' - ' + s.name
                                 });
                             });
                         } else {
-                            self.seriesData.push({data: series, name: self.displayContent.name});
+                            this.seriesData.push({data: series, name: this.displayContent.name});
                         }
                     }
-                } catch(e) {
-                    self.displayContent.validRenderer(false);
+                } catch {
+                    this.displayContent.validRenderer(false);
                 }
-                self.loading(false);
-                self.displayContent.validRenderer.valueHasMutated();
+                this.loading(false);
+                this.displayContent.validRenderer.valueHasMutated();
             });
     };
 
@@ -149,10 +148,10 @@ const AfsInstrumentViewModel = function(params) {
     if (this.displayContent) {
         this.url = this.displayContent.url;
         this.type = this.displayContent.type;
-        if (self.params.context === 'render') {
-            self.render();
-        } else if (self.params.context === 'parse'){
-            self.render();
+        if (this.params.context === 'render') {
+            this.render();
+        } else if (this.params.context === 'parse'){
+            this.render();
         }
     }
 
