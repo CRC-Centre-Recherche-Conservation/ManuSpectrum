@@ -468,6 +468,58 @@ msgstr "Impossible de charger les données du graphique"
 msgid "Select files to display"
 msgstr "Sélectionnez les fichiers à afficher"
 
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Presets..."
+msgstr "Préréglages..."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Spectral Range"
+msgstr "Gamme spectrale"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Limit the displayed X range. Leave empty for no limit."
+msgstr "Limiter la gamme X affichée. Laisser vide pour aucune limite."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Min X"
+msgstr "X min"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Max X"
+msgstr "X max"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "e.g. 400"
+msgstr "ex. 400"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "e.g. 4000"
+msgstr "ex. 4000"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Column Assignment"
+msgstr "Assignation des colonnes"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Define which data columns map to X, Y (left axis), or Y (right axis). Leave empty to use the default: column 1 = X, remaining = Y left."
+msgstr "Définir quelles colonnes de données correspondent à X, Y (axe gauche) ou Y (axe droit). Laisser vide pour le comportement par défaut : colonne 1 = X, les autres = Y gauche."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Column"
+msgstr "Colonne"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Add Column"
+msgstr "Ajouter une colonne"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Right Y Axis Label"
+msgstr "Libellé de l'axe Y droit"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Right Y Axis"
+msgstr "Axe Y droit"
+
 #: manuspectrum/views/renderer_config.py
 msgid "<h1>Renderers do not exist</h1>"
 msgstr "<h1>Les rendus n'existent pas</h1>"
