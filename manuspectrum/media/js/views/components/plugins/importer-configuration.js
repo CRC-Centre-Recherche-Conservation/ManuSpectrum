@@ -153,6 +153,13 @@ const vm = function (params) {
         }
 
         const xMode = this.xColumnMode();
+        // Extract xColumnIndex from column assignments (find the column with role 'x')
+        const xAssign = this.columnAssignments().find(
+            (a) => ko.unwrap(a.role) === 'x'
+        );
+        const xColIdx = xAssign
+            ? parseInt(ko.unwrap(xAssign.columnIndex), 10)
+            : 0;
         const newConfiguration = {
             name: this.configurationName(),
             description: this.configurationDescription(),
@@ -163,6 +170,10 @@ const vm = function (params) {
             delimiterCharacter: this.dataDelimiter(),
             transformation: this.selectedTransformation(),
             xColumnMode: xMode === 'generate' ? 'generate' : undefined,
+            xColumnIndex:
+                xMode !== 'generate' && xColIdx !== 0
+                    ? xColIdx
+                    : undefined,
             xGenerateStart:
                 xMode === 'generate' &&
                 this.xGenerateStart() !== '' &&

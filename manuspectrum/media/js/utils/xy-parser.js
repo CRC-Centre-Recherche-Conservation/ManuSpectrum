@@ -92,6 +92,7 @@ const validateContent = (text, options) => {
 
     // 5. Numeric verification — at least 50% of data rows must have numeric values
     const generateMode = options?.xColumnMode === 'generate';
+    const xCol = parseInt(options?.xColumnIndex ?? 0, 10);
     let numericCount = 0;
     for (let i = 0; i < probeData.length; i++) {
         const row = probeData[i];
@@ -101,9 +102,12 @@ const validateContent = (text, options) => {
                 numericCount++;
             }
         } else {
-            if (row.length >= 2 &&
-                !isNaN(parseFloat(row[0])) &&
-                !isNaN(parseFloat(row[1]))) {
+            // Check the X column and at least one other column are numeric
+            const hasNumericX = row.length > xCol && !isNaN(parseFloat(row[xCol]));
+            const hasNumericY = row.some((cell, idx) =>
+                idx !== xCol && !isNaN(parseFloat(cell))
+            );
+            if (hasNumericX && hasNumericY) {
                 numericCount++;
             }
         }
@@ -281,27 +285,38 @@ const parse = (text, config) => {
         return parsedData;
     }
 
-    // Standard mode: first column is X
-    // Filter rows that have no numeric first cell (safety)
-    dataRows = dataRows.filter(row => row.length >= 1 && !isNaN(parseFloat(row[0])));
+    // Standard mode: one column is X, the rest are Y
+    // xColumnIndex allows choosing which file column is X (default: 0)
+    const xCol = parseInt(config?.xColumnIndex ?? 0, 10);
+
+    // Filter rows that have no numeric X cell
+    dataRows = dataRows.filter(row => row.length > xCol && !isNaN(parseFloat(row[xCol])));
 
     if (dataRows.length === 0) {
         return { x: [], y: [] };
     }
 
-    const yColumnCount = dataRows[0].length - 1;
+    const totalCols = dataRows[0].length;
+    const yColumnCount = totalCols - 1;
     const transform = config?.transformation ?? 'basic';
+
+    // Build Y column indices (all columns except xCol)
+    const yColIndices = [];
+    for (let c = 0; c < totalCols; c++) {
+        if (c !== xCol) yColIndices.push(c);
+    }
 
     if (yColumnCount > 1 && transform !== 'mean') {
         // Multi-series mode
         const seriesNames = [];
         if (headerLine && Array.isArray(headerLine)) {
             const headerTokens = headerLine.filter(el => el && el.trim() !== '');
-            if (headerTokens.length >= yColumnCount + 1) {
-                for (let i = 1; i <= yColumnCount; i++) {
-                    seriesNames.push(headerTokens[i].trim());
+            // Pick header names for Y columns only (skip the X column)
+            yColIndices.forEach(ci => {
+                if (ci < headerTokens.length) {
+                    seriesNames.push(headerTokens[ci].trim());
                 }
-            }
+            });
         }
         if (seriesNames.length !== yColumnCount) {
             seriesNames.length = 0;
@@ -316,11 +331,11 @@ const parse = (text, config) => {
         }
 
         dataRows.forEach(row => {
-            parsedMulti.x.push(parseFloat(row[0]));
-            for (let i = 0; i < yColumnCount; i++) {
-                const val = i + 1 < row.length ? parseFloat(row[i + 1]) : NaN;
-                parsedMulti.ys[i].push(val);
-            }
+            parsedMulti.x.push(parseFloat(row[xCol]));
+            yColIndices.forEach((ci, yi) => {
+                const val = ci < row.length ? parseFloat(row[ci]) : NaN;
+                parsedMulti.ys[yi].push(val);
+            });
         });
 
         return parsedMulti;
@@ -330,8 +345,8 @@ const parse = (text, config) => {
     const parsedData = { x: [], y: [] };
 
     dataRows.forEach(row => {
-        parsedData.x.push(parseFloat(row[0]));
-        const yValues = row.slice(1).map(v => parseFloat(v)).filter(v => !isNaN(v));
+        parsedData.x.push(parseFloat(row[xCol]));
+        const yValues = yColIndices.map(ci => parseFloat(row[ci])).filter(v => !isNaN(v));
         if (yValues.length > 0) {
             parsedData.y.push(runTransformation(yValues, transform));
         } else {

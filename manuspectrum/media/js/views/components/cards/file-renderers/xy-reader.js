@@ -593,7 +593,8 @@ export default ko.components.register('xy-reader', {
             const effectiveConfig = { ...baseConfig, ...fileOverrides };
 
             const validation = XyParser.validateContent(text, {
-                xColumnMode: effectiveConfig.xColumnMode
+                xColumnMode: effectiveConfig.xColumnMode,
+                xColumnIndex: effectiveConfig.xColumnIndex
             });
             if (!validation.valid) {
                 this.invalidDelimiter(true);
@@ -607,13 +608,23 @@ export default ko.components.register('xy-reader', {
                 const xMin = this._xRangeMin;
                 const xMax = this._xRangeMax;
                 const isGenerate = effectiveConfig.xColumnMode === 'generate';
+                const xColIdx = parseInt(effectiveConfig.xColumnIndex ?? 0, 10);
 
                 if (parsedData.ys) {
                     if (assignments && assignments.length > 0) {
                         const leftSeries = [];
                         const rightSeries = [];
                         parsedData.ys.forEach((yArr, i) => {
-                            const colIdx = isGenerate ? i : i + 1;
+                            // Map series index to file column index
+                            // In generate mode: all cols are Y → series i = file col i
+                            // In standard mode: X col is removed → rebuild original index
+                            let colIdx;
+                            if (isGenerate) {
+                                colIdx = i;
+                            } else {
+                                // Y series are file columns in order, skipping xColIdx
+                                colIdx = i < xColIdx ? i : i + 1;
+                            }
                             const colAssign = assignments.find(
                                 (a) => a.columnIndex === colIdx
                             );

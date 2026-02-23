@@ -41,6 +41,7 @@ const getOrCreateRegistry = (nodeId) => {
             xRangeMax: ko.observable(undefined),
             columnAssignments: null,
             xColumnMode: null,
+            xColumnIndex: 0,
             labelsSet: false
         };
     }
@@ -141,6 +142,7 @@ const FileWidgetXYViewModel = function (params) {
         const xMax = self.xRangeMax();
         const assignments = registry ? registry.columnAssignments : null;
         const isGenerate = registry && registry.xColumnMode === 'generate';
+        const xColIdx = registry ? parseInt(registry.xColumnIndex ?? 0, 10) : 0;
 
         self.xyFileEntries().forEach((entry) => {
             if (!entry.selected() || !entry.chartData()) return;
@@ -150,9 +152,13 @@ const FileWidgetXYViewModel = function (params) {
 
             if (data.series && Array.isArray(data.series)) {
                 data.series.forEach((s, i) => {
-                    // In standard mode col 0 is X, so series i maps to col i+1
-                    // In generate mode all cols are Y, so series i maps to col i
-                    const colIdx = isGenerate ? i : i + 1;
+                    // Map series index back to original file column index
+                    let colIdx;
+                    if (isGenerate) {
+                        colIdx = i;
+                    } else {
+                        colIdx = i < xColIdx ? i : i + 1;
+                    }
                     if (assignments) {
                         const colAssign = assignments.find(
                             (a) => a.columnIndex === colIdx
@@ -326,6 +332,9 @@ const FileWidgetXYViewModel = function (params) {
                             if (config.config.xColumnMode)
                                 registry.xColumnMode =
                                     config.config.xColumnMode;
+                            if (config.config.xColumnIndex !== undefined)
+                                registry.xColumnIndex =
+                                    config.config.xColumnIndex;
                         }
 
                         return $.ajax({
@@ -349,7 +358,8 @@ const FileWidgetXYViewModel = function (params) {
                         const effectiveConfig = Object.assign({}, r.config.config, fileOverrides);
 
                         const validation = XyParser.validateContent(r.text, {
-                            xColumnMode: effectiveConfig.xColumnMode
+                            xColumnMode: effectiveConfig.xColumnMode,
+                            xColumnIndex: effectiveConfig.xColumnIndex
                         });
                         if (!validation.valid) {
                             r.entry.error('Validation: ' + validation.error);
