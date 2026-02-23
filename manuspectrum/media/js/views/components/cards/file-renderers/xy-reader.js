@@ -93,21 +93,26 @@ export default ko.components.register('xy-reader', {
                     tile.save();
                 }
             }
+            const display = this.selectedConfiguration?.config?.display;
             this.chartTitle(
-                this.selectedConfiguration?.config?.display?.chartTitle
-                    ? this.selectedConfiguration.config.display.chartTitle
+                display?.chartTitle
+                    ? display.chartTitle
                     : arches.translations.data
             );
             this.xAxisLabel(
-                this.selectedConfiguration?.config?.display?.xAxisLabel
-                    ? this.selectedConfiguration.config.display.xAxisLabel
+                display?.xAxisLabel
+                    ? display.xAxisLabel
                     : arches.translations.xAxis
             );
             this.yAxisLabel(
-                this.selectedConfiguration?.config?.display?.yAxisLabel
-                    ? this.selectedConfiguration.config.display.yAxisLabel
+                display?.yAxisLabel
+                    ? display.yAxisLabel
                     : arches.translations.yAxis
             );
+            this._xRangeMin = display?.xRangeMin;
+            this._xRangeMax = display?.xRangeMax;
+            this._columnAssignments = display?.columnAssignments || null;
+            this.yAxisRightLabel(display?.yAxisRightLabel || '');
         }));
 
         rendererConfigRefresh();
@@ -490,20 +495,25 @@ export default ko.components.register('xy-reader', {
                 self.selectedConfiguration = self.rendererConfigs().find(
                     (c) => c.configid === self.selectedConfig()
                 );
+                const display = self.selectedConfiguration?.config?.display;
+                self._xRangeMin = display?.xRangeMin;
+                self._xRangeMax = display?.xRangeMax;
+                self._columnAssignments = display?.columnAssignments || null;
+                self.yAxisRightLabel(display?.yAxisRightLabel || '');
                 self.render();
                 self.chartTitle(
-                    self.selectedConfiguration?.config?.display?.chartTitle
-                        ? self.selectedConfiguration.config.display.chartTitle
+                    display?.chartTitle
+                        ? display.chartTitle
                         : arches.translations.data
                 );
                 self.xAxisLabel(
-                    self.selectedConfiguration?.config?.display?.xAxisLabel
-                        ? self.selectedConfiguration.config.display.xAxisLabel
+                    display?.xAxisLabel
+                        ? display.xAxisLabel
                         : arches.translations.xAxis
                 );
                 self.yAxisLabel(
-                    self.selectedConfiguration?.config?.display?.yAxisLabel
-                        ? self.selectedConfiguration.config.display.yAxisLabel
+                    display?.yAxisLabel
+                        ? display.yAxisLabel
                         : arches.translations.yAxis
                 );
             }
@@ -589,18 +599,76 @@ export default ko.components.register('xy-reader', {
             try {
                 const parsedData = XyParser.parse(text, effectiveConfig);
                 this.invalidDelimiter(false);
+                const assignments = this._columnAssignments;
+                const xMin = this._xRangeMin;
+                const xMax = this._xRangeMax;
 
                 if (parsedData.ys) {
-                    series.value.push(...parsedData.x);
-                    series.count.push(...parsedData.ys[0]);
-                    series.multiSeries = parsedData.ys.map((yArr, i) => ({
-                        value: [...parsedData.x],
-                        count: yArr,
-                        name: parsedData.seriesNames[i]
-                    }));
+                    if (assignments && assignments.length > 0) {
+                        const leftSeries = [];
+                        const rightSeries = [];
+                        parsedData.ys.forEach((yArr, i) => {
+                            const colAssign = assignments.find(
+                                (a) => a.columnIndex === i + 1
+                            );
+                            const role = colAssign ? colAssign.role : 'yLeft';
+                            if (role === 'yRight') {
+                                rightSeries.push({
+                                    value: [...parsedData.x],
+                                    count: yArr,
+                                    name: parsedData.seriesNames[i],
+                                });
+                            } else if (role !== 'ignore') {
+                                leftSeries.push({
+                                    value: [...parsedData.x],
+                                    count: yArr,
+                                    name: parsedData.seriesNames[i],
+                                });
+                            }
+                        });
+                        series.multiSeries = [...leftSeries, ...rightSeries];
+                        series._rightAxisStartIndex = leftSeries.length;
+                        if (leftSeries.length > 0) {
+                            series.value.push(...leftSeries[0].value);
+                            series.count.push(...leftSeries[0].count);
+                        }
+                    } else {
+                        series.value.push(...parsedData.x);
+                        series.count.push(...parsedData.ys[0]);
+                        series.multiSeries = parsedData.ys.map((yArr, i) => ({
+                            value: [...parsedData.x],
+                            count: yArr,
+                            name: parsedData.seriesNames[i],
+                        }));
+                    }
                 } else {
                     series.value.push(...parsedData.x);
                     series.count.push(...parsedData.y);
+                }
+
+                // Apply spectral range filter
+                if (xMin !== undefined || xMax !== undefined) {
+                    const filtered = XyParser.filterXRange(
+                        series.value,
+                        series.count,
+                        xMin,
+                        xMax
+                    );
+                    series.value.length = 0;
+                    series.count.length = 0;
+                    series.value.push(...filtered.x);
+                    series.count.push(...filtered.y);
+                    if (series.multiSeries) {
+                        series.multiSeries = series.multiSeries.map((s) => {
+                            const f = XyParser.filterXRange(
+                                s.value,
+                                s.count,
+                                xMin,
+                                xMax
+                            );
+                            return { ...s, value: f.x, count: f.y };
+                        });
+                    }
                 }
             } catch (e) {
                 this.invalidDelimiter(true);
