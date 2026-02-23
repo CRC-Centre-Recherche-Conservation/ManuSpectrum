@@ -274,8 +274,29 @@ const parse = (text, config) => {
     return parsedData;
 };
 
+/**
+ * Filters parallel X/Y arrays to only include points where X is within [min, max].
+ * Both min and max are optional (undefined = no bound).
+ */
+const filterXRange = (xArr, yArr, xMin, xMax) => {
+    if (xMin === undefined && xMax === undefined) return { x: xArr, y: yArr };
+    const x = [];
+    const y = [];
+    for (let i = 0; i < xArr.length; i++) {
+        if (
+            (xMin === undefined || xArr[i] >= xMin) &&
+            (xMax === undefined || xArr[i] <= xMax)
+        ) {
+            x.push(xArr[i]);
+            y.push(yArr[i]);
+        }
+    }
+    return { x, y };
+};
+
 export default {
     transformations,
     parse,
-    validateContent
+    validateContent,
+    filterXRange
 };
