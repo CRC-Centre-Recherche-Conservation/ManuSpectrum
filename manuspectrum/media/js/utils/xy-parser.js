@@ -310,11 +310,10 @@ const parse = (text, config) => {
         // Multi-series mode
         const seriesNames = [];
         if (headerLine && Array.isArray(headerLine)) {
-            const headerTokens = headerLine.filter(el => el && el.trim() !== '');
-            // Pick header names for Y columns only (skip the X column)
+            // Use raw headerLine (not filtered) so indices match file columns
             yColIndices.forEach(ci => {
-                if (ci < headerTokens.length) {
-                    seriesNames.push(headerTokens[ci].trim());
+                if (ci < headerLine.length && headerLine[ci] && headerLine[ci].trim() !== '') {
+                    seriesNames.push(headerLine[ci].trim());
                 }
             });
         }
