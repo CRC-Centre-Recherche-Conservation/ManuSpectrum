@@ -520,6 +520,42 @@ msgstr "Libellé de l'axe Y droit"
 msgid "Right Y Axis"
 msgstr "Axe Y droit"
 
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "X Axis Source"
+msgstr "Source de l'axe X"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Define how the X axis values are determined"
+msgstr "Définir comment les valeurs de l'axe X sont déterminées"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "From data (first column is X)"
+msgstr "Depuis les données (première colonne = X)"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Generate from range (no X column in file)"
+msgstr "Générer à partir d'une plage (pas de colonne X dans le fichier)"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "The X axis will be evenly spaced between start and end values, based on the number of data rows."
+msgstr "L'axe X sera uniformément réparti entre les valeurs de début et de fin, en fonction du nombre de lignes de données."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Start"
+msgstr "Début"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "End"
+msgstr "Fin"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "e.g. -3500"
+msgstr "ex. -3500"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "e.g. 500"
+msgstr "ex. 500"
+
 #: manuspectrum/views/renderer_config.py
 msgid "<h1>Renderers do not exist</h1>"
 msgstr "<h1>Les rendus n'existent pas</h1>"
