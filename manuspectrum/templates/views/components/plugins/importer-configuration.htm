@@ -41,8 +41,8 @@
                 <h4 class="file-config-header">{% trans "Footer" %}</h4>
                 <h5 class="file-config-instructions">{% trans "Define where your x/y data end in the file" %}</h5>
                 <div style="display: flex; flex-direction: column; padding-bottom: 5px;">
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="header-config-none" type="radio" name="footerConfig" value="none" data-bind="checked: footerConfig"><label for="header-config-none">{% trans "End of File" %}</label></div>
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="header-config-delimited" type="radio" name="footerConfig" value="delimited" data-bind="checked: footerConfig"><label for="header-config-delimited">{% trans "File footer begins after specific text (consistent ending text)" %}</label></div>
+                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="footer-config-none" type="radio" name="footerConfig" value="none" data-bind="checked: footerConfig"><label for="footer-config-none">{% trans "End of File" %}</label></div>
+                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="footer-config-delimited" type="radio" name="footerConfig" value="delimited" data-bind="checked: footerConfig"><label for="footer-config-delimited">{% trans "File footer begins after specific text (consistent ending text)" %}</label></div>
                 </div>
                 <input type="text" name="headerDelimiter" data-bind="visible: footerConfig()=='delimited', textInput: footerDelimiter" placeholder="{% trans 'Ending Text' %}">
             </div>
