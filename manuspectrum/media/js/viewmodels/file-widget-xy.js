@@ -36,6 +36,10 @@ const getOrCreateRegistry = (nodeId) => {
                 arches.translations.yAxis || 'Y'
             ),
             chartYAxisLabelSize: ko.observable(17),
+            chartYAxisRightLabel: ko.observable(''),
+            xRangeMin: ko.observable(undefined),
+            xRangeMax: ko.observable(undefined),
+            columnAssignments: null,
             labelsSet: false
         };
     }
@@ -89,6 +93,15 @@ const FileWidgetXYViewModel = function (params) {
     this.chartYAxisLabelSize = registry
         ? registry.chartYAxisLabelSize
         : ko.observable(17);
+    this.chartYAxisRightLabel = registry
+        ? registry.chartYAxisRightLabel
+        : ko.observable('');
+    this.xRangeMin = registry
+        ? registry.xRangeMin
+        : ko.observable(undefined);
+    this.xRangeMax = registry
+        ? registry.xRangeMax
+        : ko.observable(undefined);
 
     // Dropdown
     this.dropdownOpen = ko.observable(false);
@@ -123,6 +136,9 @@ const FileWidgetXYViewModel = function (params) {
     // Unified Plotly traces
     this.unifiedChartData = ko.computed(() => {
         const allTraces = [];
+        const xMin = self.xRangeMin();
+        const xMax = self.xRangeMax();
+        const assignments = registry ? registry.columnAssignments : null;
 
         self.xyFileEntries().forEach((entry) => {
             if (!entry.selected() || !entry.chartData()) return;
@@ -132,27 +148,56 @@ const FileWidgetXYViewModel = function (params) {
 
             if (data.series && Array.isArray(data.series)) {
                 data.series.forEach((s, i) => {
-                    allTraces.push({
-                        x: s.value,
-                        y: s.count,
+                    // Column assignment: index i+1 (col 0 is X)
+                    if (assignments) {
+                        const colAssign = assignments.find(
+                            (a) => a.columnIndex === i + 1
+                        );
+                        if (colAssign && colAssign.role === 'ignore') return;
+                    }
+
+                    const filtered = XyParser.filterXRange(
+                        s.value,
+                        s.count,
+                        xMin,
+                        xMax
+                    );
+                    const trace = {
+                        x: filtered.x,
+                        y: filtered.y,
                         type: 'scatter',
                         mode: 'lines',
                         name: entry.fileName + ' - ' + s.name,
                         line: {
                             color: color,
                             width: 2,
-                            dash: DASH_STYLES[i % DASH_STYLES.length]
+                            dash: DASH_STYLES[i % DASH_STYLES.length],
+                        },
+                    };
+                    if (assignments) {
+                        const colAssign = assignments.find(
+                            (a) => a.columnIndex === i + 1
+                        );
+                        if (colAssign && colAssign.role === 'yRight') {
+                            trace.yaxis = 'y2';
                         }
-                    });
+                    }
+                    allTraces.push(trace);
                 });
             } else {
+                const filtered = XyParser.filterXRange(
+                    data.value,
+                    data.count,
+                    xMin,
+                    xMax
+                );
                 allTraces.push({
-                    x: data.value,
-                    y: data.count,
+                    x: filtered.x,
+                    y: filtered.y,
                     type: 'scatter',
                     mode: 'lines',
                     name: entry.fileName,
-                    line: { color: color, width: 2 }
+                    line: { color: color, width: 2 },
                 });
             }
         });
@@ -262,6 +307,17 @@ const FileWidgetXYViewModel = function (params) {
                                     registry.chartXAxisLabel(d.xAxisLabel);
                                 if (d.yAxisLabel)
                                     registry.chartYAxisLabel(d.yAxisLabel);
+                                if (d.yAxisRightLabel)
+                                    registry.chartYAxisRightLabel(
+                                        d.yAxisRightLabel
+                                    );
+                                if (d.xRangeMin !== undefined)
+                                    registry.xRangeMin(d.xRangeMin);
+                                if (d.xRangeMax !== undefined)
+                                    registry.xRangeMax(d.xRangeMax);
+                                if (d.columnAssignments)
+                                    registry.columnAssignments =
+                                        d.columnAssignments;
                             }
                         }
 
