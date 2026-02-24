@@ -68,6 +68,7 @@ IMPACT:
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from arches.app.models.tile import Tile
+from arches.app.models.models import Node
 import csv
 
 
@@ -125,6 +126,13 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Tiles à nettoyer: {len(tiles_to_clean)}\n")
 
+        # Safety: only allow cleaning resource-instance nodes
+        # Prevents accidentally deleting concept/concept-list values
+        resource_instance_node_ids = set(
+            str(n.nodeid)
+            for n in Node.objects.filter(datatype__startswith="resource-instance")
+        )
+
         cleaned_count = 0
         deleted_count = 0
         error_count = 0
@@ -162,6 +170,15 @@ class Command(BaseCommand):
                     for invalid_item in invalid_items:
                         node_id = invalid_item["node_id"]
                         invalid_uuid = invalid_item["invalid_uuid"]
+
+                        # Safety: skip nodes that aren't resource-instance
+                        if node_id not in resource_instance_node_ids:
+                            self.stdout.write(
+                                self.style.WARNING(
+                                    f"    ⚠️  Ignoré node {node_id[:8]}... (pas resource-instance, probablement concept)"
+                                )
+                            )
+                            continue
 
                         if node_id in tile.data:
                             value = tile.data[node_id]

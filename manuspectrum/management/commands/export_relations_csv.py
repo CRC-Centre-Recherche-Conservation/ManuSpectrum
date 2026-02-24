@@ -142,6 +142,16 @@ class Command(BaseCommand):
                 for node in nodes:
                     self.stdout.write(f"    - {node.name} ({node.nodeid})")
 
+        # Build set of resource-instance node IDs for filtering
+        # This prevents treating concept/concept-list UUIDs as resource references
+        resource_instance_node_ids = set(
+            str(n.nodeid)
+            for n in Node.objects.filter(datatype__startswith="resource-instance")
+        )
+        self.stdout.write(
+            f"\nNodes resource-instance à analyser: {len(resource_instance_node_ids)}"
+        )
+
         # Collecter toutes les relations
         relations = []
         stats_by_type = defaultdict(lambda: {"missing": 0, "ok": 0, "error": 0})
@@ -185,6 +195,9 @@ class Command(BaseCommand):
                         continue
 
                     for node_id, value in tile.data.items():
+                        # Only process resource-instance nodes, skip concepts etc.
+                        if node_id not in resource_instance_node_ids:
+                            continue
                         target_uuids = extract_resource_ids(value)
 
                         for target_uuid in target_uuids:
