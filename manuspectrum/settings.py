@@ -456,8 +456,8 @@ RENDERERS += [
         "id": "e93b7b27-40d8-4141-996e-e59ff08742f3",
         "iconclass": "fa fa-bolt",
         "component": "views/components/cards/file-renderers/xy-reader",
-        "ext": "csv,tsv",
-        "type": "text/csv,text/tab-separated-values",
+        "ext": "csv",
+        "type": "text/csv",
         "exclude": "",
     },
 ]
