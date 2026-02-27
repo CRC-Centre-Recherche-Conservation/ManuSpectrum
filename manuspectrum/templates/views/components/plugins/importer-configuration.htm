@@ -16,7 +16,7 @@
 
         <button class="btn btn-primary" data-bind="click:()=>{showConfigurationPanel(true); showImporterList(false); editConfigurationId(undefined)}">{% trans "Add Importer Configuration" %}</button>
     </div>
-    <div data-bind="visible: showConfigurationPanel" style="border: 1px solid #ddd; top: 4px;">
+    <div class="importer-config-panel-wrapper" data-bind="visible: showConfigurationPanel" style="border: 1px solid #ddd; top: 4px;">
         <div class="importer-config-panel-inner">
         <div style="background-color: #004577; color: #fff; padding: 10px; font-weight: bold; flex-shrink: 0;">{% trans "Add Importer Configuration" %}</div>
         <div style="background-color: #fafafa; overflow-y: auto; flex: 1; min-height: 0; padding-bottom: 12px;">
@@ -241,9 +241,29 @@
     </div>
 </div>
 <style>
+.xy-renderer-config {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 220px);
+    overflow: hidden;
+}
+.xy-renderer-config .importer-configuration {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.importer-config-panel-wrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
 .importer-config-panel-inner {
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 280px);
+    flex: 1;
+    min-height: 0;
 }
 </style>
