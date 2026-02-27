@@ -51,6 +51,10 @@ msgstr "Cet importateur est en cours d'utilisation — il doit être remplacé d
 msgid "Select Primary Description Identifier Card"
 msgstr "Sélectionner la carte d'identifiant de description principale"
 
+#: manuspectrum/templates/javascript.htm
+msgid "An error occurred while creating the manifest."
+msgstr "Une erreur est survenue lors de la création du manifeste."
+
 #: manuspectrum/templates/views/components/plugins/importer-configuration.htm
 msgid "Importer Configurations"
 msgstr "Configurations d'importation"

@@ -106,7 +106,7 @@
                     data-bind="css: uniqueidClass">
                 {% trans "Select images" %}
             </button>
-            <div id="hidden-dz-manifest-previews" style="display:none;"></div>
+            <div data-bind="attr: { id: 'hidden-dz-manifest-previews-' + uniqueId }" style="display:none;"></div>
         </div>
 
         <!-- ko if: isUploading() -->

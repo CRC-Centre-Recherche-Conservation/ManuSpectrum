@@ -1,7 +1,6 @@
 import ko from 'knockout';
-import koMapping from 'knockout-mapping';
 import $ from 'jquery';
-import Dropzone from 'dropzone';
+import Dropzone from 'dropzone'; // eslint-disable-line no-unused-vars
 import uuid from 'uuid';
 import 'bindings/select2-query';
 import 'bindings/dropzone';
@@ -223,16 +222,6 @@ const viewModel = function(params) {
                 return response.json();
             })
             .then(data => {
-                const context = data['@context'];
-                const isV2 = context && (
-                    typeof context === 'string' ? context.includes('iiif.io/api/presentation/2') :
-                    Array.isArray(context) ? context.some(c => c.includes('iiif.io/api/presentation/2')) : false
-                );
-                const isV3 = context && (
-                    typeof context === 'string' ? context.includes('iiif.io/api/presentation/3') :
-                    Array.isArray(context) ? context.some(c => c.includes('iiif.io/api/presentation/3')) : false
-                );
-
                 self.manifestData(data);
 
                 const label = self.getManifestValue(data, 'label');
@@ -383,7 +372,7 @@ const viewModel = function(params) {
                 self.isUploading(false);
                 self.uploadError(
                     (response.responseJSON && response.responseJSON.message) ||
-                    'An error occurred while creating the manifest.'
+                    arches.translations.manifestCreateError
                 );
                 if (self.dropzone) {
                     self.dropzone.removeAllFiles(true);
@@ -400,7 +389,7 @@ const viewModel = function(params) {
         acceptedFiles: ["image/jpeg", "image/png", "image/tiff"].join(','),
         autoQueue: false,
         clickable: ".fileinput-create-button." + self.uniqueidClass(),
-        previewsContainer: '#hidden-dz-manifest-previews',
+        previewsContainer: '#hidden-dz-manifest-previews-' + self.uniqueId,
         init: function() {
             self.dropzone = this;
             this.on("addedfiles", self.createManifest);
