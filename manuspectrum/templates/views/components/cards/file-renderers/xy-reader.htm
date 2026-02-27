@@ -53,12 +53,13 @@
     params: {
         selectedConfiguration: selectedConfig,
         alert: alert,
-        onConfigSaved: onConfigSaved
+        onConfigSaved: onConfigSaved,
+        showingList: importerShowingList
     }
 } -->
 <!-- /ko -->
 
-<!-- ko if: canApplyBatch() -->
+<!-- ko if: canApplyBatch() && importerShowingList() -->
 <div style="margin-top: 12px;">
     <button class="btn btn-primary btn-block"
             data-bind="click: applyConfigToStaged, disable: batchApplying()">

@@ -134,6 +134,9 @@ export default ko.components.register('xy-reader', {
             });
         }, 0);
 
+        // Track whether the importer-configuration child is showing its list (not the edit panel)
+        this.importerShowingList = ko.observable(true);
+
         // --- Batch apply config to staged tiles ---
         this.batchApplying = ko.observable(false);
         this.batchResult = ko.observable('');

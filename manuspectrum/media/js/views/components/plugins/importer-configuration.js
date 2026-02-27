@@ -106,6 +106,14 @@ const vm = function (params) {
     this.selectedTransformation = ko.observable();
     this.onConfigSaved = params.onConfigSaved;
 
+    // Sync showImporterList state to parent if provided
+    if (params.showingList) {
+        this.showImporterList.subscribe((val) => {
+            params.showingList(val);
+        });
+        params.showingList(this.showImporterList());
+    }
+
     this.dataDelimiterRadio.subscribe((value) => {
         if (value === 'auto') {
             this.dataDelimiter(undefined);
