@@ -68,65 +68,65 @@ from collections import Counter
 
 
 class Command(BaseCommand):
-    help = 'Imports relationships from validated CSV to ResourceXResource (complete by default)'
+    help = "Imports relationships from validated CSV to ResourceXResource (complete by default)"
 
     def add_arguments(self, parser):
         # Required
         parser.add_argument(
-            '--input',
+            "--input",
             type=str,
             required=True,
-            help='Path to input CSV file',
+            help="Path to input CSV file",
         )
 
         # Behavior
         parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Simulate import without modifications',
+            "--dry-run",
+            action="store_true",
+            help="Simulate import without modifications",
         )
         parser.add_argument(
-            '--skip-errors',
-            action='store_true',
-            help='Continue even if some relationships fail',
+            "--skip-errors",
+            action="store_true",
+            help="Continue even if some relationships fail",
         )
 
         # Performance
         parser.add_argument(
-            '--batch-size',
+            "--batch-size",
             type=int,
             default=100,
-            help='Batch size for transactions (default: 100)',
+            help="Batch size for transactions (default: 100)",
         )
 
         # Exclusions
         parser.add_argument(
-            '--exclude-tile',
-            action='store_true',
-            help='Do NOT link ResourceXResource to source tile',
+            "--exclude-tile",
+            action="store_true",
+            help="Do NOT link ResourceXResource to source tile",
         )
         parser.add_argument(
-            '--exclude-node',
-            action='store_true',
-            help='Do NOT link ResourceXResource to specific node',
+            "--exclude-node",
+            action="store_true",
+            help="Do NOT link ResourceXResource to specific node",
         )
         parser.add_argument(
-            '--exclude-notes',
-            action='store_true',
-            help='Do NOT add auto-generated notes',
+            "--exclude-notes",
+            action="store_true",
+            help="Do NOT add auto-generated notes",
         )
 
         # Relationship type
         parser.add_argument(
-            '--relationship-type',
+            "--relationship-type",
             type=str,
             default=None,
             help='Relationship type: UUID from RDM or "related" (auto-detected if not specified)',
         )
         parser.add_argument(
-            '--force-uuid',
-            action='store_true',
-            help='Force UUID format even if string format is more common',
+            "--force-uuid",
+            action="store_true",
+            help="Force UUID format even if string format is more common",
         )
 
     def get_default_relationship_type(self, force_uuid=False):
@@ -139,35 +139,40 @@ class Command(BaseCommand):
         # Get all unique relationship types
         all_rels = ResourceXResource.objects.filter(
             relationshiptype__isnull=False
-        ).values('relationshiptype', 'inverserelationshiptype')
+        ).values("relationshiptype", "inverserelationshiptype")
 
         if not all_rels:
-            self.stdout.write(self.style.WARNING(
-                "  No existing relations found, using default UUID"
-            ))
+            self.stdout.write(
+                self.style.WARNING("  No existing relations found, using default UUID")
+            )
             # Default UUID for "is related to" (both directions same)
-            default_uuid = 'ac41d9be-79db-4256-b368-2f4559cfbe55'
+            default_uuid = "ac41d9be-79db-4256-b368-2f4559cfbe55"
             return (default_uuid, default_uuid)
 
         # Count occurrences
-        type_counts = Counter(r['relationshiptype'] for r in all_rels)
+        type_counts = Counter(r["relationshiptype"] for r in all_rels)
         inverse_counts = Counter(
-            r['inverserelationshiptype'] for r in all_rels
-            if r['inverserelationshiptype']
+            r["inverserelationshiptype"]
+            for r in all_rels
+            if r["inverserelationshiptype"]
         )
 
         self.stdout.write("\n  Relationship types found in database:")
         for rel_type, count in type_counts.most_common():
             is_uuid = self._is_uuid(rel_type)
             type_label = "UUID" if is_uuid else "string"
-            self.stdout.write(f"    - relationshiptype: {rel_type} ({type_label}): {count} occurrences")
+            self.stdout.write(
+                f"    - relationshiptype: {rel_type} ({type_label}): {count} occurrences"
+            )
 
         if inverse_counts:
             self.stdout.write("\n  Inverse relationship types found:")
             for rel_type, count in inverse_counts.most_common():
                 is_uuid = self._is_uuid(rel_type)
                 type_label = "UUID" if is_uuid else "string"
-                self.stdout.write(f"    - inverserelationshiptype: {rel_type} ({type_label}): {count} occurrences")
+                self.stdout.write(
+                    f"    - inverserelationshiptype: {rel_type} ({type_label}): {count} occurrences"
+                )
         else:
             self.stdout.write("\n  No inverse relationship types found (will use None)")
 
@@ -178,28 +183,32 @@ class Command(BaseCommand):
         # Determine main relationship type
         if force_uuid and uuid_types:
             selected = uuid_types[0]
-            self.stdout.write(self.style.SUCCESS(
-                f"\n  ✓ Using UUID format (forced): {selected}"
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(f"\n  ✓ Using UUID format (forced): {selected}")
+            )
         elif uuid_types:
             most_common = type_counts.most_common(1)[0][0]
             if self._is_uuid(most_common):
                 selected = most_common
-                self.stdout.write(self.style.SUCCESS(
-                    f"\n  ✓ Using UUID format (most common): {selected}"
-                ))
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"\n  ✓ Using UUID format (most common): {selected}"
+                    )
+                )
             else:
                 selected = uuid_types[0]
-                self.stdout.write(self.style.WARNING(
-                    f"\n  ⚠️  String format '{most_common}' is most common, but using UUID: {selected}"
-                ))
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"\n  ⚠️  String format '{most_common}' is most common, but using UUID: {selected}"
+                    )
+                )
         elif string_types:
             selected = type_counts.most_common(1)[0][0]
-            self.stdout.write(self.style.WARNING(
-                f"\n  ⚠️  Only string format found: '{selected}'"
-            ))
+            self.stdout.write(
+                self.style.WARNING(f"\n  ⚠️  Only string format found: '{selected}'")
+            )
         else:
-            selected = 'ac41d9be-79db-4256-b368-2f4559cfbe55'
+            selected = "ac41d9be-79db-4256-b368-2f4559cfbe55"
 
         # Determine inverse relationship type
         # For symmetric relations like "is related to", use same UUID
@@ -216,7 +225,9 @@ class Command(BaseCommand):
                 self.stdout.write(f"  ✓ Symmetric relation (inverse same as main)")
             else:
                 inverse_selected = most_common_inverse
-                self.stdout.write(f"  ✓ Asymmetric relation (inverse: {inverse_selected})")
+                self.stdout.write(
+                    f"  ✓ Asymmetric relation (inverse: {inverse_selected})"
+                )
         else:
             # No inverse found, check if we should use same UUID (symmetric)
             # For "is related to" concept, it's typically symmetric
@@ -227,26 +238,39 @@ class Command(BaseCommand):
                     concept_label = value.value.lower()
 
                     # Common symmetric relation labels
-                    symmetric_keywords = ['related', 'connected', 'linked', 'associated']
+                    symmetric_keywords = [
+                        "related",
+                        "connected",
+                        "linked",
+                        "associated",
+                    ]
                     is_symmetric = any(kw in concept_label for kw in symmetric_keywords)
 
                     if is_symmetric:
                         inverse_selected = selected
-                        self.stdout.write(f"  ✓ Detected symmetric relation: \"{value.value}\"")
-                        self.stdout.write(f"    Using same UUID for inverse: {inverse_selected}")
+                        self.stdout.write(
+                            f'  ✓ Detected symmetric relation: "{value.value}"'
+                        )
+                        self.stdout.write(
+                            f"    Using same UUID for inverse: {inverse_selected}"
+                        )
                     else:
                         inverse_selected = None
-                        self.stdout.write(f"  ℹ Detected non-symmetric relation: \"{value.value}\"")
+                        self.stdout.write(
+                            f'  ℹ Detected non-symmetric relation: "{value.value}"'
+                        )
                         self.stdout.write(f"    No inverse type set (None)")
                 except Value.DoesNotExist:
                     # Can't determine, default to None
                     inverse_selected = None
-                    self.stdout.write(f"  ℹ Cannot determine symmetry, inverse set to None")
+                    self.stdout.write(
+                        f"  ℹ Cannot determine symmetry, inverse set to None"
+                    )
             else:
                 # String format, likely "related", assume symmetric
-                inverse_selected = selected if selected == 'related' else None
+                inverse_selected = selected if selected == "related" else None
                 if inverse_selected:
-                    self.stdout.write(f"  ✓ Symmetric relation: \"{selected}\"")
+                    self.stdout.write(f'  ✓ Symmetric relation: "{selected}"')
 
         return (selected, inverse_selected)
 
@@ -259,20 +283,20 @@ class Command(BaseCommand):
             return False
 
     def handle(self, *args, **options):
-        input_file = options['input']
-        dry_run = options['dry_run']
-        batch_size = options['batch_size']
-        skip_errors = options['skip_errors']
-        force_uuid = options['force_uuid']
+        input_file = options["input"]
+        dry_run = options["dry_run"]
+        batch_size = options["batch_size"]
+        skip_errors = options["skip_errors"]
+        force_uuid = options["force_uuid"]
 
         # Inverted logic: include by default, exclude if flag is set
-        include_tile = not options['exclude_tile']
-        include_node = not options['exclude_node']
-        include_notes = not options['exclude_notes']
+        include_tile = not options["exclude_tile"]
+        include_node = not options["exclude_node"]
+        include_notes = not options["exclude_notes"]
 
         # ✅ CORRECTION: Récupérer le tuple et décomposer
-        manual_rel_type = options.get('relationship_type')
-        manual_inverse_type = options.get('inverse_relationship_type')
+        manual_rel_type = options.get("relationship_type")
+        manual_inverse_type = options.get("inverse_relationship_type")
 
         if manual_rel_type:
             # Type manuel spécifié
@@ -280,7 +304,7 @@ class Command(BaseCommand):
 
             # Gérer l'inverse
             if manual_inverse_type:
-                if manual_inverse_type.lower() == 'none':
+                if manual_inverse_type.lower() == "none":
                     inverse_relationship_type = None
                 else:
                     inverse_relationship_type = manual_inverse_type
@@ -290,21 +314,30 @@ class Command(BaseCommand):
                     try:
                         value = Value.objects.get(valueid=relationship_type)
                         concept_label = value.value.lower()
-                        symmetric_keywords = ['related', 'connected', 'linked', 'associated']
+                        symmetric_keywords = [
+                            "related",
+                            "connected",
+                            "linked",
+                            "associated",
+                        ]
                         if any(kw in concept_label for kw in symmetric_keywords):
                             inverse_relationship_type = relationship_type
-                            self.stdout.write(f"\n  Detected symmetric relation from concept label")
+                            self.stdout.write(
+                                f"\n  Detected symmetric relation from concept label"
+                            )
                         else:
                             inverse_relationship_type = None
                     except Value.DoesNotExist:
                         inverse_relationship_type = None
-                elif relationship_type == 'related':
-                    inverse_relationship_type = 'related'
+                elif relationship_type == "related":
+                    inverse_relationship_type = "related"
                 else:
                     inverse_relationship_type = None
         else:
             # Auto-détection complète
-            relationship_type, inverse_relationship_type = self.get_default_relationship_type(force_uuid)
+            relationship_type, inverse_relationship_type = (
+                self.get_default_relationship_type(force_uuid)
+            )
 
         self.stdout.write("\n" + "=" * 80)
         self.stdout.write("IMPORT RELATIONSHIPS TO RESOURCEXRESOURCE")
@@ -318,19 +351,24 @@ class Command(BaseCommand):
         # Afficher la configuration des types de relation
         is_uuid_format = self._is_uuid(relationship_type)
         self.stdout.write(f"\nRelationship configuration:")
-        self.stdout.write(f"  - Main type: {relationship_type} ({'UUID' if is_uuid_format else 'string'})")
+        self.stdout.write(
+            f"  - Main type: {relationship_type} ({'UUID' if is_uuid_format else 'string'})"
+        )
 
         if is_uuid_format:
             try:
                 value = Value.objects.get(valueid=relationship_type)
-                self.stdout.write(f"    Concept: \"{value.value}\"")
+                self.stdout.write(f'    Concept: "{value.value}"')
             except Value.DoesNotExist:
-                self.stdout.write(self.style.WARNING(f"    ⚠️  Concept not found in RDM"))
+                self.stdout.write(
+                    self.style.WARNING(f"    ⚠️  Concept not found in RDM")
+                )
 
         if inverse_relationship_type:
             is_inverse_uuid = self._is_uuid(inverse_relationship_type)
             self.stdout.write(
-                f"  - Inverse type: {inverse_relationship_type} ({'UUID' if is_inverse_uuid else 'string'})")
+                f"  - Inverse type: {inverse_relationship_type} ({'UUID' if is_inverse_uuid else 'string'})"
+            )
 
             if inverse_relationship_type == relationship_type:
                 self.stdout.write(f"  - Relation is: SYMMETRIC (bidirectional)")
@@ -342,10 +380,14 @@ class Command(BaseCommand):
 
         self.stdout.write(f"\nField inclusion:")
         self.stdout.write(
-            f"  - Tile reference: {self.style.SUCCESS('YES') if include_tile else self.style.WARNING('NO')}")
+            f"  - Tile reference: {self.style.SUCCESS('YES') if include_tile else self.style.WARNING('NO')}"
+        )
         self.stdout.write(
-            f"  - Node reference: {self.style.SUCCESS('YES') if include_node else self.style.WARNING('NO')}")
-        self.stdout.write(f"  - Auto notes: {self.style.SUCCESS('YES') if include_notes else self.style.WARNING('NO')}")
+            f"  - Node reference: {self.style.SUCCESS('YES') if include_node else self.style.WARNING('NO')}"
+        )
+        self.stdout.write(
+            f"  - Auto notes: {self.style.SUCCESS('YES') if include_notes else self.style.WARNING('NO')}"
+        )
         self.stdout.write("")
 
         # Read CSV
@@ -353,32 +395,38 @@ class Command(BaseCommand):
         skipped_count = 0
         error_lines = 0
 
-        with open(input_file, 'r', encoding='utf-8') as csvfile:
+        with open(input_file, "r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
 
             for row_num, row in enumerate(reader, start=2):
-                action = row.get('action', '').strip().upper()
-                status = row.get('status', '').strip().upper()
+                action = row.get("action", "").strip().upper()
+                status = row.get("status", "").strip().upper()
 
-                if action == 'SKIP':
+                if action == "SKIP":
                     skipped_count += 1
                     continue
 
-                if action == 'ERROR' or status in ['INVALID_TARGET', 'ERROR']:
+                if action == "ERROR" or status in ["INVALID_TARGET", "ERROR"]:
                     error_lines += 1
                     continue
 
-                if action == 'CREATE':
-                    relations_to_create.append({
-                        'from_resource_id': row['source_id'].strip(),
-                        'to_resource_id': row['target_id'].strip(),
-                        'source_name': row.get('source_name', '').strip(),
-                        'target_name': row.get('target_name', '').strip(),
-                        'relation_type': row.get('relation_type', '').strip(),
-                        'tile_id': row.get('tile_id', '').strip() if include_tile else None,
-                        'node_id': row.get('node_id', '').strip() if include_node else None,
-                        'row_num': row_num
-                    })
+                if action == "CREATE":
+                    relations_to_create.append(
+                        {
+                            "from_resource_id": row["source_id"].strip(),
+                            "to_resource_id": row["target_id"].strip(),
+                            "source_name": row.get("source_name", "").strip(),
+                            "target_name": row.get("target_name", "").strip(),
+                            "relation_type": row.get("relation_type", "").strip(),
+                            "tile_id": (
+                                row.get("tile_id", "").strip() if include_tile else None
+                            ),
+                            "node_id": (
+                                row.get("node_id", "").strip() if include_node else None
+                            ),
+                            "row_num": row_num,
+                        }
+                    )
 
         total = len(relations_to_create)
 
@@ -393,8 +441,12 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write("Preview of relations to create:\n")
             for i, rel in enumerate(relations_to_create[:20], 1):
-                tile_info = f" [tile: {rel['tile_id'][:8]}...]" if rel['tile_id'] else ""
-                node_info = f" [node: {rel['node_id'][:8]}...]" if rel['node_id'] else ""
+                tile_info = (
+                    f" [tile: {rel['tile_id'][:8]}...]" if rel["tile_id"] else ""
+                )
+                node_info = (
+                    f" [node: {rel['node_id'][:8]}...]" if rel["node_id"] else ""
+                )
                 self.stdout.write(
                     f"  {i}. {rel['relation_type']}: "
                     f"{rel['source_name'][:30]} → {rel['target_name'][:30]}"
@@ -418,7 +470,7 @@ class Command(BaseCommand):
         self.stdout.write("Creating relationships...\n")
 
         for i in range(0, total, batch_size):
-            batch = relations_to_create[i:i + batch_size]
+            batch = relations_to_create[i : i + batch_size]
             batch_num = (i // batch_size) + 1
             total_batches = (total + batch_size - 1) // batch_size
 
@@ -431,33 +483,39 @@ class Command(BaseCommand):
                             # Verify resources exist
                             try:
                                 from_res = Resource.objects.get(
-                                    resourceinstanceid=rel['from_resource_id']
+                                    resourceinstanceid=rel["from_resource_id"]
                                 )
                             except Resource.DoesNotExist:
-                                raise Exception(f"Source resource not found: {rel['from_resource_id'][:8]}...")
+                                raise Exception(
+                                    f"Source resource not found: {rel['from_resource_id'][:8]}..."
+                                )
 
                             try:
                                 to_res = Resource.objects.get(
-                                    resourceinstanceid=rel['to_resource_id']
+                                    resourceinstanceid=rel["to_resource_id"]
                                 )
                             except Resource.DoesNotExist:
-                                raise Exception(f"Target resource not found: {rel['to_resource_id'][:8]}...")
+                                raise Exception(
+                                    f"Target resource not found: {rel['to_resource_id'][:8]}..."
+                                )
 
                             # Prepare optional fields
                             tile_obj = None
-                            if include_tile and rel['tile_id']:
+                            if include_tile and rel["tile_id"]:
                                 try:
-                                    tile_obj = Tile.objects.get(tileid=rel['tile_id'])
+                                    tile_obj = Tile.objects.get(tileid=rel["tile_id"])
                                 except Tile.DoesNotExist:
                                     if created == 0:
-                                        self.stdout.write(self.style.WARNING(
-                                            f"    ⚠️  Some tiles not found, continuing without tile references..."
-                                        ))
+                                        self.stdout.write(
+                                            self.style.WARNING(
+                                                f"    ⚠️  Some tiles not found, continuing without tile references..."
+                                            )
+                                        )
 
                             node_obj = None
-                            if include_node and rel['node_id']:
+                            if include_node and rel["node_id"]:
                                 try:
-                                    node_obj = Node.objects.get(nodeid=rel['node_id'])
+                                    node_obj = Node.objects.get(nodeid=rel["node_id"])
                                 except Node.DoesNotExist:
                                     pass
 
@@ -471,17 +529,17 @@ class Command(BaseCommand):
 
                             # ✅ CORRECTION: Utiliser les valeurs correctes (pas de tuple!)
                             rxr, is_created = ResourceXResource.objects.get_or_create(
-                                from_resource_id=rel['from_resource_id'],
-                                to_resource_id=rel['to_resource_id'],
+                                from_resource_id=rel["from_resource_id"],
+                                to_resource_id=rel["to_resource_id"],
                                 defaults={
-                                    'from_resource_graph_id': from_res.graph_id,
-                                    'to_resource_graph_id': to_res.graph_id,
-                                    'tile': tile_obj,
-                                    'node': node_obj,
-                                    'relationshiptype': relationship_type,  # ✅ UUID simple, pas tuple!
-                                    'inverserelationshiptype': inverse_relationship_type,  # ✅ UUID ou None
-                                    'notes': notes_text,  # ✅ Maintenant correctement assigné
-                                }
+                                    "from_resource_graph_id": from_res.graph_id,
+                                    "to_resource_graph_id": to_res.graph_id,
+                                    "tile": tile_obj,
+                                    "node": node_obj,
+                                    "relationshiptype": relationship_type,  # ✅ UUID simple, pas tuple!
+                                    "inverserelationshiptype": inverse_relationship_type,  # ✅ UUID ou None
+                                    "notes": notes_text,  # ✅ Maintenant correctement assigné
+                                },
                             )
 
                             if is_created:
@@ -500,12 +558,20 @@ class Command(BaseCommand):
                                 self.stdout.write(self.style.ERROR(f"  ✗ {error_msg}"))
 
                 if (i + batch_size) % 500 == 0 or (i + batch_size) >= total:
-                    self.stdout.write(f"  Progress: {min(i + batch_size, total)}/{total} ({created} created)")
+                    self.stdout.write(
+                        f"  Progress: {min(i + batch_size, total)}/{total} ({created} created)"
+                    )
 
             except Exception as e:
                 if not skip_errors:
-                    self.stdout.write(self.style.ERROR(f"\n✗ Fatal error in batch {batch_num}: {str(e)}"))
-                    self.stdout.write("Import cancelled. Use --skip-errors to continue despite errors.")
+                    self.stdout.write(
+                        self.style.ERROR(
+                            f"\n✗ Fatal error in batch {batch_num}: {str(e)}"
+                        )
+                    )
+                    self.stdout.write(
+                        "Import cancelled. Use --skip-errors to continue despite errors."
+                    )
                     return
 
         # Summary
@@ -517,7 +583,8 @@ class Command(BaseCommand):
         self.stdout.write(f"\nRelationship types used:")
         self.stdout.write(f"  - relationshiptype: {relationship_type}")
         self.stdout.write(
-            f"  - inverserelationshiptype: {inverse_relationship_type if inverse_relationship_type else 'None'}")
+            f"  - inverserelationshiptype: {inverse_relationship_type if inverse_relationship_type else 'None'}"
+        )
 
         if errors > 0:
             self.stdout.write(self.style.ERROR(f"\n✗ Errors: {errors}"))

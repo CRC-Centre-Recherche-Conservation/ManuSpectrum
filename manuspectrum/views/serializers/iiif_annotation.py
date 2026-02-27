@@ -160,7 +160,11 @@ class IIIFAnnotationSerializer:
             resource = Resource.objects.get(resourceinstanceid=resource_id)
             uri = f"{cls.base_url}resources/{resource_id}"
 
-            displayname = resource.displayname() if callable(resource.displayname) else resource.displayname
+            displayname = (
+                resource.displayname()
+                if callable(resource.displayname)
+                else resource.displayname
+            )
             if isinstance(displayname, dict):
                 labels = {
                     lang: info["value"]
@@ -202,7 +206,9 @@ class IIIFAnnotationSerializer:
         Returns:
             List of IIIF annotation representations
         """
-        resource_ids = [a["resource_id"] for a in annotations_data if a.get("resource_id")]
+        resource_ids = [
+            a["resource_id"] for a in annotations_data if a.get("resource_id")
+        ]
 
         cls._batch_mode = True
         try:
@@ -336,7 +342,11 @@ class IIIFAnnotationSerializer:
             rid = str(resource.resourceinstanceid)
             uri = f"{cls.base_url}resources/{rid}"
 
-            displayname = resource.displayname() if callable(resource.displayname) else resource.displayname
+            displayname = (
+                resource.displayname()
+                if callable(resource.displayname)
+                else resource.displayname
+            )
             if isinstance(displayname, dict):
                 labels = {
                     lang: info["value"]
@@ -375,7 +385,9 @@ class IIIFAnnotationSerializer:
                     all_variants.add(relative_path)
                     url_to_relative[url] = relative_path
 
-        manifests = IIIFManifest.objects.filter(url__in=list(all_variants)).values("url", "label")
+        manifests = IIIFManifest.objects.filter(url__in=list(all_variants)).values(
+            "url", "label"
+        )
         cache = {m["url"]: {"label": m["label"]} for m in manifests}
 
         # Map original full URLs to their data (found via relative path)
@@ -445,12 +457,14 @@ class IIIFAnnotationSerializer:
                             value = lang_info["value"]
                             break
 
-            bodies.append({
-                "type": "TextualBody",
-                "value": value,
-                "format": "text/plain",
-                "language": "fr",
-            })
+            bodies.append(
+                {
+                    "type": "TextualBody",
+                    "value": value,
+                    "format": "text/plain",
+                    "language": "fr",
+                }
+            )
 
         # Return single object if only one, list if multiple (cleaner JSON output)
         return bodies[0] if len(bodies) == 1 else bodies
@@ -539,12 +553,14 @@ class IIIFAnnotationSerializer:
             else:
                 label = base_label
 
-            bodies.append({
-                "id": settings.PUBLIC_SERVER_ADDRESS + file_url.lstrip("/"),
-                "type": "Dataset",
-                "format": mime_type,
-                "label": label,
-            })
+            bodies.append(
+                {
+                    "id": settings.PUBLIC_SERVER_ADDRESS + file_url.lstrip("/"),
+                    "type": "Dataset",
+                    "format": mime_type,
+                    "label": label,
+                }
+            )
 
         return bodies
 
@@ -562,7 +578,9 @@ class IIIFAnnotationSerializer:
                 for concept_id in raw_value:
                     concept_data = cls._resolve_concept_multilingual(str(concept_id))
                     for lang, label in concept_data["labels"].items():
-                        all_labels.setdefault(lang, []).append(f"{label} ({concept_data['uri']})")
+                        all_labels.setdefault(lang, []).append(
+                            f"{label} ({concept_data['uri']})"
+                        )
                 return all_labels or {"en": [str(raw_value)]}
 
         # Resource-instance fields
@@ -574,7 +592,9 @@ class IIIFAnnotationSerializer:
                 if resource_id:
                     res_data = cls._resolve_resource_multilingual(resource_id)
                     for lang, label in res_data["labels"].items():
-                        all_labels.setdefault(lang, []).append(f"{label} ({res_data['uri']})")
+                        all_labels.setdefault(lang, []).append(
+                            f"{label} ({res_data['uri']})"
+                        )
             return all_labels or {"en": [str(raw_value)]}
 
         # Researchers
@@ -625,7 +645,9 @@ class IIIFAnnotationSerializer:
             node = cls.DATATYPE_NODES.get(field)
             if node and node in tiles_data and tiles_data[node]:
                 try:
-                    formatted_value = cls._format_metadata_value(tiles_data[node], field)
+                    formatted_value = cls._format_metadata_value(
+                        tiles_data[node], field
+                    )
                     metadata.append(
                         {
                             "label": {"en": [label]},
@@ -693,7 +715,10 @@ class IIIFAnnotationSerializer:
 
     @classmethod
     def _build_target(
-        cls, target_string: str, canvas_uri: str | None = None, manifest_url: str | None = None
+        cls,
+        target_string: str,
+        canvas_uri: str | None = None,
+        manifest_url: str | None = None,
     ) -> dict | str:
         """
         Build a IIIF SpecificResource target from a target string.
@@ -927,11 +952,13 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
                             value = lang_info["value"]
                             break
 
-            bodies.append({
-                "@type": "cnt:ContentAsText",
-                "chars": value,
-                "format": "text/plain",
-            })
+            bodies.append(
+                {
+                    "@type": "cnt:ContentAsText",
+                    "chars": value,
+                    "format": "text/plain",
+                }
+            )
 
         return bodies[0] if len(bodies) == 1 else bodies
 
@@ -1018,12 +1045,14 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
             else:
                 label = base_label
 
-            bodies.append({
-                "@id": settings.PUBLIC_SERVER_ADDRESS + file_url.lstrip("/"),
-                "@type": "dctypes:Dataset",
-                "format": mime_type,
-                "label": label,
-            })
+            bodies.append(
+                {
+                    "@id": settings.PUBLIC_SERVER_ADDRESS + file_url.lstrip("/"),
+                    "@type": "dctypes:Dataset",
+                    "format": mime_type,
+                    "label": label,
+                }
+            )
 
         return bodies
 
@@ -1033,7 +1062,10 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
 
     @classmethod
     def _build_target_v2(
-        cls, target_string: str, canvas_uri: str | None = None, manifest_url: str | None = None
+        cls,
+        target_string: str,
+        canvas_uri: str | None = None,
+        manifest_url: str | None = None,
     ) -> str | dict:
         """
         Build a IIIF v2 target (on) from a target string.
@@ -1157,7 +1189,9 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
         Returns:
             List of IIIF v2 annotation representations
         """
-        resource_ids = [a["resource_id"] for a in annotations_data if a.get("resource_id")]
+        resource_ids = [
+            a["resource_id"] for a in annotations_data if a.get("resource_id")
+        ]
 
         cls._batch_mode = True
         try:

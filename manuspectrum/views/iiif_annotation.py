@@ -1,6 +1,7 @@
 """
 IIIF Annotation & collection API
 """
+
 from collections import defaultdict
 from functools import lru_cache
 import logging
@@ -36,7 +37,9 @@ def _cache_etag_key(cache_key: str) -> str:
     return f"{cache_key}__etag"
 
 
-def cached_json_response(cache_key: str, data: dict, timeout: int = 3600) -> HttpResponse:
+def cached_json_response(
+    cache_key: str, data: dict, timeout: int = 3600
+) -> HttpResponse:
     """
     Store or refresh compressed JSON in Redis and build an HTTP response with ETag.
     """
@@ -119,18 +122,24 @@ class IIIFAnnotationMixin:
         manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
         if manifest_data:
             cache.set(cache_key, manifest_data, timeout=self.CACHE_TIMEOUT)
-            logger.debug(f"Manifest fetched successfully, {len(manifest_data.get('items', manifest_data.get('sequences', [])))} canvases found")
+            logger.debug(
+                f"Manifest fetched successfully, {len(manifest_data.get('items', manifest_data.get('sequences', [])))} canvases found"
+            )
         else:
             logger.warning(f"Failed to fetch manifest from: {manifest_url}")
         return manifest_data
 
-    def _get_canvas_page_num(self, canvas_uri: str, manifest_url: str | None) -> int | None:
+    def _get_canvas_page_num(
+        self, canvas_uri: str, manifest_url: str | None
+    ) -> int | None:
         """
         Get the 1-based page number (index in manifest) for a canvas.
         Returns the position of the canvas in the manifest's sequence/items.
         """
         if not canvas_uri or not manifest_url:
-            logger.debug(f"Missing canvas_uri ({canvas_uri}) or manifest_url ({manifest_url})")
+            logger.debug(
+                f"Missing canvas_uri ({canvas_uri}) or manifest_url ({manifest_url})"
+            )
             return None
 
         cache_key = f"iiif_canvas_pagenum:{canvas_uri}"
@@ -207,7 +216,9 @@ class IIIFAnnotationMixin:
         if not analysis_ids:
             return annotations
 
-        vw_annotations = VwAnnotation.objects.filter(resourceinstance_id__in=analysis_ids)
+        vw_annotations = VwAnnotation.objects.filter(
+            resourceinstance_id__in=analysis_ids
+        )
 
         for vw_anno in vw_annotations:
             try:
@@ -270,7 +281,9 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
             annotations = self._get_annotations_from_analyses(analyses)
             if not annotations:
-                return JsonResponse({"error": "No annotations found for analyses"}, status=404)
+                return JsonResponse(
+                    {"error": "No annotations found for analyses"}, status=404
+                )
 
             grouped_annos = self._group_by_canvas(annotations)
 
@@ -291,7 +304,9 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
                     canvas_mapping.setdefault(canvas_uri, []).append(idx)
 
             # Batch serialize all annotations
-            serialized = IIIFAnnotationSerializer.batch_to_representation(all_annotation_data)
+            serialized = IIIFAnnotationSerializer.batch_to_representation(
+                all_annotation_data
+            )
 
             # regroup canvas
             grouped_serialized: dict[str, list[dict]] = {}
@@ -352,9 +367,9 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
             return []
 
         return list(
-            Resource.objects.filter(
-                resourceinstanceid__in=analysis_ids
-            ).only("resourceinstanceid", "graph_id")
+            Resource.objects.filter(resourceinstanceid__in=analysis_ids).only(
+                "resourceinstanceid", "graph_id"
+            )
         )
 
     def _group_by_canvas(self, annotations: list[dict]) -> dict[str, list[dict]]:
@@ -394,8 +409,12 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
         return canvas_page_nums
 
-    def _build_annotation_collection(self, resource: ResourceInstance, grouped_annos: dict) -> dict:
-        collection_id = f"{self.base_url}/v3/annotation-collection/{resource.resourceinstanceid}"
+    def _build_annotation_collection(
+        self, resource: ResourceInstance, grouped_annos: dict
+    ) -> dict:
+        collection_id = (
+            f"{self.base_url}/v3/annotation-collection/{resource.resourceinstanceid}"
+        )
         pages: list[dict] = []
         total = 0
 
@@ -404,8 +423,7 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
         # Sort canvases by their page number
         sorted_canvases = sorted(
-            grouped_annos.keys(),
-            key=lambda uri: canvas_page_nums.get(uri, 0)
+            grouped_annos.keys(), key=lambda uri: canvas_page_nums.get(uri, 0)
         )
         sorted_page_nums = [canvas_page_nums[uri] for uri in sorted_canvases]
 
@@ -463,7 +481,9 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
             return cached
 
         try:
-            resource = ResourceInstance.objects.select_related("graph").get(resourceinstanceid=resource_id)
+            resource = ResourceInstance.objects.select_related("graph").get(
+                resourceinstanceid=resource_id
+            )
 
             collection_view = IIIFAnnotationCollectionView()
             analyses = collection_view._get_related_analyses(resource)
@@ -511,18 +531,26 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
                 "partOf": {
                     "id": collection_id,
                     "type": "AnnotationCollection",
-                    "label": {"fr": [f"Analyses pour {self._get_display_name(resource)}"]},
+                    "label": {
+                        "fr": [f"Analyses pour {self._get_display_name(resource)}"]
+                    },
                 },
             }
 
             # Calculate next/prev based on sorted page numbers
             sorted_page_nums = sorted(canvas_page_nums.values())
-            current_idx = sorted_page_nums.index(page_num) if page_num in sorted_page_nums else -1
+            current_idx = (
+                sorted_page_nums.index(page_num) if page_num in sorted_page_nums else -1
+            )
 
             if current_idx >= 0 and current_idx < len(sorted_page_nums) - 1:
-                page["next"] = f"{collection_id}/page-{sorted_page_nums[current_idx + 1]}"
+                page["next"] = (
+                    f"{collection_id}/page-{sorted_page_nums[current_idx + 1]}"
+                )
             if current_idx > 0:
-                page["prev"] = f"{collection_id}/page-{sorted_page_nums[current_idx - 1]}"
+                page["prev"] = (
+                    f"{collection_id}/page-{sorted_page_nums[current_idx - 1]}"
+                )
 
             return cached_json_response(cache_key, page, self.CACHE_TIMEOUT)
 
@@ -554,7 +582,9 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
         try:
             analysis = Resource.objects.get(resourceinstanceid=resource_id)
             if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
-                return JsonResponse({"error": "Resource is not an Analysis"}, status=400)
+                return JsonResponse(
+                    {"error": "Resource is not an Analysis"}, status=400
+                )
 
             annos = self._get_annotations_from_analyses([analysis])
             if not annos:
@@ -613,7 +643,9 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
 
             annotations = self._get_annotations_from_analyses(analyses)
             if not annotations:
-                return JsonResponse({"error": "No annotations found for analyses"}, status=404)
+                return JsonResponse(
+                    {"error": "No annotations found for analyses"}, status=404
+                )
 
             grouped_annos = collection_view._group_by_canvas(annotations)
 
@@ -630,7 +662,9 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
 
     def _build_layer(self, resource: ResourceInstance, grouped_annos: dict) -> dict:
         """Build a sc:Layer structure referencing all AnnotationLists."""
-        layer_id = f"{self.base_url}/v2/annotation-collection/{resource.resourceinstanceid}"
+        layer_id = (
+            f"{self.base_url}/v2/annotation-collection/{resource.resourceinstanceid}"
+        )
 
         # Get real page numbers from manifest positions (reuse v3 logic)
         collection_view = IIIFAnnotationCollectionView()
@@ -638,17 +672,18 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
 
         # Sort canvases by their page number
         sorted_canvases = sorted(
-            grouped_annos.keys(),
-            key=lambda uri: canvas_page_nums.get(uri, 0)
+            grouped_annos.keys(), key=lambda uri: canvas_page_nums.get(uri, 0)
         )
 
         other_content = []
         for canvas_uri in sorted_canvases:
             page_num = canvas_page_nums[canvas_uri]
-            other_content.append({
-                "@id": f"{layer_id}/page-{page_num}",
-                "@type": "sc:AnnotationList",
-            })
+            other_content.append(
+                {
+                    "@id": f"{layer_id}/page-{page_num}",
+                    "@type": "sc:AnnotationList",
+                }
+            )
 
         layer: dict = {
             "@context": "http://iiif.io/api/presentation/2/context.json",
@@ -678,7 +713,9 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
             return cached
 
         try:
-            resource = ResourceInstance.objects.select_related("graph").get(resourceinstanceid=resource_id)
+            resource = ResourceInstance.objects.select_related("graph").get(
+                resourceinstanceid=resource_id
+            )
 
             collection_view = IIIFAnnotationCollectionView()
             analyses = collection_view._get_related_analyses(resource)
@@ -757,7 +794,9 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
         try:
             analysis = Resource.objects.get(resourceinstanceid=resource_id)
             if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
-                return JsonResponse({"error": "Resource is not an Analysis"}, status=400)
+                return JsonResponse(
+                    {"error": "Resource is not an Analysis"}, status=400
+                )
 
             annos = self._get_annotations_from_analyses([analysis])
             if not annos:
@@ -822,10 +861,12 @@ def _invalidate_for_analysis_id(analysis_uuid):
       - the single annotation cache for this analysis (v2 and v3)
       - any collections/pages that include this analysis via Component and/or Document.
     """
-    _delete_cache_keys([
-        f"iiif_v3_annotation_{analysis_uuid}",
-        f"iiif_v2_annotation_{analysis_uuid}",
-    ])
+    _delete_cache_keys(
+        [
+            f"iiif_v3_annotation_{analysis_uuid}",
+            f"iiif_v2_annotation_{analysis_uuid}",
+        ]
+    )
 
     DOCUMENT_GRAPH = IIIFAnnotationMixin.DOCUMENT_GRAPH_ID
     COMPONENT_GRAPH = IIIFAnnotationMixin.COMPONENT_GRAPH_ID
@@ -855,10 +896,12 @@ def _invalidate_for_analysis_id(analysis_uuid):
         return
 
     for doc_id in doc_ids:
-        _delete_cache_keys([
-            f"iiif_v3_collection_{doc_id}",
-            f"iiif_v2_collection_{doc_id}",
-        ])
+        _delete_cache_keys(
+            [
+                f"iiif_v3_collection_{doc_id}",
+                f"iiif_v2_collection_{doc_id}",
+            ]
+        )
         _delete_page_patterns(doc_id, "v3")
         _delete_page_patterns(doc_id, "v2")
 
@@ -897,18 +940,27 @@ def invalidate_on_relation_change(sender, instance: ResourceXResource, **kwargs)
             _invalidate_for_analysis_id(instance.to_resource_id)
 
         else:
-            to_gid = str(instance.to_resource_graph_id) if instance.to_resource_graph_id else None
-            from_gid = str(instance.from_resource_graph_id) if instance.from_resource_graph_id else None
+            to_gid = (
+                str(instance.to_resource_graph_id)
+                if instance.to_resource_graph_id
+                else None
+            )
+            from_gid = (
+                str(instance.from_resource_graph_id)
+                if instance.from_resource_graph_id
+                else None
+            )
 
             if from_gid == COMPONENT_GRAPH and to_gid == DOCUMENT_GRAPH:
                 doc_id = instance.to_resource_id
-                _delete_cache_keys([
-                    f"iiif_v3_collection_{doc_id}",
-                    f"iiif_v2_collection_{doc_id}",
-                ])
+                _delete_cache_keys(
+                    [
+                        f"iiif_v3_collection_{doc_id}",
+                        f"iiif_v2_collection_{doc_id}",
+                    ]
+                )
                 _delete_page_patterns(doc_id, "v3")
                 _delete_page_patterns(doc_id, "v2")
 
     except Exception as e:  # pragma: no cover
         logger.error(f"Cache invalidation (ResourceXResource) failed: {e}")
-

@@ -1,0 +1,17 @@
+{% extends "javascript.htm" %}
+{% load i18n %}
+
+{% block arches_translations %}
+{{ block.super }}
+<div
+    class='arches-translations'
+    data='{% trans "Data" as data %} "{{ data|escapejs }}"'
+    x-axis='{% trans "X Axis" as xAxis %} "{{ xAxis|escapejs }}"'
+    y-axis='{% trans "Y Axis" as yAxis %} "{{ yAxis|escapejs }}"'
+    select-transformation='{% trans "Select a Transformation" as selectTransformation %} "{{ selectTransformation|escapejs }}"'
+    select-importer='{% trans "Select an Importer" as selectImporter %} "{{ selectImporter|escapejs }}"'
+    importer-in-use='{% trans "Importer in Use" as importerInUse %} "{{ importerInUse|escapejs }}"'
+    importer-in-use-warning='{% trans "This importer is in use - it should be replaced in all files where it is used before deleting." as importerInUseWarning %} "{{ importerInUseWarning|escapejs }}"'
+    select-primary-description-identifier-card='{% trans "Select Primary Description Identifier Card" as selectPrimaryDescriptionIdentifierCard %} "{{ selectPrimaryDescriptionIdentifierCard|escapejs }}"'
+></div>
+{% endblock arches_translations %}

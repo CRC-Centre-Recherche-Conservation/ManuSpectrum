@@ -13,22 +13,22 @@ try:
 except ImportError:
     pass
 
-APP_NAME = 'manuspectrum'
+APP_NAME = "manuspectrum"
 APP_VERSION = semantic_version.Version(major=0, minor=0, patch=0)
 APP_ROOT = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 WEBPACK_LOADER = {
     "DEFAULT": {
-        "STATS_FILE": os.path.join(APP_ROOT, '..', 'webpack/webpack-stats.json'),
+        "STATS_FILE": os.path.join(APP_ROOT, "..", "webpack/webpack-stats.json"),
     },
 }
 
-DATATYPE_LOCATIONS.append('manuspectrum.datatypes')
-FUNCTION_LOCATIONS.append('manuspectrum.functions')
-ETL_MODULE_LOCATIONS.append('manuspectrum.etl_modules')
-SEARCH_COMPONENT_LOCATIONS.append('manuspectrum.search_components')
+DATATYPE_LOCATIONS.append("manuspectrum.datatypes")
+FUNCTION_LOCATIONS.append("manuspectrum.functions")
+ETL_MODULE_LOCATIONS.append("manuspectrum.etl_modules")
+SEARCH_COMPONENT_LOCATIONS.append("manuspectrum.search_components")
 
-LOCALE_PATHS.insert(0, os.path.join(APP_ROOT, 'locale'))
+LOCALE_PATHS.insert(0, os.path.join(APP_ROOT, "locale"))
 
 FILE_TYPE_CHECKING = "lenient"
 FILE_TYPES = [
@@ -52,7 +52,7 @@ FILENAME_GENERATOR = "arches.app.utils.storage_filename_generator.generate_filen
 UPLOADED_FILES_DIR = "uploadedfiles"
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-7q$l+ji@$gmfe=^5v3%3y!)=5%g8$d06zzx%t+6)vv$3+&2(f!'
+SECRET_KEY = "django-insecure-7q$l+ji@$gmfe=^5v3%3y!)=5%g8$d06zzx%t+6)vv$3+&2(f!"
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -64,7 +64,11 @@ ROOT_HOSTCONF = "manuspectrum.hosts"
 DEFAULT_HOST = "manuspectrum"
 
 # Modify this line as needed for your project to connect to elasticsearch with a password that you generate
-ELASTICSEARCH_CONNECTION_OPTIONS = {"request_timeout": 30, "verify_certs": False, "basic_auth": ("elastic", "***")}
+ELASTICSEARCH_CONNECTION_OPTIONS = {
+    "request_timeout": 30,
+    "verify_certs": False,
+    "basic_auth": ("elastic", "***"),
+}
 
 # If you need to connect to Elasticsearch via an API key instead of username/password, use the syntax below:
 # ELASTICSEARCH_CONNECTION_OPTIONS = {"request_timeout": 30, "verify_certs": False, "api_key": "<ENCODED_API_KEY>"}
@@ -79,7 +83,7 @@ ELASTICSEARCH_CONNECTION_OPTIONS = {"request_timeout": 30, "verify_certs": False
 # Or Kibana: https://www.elastic.co/guide/en/kibana/current/api-keys.html
 
 # a prefix to append to all elasticsearch indexes, note: must be lower case
-ELASTICSEARCH_PREFIX = 'manuspectrum'
+ELASTICSEARCH_PREFIX = "manuspectrum"
 
 ELASTICSEARCH_CUSTOM_INDEXES = []
 # [{
@@ -109,20 +113,15 @@ DATABASES = {
         "HOST": "localhost",
         "NAME": "manuspectrum",
         "OPTIONS": {
-            'sslmode': 'disable',
+            "sslmode": "disable",
             "options": "-c cursor_tuple_fraction=1",
         },
         "PASSWORD": "postgis",
         "PORT": "5432",
         "POSTGIS_TEMPLATE": "template_postgis",
-        "TEST": {
-            "CHARSET": None,
-            "COLLATION": None,
-            "MIRROR": None,
-            "NAME": None
-        },
+        "TEST": {"CHARSET": None, "COLLATION": None, "MIRROR": None, "NAME": None},
         "TIME_ZONE": None,
-        "USER": "postgres"
+        "USER": "postgres",
     }
 }
 
@@ -153,7 +152,7 @@ INSTALLED_APPS = (
     "arches_querysets",
     "rest_framework",
     "arches_component_lab",
-    #"arches_controlled_lists",
+    # "arches_controlled_lists",
     "arches_modular_reports",
 )
 
@@ -179,8 +178,7 @@ MIDDLEWARE = [
 ]
 
 MIDDLEWARE.insert(  # this must resolve to first MIDDLEWARE entry
-    0,
-    "django_hosts.middleware.HostsRequestMiddleware"
+    0, "django_hosts.middleware.HostsRequestMiddleware"
 )
 
 MIDDLEWARE.append(  # this must resolve last MIDDLEWARE entry
@@ -196,19 +194,21 @@ TEMPLATES = build_templates_config(
 
 ALLOWED_HOSTS = []
 
-SYSTEM_SETTINGS_LOCAL_PATH = os.path.join(APP_ROOT, 'system_settings', 'System_Settings.json')
-WSGI_APPLICATION = 'manuspectrum.wsgi.application'
+SYSTEM_SETTINGS_LOCAL_PATH = os.path.join(
+    APP_ROOT, "system_settings", "System_Settings.json"
+)
+WSGI_APPLICATION = "manuspectrum.wsgi.application"
 
 # URL that handles the media served from MEDIA_ROOT, used for managing stored files.
 # It must end in a slash if set to a non-empty value.
-MEDIA_URL = '/files/'
+MEDIA_URL = "/files/"
 
 # Absolute filesystem path to the directory that will hold user-uploaded files.
-MEDIA_ROOT =  os.path.join(APP_ROOT)
+MEDIA_ROOT = os.path.join(APP_ROOT)
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
-STATIC_URL = '/static/'
+STATIC_URL = "/static/"
 
 # Absolute path to the directory static files should be collected to.
 # Don't put anything in this directory yourself; store your static files
@@ -219,29 +219,29 @@ STATIC_ROOT = os.path.join(APP_ROOT, "staticfiles")
 # when hosting Arches under a sub path set this value to the sub path eg : "/{sub_path}/"
 FORCE_SCRIPT_NAME = None
 
-RESOURCE_IMPORT_LOG = os.path.join(APP_ROOT, 'logs', 'resource_import.log')
-DEFAULT_RESOURCE_IMPORT_USER = {'username': 'admin', 'userid': 1}
+RESOURCE_IMPORT_LOG = os.path.join(APP_ROOT, "logs", "resource_import.log")
+DEFAULT_RESOURCE_IMPORT_USER = {"username": "admin", "userid": 1}
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'console': {
-            'format': '%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "console": {
+            "format": "%(asctime)s %(name)-12s %(levelname)-8s %(message)s",
         },
     },
-    'handlers': {
-        'file': {
-            'level': 'DEBUG',  # DEBUG, INFO, WARNING, ERROR
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(APP_ROOT, 'arches.log'),
-            'formatter': 'console'
+    "handlers": {
+        "file": {
+            "level": "DEBUG",  # DEBUG, INFO, WARNING, ERROR
+            "class": "logging.FileHandler",
+            "filename": os.path.join(APP_ROOT, "arches.log"),
+            "formatter": "console",
         },
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'console'
-        }
+        "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "console",
+        },
     },
     "loggers": {
         "arches": {
@@ -267,7 +267,7 @@ RATE_LIMIT = "5/m"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 15728640
 
 # Unique session cookie ensures that logins are treated separately for each app
-SESSION_COOKIE_NAME = 'manuspectrum'
+SESSION_COOKIE_NAME = "manuspectrum"
 
 # For more info on configuring your cache: https://docs.djangoproject.com/en/2.2/topics/cache/
 CACHES = {
@@ -287,27 +287,26 @@ HIDE_EMPTY_NODES_IN_REPORT = False
 BYPASS_UNIQUE_CONSTRAINT_TILE_VALIDATION = False
 BYPASS_REQUIRED_VALUE_TILE_VALIDATION = False
 
-DATE_IMPORT_EXPORT_FORMAT = "%Y-%m-%d" # Custom date format for dates imported from and exported to csv
+DATE_IMPORT_EXPORT_FORMAT = (
+    "%Y-%m-%d"  # Custom date format for dates imported from and exported to csv
+)
 
 # This is used to indicate whether the data in the CSV and SHP exports should be
 # ordered as seen in the resource cards or not.
 EXPORT_DATA_FIELDS_IN_CARD_ORDER = False
 
-#Identify the usernames and duration (seconds) for which you want to cache the time wheel
-CACHE_BY_USER = {
-    "default": 3600 * 24, #24hrs
-    "anonymous": 3600 * 24 #24hrs
-    }
+# Identify the usernames and duration (seconds) for which you want to cache the time wheel
+CACHE_BY_USER = {"default": 3600 * 24, "anonymous": 3600 * 24}  # 24hrs  # 24hrs
 
-TILE_CACHE_TIMEOUT = 600 #seconds
-CLUSTER_DISTANCE_MAX = 5000 #meters
+TILE_CACHE_TIMEOUT = 600  # seconds
+CLUSTER_DISTANCE_MAX = 5000  # meters
 GRAPH_MODEL_CACHE_TIMEOUT = None
 
-OAUTH_CLIENT_ID = ''  #'9JCibwrWQ4hwuGn5fu2u1oRZSs9V6gK8Vu8hpRC4'
+OAUTH_CLIENT_ID = ""  #'9JCibwrWQ4hwuGn5fu2u1oRZSs9V6gK8Vu8hpRC4'
 
-APP_TITLE = 'Arches | Heritage Data Management'
-COPYRIGHT_TEXT = 'All Rights Reserved.'
-COPYRIGHT_YEAR = '2019'
+APP_TITLE = "Arches | Heritage Data Management"
+COPYRIGHT_TEXT = "All Rights Reserved."
+COPYRIGHT_YEAR = "2019"
 
 ENABLE_CAPTCHA = False
 # RECAPTCHA_PUBLIC_KEY = ''
@@ -325,18 +324,27 @@ EMAIL_HOST_USER = "xxxx@xxx.com"
 
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
-CELERY_BROKER_URL = "redis://localhost:6379/0" # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_RESULT_BACKEND = 'django-db' # Use 'django-cache' if you want to use your cache as your backend
-CELERY_TASK_SERIALIZER = 'json'
+CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_RESULT_BACKEND = (
+    "django-db"  # Use 'django-cache' if you want to use your cache as your backend
+)
+CELERY_TASK_SERIALIZER = "json"
 
 
 CELERY_SEARCH_EXPORT_EXPIRES = 24 * 3600  # seconds
 CELERY_SEARCH_EXPORT_CHECK = 3600  # seconds
 
 CELERY_BEAT_SCHEDULE = {
-    "delete-expired-search-export": {"task": "arches.app.tasks.delete_file", "schedule": CELERY_SEARCH_EXPORT_CHECK,},
-    "notification": {"task": "arches.app.tasks.message", "schedule": CELERY_SEARCH_EXPORT_CHECK, "args": ("Celery Beat is Running",),},
+    "delete-expired-search-export": {
+        "task": "arches.app.tasks.delete_file",
+        "schedule": CELERY_SEARCH_EXPORT_CHECK,
+    },
+    "notification": {
+        "task": "arches.app.tasks.message",
+        "schedule": CELERY_SEARCH_EXPORT_CHECK,
+        "args": ("Celery Beat is Running",),
+    },
 }
 
 # Set to True if you want to send celery tasks to the broker without being able to detect celery.
@@ -375,7 +383,7 @@ RENDERERS = [
     },
 ]
 
-#THUMBNAIL
+# THUMBNAIL
 SEARCH_THUMBNAILS = True
 THUMBNAIL_GENERATOR = "arches.app.utils.thumbnail_generator.ThumbnailGenerator"
 GENERATE_THUMBNAILS_ON_DEMAND = True
@@ -392,7 +400,9 @@ RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = False
 # Dictionary containing any additional context items for customising email templates
 EXTRA_EMAIL_CONTEXT = {
     "salutation": _("Hi"),
-    "expiration":(datetime.now() + timedelta(seconds=CELERY_SEARCH_EXPORT_EXPIRES)).strftime("%A, %d %B %Y")
+    "expiration": (
+        datetime.now() + timedelta(seconds=CELERY_SEARCH_EXPORT_EXPIRES)
+    ).strftime("%A, %d %B %Y"),
 }
 
 # see https://docs.djangoproject.com/en/1.9/topics/i18n/translation/#how-django-discovers-language-preference
@@ -416,7 +426,7 @@ EXTRA_EMAIL_CONTEXT = {
 # {langcode}-{regioncode} eg: en, en-gb ....
 # a list of language codes can be found here http://www.i18nguy.com/unicode/language-identifiers.html
 LANGUAGE_CODE = "en"
-#LANGUAGE_CODE = "fr"
+# LANGUAGE_CODE = "fr"
 
 # list of languages to display in the language switcher,
 # if left empty or with a single entry then the switch won't be displayed
@@ -424,11 +434,11 @@ LANGUAGE_CODE = "en"
 # {langcode}-{regioncode} eg: en, en-gb ....
 # a list of language codes can be found here http://www.i18nguy.com/unicode/language-identifiers.html
 LANGUAGES = [
-#   ('de', _('German')),
-    ('en', _('English')),
-#    ('fr', _('French')),
-#   ('en-gb', _('British English')),
-#    ('es', _('Spanish')),
+    #   ('de', _('German')),
+    ("en", _("English")),
+    #    ('fr', _('French')),
+    #   ('en-gb', _('British English')),
+    #    ('es', _('Spanish')),
 ]
 
 # override this to permenantly display/hide the language switcher
@@ -438,11 +448,25 @@ SHOW_LANGUAGE_SWITCH = len(LANGUAGES) > 1
 # See tests.views.search_tests.TestEsMappingModifier class for example
 # ES_MAPPING_MODIFIER_CLASSES = ["manuspectrum.search.es_mapping_modifier.EsMappingModifier"]
 
-FILE_TYPES += ["h5", "eln", "hdf5", "md", ".xlsx"]
+RENDERERS += [
+    {
+        "name": "xy-reader",
+        "title": "XY Data File Reader",
+        "description": "Use for all instrument outputs with x-y data",
+        "id": "e93b7b27-40d8-4141-996e-e59ff08742f3",
+        "iconclass": "fa fa-bolt",
+        "component": "views/components/cards/file-renderers/xy-reader",
+        "ext": "csv",
+        "type": "text/csv",
+        "exclude": "",
+    },
+]
 
-XY_TEXT_FILE_FORMATS = ["txt"]
+FILE_TYPES += ["csv", "tsv"]
 
-PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT),'pkg')
+XY_TEXT_FILE_FORMATS = ["csv", "tsv"]
+
+PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT), "pkg")
 
 try:
     from .package_settings import *

@@ -1,0 +1,565 @@
+# ManuSpectrum French translations
+# Copyright (C) 2026 ManuSpectrum
+# This file is distributed under the same license as the ManuSpectrum package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ManuSpectrum\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-16 08:53-0600\n"
+"PO-Revision-Date: 2026-02-16 08:53-0600\n"
+"Last-Translator: \n"
+"Language-Team: French\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: manuspectrum/templates/javascript.htm
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Data"
+msgstr "Données"
+
+#: manuspectrum/templates/javascript.htm
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "X Axis"
+msgstr "Axe X"
+
+#: manuspectrum/templates/javascript.htm
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Y Axis"
+msgstr "Axe Y"
+
+#: manuspectrum/templates/javascript.htm
+msgid "Select a Transformation"
+msgstr "Sélectionner une transformation"
+
+#: manuspectrum/templates/javascript.htm
+msgid "Select an Importer"
+msgstr "Sélectionner un importateur"
+
+#: manuspectrum/templates/javascript.htm
+msgid "Importer in Use"
+msgstr "Importateur en cours d'utilisation"
+
+#: manuspectrum/templates/javascript.htm
+msgid "This importer is in use - it should be replaced in all files where it is used before deleting."
+msgstr "Cet importateur est en cours d'utilisation — il doit être remplacé dans tous les fichiers où il est utilisé avant de le supprimer."
+
+#: manuspectrum/templates/javascript.htm
+msgid "Select Primary Description Identifier Card"
+msgstr "Sélectionner la carte d'identifiant de description principale"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Importer Configurations"
+msgstr "Configurations d'importation"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Define how to import your x/y data"
+msgstr "Définissez comment importer vos données x/y"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Edit"
+msgstr "Modifier"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Delete"
+msgstr "Supprimer"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Add Importer Configuration"
+msgstr "Ajouter une configuration d'importation"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Importer Name"
+msgstr "Nom de l'importateur"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Name of Importer"
+msgstr "Nom de l'importateur"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Importer Description"
+msgstr "Description de l'importateur"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Describe the Importer"
+msgstr "Décrire l'importateur"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Header"
+msgstr "En-tête"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Define where your x/y data are found in the file"
+msgstr "Définissez où vos données x/y se trouvent dans le fichier"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "File does not have a header"
+msgstr "Le fichier n'a pas d'en-tête"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "File has a fixed header (constant number of lines)"
+msgstr "Le fichier a un en-tête fixe (nombre constant de lignes)"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "File header ends after specific text"
+msgstr "L'en-tête du fichier se termine après un texte spécifique"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Ending Text"
+msgstr "Texte de fin"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Number of Lines"
+msgstr "Nombre de lignes"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Footer"
+msgstr "Pied de page"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Define where your x/y data end in the file"
+msgstr "Définissez où vos données x/y se terminent dans le fichier"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "End of File"
+msgstr "Fin du fichier"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "File footer begins after specific text (consistent ending text)"
+msgstr "Le pied de page du fichier commence après un texte spécifique (texte de fin constant)"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Transformations"
+msgstr "Transformations"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "If your file has multiple Y columns, they are displayed as separate series. Use \"mean\" to average them into a single series instead."
+msgstr "Si votre fichier a plusieurs colonnes Y, elles sont affichées comme des séries distinctes. Utilisez « mean » pour les moyenner en une seule série."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Data Column Delimiter"
+msgstr "Délimiteur de colonnes de données"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "The data delimiter must be a valid regular expression"
+msgstr "Le délimiteur de données doit être une expression régulière valide"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Define how the data are separated"
+msgstr "Définissez comment les données sont séparées"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Whitespace"
+msgstr "Espace"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Comma"
+msgstr "Virgule"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Pipe"
+msgstr "Pipe"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Other"
+msgstr "Autre"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Include Delimiter in Value"
+msgstr "Inclure le délimiteur dans la valeur"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Display/Charting"
+msgstr "Affichage / Graphique"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Chart Title"
+msgstr "Titre du graphique"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Title"
+msgstr "Titre"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "X Axis Label"
+msgstr "Libellé de l'axe X"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Y Axis Label"
+msgstr "Libellé de l'axe Y"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Cancel"
+msgstr "Annuler"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Save"
+msgstr "Enregistrer"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Chart Configuration"
+msgstr "Configuration du graphique"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Manage Series Data"
+msgstr "Gérer les séries de données"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Available Series"
+msgstr "Séries disponibles"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Add Series to Chart"
+msgstr "Ajouter des séries au graphique"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Config"
+msgstr "Configuration"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "File Filter"
+msgstr "Filtre de fichier"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Style"
+msgstr "Style"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Color"
+msgstr "Couleur"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/afs-reader.htm
+msgid "Data Series Line Color"
+msgstr "Couleur de la ligne de série de données"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Specify how to process the data files for viewing.  Any additional files (such as images) will be automatically displayed if possible."
+msgstr "Spécifiez comment traiter les fichiers de données pour la visualisation. Tout fichier supplémentaire (comme les images) sera automatiquement affiché si possible."
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Data Files"
+msgstr "Fichiers de données"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Additional Files"
+msgstr "Fichiers supplémentaires"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Name"
+msgstr "Nom"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Configuration"
+msgstr "Configuration"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "files"
+msgstr "fichiers"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "file"
+msgstr "fichier"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "selected"
+msgstr "sélectionné(s)"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Select All"
+msgstr "Tout sélectionner"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Deselect All"
+msgstr "Tout désélectionner"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Import Preview"
+msgstr "Aperçu de l'importation"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Selected Files"
+msgstr "Fichiers sélectionnés"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Select an importer configuration on the right to apply to all files"
+msgstr "Sélectionnez une configuration d'importation à droite pour l'appliquer à tous les fichiers"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "Apply Importer to Selected Files"
+msgstr "Appliquer l'importateur aux fichiers sélectionnés"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "File Preview"
+msgstr "Aperçu du fichier"
+
+#: manuspectrum/templates/views/components/plugins/file-configuration.htm
+msgid "This file type cannot be previewed."
+msgstr "Ce type de fichier ne peut pas être prévisualisé."
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "IIIF Manifest"
+msgstr "Manifeste IIIF"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Enter Manifest URL"
+msgstr "Entrer l'URL du manifeste"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Select a manifest"
+msgstr "Sélectionner un manifeste"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Loading manifest"
+msgstr "Chargement du manifeste"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Clear"
+msgstr "Effacer"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Status"
+msgstr "Statut"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Select or create a shared configuration that applies to all XY files. For per-file adjustments, use the Status tab."
+msgstr "Sélectionnez ou créez une configuration partagée qui s'applique à tous les fichiers XY. Pour des ajustements par fichier, utilisez l'onglet Statut."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "XY file(s) staged"
+msgstr "fichier(s) XY en attente"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "No config"
+msgstr "Aucune config"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Apply to"
+msgstr "Appliquer à"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "staged file(s)"
+msgstr "fichier(s) en attente"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Applying..."
+msgstr "Application en cours..."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Files Status"
+msgstr "Statut des fichiers"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Check which files have a configuration applied. Select file(s) to customize parsing settings individually, overriding the shared config."
+msgstr "Vérifiez quels fichiers ont une configuration appliquée. Sélectionnez un ou plusieurs fichiers pour personnaliser les paramètres d'analyse individuellement, en remplaçant la configuration partagée."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
+msgstr "Aucun fichier XY trouvé. Assignez le rendu XY aux fichiers dans l'onglet Gérer."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "file(s)"
+msgstr "fichier(s)"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "All"
+msgstr "Tous"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "None"
+msgstr "Aucun"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Has custom parsing"
+msgstr "A un parsing personnalisé"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "none"
+msgstr "aucune"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Adjust parsing for"
+msgstr "Ajuster le parsing pour"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Custom parsing:"
+msgstr "Parsing personnalisé :"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "These settings override the shared config for the selected file(s) only. Choose 'Use config' to keep the shared config value."
+msgstr "Ces paramètres remplacent la configuration partagée uniquement pour le(s) fichier(s) sélectionné(s). Choisissez « Utiliser la config » pour conserver la valeur de la configuration partagée."
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Delimiter"
+msgstr "Délimiteur"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Use config"
+msgstr "Utiliser la config"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Auto-detect"
+msgstr "Détection automatique"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Tab"
+msgstr "Tabulation"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Other:"
+msgstr "Autre :"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Custom delimiter"
+msgstr "Délimiteur personnalisé"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Fixed lines:"
+msgstr "Lignes fixes :"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Number of lines"
+msgstr "Nombre de lignes"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "End of file"
+msgstr "Fin du fichier"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "After text:"
+msgstr "Après le texte :"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Footer text"
+msgstr "Texte du pied de page"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Reset to config"
+msgstr "Réinitialiser à la config"
+
+#: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
+msgid "Apply & re-render"
+msgstr "Appliquer et re-rendre"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Files"
+msgstr "Fichiers"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Select all"
+msgstr "Tout sélectionner"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Deselect all"
+msgstr "Tout désélectionner"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Loading charts..."
+msgstr "Chargement des graphiques..."
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Unable to load chart data"
+msgstr "Impossible de charger les données du graphique"
+
+#: manuspectrum/templates/views/components/widgets/file-xy.htm
+msgid "Select files to display"
+msgstr "Sélectionnez les fichiers à afficher"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Presets..."
+msgstr "Préréglages..."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Spectral Range"
+msgstr "Gamme spectrale"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Limit the displayed X range. Leave empty for no limit."
+msgstr "Limiter la gamme X affichée. Laisser vide pour aucune limite."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Min X"
+msgstr "X min"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Max X"
+msgstr "X max"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "e.g. 400"
+msgstr "ex. 400"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "e.g. 4000"
+msgstr "ex. 4000"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Column Assignment"
+msgstr "Assignation des colonnes"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Define which data columns map to X, Y (left axis), or Y (right axis). Leave empty to use the default: column 1 = X, remaining = Y left."
+msgstr "Définir quelles colonnes de données correspondent à X, Y (axe gauche) ou Y (axe droit). Laisser vide pour le comportement par défaut : colonne 1 = X, les autres = Y gauche."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Column"
+msgstr "Colonne"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Add Column"
+msgstr "Ajouter une colonne"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Right Y Axis Label"
+msgstr "Libellé de l'axe Y droit"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Right Y Axis"
+msgstr "Axe Y droit"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "X Axis Source"
+msgstr "Source de l'axe X"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Define how the X axis values are determined"
+msgstr "Définir comment les valeurs de l'axe X sont déterminées"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "From data (first column is X)"
+msgstr "Depuis les données (première colonne = X)"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Generate from range (no X column in file)"
+msgstr "Générer à partir d'une plage (pas de colonne X dans le fichier)"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "The X axis will be evenly spaced between start and end values, based on the number of data rows."
+msgstr "L'axe X sera uniformément réparti entre les valeurs de début et de fin, en fonction du nombre de lignes de données."
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "Start"
+msgstr "Début"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "End"
+msgstr "Fin"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "e.g. -3500"
+msgstr "ex. -3500"
+
+#: manuspectrum/templates/views/components/plugins/importer-configuration.htm
+msgid "e.g. 500"
+msgstr "ex. 500"
+
+#: manuspectrum/views/renderer_config.py
+msgid "<h1>Renderers do not exist</h1>"
+msgstr "<h1>Les rendus n'existent pas</h1>"
+
+#: manuspectrum/views/renderer_config.py
+msgid "<h1>Renderers config does not exist</h1>"
+msgstr "<h1>La configuration de rendu n'existe pas</h1>"

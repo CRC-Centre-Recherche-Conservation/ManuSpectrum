@@ -1,0 +1,55 @@
+{% load i18n %}
+
+<!--ko if: params.context === 'render' -->
+<div class="file-viewer chart-header">
+    <h3 data-bind="text: displayContent.name"></h3>
+</div>
+<div class="">
+    <!--ko if: params.selected() -->
+    <div class="preview file-viewer" style="position: relative;">
+        <div class='loading-mask' data-bind="visible: loading()"></div>
+        <!--ko if: chartData -->
+        <div class="chart" data-bind='plotly: {
+            data: chartData,
+            title: chartTitle,
+            titleSize: titleSize,
+            xAxisLabel: xAxisLabel,
+            xAxisLabelSize: xAxisLabelSize,
+            yAxisLabel: yAxisLabel,
+            yAxisLabelSize: yAxisLabelSize,
+            yAxisRightLabel: yAxisRightLabel,
+            options: chartOptions,
+            seriesStyles: seriesStyles,
+            primarySeriesColor: primarySeriesColor,
+            seriesData: seriesData,
+            loading: loading
+        }'></div>
+        <!--/ko-->
+    </div>
+    <!--/ko-->
+</div>
+<!--/ko-->
+<!--ko if: params.context === 'tab' -->
+<div class="workbench-card-sidebar-tab" data-bind="click: function() {
+    fileViewer.toggleTab('file-context');
+}, css: {
+    'active': fileViewer.activeTab() === 'file-context'
+}">
+    <i class="fa fa-cog"></i>
+    <span class="map-sidebar-text">{% trans "Config" %}</span>
+</div>
+{% block extra_tabs %}{% endblock %}
+<!--/ko-->
+
+
+<!--ko if: params.context === 'tab-contents' -->
+    <!--ko if: fileViewer.activeTab() === 'file-context' -->
+    <div class="workbench-card-sidepanel-header-container file-workbench">
+        <h4 class="workbench-card-sidepanel-header" data-bind="click: fileViewer.hideSidePanel">{% trans 'Chart Configuration' %}</h4>
+    </div>
+        {% block renderer_configuration %}
+        {% endblock renderer_configuration %}
+    </div>
+    <!--/ko-->
+    {% block extra_tab_contents %}{% endblock %}
+<!--/ko-->

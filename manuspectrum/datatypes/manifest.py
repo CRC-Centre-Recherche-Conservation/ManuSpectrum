@@ -9,16 +9,16 @@ from django.utils.translation import gettext_lazy as _
 text: Widget = Widget.objects.get(name="manifest-widget")
 
 details: dict[str, str | Widget | bool | None] = {
-    'datatype': 'manifest',
-    'iconclass': 'fa fa-file-image-o',
-    'modulename': 'manifest.py',
-    'classname': 'ManifestDataType',
-    'defaultwidget': text,
-    'defaultconfig': None,
-    'configcomponent': None,
-    'configname': None,
-    'isgeometric': False,
-    'issearchable': False
+    "datatype": "manifest",
+    "iconclass": "fa fa-file-image-o",
+    "modulename": "manifest.py",
+    "classname": "ManifestDataType",
+    "defaultwidget": text,
+    "defaultconfig": None,
+    "configcomponent": None,
+    "configname": None,
+    "isgeometric": False,
+    "issearchable": False,
 }
 
 
@@ -45,14 +45,20 @@ class ManifestDataType(BaseDataType):
         if context and "iiif.io/api/presentation/2/context.json" in context:
             if manifest_json.get("@type") == "sc:Manifest":
                 return True
-            raise FailParsingManifestIIIF("Missing or invalid @type for IIIF v2 manifest")
+            raise FailParsingManifestIIIF(
+                "Missing or invalid @type for IIIF v2 manifest"
+            )
 
         if context and "iiif.io/api/presentation/3/context.json" in context:
             if manifest_json.get("type") == "Manifest":
                 return True
-            raise FailParsingManifestIIIF("Missing or invalid type for IIIF v3 manifest")
+            raise FailParsingManifestIIIF(
+                "Missing or invalid type for IIIF v3 manifest"
+            )
 
-        raise FailParsingManifestIIIF("Not a recognized IIIF manifest (no valid @context)")
+        raise FailParsingManifestIIIF(
+            "Not a recognized IIIF manifest (no valid @context)"
+        )
 
     def validate(self, value, **kwargs):
         errors = []
@@ -62,10 +68,15 @@ class ManifestDataType(BaseDataType):
             manifest_url = None
 
             if isinstance(value, dict):
-                manifest_id = value.get('manifest_id')
-                manifest_url = value.get('manifest_url')
+                manifest_id = value.get("manifest_id")
+                manifest_url = value.get("manifest_url")
                 if not manifest_id and not manifest_url:
-                    errors.append({'type': 'ERROR', 'message': _('Manifest must have a URL or ID')})
+                    errors.append(
+                        {
+                            "type": "ERROR",
+                            "message": _("Manifest must have a URL or ID"),
+                        }
+                    )
                     return errors
 
             elif isinstance(value, str):
@@ -79,7 +90,9 @@ class ManifestDataType(BaseDataType):
                 try:
                     IIIFManifest.objects.get(id=manifest_id)
                 except IIIFManifest.DoesNotExist:
-                    errors.append({'type': 'ERROR', 'message': _('Manifest ID does not exist')})
+                    errors.append(
+                        {"type": "ERROR", "message": _("Manifest ID does not exist")}
+                    )
 
             elif manifest_url:
                 try:
@@ -96,19 +109,31 @@ class ManifestDataType(BaseDataType):
                     IIIFManifest.objects.get_or_create(
                         url=manifest_url,
                         defaults={
-                            'label': label or 'IIIF Manifest',
-                            'description': desc or '',
-                            'manifest': manifest_json
-                        }
+                            "label": label or "IIIF Manifest",
+                            "description": desc or "",
+                            "manifest": manifest_json,
+                        },
                     )
                 except FailRegexURLMatch:
-                    errors.append({'type': 'ERROR', 'message': _('Invalid URL format')})
+                    errors.append({"type": "ERROR", "message": _("Invalid URL format")})
                 except requests.Timeout:
-                    errors.append({'type': 'ERROR', 'message': _('Timeout while fetching manifest')})
+                    errors.append(
+                        {
+                            "type": "ERROR",
+                            "message": _("Timeout while fetching manifest"),
+                        }
+                    )
                 except FailParsingManifestIIIF as e:
-                    errors.append({'type': 'ERROR', 'message': _(f'Invalid IIIF manifest: {str(e)}')})
+                    errors.append(
+                        {
+                            "type": "ERROR",
+                            "message": _(f"Invalid IIIF manifest: {str(e)}"),
+                        }
+                    )
                 except Exception as e:
-                    errors.append({'type': 'ERROR', 'message': _(f'Unexpected error: {str(e)}')})
+                    errors.append(
+                        {"type": "ERROR", "message": _(f"Unexpected error: {str(e)}")}
+                    )
 
         return errors
 
@@ -117,11 +142,11 @@ class ManifestDataType(BaseDataType):
             return None
 
         if isinstance(value, dict):
-            if 'manifest_id' in value:
-                return str(value['manifest_id'])
-            elif 'manifest_url' in value:
+            if "manifest_id" in value:
+                return str(value["manifest_id"])
+            elif "manifest_url" in value:
                 try:
-                    manifest = IIIFManifest.objects.get(url=value['manifest_url'])
+                    manifest = IIIFManifest.objects.get(url=value["manifest_url"])
                     return str(manifest.id)
                 except IIIFManifest.DoesNotExist:
                     return None
@@ -161,28 +186,30 @@ class ManifestDataType(BaseDataType):
     def _extract_manifest_label(self, manifest_json):
         if not manifest_json:
             return None
-        label = manifest_json.get('label')
+        label = manifest_json.get("label")
         if isinstance(label, dict):
-            val = label.get('en') or label.get('none') or next(iter(label.values()), None)
+            val = (
+                label.get("en") or label.get("none") or next(iter(label.values()), None)
+            )
             return val[0] if isinstance(val, list) and val else val
         if isinstance(label, list) and label:
-            return label[0].get('@value') if isinstance(label[0], dict) else label[0]
+            return label[0].get("@value") if isinstance(label[0], dict) else label[0]
         return str(label) if label else None
 
     def _extract_manifest_description(self, manifest_json):
         if not manifest_json:
             return None
-        desc = manifest_json.get('description') or manifest_json.get('summary')
+        desc = manifest_json.get("description") or manifest_json.get("summary")
         if isinstance(desc, dict):
-            val = desc.get('en') or desc.get('none') or next(iter(desc.values()), None)
+            val = desc.get("en") or desc.get("none") or next(iter(desc.values()), None)
             return val[0] if isinstance(val, list) and val else val
         if isinstance(desc, list) and desc:
-            return desc[0].get('@value') if isinstance(desc[0], dict) else desc[0]
+            return desc[0].get("@value") if isinstance(desc[0], dict) else desc[0]
         return str(desc) if desc else None
 
     @classmethod
     def get_pref_label(cls):
-        return 'IIIF Manifest'
+        return "IIIF Manifest"
 
     def get_config_form_class(self):
         return None
