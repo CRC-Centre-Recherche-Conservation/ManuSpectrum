@@ -319,6 +319,34 @@ msgstr "Chargement du manifeste"
 msgid "Clear"
 msgstr "Effacer"
 
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Create a manifest"
+msgstr "Créer un manifeste"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Return"
+msgstr "Retour"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Manifest title"
+msgstr "Titre du manifeste"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Drag and drop images here"
+msgstr "Glissez-déposez vos images ici"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Accepted formats: JPEG, PNG, TIFF"
+msgstr "Formats acceptés : JPEG, PNG, TIFF"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Select images"
+msgstr "Sélectionner des images"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Creating manifest..."
+msgstr "Création du manifeste en cours..."
+
 #: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
 msgid "Status"
 msgstr "Statut"
