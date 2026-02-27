@@ -539,47 +539,38 @@ class TestManifestValidation(TestCase):
         self.assertEqual(errors[0]["type"], "ERROR")
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_validate_url_with_valid_v3_manifest(self, mock_manifest_model, mock_get):
+    def test_validate_url_with_valid_v3_manifest(self, mock_get):
         """Validating a URL that returns a valid v3 manifest should succeed."""
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
-        mock_manifest_model.objects.get_or_create.return_value = (MagicMock(), True)
 
         errors = self.datatype.validate("https://example.org/iiif/book1/manifest")
         self.assertEqual(errors, [])
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_validate_url_with_valid_v2_manifest(self, mock_manifest_model, mock_get):
+    def test_validate_url_with_valid_v2_manifest(self, mock_get):
         """Validating a URL that returns a valid v2 manifest should succeed."""
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V2
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
-        mock_manifest_model.objects.get_or_create.return_value = (MagicMock(), True)
 
         errors = self.datatype.validate("http://example.org/iiif/book1/manifest")
         self.assertEqual(errors, [])
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_validate_url_creates_manifest_record(self, mock_manifest_model, mock_get):
-        """Validating a URL should create IIIFManifest record with extracted data."""
+    def test_validate_does_not_create_manifest(self, mock_get):
+        """Validating a URL should NOT create an IIIFManifest record (creation is in pre_tile_save)."""
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
-        mock_manifest_model.objects.get_or_create.return_value = (MagicMock(), True)
 
-        self.datatype.validate("https://example.org/iiif/book1/manifest")
-
-        mock_manifest_model.objects.get_or_create.assert_called_once()
-        call_kwargs = mock_manifest_model.objects.get_or_create.call_args
-        defaults = call_kwargs[1]["defaults"]
-        self.assertEqual(defaults["label"], "Book 1")
+        with patch("manuspectrum.datatypes.manifest.IIIFManifest") as mock_manifest_model:
+            self.datatype.validate("https://example.org/iiif/book1/manifest")
+            mock_manifest_model.objects.get_or_create.assert_not_called()
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
     def test_validate_url_timeout(self, mock_get):
@@ -638,14 +629,12 @@ class TestManifestValidation(TestCase):
         self.assertEqual(errors, [])
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_validate_dict_with_manifest_url(self, mock_manifest_model, mock_get):
+    def test_validate_dict_with_manifest_url(self, mock_get):
         """Validating a dict with manifest_url should fetch and validate."""
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
-        mock_manifest_model.objects.get_or_create.return_value = (MagicMock(), True)
 
         errors = self.datatype.validate(
             {"manifest_url": "https://example.org/iiif/book1/manifest"}
@@ -887,3 +876,208 @@ class TestTransformExportValues(TestCase):
         """Should return None unchanged."""
         result = self.datatype.transform_export_values(None)
         self.assertIsNone(result)
+
+
+class TestNormalizeUrl(TestCase):
+    """Tests for the _normalize_url static method."""
+
+    def setUp(self):
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.ManifestDataType = ManifestDataType
+
+    def test_strips_trailing_slash(self):
+        result = self.ManifestDataType._normalize_url(
+            "https://example.org/iiif/book1/manifest/"
+        )
+        self.assertEqual(result, "https://example.org/iiif/book1/manifest")
+
+    def test_strips_fragment(self):
+        result = self.ManifestDataType._normalize_url(
+            "https://example.org/iiif/book1/manifest#section"
+        )
+        self.assertEqual(result, "https://example.org/iiif/book1/manifest")
+
+    def test_strips_trailing_slash_and_fragment(self):
+        result = self.ManifestDataType._normalize_url(
+            "https://example.org/iiif/book1/manifest/#section"
+        )
+        self.assertEqual(result, "https://example.org/iiif/book1/manifest")
+
+    def test_preserves_clean_url(self):
+        url = "https://example.org/iiif/book1/manifest"
+        result = self.ManifestDataType._normalize_url(url)
+        self.assertEqual(result, url)
+
+    def test_preserves_query_string(self):
+        result = self.ManifestDataType._normalize_url(
+            "https://example.org/iiif/manifest?version=2"
+        )
+        self.assertEqual(result, "https://example.org/iiif/manifest?version=2")
+
+    def test_none_returns_none(self):
+        result = self.ManifestDataType._normalize_url(None)
+        self.assertIsNone(result)
+
+    def test_empty_string_returns_empty(self):
+        result = self.ManifestDataType._normalize_url("")
+        self.assertEqual(result, "")
+
+    def test_same_url_different_forms_normalize_equally(self):
+        """URLs that differ only by trailing slash or fragment should normalize to the same value."""
+        url1 = self.ManifestDataType._normalize_url(
+            "https://example.org/iiif/book1/manifest"
+        )
+        url2 = self.ManifestDataType._normalize_url(
+            "https://example.org/iiif/book1/manifest/"
+        )
+        url3 = self.ManifestDataType._normalize_url(
+            "https://example.org/iiif/book1/manifest#top"
+        )
+        self.assertEqual(url1, url2)
+        self.assertEqual(url2, url3)
+
+
+class TestPreTileSave(TestCase):
+    """Tests for the pre_tile_save method."""
+
+    def setUp(self):
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.datatype = ManifestDataType()
+
+    def test_pre_tile_save_skips_none_value(self):
+        """pre_tile_save should do nothing when value is None."""
+        nodeid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: None}
+
+        self.datatype.pre_tile_save(tile, nodeid)
+        self.assertIsNone(tile.data[nodeid])
+
+    def test_pre_tile_save_keeps_existing_uuid(self):
+        """pre_tile_save should not modify an existing UUID value."""
+        nodeid = str(uuid.uuid4())
+        test_uuid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: test_uuid}
+
+        self.datatype.pre_tile_save(tile, nodeid)
+        self.assertEqual(tile.data[nodeid], test_uuid)
+
+    def test_pre_tile_save_resolves_dict_with_manifest_id(self):
+        """pre_tile_save should extract manifest_id from dict value."""
+        nodeid = str(uuid.uuid4())
+        test_uuid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: {"manifest_id": test_uuid}}
+
+        self.datatype.pre_tile_save(tile, nodeid)
+        self.assertEqual(tile.data[nodeid], test_uuid)
+
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_creates_manifest_from_url(
+        self, mock_manifest_model, mock_get
+    ):
+        """pre_tile_save should create IIIFManifest from URL and set tile data to UUID."""
+        nodeid = str(uuid.uuid4())
+        test_uuid = uuid.uuid4()
+        tile = MagicMock()
+        tile.data = {nodeid: "https://example.org/iiif/book1/manifest"}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        mock_manifest = MagicMock()
+        mock_manifest.id = test_uuid
+        mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        mock_manifest_model.objects.get_or_create.assert_called_once()
+        self.assertEqual(tile.data[nodeid], str(test_uuid))
+
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_normalizes_url(self, mock_manifest_model, mock_get):
+        """pre_tile_save should normalize the URL before get_or_create."""
+        nodeid = str(uuid.uuid4())
+        test_uuid = uuid.uuid4()
+        tile = MagicMock()
+        tile.data = {nodeid: "https://example.org/iiif/book1/manifest/"}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        mock_manifest = MagicMock()
+        mock_manifest.id = test_uuid
+        mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        call_kwargs = mock_manifest_model.objects.get_or_create.call_args
+        # URL should be normalized (no trailing slash)
+        self.assertEqual(
+            call_kwargs[1]["url"], "https://example.org/iiif/book1/manifest"
+        )
+
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_extracts_label_and_description(
+        self, mock_manifest_model, mock_get
+    ):
+        """pre_tile_save should extract label and description for the manifest record."""
+        nodeid = str(uuid.uuid4())
+        test_uuid = uuid.uuid4()
+        tile = MagicMock()
+        tile.data = {nodeid: "https://example.org/iiif/book1/manifest"}
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        mock_manifest = MagicMock()
+        mock_manifest.id = test_uuid
+        mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        call_kwargs = mock_manifest_model.objects.get_or_create.call_args
+        defaults = call_kwargs[1]["defaults"]
+        self.assertEqual(defaults["label"], "Book 1")
+
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_dict_with_manifest_url(
+        self, mock_manifest_model, mock_get
+    ):
+        """pre_tile_save should handle dict with manifest_url."""
+        nodeid = str(uuid.uuid4())
+        test_uuid = uuid.uuid4()
+        tile = MagicMock()
+        tile.data = {
+            nodeid: {"manifest_url": "https://example.org/iiif/book1/manifest"}
+        }
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        mock_manifest = MagicMock()
+        mock_manifest.id = test_uuid
+        mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        self.assertEqual(tile.data[nodeid], str(test_uuid))
