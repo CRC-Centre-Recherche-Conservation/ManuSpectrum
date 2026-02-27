@@ -23,6 +23,20 @@
         </small>
     </div>
 
+    <!-- ko ifnot: manifestUrl() || disabled() -->
+    <div class="manifest-create-zone">
+        <button class="manifest-create-btn" data-bind="click: openCreatePanel">
+            <span class="manifest-create-btn__icon">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <rect x="1" y="1" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/>
+                    <path d="M10 6v8M6 10h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </span>
+            <span>{% trans "Create a manifest" %}</span>
+        </button>
+    </div>
+    <!-- /ko -->
+
     <!-- Loading indicator -->
     <!-- ko if: loading() -->
     <div class="text-center" style="padding: 10px;">
@@ -62,6 +76,55 @@
     </div>
     <!-- /ko -->
 </div>
+
+<!-- Sliding create panel -->
+<div class="create-resource-instance-card-component rr-table-pop"
+     data-bind="style: {transform: showCreatePanel() ? 'translate(0,0)' : 'translate(100%,0)'}">
+
+    <div class="create-instance-header">
+        <span>{% trans "Create a manifest" %}</span>
+        <div class="close-new-step" data-bind="click: closeCreatePanel">
+            <button class="btn btn-labeled btn-lg fa fa-arrow-right btn-primary">
+                <span>{% trans "Return" %}</span>
+            </button>
+        </div>
+    </div>
+
+    <div style="padding: 30px 50px;">
+        <div class="form-group">
+            <label>{% trans "Manifest title" %}</label>
+            <input type="text" class="form-control input-lg"
+                   data-bind="textInput: newManifestTitle"
+                   placeholder="{% trans 'Manifest title' %}">
+        </div>
+
+        <div data-bind="dropzone: dropzoneOptions" class="manifest-create-dropzone">
+            <i class="fa fa-cloud-upload" style="font-size: 48px; color: #b8cfe0;"></i>
+            <h4>{% trans "Drag and drop images here" %}</h4>
+            <p style="color: #999;">{% trans "Accepted formats: JPEG, PNG, TIFF" %}</p>
+            <button class="btn btn-mint btn-lg fileinput-create-button"
+                    data-bind="css: uniqueidClass">
+                {% trans "Select images" %}
+            </button>
+            <div id="hidden-dz-manifest-previews" style="display:none;"></div>
+        </div>
+
+        <!-- ko if: isUploading() -->
+        <div class="text-center" style="padding: 20px;">
+            <i class="fa fa-spinner fa-spin fa-2x"></i>
+            <p style="margin-top: 10px;">{% trans "Creating manifest..." %}</p>
+        </div>
+        <!-- /ko -->
+
+        <!-- ko if: uploadError() -->
+        <div class="alert alert-danger" style="margin-top: 15px;">
+            <i class="fa fa-exclamation-triangle"></i>
+            <span data-bind="text: uploadError"></span>
+        </div>
+        <!-- /ko -->
+    </div>
+</div>
+
 {% endblock form %}
 
 <!-- REPORT Manifest IIIF-->
@@ -156,6 +219,90 @@
 
 .manifest-info small {
     word-break: break-all;
+}
+
+/* Create manifest zone */
+.manifest-create-zone {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.manifest-create-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border: 1.5px dashed #b8cfe0;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #f7fafd 0%, #eef4f9 100%);
+    color: #3d6b8e;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.manifest-create-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(91, 155, 215, 0.06) 0%, rgba(58, 123, 200, 0.03) 100%);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.manifest-create-btn:hover {
+    border-color: #7ba7c9;
+    border-style: solid;
+    color: #2a5578;
+    box-shadow: 0 2px 8px rgba(91, 155, 215, 0.15);
+    transform: translateY(-1px);
+}
+
+.manifest-create-btn:hover::before {
+    opacity: 1;
+}
+
+.manifest-create-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(91, 155, 215, 0.12);
+}
+
+.manifest-create-btn__icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0.75;
+    transition: opacity 0.2s ease;
+}
+
+.manifest-create-btn:hover .manifest-create-btn__icon {
+    opacity: 1;
+}
+
+/* Dropzone area in create panel */
+.manifest-create-dropzone {
+    margin-top: 20px;
+    padding: 40px 20px;
+    border: 2px dashed #b8cfe0;
+    border-radius: 8px;
+    text-align: center;
+    background: #f7fafd;
+    transition: border-color 0.2s ease;
+}
+
+.manifest-create-dropzone:hover {
+    border-color: #7ba7c9;
+}
+
+.manifest-create-dropzone h4 {
+    margin: 15px 0 5px;
+    color: #3d6b8e;
 }
 
 /* Fix for select2 input visibility */

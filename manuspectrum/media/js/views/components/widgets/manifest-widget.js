@@ -1,7 +1,10 @@
 import ko from 'knockout';
 import koMapping from 'knockout-mapping';
 import $ from 'jquery';
+import Dropzone from 'dropzone';
+import uuid from 'uuid';
 import 'bindings/select2-query';
+import 'bindings/dropzone';
 import WidgetViewModel from 'viewmodels/widget';
 import arches from 'arches';
 import manifestWidgetTemplate from 'templates/views/components/widgets/manifest-widget.htm';
@@ -29,6 +32,17 @@ const viewModel = function(params) {
     self.loading = ko.observable(false);
     self.manifestError = ko.observable(false);
     self.errorMessage = ko.observable('');
+
+    self.showCreatePanel = ko.observable(false);
+    self.newManifestTitle = ko.observable('');
+    self.isUploading = ko.observable(false);
+    self.uploadError = ko.observable('');
+
+    self.transactionId = uuid.generate();
+    self.uniqueId = uuid.generate();
+    self.uniqueidClass = ko.computed(function() {
+        return "unique_id_" + self.uniqueId;
+    });
 
     self.defaultManifest = self.config.defaultManifest;
 
@@ -320,6 +334,80 @@ const viewModel = function(params) {
         self.value(null);
         self.manifestError(false);
         self.errorMessage('');
+    };
+
+    self.openCreatePanel = function() {
+        self.showCreatePanel(true);
+    };
+
+    self.closeCreatePanel = function() {
+        self.showCreatePanel(false);
+        self.newManifestTitle('');
+        self.uploadError('');
+        self.isUploading(false);
+        if (self.dropzone) {
+            self.dropzone.removeAllFiles(true);
+        }
+    };
+
+    self.formData = new window.FormData();
+
+    self.createManifest = function(fileList) {
+        self.formData.delete("files");
+        self.formData = new window.FormData();
+
+        Array.from(fileList).forEach(function(file) {
+            self.formData.append("files", file, file.name);
+        });
+        self.formData.append("manifest_title", self.newManifestTitle() || 'Untitled manifest');
+        self.formData.append("operation", "create");
+        self.formData.append("transaction_id", self.transactionId);
+
+        self.isUploading(true);
+        self.uploadError('');
+
+        $.ajax({
+            type: "POST",
+            url: arches.urls.manifest_manager,
+            data: self.formData,
+            cache: false,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                self.isUploading(false);
+                var newUrl = response.url;
+                self.closeCreatePanel();
+                self.manifest(newUrl);
+            },
+            error: function(response) {
+                self.isUploading(false);
+                self.uploadError(
+                    (response.responseJSON && response.responseJSON.message) ||
+                    'An error occurred while creating the manifest.'
+                );
+                if (self.dropzone) {
+                    self.dropzone.removeAllFiles(true);
+                }
+            }
+        });
+    };
+
+    self.dropzoneOptions = {
+        url: "arches.urls.root",
+        dictDefaultMessage: '',
+        autoProcessQueue: false,
+        uploadMultiple: true,
+        acceptedFiles: ["image/jpeg", "image/png", "image/tiff"].join(','),
+        autoQueue: false,
+        clickable: ".fileinput-create-button." + self.uniqueidClass(),
+        previewsContainer: '#hidden-dz-manifest-previews',
+        init: function() {
+            self.dropzone = this;
+            this.on("addedfiles", self.createManifest);
+            this.on("error", function(file, error) {
+                file.error = error;
+            });
+        }
     };
 
     self.displayValue = ko.computed(function() {
