@@ -1,6 +1,7 @@
 import uuid
 import re
 import requests
+from urllib.parse import urlparse, urlunparse
 
 from arches.app.datatypes.base import BaseDataType
 from arches.app.models.models import IIIFManifest, Widget
@@ -36,6 +37,24 @@ class ManifestDataType(BaseDataType):
     )
 
     @staticmethod
+    def _normalize_url(url):
+        """Normalize a URL to prevent duplicates from cosmetic differences.
+
+        - Strips trailing slashes
+        - Removes fragments (#...)
+        - Returns the cleaned URL string
+        """
+        if not url:
+            return url
+        parsed = urlparse(url)
+        # Remove fragment, strip trailing slash from path
+        path = parsed.path.rstrip("/")
+        normalized = urlunparse(
+            (parsed.scheme, parsed.netloc, path, parsed.params, parsed.query, "")
+        )
+        return normalized
+
+    @staticmethod
     def is_iiif_manifest(manifest_json):
         if not isinstance(manifest_json, dict):
             raise FailParsingManifestIIIF("Manifest JSON is not a dict")
@@ -61,6 +80,11 @@ class ManifestDataType(BaseDataType):
         )
 
     def validate(self, value, **kwargs):
+        """Validate the manifest value without creating any DB records.
+
+        Only checks format, URL reachability, and IIIF compliance.
+        Creation is handled exclusively in pre_tile_save().
+        """
         errors = []
 
         if value:
@@ -96,24 +120,13 @@ class ManifestDataType(BaseDataType):
 
             elif manifest_url:
                 try:
+                    manifest_url = self._normalize_url(manifest_url)
                     if not self.URL_REGEX.match(manifest_url):
                         raise FailRegexURLMatch()
                     resp = requests.get(manifest_url, timeout=5)
                     resp.raise_for_status()
                     manifest_json = resp.json()
                     self.is_iiif_manifest(manifest_json)
-
-                    label = self._extract_manifest_label(manifest_json)
-                    desc = self._extract_manifest_description(manifest_json)
-
-                    IIIFManifest.objects.get_or_create(
-                        url=manifest_url,
-                        defaults={
-                            "label": label or "IIIF Manifest",
-                            "description": desc or "",
-                            "manifest": manifest_json,
-                        },
-                    )
                 except FailRegexURLMatch:
                     errors.append({"type": "ERROR", "message": _("Invalid URL format")})
                 except requests.Timeout:
@@ -137,6 +150,53 @@ class ManifestDataType(BaseDataType):
 
         return errors
 
+    def pre_tile_save(self, tile, nodeid):
+        """Create or resolve the IIIFManifest record once, before the tile is saved.
+
+        This is the single place where get_or_create is called, preventing
+        duplicates that occurred when it was inside validate().
+        """
+        value = tile.data.get(str(nodeid))
+        if not value:
+            return
+
+        manifest_url = None
+
+        if isinstance(value, dict):
+            if value.get("manifest_id"):
+                tile.data[str(nodeid)] = str(value["manifest_id"])
+                return
+            manifest_url = value.get("manifest_url")
+        elif isinstance(value, str):
+            try:
+                uuid.UUID(value)
+                return  # Already a UUID, nothing to do
+            except ValueError:
+                manifest_url = value
+
+        if manifest_url:
+            manifest_url = self._normalize_url(manifest_url)
+            try:
+                resp = requests.get(manifest_url, timeout=5)
+                resp.raise_for_status()
+                manifest_json = resp.json()
+                self.is_iiif_manifest(manifest_json)
+
+                label = self._extract_manifest_label(manifest_json)
+                desc = self._extract_manifest_description(manifest_json)
+
+                manifest, _ = IIIFManifest.objects.get_or_create(
+                    url=manifest_url,
+                    defaults={
+                        "label": label or "IIIF Manifest",
+                        "description": desc or "",
+                        "manifest": manifest_json,
+                    },
+                )
+                tile.data[str(nodeid)] = str(manifest.id)
+            except Exception:
+                pass  # Validation errors are already caught by validate()
+
     def transform_value_for_tile(self, value, **kwargs):
         if not value:
             return None
@@ -145,8 +205,9 @@ class ManifestDataType(BaseDataType):
             if "manifest_id" in value:
                 return str(value["manifest_id"])
             elif "manifest_url" in value:
+                url = self._normalize_url(value["manifest_url"])
                 try:
-                    manifest = IIIFManifest.objects.get(url=value["manifest_url"])
+                    manifest = IIIFManifest.objects.get(url=url)
                     return str(manifest.id)
                 except IIIFManifest.DoesNotExist:
                     return None
@@ -156,8 +217,9 @@ class ManifestDataType(BaseDataType):
                 uuid.UUID(value)
                 return value
             except ValueError:
+                url = self._normalize_url(value)
                 try:
-                    manifest = IIIFManifest.objects.get(url=value)
+                    manifest = IIIFManifest.objects.get(url=url)
                     return str(manifest.id)
                 except IIIFManifest.DoesNotExist:
                     return None

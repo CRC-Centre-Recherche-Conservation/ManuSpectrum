@@ -62,11 +62,11 @@ const viewModel = function(params) {
             processResults: function(data) {
                 return {
                     results: (data.results || []).map(function(manifest) {
-                        const fullUrl = self.buildFullUrl(manifest.url);
+                        const url = manifest.url;
                         return {
-                            id: fullUrl,
-                            text: manifest.label || fullUrl,
-                            manifest: { ...manifest, url: fullUrl }
+                            id: url,
+                            text: manifest.label || url,
+                            manifest: { ...manifest, url: url }
                         };
                     })
                 };
@@ -125,7 +125,11 @@ const viewModel = function(params) {
         }
     };
 
+    self._lastManifestValue = null;
     self.manifest.subscribe(function(newValue) {
+        if (newValue === self._lastManifestValue) return;
+        self._lastManifestValue = newValue;
+
         if (newValue) {
             const fullUrl = self.buildFullUrl(newValue);
             self.manifestUrl(fullUrl);
