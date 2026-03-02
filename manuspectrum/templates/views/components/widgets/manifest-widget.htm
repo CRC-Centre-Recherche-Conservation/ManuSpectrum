@@ -4,8 +4,8 @@
 {% block display_value %}
 <!-- Display in editor tree -->
 <span data-bind="text: manifestLabel() || 'IIIF Manifest'"></span>
-<span style="color: #999; font-size: 0.9em;" data-bind="if: manifestUrl">
-    (<span data-bind="text: manifestUrl"></span>)
+<span style="color: #999; font-size: 0.9em;" data-bind="if: manifestDisplayUrl">
+    (<span data-bind="text: manifestDisplayUrl"></span>)
 </span>
 {% endblock display_value %}
 
@@ -67,7 +67,7 @@
             <!-- ko if: manifestDescription -->
             <p data-bind="text: manifestDescription"></p>
             <!-- /ko -->
-            <small class="text-muted" data-bind="text: manifestUrl"></small>
+            <small class="text-muted" data-bind="text: manifestDisplayUrl"></small>
         </div>
 
         <button class="btn btn-sm btn-danger" data-bind="click: clearManifest">
@@ -136,7 +136,7 @@
         <!-- Display manifest title and link -->
         <div style="margin-bottom: 10px;">
             <strong data-bind="text: manifestLabel() || 'IIIF Manifest'"></strong><br>
-            <a data-bind="attr: { href: manifestUrl }, text: manifestUrl" target="_blank" style="font-size: 0.9em; color: #5b9bd7;"></a>
+            <a data-bind="attr: { href: manifestDisplayUrl }, text: manifestDisplayUrl" target="_blank" style="font-size: 0.9em; color: #5b9bd7;"></a>
         </div>
 
         <!-- IIIF Viewer -->

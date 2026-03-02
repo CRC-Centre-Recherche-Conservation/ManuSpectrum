@@ -377,11 +377,24 @@ const viewModel = function(params) {
         }
     };
 
+    self.manifestDisplayUrl = ko.computed(function() {
+        // Show the canonical IIIF id from the JSON if available (original external URL)
+        var data = self.manifestData();
+        if (data) {
+            var canonical = data.id || data['@id'];
+            if (canonical && canonical.startsWith('http')) return canonical;
+        }
+        // Fallback: reconstruct full URL from relative path
+        var url = self.manifestUrl();
+        if (url && url.startsWith('/')) return location.origin + url;
+        return url || '';
+    });
+
     self.displayValue = ko.computed(function() {
         if (self.state === 'report') {
-            return self.manifestUrl() || self.value() || '';
+            return self.manifestDisplayUrl() || self.value() || '';
         }
-        return self.manifestLabel() || self.manifestUrl() || '';
+        return self.manifestLabel() || self.manifestDisplayUrl() || '';
     });
 
     if (self.value()) {
