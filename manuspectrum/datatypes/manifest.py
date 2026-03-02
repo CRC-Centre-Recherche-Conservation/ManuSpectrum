@@ -1,3 +1,4 @@
+import logging
 import uuid
 import re
 import requests
@@ -25,6 +26,9 @@ details: dict[str, str | Widget | bool | None] = {
 }
 
 
+logger = logging.getLogger(__name__)
+
+
 class FailRegexURLMatch(Exception):
     pass
 
@@ -42,8 +46,11 @@ class ManifestDataType(BaseDataType):
         app_name = getattr(django_settings, "APP_NAME", "Arches")
         app_version = getattr(django_settings, "APP_VERSION", "")
         arches_version = getattr(arches, "__version__", "")
+        parts = [f"{app_name}/{app_version}" if app_version else app_name]
+        if arches_version:
+            parts.append(f"Arches/{arches_version}")
         return {
-            "User-Agent": f"{app_name}/{app_version} Arches/{arches_version}",
+            "User-Agent": " ".join(parts),
             "Accept": "application/ld+json, application/json",
         }
 
@@ -268,16 +275,17 @@ class ManifestDataType(BaseDataType):
             label = self._extract_manifest_label(manifest_json)
             desc = self._extract_manifest_description(manifest_json)
 
+            new_globalid = uuid.uuid4()
             manifest = IIIFManifest.objects.create(
+                globalid=new_globalid,
+                url=f"/manifest/{new_globalid}",
                 label=label or "IIIF Manifest",
                 description=desc or "",
                 manifest=manifest_json,
             )
-            manifest.url = f"/manifest/{manifest.globalid}"
-            manifest.save(update_fields=["url"])
             tile.data[str(nodeid)] = manifest.url
-        except Exception:
-            pass  # Validation errors are already caught by validate()
+        except Exception as e:
+            logger.warning("pre_tile_save manifest import failed: %s", e)
 
     def transform_value_for_tile(self, value, **kwargs):
         """Transform input value for tile storage. Returns a URL string."""
