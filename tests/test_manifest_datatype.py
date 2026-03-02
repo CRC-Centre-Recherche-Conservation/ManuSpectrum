@@ -544,6 +544,7 @@ class TestManifestValidation(TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
+
         mock_get.return_value = mock_response
 
         errors = self.datatype.validate("https://example.org/iiif/book1/manifest")
@@ -555,6 +556,7 @@ class TestManifestValidation(TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V2
         mock_response.raise_for_status = MagicMock()
+
         mock_get.return_value = mock_response
 
         errors = self.datatype.validate("http://example.org/iiif/book1/manifest")
@@ -566,11 +568,12 @@ class TestManifestValidation(TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
+
         mock_get.return_value = mock_response
 
         with patch("manuspectrum.datatypes.manifest.IIIFManifest") as mock_manifest_model:
             self.datatype.validate("https://example.org/iiif/book1/manifest")
-            mock_manifest_model.objects.get_or_create.assert_not_called()
+            mock_manifest_model.objects.create.assert_not_called()
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
     def test_validate_url_timeout(self, mock_get):
@@ -595,6 +598,7 @@ class TestManifestValidation(TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.INVALID_NO_CONTEXT
         mock_response.raise_for_status = MagicMock()
+
         mock_get.return_value = mock_response
 
         errors = self.datatype.validate("https://example.org/iiif/invalid/manifest")
@@ -607,6 +611,7 @@ class TestManifestValidation(TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.INVALID_WRONG_TYPE_V2
         mock_response.raise_for_status = MagicMock()
+
         mock_get.return_value = mock_response
 
         errors = self.datatype.validate("http://example.org/collection")
@@ -634,12 +639,72 @@ class TestManifestValidation(TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
+
         mock_get.return_value = mock_response
 
         errors = self.datatype.validate(
             {"manifest_url": "https://example.org/iiif/book1/manifest"}
         )
         self.assertEqual(errors, [])
+
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_validate_local_path_passes_when_exists(self, mock_manifest_model):
+        """Local path /manifest/{uuid} should pass if manifest exists by globalid."""
+        mock_filter = MagicMock()
+        mock_filter.exists.return_value = True
+        mock_manifest_model.objects.filter.return_value = mock_filter
+
+        errors = self.datatype.validate(
+            "/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+        self.assertEqual(errors, [])
+        mock_manifest_model.objects.filter.assert_called_once_with(
+            globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_validate_local_path_with_host_passes(self, mock_manifest_model):
+        """Full local URL http://host/manifest/{uuid} should also validate by globalid."""
+        mock_filter = MagicMock()
+        mock_filter.exists.return_value = True
+        mock_manifest_model.objects.filter.return_value = mock_filter
+
+        errors = self.datatype.validate(
+            "http://localhost:8000/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+        self.assertEqual(errors, [])
+        mock_manifest_model.objects.filter.assert_called_once_with(
+            globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_validate_local_path_fails_when_not_found(self, mock_manifest_model):
+        """Local path should fail if the manifest globalid is not in DB."""
+        mock_filter = MagicMock()
+        mock_filter.exists.return_value = False
+        mock_manifest_model.objects.filter.return_value = mock_filter
+
+        errors = self.datatype.validate(
+            "/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("not found", errors[0]["message"].lower())
+
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    def test_validate_external_url_sends_headers(self, mock_get):
+        """External URL validation should send proper headers."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_response.raise_for_status = MagicMock()
+
+        mock_get.return_value = mock_response
+
+        url = "https://example.org/iiif/book1/manifest"
+        errors = self.datatype.validate(url)
+        self.assertEqual(errors, [])
+        call_kwargs = mock_get.call_args
+        self.assertIn("headers", call_kwargs[1])
+        self.assertIn("User-Agent", call_kwargs[1]["headers"])
 
 
 class TestTransformValueForTile(TestCase):
@@ -1074,69 +1139,10 @@ class TestPreTileSave(TestCase):
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_creates_manifest_from_url(
+    def test_pre_tile_save_imports_external_manifest_as_local(
         self, mock_manifest_model, mock_get
     ):
-        """pre_tile_save should create IIIFManifest record but NOT modify tile.data."""
-        nodeid = str(uuid.uuid4())
-        url = "https://example.org/iiif/book1/manifest"
-        tile = MagicMock()
-        tile.data = {nodeid: url}
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
-
-        # Relative path lookup fails (not a local manifest)
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = False
-        mock_manifest_model.objects.filter.return_value = mock_filter
-
-        mock_manifest = MagicMock()
-        mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
-
-        self.datatype.pre_tile_save(tile, nodeid)
-
-        mock_manifest_model.objects.get_or_create.assert_called_once()
-        # tile.data should NOT be modified — URL stays as-is
-        self.assertEqual(tile.data[nodeid], url)
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_normalizes_url(self, mock_manifest_model, mock_get):
-        """pre_tile_save should normalize the URL before get_or_create."""
-        nodeid = str(uuid.uuid4())
-        tile = MagicMock()
-        tile.data = {nodeid: "https://example.org/iiif/book1/manifest/"}
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
-
-        # Relative path lookup fails
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = False
-        mock_manifest_model.objects.filter.return_value = mock_filter
-
-        mock_manifest = MagicMock()
-        mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
-
-        self.datatype.pre_tile_save(tile, nodeid)
-
-        call_kwargs = mock_manifest_model.objects.get_or_create.call_args
-        # URL should be normalized (no trailing slash)
-        self.assertEqual(
-            call_kwargs[1]["url"], "https://example.org/iiif/book1/manifest"
-        )
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_extracts_label_and_description(
-        self, mock_manifest_model, mock_get
-    ):
-        """pre_tile_save should extract label and description for the manifest record."""
+        """pre_tile_save should import external manifest and store local path."""
         nodeid = str(uuid.uuid4())
         tile = MagicMock()
         tile.data = {nodeid: "https://example.org/iiif/book1/manifest"}
@@ -1146,68 +1152,80 @@ class TestPreTileSave(TestCase):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
-        # Relative path lookup fails
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = False
-        mock_manifest_model.objects.filter.return_value = mock_filter
+        # Both lookups fail (new external manifest)
+        mock_filter_none = MagicMock()
+        mock_filter_none.first.return_value = None
+        mock_manifest_model.objects.filter.return_value = mock_filter_none
 
-        mock_manifest = MagicMock()
-        mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
+        # Mock create to return a manifest with auto-generated globalid
+        created_globalid = uuid.uuid4()
+        mock_created = MagicMock()
+        mock_created.globalid = created_globalid
+        mock_created.url = f"/manifest/{created_globalid}"
+        mock_manifest_model.objects.create.return_value = mock_created
 
         self.datatype.pre_tile_save(tile, nodeid)
 
-        call_kwargs = mock_manifest_model.objects.get_or_create.call_args
-        defaults = call_kwargs[1]["defaults"]
-        self.assertEqual(defaults["label"], "Book 1")
+        mock_manifest_model.objects.create.assert_called_once()
+        create_kwargs = mock_manifest_model.objects.create.call_args[1]
+        self.assertEqual(create_kwargs["label"], "Book 1")
+        # tile.data should now be the local path
+        self.assertEqual(tile.data[nodeid], f"/manifest/{created_globalid}")
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_does_not_modify_tile_data(
+    def test_pre_tile_save_reuses_already_imported_external(
         self, mock_manifest_model, mock_get
     ):
-        """pre_tile_save should never change the URL stored in tile.data."""
+        """pre_tile_save should reuse existing record for already-imported external URL."""
         nodeid = str(uuid.uuid4())
-        url = "https://example.org/iiif/book1/manifest"
+        existing_globalid = uuid.uuid4()
         tile = MagicMock()
-        tile.data = {nodeid: url}
+        tile.data = {nodeid: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b105477296/manifest.json"}
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
-
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = False
-        mock_manifest_model.objects.filter.return_value = mock_filter
-
-        mock_manifest = MagicMock()
-        mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
+        # Step 1: relative path lookup returns None
+        # Step 2: full URL lookup returns existing manifest
+        mock_filter_none = MagicMock()
+        mock_filter_none.first.return_value = None
+        mock_filter_found = MagicMock()
+        mock_filter_found.first.return_value = MagicMock(
+            globalid=existing_globalid,
+            url="https://gallica.bnf.fr/iiif/ark:/12148/btv1b105477296/manifest.json",
+        )
+        mock_manifest_model.objects.filter.side_effect = [
+            mock_filter_none,
+            mock_filter_found,
+        ]
 
         self.datatype.pre_tile_save(tile, nodeid)
 
-        # URL in tile.data must remain unchanged
-        self.assertEqual(tile.data[nodeid], url)
+        # Should NOT fetch or create (reuses existing)
+        mock_get.assert_not_called()
+        mock_manifest_model.objects.create.assert_not_called()
+        # tile.data should be the local path from globalid
+        self.assertEqual(tile.data[nodeid], f"/manifest/{existing_globalid}")
 
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_dedup_relative_path(self, mock_manifest_model):
-        """When manifest exists by relative path, should skip without fetching."""
+    def test_pre_tile_save_dedup_local_manifest(self, mock_manifest_model):
+        """When local manifest exists by relative path, should store its url."""
         nodeid = str(uuid.uuid4())
-        url = "http://localhost:8000/manifest/abc-123"
         tile = MagicMock()
-        tile.data = {nodeid: url}
+        tile.data = {nodeid: "http://localhost:8000/manifest/abc-123"}
 
-        # Relative path lookup succeeds (local manifest from manifest_manager)
+        # Relative path lookup succeeds
+        mock_manifest = MagicMock()
+        mock_manifest.url = "/manifest/abc-123"
         mock_filter = MagicMock()
-        mock_filter.exists.return_value = True
+        mock_filter.first.return_value = mock_manifest
         mock_manifest_model.objects.filter.return_value = mock_filter
 
         self.datatype.pre_tile_save(tile, nodeid)
 
-        # Should NOT call get_or_create (manifest already exists)
-        mock_manifest_model.objects.get_or_create.assert_not_called()
-        # tile.data should NOT be modified
-        self.assertEqual(tile.data[nodeid], url)
-        # Verify relative path was used for lookup
+        # Should NOT create (manifest already exists)
+        mock_manifest_model.objects.create.assert_not_called()
+        # tile.data should be the relative path from DB
+        self.assertEqual(tile.data[nodeid], "/manifest/abc-123")
+        # Verify lookup used relative path
         mock_manifest_model.objects.filter.assert_called_once_with(
             url="/manifest/abc-123"
         )
