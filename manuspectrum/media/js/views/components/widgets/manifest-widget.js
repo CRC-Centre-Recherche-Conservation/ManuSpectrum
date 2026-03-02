@@ -157,25 +157,12 @@ const viewModel = function(params) {
     self.loadManifestFromId = function(manifestId) {
         self.loading(true);
         self.manifestError(false);
-
-        fetch(`${arches.urls.api_iiif_manifest}?id=${manifestId}`)
-            .then(response => {
-                if (!response.ok) throw new Error('Manifest not found');
-                return response.json();
-            })
-            .then(data => {
-                if (data.results && data.results.length > 0) {
-                    const manifest = data.results[0];
-                    const fullUrl = self.buildFullUrl(manifest.url);
-                    self.manifestUrl(fullUrl);
-                    self.manifestLabel(manifest.label || 'IIIF Manifest');
-                    self.manifestDescription(manifest.description || '');
-                    self.loading(false);
-                } else {
-                    throw new Error('Manifest not found');
-                }
-            })
-            .catch(() => {
+        var manifestPath = '/manifest/' + manifestId;
+        var fullUrl = self.buildFullUrl(manifestPath);
+        self.manifestUrl(fullUrl);
+        self.manifestId(manifestId);
+        self.loadManifestData(fullUrl)
+            .catch(function() {
                 self.manifestError(true);
                 self.errorMessage('Unable to load manifest');
                 self.loading(false);
@@ -364,9 +351,20 @@ const viewModel = function(params) {
             contentType: false,
             success: function(response) {
                 self.isUploading(false);
-                var newUrl = response.url;
                 self.closeCreatePanel();
-                self.manifest(newUrl);
+
+                // manifest_manager already created the DB record.
+                // Set display state directly, bypassing select2 subscription.
+                var fullUrl = self.buildFullUrl(response.url);
+
+                self._lastManifestValue = response.url;
+                self.manifestUrl(fullUrl);
+                self.manifestLabel(response.label || self.newManifestTitle() || 'IIIF Manifest');
+                self.manifestDescription(response.description || '');
+                self.value(fullUrl);
+
+                // Load full manifest data for thumbnail preview
+                self.loadManifestData(fullUrl).catch(function() {});
             },
             error: function(response) {
                 self.isUploading(false);
