@@ -516,7 +516,7 @@ class TestManifestValidation(TestCase):
 
         errors = self.datatype.validate(test_uuid)
         self.assertEqual(errors, [])
-        mock_manifest_model.objects.get.assert_called_once_with(id=test_uuid)
+        mock_manifest_model.objects.get.assert_called_once_with(globalid=test_uuid)
 
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_validate_nonexistent_manifest_id(self, mock_manifest_model):
@@ -662,55 +662,29 @@ class TestTransformValueForTile(TestCase):
         result = self.datatype.transform_value_for_tile("")
         self.assertIsNone(result)
 
-    def test_transform_valid_uuid_string(self):
-        """Transforming a valid UUID string should return it unchanged."""
+    def test_transform_url_string(self):
+        """Transforming a URL string should return normalized URL."""
+        result = self.datatype.transform_value_for_tile(
+            "https://example.org/iiif/book1/manifest/"
+        )
+        self.assertEqual(result, "https://example.org/iiif/book1/manifest")
+
+    def test_transform_uuid_string(self):
+        """Transforming a UUID string should return it normalized (unchanged)."""
         test_uuid = str(uuid.uuid4())
         result = self.datatype.transform_value_for_tile(test_uuid)
         self.assertEqual(result, test_uuid)
 
-    def test_transform_dict_with_manifest_id(self):
-        """Transforming a dict with manifest_id should return the UUID."""
-        test_uuid = str(uuid.uuid4())
-        result = self.datatype.transform_value_for_tile({"manifest_id": test_uuid})
-        self.assertEqual(result, test_uuid)
-
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_transform_dict_with_manifest_url(self, mock_manifest_model):
-        """Transforming a dict with manifest_url should lookup and return UUID."""
-        test_uuid = uuid.uuid4()
-        mock_manifest = MagicMock()
-        mock_manifest.id = test_uuid
-        mock_manifest_model.objects.get.return_value = mock_manifest
-
+    def test_transform_dict_with_manifest_url(self):
+        """Transforming a dict with manifest_url should return normalized URL."""
         result = self.datatype.transform_value_for_tile(
-            {"manifest_url": "https://example.org/iiif/book1/manifest"}
+            {"manifest_url": "https://example.org/iiif/book1/manifest/"}
         )
-        self.assertEqual(result, str(test_uuid))
+        self.assertEqual(result, "https://example.org/iiif/book1/manifest")
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_transform_url_string(self, mock_manifest_model):
-        """Transforming a URL string should lookup and return UUID."""
-        test_uuid = uuid.uuid4()
-        mock_manifest = MagicMock()
-        mock_manifest.id = test_uuid
-        mock_manifest_model.objects.get.return_value = mock_manifest
-
-        result = self.datatype.transform_value_for_tile(
-            "https://example.org/iiif/book1/manifest"
-        )
-        self.assertEqual(result, str(test_uuid))
-
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_transform_nonexistent_url_returns_none(self, mock_manifest_model):
-        """Transforming a URL that doesn't exist should return None."""
-        mock_manifest_model.DoesNotExist = Exception
-        mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist(
-            "Not found"
-        )
-
-        result = self.datatype.transform_value_for_tile(
-            "https://example.org/iiif/unknown/manifest"
-        )
+    def test_transform_dict_without_url_returns_none(self):
+        """Transforming a dict without manifest_url should return None."""
+        result = self.datatype.transform_value_for_tile({"other_key": "value"})
         self.assertIsNone(result)
 
 
@@ -726,36 +700,57 @@ class TestGetDisplayValue(TestCase):
 
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_get_display_value_with_url(self, mock_manifest_model):
-        """Display value should include label and URL."""
+        """Display value should include label and URL from DB record."""
         mock_manifest = MagicMock()
         mock_manifest.label = "Book 1"
-        mock_manifest.url = "https://example.org/iiif/book1/manifest"
+        mock_manifest.url = "/iiif/book1/manifest"
         mock_manifest_model.objects.get.return_value = mock_manifest
+        mock_manifest_model.DoesNotExist = Exception
 
         node = MagicMock()
         node.nodeid = uuid.uuid4()
         tile = MagicMock()
-        tile.data = {str(node.nodeid): str(uuid.uuid4())}
+        tile.data = {str(node.nodeid): "https://example.org/iiif/book1/manifest"}
 
         result = self.datatype.get_display_value(tile, node)
         self.assertIn("Book 1", result)
-        self.assertIn("https://example.org/iiif/book1/manifest", result)
+        self.assertIn("/iiif/book1/manifest", result)
+        # Verify lookup uses relative path extracted from full URL
+        mock_manifest_model.objects.get.assert_called_once_with(
+            url="/iiif/book1/manifest"
+        )
 
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_get_display_value_without_url(self, mock_manifest_model):
-        """Display value without URL should show label only."""
+        """Display value without URL on DB record should show label only."""
         mock_manifest = MagicMock()
         mock_manifest.label = "Book 1"
         mock_manifest.url = None
         mock_manifest_model.objects.get.return_value = mock_manifest
+        mock_manifest_model.DoesNotExist = Exception
 
         node = MagicMock()
         node.nodeid = uuid.uuid4()
         tile = MagicMock()
-        tile.data = {str(node.nodeid): str(uuid.uuid4())}
+        tile.data = {str(node.nodeid): "https://example.org/iiif/book1/manifest"}
 
         result = self.datatype.get_display_value(tile, node)
         self.assertEqual(result, "Book 1")
+
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_get_display_value_manifest_not_found(self, mock_manifest_model):
+        """Display value should fallback to raw URL when manifest not in DB."""
+        mock_manifest_model.DoesNotExist = Exception
+        mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist
+
+        node = MagicMock()
+        node.nodeid = uuid.uuid4()
+        url = "https://example.org/iiif/book1/manifest"
+        tile = MagicMock()
+        tile.data = {str(node.nodeid): url}
+
+        result = self.datatype.get_display_value(tile, node)
+        self.assertEqual(result, url)
 
     def test_get_display_value_no_data_returns_none(self):
         """Display value with no tile data should return None."""
@@ -828,16 +823,72 @@ class TestURLRegex(TestCase):
             self.ManifestDataType = ManifestDataType
 
     def test_valid_https_url(self):
-        """HTTPS URLs should match."""
+        """HTTPS URLs should match strict regex."""
         self.assertIsNotNone(
-            self.ManifestDataType.URL_REGEX.match(
+            self.ManifestDataType._URL_REGEX_STRICT.match(
                 "https://example.org/iiif/book1/manifest"
             )
         )
 
     def test_unvalid_https_url(self):
-        """Unvalid HTTPS URLs should not match."""
-        self.assertIsNone(self.ManifestDataType.URL_REGEX.match("iiif/book1/manifest"))
+        """Invalid HTTPS URLs should not match strict regex."""
+        self.assertIsNone(
+            self.ManifestDataType._URL_REGEX_STRICT.match("iiif/book1/manifest")
+        )
+
+    def test_strict_rejects_localhost(self):
+        """Strict regex should NOT match localhost URLs."""
+        self.assertIsNone(
+            self.ManifestDataType._URL_REGEX_STRICT.match(
+                "http://localhost:8000/manifest/abc"
+            )
+        )
+
+    def test_dev_matches_localhost(self):
+        """Dev regex should match localhost URLs."""
+        self.assertIsNotNone(
+            self.ManifestDataType._URL_REGEX_DEV.match(
+                "http://localhost:8000/manifest/abc"
+            )
+        )
+
+    def test_dev_matches_localhost_no_port(self):
+        """Dev regex should match localhost without port."""
+        self.assertIsNotNone(
+            self.ManifestDataType._URL_REGEX_DEV.match(
+                "http://localhost/manifest/abc"
+            )
+        )
+
+    def test_dev_matches_ip_address(self):
+        """Dev regex should match IP address URLs."""
+        self.assertIsNotNone(
+            self.ManifestDataType._URL_REGEX_DEV.match(
+                "http://127.0.0.1:8000/manifest/abc"
+            )
+        )
+
+    def test_dev_also_matches_domain(self):
+        """Dev regex should also match regular domain URLs."""
+        self.assertIsNotNone(
+            self.ManifestDataType._URL_REGEX_DEV.match(
+                "https://example.org/iiif/book1/manifest"
+            )
+        )
+
+    @patch("manuspectrum.datatypes.manifest.django_settings")
+    def test_get_url_regex_debug_true(self, mock_settings):
+        """_get_url_regex should return dev regex when DEBUG=True."""
+        mock_settings.DEBUG = True
+        regex = self.ManifestDataType._get_url_regex()
+        self.assertIs(regex, self.ManifestDataType._URL_REGEX_DEV)
+
+    @patch("manuspectrum.datatypes.manifest.django_settings")
+    def test_get_url_regex_debug_false(self, mock_settings):
+        """_get_url_regex should return strict regex when DEBUG=False."""
+        mock_settings.DEBUG = False
+        regex = self.ManifestDataType._get_url_regex()
+        self.assertIs(regex, self.ManifestDataType._URL_REGEX_STRICT)
 
 
 class TestGetPrefLabel(TestCase):
@@ -940,6 +991,47 @@ class TestNormalizeUrl(TestCase):
         self.assertEqual(url2, url3)
 
 
+class TestToRelativePath(TestCase):
+    """Tests for the _to_relative_path static method."""
+
+    def setUp(self):
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.ManifestDataType = ManifestDataType
+
+    def test_full_url_returns_path(self):
+        result = self.ManifestDataType._to_relative_path(
+            "http://localhost:8000/manifest/abc-123"
+        )
+        self.assertEqual(result, "/manifest/abc-123")
+
+    def test_https_url_returns_path(self):
+        result = self.ManifestDataType._to_relative_path(
+            "https://example.org/iiif/book1/manifest"
+        )
+        self.assertEqual(result, "/iiif/book1/manifest")
+
+    def test_relative_path_unchanged(self):
+        result = self.ManifestDataType._to_relative_path("/manifest/abc-123")
+        self.assertEqual(result, "/manifest/abc-123")
+
+    def test_none_returns_none(self):
+        result = self.ManifestDataType._to_relative_path(None)
+        self.assertIsNone(result)
+
+    def test_empty_returns_empty(self):
+        result = self.ManifestDataType._to_relative_path("")
+        self.assertEqual(result, "")
+
+    def test_strips_trailing_slash(self):
+        result = self.ManifestDataType._to_relative_path(
+            "http://localhost:8000/manifest/abc-123/"
+        )
+        self.assertEqual(result, "/manifest/abc-123")
+
+
 class TestPreTileSave(TestCase):
     """Tests for the pre_tile_save method."""
 
@@ -969,47 +1061,52 @@ class TestPreTileSave(TestCase):
         self.datatype.pre_tile_save(tile, nodeid)
         self.assertEqual(tile.data[nodeid], test_uuid)
 
-    def test_pre_tile_save_resolves_dict_with_manifest_id(self):
-        """pre_tile_save should extract manifest_id from dict value."""
+    def test_pre_tile_save_skips_dict_value(self):
+        """pre_tile_save should skip non-string values (dict)."""
         nodeid = str(uuid.uuid4())
-        test_uuid = str(uuid.uuid4())
+        original_value = {"manifest_id": str(uuid.uuid4())}
         tile = MagicMock()
-        tile.data = {nodeid: {"manifest_id": test_uuid}}
+        tile.data = {nodeid: original_value}
 
         self.datatype.pre_tile_save(tile, nodeid)
-        self.assertEqual(tile.data[nodeid], test_uuid)
+        # Value should be untouched — pre_tile_save only handles strings
+        self.assertEqual(tile.data[nodeid], original_value)
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_pre_tile_save_creates_manifest_from_url(
         self, mock_manifest_model, mock_get
     ):
-        """pre_tile_save should create IIIFManifest from URL and set tile data to UUID."""
+        """pre_tile_save should create IIIFManifest record but NOT modify tile.data."""
         nodeid = str(uuid.uuid4())
-        test_uuid = uuid.uuid4()
+        url = "https://example.org/iiif/book1/manifest"
         tile = MagicMock()
-        tile.data = {nodeid: "https://example.org/iiif/book1/manifest"}
+        tile.data = {nodeid: url}
 
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
+        # Relative path lookup fails (not a local manifest)
+        mock_filter = MagicMock()
+        mock_filter.exists.return_value = False
+        mock_manifest_model.objects.filter.return_value = mock_filter
+
         mock_manifest = MagicMock()
-        mock_manifest.id = test_uuid
         mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
 
         self.datatype.pre_tile_save(tile, nodeid)
 
         mock_manifest_model.objects.get_or_create.assert_called_once()
-        self.assertEqual(tile.data[nodeid], str(test_uuid))
+        # tile.data should NOT be modified — URL stays as-is
+        self.assertEqual(tile.data[nodeid], url)
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_pre_tile_save_normalizes_url(self, mock_manifest_model, mock_get):
         """pre_tile_save should normalize the URL before get_or_create."""
         nodeid = str(uuid.uuid4())
-        test_uuid = uuid.uuid4()
         tile = MagicMock()
         tile.data = {nodeid: "https://example.org/iiif/book1/manifest/"}
 
@@ -1018,8 +1115,12 @@ class TestPreTileSave(TestCase):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
+        # Relative path lookup fails
+        mock_filter = MagicMock()
+        mock_filter.exists.return_value = False
+        mock_manifest_model.objects.filter.return_value = mock_filter
+
         mock_manifest = MagicMock()
-        mock_manifest.id = test_uuid
         mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
 
         self.datatype.pre_tile_save(tile, nodeid)
@@ -1037,7 +1138,6 @@ class TestPreTileSave(TestCase):
     ):
         """pre_tile_save should extract label and description for the manifest record."""
         nodeid = str(uuid.uuid4())
-        test_uuid = uuid.uuid4()
         tile = MagicMock()
         tile.data = {nodeid: "https://example.org/iiif/book1/manifest"}
 
@@ -1046,8 +1146,12 @@ class TestPreTileSave(TestCase):
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
+        # Relative path lookup fails
+        mock_filter = MagicMock()
+        mock_filter.exists.return_value = False
+        mock_manifest_model.objects.filter.return_value = mock_filter
+
         mock_manifest = MagicMock()
-        mock_manifest.id = test_uuid
         mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
 
         self.datatype.pre_tile_save(tile, nodeid)
@@ -1058,26 +1162,52 @@ class TestPreTileSave(TestCase):
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_dict_with_manifest_url(
+    def test_pre_tile_save_does_not_modify_tile_data(
         self, mock_manifest_model, mock_get
     ):
-        """pre_tile_save should handle dict with manifest_url."""
+        """pre_tile_save should never change the URL stored in tile.data."""
         nodeid = str(uuid.uuid4())
-        test_uuid = uuid.uuid4()
+        url = "https://example.org/iiif/book1/manifest"
         tile = MagicMock()
-        tile.data = {
-            nodeid: {"manifest_url": "https://example.org/iiif/book1/manifest"}
-        }
+        tile.data = {nodeid: url}
 
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
+        mock_filter = MagicMock()
+        mock_filter.exists.return_value = False
+        mock_manifest_model.objects.filter.return_value = mock_filter
+
         mock_manifest = MagicMock()
-        mock_manifest.id = test_uuid
         mock_manifest_model.objects.get_or_create.return_value = (mock_manifest, True)
 
         self.datatype.pre_tile_save(tile, nodeid)
 
-        self.assertEqual(tile.data[nodeid], str(test_uuid))
+        # URL in tile.data must remain unchanged
+        self.assertEqual(tile.data[nodeid], url)
+
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_dedup_relative_path(self, mock_manifest_model):
+        """When manifest exists by relative path, should skip without fetching."""
+        nodeid = str(uuid.uuid4())
+        url = "http://localhost:8000/manifest/abc-123"
+        tile = MagicMock()
+        tile.data = {nodeid: url}
+
+        # Relative path lookup succeeds (local manifest from manifest_manager)
+        mock_filter = MagicMock()
+        mock_filter.exists.return_value = True
+        mock_manifest_model.objects.filter.return_value = mock_filter
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        # Should NOT call get_or_create (manifest already exists)
+        mock_manifest_model.objects.get_or_create.assert_not_called()
+        # tile.data should NOT be modified
+        self.assertEqual(tile.data[nodeid], url)
+        # Verify relative path was used for lookup
+        mock_manifest_model.objects.filter.assert_called_once_with(
+            url="/manifest/abc-123"
+        )
