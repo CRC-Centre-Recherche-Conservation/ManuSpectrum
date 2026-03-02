@@ -164,9 +164,6 @@ class IIIFAnnotationMixin:
     def _get_canvas_dimensions(self, canvas_uri: str):
         """
         Retrieve canvas width/height from the IIIF infrastructure.
-
-        CanvasIIIF.get_image_service_dimensions() peut faire des appels
-        externes ou des requêtes DB, donc on le met derrière un LRU cache.
         """
         cache_key = f"iiif_canvas_dim:{canvas_uri}"
 

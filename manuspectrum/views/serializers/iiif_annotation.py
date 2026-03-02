@@ -22,6 +22,18 @@ class IIIFAnnotationSerializer:
     base_url = settings.PUBLIC_SERVER_ADDRESS
     base_url_iiif = base_url + "iiif"
 
+    @classmethod
+    def _to_full_manifest_url(cls, url: str) -> str:
+        """Convert a relative manifest path to a full URL.
+
+        Tiles from Manifest Datatype store relative paths like /manifest/{uuid}.
+        """
+        if not url:
+            return url
+        if url.startswith("/"):
+            return cls.base_url.rstrip("/") + url
+        return url
+
     DATATYPE_NODES = {
         "manifest": "9764a2c7-fc1b-46dd-8b4a-8b86588a0294",
         "file_list": "8fe5161a-7bf2-11ef-b1e5-dd514ecd97bc",
@@ -480,12 +492,14 @@ class IIIFAnnotationSerializer:
         if not manifest_url:
             return None
 
+        full_url = cls._to_full_manifest_url(manifest_url)
+
         # Check cache first
         if manifest_url in cls._manifest_cache:
             manifest_resource = cls._manifest_cache[manifest_url]
             label = manifest_resource["label"]
             return {
-                "id": manifest_url,
+                "id": full_url,
                 "type": "Manifest",
                 "format": "application/ld+json",
                 "label": {"en": [label] if label else ["Manifest"]},
@@ -505,7 +519,7 @@ class IIIFAnnotationSerializer:
                 try:
                     m = IIIFManifest.objects.get(url=url_variant)
                     return {
-                        "id": manifest_url,
+                        "id": full_url,
                         "type": "Manifest",
                         "format": "application/ld+json",
                         "label": {"en": [m.label] if m.label else ["Manifest"]},
@@ -973,12 +987,14 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
         if not manifest_url:
             return None
 
+        full_url = cls._to_full_manifest_url(manifest_url)
+
         # Check cache first
         if manifest_url in cls._manifest_cache:
             manifest_resource = cls._manifest_cache[manifest_url]
             label = manifest_resource["label"]
             return {
-                "@id": manifest_url,
+                "@id": full_url,
                 "@type": "sc:Manifest",
                 "format": "application/ld+json",
                 "label": label if label else "Manifest",
@@ -998,7 +1014,7 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
                 try:
                     m = IIIFManifest.objects.get(url=url_variant)
                     return {
-                        "@id": manifest_url,
+                        "@id": full_url,
                         "@type": "sc:Manifest",
                         "format": "application/ld+json",
                         "label": m.label if m.label else "Manifest",
