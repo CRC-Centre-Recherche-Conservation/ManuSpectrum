@@ -45,15 +45,6 @@ const viewModel = function(params) {
 
     self.defaultManifest = self.config.defaultManifest;
 
-    self.buildFullUrl = function(url) {
-        if (!url) return url;
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-            return url;
-        }
-        const baseUrl = window.location.origin;
-        return baseUrl + url;
-    };
-
     self.manifestSelectConfig = {
         value: self.manifest,
         clickBubble: true,
@@ -144,9 +135,8 @@ const viewModel = function(params) {
         self._lastManifestValue = newValue;
 
         if (newValue) {
-            const fullUrl = self.buildFullUrl(newValue);
-            self.manifestUrl(fullUrl);
-            self.loadManifestData(fullUrl)
+            self.manifestUrl(newValue);
+            self.loadManifestData(newValue)
                 .then(() => self.updateValue())
                 .catch(() => self.updateValue());
         } else {
@@ -158,10 +148,9 @@ const viewModel = function(params) {
         self.loading(true);
         self.manifestError(false);
         var manifestPath = '/manifest/' + manifestId;
-        var fullUrl = self.buildFullUrl(manifestPath);
-        self.manifestUrl(fullUrl);
+        self.manifestUrl(manifestPath);
         self.manifestId(manifestId);
-        self.loadManifestData(fullUrl)
+        self.loadManifestData(manifestPath)
             .catch(function() {
                 self.manifestError(true);
                 self.errorMessage('Unable to load manifest');
@@ -171,6 +160,7 @@ const viewModel = function(params) {
 
     self.quickValidateUrl = function(url) {
         if (!url) return { valid: false, error: 'URL is required' };
+        if (url.startsWith('/')) return { valid: true };
         try {
             new URL(url);
             return { valid: true };
@@ -257,46 +247,38 @@ const viewModel = function(params) {
         if (!manifest) return '';
 
         if (manifest.thumbnail) {
-            if (typeof manifest.thumbnail === 'string') return self.buildFullUrl(manifest.thumbnail);
+            if (typeof manifest.thumbnail === 'string') return manifest.thumbnail;
             if (manifest.thumbnail['@id'] || manifest.thumbnail['id']) {
-                return self.buildFullUrl(manifest.thumbnail['@id'] || manifest.thumbnail['id']);
+                return manifest.thumbnail['@id'] || manifest.thumbnail['id'];
             } else if (Array.isArray(manifest.thumbnail) && manifest.thumbnail[0]) {
                 const thumb = manifest.thumbnail[0];
-                const thumbUrl = thumb['@id'] || thumb['id'] || thumb;
-                return self.buildFullUrl(thumbUrl);
+                return thumb['@id'] || thumb['id'] || thumb;
             }
         }
 
         if (manifest.sequences?.[0]?.canvases?.[0]) {
             const firstCanvas = manifest.sequences[0].canvases[0];
             if (firstCanvas.thumbnail) {
-                if (typeof firstCanvas.thumbnail === 'string') return self.buildFullUrl(firstCanvas.thumbnail);
-                if (firstCanvas.thumbnail['@id']) return self.buildFullUrl(firstCanvas.thumbnail['@id']);
+                if (typeof firstCanvas.thumbnail === 'string') return firstCanvas.thumbnail;
+                if (firstCanvas.thumbnail['@id']) return firstCanvas.thumbnail['@id'];
             }
             if (firstCanvas.images?.[0]?.resource?.['@id']) {
                 const imageUrl = firstCanvas.images[0].resource['@id'];
-                const fullImageUrl = self.buildFullUrl(imageUrl);
-                return fullImageUrl.includes('/full/full/')
-                    ? fullImageUrl.replace('/full/full/', '/full/200,/')
-                    : fullImageUrl;
+                return imageUrl.includes('/full/full/')
+                    ? imageUrl.replace('/full/full/', '/full/200,/')
+                    : imageUrl;
             }
         }
 
         if (manifest.items?.[0]?.thumbnail?.[0]) {
-            return self.buildFullUrl(manifest.items[0].thumbnail[0].id);
+            return manifest.items[0].thumbnail[0].id;
         }
 
         return '';
     };
 
     self.updateValue = function() {
-        const url = self.manifestUrl();
-        if (url) {
-            const fullUrl = self.buildFullUrl(url);
-            self.value(fullUrl);
-        } else {
-            self.value(null);
-        }
+        self.value(self.manifestUrl() || null);
     };
 
     self.clearManifest = function() {
@@ -355,16 +337,14 @@ const viewModel = function(params) {
 
                 // manifest_manager already created the DB record.
                 // Set display state directly, bypassing select2 subscription.
-                var fullUrl = self.buildFullUrl(response.url);
-
                 self._lastManifestValue = response.url;
-                self.manifestUrl(fullUrl);
+                self.manifestUrl(response.url);
                 self.manifestLabel(response.label || self.newManifestTitle() || 'IIIF Manifest');
                 self.manifestDescription(response.description || '');
-                self.value(fullUrl);
+                self.value(response.url);
 
                 // Load full manifest data for thumbnail preview
-                self.loadManifestData(fullUrl).catch(function() {});
+                self.loadManifestData(response.url).catch(function() {});
             },
             error: function(response) {
                 self.isUploading(false);
