@@ -1,16 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 78">
   <defs>
-    <linearGradient id="spectral-logo" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#dc3545"/>
-      <stop offset="20%" style="stop-color:#e67e22"/>
-      <stop offset="40%" style="stop-color:#f0b429"/>
-      <stop offset="60%" style="stop-color:#10b981"/>
-      <stop offset="80%" style="stop-color:#3b82f6"/>
-      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    <linearGradient id="spectral-bar" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#dc3545"/>
+      <stop offset="20%" stop-color="#e67e22"/>
+      <stop offset="40%" stop-color="#f0b429"/>
+      <stop offset="60%" stop-color="#10b981"/>
+      <stop offset="80%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <!-- Gradient fills under peaks (glow effect) -->
+    <linearGradient id="glow-blue" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="glow-red" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#dc3545" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#dc3545" stop-opacity="0.07"/>
     </linearGradient>
   </defs>
+
+  <!-- "MANU" -->
+  <text x="40" y="50" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">MANU</text>
+
+  <!-- Spectral baseline hint -->
+  <line x1="178" y1="55" x2="320" y2="55" stroke="#1a1a2e" stroke-width="0.5" opacity="0.12"/>
+
+  <!-- Peak 1 (blue) — tall, sharp Gaussian -->
+  <path d="M 178,55 C 194,55 218,3 248,3 C 278,3 302,55 318,55 Z" fill="url(#glow-blue)"/>
+  <path d="M 178,55 C 194,55 218,3 248,3 C 278,3 302,55 318,55"
+        fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Peak 2 (red) — offset, broader, slightly asymmetric -->
+  <path d="M 192,55 C 210,55 236,16 262,14 C 285,12 308,55 322,55 Z" fill="url(#glow-red)"/>
+  <path d="M 192,55 C 210,55 236,16 262,14 C 285,12 308,55 322,55"
+        fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- "PECTRUM" -->
+  <text x="315" y="50" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
+
   <!-- Spectral bar -->
-  <rect x="30" y="85" width="340" height="3" rx="1.5" fill="url(#spectral-logo)"/>
-  <!-- Logo text -->
-  <text x="200" y="70" text-anchor="middle" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="42" font-weight="300" letter-spacing="6">MANUSPECTRUM</text>
+  <rect x="40" y="66" width="620" height="3" rx="1.5" fill="url(#spectral-bar)"/>
 </svg>
