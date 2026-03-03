@@ -619,3 +619,323 @@ msgstr "<h1>Les rendus n'existent pas</h1>"
 #: manuspectrum/views/renderer_config.py
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
+
+# ============================================================
+# Homepage — index.htm
+# ============================================================
+
+#: manuspectrum/templates/index.htm
+msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
+msgstr "ManuSpectrum — Analyse physico-chimique du patrimoine"
+
+#: manuspectrum/templates/index.htm
+msgid "Interoperable database for heritage materials analysis — Biblissima+ Cluster"
+msgstr "Base de données interopérable pour l'analyse des matériaux patrimoniaux — Cluster Biblissima+"
+
+#: manuspectrum/templates/index.htm
+msgid "ManuSpectrum — Home"
+msgstr "ManuSpectrum — Accueil"
+
+#: manuspectrum/templates/index.htm
+msgid "Main Navigation"
+msgstr "Navigation principale"
+
+#: manuspectrum/templates/index.htm
+msgid "The Project"
+msgstr "Le Projet"
+
+#: manuspectrum/templates/index.htm
+msgid "Explore"
+msgstr "Explorer"
+
+#: manuspectrum/templates/index.htm
+msgid "Analyses"
+msgstr "Analyses"
+
+#: manuspectrum/templates/index.htm
+msgid "Search"
+msgstr "Rechercher"
+
+#: manuspectrum/templates/index.htm
+msgid "Management"
+msgstr "Gestion"
+
+#: manuspectrum/templates/index.htm
+msgid "Sign In"
+msgstr "Se connecter"
+
+#: manuspectrum/templates/index.htm
+msgid "User Profile"
+msgstr "Profil utilisateur"
+
+#: manuspectrum/templates/index.htm
+msgid "Welcome,"
+msgstr "Bienvenue,"
+
+#: manuspectrum/templates/index.htm
+msgid "Sign Out"
+msgstr "Déconnexion"
+
+#: manuspectrum/templates/index.htm
+msgid "Open Menu"
+msgstr "Ouvrir le menu"
+
+#: manuspectrum/templates/index.htm
+msgid "Interoperable database for"
+msgstr "Base de données interopérable pour"
+
+#: manuspectrum/templates/index.htm
+msgid "physicochemical analysis"
+msgstr "l'analyse physico-chimique"
+
+#: manuspectrum/templates/index.htm
+msgid "of heritage"
+msgstr "du patrimoine"
+
+#: manuspectrum/templates/index.htm
+msgid "Explore, visualize, and share heritage materials analysis data within the Biblissima+ ecosystem."
+msgstr "Explorer, visualiser et partager les données d'analyse des matériaux patrimoniaux au sein de l'écosystème Biblissima+."
+
+#: manuspectrum/templates/index.htm
+msgid "Explore the database"
+msgstr "Explorer la base de données"
+
+#: manuspectrum/templates/index.htm
+msgid "Learn more"
+msgstr "En savoir plus"
+
+#: manuspectrum/templates/index.htm
+msgid "scroll"
+msgstr "défiler"
+
+#: manuspectrum/templates/index.htm
+msgid "Thinking and modeling heritage materials"
+msgstr "Penser et modéliser les matériaux patrimoniaux"
+
+#: manuspectrum/templates/index.htm
+msgid "This cluster aims to address the challenge of effectively reusing physicochemical data for heritage materials analysis by establishing an interoperable database aligned with existing standards, particularly with the Biblissima portal."
+msgstr "Ce cluster vise à résoudre le défi de la réutilisation efficace des données physico-chimiques pour l'analyse des matériaux patrimoniaux en mettant en place une base de données interopérable alignée sur les standards existants, plus particulièrement avec le portail Biblissima."
+
+#: manuspectrum/templates/index.htm
+msgid "Arches, an open-source platform specialized in heritage and cultural data management, offers a flexible architecture enabling advanced data modeling. This platform aims to facilitate data access and encourage effective collaboration between researchers from different disciplines."
+msgstr "Arches, une plateforme open source spécialisée dans la gestion de données patrimoniales et culturelles, offre une architecture flexible permettant une modélisation avancée des données. Cette plateforme vise à faciliter l'accès aux données et à encourager la collaboration efficace entre les chercheurs de différentes disciplines."
+
+#: manuspectrum/templates/index.htm
+msgid "The model focuses on identifying the component as a pivot axis between the object, its context, the analyses, and their interpretations, using thesauri and authority databases to contextualize information on heterogeneous documents."
+msgstr "Le modèle se concentre sur l'identification du composant comme axe pivot entre l'objet, son contexte, les analyses et leurs interprétations, en utilisant des thésaurus et des bases d'autorité pour contextualiser les informations sur des documents hétérogènes."
+
+#: manuspectrum/templates/index.htm
+msgid "Biblissima+ Cluster"
+msgstr "Cluster Biblissima+"
+
+#: manuspectrum/templates/index.htm
+msgid "ManuSpectrum is part of the Biblissima+ cluster, an observatory of ancient written cultures. Our objective is to ensure the interoperability of physicochemical data with the Biblissima portal and cultural heritage standards."
+msgstr "ManuSpectrum s'inscrit dans le cadre du cluster Biblissima+, un observatoire des cultures écrites anciennes. Notre objectif est de garantir l'interopérabilité des données physico-chimiques avec le portail Biblissima et les standards du patrimoine culturel."
+
+#: manuspectrum/templates/index.htm
+msgid "X-ray Fluorescence"
+msgstr "Fluorescence X"
+
+#: manuspectrum/templates/index.htm
+msgid "IR Spectroscopy"
+msgstr "Spectroscopie IR"
+
+#: manuspectrum/templates/index.htm
+msgid "Multispectral Imaging"
+msgstr "Imagerie multispectrale"
+
+#: manuspectrum/templates/index.htm
+msgid "XRF mapping of a manuscript"
+msgstr "Cartographie XRF d'un manuscrit"
+
+#: manuspectrum/templates/index.htm
+msgid "XRF mapping of an illuminated manuscript"
+msgstr "Cartographie XRF d'un manuscrit enluminé"
+
+#: manuspectrum/templates/index.htm
+msgid "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
+msgstr "Analyse élémentaire par fluorescence X — Distribution spatiale des pigments"
+
+#: manuspectrum/templates/index.htm
+msgid "What you can discover"
+msgstr "Ce que vous pouvez découvrir"
+
+#: manuspectrum/templates/index.htm
+msgid "A platform designed to explore physicochemical analyses on historical documents, correlating data with their heritage context."
+msgstr "Une plateforme conçue pour explorer les analyses physico-chimiques sur les documents historiques, en corrélant les données avec leur contexte patrimonial."
+
+#: manuspectrum/templates/index.htm
+msgid "Spectra and analysis data"
+msgstr "Spectres et données d'analyse"
+
+#: manuspectrum/templates/index.htm
+msgid "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other analysis results directly on the platform."
+msgstr "Visualisez et comparez les spectres de référence. Explorez les résultats d'analyses XRF, FTIR, Raman et d'autres techniques directement dans la plateforme."
+
+#: manuspectrum/templates/index.htm
+msgid "IIIF Annotations"
+msgstr "Annotations IIIF"
+
+#: manuspectrum/templates/index.htm
+msgid "Explore high-resolution manuscript images with annotations linked to analysis points. Each annotation connects the image to its physicochemical data."
+msgstr "Explorez les images haute résolution des manuscrits avec des annotations liées aux points d'analyse. Chaque annotation relie l'image à ses données physico-chimiques."
+
+#: manuspectrum/templates/index.htm
+msgid "Interoperability and Standards"
+msgstr "Interopérabilité et standards"
+
+#: manuspectrum/templates/index.htm
+msgid "Data is structured according to the CIDOC-CRM and CRMsci ontology, ensuring interoperability with international heritage systems and the Biblissima portal."
+msgstr "Les données sont structurées selon l'ontologie CIDOC-CRM et CRMsci, garantissant leur interopérabilité avec les systèmes patrimoniaux internationaux et le portail Biblissima."
+
+#: manuspectrum/templates/index.htm
+msgid "Material Characterization"
+msgstr "Caractérisation matérielle"
+
+#: manuspectrum/templates/index.htm
+msgid "Explore the layers, materials, and chemical elements identified on heritage documents, with different levels of reliability and characterization."
+msgstr "Explorez les couches, matériaux et éléments chimiques identifiés sur les documents patrimoniaux, avec différents niveaux de fiabilité et de caractérisation."
+
+#: manuspectrum/templates/index.htm
+msgid "Pigments"
+msgstr "Pigments"
+
+#: manuspectrum/templates/index.htm
+msgid "Layers"
+msgstr "Couches"
+
+#: manuspectrum/templates/index.htm
+msgid "Binders"
+msgstr "Liants"
+
+#: manuspectrum/templates/index.htm
+msgid "Substrates"
+msgstr "Supports"
+
+#: manuspectrum/templates/index.htm
+msgid "Visualize physicochemical analyses"
+msgstr "Visualiser les analyses physico-chimiques"
+
+#: manuspectrum/templates/index.htm
+msgid "From elemental mapping to multispectral imaging, explore the different analysis techniques applied to manuscripts and heritage objects."
+msgstr "De la cartographie élémentaire à l'imagerie multispectrale, explorez les différentes techniques d'analyse appliquées aux manuscrits et objets patrimoniaux."
+
+#: manuspectrum/templates/index.htm
+msgid "XRF Mapping"
+msgstr "Cartographie XRF"
+
+#: manuspectrum/templates/index.htm
+msgid "Spatial distribution of chemical elements on an illuminated manuscript"
+msgstr "Distribution spatiale des éléments chimiques sur un manuscrit enluminé"
+
+#: manuspectrum/templates/index.htm
+msgid "Spectroscopy"
+msgstr "Spectroscopie"
+
+#: manuspectrum/templates/index.htm
+msgid "Point Analysis"
+msgstr "Analyse ponctuelle"
+
+#: manuspectrum/templates/index.htm
+msgid "Manuscript analysis"
+msgstr "Analyse sur manuscrit"
+
+#: manuspectrum/templates/index.htm
+msgid "Analysis points and material characterization"
+msgstr "Points d'analyse et caractérisation des matériaux"
+
+#: manuspectrum/templates/index.htm
+msgid "Imaging"
+msgstr "Imagerie"
+
+#: manuspectrum/templates/index.htm
+msgid "Multispectral"
+msgstr "Multispectral"
+
+#: manuspectrum/templates/index.htm
+msgid "Multispectral and hyperspectral imaging via IIIF"
+msgstr "Imagerie multispectrale et hyperspectrale via IIIF"
+
+#: manuspectrum/templates/index.htm
+msgid "Search by material, analysis technique, heritage object, or chemical element. Advanced filters available in the search interface."
+msgstr "Recherchez par matériau, technique d'analyse, objet patrimonial ou élément chimique. Filtres avancés disponibles dans l'interface de recherche."
+
+#: manuspectrum/templates/index.htm
+msgid "Search materials, techniques, objects..."
+msgstr "Rechercher des matériaux, techniques, objets..."
+
+#: manuspectrum/templates/index.htm
+msgid "pigment"
+msgstr "pigment"
+
+#: manuspectrum/templates/index.htm
+msgid "Manuscripts"
+msgstr "Manuscrits"
+
+#: manuspectrum/templates/index.htm
+msgid "manuscript"
+msgstr "manuscrit"
+
+#: manuspectrum/templates/index.htm
+msgid "XRF"
+msgstr "XRF"
+
+#: manuspectrum/templates/index.htm
+msgid "parchment"
+msgstr "parchemin"
+
+#: manuspectrum/templates/index.htm
+msgid "Parchment"
+msgstr "Parchemin"
+
+#: manuspectrum/templates/index.htm
+msgid "illumination"
+msgstr "enluminure"
+
+#: manuspectrum/templates/index.htm
+msgid "Illuminations"
+msgstr "Enluminures"
+
+#: manuspectrum/templates/index.htm
+msgid "Raman"
+msgstr "Raman"
+
+#: manuspectrum/templates/index.htm
+msgid "Access advanced search"
+msgstr "Accéder à la recherche avancée"
+
+#: manuspectrum/templates/index.htm
+msgid "Our Partners"
+msgstr "Nos Partenaires"
+
+#: manuspectrum/templates/index.htm
+msgid "Ministry of Culture"
+msgstr "Ministère de la Culture"
+
+#: manuspectrum/templates/index.htm
+msgid "Interoperable database for physicochemical analysis of heritage materials. A Biblissima+ cluster project."
+msgstr "Base de données interopérable pour l'analyse physico-chimique des matériaux patrimoniaux. Un projet du cluster Biblissima+."
+
+#: manuspectrum/templates/index.htm
+msgid "Platform"
+msgstr "Plateforme"
+
+#: manuspectrum/templates/index.htm
+msgid "My Profile"
+msgstr "Mon profil"
+
+#: manuspectrum/templates/index.htm
+msgid "Resources"
+msgstr "Ressources"
+
+#: manuspectrum/templates/index.htm
+msgid "Standards"
+msgstr "Standards"
+
+#: manuspectrum/templates/index.htm
+msgid "All rights reserved"
+msgstr "Tous droits réservés"
+
+#: manuspectrum/templates/index.htm
+msgid "Powered by"
+msgstr "Propulsé par"

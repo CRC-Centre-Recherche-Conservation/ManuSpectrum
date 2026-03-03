@@ -12,10 +12,10 @@ Homepage — Prismatic Luminescence aesthetic
 <html lang="fr">
 
 <head>
-    <title>{% trans "ManuSpectrum — Analyse physico-chimique du patrimoine" %}</title>
+    <title>{% trans "ManuSpectrum — Physicochemical Analysis of Heritage" %}</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{% trans "Base de données interopérable pour l'analyse des matériaux patrimoniaux — Cluster Biblissima+" %}">
+    <meta name="description" content="{% trans "Interoperable database for heritage materials analysis — Biblissima+ Cluster" %}">
     <meta name="theme-color" content="#faf9f7">
 
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
@@ -486,7 +486,7 @@ Homepage — Prismatic Luminescence aesthetic
     }
 
     .ms-hero-logo {
-        width: 300px;
+        width: clamp(280px, 40vw, 480px);
         margin: 0 auto 2.5rem;
         opacity: 0;
         transform: translateY(20px);
@@ -1212,7 +1212,7 @@ Homepage — Prismatic Luminescence aesthetic
         .ms-hamburger { display: flex; }
         .ms-mobile-nav { display: flex; }
 
-        .ms-hero-logo { width: 220px; }
+        .ms-hero-logo { width: clamp(200px, 65vw, 320px); }
 
         .ms-stats { grid-template-columns: 1fr; }
 
@@ -1242,19 +1242,19 @@ Homepage — Prismatic Luminescence aesthetic
          ============================================================ -->
     <header class="ms-header" id="ms-header">
         <div class="ms-header-inner">
-            <a href="{% url 'home' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Accueil' %}">
+            <a href="{% url 'home' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Home' %}">
                 <div class="ms-header-logo-mark"></div>
                 <span class="ms-header-logo-text">ManuSpectrum</span>
             </a>
 
-            <nav class="ms-nav" aria-label="{% trans 'Navigation principale' %}">
+            <nav class="ms-nav" aria-label="{% trans 'Main Navigation' %}">
                 <ul class="ms-nav-links">
-                    <li><a href="#projet">{% trans "Le Projet" %}</a></li>
-                    <li><a href="#explorer">{% trans "Explorer" %}</a></li>
+                    <li><a href="#projet">{% trans "The Project" %}</a></li>
+                    <li><a href="#explorer">{% trans "Explore" %}</a></li>
                     <li><a href="#analyses">{% trans "Analyses" %}</a></li>
-                    <li><a href="#rechercher">{% trans "Rechercher" %}</a></li>
+                    <li><a href="#rechercher">{% trans "Search" %}</a></li>
                     {% if user|can_create_resource_instance and user.username != 'anonymous' %}
-                    <li><a href="{% url 'resource' %}" target="_blank">{% trans "Gestion" %}</a></li>
+                    <li><a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a></li>
                     {% endif %}
                 </ul>
 
@@ -1262,12 +1262,12 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-nav-auth">
                     {% if user.username == 'anonymous' %}
-                        <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Se connecter" %}</a>
+                        <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
                     {% else %}
-                        <a href="{% url 'user_profile_manager' %}" aria-label="{% trans 'Profil utilisateur' %}">
-                            {% trans "Bienvenue," %} {{ user.first_name|default:user.username }}
+                        <a href="{% url 'user_profile_manager' %}" aria-label="{% trans 'User Profile' %}">
+                            {% trans "Welcome," %} {{ user.first_name|default:user.username }}
                         </a>
-                        <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Deconnexion" %}</a>
+                        <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
                     {% endif %}
                 </div>
 
@@ -1281,7 +1281,7 @@ Homepage — Prismatic Luminescence aesthetic
                 {% endif %}
             </nav>
 
-            <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Ouvrir le menu' %}">
+            <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Open Menu' %}">
                 <span></span>
                 <span></span>
                 <span></span>
@@ -1291,19 +1291,19 @@ Homepage — Prismatic Luminescence aesthetic
 
     <!-- Mobile Navigation -->
     <div class="ms-mobile-nav" id="ms-mobile-nav">
-        <a href="#projet" class="ms-mobile-nav-link">{% trans "Le Projet" %}</a>
-        <a href="#explorer" class="ms-mobile-nav-link">{% trans "Explorer" %}</a>
+        <a href="#projet" class="ms-mobile-nav-link">{% trans "The Project" %}</a>
+        <a href="#explorer" class="ms-mobile-nav-link">{% trans "Explore" %}</a>
         <a href="#analyses" class="ms-mobile-nav-link">{% trans "Analyses" %}</a>
-        <a href="#rechercher" class="ms-mobile-nav-link">{% trans "Rechercher" %}</a>
+        <a href="#rechercher" class="ms-mobile-nav-link">{% trans "Search" %}</a>
         {% if user|can_create_resource_instance and user.username != 'anonymous' %}
-            <a href="{% url 'resource' %}" target="_blank">{% trans "Gestion" %}</a>
+            <a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a>
         {% endif %}
         <div class="spectral-line" style="width:60px;margin:1rem 0;"></div>
         {% if user.username == 'anonymous' %}
-            <a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Se connecter" %}</a>
+            <a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
         {% else %}
             <a href="{% url 'user_profile_manager' %}">{{ user.first_name|default:user.username }}</a>
-            <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Deconnexion" %}</a>
+            <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
         {% endif %}
     </div>
 
@@ -1321,28 +1321,28 @@ Homepage — Prismatic Luminescence aesthetic
             <img class="ms-hero-logo" src="{% static 'img/landing/logo-manuspectrum.svg' %}" alt="ManuSpectrum">
 
             <h1 class="ms-hero-tagline">
-                {% trans "Base de donnees interoperable pour" %}
-                <em>{% trans "l'analyse physico-chimique" %}</em>
-                {% trans "du patrimoine" %}
+                {% trans "Interoperable database for" %}
+                <em>{% trans "physicochemical analysis" %}</em>
+                {% trans "of heritage" %}
             </h1>
 
             <p class="ms-hero-description">
-                {% trans "Explorer, visualiser et partager les donnees d'analyse des materiaux patrimoniaux au sein de l'ecosysteme Biblissima+." %}
+                {% trans "Explore, visualize, and share heritage materials analysis data within the Biblissima+ ecosystem." %}
             </p>
 
             <div class="ms-hero-actions">
                 <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
-                    <i class="fa-solid fa-magnifying-glass"></i> {% trans "Explorer la base" %}
+                    <i class="fa-solid fa-magnifying-glass"></i> {% trans "Explore the database" %}
                 </a>
                 <a href="#projet" class="ms-btn ms-btn-ghost">
-                    {% trans "En savoir plus" %} <i class="fa-solid fa-arrow-down"></i>
+                    {% trans "Learn more" %} <i class="fa-solid fa-arrow-down"></i>
                 </a>
             </div>
         </div>
 
         <div class="ms-hero-scroll">
             <a href="#projet">
-                <span>{% trans "defiler" %}</span>
+                <span>{% trans "scroll" %}</span>
                 <div class="ms-hero-scroll-line"></div>
             </a>
         </div>
@@ -1355,28 +1355,28 @@ Homepage — Prismatic Luminescence aesthetic
     <section class="ms-section ms-project" id="projet">
         <div class="ms-container">
             <div class="reveal">
-                <div class="ms-section-label">{% trans "Le Projet" %}</div>
-                <h2 class="ms-section-title">{% trans "Penser et modeliser les materiaux patrimoniaux" %}</h2>
+                <div class="ms-section-label">{% trans "The Project" %}</div>
+                <h2 class="ms-section-title">{% trans "Thinking and modeling heritage materials" %}</h2>
             </div>
 
             <div class="ms-project-grid">
                 <div class="ms-project-text reveal reveal-d1">
                     <p>
-                        {% trans "Ce cluster vise a resoudre le defi de la reutilisation efficace des donnees physico-chimiques pour l'analyse des materiaux patrimoniaux en mettant en place une base de donnees interoperable alignee sur les standards existants, plus particulierement avec le portail Biblissima." %}
+                        {% trans "This cluster aims to address the challenge of effectively reusing physicochemical data for heritage materials analysis by establishing an interoperable database aligned with existing standards, particularly with the Biblissima portal." %}
                     </p>
                     <p>
-                        {% trans "Arches, une plateforme open source specialisee dans la gestion de donnees patrimoniales et culturelles, offre une architecture flexible permettant une modelisation avancee des donnees. Cette plateforme vise a faciliter l'acces aux donnees et a encourager la collaboration efficace entre les chercheurs de differentes disciplines." %}
+                        {% trans "Arches, an open-source platform specialized in heritage and cultural data management, offers a flexible architecture enabling advanced data modeling. This platform aims to facilitate data access and encourage effective collaboration between researchers from different disciplines." %}
                     </p>
                     <p>
-                        {% trans "Le modele se concentre sur l'identification du composant comme axe pivot entre l'objet, son contexte, les analyses et leurs interpretations, en utilisant des thesaurus et des bases d'autorite pour contextualiser les informations sur des documents heterogenes." %}
+                        {% trans "The model focuses on identifying the component as a pivot axis between the object, its context, the analyses, and their interpretations, using thesauri and authority databases to contextualize information on heterogeneous documents." %}
                     </p>
                 </div>
 
                 <div class="ms-biblissima-card reveal reveal-d2">
                     <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
-                    <h3>{% trans "Cluster Biblissima+" %}</h3>
+                    <h3>{% trans "Biblissima+ Cluster" %}</h3>
                     <p>
-                        {% trans "ManuSpectrum s'inscrit dans le cadre du cluster Biblissima+, un observatoire des cultures ecrites anciennes. Notre objectif est de garantir l'interoperabilite des donnees physico-chimiques avec le portail Biblissima et les standards du patrimoine culturel." %}
+                        {% trans "ManuSpectrum is part of the Biblissima+ cluster, an observatory of ancient written cultures. Our objective is to ensure the interoperability of physicochemical data with the Biblissima portal and cultural heritage standards." %}
                     </p>
                     <div class="ms-feature-tags" style="margin-top:1.5rem;">
                         <span class="ms-feature-tag">CIDOC-CRM</span>
@@ -1392,26 +1392,26 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-stat reveal reveal-d2">
                     <div class="ms-stat-icon"><i class="fa-solid fa-atom"></i></div>
                     <div class="ms-stat-value">XRF</div>
-                    <div class="ms-stat-label">{% trans "Fluorescence X" %}</div>
+                    <div class="ms-stat-label">{% trans "X-ray Fluorescence" %}</div>
                 </div>
                 <div class="ms-stat reveal reveal-d3">
                     <div class="ms-stat-icon"><i class="fa-solid fa-wave-square"></i></div>
                     <div class="ms-stat-value">FTIR</div>
-                    <div class="ms-stat-label">{% trans "Spectroscopie IR" %}</div>
+                    <div class="ms-stat-label">{% trans "IR Spectroscopy" %}</div>
                 </div>
                 <div class="ms-stat reveal reveal-d4">
                     <div class="ms-stat-icon"><i class="fa-solid fa-satellite-dish"></i></div>
                     <div class="ms-stat-value">MSI</div>
-                    <div class="ms-stat-label">{% trans "Imagerie multispectrale" %}</div>
+                    <div class="ms-stat-label">{% trans "Multispectral Imaging" %}</div>
                 </div>
             </div>
 
             <!-- Showcase image -->
             <div class="ms-showcase reveal-scale" style="margin-top:4rem;">
-                <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'Cartographie XRF d un manuscrit' %}">
+                <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF mapping of a manuscript' %}">
                 <div class="ms-showcase-caption">
-                    <h4>{% trans "Cartographie XRF d'un manuscrit enluminé" %}</h4>
-                    <p>{% trans "Analyse elementaire par fluorescence X — Distribution spatiale des pigments" %}</p>
+                    <h4>{% trans "XRF mapping of an illuminated manuscript" %}</h4>
+                    <p>{% trans "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments" %}</p>
                 </div>
             </div>
         </div>
@@ -1427,18 +1427,18 @@ Homepage — Prismatic Luminescence aesthetic
     <section class="ms-section ms-features" id="explorer">
         <div class="ms-container">
             <div class="reveal">
-                <div class="ms-section-label">{% trans "Explorer" %}</div>
-                <h2 class="ms-section-title">{% trans "Ce que vous pouvez decouvrir" %}</h2>
+                <div class="ms-section-label">{% trans "Explore" %}</div>
+                <h2 class="ms-section-title">{% trans "What you can discover" %}</h2>
                 <p class="ms-section-subtitle">
-                    {% trans "Une plateforme concue pour explorer les analyses physico-chimiques sur les documents historiques, en correlant les donnees avec leur contexte patrimonial." %}
+                    {% trans "A platform designed to explore physicochemical analyses on historical documents, correlating data with their heritage context." %}
                 </p>
             </div>
 
             <div class="ms-features-grid">
                 <div class="ms-feature-card reveal reveal-d1">
                     <div class="ms-feature-icon"><i class="fa-solid fa-chart-line"></i></div>
-                    <h3>{% trans "Spectres et donnees d'analyse" %}</h3>
-                    <p>{% trans "Visualisez et comparez les spectres de reference. Explorez les resultats d'analyses XRF, FTIR, Raman et d'autres techniques directement dans la plateforme." %}</p>
+                    <h3>{% trans "Spectra and analysis data" %}</h3>
+                    <p>{% trans "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other analysis results directly on the platform." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">XRF</span>
                         <span class="ms-feature-tag">FTIR</span>
@@ -1449,8 +1449,8 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-feature-card reveal reveal-d2">
                     <div class="ms-feature-icon"><i class="fa-solid fa-layer-group"></i></div>
-                    <h3>{% trans "Annotations IIIF" %}</h3>
-                    <p>{% trans "Explorez les images haute resolution des manuscrits avec des annotations liees aux points d'analyse. Chaque annotation relie l'image a ses donnees physico-chimiques." %}</p>
+                    <h3>{% trans "IIIF Annotations" %}</h3>
+                    <p>{% trans "Explore high-resolution manuscript images with annotations linked to analysis points. Each annotation connects the image to its physicochemical data." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">IIIF v2/v3</span>
                         <span class="ms-feature-tag">Mirador</span>
@@ -1460,8 +1460,8 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-feature-card reveal reveal-d3">
                     <div class="ms-feature-icon"><i class="fa-solid fa-diagram-project"></i></div>
-                    <h3>{% trans "Interoperabilite et standards" %}</h3>
-                    <p>{% trans "Les donnees sont structurees selon l'ontologie CIDOC-CRM et CRMsci, garantissant leur interoperabilite avec les systemes patrimoniaux internationaux et le portail Biblissima." %}</p>
+                    <h3>{% trans "Interoperability and Standards" %}</h3>
+                    <p>{% trans "Data is structured according to the CIDOC-CRM and CRMsci ontology, ensuring interoperability with international heritage systems and the Biblissima portal." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">CIDOC-CRM</span>
                         <span class="ms-feature-tag">CRMsci</span>
@@ -1471,13 +1471,13 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-feature-card reveal reveal-d4">
                     <div class="ms-feature-icon"><i class="fa-solid fa-microscope"></i></div>
-                    <h3>{% trans "Caracterisation materielle" %}</h3>
-                    <p>{% trans "Explorez les couches, materiaux et elements chimiques identifies sur les documents patrimoniaux, avec differents niveaux de fiabilite et de caracterisation." %}</p>
+                    <h3>{% trans "Material Characterization" %}</h3>
+                    <p>{% trans "Explore the layers, materials, and chemical elements identified on heritage documents, with different levels of reliability and characterization." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">{% trans "Pigments" %}</span>
-                        <span class="ms-feature-tag">{% trans "Couches" %}</span>
-                        <span class="ms-feature-tag">{% trans "Liants" %}</span>
-                        <span class="ms-feature-tag">{% trans "Supports" %}</span>
+                        <span class="ms-feature-tag">{% trans "Layers" %}</span>
+                        <span class="ms-feature-tag">{% trans "Binders" %}</span>
+                        <span class="ms-feature-tag">{% trans "Substrates" %}</span>
                     </div>
                 </div>
             </div>
@@ -1492,37 +1492,37 @@ Homepage — Prismatic Luminescence aesthetic
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "Analyses" %}</div>
-                <h2 class="ms-section-title">{% trans "Visualiser les analyses physico-chimiques" %}</h2>
+                <h2 class="ms-section-title">{% trans "Visualize physicochemical analyses" %}</h2>
                 <p class="ms-section-subtitle">
-                    {% trans "De la cartographie elementaire a l'imagerie multispectrale, explorez les differentes techniques d'analyse appliquees aux manuscrits et objets patrimoniaux." %}
+                    {% trans "From elemental mapping to multispectral imaging, explore the different analysis techniques applied to manuscripts and heritage objects." %}
                 </p>
             </div>
 
             <div class="ms-gallery-grid">
                 <div class="ms-gallery-item reveal reveal-d1">
-                    <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'Cartographie XRF' %}">
+                    <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF Mapping' %}">
                     <div class="ms-gallery-overlay">
-                        <div class="ms-gallery-tag">{% trans "Fluorescence X" %}</div>
-                        <h4>{% trans "Cartographie XRF" %}</h4>
-                        <p>{% trans "Distribution spatiale des elements chimiques sur un manuscrit enluminé" %}</p>
+                        <div class="ms-gallery-tag">{% trans "X-ray Fluorescence" %}</div>
+                        <h4>{% trans "XRF Mapping" %}</h4>
+                        <p>{% trans "Spatial distribution of chemical elements on an illuminated manuscript" %}</p>
                     </div>
                 </div>
 
                 <div class="ms-gallery-item reveal reveal-d2">
-                    <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Analyse sur manuscrit' %}">
+                    <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Manuscript analysis' %}">
                     <div class="ms-gallery-overlay">
-                        <div class="ms-gallery-tag">{% trans "Spectroscopie" %}</div>
-                        <h4>{% trans "Analyse ponctuelle" %}</h4>
-                        <p>{% trans "Points d'analyse et caracterisation des materiaux" %}</p>
+                        <div class="ms-gallery-tag">{% trans "Spectroscopy" %}</div>
+                        <h4>{% trans "Point Analysis" %}</h4>
+                        <p>{% trans "Analysis points and material characterization" %}</p>
                     </div>
                 </div>
 
                 <div class="ms-gallery-item reveal reveal-d3">
-                    <img src="{% static 'img/landing/icone2.svg' %}" alt="{% trans 'Imagerie multispectrale' %}">
+                    <img src="{% static 'img/landing/icone2.svg' %}" alt="{% trans 'Multispectral Imaging' %}">
                     <div class="ms-gallery-overlay">
-                        <div class="ms-gallery-tag">{% trans "Imagerie" %}</div>
+                        <div class="ms-gallery-tag">{% trans "Imaging" %}</div>
                         <h4>{% trans "Multispectral" %}</h4>
-                        <p>{% trans "Imagerie multispectrale et hyperspectrale via IIIF" %}</p>
+                        <p>{% trans "Multispectral and hyperspectral imaging via IIIF" %}</p>
                     </div>
                 </div>
             </div>
@@ -1539,10 +1539,10 @@ Homepage — Prismatic Luminescence aesthetic
     <section class="ms-section ms-search" id="rechercher">
         <div class="ms-container">
             <div class="reveal">
-                <div class="ms-section-label">{% trans "Rechercher" %}</div>
-                <h2 class="ms-section-title">{% trans "Explorez la base de donnees" %}</h2>
+                <div class="ms-section-label">{% trans "Search" %}</div>
+                <h2 class="ms-section-title">{% trans "Explore the database" %}</h2>
                 <p class="ms-section-subtitle">
-                    {% trans "Recherchez par materiau, technique d'analyse, objet patrimonial ou element chimique. Filtres avancés disponibles dans l'interface de recherche." %}
+                    {% trans "Search by material, analysis technique, heritage object, or chemical element. Advanced filters available in the search interface." %}
                 </p>
             </div>
 
@@ -1555,7 +1555,7 @@ Homepage — Prismatic Luminescence aesthetic
                             class="ms-search-input"
                             id="ms-search-input"
                             name="q"
-                            placeholder="{% trans "Rechercher des materiaux, techniques, objets..." %}"
+                            placeholder="{% trans "Search materials, techniques, objects..." %}"
                             autocomplete="off"
                         >
                     </div>
@@ -1563,16 +1563,16 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-search-chips">
                     <button class="ms-search-chip" data-term="{% trans 'pigment' %}">{% trans "Pigments" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'manuscrit' %}">{% trans "Manuscrits" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
                     <button class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'parchemin' %}">{% trans "Parchemin" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'enluminure' %}">{% trans "Enluminures" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
                     <button class="ms-search-chip" data-term="{% trans 'Raman' %}">{% trans "Raman" %}</button>
                 </div>
 
                 <div class="ms-search-cta">
                     <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
-                        <i class="fa-solid fa-arrow-right"></i> {% trans "Acceder a la recherche avancee" %}
+                        <i class="fa-solid fa-arrow-right"></i> {% trans "Access advanced search" %}
                     </a>
                 </div>
             </div>
@@ -1585,13 +1585,13 @@ Homepage — Prismatic Luminescence aesthetic
          ============================================================ -->
     <section class="ms-partners reveal" id="partenaires">
         <div class="ms-container">
-            <div class="ms-partners-label">{% trans "Nos Partenaires" %}</div>
+            <div class="ms-partners-label">{% trans "Our Partners" %}</div>
             <div class="ms-partners-grid">
                 <img class="ms-partner-logo reveal-d1" src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC — Centre de Recherche sur la Conservation">
                 <img class="ms-partner-logo reveal-d2" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
                 <img class="ms-partner-logo reveal-d3" src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS">
                 <img class="ms-partner-logo reveal-d4" src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN — Museum national d'Histoire naturelle">
-                <img class="ms-partner-logo reveal-d5" src="{% static 'img/landing/logo-culture.svg' %}" alt="{% trans "Ministere de la Culture" %}">
+                <img class="ms-partner-logo reveal-d5" src="{% static 'img/landing/logo-culture.svg' %}" alt="{% trans "Ministry of Culture" %}">
                 <img class="ms-partner-logo reveal-d6" src="{% static 'img/landing/logo-humanum.svg' %}" alt="Huma-Num">
                 <img class="ms-partner-logo reveal-d7" src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches">
             </div>
@@ -1611,24 +1611,24 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-footer-brand">
                     <div class="ms-footer-brand-name">ManuSpectrum</div>
                     <p class="ms-footer-brand-desc">
-                        {% trans "Base de donnees interoperable pour l'analyse physico-chimique des materiaux patrimoniaux. Un projet du cluster Biblissima+." %}
+                        {% trans "Interoperable database for physicochemical analysis of heritage materials. A Biblissima+ cluster project." %}
                     </p>
                 </div>
 
                 <div class="ms-footer-links">
                     <div class="ms-footer-col">
-                        <h4>{% trans "Plateforme" %}</h4>
+                        <h4>{% trans "Platform" %}</h4>
                         <ul>
-                            <li><a href="{% url 'search_home' %}">{% trans "Recherche" %}</a></li>
+                            <li><a href="{% url 'search_home' %}">{% trans "Search" %}</a></li>
                             {% if user.username == 'anonymous' %}
-                                <li><a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Connexion" %}</a></li>
+                                <li><a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a></li>
                             {% else %}
-                                <li><a href="{% url 'user_profile_manager' %}">{% trans "Mon profil" %}</a></li>
+                                <li><a href="{% url 'user_profile_manager' %}">{% trans "My Profile" %}</a></li>
                             {% endif %}
                         </ul>
                     </div>
                     <div class="ms-footer-col">
-                        <h4>{% trans "Ressources" %}</h4>
+                        <h4>{% trans "Resources" %}</h4>
                         <ul>
                             <li><a href="https://biblissima.fr" target="_blank" rel="noopener">Biblissima+</a></li>
                             <li><a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches Project</a></li>
@@ -1646,9 +1646,9 @@ Homepage — Prismatic Luminescence aesthetic
             </div>
 
             <div class="ms-footer-bottom">
-                <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "Tous droits reserves" %}</p>
+                <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "All rights reserved" %}</p>
                 <div class="ms-footer-arches">
-                    {% trans "Propulse par" %} <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>
+                    {% trans "Powered by" %} <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>
                 </div>
             </div>
         </div>
