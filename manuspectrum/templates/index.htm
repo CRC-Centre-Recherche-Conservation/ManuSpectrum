@@ -1,6 +1,6 @@
 <!--
 ManuSpectrum — Base de données interopérable pour l'analyse physico-chimique du patrimoine
-Homepage redesign — Scientific Luminescence aesthetic
+Homepage — Prismatic Luminescence aesthetic
 -->
 {% load static %}
 {% load template_tags %}
@@ -16,7 +16,7 @@ Homepage redesign — Scientific Luminescence aesthetic
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{% trans "Base de données interopérable pour l'analyse des matériaux patrimoniaux — Cluster Biblissima+" %}">
-    <meta name="theme-color" content="#070b16">
+    <meta name="theme-color" content="#faf9f7">
 
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
     <link rel="apple-touch-icon" href="{% webpack_static 'favicons/apple-touch-icon.png' %}" />
@@ -24,43 +24,71 @@ Homepage redesign — Scientific Luminescence aesthetic
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
+    <!-- Fallback: if JS doesn't load, make everything visible -->
+    <noscript>
+        <style>
+            .reveal, .reveal-scale { opacity: 1 !important; transform: none !important; }
+        </style>
+    </noscript>
+
     <style>
     /* ============================================================
-       MANUSPECTRUM HOMEPAGE — SCIENTIFIC LUMINESCENCE
+       MANUSPECTRUM HOMEPAGE — PRISMATIC LUMINESCENCE
+       A light, scientific aesthetic inspired by spectral analysis
        ============================================================ */
 
     /* --- RESET & CUSTOM PROPERTIES --- */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-        --midnight: #070b16;
-        --deep: #0c1222;
-        --surface: #131b2e;
-        --elevated: #1a2440;
-        --border: rgba(255,255,255,0.06);
-        --border-hover: rgba(255,255,255,0.12);
-        --accent: #c8a951;
-        --accent-light: #e4c36a;
-        --accent-dim: rgba(200,169,81,0.15);
-        --teal: #2eb8a6;
-        --teal-dim: rgba(46,184,166,0.12);
-        --spectral-1: #e74c3c;
+        /* Light backgrounds — warm, paper-like */
+        --bg: #faf9f7;
+        --bg-warm: #f5f2ed;
+        --bg-alt: #f0ede8;
+        --surface: #ffffff;
+
+        /* Borders & shadows for depth */
+        --border: rgba(26,26,46,0.07);
+        --border-hover: rgba(26,26,46,0.14);
+        --shadow-sm: 0 1px 3px rgba(26,26,46,0.04);
+        --shadow-md: 0 4px 20px rgba(26,26,46,0.06);
+        --shadow-lg: 0 12px 48px rgba(26,26,46,0.08);
+        --shadow-glow: 0 8px 32px rgba(59,130,246,0.08);
+
+        /* Ink — rich dark text */
+        --ink: #1a1a2e;
+        --ink-muted: #4a4a5e;
+        --ink-dim: #8a8a9a;
+
+        /* Gold accent — adjusted for light background */
+        --accent: #a07d1c;
+        --accent-hover: #c49a2a;
+        --accent-dim: rgba(160,125,28,0.08);
+        --accent-glow: rgba(160,125,28,0.12);
+
+        /* Teal */
+        --teal: #0d9488;
+        --teal-dim: rgba(13,148,136,0.06);
+
+        /* Spectral rainbow — vivid on light */
+        --spectral-1: #dc3545;
         --spectral-2: #e67e22;
-        --spectral-3: #f1c40f;
-        --spectral-4: #2ecc71;
-        --spectral-5: #3498db;
-        --spectral-6: #9b59b6;
-        --text: #e6e4e0;
-        --text-muted: #8b8d9e;
-        --text-dim: #5c5e72;
+        --spectral-3: #f0b429;
+        --spectral-4: #10b981;
+        --spectral-5: #3b82f6;
+        --spectral-6: #8b5cf6;
+
+        /* Typography */
         --font-display: 'Cormorant Garamond', Georgia, serif;
-        --font-body: 'Outfit', system-ui, sans-serif;
+        --font-body: 'Sora', system-ui, sans-serif;
         --font-mono: 'JetBrains Mono', monospace;
+
+        /* Easing */
         --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
         --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
@@ -72,29 +100,29 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     body {
         font-family: var(--font-body);
-        background: var(--midnight);
-        color: var(--text);
+        background: var(--bg);
+        color: var(--ink);
         overflow-x: hidden;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         line-height: 1.6;
     }
 
-    /* --- GRAIN OVERLAY --- */
+    /* --- SUBTLE PAPER GRAIN --- */
     body::after {
         content: '';
         position: fixed;
         inset: 0;
         pointer-events: none;
         z-index: 10000;
-        opacity: 0.025;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+        opacity: 0.018;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
         background-repeat: repeat;
         background-size: 256px 256px;
     }
 
     a { color: var(--accent); text-decoration: none; transition: color 0.3s; }
-    a:hover { color: var(--accent-light); }
+    a:hover { color: var(--accent-hover); }
 
     img { max-width: 100%; height: auto; display: block; }
 
@@ -108,7 +136,7 @@ Homepage redesign — Scientific Luminescence aesthetic
     .spectral-line-thin {
         height: 1px;
         background: linear-gradient(90deg, transparent 0%, var(--spectral-1) 10%, var(--spectral-2) 25%, var(--spectral-3) 40%, var(--spectral-4) 55%, var(--spectral-5) 70%, var(--spectral-6) 85%, transparent 100%);
-        opacity: 0.5;
+        opacity: 0.45;
     }
 
     /* --- LAYOUT --- */
@@ -125,7 +153,7 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     .ms-section-label {
         font-family: var(--font-mono);
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         letter-spacing: 0.2em;
         text-transform: uppercase;
         color: var(--accent);
@@ -147,13 +175,13 @@ Homepage redesign — Scientific Luminescence aesthetic
         font-size: clamp(2rem, 4vw, 3.2rem);
         font-weight: 300;
         line-height: 1.2;
-        color: var(--text);
+        color: var(--ink);
         margin-bottom: 1.5rem;
     }
 
     .ms-section-subtitle {
-        font-size: 1.05rem;
-        color: var(--text-muted);
+        font-size: 1rem;
+        color: var(--ink-muted);
         max-width: 640px;
         line-height: 1.7;
         font-weight: 300;
@@ -162,8 +190,8 @@ Homepage redesign — Scientific Luminescence aesthetic
     /* --- SCROLL REVEAL ANIMATIONS --- */
     .reveal {
         opacity: 0;
-        transform: translateY(36px);
-        transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
+        transform: translateY(28px);
+        transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo);
     }
     .reveal.visible { opacity: 1; transform: translateY(0); }
     .reveal-d1 { transition-delay: 0.08s; }
@@ -176,14 +204,14 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     .reveal-scale {
         opacity: 0;
-        transform: scale(0.95);
-        transition: opacity 1s var(--ease-out-expo), transform 1s var(--ease-out-expo);
+        transform: scale(0.97);
+        transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
     }
     .reveal-scale.visible { opacity: 1; transform: scale(1); }
 
 
     /* ============================================================
-       HEADER
+       HEADER — Glass-like on scroll, transparent initially
        ============================================================ */
     .ms-header {
         position: fixed;
@@ -192,15 +220,15 @@ Homepage redesign — Scientific Luminescence aesthetic
         right: 0;
         z-index: 1000;
         padding: 1.2rem 0;
-        transition: background 0.4s, padding 0.4s, backdrop-filter 0.4s;
+        transition: background 0.4s, padding 0.4s, backdrop-filter 0.4s, box-shadow 0.4s;
     }
 
     .ms-header.scrolled {
-        background: rgba(7, 11, 22, 0.85);
+        background: rgba(250, 249, 247, 0.88);
         backdrop-filter: blur(20px) saturate(180%);
         -webkit-backdrop-filter: blur(20px) saturate(180%);
-        padding: 0.8rem 0;
-        border-bottom: 1px solid var(--border);
+        padding: 0.7rem 0;
+        box-shadow: 0 1px 0 var(--border), var(--shadow-sm);
     }
 
     .ms-header-inner {
@@ -222,7 +250,7 @@ Homepage redesign — Scientific Luminescence aesthetic
         font-family: var(--font-display);
         font-size: 1.35rem;
         font-weight: 400;
-        color: var(--text);
+        color: var(--ink);
         letter-spacing: 0.08em;
     }
 
@@ -245,9 +273,9 @@ Homepage redesign — Scientific Luminescence aesthetic
     .ms-nav-links a {
         display: block;
         padding: 0.5rem 1.1rem;
-        font-size: 0.88rem;
+        font-size: 0.85rem;
         font-weight: 400;
-        color: var(--text-muted);
+        color: var(--ink-muted);
         letter-spacing: 0.02em;
         transition: color 0.3s;
         position: relative;
@@ -259,12 +287,13 @@ Homepage redesign — Scientific Luminescence aesthetic
         bottom: 0;
         left: 50%;
         width: 0;
-        height: 1px;
-        background: var(--accent);
+        height: 1.5px;
+        background: linear-gradient(90deg, var(--spectral-5), var(--spectral-6));
         transition: width 0.3s var(--ease-out-expo), left 0.3s var(--ease-out-expo);
+        border-radius: 1px;
     }
 
-    .ms-nav-links a:hover { color: var(--text); }
+    .ms-nav-links a:hover { color: var(--ink); }
     .ms-nav-links a:hover::after { width: 60%; left: 20%; }
 
     .ms-nav-divider {
@@ -275,26 +304,28 @@ Homepage redesign — Scientific Luminescence aesthetic
     }
 
     .ms-nav-auth a {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         padding: 0.45rem 1rem;
-        color: var(--text-muted);
+        color: var(--ink-muted);
         transition: color 0.3s;
     }
 
     .ms-nav-auth a:hover { color: var(--accent); }
 
     .ms-nav-auth .ms-btn-signin {
-        background: var(--accent-dim);
-        color: var(--accent);
+        background: var(--ink);
+        color: var(--bg);
         border-radius: 6px;
-        padding: 0.45rem 1.2rem;
+        padding: 0.5rem 1.3rem;
         font-weight: 500;
-        transition: background 0.3s, color 0.3s;
+        font-size: 0.82rem;
+        transition: background 0.3s, transform 0.3s;
     }
 
     .ms-nav-auth .ms-btn-signin:hover {
-        background: var(--accent);
-        color: var(--midnight);
+        background: var(--spectral-5);
+        color: #fff;
+        transform: translateY(-1px);
     }
 
     /* Mobile nav toggle */
@@ -313,7 +344,7 @@ Homepage redesign — Scientific Luminescence aesthetic
         display: block;
         width: 24px;
         height: 2px;
-        background: var(--text);
+        background: var(--ink);
         border-radius: 2px;
         transition: all 0.35s var(--ease-out-expo);
         transform-origin: center;
@@ -328,7 +359,7 @@ Homepage redesign — Scientific Luminescence aesthetic
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(7, 11, 22, 0.97);
+        background: rgba(250, 249, 247, 0.97);
         backdrop-filter: blur(30px);
         -webkit-backdrop-filter: blur(30px);
         z-index: 1001;
@@ -350,15 +381,15 @@ Homepage redesign — Scientific Luminescence aesthetic
         font-family: var(--font-display);
         font-size: 2rem;
         font-weight: 300;
-        color: var(--text-muted);
+        color: var(--ink-muted);
         transition: color 0.3s;
     }
 
-    .ms-mobile-nav a:hover { color: var(--accent); }
+    .ms-mobile-nav a:hover { color: var(--spectral-5); }
 
 
     /* ============================================================
-       HERO SECTION
+       HERO — Luminescent prism with soft spectral glow
        ============================================================ */
     .ms-hero {
         position: relative;
@@ -368,37 +399,39 @@ Homepage redesign — Scientific Luminescence aesthetic
         justify-content: center;
         text-align: center;
         overflow: hidden;
-        background: var(--midnight);
+        background: var(--bg);
     }
 
+    /* Prismatic aurora — soft spectral light on a warm canvas */
     .ms-hero-aurora {
         position: absolute;
-        inset: -30%;
-        opacity: 0.5;
+        inset: -20%;
+        opacity: 0.35;
         background:
-            radial-gradient(ellipse 70% 50% at 15% 45%, rgba(46,184,166,0.2), transparent),
-            radial-gradient(ellipse 50% 60% at 80% 55%, rgba(200,169,81,0.18), transparent),
-            radial-gradient(ellipse 60% 40% at 50% 15%, rgba(155,89,182,0.1), transparent),
-            radial-gradient(ellipse 40% 50% at 60% 80%, rgba(52,152,219,0.08), transparent);
-        animation: aurora-drift 30s ease-in-out infinite alternate;
+            radial-gradient(ellipse 50% 40% at 20% 30%, rgba(59,130,246,0.25), transparent),
+            radial-gradient(ellipse 40% 50% at 75% 60%, rgba(139,92,246,0.18), transparent),
+            radial-gradient(ellipse 60% 35% at 50% 20%, rgba(240,180,41,0.15), transparent),
+            radial-gradient(ellipse 35% 45% at 35% 70%, rgba(16,185,129,0.12), transparent),
+            radial-gradient(ellipse 30% 30% at 80% 25%, rgba(220,53,69,0.1), transparent);
+        animation: aurora-drift 25s ease-in-out infinite alternate;
         will-change: transform;
     }
 
     @keyframes aurora-drift {
         0%   { transform: scale(1) translate(0, 0) rotate(0deg); }
-        33%  { transform: scale(1.06) translate(-3%, 2%) rotate(1deg); }
-        66%  { transform: scale(0.97) translate(2%, -1%) rotate(-0.5deg); }
-        100% { transform: scale(1.03) translate(-1%, 1%) rotate(0.3deg); }
+        33%  { transform: scale(1.05) translate(-2%, 2%) rotate(0.8deg); }
+        66%  { transform: scale(0.98) translate(2%, -1%) rotate(-0.4deg); }
+        100% { transform: scale(1.02) translate(-1%, 1%) rotate(0.2deg); }
     }
 
-    /* Spectral emission lines in hero background */
+    /* Spectral emission lines — faint, scientific background detail */
     .ms-hero-spectral-bg {
         position: absolute;
-        bottom: 20%;
+        top: 0;
         left: 0;
         right: 0;
-        height: 300px;
-        opacity: 0.04;
+        bottom: 0;
+        opacity: 0.035;
         background: repeating-linear-gradient(
             90deg,
             transparent 0px, transparent 47px,
@@ -415,6 +448,34 @@ Homepage redesign — Scientific Luminescence aesthetic
             var(--spectral-6) 372px, var(--spectral-6) 373px,
             transparent 373px, transparent 450px
         );
+    }
+
+    /* Prism decoration — triangular dispersive element */
+    .ms-hero-prism {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 600px;
+        height: 600px;
+        opacity: 0.06;
+        background:
+            conic-gradient(from 0deg at 50% 40%,
+                var(--spectral-1),
+                var(--spectral-2),
+                var(--spectral-3),
+                var(--spectral-4),
+                var(--spectral-5),
+                var(--spectral-6),
+                var(--spectral-1)
+            );
+        border-radius: 50%;
+        filter: blur(60px);
+        animation: prism-rotate 40s linear infinite;
+    }
+
+    @keyframes prism-rotate {
+        to { transform: translate(-50%, -50%) rotate(360deg); }
     }
 
     .ms-hero-content {
@@ -437,7 +498,7 @@ Homepage redesign — Scientific Luminescence aesthetic
         font-size: clamp(1.5rem, 3.5vw, 2.6rem);
         font-weight: 300;
         line-height: 1.35;
-        color: var(--text);
+        color: var(--ink);
         margin-bottom: 1.5rem;
         opacity: 0;
         transform: translateY(20px);
@@ -446,12 +507,15 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     .ms-hero-tagline em {
         font-style: italic;
-        color: var(--accent);
+        background: linear-gradient(135deg, var(--spectral-5), var(--spectral-6));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
 
     .ms-hero-description {
-        font-size: 1.05rem;
-        color: var(--text-muted);
+        font-size: 1.02rem;
+        color: var(--ink-muted);
         max-width: 580px;
         margin: 0 auto 2.5rem;
         font-weight: 300;
@@ -475,13 +539,14 @@ Homepage redesign — Scientific Luminescence aesthetic
         to { opacity: 1; transform: translateY(0); }
     }
 
+    /* Buttons */
     .ms-btn {
         display: inline-flex;
         align-items: center;
         gap: 0.6rem;
         padding: 0.85rem 2rem;
         font-family: var(--font-body);
-        font-size: 0.9rem;
+        font-size: 0.88rem;
         font-weight: 500;
         border-radius: 8px;
         cursor: pointer;
@@ -491,26 +556,26 @@ Homepage redesign — Scientific Luminescence aesthetic
     }
 
     .ms-btn-primary {
-        background: var(--accent);
-        color: var(--midnight);
+        background: var(--ink);
+        color: #fff;
     }
 
     .ms-btn-primary:hover {
-        background: var(--accent-light);
-        color: var(--midnight);
+        background: var(--spectral-5);
+        color: #fff;
         transform: translateY(-2px);
-        box-shadow: 0 8px 30px rgba(200,169,81,0.25);
+        box-shadow: 0 8px 30px rgba(59,130,246,0.2);
     }
 
     .ms-btn-ghost {
         background: transparent;
-        color: var(--text-muted);
+        color: var(--ink-muted);
         border: 1px solid var(--border-hover);
     }
 
     .ms-btn-ghost:hover {
-        color: var(--text);
-        border-color: var(--text-dim);
+        color: var(--ink);
+        border-color: var(--ink-dim);
         transform: translateY(-2px);
     }
 
@@ -530,8 +595,8 @@ Homepage redesign — Scientific Luminescence aesthetic
         flex-direction: column;
         align-items: center;
         gap: 0.5rem;
-        color: var(--text-dim);
-        font-size: 0.7rem;
+        color: var(--ink-dim);
+        font-size: 0.68rem;
         letter-spacing: 0.15em;
         text-transform: uppercase;
         font-family: var(--font-mono);
@@ -540,13 +605,13 @@ Homepage redesign — Scientific Luminescence aesthetic
     .ms-hero-scroll-line {
         width: 1px;
         height: 40px;
-        background: linear-gradient(to bottom, var(--accent), transparent);
+        background: linear-gradient(to bottom, var(--spectral-5), transparent);
         animation: scroll-pulse 2s ease-in-out infinite;
     }
 
     @keyframes scroll-pulse {
-        0%, 100% { opacity: 0.4; transform: scaleY(1); }
-        50% { opacity: 1; transform: scaleY(1.2); transform-origin: top; }
+        0%, 100% { opacity: 0.3; transform: scaleY(1); }
+        50% { opacity: 0.8; transform: scaleY(1.2); transform-origin: top; }
     }
 
 
@@ -554,8 +619,7 @@ Homepage redesign — Scientific Luminescence aesthetic
        PROJECT SECTION
        ============================================================ */
     .ms-project {
-        background: var(--deep);
-        border-top: 1px solid var(--border);
+        background: var(--bg-warm);
     }
 
     .ms-project-grid {
@@ -567,9 +631,9 @@ Homepage redesign — Scientific Luminescence aesthetic
     }
 
     .ms-project-text {
-        font-size: 1rem;
-        color: var(--text-muted);
-        line-height: 1.8;
+        font-size: 0.95rem;
+        color: var(--ink-muted);
+        line-height: 1.85;
         font-weight: 300;
     }
 
@@ -582,6 +646,13 @@ Homepage redesign — Scientific Luminescence aesthetic
         padding: 2.5rem;
         position: relative;
         overflow: hidden;
+        box-shadow: var(--shadow-md);
+        transition: box-shadow 0.4s, transform 0.4s var(--ease-out-expo);
+    }
+
+    .ms-biblissima-card:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-3px);
     }
 
     .ms-biblissima-card::before {
@@ -591,7 +662,7 @@ Homepage redesign — Scientific Luminescence aesthetic
         left: 0;
         right: 0;
         height: 2px;
-        background: linear-gradient(90deg, var(--accent), var(--teal));
+        background: linear-gradient(90deg, var(--spectral-5), var(--spectral-6), var(--spectral-4));
     }
 
     .ms-biblissima-logo {
@@ -605,12 +676,12 @@ Homepage redesign — Scientific Luminescence aesthetic
         font-size: 1.5rem;
         font-weight: 400;
         margin-bottom: 1rem;
-        color: var(--text);
+        color: var(--ink);
     }
 
     .ms-biblissima-card p {
-        font-size: 0.92rem;
-        color: var(--text-muted);
+        font-size: 0.9rem;
+        color: var(--ink-muted);
         line-height: 1.7;
         font-weight: 300;
     }
@@ -629,32 +700,36 @@ Homepage redesign — Scientific Luminescence aesthetic
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 12px;
-        transition: border-color 0.4s, transform 0.4s var(--ease-out-expo);
+        box-shadow: var(--shadow-sm);
+        transition: box-shadow 0.4s, transform 0.4s var(--ease-out-expo);
     }
 
     .ms-stat:hover {
-        border-color: var(--border-hover);
-        transform: translateY(-4px);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-3px);
     }
 
     .ms-stat-icon {
-        font-size: 1.5rem;
-        color: var(--accent);
+        font-size: 1.4rem;
         margin-bottom: 0.75rem;
     }
+
+    .ms-stat:nth-child(1) .ms-stat-icon { color: var(--spectral-1); }
+    .ms-stat:nth-child(2) .ms-stat-icon { color: var(--spectral-5); }
+    .ms-stat:nth-child(3) .ms-stat-icon { color: var(--spectral-4); }
 
     .ms-stat-value {
         font-family: var(--font-display);
         font-size: 2.2rem;
         font-weight: 300;
-        color: var(--text);
+        color: var(--ink);
         line-height: 1;
         margin-bottom: 0.4rem;
     }
 
     .ms-stat-label {
-        font-size: 0.82rem;
-        color: var(--text-dim);
+        font-size: 0.78rem;
+        color: var(--ink-dim);
         letter-spacing: 0.05em;
         text-transform: uppercase;
         font-family: var(--font-mono);
@@ -666,7 +741,7 @@ Homepage redesign — Scientific Luminescence aesthetic
         border-radius: 16px;
         overflow: hidden;
         position: relative;
-        border: 1px solid var(--border);
+        box-shadow: var(--shadow-lg);
     }
 
     .ms-showcase img {
@@ -682,7 +757,7 @@ Homepage redesign — Scientific Luminescence aesthetic
         left: 0;
         right: 0;
         padding: 2rem 2.5rem;
-        background: linear-gradient(to top, rgba(7,11,22,0.95) 0%, transparent 100%);
+        background: linear-gradient(to top, rgba(26,26,46,0.85) 0%, transparent 100%);
     }
 
     .ms-showcase-caption h4 {
@@ -690,11 +765,12 @@ Homepage redesign — Scientific Luminescence aesthetic
         font-size: 1.3rem;
         font-weight: 400;
         margin-bottom: 0.3rem;
+        color: #fff;
     }
 
     .ms-showcase-caption p {
         font-size: 0.85rem;
-        color: var(--text-muted);
+        color: rgba(255,255,255,0.7);
         font-weight: 300;
     }
 
@@ -703,7 +779,7 @@ Homepage redesign — Scientific Luminescence aesthetic
        FEATURES / EXPLORER SECTION
        ============================================================ */
     .ms-features {
-        background: var(--midnight);
+        background: var(--bg);
     }
 
     .ms-features-grid {
@@ -718,34 +794,35 @@ Homepage redesign — Scientific Luminescence aesthetic
         border: 1px solid var(--border);
         border-radius: 16px;
         padding: 2.5rem;
-        transition: border-color 0.4s, transform 0.4s var(--ease-out-expo), box-shadow 0.4s;
+        transition: box-shadow 0.4s, transform 0.4s var(--ease-out-expo);
         position: relative;
         overflow: hidden;
+        box-shadow: var(--shadow-sm);
     }
 
-    .ms-feature-card::after {
+    /* Colored top accent line */
+    .ms-feature-card::before {
         content: '';
         position: absolute;
         top: 0;
         left: 0;
         right: 0;
-        height: 1px;
+        height: 2px;
         opacity: 0;
         transition: opacity 0.4s;
     }
 
-    .ms-feature-card:nth-child(1)::after { background: linear-gradient(90deg, var(--spectral-3), transparent); }
-    .ms-feature-card:nth-child(2)::after { background: linear-gradient(90deg, var(--teal), transparent); }
-    .ms-feature-card:nth-child(3)::after { background: linear-gradient(90deg, var(--spectral-5), transparent); }
-    .ms-feature-card:nth-child(4)::after { background: linear-gradient(90deg, var(--spectral-6), transparent); }
+    .ms-feature-card:nth-child(1)::before { background: linear-gradient(90deg, var(--spectral-3), var(--spectral-2)); }
+    .ms-feature-card:nth-child(2)::before { background: linear-gradient(90deg, var(--teal), var(--spectral-4)); }
+    .ms-feature-card:nth-child(3)::before { background: linear-gradient(90deg, var(--spectral-5), var(--spectral-6)); }
+    .ms-feature-card:nth-child(4)::before { background: linear-gradient(90deg, var(--spectral-6), var(--spectral-1)); }
 
     .ms-feature-card:hover {
-        border-color: var(--border-hover);
+        box-shadow: var(--shadow-lg);
         transform: translateY(-4px);
-        box-shadow: 0 16px 48px rgba(0,0,0,0.3);
     }
 
-    .ms-feature-card:hover::after { opacity: 1; }
+    .ms-feature-card:hover::before { opacity: 1; }
 
     .ms-feature-icon {
         width: 48px;
@@ -758,22 +835,22 @@ Homepage redesign — Scientific Luminescence aesthetic
         margin-bottom: 1.5rem;
     }
 
-    .ms-feature-card:nth-child(1) .ms-feature-icon { background: rgba(241,196,15,0.1); color: var(--spectral-3); }
+    .ms-feature-card:nth-child(1) .ms-feature-icon { background: rgba(240,180,41,0.1); color: var(--spectral-2); }
     .ms-feature-card:nth-child(2) .ms-feature-icon { background: var(--teal-dim); color: var(--teal); }
-    .ms-feature-card:nth-child(3) .ms-feature-icon { background: rgba(52,152,219,0.1); color: var(--spectral-5); }
-    .ms-feature-card:nth-child(4) .ms-feature-icon { background: rgba(155,89,182,0.1); color: var(--spectral-6); }
+    .ms-feature-card:nth-child(3) .ms-feature-icon { background: rgba(59,130,246,0.08); color: var(--spectral-5); }
+    .ms-feature-card:nth-child(4) .ms-feature-icon { background: rgba(139,92,246,0.08); color: var(--spectral-6); }
 
     .ms-feature-card h3 {
         font-family: var(--font-display);
         font-size: 1.4rem;
         font-weight: 400;
         margin-bottom: 0.8rem;
-        color: var(--text);
+        color: var(--ink);
     }
 
     .ms-feature-card p {
-        font-size: 0.9rem;
-        color: var(--text-muted);
+        font-size: 0.88rem;
+        color: var(--ink-muted);
         line-height: 1.7;
         font-weight: 300;
     }
@@ -787,13 +864,13 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     .ms-feature-tag {
         font-family: var(--font-mono);
-        font-size: 0.7rem;
+        font-size: 0.68rem;
         letter-spacing: 0.05em;
         padding: 0.3rem 0.7rem;
-        background: rgba(255,255,255,0.04);
+        background: var(--bg-warm);
         border: 1px solid var(--border);
         border-radius: 4px;
-        color: var(--text-dim);
+        color: var(--ink-dim);
     }
 
 
@@ -801,8 +878,7 @@ Homepage redesign — Scientific Luminescence aesthetic
        GALLERY / ANALYSES SECTION
        ============================================================ */
     .ms-gallery {
-        background: var(--deep);
-        border-top: 1px solid var(--border);
+        background: var(--bg-warm);
     }
 
     .ms-gallery-grid {
@@ -817,13 +893,13 @@ Homepage redesign — Scientific Luminescence aesthetic
         border-radius: 16px;
         overflow: hidden;
         position: relative;
-        border: 1px solid var(--border);
+        box-shadow: var(--shadow-md);
         cursor: pointer;
-        transition: border-color 0.4s, transform 0.4s var(--ease-out-expo);
+        transition: box-shadow 0.4s, transform 0.4s var(--ease-out-expo);
     }
 
     .ms-gallery-item:hover {
-        border-color: var(--border-hover);
+        box-shadow: var(--shadow-lg);
         transform: translateY(-4px);
     }
 
@@ -846,7 +922,7 @@ Homepage redesign — Scientific Luminescence aesthetic
     .ms-gallery-overlay {
         position: absolute;
         inset: 0;
-        background: linear-gradient(to top, rgba(7,11,22,0.9) 0%, rgba(7,11,22,0.2) 40%, transparent 70%);
+        background: linear-gradient(to top, rgba(26,26,46,0.85) 0%, rgba(26,26,46,0.2) 40%, transparent 70%);
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
@@ -855,15 +931,15 @@ Homepage redesign — Scientific Luminescence aesthetic
     }
 
     .ms-gallery-item:hover .ms-gallery-overlay {
-        background: linear-gradient(to top, rgba(7,11,22,0.95) 0%, rgba(7,11,22,0.3) 50%, transparent 80%);
+        background: linear-gradient(to top, rgba(26,26,46,0.92) 0%, rgba(26,26,46,0.3) 50%, transparent 80%);
     }
 
     .ms-gallery-tag {
         font-family: var(--font-mono);
-        font-size: 0.65rem;
+        font-size: 0.63rem;
         letter-spacing: 0.15em;
         text-transform: uppercase;
-        color: var(--accent);
+        color: var(--spectral-3);
         margin-bottom: 0.5rem;
     }
 
@@ -872,11 +948,12 @@ Homepage redesign — Scientific Luminescence aesthetic
         font-size: 1.3rem;
         font-weight: 400;
         margin-bottom: 0.3rem;
+        color: #fff;
     }
 
     .ms-gallery-overlay p {
-        font-size: 0.85rem;
-        color: var(--text-muted);
+        font-size: 0.83rem;
+        color: rgba(255,255,255,0.7);
         font-weight: 300;
         line-height: 1.5;
     }
@@ -886,7 +963,7 @@ Homepage redesign — Scientific Luminescence aesthetic
        SEARCH SECTION
        ============================================================ */
     .ms-search {
-        background: var(--midnight);
+        background: var(--bg);
         text-align: center;
     }
 
@@ -919,23 +996,24 @@ Homepage redesign — Scientific Luminescence aesthetic
         width: 100%;
         padding: 1.1rem 1.5rem 1.1rem 3.5rem;
         font-family: var(--font-body);
-        font-size: 1rem;
+        font-size: 0.95rem;
         font-weight: 300;
-        color: var(--text);
+        color: var(--ink);
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 12px;
         outline: none;
+        box-shadow: var(--shadow-sm);
         transition: border-color 0.3s, box-shadow 0.3s;
     }
 
     .ms-search-input::placeholder {
-        color: var(--text-dim);
+        color: var(--ink-dim);
     }
 
     .ms-search-input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px var(--accent-dim);
+        border-color: var(--spectral-5);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.1), var(--shadow-md);
     }
 
     .ms-search-icon {
@@ -943,8 +1021,8 @@ Homepage redesign — Scientific Luminescence aesthetic
         left: 1.2rem;
         top: 50%;
         transform: translateY(-50%);
-        color: var(--text-dim);
-        font-size: 1rem;
+        color: var(--ink-dim);
+        font-size: 0.95rem;
     }
 
     .ms-search-chips {
@@ -957,21 +1035,23 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     .ms-search-chip {
         font-family: var(--font-body);
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         font-weight: 400;
         padding: 0.5rem 1.2rem;
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 100px;
-        color: var(--text-muted);
+        color: var(--ink-muted);
         cursor: pointer;
         transition: all 0.3s;
+        box-shadow: var(--shadow-sm);
     }
 
     .ms-search-chip:hover {
-        border-color: var(--accent);
-        color: var(--accent);
-        background: var(--accent-dim);
+        border-color: var(--spectral-5);
+        color: var(--spectral-5);
+        background: rgba(59,130,246,0.04);
+        box-shadow: 0 2px 12px rgba(59,130,246,0.1);
     }
 
     .ms-search-cta {
@@ -983,8 +1063,7 @@ Homepage redesign — Scientific Luminescence aesthetic
        PARTNERS SECTION
        ============================================================ */
     .ms-partners {
-        background: var(--deep);
-        border-top: 1px solid var(--border);
+        background: var(--bg-warm);
         padding: 5rem 0;
         text-align: center;
     }
@@ -994,7 +1073,7 @@ Homepage redesign — Scientific Luminescence aesthetic
         font-size: 0.72rem;
         letter-spacing: 0.2em;
         text-transform: uppercase;
-        color: var(--text-dim);
+        color: var(--ink-dim);
         margin-bottom: 3rem;
     }
 
@@ -1011,14 +1090,14 @@ Homepage redesign — Scientific Luminescence aesthetic
     .ms-partner-logo {
         height: 50px;
         width: auto;
-        opacity: 0.4;
-        filter: grayscale(100%) brightness(1.5);
+        opacity: 0.35;
+        filter: grayscale(100%);
         transition: opacity 0.4s, filter 0.4s;
     }
 
     .ms-partner-logo:hover {
-        opacity: 0.85;
-        filter: grayscale(0%) brightness(1);
+        opacity: 0.9;
+        filter: grayscale(0%);
     }
 
 
@@ -1026,8 +1105,7 @@ Homepage redesign — Scientific Luminescence aesthetic
        FOOTER
        ============================================================ */
     .ms-footer {
-        background: var(--midnight);
-        border-top: 1px solid var(--border);
+        background: var(--bg-alt);
         padding: 3rem 0 2rem;
     }
 
@@ -1046,14 +1124,14 @@ Homepage redesign — Scientific Luminescence aesthetic
     .ms-footer-brand-name {
         font-family: var(--font-display);
         font-size: 1.2rem;
-        color: var(--text);
+        color: var(--ink);
         margin-bottom: 0.5rem;
         letter-spacing: 0.06em;
     }
 
     .ms-footer-brand-desc {
         font-size: 0.82rem;
-        color: var(--text-dim);
+        color: var(--ink-dim);
         font-weight: 300;
         max-width: 320px;
         line-height: 1.6;
@@ -1066,10 +1144,10 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     .ms-footer-col h4 {
         font-family: var(--font-mono);
-        font-size: 0.7rem;
+        font-size: 0.68rem;
         letter-spacing: 0.15em;
         text-transform: uppercase;
-        color: var(--text-dim);
+        color: var(--ink-dim);
         margin-bottom: 1rem;
     }
 
@@ -1082,12 +1160,12 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     .ms-footer-col a {
         font-size: 0.85rem;
-        color: var(--text-muted);
+        color: var(--ink-muted);
         font-weight: 300;
         transition: color 0.3s;
     }
 
-    .ms-footer-col a:hover { color: var(--accent); }
+    .ms-footer-col a:hover { color: var(--spectral-5); }
 
     .ms-footer-bottom {
         display: flex;
@@ -1099,17 +1177,17 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     .ms-footer-bottom p {
         font-size: 0.78rem;
-        color: var(--text-dim);
+        color: var(--ink-dim);
         font-weight: 300;
     }
 
     .ms-footer-arches {
         font-size: 0.78rem;
-        color: var(--text-dim);
+        color: var(--ink-dim);
     }
 
-    .ms-footer-arches a { color: var(--text-muted); }
-    .ms-footer-arches a:hover { color: var(--accent); }
+    .ms-footer-arches a { color: var(--ink-muted); }
+    .ms-footer-arches a:hover { color: var(--spectral-5); }
 
 
     /* ============================================================
@@ -1237,6 +1315,7 @@ Homepage redesign — Scientific Luminescence aesthetic
     <section class="ms-hero" id="hero">
         <div class="ms-hero-aurora"></div>
         <div class="ms-hero-spectral-bg"></div>
+        <div class="ms-hero-prism"></div>
 
         <div class="ms-hero-content">
             <img class="ms-hero-logo" src="{% static 'img/landing/logo-manuspectrum.svg' %}" alt="ManuSpectrum">
@@ -1577,8 +1656,118 @@ Homepage redesign — Scientific Luminescence aesthetic
 
 
     <!-- ============================================================
-         SCRIPTS
+         SCRIPTS — Critical JS runs BEFORE RequireJS modules load
          ============================================================ -->
+
+    <!-- 1) Standalone scroll-reveal & header — no dependency on RequireJS -->
+    <script>
+    (function() {
+        'use strict';
+
+        // --- Header scroll behavior ---
+        var header = document.getElementById('ms-header');
+        var scrollThreshold = 80;
+
+        function updateHeader() {
+            if (window.scrollY > scrollThreshold) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        }
+        window.addEventListener('scroll', updateHeader, { passive: true });
+        updateHeader();
+
+        // --- Mobile nav ---
+        var hamburger = document.getElementById('ms-hamburger');
+        var mobileNav = document.getElementById('ms-mobile-nav');
+
+        hamburger.addEventListener('click', function() {
+            hamburger.classList.toggle('active');
+            mobileNav.classList.toggle('open');
+            document.body.style.overflow = mobileNav.classList.contains('open') ? 'hidden' : '';
+        });
+
+        var mobileLinks = mobileNav.querySelectorAll('a');
+        for (var i = 0; i < mobileLinks.length; i++) {
+            mobileLinks[i].addEventListener('click', function() {
+                hamburger.classList.remove('active');
+                mobileNav.classList.remove('open');
+                document.body.style.overflow = '';
+            });
+        }
+
+        // --- Scroll reveal (IntersectionObserver) ---
+        function initReveal() {
+            if ('IntersectionObserver' in window) {
+                var revealObserver = new IntersectionObserver(function(entries) {
+                    entries.forEach(function(entry) {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('visible');
+                        }
+                    });
+                }, {
+                    threshold: 0.06,
+                    rootMargin: '0px 0px -30px 0px'
+                });
+
+                var revealElements = document.querySelectorAll('.reveal, .reveal-scale');
+                for (var j = 0; j < revealElements.length; j++) {
+                    revealObserver.observe(revealElements[j]);
+                }
+            } else {
+                // Fallback: show everything immediately
+                var allReveal = document.querySelectorAll('.reveal, .reveal-scale');
+                for (var k = 0; k < allReveal.length; k++) {
+                    allReveal[k].classList.add('visible');
+                }
+            }
+        }
+
+        // Run immediately if DOM already loaded, otherwise wait
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initReveal);
+        } else {
+            initReveal();
+        }
+
+        // --- Search form ---
+        var searchForm = document.getElementById('ms-search-form');
+        var searchInput = document.getElementById('ms-search-input');
+        var searchUrl = "{% url 'search_home' %}";
+
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var query = searchInput.value.trim();
+            if (query) {
+                var termFilter = JSON.stringify([{
+                    "inverted": false,
+                    "type": "string",
+                    "context": "",
+                    "context_label": "",
+                    "id": query,
+                    "text": query,
+                    "value": query
+                }]);
+                window.location.href = searchUrl + '?paging-filter=1&term-filter=' + encodeURIComponent(termFilter);
+            } else {
+                window.location.href = searchUrl;
+            }
+        });
+
+        // Search chips
+        var chips = document.querySelectorAll('.ms-search-chip');
+        for (var c = 0; c < chips.length; c++) {
+            chips[c].addEventListener('click', function() {
+                var term = this.getAttribute('data-term');
+                searchInput.value = term;
+                searchForm.dispatchEvent(new Event('submit'));
+            });
+        }
+    })();
+    </script>
+
+    <!-- 2) KnockoutJS & language-switcher — loaded async, won't block the page -->
     <script>
     require.config({
         baseUrl: "{% webpack_static 'build/js' %}",
@@ -1596,109 +1785,10 @@ Homepage redesign — Scientific Luminescence aesthetic
 
     require(['jquery', 'knockout', 'views/components/language-switcher'], function($, ko) {
         $(document).ready(function() {
-
-            // --- Header scroll behavior ---
-            var header = document.getElementById('ms-header');
-            var scrollThreshold = 80;
-
-            function updateHeader() {
-                if (window.scrollY > scrollThreshold) {
-                    header.classList.add('scrolled');
-                } else {
-                    header.classList.remove('scrolled');
-                }
-            }
-            window.addEventListener('scroll', updateHeader, { passive: true });
-            updateHeader();
-
-            // --- Mobile nav ---
-            var hamburger = document.getElementById('ms-hamburger');
-            var mobileNav = document.getElementById('ms-mobile-nav');
-
-            hamburger.addEventListener('click', function() {
-                hamburger.classList.toggle('active');
-                mobileNav.classList.toggle('open');
-                document.body.style.overflow = mobileNav.classList.contains('open') ? 'hidden' : '';
-            });
-
-            // Close mobile nav on link click
-            var mobileLinks = mobileNav.querySelectorAll('a');
-            for (var i = 0; i < mobileLinks.length; i++) {
-                mobileLinks[i].addEventListener('click', function() {
-                    hamburger.classList.remove('active');
-                    mobileNav.classList.remove('open');
-                    document.body.style.overflow = '';
-                });
-            }
-
-            // --- Scroll reveal (IntersectionObserver) ---
-            if ('IntersectionObserver' in window) {
-                var revealObserver = new IntersectionObserver(function(entries) {
-                    entries.forEach(function(entry) {
-                        if (entry.isIntersecting) {
-                            entry.target.classList.add('visible');
-                        }
-                    });
-                }, {
-                    threshold: 0.08,
-                    rootMargin: '0px 0px -40px 0px'
-                });
-
-                var revealElements = document.querySelectorAll('.reveal, .reveal-scale');
-                for (var j = 0; j < revealElements.length; j++) {
-                    revealObserver.observe(revealElements[j]);
-                }
-            } else {
-                // Fallback: show everything
-                var allReveal = document.querySelectorAll('.reveal, .reveal-scale');
-                for (var k = 0; k < allReveal.length; k++) {
-                    allReveal[k].classList.add('visible');
-                }
-            }
-
-            // --- Search form ---
-            var searchForm = document.getElementById('ms-search-form');
-            var searchInput = document.getElementById('ms-search-input');
-            var searchUrl = "{% url 'search_home' %}";
-
-            searchForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                var query = searchInput.value.trim();
-                if (query) {
-                    var termFilter = JSON.stringify([{
-                        "inverted": false,
-                        "type": "string",
-                        "context": "",
-                        "context_label": "",
-                        "id": query,
-                        "text": query,
-                        "value": query
-                    }]);
-                    window.location.href = searchUrl + '?paging-filter=1&term-filter=' + encodeURIComponent(termFilter);
-                } else {
-                    window.location.href = searchUrl;
-                }
-            });
-
-            // Search chips
-            var chips = document.querySelectorAll('.ms-search-chip');
-            for (var c = 0; c < chips.length; c++) {
-                chips[c].addEventListener('click', function() {
-                    var term = this.getAttribute('data-term');
-                    searchInput.value = term;
-                    searchForm.dispatchEvent(new Event('submit'));
-                });
-            }
-
-            // --- KnockoutJS ---
             var ViewModel = function() {};
-            setTimeout(function() {
-                ko.applyBindings(new ViewModel());
-            }, 300);
-
+            ko.applyBindings(new ViewModel());
         });
     });
     </script>
-
 </body>
 </html>
