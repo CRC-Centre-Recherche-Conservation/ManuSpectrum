@@ -519,6 +519,122 @@ Homepage — Prismatic Luminescence aesthetic
     #ms-logo-svg:hover #curve-blue { filter: drop-shadow(0 0 3px rgba(59,130,246,0.4)); }
     #ms-logo-svg:hover #curve-red  { filter: drop-shadow(0 0 3px rgba(220,53,69,0.35)); }
 
+    /* Zoom button */
+    .ms-logo-zoom-btn {
+        position: absolute;
+        bottom: 8px;
+        right: 4px;
+        width: 26px;
+        height: 26px;
+        border: 1px solid rgba(26,26,46,0.12);
+        border-radius: 5px;
+        background: rgba(255,255,255,0.75);
+        backdrop-filter: blur(6px);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.25s, background 0.2s, transform 0.2s;
+        z-index: 5;
+    }
+    .ms-hero-logo { position: relative; }
+    .ms-hero-logo:hover .ms-logo-zoom-btn { opacity: 0.7; }
+    .ms-logo-zoom-btn:hover { opacity: 1 !important; background: rgba(255,255,255,0.95); transform: scale(1.08); }
+    .ms-logo-zoom-btn svg { width: 14px; height: 14px; stroke: #1a1a2e; fill: none; stroke-width: 2; stroke-linecap: round; }
+
+    /* Fullscreen overlay */
+    .ms-logo-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        background: rgba(10,10,20,0.55);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        animation: overlay-in 0.3s ease forwards;
+    }
+    .ms-logo-overlay.active { display: flex; }
+    @keyframes overlay-in {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    .ms-logo-overlay-inner {
+        position: relative;
+        width: min(90vw, 1100px);
+        background: var(--surface, #fff);
+        border-radius: 12px;
+        box-shadow: 0 24px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(26,26,46,0.06);
+        padding: 2.5rem 2.5rem 2rem;
+        animation: overlay-card-in 0.35s cubic-bezier(0.16,1,0.3,1) forwards;
+    }
+    @keyframes overlay-card-in {
+        from { opacity: 0; transform: scale(0.92) translateY(16px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .ms-logo-overlay-inner svg { width: 100%; height: auto; cursor: crosshair; }
+
+    .ms-logo-overlay-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(26,26,46,0.06);
+    }
+    .ms-logo-overlay-title {
+        font-family: var(--font-mono, 'JetBrains Mono', monospace);
+        font-size: 0.75rem;
+        color: var(--ink-muted, #4a4a5e);
+        letter-spacing: 0.05em;
+    }
+    .ms-logo-overlay-badge {
+        font-family: var(--font-mono, 'JetBrains Mono', monospace);
+        font-size: 0.65rem;
+        color: var(--ink-dim, #8a8a9a);
+        background: rgba(26,26,46,0.04);
+        padding: 0.2em 0.6em;
+        border-radius: 4px;
+    }
+
+    .ms-logo-close-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(26,26,46,0.08);
+        border-radius: 6px;
+        background: rgba(26,26,46,0.03);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+        z-index: 2;
+    }
+    .ms-logo-close-btn:hover { background: rgba(26,26,46,0.08); }
+    .ms-logo-close-btn svg { width: 14px; height: 14px; stroke: var(--ink-muted, #4a4a5e); fill: none; stroke-width: 2; stroke-linecap: round; }
+
+    .ms-logo-overlay-footer {
+        margin-top: 0.75rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid rgba(26,26,46,0.06);
+        display: flex;
+        gap: 1.5rem;
+        font-family: var(--font-mono, 'JetBrains Mono', monospace);
+        font-size: 0.65rem;
+        color: var(--ink-dim, #8a8a9a);
+    }
+    .ms-logo-overlay-footer span { display: flex; align-items: center; gap: 0.4em; }
+    .ms-logo-overlay-footer .dot-blue { width: 7px; height: 7px; border-radius: 50%; background: #3b82f6; }
+    .ms-logo-overlay-footer .dot-red  { width: 7px; height: 7px; border-radius: 50%; background: #dc3545; }
+
     .ms-hero-tagline {
         font-family: var(--font-display);
         font-size: clamp(1.5rem, 3.5vw, 2.6rem);
@@ -1415,6 +1531,29 @@ Homepage — Prismatic Luminescence aesthetic
                   <circle cx="357" cy="10" r="2" fill="none" stroke="#dc3545" stroke-width="1" opacity="0.6"/>
                 </g>
               </svg>
+              <!-- Zoom button (appears on hover) -->
+              <button class="ms-logo-zoom-btn" id="ms-logo-zoom" aria-label="Zoom" title="Zoom">
+                <svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="10" y1="7" x2="10" y2="13"/></svg>
+              </button>
+            </div>
+
+            <!-- Fullscreen overlay for zoomed logo -->
+            <div class="ms-logo-overlay" id="ms-logo-overlay">
+              <div class="ms-logo-overlay-inner">
+                <button class="ms-logo-close-btn" id="ms-logo-close" aria-label="Close">
+                  <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                </button>
+                <div class="ms-logo-overlay-header">
+                  <span class="ms-logo-overlay-title">ManuSpectrum — Spectral Analysis Plot</span>
+                  <span class="ms-logo-overlay-badge">interactive</span>
+                </div>
+                <div id="ms-logo-zoom-target"></div>
+                <div class="ms-logo-overlay-footer">
+                  <span><i class="dot-blue"></i>Channel 1 (XRF)</span>
+                  <span><i class="dot-red"></i>Channel 2 (FORS)</span>
+                  <span>λ : 380 – 780 nm</span>
+                </div>
+              </div>
             </div>
 
             <h1 class="ms-hero-tagline">
@@ -1991,6 +2130,42 @@ Homepage — Prismatic Luminescence aesthetic
             onMove(e.touches[0]);
         }, { passive: false });
         svg.addEventListener('touchend', onLeave);
+
+        // --- Zoom / fullscreen ---
+        var zoomBtn  = document.getElementById('ms-logo-zoom');
+        var overlay  = document.getElementById('ms-logo-overlay');
+        var closeBtn = document.getElementById('ms-logo-close');
+        var target   = document.getElementById('ms-logo-zoom-target');
+        var wrap     = document.getElementById('ms-logo-wrap');
+
+        function openZoom() {
+            // Move the SVG into the overlay
+            target.appendChild(svg);
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeZoom() {
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+            // Move SVG back into the hero
+            wrap.insertBefore(svg, zoomBtn);
+        }
+
+        zoomBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            openZoom();
+        });
+
+        closeBtn.addEventListener('click', closeZoom);
+
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closeZoom();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay.classList.contains('active')) closeZoom();
+        });
     })();
     </script>
 
