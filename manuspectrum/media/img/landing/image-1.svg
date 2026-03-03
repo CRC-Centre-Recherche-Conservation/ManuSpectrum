@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0c1222"/>
+      <stop offset="100%" style="stop-color:#1a2440"/>
+    </linearGradient>
+    <linearGradient id="spectral" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#e74c3c;stop-opacity:0.8"/>
+      <stop offset="20%" style="stop-color:#e67e22;stop-opacity:0.9"/>
+      <stop offset="40%" style="stop-color:#f1c40f;stop-opacity:1"/>
+      <stop offset="60%" style="stop-color:#2ecc71;stop-opacity:0.8"/>
+      <stop offset="80%" style="stop-color:#3498db;stop-opacity:0.9"/>
+      <stop offset="100%" style="stop-color:#9b59b6;stop-opacity:0.7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <!-- Grid pattern suggesting XRF mapping -->
+  <g opacity="0.15">
+    <rect x="100" y="100" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="190" y="100" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="280" y="100" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="370" y="100" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="460" y="100" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="550" y="100" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="640" y="100" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="730" y="100" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="820" y="100" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="910" y="100" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="1000" y="100" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="100" y="190" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="190" y="190" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="280" y="190" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="370" y="190" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="460" y="190" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="550" y="190" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="640" y="190" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="730" y="190" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="820" y="190" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="910" y="190" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="1000" y="190" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="100" y="280" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="190" y="280" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="280" y="280" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="370" y="280" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="460" y="280" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="550" y="280" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="640" y="280" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="730" y="280" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="820" y="280" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="910" y="280" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="1000" y="280" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="100" y="370" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="190" y="370" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="280" y="370" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="370" y="370" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="460" y="370" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="550" y="370" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="640" y="370" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="730" y="370" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="820" y="370" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="910" y="370" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="1000" y="370" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="100" y="460" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="190" y="460" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="280" y="460" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="370" y="460" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="460" y="460" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="550" y="460" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="640" y="460" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="730" y="460" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="820" y="460" width="80" height="80" rx="4" fill="#f1c40f"/>
+    <rect x="910" y="460" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="1000" y="460" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="100" y="550" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="190" y="550" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="280" y="550" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="370" y="550" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="460" y="550" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="550" y="550" width="80" height="80" rx="4" fill="#e67e22"/>
+    <rect x="640" y="550" width="80" height="80" rx="4" fill="#3498db"/>
+    <rect x="730" y="550" width="80" height="80" rx="4" fill="#e74c3c"/>
+    <rect x="820" y="550" width="80" height="80" rx="4" fill="#2ecc71"/>
+    <rect x="910" y="550" width="80" height="80" rx="4" fill="#9b59b6"/>
+    <rect x="1000" y="550" width="80" height="80" rx="4" fill="#f1c40f"/>
+  </g>
+  <!-- Spectral bar at bottom -->
+  <rect x="0" y="700" width="1200" height="4" fill="url(#spectral)"/>
+  <!-- Label -->
+  <text x="600" y="750" text-anchor="middle" fill="#8b8d9e" font-family="sans-serif" font-size="18" letter-spacing="3">CARTOGRAPHIE XRF — PLACEHOLDER</text>
+</svg>

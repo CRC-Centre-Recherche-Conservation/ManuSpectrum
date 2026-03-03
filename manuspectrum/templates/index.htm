@@ -1,19 +1,6 @@
 <!--
-ARCHES - a program developed to inventory and manage immovable cultural heritage.
-Copyright (C) 2013 J. Paul Getty Trust and World Monuments Fund
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
+ManuSpectrum — Base de données interopérable pour l'analyse physico-chimique du patrimoine
+Homepage redesign — Scientific Luminescence aesthetic
 -->
 {% load static %}
 {% load template_tags %}
@@ -22,527 +9,1696 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 {% load webpack_static from webpack_loader %}
 
 <!DOCTYPE html>
-<!--[if IE 8]> <html lang="en" class="ie8"> <![endif]-->
-<!--[if IE 9]> <html lang="en" class="ie9"> <![endif]-->
-<!--[if !IE]><!-->
-<html lang="en">
-<!--<![endif]-->
+<html lang="fr">
 
 <head>
-    <title>{{app_title}}</title>
-
-    <!-- Meta -->
+    <title>{% trans "ManuSpectrum — Analyse physico-chimique du patrimoine" %}</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="">
-    <meta name="author" content="">
+    <meta name="description" content="{% trans "Base de données interopérable pour l'analyse des matériaux patrimoniaux — Cluster Biblissima+" %}">
+    <meta name="theme-color" content="#070b16">
 
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
     <link rel="apple-touch-icon" href="{% webpack_static 'favicons/apple-touch-icon.png' %}" />
-    <link rel="apple-touch-icon" sizes="76x76" href="{% webpack_static 'favicons/apple-touch-icon-76x76.png' %}" />
-    <link rel="apple-touch-icon" sizes="120x120" href="{% webpack_static 'favicons/apple-touch-icon-120x120.png' %}" />
-    <link rel="apple-touch-icon" sizes="152x152" href="{% webpack_static 'favicons/apple-touch-icon-152x152.png' %}" />
-    <link rel="apple-touch-icon" sizes="180x180" href="{% webpack_static 'favicons/apple-touch-icon-180x180.png' %}" />
 
-    {% block css %}
-        <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Open+Sans:400,300,600&amp;subset=cyrillic,latin">
-        <link rel="stylesheet" type="text/css" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.2/css/bootstrap.min.css">
-        <link rel="stylesheet" type="text/css" href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.2.0/css/font-awesome.min.css">
-        <link rel="stylesheet" type="text/css" href="{% webpack_static 'plugins/slick/slick.min.css' %}">
-        <link rel="stylesheet" type="text/css" href="{% webpack_static 'plugins/slick/accessible-slick-theme.min.css' %}">
-        {% render_bundle 'css/index' 'css' %}
-        {% render_bundle 'css/index-slider' 'css' %}
-        
-        {% if app_settings.ACCESSIBILITY_MODE %}
-            {% render_bundle 'css/accessibility' 'css' %}
-        {% endif %}
-    {% endblock css%}
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <style>
+    /* ============================================================
+       MANUSPECTRUM HOMEPAGE — SCIENTIFIC LUMINESCENCE
+       ============================================================ */
+
+    /* --- RESET & CUSTOM PROPERTIES --- */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+        --midnight: #070b16;
+        --deep: #0c1222;
+        --surface: #131b2e;
+        --elevated: #1a2440;
+        --border: rgba(255,255,255,0.06);
+        --border-hover: rgba(255,255,255,0.12);
+        --accent: #c8a951;
+        --accent-light: #e4c36a;
+        --accent-dim: rgba(200,169,81,0.15);
+        --teal: #2eb8a6;
+        --teal-dim: rgba(46,184,166,0.12);
+        --spectral-1: #e74c3c;
+        --spectral-2: #e67e22;
+        --spectral-3: #f1c40f;
+        --spectral-4: #2ecc71;
+        --spectral-5: #3498db;
+        --spectral-6: #9b59b6;
+        --text: #e6e4e0;
+        --text-muted: #8b8d9e;
+        --text-dim: #5c5e72;
+        --font-display: 'Cormorant Garamond', Georgia, serif;
+        --font-body: 'Outfit', system-ui, sans-serif;
+        --font-mono: 'JetBrains Mono', monospace;
+        --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+        --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+    }
+
+    body {
+        font-family: var(--font-body);
+        background: var(--midnight);
+        color: var(--text);
+        overflow-x: hidden;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        line-height: 1.6;
+    }
+
+    /* --- GRAIN OVERLAY --- */
+    body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 10000;
+        opacity: 0.025;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+        background-repeat: repeat;
+        background-size: 256px 256px;
+    }
+
+    a { color: var(--accent); text-decoration: none; transition: color 0.3s; }
+    a:hover { color: var(--accent-light); }
+
+    img { max-width: 100%; height: auto; display: block; }
+
+    /* --- SPECTRAL LINE MOTIF --- */
+    .spectral-line {
+        height: 2px;
+        background: linear-gradient(90deg, var(--spectral-1), var(--spectral-2), var(--spectral-3), var(--spectral-4), var(--spectral-5), var(--spectral-6));
+        border-radius: 1px;
+    }
+
+    .spectral-line-thin {
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, var(--spectral-1) 10%, var(--spectral-2) 25%, var(--spectral-3) 40%, var(--spectral-4) 55%, var(--spectral-5) 70%, var(--spectral-6) 85%, transparent 100%);
+        opacity: 0.5;
+    }
+
+    /* --- LAYOUT --- */
+    .ms-container {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 0 2rem;
+    }
+
+    .ms-section {
+        padding: 7rem 0;
+        position: relative;
+    }
+
+    .ms-section-label {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .ms-section-label::before {
+        content: '';
+        width: 32px;
+        height: 1px;
+        background: var(--accent);
+    }
+
+    .ms-section-title {
+        font-family: var(--font-display);
+        font-size: clamp(2rem, 4vw, 3.2rem);
+        font-weight: 300;
+        line-height: 1.2;
+        color: var(--text);
+        margin-bottom: 1.5rem;
+    }
+
+    .ms-section-subtitle {
+        font-size: 1.05rem;
+        color: var(--text-muted);
+        max-width: 640px;
+        line-height: 1.7;
+        font-weight: 300;
+    }
+
+    /* --- SCROLL REVEAL ANIMATIONS --- */
+    .reveal {
+        opacity: 0;
+        transform: translateY(36px);
+        transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-d1 { transition-delay: 0.08s; }
+    .reveal-d2 { transition-delay: 0.16s; }
+    .reveal-d3 { transition-delay: 0.24s; }
+    .reveal-d4 { transition-delay: 0.32s; }
+    .reveal-d5 { transition-delay: 0.40s; }
+    .reveal-d6 { transition-delay: 0.48s; }
+    .reveal-d7 { transition-delay: 0.56s; }
+
+    .reveal-scale {
+        opacity: 0;
+        transform: scale(0.95);
+        transition: opacity 1s var(--ease-out-expo), transform 1s var(--ease-out-expo);
+    }
+    .reveal-scale.visible { opacity: 1; transform: scale(1); }
+
+
+    /* ============================================================
+       HEADER
+       ============================================================ */
+    .ms-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        padding: 1.2rem 0;
+        transition: background 0.4s, padding 0.4s, backdrop-filter 0.4s;
+    }
+
+    .ms-header.scrolled {
+        background: rgba(7, 11, 22, 0.85);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        padding: 0.8rem 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .ms-header-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 2rem;
+    }
+
+    .ms-header-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .ms-header-logo-text {
+        font-family: var(--font-display);
+        font-size: 1.35rem;
+        font-weight: 400;
+        color: var(--text);
+        letter-spacing: 0.08em;
+    }
+
+    .ms-header-logo-mark {
+        width: 28px;
+        height: 3px;
+        background: linear-gradient(90deg, var(--spectral-1), var(--spectral-3), var(--spectral-5));
+        border-radius: 2px;
+    }
+
+    .ms-nav { display: flex; align-items: center; gap: 0; }
+
+    .ms-nav-links {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        list-style: none;
+    }
+
+    .ms-nav-links a {
+        display: block;
+        padding: 0.5rem 1.1rem;
+        font-size: 0.88rem;
+        font-weight: 400;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+        transition: color 0.3s;
+        position: relative;
+    }
+
+    .ms-nav-links a::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        width: 0;
+        height: 1px;
+        background: var(--accent);
+        transition: width 0.3s var(--ease-out-expo), left 0.3s var(--ease-out-expo);
+    }
+
+    .ms-nav-links a:hover { color: var(--text); }
+    .ms-nav-links a:hover::after { width: 60%; left: 20%; }
+
+    .ms-nav-divider {
+        width: 1px;
+        height: 20px;
+        background: var(--border);
+        margin: 0 0.5rem;
+    }
+
+    .ms-nav-auth a {
+        font-size: 0.85rem;
+        padding: 0.45rem 1rem;
+        color: var(--text-muted);
+        transition: color 0.3s;
+    }
+
+    .ms-nav-auth a:hover { color: var(--accent); }
+
+    .ms-nav-auth .ms-btn-signin {
+        background: var(--accent-dim);
+        color: var(--accent);
+        border-radius: 6px;
+        padding: 0.45rem 1.2rem;
+        font-weight: 500;
+        transition: background 0.3s, color 0.3s;
+    }
+
+    .ms-nav-auth .ms-btn-signin:hover {
+        background: var(--accent);
+        color: var(--midnight);
+    }
+
+    /* Mobile nav toggle */
+    .ms-hamburger {
+        display: none;
+        flex-direction: column;
+        gap: 5px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 8px;
+        z-index: 1002;
+    }
+
+    .ms-hamburger span {
+        display: block;
+        width: 24px;
+        height: 2px;
+        background: var(--text);
+        border-radius: 2px;
+        transition: all 0.35s var(--ease-out-expo);
+        transform-origin: center;
+    }
+
+    .ms-hamburger.active span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .ms-hamburger.active span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+    .ms-hamburger.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    /* Mobile overlay nav */
+    .ms-mobile-nav {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(7, 11, 22, 0.97);
+        backdrop-filter: blur(30px);
+        -webkit-backdrop-filter: blur(30px);
+        z-index: 1001;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.4s;
+    }
+
+    .ms-mobile-nav.open {
+        opacity: 1;
+        pointer-events: all;
+    }
+
+    .ms-mobile-nav a {
+        font-family: var(--font-display);
+        font-size: 2rem;
+        font-weight: 300;
+        color: var(--text-muted);
+        transition: color 0.3s;
+    }
+
+    .ms-mobile-nav a:hover { color: var(--accent); }
+
+
+    /* ============================================================
+       HERO SECTION
+       ============================================================ */
+    .ms-hero {
+        position: relative;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        overflow: hidden;
+        background: var(--midnight);
+    }
+
+    .ms-hero-aurora {
+        position: absolute;
+        inset: -30%;
+        opacity: 0.5;
+        background:
+            radial-gradient(ellipse 70% 50% at 15% 45%, rgba(46,184,166,0.2), transparent),
+            radial-gradient(ellipse 50% 60% at 80% 55%, rgba(200,169,81,0.18), transparent),
+            radial-gradient(ellipse 60% 40% at 50% 15%, rgba(155,89,182,0.1), transparent),
+            radial-gradient(ellipse 40% 50% at 60% 80%, rgba(52,152,219,0.08), transparent);
+        animation: aurora-drift 30s ease-in-out infinite alternate;
+        will-change: transform;
+    }
+
+    @keyframes aurora-drift {
+        0%   { transform: scale(1) translate(0, 0) rotate(0deg); }
+        33%  { transform: scale(1.06) translate(-3%, 2%) rotate(1deg); }
+        66%  { transform: scale(0.97) translate(2%, -1%) rotate(-0.5deg); }
+        100% { transform: scale(1.03) translate(-1%, 1%) rotate(0.3deg); }
+    }
+
+    /* Spectral emission lines in hero background */
+    .ms-hero-spectral-bg {
+        position: absolute;
+        bottom: 20%;
+        left: 0;
+        right: 0;
+        height: 300px;
+        opacity: 0.04;
+        background: repeating-linear-gradient(
+            90deg,
+            transparent 0px, transparent 47px,
+            var(--spectral-1) 47px, var(--spectral-1) 48px,
+            transparent 48px, transparent 113px,
+            var(--spectral-2) 113px, var(--spectral-2) 114px,
+            transparent 114px, transparent 167px,
+            var(--spectral-3) 167px, var(--spectral-3) 169px,
+            transparent 169px, transparent 241px,
+            var(--spectral-4) 241px, var(--spectral-4) 242px,
+            transparent 242px, transparent 318px,
+            var(--spectral-5) 318px, var(--spectral-5) 319px,
+            transparent 319px, transparent 372px,
+            var(--spectral-6) 372px, var(--spectral-6) 373px,
+            transparent 373px, transparent 450px
+        );
+    }
+
+    .ms-hero-content {
+        position: relative;
+        z-index: 2;
+        max-width: 860px;
+        padding: 0 2rem;
+    }
+
+    .ms-hero-logo {
+        width: 300px;
+        margin: 0 auto 2.5rem;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: hero-fade-in 1.2s var(--ease-out-expo) 0.2s forwards;
+    }
+
+    .ms-hero-tagline {
+        font-family: var(--font-display);
+        font-size: clamp(1.5rem, 3.5vw, 2.6rem);
+        font-weight: 300;
+        line-height: 1.35;
+        color: var(--text);
+        margin-bottom: 1.5rem;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: hero-fade-in 1.2s var(--ease-out-expo) 0.5s forwards;
+    }
+
+    .ms-hero-tagline em {
+        font-style: italic;
+        color: var(--accent);
+    }
+
+    .ms-hero-description {
+        font-size: 1.05rem;
+        color: var(--text-muted);
+        max-width: 580px;
+        margin: 0 auto 2.5rem;
+        font-weight: 300;
+        line-height: 1.7;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: hero-fade-in 1.2s var(--ease-out-expo) 0.8s forwards;
+    }
+
+    .ms-hero-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: hero-fade-in 1.2s var(--ease-out-expo) 1.1s forwards;
+    }
+
+    @keyframes hero-fade-in {
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .ms-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.85rem 2rem;
+        font-family: var(--font-body);
+        font-size: 0.9rem;
+        font-weight: 500;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.35s var(--ease-out-expo);
+        border: none;
+        letter-spacing: 0.02em;
+    }
+
+    .ms-btn-primary {
+        background: var(--accent);
+        color: var(--midnight);
+    }
+
+    .ms-btn-primary:hover {
+        background: var(--accent-light);
+        color: var(--midnight);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(200,169,81,0.25);
+    }
+
+    .ms-btn-ghost {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border-hover);
+    }
+
+    .ms-btn-ghost:hover {
+        color: var(--text);
+        border-color: var(--text-dim);
+        transform: translateY(-2px);
+    }
+
+    /* Scroll indicator */
+    .ms-hero-scroll {
+        position: absolute;
+        bottom: 2.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2;
+        opacity: 0;
+        animation: hero-fade-in 1s var(--ease-out-expo) 1.8s forwards;
+    }
+
+    .ms-hero-scroll a {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-dim);
+        font-size: 0.7rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        font-family: var(--font-mono);
+    }
+
+    .ms-hero-scroll-line {
+        width: 1px;
+        height: 40px;
+        background: linear-gradient(to bottom, var(--accent), transparent);
+        animation: scroll-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes scroll-pulse {
+        0%, 100% { opacity: 0.4; transform: scaleY(1); }
+        50% { opacity: 1; transform: scaleY(1.2); transform-origin: top; }
+    }
+
+
+    /* ============================================================
+       PROJECT SECTION
+       ============================================================ */
+    .ms-project {
+        background: var(--deep);
+        border-top: 1px solid var(--border);
+    }
+
+    .ms-project-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4rem;
+        margin-top: 3rem;
+        align-items: start;
+    }
+
+    .ms-project-text {
+        font-size: 1rem;
+        color: var(--text-muted);
+        line-height: 1.8;
+        font-weight: 300;
+    }
+
+    .ms-project-text p + p { margin-top: 1.2rem; }
+
+    .ms-biblissima-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .ms-biblissima-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, var(--accent), var(--teal));
+    }
+
+    .ms-biblissima-logo {
+        width: 180px;
+        margin-bottom: 1.5rem;
+        opacity: 0.85;
+    }
+
+    .ms-biblissima-card h3 {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-weight: 400;
+        margin-bottom: 1rem;
+        color: var(--text);
+    }
+
+    .ms-biblissima-card p {
+        font-size: 0.92rem;
+        color: var(--text-muted);
+        line-height: 1.7;
+        font-weight: 300;
+    }
+
+    /* Stats row */
+    .ms-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-top: 4rem;
+    }
+
+    .ms-stat {
+        text-align: center;
+        padding: 2rem 1rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        transition: border-color 0.4s, transform 0.4s var(--ease-out-expo);
+    }
+
+    .ms-stat:hover {
+        border-color: var(--border-hover);
+        transform: translateY(-4px);
+    }
+
+    .ms-stat-icon {
+        font-size: 1.5rem;
+        color: var(--accent);
+        margin-bottom: 0.75rem;
+    }
+
+    .ms-stat-value {
+        font-family: var(--font-display);
+        font-size: 2.2rem;
+        font-weight: 300;
+        color: var(--text);
+        line-height: 1;
+        margin-bottom: 0.4rem;
+    }
+
+    .ms-stat-label {
+        font-size: 0.82rem;
+        color: var(--text-dim);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        font-family: var(--font-mono);
+    }
+
+    /* Full-width image showcase */
+    .ms-showcase {
+        margin-top: 4rem;
+        border-radius: 16px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid var(--border);
+    }
+
+    .ms-showcase img {
+        width: 100%;
+        height: 400px;
+        object-fit: cover;
+        display: block;
+    }
+
+    .ms-showcase-caption {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 2rem 2.5rem;
+        background: linear-gradient(to top, rgba(7,11,22,0.95) 0%, transparent 100%);
+    }
+
+    .ms-showcase-caption h4 {
+        font-family: var(--font-display);
+        font-size: 1.3rem;
+        font-weight: 400;
+        margin-bottom: 0.3rem;
+    }
+
+    .ms-showcase-caption p {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        font-weight: 300;
+    }
+
+
+    /* ============================================================
+       FEATURES / EXPLORER SECTION
+       ============================================================ */
+    .ms-features {
+        background: var(--midnight);
+    }
+
+    .ms-features-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+        margin-top: 3rem;
+    }
+
+    .ms-feature-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2.5rem;
+        transition: border-color 0.4s, transform 0.4s var(--ease-out-expo), box-shadow 0.4s;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .ms-feature-card::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        opacity: 0;
+        transition: opacity 0.4s;
+    }
+
+    .ms-feature-card:nth-child(1)::after { background: linear-gradient(90deg, var(--spectral-3), transparent); }
+    .ms-feature-card:nth-child(2)::after { background: linear-gradient(90deg, var(--teal), transparent); }
+    .ms-feature-card:nth-child(3)::after { background: linear-gradient(90deg, var(--spectral-5), transparent); }
+    .ms-feature-card:nth-child(4)::after { background: linear-gradient(90deg, var(--spectral-6), transparent); }
+
+    .ms-feature-card:hover {
+        border-color: var(--border-hover);
+        transform: translateY(-4px);
+        box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+    }
+
+    .ms-feature-card:hover::after { opacity: 1; }
+
+    .ms-feature-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .ms-feature-card:nth-child(1) .ms-feature-icon { background: rgba(241,196,15,0.1); color: var(--spectral-3); }
+    .ms-feature-card:nth-child(2) .ms-feature-icon { background: var(--teal-dim); color: var(--teal); }
+    .ms-feature-card:nth-child(3) .ms-feature-icon { background: rgba(52,152,219,0.1); color: var(--spectral-5); }
+    .ms-feature-card:nth-child(4) .ms-feature-icon { background: rgba(155,89,182,0.1); color: var(--spectral-6); }
+
+    .ms-feature-card h3 {
+        font-family: var(--font-display);
+        font-size: 1.4rem;
+        font-weight: 400;
+        margin-bottom: 0.8rem;
+        color: var(--text);
+    }
+
+    .ms-feature-card p {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        line-height: 1.7;
+        font-weight: 300;
+    }
+
+    .ms-feature-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1.2rem;
+    }
+
+    .ms-feature-tag {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.05em;
+        padding: 0.3rem 0.7rem;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text-dim);
+    }
+
+
+    /* ============================================================
+       GALLERY / ANALYSES SECTION
+       ============================================================ */
+    .ms-gallery {
+        background: var(--deep);
+        border-top: 1px solid var(--border);
+    }
+
+    .ms-gallery-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        grid-template-rows: auto auto;
+        gap: 1.5rem;
+        margin-top: 3rem;
+    }
+
+    .ms-gallery-item {
+        border-radius: 16px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        transition: border-color 0.4s, transform 0.4s var(--ease-out-expo);
+    }
+
+    .ms-gallery-item:hover {
+        border-color: var(--border-hover);
+        transform: translateY(-4px);
+    }
+
+    .ms-gallery-item:first-child {
+        grid-row: 1 / 3;
+    }
+
+    .ms-gallery-item img {
+        width: 100%;
+        height: 100%;
+        min-height: 280px;
+        object-fit: cover;
+        transition: transform 0.6s var(--ease-out-expo);
+    }
+
+    .ms-gallery-item:hover img {
+        transform: scale(1.03);
+    }
+
+    .ms-gallery-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to top, rgba(7,11,22,0.9) 0%, rgba(7,11,22,0.2) 40%, transparent 70%);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 2rem;
+        transition: background 0.4s;
+    }
+
+    .ms-gallery-item:hover .ms-gallery-overlay {
+        background: linear-gradient(to top, rgba(7,11,22,0.95) 0%, rgba(7,11,22,0.3) 50%, transparent 80%);
+    }
+
+    .ms-gallery-tag {
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+    }
+
+    .ms-gallery-overlay h4 {
+        font-family: var(--font-display);
+        font-size: 1.3rem;
+        font-weight: 400;
+        margin-bottom: 0.3rem;
+    }
+
+    .ms-gallery-overlay p {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        font-weight: 300;
+        line-height: 1.5;
+    }
+
+
+    /* ============================================================
+       SEARCH SECTION
+       ============================================================ */
+    .ms-search {
+        background: var(--midnight);
+        text-align: center;
+    }
+
+    .ms-search .ms-section-label { justify-content: center; }
+    .ms-search .ms-section-label::before { display: none; }
+
+    .ms-search .ms-section-title {
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .ms-search .ms-section-subtitle {
+        margin-left: auto;
+        margin-right: auto;
+        margin-bottom: 3rem;
+    }
+
+    .ms-search-box {
+        max-width: 680px;
+        margin: 0 auto;
+        position: relative;
+    }
+
+    .ms-search-input-wrapper {
+        position: relative;
+        margin-bottom: 1.5rem;
+    }
+
+    .ms-search-input {
+        width: 100%;
+        padding: 1.1rem 1.5rem 1.1rem 3.5rem;
+        font-family: var(--font-body);
+        font-size: 1rem;
+        font-weight: 300;
+        color: var(--text);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        outline: none;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .ms-search-input::placeholder {
+        color: var(--text-dim);
+    }
+
+    .ms-search-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .ms-search-icon {
+        position: absolute;
+        left: 1.2rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-dim);
+        font-size: 1rem;
+    }
+
+    .ms-search-chips {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-bottom: 2rem;
+    }
+
+    .ms-search-chip {
+        font-family: var(--font-body);
+        font-size: 0.82rem;
+        font-weight: 400;
+        padding: 0.5rem 1.2rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 100px;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .ms-search-chip:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-dim);
+    }
+
+    .ms-search-cta {
+        margin-top: 1rem;
+    }
+
+
+    /* ============================================================
+       PARTNERS SECTION
+       ============================================================ */
+    .ms-partners {
+        background: var(--deep);
+        border-top: 1px solid var(--border);
+        padding: 5rem 0;
+        text-align: center;
+    }
+
+    .ms-partners-label {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 3rem;
+    }
+
+    .ms-partners-grid {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 2.5rem 3.5rem;
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .ms-partner-logo {
+        height: 50px;
+        width: auto;
+        opacity: 0.4;
+        filter: grayscale(100%) brightness(1.5);
+        transition: opacity 0.4s, filter 0.4s;
+    }
+
+    .ms-partner-logo:hover {
+        opacity: 0.85;
+        filter: grayscale(0%) brightness(1);
+    }
+
+
+    /* ============================================================
+       FOOTER
+       ============================================================ */
+    .ms-footer {
+        background: var(--midnight);
+        border-top: 1px solid var(--border);
+        padding: 3rem 0 2rem;
+    }
+
+    .ms-footer-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 2rem;
+        margin-bottom: 2.5rem;
+    }
+
+    .ms-footer-brand {
+        flex: 1;
+    }
+
+    .ms-footer-brand-name {
+        font-family: var(--font-display);
+        font-size: 1.2rem;
+        color: var(--text);
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.06em;
+    }
+
+    .ms-footer-brand-desc {
+        font-size: 0.82rem;
+        color: var(--text-dim);
+        font-weight: 300;
+        max-width: 320px;
+        line-height: 1.6;
+    }
+
+    .ms-footer-links {
+        display: flex;
+        gap: 3rem;
+    }
+
+    .ms-footer-col h4 {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 1rem;
+    }
+
+    .ms-footer-col ul {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+
+    .ms-footer-col a {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        font-weight: 300;
+        transition: color 0.3s;
+    }
+
+    .ms-footer-col a:hover { color: var(--accent); }
+
+    .ms-footer-bottom {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 2rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .ms-footer-bottom p {
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        font-weight: 300;
+    }
+
+    .ms-footer-arches {
+        font-size: 0.78rem;
+        color: var(--text-dim);
+    }
+
+    .ms-footer-arches a { color: var(--text-muted); }
+    .ms-footer-arches a:hover { color: var(--accent); }
+
+
+    /* ============================================================
+       RESPONSIVE
+       ============================================================ */
+    @media (max-width: 1024px) {
+        .ms-project-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+        .ms-features-grid { grid-template-columns: 1fr; }
+        .ms-gallery-grid { grid-template-columns: 1fr; }
+        .ms-gallery-item:first-child { grid-row: auto; }
+        .ms-stats { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 768px) {
+        .ms-section { padding: 4.5rem 0; }
+        .ms-container { padding: 0 1.2rem; }
+
+        .ms-nav-links,
+        .ms-nav-divider,
+        .ms-nav-auth { display: none; }
+
+        .ms-hamburger { display: flex; }
+        .ms-mobile-nav { display: flex; }
+
+        .ms-hero-logo { width: 220px; }
+
+        .ms-stats { grid-template-columns: 1fr; }
+
+        .ms-footer-inner { flex-direction: column; }
+        .ms-footer-links { flex-direction: column; gap: 2rem; }
+        .ms-footer-bottom { flex-direction: column; gap: 1rem; text-align: center; }
+    }
+
+    @media (max-width: 480px) {
+        .ms-hero-actions { flex-direction: column; align-items: center; }
+        .ms-btn { width: 100%; justify-content: center; max-width: 280px; }
+        .ms-search-chips { gap: 0.4rem; }
+        .ms-search-chip { font-size: 0.75rem; padding: 0.4rem 0.9rem; }
+        .ms-partners-grid { gap: 1.5rem 2rem; }
+        .ms-partner-logo { height: 38px; }
+    }
+    </style>
 </head>
 
 <body>
+    <!-- RequireJS & Arches base config -->
     <script src="{% webpack_static 'node_modules/requirejs/require.js' %}"></script>
     {% include 'javascript.htm' %}
 
-    <!--=== Header ===-->
-    <header>
-        <div class="v5-splash-navbar navbar">
-            <div class="container-fluid">
-                <div class="navbar-header">
-                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#myNavbar" aria-expanded="false" aria-controls="myNavbar">
-                        <span class="sr-only">Toggle navigation</span>
-                        <span class="icon-bar"></span>
-                        <span class="icon-bar"></span>
-                        <span class="icon-bar"></span>
-                    </button>
+    <!-- ============================================================
+         HEADER
+         ============================================================ -->
+    <header class="ms-header" id="ms-header">
+        <div class="ms-header-inner">
+            <a href="{% url 'home' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Accueil' %}">
+                <div class="ms-header-logo-mark"></div>
+                <span class="ms-header-logo-text">ManuSpectrum</span>
+            </a>
 
-                    <div class="relative nav-brand-container">
-                        <div class="navbar-brand-v5-icon-container">
-                            <img class="navbar-brand-v5-icon" src="{% webpack_static 'img/landing/Arches_logo_white.png' %}" alt="{% trans 'Arches Logo' %}">
-                        </div>
-                        <div class="application-name">
-                            <h1>{% blocktrans %}Arches | {{version}}{% endblocktrans %}</h1>
-                        </div>
-                    </div>
+            <nav class="ms-nav" aria-label="{% trans 'Navigation principale' %}">
+                <ul class="ms-nav-links">
+                    <li><a href="#projet">{% trans "Le Projet" %}</a></li>
+                    <li><a href="#explorer">{% trans "Explorer" %}</a></li>
+                    <li><a href="#analyses">{% trans "Analyses" %}</a></li>
+                    <li><a href="#rechercher">{% trans "Rechercher" %}</a></li>
+                    {% if user|can_create_resource_instance and user.username != 'anonymous' %}
+                    <li><a href="{% url 'resource' %}" target="_blank">{% trans "Gestion" %}</a></li>
+                    {% endif %}
+                </ul>
+
+                <div class="ms-nav-divider"></div>
+
+                <div class="ms-nav-auth">
+                    {% if user.username == 'anonymous' %}
+                        <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Se connecter" %}</a>
+                    {% else %}
+                        <a href="{% url 'user_profile_manager' %}" aria-label="{% trans 'Profil utilisateur' %}">
+                            {% trans "Bienvenue," %} {{ user.first_name|default:user.username }}
+                        </a>
+                        <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Deconnexion" %}</a>
+                    {% endif %}
                 </div>
 
-                <nav id="myNavbar" class="navbar-collapse collapse" aria-label="{% trans 'Arches Application Navigation' %}">
-                    <ul class="nav navbar-nav navbar-right">
-                        <li>
-                            <a href="#info-block-1">{% trans "Arches Features" %}</a>
-                        </li>
-                        <li>
-                            <a href="{% url 'search_home' %}">{% trans "Search Arches" %}</a>
-                        </li>
-                        {% if user|can_create_resource_instance and user.username != 'anonymous' %}
-                            <li>
-                                <a href="{% url 'resource' %}" target="_blank">{% trans "Manage" %}</a>
-                            </li>
-                        {% endif %}
-                        {% if user.username == 'anonymous' %}
-                            <li>
-                                <a class="application-login" id="auth-link" href="{% url 'auth' %}?next={% url 'home' %}{% if user.username != 'anonymous' %}&logout=true{% endif %}">{% trans "Sign in" %}</a>
-                            </li>
-                        {% else %}
-                            <li>
-                                <a class="auth-welcome" href="{% url 'user_profile_manager' %}" aria-label="{% trans 'Visit user profile' %}">
-                                    {% trans "Welcome, " %} {{ user.first_name|default:user.username }}
-                                </a>
-                            </li>
-                            <li>
-                                <a class="application-login" href="{% url 'auth' %}?next={% url 'home' %}{% if user.username != 'anonymous' %}&logout=true{% endif %}">{% trans 'Log off' %}</a>
-                            </li>
-                        {% endif %}
-                        {% if show_language_swtich %}
-                        {% csrf_token %}
-                            <li>
-                                {% get_current_language as LANGUAGE_CODE %}
-                                <div class="lang-switch" style="max-width: none;" data-bind='component: {
-                                    name: "views/components/language-switcher",
-                                    params: {
-                                        current_language: "{{LANGUAGE_CODE}}"
-                                    }
-                                }'></div>
-                            </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-            </div>
+                {% if show_language_swtich %}
+                {% csrf_token %}
+                    {% get_current_language as LANGUAGE_CODE %}
+                    <div class="lang-switch" data-bind='component: {
+                        name: "views/components/language-switcher",
+                        params: { current_language: "{{LANGUAGE_CODE}}" }
+                    }'></div>
+                {% endif %}
+            </nav>
+
+            <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Ouvrir le menu' %}">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
     </header>
-    <!--=== End Header ===-->
+
+    <!-- Mobile Navigation -->
+    <div class="ms-mobile-nav" id="ms-mobile-nav">
+        <a href="#projet" class="ms-mobile-nav-link">{% trans "Le Projet" %}</a>
+        <a href="#explorer" class="ms-mobile-nav-link">{% trans "Explorer" %}</a>
+        <a href="#analyses" class="ms-mobile-nav-link">{% trans "Analyses" %}</a>
+        <a href="#rechercher" class="ms-mobile-nav-link">{% trans "Rechercher" %}</a>
+        {% if user|can_create_resource_instance and user.username != 'anonymous' %}
+            <a href="{% url 'resource' %}" target="_blank">{% trans "Gestion" %}</a>
+        {% endif %}
+        <div class="spectral-line" style="width:60px;margin:1rem 0;"></div>
+        {% if user.username == 'anonymous' %}
+            <a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Se connecter" %}</a>
+        {% else %}
+            <a href="{% url 'user_profile_manager' %}">{{ user.first_name|default:user.username }}</a>
+            <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Deconnexion" %}</a>
+        {% endif %}
+    </div>
+
 
     <main>
-        <article>
-            <!-- Intro Section -->
-            <section id="info-block-0" class="app-info-block intro-section relative">
-                <!-- Vertical Nav -->
-                <nav id="cd-vertical-nav" class="vertical-nav-container" aria-label="{% trans 'Page Navigation' %}">
-                    <ul class="vertical-nav-list">
-                        <li class="active">
-                            <a class="vertical-nav-list-link" href="#info-block-0" data-number="1" aria-label="{% trans 'Go to the top of the page' %}"
-                                data-bind="click: function() { document.querySelector('#info-block-0').focus; }"
-                            >
-                                <span class="vertical-nav-list-ref">{% trans "Home" %}</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="vertical-nav-list-link" href="#info-block-1" data-number="2" aria-label="{% trans 'Go to the fast section' %}">
-                                <span class="vertical-nav-list-ref">{% trans "Fast" %}</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="vertical-nav-list-link" href="#info-block-2" data-number="3" aria-label="{% trans 'Go to the workflows section' %}">
-                                <span class="vertical-nav-list-ref">{% trans "Workflows" %}</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="vertical-nav-list-link" href="#info-block-3" data-number="4" aria-label="{% trans 'Go to the search tools section' %}">
-                                <span class="vertical-nav-list-ref">{% trans "Search Tools" %}</span>
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
+    <!-- ============================================================
+         HERO SECTION
+         ============================================================ -->
+    <section class="ms-hero" id="hero">
+        <div class="ms-hero-aurora"></div>
+        <div class="ms-hero-spectral-bg"></div>
 
-                <!-- Slider - Start -->
-                <div class="home-slider">
-                    <div class="slide-img-container">
-                        <img src="{% webpack_static 'img/landing/landing-primary.jpg' %}" alt="" aria-describedby="slide1-attribution">
-                        <div class="slide-caption">
-                            <h2>{% blocktrans %}Arches {{version}}{% endblocktrans %}</h2>
-                            <p>{% trans "A web and mobile platform for" %}</p>
-                            <p>{% trans "managing your most important resource information" %}</p>
-                        </div>
-                        <div id="slide1-attribution" class="slide-img-attribution">{% trans "Image courtesy of Luis Alfonso Orellana" %}</div>
-                    </div>
-                    <div class="slide-img-container">
-                        <img src="{% webpack_static 'img/landing/bhutan_tigersnest_lr.jpg' %}" alt="" aria-describedby="slide2-attribution">
-                        <div class="slide-caption">
-                            <h2>{% blocktrans %}Arches {{version}}{% endblocktrans %}</h2>
-                            <p>{% trans "A web and mobile platform for" %}</p>
-                            <p>{% trans "managing your most important resource information" %}</p>
-                        </div>
-                        <div id="slide2-attribution" class="slide-img-attribution">{% trans "Taktsang Palphug Monastery (also known as Paro Takstang or Tiger's Nest Monastery), Bhutan" %}</div>
-                    </div>
-                    <div class="slide-img-container">
-                        <img src="{% webpack_static 'img/landing/potala_palace.jpg' %}" alt="" aria-describedby="slide3-attribution">
-                        <div class="slide-caption">
-                            <h2>{% blocktrans %}Arches {{version}}{% endblocktrans %}</h2>
-                            <p>{% trans "A web and mobile platform for" %}</p>
-                            <p>{% trans "managing your most important resource information" %}</p>
-                        </div>
-                        <div id="slide3-attribution" class="slide-img-attribution">{% trans "Potala Palace in Lhasa, Tibet" %}</div>
+        <div class="ms-hero-content">
+            <img class="ms-hero-logo" src="{% static 'img/landing/logo-manuspectrum.svg' %}" alt="ManuSpectrum">
+
+            <h1 class="ms-hero-tagline">
+                {% trans "Base de donnees interoperable pour" %}
+                <em>{% trans "l'analyse physico-chimique" %}</em>
+                {% trans "du patrimoine" %}
+            </h1>
+
+            <p class="ms-hero-description">
+                {% trans "Explorer, visualiser et partager les donnees d'analyse des materiaux patrimoniaux au sein de l'ecosysteme Biblissima+." %}
+            </p>
+
+            <div class="ms-hero-actions">
+                <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
+                    <i class="fa-solid fa-magnifying-glass"></i> {% trans "Explorer la base" %}
+                </a>
+                <a href="#projet" class="ms-btn ms-btn-ghost">
+                    {% trans "En savoir plus" %} <i class="fa-solid fa-arrow-down"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="ms-hero-scroll">
+            <a href="#projet">
+                <span>{% trans "defiler" %}</span>
+                <div class="ms-hero-scroll-line"></div>
+            </a>
+        </div>
+    </section>
+
+
+    <!-- ============================================================
+         PROJECT SECTION
+         ============================================================ -->
+    <section class="ms-section ms-project" id="projet">
+        <div class="ms-container">
+            <div class="reveal">
+                <div class="ms-section-label">{% trans "Le Projet" %}</div>
+                <h2 class="ms-section-title">{% trans "Penser et modeliser les materiaux patrimoniaux" %}</h2>
+            </div>
+
+            <div class="ms-project-grid">
+                <div class="ms-project-text reveal reveal-d1">
+                    <p>
+                        {% trans "Ce cluster vise a resoudre le defi de la reutilisation efficace des donnees physico-chimiques pour l'analyse des materiaux patrimoniaux en mettant en place une base de donnees interoperable alignee sur les standards existants, plus particulierement avec le portail Biblissima." %}
+                    </p>
+                    <p>
+                        {% trans "Arches, une plateforme open source specialisee dans la gestion de donnees patrimoniales et culturelles, offre une architecture flexible permettant une modelisation avancee des donnees. Cette plateforme vise a faciliter l'acces aux donnees et a encourager la collaboration efficace entre les chercheurs de differentes disciplines." %}
+                    </p>
+                    <p>
+                        {% trans "Le modele se concentre sur l'identification du composant comme axe pivot entre l'objet, son contexte, les analyses et leurs interpretations, en utilisant des thesaurus et des bases d'autorite pour contextualiser les informations sur des documents heterogenes." %}
+                    </p>
+                </div>
+
+                <div class="ms-biblissima-card reveal reveal-d2">
+                    <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
+                    <h3>{% trans "Cluster Biblissima+" %}</h3>
+                    <p>
+                        {% trans "ManuSpectrum s'inscrit dans le cadre du cluster Biblissima+, un observatoire des cultures ecrites anciennes. Notre objectif est de garantir l'interoperabilite des donnees physico-chimiques avec le portail Biblissima et les standards du patrimoine culturel." %}
+                    </p>
+                    <div class="ms-feature-tags" style="margin-top:1.5rem;">
+                        <span class="ms-feature-tag">CIDOC-CRM</span>
+                        <span class="ms-feature-tag">IIIF</span>
+                        <span class="ms-feature-tag">CRMsci</span>
+                        <span class="ms-feature-tag">AAT Getty</span>
                     </div>
                 </div>
-                <!-- Slider - End -->
+            </div>
 
-                <!-- Down button -->
-                <a href="#info-block-1" class="down-button" aria-label="{% trans 'Go to content' %}"><i class="fa fa-angle-down down-button-icon"></i></a>
-
-            </section>
-            <!-- End Intro Section -->
-
-            <!-- Info Block 1 -->
-            <section id="info-block-1" class="app-info-block relative">
-                <div>
-
-                    <!-- Heading Info -->
-                    <div class="sub-section">
-                        <div class="col-lg-7">
-                            <div class="app-info-block-intro text-center">
-                                <h2 class="app-info-block-header">{% trans "Fast" %}</h2>
-                                <h3 class="app-info-block-title">{% trans "Deploy Applications Rapidly" %}</h3>
-                                <p class="app-info-block-text">
-                                    {% trans "Design custom information management applications in hours.  Build your databases with Arches Designer, then configure your interface all without having to write any code." %}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content -->
-                    <div class="splash-img">
-                        <img src="{% webpack_static 'img/landing/imac_designer.png' %}"  alt="{% trans 'Arches Designer' %}">
-                    </div>
-
-                    <!-- Sub-section -->
-                    <div class="row app-info-sub-block">
-
-                        <!-- Arches Data Type Block -->
-                        <div class="col-lg-6">
-                            <div class="sub-block-container">
-                                <h3 class="app-info-block-title">{% trans "Interface Manager" %}</h3>
-                                <p class="sub-block-description">
-                                    {% trans "Arches automatically creates data entry forms based on your data models.  Use Arches' Card Manager to configure the look and feel of your data entry UI." %}
-                                </p>
-                                <img class="sub-block-image" src="{% webpack_static 'img/landing/card_manager.png' %}" alt="{% trans 'Card Manager' %}">
-                            </div>
-                        </div>
-
-                        <!-- Arches Data Type Block -->
-                        <div class="col-lg-6">
-                            <div class="sub-block-container">
-                                <h3 class="app-info-block-title">{% trans "Data Security" %}</h3>
-                                <p class="sub-block-description">
-                                    {% trans "Use Arches' Permissions Manager to set up data access rules for all your user groups and individual accounts.  You can define read/write/delete and no-access permissions." %}
-                                </p>
-                                <img class="sub-block-image" src="{% webpack_static 'img/landing/permissions_manager.png' %}" alt="{% trans 'Permissions Manager' %}">
-                            </div>
-                        </div>
-
-                    </div>
-                    <!-- End Sub-section -->
-
+            <!-- Stats -->
+            <div class="ms-stats">
+                <div class="ms-stat reveal reveal-d2">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-atom"></i></div>
+                    <div class="ms-stat-value">XRF</div>
+                    <div class="ms-stat-label">{% trans "Fluorescence X" %}</div>
                 </div>
-            </section>
-            <!-- End Info Block 1 -->
-
-            <!-- Info Block 2 -->
-            <section id="info-block-2" class="app-info-block relative">
-                <div>
-
-                    <!-- Heading Info -->
-                    <div class="sub-section">
-                        <div class="col-lg-7">
-                            <div class="app-info-block-intro text-center">
-                                <h2 class="app-info-block-header">{% trans "Workflows" %}</h2>
-                                <h3 class="app-info-block-title">{% trans "Orchestrate your data entry" %}</h3>
-                                <p class="app-info-block-text">
-                                    {% trans "Design step-wise data management interfaces that simplify complex editing tasks.  Ensure that everyone enters data completely and consistently" %}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content -->
-                    <div class="splash-img">
-                        <img class="sub-block-image" src="{% webpack_static 'img/landing/consultation_workflow.jpg' %}" alt="{% trans 'Arches Workflows' %}">
-                    </div>
-
+                <div class="ms-stat reveal reveal-d3">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-wave-square"></i></div>
+                    <div class="ms-stat-value">FTIR</div>
+                    <div class="ms-stat-label">{% trans "Spectroscopie IR" %}</div>
                 </div>
-            </section>
-            <!-- End Info Block 2 -->
-
-            <!-- Info Block 3 -->
-            <section id="info-block-3" class="app-info-block relative">
-                <div>
-
-                    <!-- Heading Info -->
-                    <div class="sub-section">
-                        <div class="col-lg-7">
-                            <div class="app-info-block-intro text-center">
-                                <h2 class="app-info-block-header">{% trans "Arches Search Tools" %}</h2>
-                                <h3 class="app-info-block-title">{% trans "Find what you're looking for" %}</h3>
-                                <p class="app-info-block-text">
-                                    {% trans "Arches comes with powerful built-in search tools.  Quickly filter large databases with term, geospatial, and time-based search components" %}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="splash-img">
-                        <img class="sub-block-image" src="{% webpack_static 'img/landing/arches_search.png' %}" alt="{% trans 'Arches Search' %}">
-                    </div>
-
-                    <!-- Sub-section -->
-                    <div class="wide-box">
-                        <div class="box-highlight">
-                            <h3 class="app-info-block-header">{% trans "Search Options" %}</h3>
-                            <p>
-                                {% trans "Arches gives you many ways to find precisely the information you need, even if your Arches application contains 10's of millions of records.  In addition to term, thesaurus, geospatial, and temporal filters, Arches provides you with advanced filtering options that support boolean logic, inverses, and many other filtering options." %}
-                            </p>
-                            <br>
-                            <p>
-                                {% trans "Arches' search capabilities also provide for sophisticated data visualizations, including interactive displays of the connections between your data objects using a Force Directed Graph." %}
-                            </p>
-                            <br>
-                            <p>
-                                {% trans "If you're a software developer, you can build on Arches modular search services and create your own filters, reports, and visualizations to best show off your particular dataset." %}
-                            </p>
-
-                        </div>
-                    </div>
-
+                <div class="ms-stat reveal reveal-d4">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-satellite-dish"></i></div>
+                    <div class="ms-stat-value">MSI</div>
+                    <div class="ms-stat-label">{% trans "Imagerie multispectrale" %}</div>
                 </div>
-            </section>
-            <!-- End Info Block 3 -->
-        </article>
+            </div>
+
+            <!-- Showcase image -->
+            <div class="ms-showcase reveal-scale" style="margin-top:4rem;">
+                <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'Cartographie XRF d un manuscrit' %}">
+                <div class="ms-showcase-caption">
+                    <h4>{% trans "Cartographie XRF d'un manuscrit enluminé" %}</h4>
+                    <p>{% trans "Analyse elementaire par fluorescence X — Distribution spatiale des pigments" %}</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- spectral separator -->
+    <div class="spectral-line-thin"></div>
+
+
+    <!-- ============================================================
+         FEATURES / EXPLORER SECTION
+         ============================================================ -->
+    <section class="ms-section ms-features" id="explorer">
+        <div class="ms-container">
+            <div class="reveal">
+                <div class="ms-section-label">{% trans "Explorer" %}</div>
+                <h2 class="ms-section-title">{% trans "Ce que vous pouvez decouvrir" %}</h2>
+                <p class="ms-section-subtitle">
+                    {% trans "Une plateforme concue pour explorer les analyses physico-chimiques sur les documents historiques, en correlant les donnees avec leur contexte patrimonial." %}
+                </p>
+            </div>
+
+            <div class="ms-features-grid">
+                <div class="ms-feature-card reveal reveal-d1">
+                    <div class="ms-feature-icon"><i class="fa-solid fa-chart-line"></i></div>
+                    <h3>{% trans "Spectres et donnees d'analyse" %}</h3>
+                    <p>{% trans "Visualisez et comparez les spectres de reference. Explorez les resultats d'analyses XRF, FTIR, Raman et d'autres techniques directement dans la plateforme." %}</p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">XRF</span>
+                        <span class="ms-feature-tag">FTIR</span>
+                        <span class="ms-feature-tag">Raman</span>
+                        <span class="ms-feature-tag">UV-Vis</span>
+                    </div>
+                </div>
+
+                <div class="ms-feature-card reveal reveal-d2">
+                    <div class="ms-feature-icon"><i class="fa-solid fa-layer-group"></i></div>
+                    <h3>{% trans "Annotations IIIF" %}</h3>
+                    <p>{% trans "Explorez les images haute resolution des manuscrits avec des annotations liees aux points d'analyse. Chaque annotation relie l'image a ses donnees physico-chimiques." %}</p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">IIIF v2/v3</span>
+                        <span class="ms-feature-tag">Mirador</span>
+                        <span class="ms-feature-tag">Cantaloupe</span>
+                    </div>
+                </div>
+
+                <div class="ms-feature-card reveal reveal-d3">
+                    <div class="ms-feature-icon"><i class="fa-solid fa-diagram-project"></i></div>
+                    <h3>{% trans "Interoperabilite et standards" %}</h3>
+                    <p>{% trans "Les donnees sont structurees selon l'ontologie CIDOC-CRM et CRMsci, garantissant leur interoperabilite avec les systemes patrimoniaux internationaux et le portail Biblissima." %}</p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">CIDOC-CRM</span>
+                        <span class="ms-feature-tag">CRMsci</span>
+                        <span class="ms-feature-tag">AGORHA</span>
+                    </div>
+                </div>
+
+                <div class="ms-feature-card reveal reveal-d4">
+                    <div class="ms-feature-icon"><i class="fa-solid fa-microscope"></i></div>
+                    <h3>{% trans "Caracterisation materielle" %}</h3>
+                    <p>{% trans "Explorez les couches, materiaux et elements chimiques identifies sur les documents patrimoniaux, avec differents niveaux de fiabilite et de caracterisation." %}</p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">{% trans "Pigments" %}</span>
+                        <span class="ms-feature-tag">{% trans "Couches" %}</span>
+                        <span class="ms-feature-tag">{% trans "Liants" %}</span>
+                        <span class="ms-feature-tag">{% trans "Supports" %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ============================================================
+         GALLERY / ANALYSES SECTION
+         ============================================================ -->
+    <section class="ms-section ms-gallery" id="analyses">
+        <div class="ms-container">
+            <div class="reveal">
+                <div class="ms-section-label">{% trans "Analyses" %}</div>
+                <h2 class="ms-section-title">{% trans "Visualiser les analyses physico-chimiques" %}</h2>
+                <p class="ms-section-subtitle">
+                    {% trans "De la cartographie elementaire a l'imagerie multispectrale, explorez les differentes techniques d'analyse appliquees aux manuscrits et objets patrimoniaux." %}
+                </p>
+            </div>
+
+            <div class="ms-gallery-grid">
+                <div class="ms-gallery-item reveal reveal-d1">
+                    <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'Cartographie XRF' %}">
+                    <div class="ms-gallery-overlay">
+                        <div class="ms-gallery-tag">{% trans "Fluorescence X" %}</div>
+                        <h4>{% trans "Cartographie XRF" %}</h4>
+                        <p>{% trans "Distribution spatiale des elements chimiques sur un manuscrit enluminé" %}</p>
+                    </div>
+                </div>
+
+                <div class="ms-gallery-item reveal reveal-d2">
+                    <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Analyse sur manuscrit' %}">
+                    <div class="ms-gallery-overlay">
+                        <div class="ms-gallery-tag">{% trans "Spectroscopie" %}</div>
+                        <h4>{% trans "Analyse ponctuelle" %}</h4>
+                        <p>{% trans "Points d'analyse et caracterisation des materiaux" %}</p>
+                    </div>
+                </div>
+
+                <div class="ms-gallery-item reveal reveal-d3">
+                    <img src="{% static 'img/landing/icone2.svg' %}" alt="{% trans 'Imagerie multispectrale' %}">
+                    <div class="ms-gallery-overlay">
+                        <div class="ms-gallery-tag">{% trans "Imagerie" %}</div>
+                        <h4>{% trans "Multispectral" %}</h4>
+                        <p>{% trans "Imagerie multispectrale et hyperspectrale via IIIF" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- spectral separator -->
+    <div class="spectral-line-thin"></div>
+
+
+    <!-- ============================================================
+         SEARCH SECTION
+         ============================================================ -->
+    <section class="ms-section ms-search" id="rechercher">
+        <div class="ms-container">
+            <div class="reveal">
+                <div class="ms-section-label">{% trans "Rechercher" %}</div>
+                <h2 class="ms-section-title">{% trans "Explorez la base de donnees" %}</h2>
+                <p class="ms-section-subtitle">
+                    {% trans "Recherchez par materiau, technique d'analyse, objet patrimonial ou element chimique. Filtres avancés disponibles dans l'interface de recherche." %}
+                </p>
+            </div>
+
+            <div class="ms-search-box reveal reveal-d1">
+                <form id="ms-search-form" action="{% url 'search_home' %}" method="get">
+                    <div class="ms-search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass ms-search-icon"></i>
+                        <input
+                            type="text"
+                            class="ms-search-input"
+                            id="ms-search-input"
+                            name="q"
+                            placeholder="{% trans "Rechercher des materiaux, techniques, objets..." %}"
+                            autocomplete="off"
+                        >
+                    </div>
+                </form>
+
+                <div class="ms-search-chips">
+                    <button class="ms-search-chip" data-term="{% trans 'pigment' %}">{% trans "Pigments" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'manuscrit' %}">{% trans "Manuscrits" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'parchemin' %}">{% trans "Parchemin" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'enluminure' %}">{% trans "Enluminures" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'Raman' %}">{% trans "Raman" %}</button>
+                </div>
+
+                <div class="ms-search-cta">
+                    <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
+                        <i class="fa-solid fa-arrow-right"></i> {% trans "Acceder a la recherche avancee" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ============================================================
+         PARTNERS SECTION
+         ============================================================ -->
+    <section class="ms-partners reveal" id="partenaires">
+        <div class="ms-container">
+            <div class="ms-partners-label">{% trans "Nos Partenaires" %}</div>
+            <div class="ms-partners-grid">
+                <img class="ms-partner-logo reveal-d1" src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC — Centre de Recherche sur la Conservation">
+                <img class="ms-partner-logo reveal-d2" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
+                <img class="ms-partner-logo reveal-d3" src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS">
+                <img class="ms-partner-logo reveal-d4" src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN — Museum national d'Histoire naturelle">
+                <img class="ms-partner-logo reveal-d5" src="{% static 'img/landing/logo-culture.svg' %}" alt="{% trans "Ministere de la Culture" %}">
+                <img class="ms-partner-logo reveal-d6" src="{% static 'img/landing/logo-humanum.svg' %}" alt="Huma-Num">
+                <img class="ms-partner-logo reveal-d7" src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches">
+            </div>
+        </div>
+    </section>
+
     </main>
 
+    <!-- ============================================================
+         FOOTER
+         ============================================================ -->
+    <footer class="ms-footer">
+        <div class="ms-container">
+            <div class="spectral-line" style="margin-bottom:3rem;"></div>
 
-
-    <!-- Footer -->
-    <footer>
-
-        <!-- footer content container -->
-        <div class="row footer-links">
-
-            <!-- branding column -->
-            <div class="col-lg-4">
-                <h2 class="app-footer-heading">{% trans "Sample Institution Name" %}</h2>
-
-                <div class="organization-address">
-                  {% trans "Sample Address" %}<br>
-                  {% trans "Getty Conservation Institute" %}<br>
-                  {% trans "1200 Getty Center Drive" %}<br>
-                  {% trans "Los Angeles, CA  90049" %}<br>
+            <div class="ms-footer-inner">
+                <div class="ms-footer-brand">
+                    <div class="ms-footer-brand-name">ManuSpectrum</div>
+                    <p class="ms-footer-brand-desc">
+                        {% trans "Base de donnees interoperable pour l'analyse physico-chimique des materiaux patrimoniaux. Un projet du cluster Biblissima+." %}
+                    </p>
                 </div>
-            </div>
 
-            <!-- Info Column -->
-            <div class="col-lg-8">
-                <h2 class="app-footer-heading">{% trans "Guides and Documentation" %}</h2>
-
-                <!-- Links -->
-                <div class="splash-links">
-                    <div class="row">
-                        <div class="col-lg-4">
-                            <ul class="splash-link-container">
-                                <li>
-                                    <a class="splash-link-address" href="http://https://www.archesproject.org/what-is-arches/" target="_blank">{% trans "What is Arches" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/implementation-considerations/" target="_blank">{% trans "Implementation Considerations" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/development/" target="_blank">{% trans "Information For Developers" %}</a>
-                                </li>
-
-
-                            </ul>
-                        </div>
-
-                        <div class="col-lg-4">
-                            <ul class="splash-link-container">
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/faq/" target="_blank">{% trans "FAQ" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/standards/" target="_blank">{% trans "Standards and Interoperability" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://arches.readthedocs.io/en/stable/requirements-and-dependencies/" target="_blank">{% trans "Installation Guide" %}</a>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div class="col-lg-4">
-                            <ul class="splash-link-container">
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/project-background/" target="_blank">{% trans "Arches Project Background" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/videos/" target="_blank">{% trans "Arches Webinars/Presentations" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/resource-models/" target="_blank">{% trans "Resource Models" %}</a>
-                                </li>
-                            </ul>
-                        </div>
-
+                <div class="ms-footer-links">
+                    <div class="ms-footer-col">
+                        <h4>{% trans "Plateforme" %}</h4>
+                        <ul>
+                            <li><a href="{% url 'search_home' %}">{% trans "Recherche" %}</a></li>
+                            {% if user.username == 'anonymous' %}
+                                <li><a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Connexion" %}</a></li>
+                            {% else %}
+                                <li><a href="{% url 'user_profile_manager' %}">{% trans "Mon profil" %}</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <div class="ms-footer-col">
+                        <h4>{% trans "Ressources" %}</h4>
+                        <ul>
+                            <li><a href="https://biblissima.fr" target="_blank" rel="noopener">Biblissima+</a></li>
+                            <li><a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches Project</a></li>
+                            <li><a href="https://iiif.io" target="_blank" rel="noopener">IIIF</a></li>
+                        </ul>
+                    </div>
+                    <div class="ms-footer-col">
+                        <h4>{% trans "Standards" %}</h4>
+                        <ul>
+                            <li><a href="https://www.cidoc-crm.org" target="_blank" rel="noopener">CIDOC-CRM</a></li>
+                            <li><a href="https://www.getty.edu/research/tools/vocabularies/aat/" target="_blank" rel="noopener">AAT Getty</a></li>
+                        </ul>
                     </div>
                 </div>
-
             </div>
-        </div>
 
-        <!-- Copyright Panel -->
-        <div class="row copyright-container">
-            <!-- Arches link -->
-            <div class="app-footer-links">
-                <div class="col-sm-8">
-                    <a class="link-spacing" href="#">{% trans "Terms & Conditions" %}</a>
-                    <a class="link-spacing" href="#">{% trans "Privacy Policy" %}</a>
-                </div>
-                <div class="col-sm-4">
-                    <a class="app-footer-arches-link" href="http://www.archesproject.org" target="_blank">{% trans "Powered by Arches" %}</a>
+            <div class="ms-footer-bottom">
+                <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "Tous droits reserves" %}</p>
+                <div class="ms-footer-arches">
+                    {% trans "Propulse par" %} <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>
                 </div>
             </div>
         </div>
-        <!-- End Copyright Container -->
-
     </footer>
-    <!-- End Footer -->
 
-<script>
 
+    <!-- ============================================================
+         SCRIPTS
+         ============================================================ -->
+    <script>
     require.config({
         baseUrl: "{% webpack_static 'build/js' %}",
         paths: {
             'text': "{% webpack_static 'node_modules/requirejs-text/text' %}",
             'jquery': "{% webpack_static 'node_modules/jquery/dist/jquery.min' %}",
             'jquery-ui': "{% webpack_static 'node_modules/jqueryui/jquery-ui.min' %}",
-            'jquery-validate': "{% webpack_static 'node_modules/jquery-validation/dist/jquery.validate.min' %}",
             'underscore': "{% webpack_static 'node_modules/underscore/underscore-min' %}",
-            'chosen': "{% webpack_static 'node_modules/chosen-js/chosen.jquery.min' %}",
             'knockout': "{% webpack_static 'node_modules/knockout/build/output/knockout-latest' %}",
-            'bootstrap': "{% webpack_static 'node_modules/bootstrap/dist/js/bootstrap.min' %}",
-            'one-app': "{% webpack_static 'plugins/one.app' %}",
-            'themepunch-tools': "{% webpack_static 'plugins/revolution-slider/rs-plugin/js/jquery.themepunch.tools.min' %}",
-            'themepunch-revolution': "{% webpack_static 'plugins/revolution-slider/rs-plugin/js/jquery.themepunch.revolution' %}",
-            'revolution-slider': "{% webpack_static 'plugins/revolution-slider' %}",
-            'slick': "{% webpack_static 'plugins/slick/slick.min' %}",
         },
         shim: {
-            'jquery': {
-                exports: '$'
-            },
-            'bootstrap': {
-                deps: ['jquery', 'jquery-ui']
-            },
-            'chosen': {
-                deps: ['jquery'],
-            },
-            'one-app': {
-                deps: ['jquery'],
-            },
-            'themepunch-tools': {
-                deps: ['jquery'],
-            },
-            'themepunch-revolution': {
-                deps: ['jquery'],
-            },
-            'revolution-slider': {
-                deps: ['jquery'],
-            },
-            'slick': {
-                deps: ['jquery'],
-            }
+            'jquery': { exports: '$' }
         }
     });
-    require(
-        [
-            'jquery',
-            'knockout',
-            'bootstrap',
-            'one-app',
-            'themepunch-tools',
-            'themepunch-revolution',
-            'revolution-slider',
-            'slick',
-            'bindings/chosen',
-            'bindings/key-events-click',
-            'views/components/language-switcher'
-        ], function ($, ko) {
-            $(document).ready(function () {
-                App.init();
-                
-                var contentSections = $('.app-info-block'),
-                    navigationItems = $('#cd-vertical-nav a');
 
-                updateNavigation();
-                $(window).on('scroll', function () {
-                    updateNavigation();
-                });
+    require(['jquery', 'knockout', 'views/components/language-switcher'], function($, ko) {
+        $(document).ready(function() {
 
-                //smooth scroll to the section
-                navigationItems.on('click', function (event) {
-                    event.preventDefault();
-                    smoothScroll($(this.hash));
-                });
+            // --- Header scroll behavior ---
+            var header = document.getElementById('ms-header');
+            var scrollThreshold = 80;
 
-
-                function updateNavigation() {
-                    contentSections.each(function () {
-                        $this = $(this);
-                        var activeSection = $('#cd-vertical-nav a[href="#' + $this.attr('id') + '"]').data('number') - 1;
-                        if (($this.offset().top - $(window).height() / 2 < $(window).scrollTop()) && ($this.offset().top + $this.height() - $(window).height() / 2 > $(window).scrollTop())) {
-                            navigationItems.eq(activeSection).addClass('is-selected');
-                        } else {
-                            navigationItems.eq(activeSection).removeClass('is-selected');
-                        }
-                    });
+            function updateHeader() {
+                if (window.scrollY > scrollThreshold) {
+                    header.classList.add('scrolled');
+                } else {
+                    header.classList.remove('scrolled');
                 }
+            }
+            window.addEventListener('scroll', updateHeader, { passive: true });
+            updateHeader();
 
-                function smoothScroll(target) {
-                    $('body,html').animate(
-                        { 'scrollTop': target.offset().top },
-                        600
-                    );
-                }
+            // --- Mobile nav ---
+            var hamburger = document.getElementById('ms-hamburger');
+            var mobileNav = document.getElementById('ms-mobile-nav');
 
-                //slider
-                $('.home-slider').slick({
-                    arrowsPlacement: 'split',
-                    dots: true,
-                    autoplay: true,
-                    autoplaySpeed: 6000,
-                    prevArrow:`<button type='button' class='slick-prev pull-left' aria-label="{% trans 'Go to previous slide' %}"><i class='fa fa-chevron-left' aria-hidden='true'></i></button>`,
-                    nextArrow:`<button type='button' class='slick-next pull-right' aria-label="{% trans 'Go to next slide' %}"><i class='fa fa-chevron-right' aria-hidden='true'></i></button>`
-                });
-
-                var ViewModel = function () {
-                     // place observables here
-                };
-
-                // need to have this to prevent mismatched anonymous define error in require.js
-                setTimeout(function () {
-                    ko.applyBindings(new ViewModel());
-                }, 300);
+            hamburger.addEventListener('click', function() {
+                hamburger.classList.toggle('active');
+                mobileNav.classList.toggle('open');
+                document.body.style.overflow = mobileNav.classList.contains('open') ? 'hidden' : '';
             });
 
-        }
-    );
-</script>
+            // Close mobile nav on link click
+            var mobileLinks = mobileNav.querySelectorAll('a');
+            for (var i = 0; i < mobileLinks.length; i++) {
+                mobileLinks[i].addEventListener('click', function() {
+                    hamburger.classList.remove('active');
+                    mobileNav.classList.remove('open');
+                    document.body.style.overflow = '';
+                });
+            }
+
+            // --- Scroll reveal (IntersectionObserver) ---
+            if ('IntersectionObserver' in window) {
+                var revealObserver = new IntersectionObserver(function(entries) {
+                    entries.forEach(function(entry) {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('visible');
+                        }
+                    });
+                }, {
+                    threshold: 0.08,
+                    rootMargin: '0px 0px -40px 0px'
+                });
+
+                var revealElements = document.querySelectorAll('.reveal, .reveal-scale');
+                for (var j = 0; j < revealElements.length; j++) {
+                    revealObserver.observe(revealElements[j]);
+                }
+            } else {
+                // Fallback: show everything
+                var allReveal = document.querySelectorAll('.reveal, .reveal-scale');
+                for (var k = 0; k < allReveal.length; k++) {
+                    allReveal[k].classList.add('visible');
+                }
+            }
+
+            // --- Search form ---
+            var searchForm = document.getElementById('ms-search-form');
+            var searchInput = document.getElementById('ms-search-input');
+            var searchUrl = "{% url 'search_home' %}";
+
+            searchForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                var query = searchInput.value.trim();
+                if (query) {
+                    var termFilter = JSON.stringify([{
+                        "inverted": false,
+                        "type": "string",
+                        "context": "",
+                        "context_label": "",
+                        "id": query,
+                        "text": query,
+                        "value": query
+                    }]);
+                    window.location.href = searchUrl + '?paging-filter=1&term-filter=' + encodeURIComponent(termFilter);
+                } else {
+                    window.location.href = searchUrl;
+                }
+            });
+
+            // Search chips
+            var chips = document.querySelectorAll('.ms-search-chip');
+            for (var c = 0; c < chips.length; c++) {
+                chips[c].addEventListener('click', function() {
+                    var term = this.getAttribute('data-term');
+                    searchInput.value = term;
+                    searchForm.dispatchEvent(new Event('submit'));
+                });
+            }
+
+            // --- KnockoutJS ---
+            var ViewModel = function() {};
+            setTimeout(function() {
+                ko.applyBindings(new ViewModel());
+            }, 300);
+
+        });
+    });
+    </script>
 
 </body>
-
 </html>
