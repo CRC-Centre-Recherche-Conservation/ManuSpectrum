@@ -8,6 +8,14 @@ import WidgetViewModel from 'viewmodels/widget';
 import arches from 'arches';
 import manifestWidgetTemplate from 'templates/views/components/widgets/manifest-widget.htm';
 
+// Inject spinner keyframes once
+if (!document.getElementById('manifest-widget-keyframes')) {
+    const style = document.createElement('style');
+    style.id = 'manifest-widget-keyframes';
+    style.textContent = '@keyframes manifest-spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+}
+
 const viewModel = function(params) {
     const self = this;
 
@@ -34,6 +42,7 @@ const viewModel = function(params) {
 
     self.showCreatePanel = ko.observable(false);
     self.newManifestTitle = ko.observable('');
+    self.newManifestDescription = ko.observable('');
     self.isUploading = ko.observable(false);
     self.uploadError = ko.observable('');
 
@@ -301,6 +310,7 @@ const viewModel = function(params) {
     self.closeCreatePanel = function() {
         self.showCreatePanel(false);
         self.newManifestTitle('');
+        self.newManifestDescription('');
         self.uploadError('');
         self.isUploading(false);
         if (self.dropzone) {
@@ -318,6 +328,7 @@ const viewModel = function(params) {
             self.formData.append("files", file, file.name);
         });
         self.formData.append("manifest_title", self.newManifestTitle() || 'Untitled manifest');
+        self.formData.append("manifest_description", self.newManifestDescription() || '');
         self.formData.append("operation", "create");
         self.formData.append("transaction_id", self.transactionId);
 
@@ -374,6 +385,9 @@ const viewModel = function(params) {
             this.on("error", function(file, error) {
                 file.error = error;
             });
+            // Hide Dropzone's auto-generated default message button
+            var dzMessage = this.element.querySelector('.dz-default.dz-message');
+            if (dzMessage) dzMessage.style.display = 'none';
         }
     };
 

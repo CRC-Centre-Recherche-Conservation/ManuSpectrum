@@ -316,16 +316,28 @@ msgid "Select a manifest"
 msgstr "Sélectionner un manifeste"
 
 #: manuspectrum/templates/views/components/widgets/manifest-widget.htm
-msgid "Loading manifest"
-msgstr "Chargement du manifeste"
+msgid "Loading manifest..."
+msgstr "Chargement du manifeste..."
 
 #: manuspectrum/templates/views/components/widgets/manifest-widget.htm
-msgid "Clear"
-msgstr "Effacer"
+msgid "Remove manifest"
+msgstr "Supprimer le manifeste"
 
 #: manuspectrum/templates/views/components/widgets/manifest-widget.htm
 msgid "Create a manifest"
 msgstr "Créer un manifeste"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Create a IIIF Manifest"
+msgstr "Créer un manifeste IIIF"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Build a manifest from your own images"
+msgstr "Construire un manifeste à partir de vos propres images"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Accepted formats:"
+msgstr "Formats acceptés :"
 
 #: manuspectrum/templates/views/components/widgets/manifest-widget.htm
 msgid "Return"
@@ -336,12 +348,20 @@ msgid "Manifest title"
 msgstr "Titre du manifeste"
 
 #: manuspectrum/templates/views/components/widgets/manifest-widget.htm
-msgid "Drag and drop images here"
-msgstr "Glissez-déposez vos images ici"
+msgid "Description"
+msgstr "Description"
 
 #: manuspectrum/templates/views/components/widgets/manifest-widget.htm
-msgid "Accepted formats: JPEG, PNG, TIFF"
-msgstr "Formats acceptés : JPEG, PNG, TIFF"
+msgid "Manifest description"
+msgstr "Description du manifeste"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Upload Images"
+msgstr "Téléverser des images"
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Drag and drop image files on this panel"
+msgstr "Glissez-déposez vos images sur ce panneau"
 
 #: manuspectrum/templates/views/components/widgets/manifest-widget.htm
 msgid "Select images"
@@ -350,6 +370,10 @@ msgstr "Sélectionner des images"
 #: manuspectrum/templates/views/components/widgets/manifest-widget.htm
 msgid "Creating manifest..."
 msgstr "Création du manifeste en cours..."
+
+#: manuspectrum/templates/views/components/widgets/manifest-widget.htm
+msgid "Uploading images and generating IIIF manifest"
+msgstr "Téléversement des images et génération du manifeste IIIF"
 
 #: manuspectrum/templates/views/components/cards/file-renderers/xy-reader.htm
 msgid "Status"
