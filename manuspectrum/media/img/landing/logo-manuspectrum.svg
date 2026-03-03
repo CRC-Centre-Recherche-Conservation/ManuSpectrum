@@ -32,7 +32,7 @@
         fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
 
   <!-- "PECTRUM" text (drawn last, overlays descending curves) -->
-  <text x="315" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
+  <text x="295" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
 
   <!-- Spectral bar -->
   <rect x="40" y="82" width="620" height="3" rx="1.5" fill="url(#spectral-bar)"/>
