@@ -571,7 +571,9 @@ class TestManifestValidation(TestCase):
 
         mock_get.return_value = mock_response
 
-        with patch("manuspectrum.datatypes.manifest.IIIFManifest") as mock_manifest_model:
+        with patch(
+            "manuspectrum.datatypes.manifest.IIIFManifest"
+        ) as mock_manifest_model:
             self.datatype.validate("https://example.org/iiif/book1/manifest")
             mock_manifest_model.objects.create.assert_not_called()
 
@@ -920,9 +922,7 @@ class TestURLRegex(TestCase):
     def test_dev_matches_localhost_no_port(self):
         """Dev regex should match localhost without port."""
         self.assertIsNotNone(
-            self.ManifestDataType._URL_REGEX_DEV.match(
-                "http://localhost/manifest/abc"
-            )
+            self.ManifestDataType._URL_REGEX_DEV.match("http://localhost/manifest/abc")
         )
 
     def test_dev_matches_ip_address(self):
@@ -1181,7 +1181,9 @@ class TestPreTileSave(TestCase):
         nodeid = str(uuid.uuid4())
         existing_globalid = uuid.uuid4()
         tile = MagicMock()
-        tile.data = {nodeid: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b105477296/manifest.json"}
+        tile.data = {
+            nodeid: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b105477296/manifest.json"
+        }
 
         # Step 1: relative path lookup returns None
         # Step 2: full URL lookup returns existing manifest
@@ -1270,9 +1272,7 @@ class TestSSRF_RedirectBlocked(TestCase):
 
     @patch("manuspectrum.datatypes.manifest.requests.get")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_disables_redirects(
-        self, mock_manifest_model, mock_get
-    ):
+    def test_pre_tile_save_disables_redirects(self, mock_manifest_model, mock_get):
         """pre_tile_save() must call requests.get with allow_redirects=False."""
         nodeid = str(uuid.uuid4())
         tile = MagicMock()
@@ -1454,9 +1454,7 @@ class TestSSRF_DevModePrivateIPs(TestCase):
 
     def test_dev_regex_allows_docker_network(self):
         """DEV regex matches Docker bridge network 172.17.x."""
-        match = self.ManifestDataType._URL_REGEX_DEV.match(
-            "http://172.17.0.2:5432/"
-        )
+        match = self.ManifestDataType._URL_REGEX_DEV.match("http://172.17.0.2:5432/")
         self.assertIsNotNone(
             match,
             "SSRF CONFIRMED: dev regex allows Docker internal IPs",
@@ -1464,9 +1462,7 @@ class TestSSRF_DevModePrivateIPs(TestCase):
 
     @patch("manuspectrum.datatypes.manifest.django_settings")
     @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_fetches_metadata_in_debug_mode(
-        self, mock_get, mock_settings
-    ):
+    def test_validate_fetches_metadata_in_debug_mode(self, mock_get, mock_settings):
         """SSRF: validate() in DEBUG mode fetches cloud metadata directly."""
         mock_settings.DEBUG = True
 
@@ -1516,9 +1512,7 @@ class TestSSRF_StrictRegexBypassViaRedirect(TestCase):
 
     @patch("manuspectrum.datatypes.manifest.django_settings")
     @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_strict_mode_blocks_redirects(
-        self, mock_get, mock_settings
-    ):
+    def test_validate_strict_mode_blocks_redirects(self, mock_get, mock_settings):
         """In production (strict regex), redirects are disabled."""
         mock_settings.DEBUG = False
 
