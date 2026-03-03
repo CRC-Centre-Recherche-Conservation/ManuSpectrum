@@ -86,6 +86,8 @@ runs:
       run: |
         python -W default::DeprecationWarning -m coverage run manage.py test tests --settings="tests.test_settings"
       shell: bash
+      env:
+        ES_SCHEME: http
 
     - name: Generate Python report coverage
       run: |

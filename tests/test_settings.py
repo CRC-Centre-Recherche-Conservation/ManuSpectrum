@@ -64,7 +64,13 @@ LOGGING["loggers"]["arches"]["level"] = "ERROR"
 
 ELASTICSEARCH_PREFIX = "test"
 
-ELASTICSEARCH_HOSTS = [{"scheme": "https", "host": "localhost", "port": 9200}]
+ELASTICSEARCH_HOSTS = [
+    {
+        "scheme": os.environ.get("ES_SCHEME", "https"),
+        "host": "localhost",
+        "port": 9200,
+    }
+]
 
 TEST_RUNNER = "arches.test.runner.ArchesTestRunner"
 SILENCED_SYSTEM_CHECKS.append(
