@@ -18,6 +18,14 @@
     </linearGradient>
   </defs>
 
+  <!-- Y-axis (plot spirit) -->
+  <line x1="40" y1="82" x2="40" y2="4" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+  <line x1="37" y1="82" x2="40" y2="82" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+  <line x1="37" y1="43" x2="40" y2="43" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+  <line x1="37" y1="4" x2="40" y2="4" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+  <text x="34" y="85" text-anchor="end" fill="#1a1a2e" font-family="'Sora', system-ui, sans-serif" font-size="8" opacity="0.30">0</text>
+  <text x="34" y="7" text-anchor="end" fill="#1a1a2e" font-family="'Sora', system-ui, sans-serif" font-size="8" opacity="0.30">1</text>
+
   <!-- "MANU" text (drawn first, curves will overlay) -->
   <text x="124" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">MANU</text>
 
