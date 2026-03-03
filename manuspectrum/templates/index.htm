@@ -491,7 +491,33 @@ Homepage — Prismatic Luminescence aesthetic
         opacity: 0;
         transform: translateY(20px);
         animation: hero-fade-in 1.2s var(--ease-out-expo) 0.2s forwards;
+        cursor: crosshair;
     }
+
+    /* Curve draw-in animation */
+    .ms-logo-curve {
+        stroke-dasharray: 1200;
+        stroke-dashoffset: 1200;
+        animation: curve-draw 2.2s cubic-bezier(0.4, 0, 0.2, 1) 0.6s forwards;
+    }
+    #curve-red.ms-logo-curve {
+        animation-delay: 0.9s;
+    }
+    @keyframes curve-draw {
+        to { stroke-dashoffset: 0; }
+    }
+
+    /* Peak markers fade in */
+    #ms-peak-markers {
+        animation: peak-fade 0.5s ease 2.8s forwards;
+    }
+    @keyframes peak-fade {
+        to { opacity: 1; }
+    }
+
+    /* Hover glow on curves */
+    #ms-logo-svg:hover #curve-blue { filter: drop-shadow(0 0 3px rgba(59,130,246,0.4)); }
+    #ms-logo-svg:hover #curve-red  { filter: drop-shadow(0 0 3px rgba(220,53,69,0.35)); }
 
     .ms-hero-tagline {
         font-family: var(--font-display);
@@ -1318,7 +1344,78 @@ Homepage — Prismatic Luminescence aesthetic
         <div class="ms-hero-prism"></div>
 
         <div class="ms-hero-content">
-            <img class="ms-hero-logo" src="{% static 'img/landing/logo-manuspectrum.svg' %}" alt="ManuSpectrum">
+            <!-- Interactive logo (inline SVG for Plotly-style hover) -->
+            <div class="ms-hero-logo" id="ms-logo-wrap">
+              <svg id="ms-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 95" aria-label="ManuSpectrum">
+                <defs>
+                  <linearGradient id="spectral-bar" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#dc3545"/><stop offset="20%" stop-color="#e67e22"/>
+                    <stop offset="40%" stop-color="#f0b429"/><stop offset="60%" stop-color="#10b981"/>
+                    <stop offset="80%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#8b5cf6"/>
+                  </linearGradient>
+                  <linearGradient id="glow-blue" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stop-color="#3b82f6" stop-opacity="0"/>
+                    <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.10"/>
+                  </linearGradient>
+                  <linearGradient id="glow-red" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stop-color="#dc3545" stop-opacity="0"/>
+                    <stop offset="100%" stop-color="#dc3545" stop-opacity="0.07"/>
+                  </linearGradient>
+                </defs>
+
+                <!-- Y-axis -->
+                <line x1="40" y1="82" x2="40" y2="4" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+                <line x1="37" y1="82" x2="40" y2="82" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+                <line x1="37" y1="43" x2="40" y2="43" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+                <line x1="37" y1="4" x2="40" y2="4" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+                <text x="34" y="85" text-anchor="end" fill="#1a1a2e" font-family="'Sora',system-ui,sans-serif" font-size="8" opacity="0.30">0</text>
+                <text x="34" y="7" text-anchor="end" fill="#1a1a2e" font-family="'Sora',system-ui,sans-serif" font-size="8" opacity="0.30">1</text>
+
+                <!-- MANU text -->
+                <text x="124" y="65" fill="#1a1a2e" font-family="Georgia,'Cormorant Garamond',serif" font-size="44" font-weight="300" letter-spacing="5">MANU</text>
+
+                <!-- Peak 1 (blue) fill + stroke -->
+                <path d="M 40,82 C 50,82 65,45 78,45 C 86,45 100,82 132,81 C 262,81 276,80 286,72 C 300,42 316,6 340,6 C 348,6 372,30 438,28 L 40,82 Z" fill="url(#glow-blue)"/>
+                <path id="curve-blue" class="ms-logo-curve"
+                      d="M 40,82 C 50,82 65,45 78,45 C 86,45 100,82 132,81 C 262,81 276,80 286,72 C 300,42 316,6 340,6 C 348,6 372,30 438,28"
+                      fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+
+                <!-- Peak 2 (red) fill + stroke -->
+                <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 363,10 378,32 386,30 C 389,30 391,20 394,20 C 397,20 400,30 444,30 L 40,82 Z" fill="url(#glow-red)"/>
+                <path id="curve-red" class="ms-logo-curve"
+                      d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 363,10 378,32 386,30 C 389,30 391,20 394,20 C 397,20 400,30 444,30"
+                      fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+
+                <!-- PECTRUM text -->
+                <text x="379" y="65" fill="#1a1a2e" font-family="Georgia,'Cormorant Garamond',serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
+
+                <!-- Spectral bar (x-axis) -->
+                <rect x="40" y="82" width="620" height="3" rx="1.5" fill="url(#spectral-bar)"/>
+
+                <!-- Interactive overlay (hidden by default) -->
+                <g id="ms-logo-crosshair" style="display:none;pointer-events:none;">
+                  <line id="ms-cross-v" x1="0" y1="4" x2="0" y2="82" stroke="#1a1a2e" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
+                  <line id="ms-cross-h-blue" x1="40" y1="0" x2="0" y2="0" stroke="#3b82f6" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
+                  <line id="ms-cross-h-red" x1="40" y1="0" x2="0" y2="0" stroke="#dc3545" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
+                  <circle id="ms-dot-blue" cx="0" cy="0" r="3.5" fill="#3b82f6" opacity="0"/>
+                  <circle id="ms-dot-red" cx="0" cy="0" r="3.5" fill="#dc3545" opacity="0"/>
+                </g>
+
+                <!-- Tooltip background + text -->
+                <g id="ms-logo-tooltip" style="display:none;pointer-events:none;">
+                  <rect id="ms-tt-bg" x="0" y="0" width="120" height="42" rx="4" fill="#1a1a2e" opacity="0.88"/>
+                  <text id="ms-tt-wl" x="0" y="0" fill="#f0b429" font-family="'JetBrains Mono','Sora',monospace" font-size="7.5" font-weight="600"></text>
+                  <text id="ms-tt-blue" x="0" y="0" fill="#3b82f6" font-family="'JetBrains Mono','Sora',monospace" font-size="7"></text>
+                  <text id="ms-tt-red" x="0" y="0" fill="#dc3545" font-family="'JetBrains Mono','Sora',monospace" font-size="7"></text>
+                </g>
+
+                <!-- Peak annotation markers (appear on load) -->
+                <g id="ms-peak-markers" opacity="0">
+                  <circle cx="340" cy="6" r="2" fill="none" stroke="#3b82f6" stroke-width="1" opacity="0.6"/>
+                  <circle cx="357" cy="10" r="2" fill="none" stroke="#dc3545" stroke-width="1" opacity="0.6"/>
+                </g>
+              </svg>
+            </div>
 
             <h1 class="ms-hero-tagline">
                 {% trans "Interoperable database for" %}
@@ -1767,7 +1864,137 @@ Homepage — Prismatic Luminescence aesthetic
     })();
     </script>
 
-    <!-- 2) KnockoutJS & language-switcher — loaded async, won't block the page -->
+    <!-- 2) Interactive logo — Plotly-style crosshair & tooltip -->
+    <script>
+    (function() {
+        'use strict';
+        var svg = document.getElementById('ms-logo-svg');
+        if (!svg) return;
+
+        var curveBlue = document.getElementById('curve-blue');
+        var curveRed  = document.getElementById('curve-red');
+        var crosshair = document.getElementById('ms-logo-crosshair');
+        var tooltip   = document.getElementById('ms-logo-tooltip');
+        var crossV    = document.getElementById('ms-cross-v');
+        var crossHB   = document.getElementById('ms-cross-h-blue');
+        var crossHR   = document.getElementById('ms-cross-h-red');
+        var dotBlue   = document.getElementById('ms-dot-blue');
+        var dotRed    = document.getElementById('ms-dot-red');
+        var ttBg      = document.getElementById('ms-tt-bg');
+        var ttWl      = document.getElementById('ms-tt-wl');
+        var ttBlue    = document.getElementById('ms-tt-blue');
+        var ttRedTxt  = document.getElementById('ms-tt-red');
+
+        // Plot area bounds in SVG coords
+        var xMin = 40, xMax = 660, yMin = 4, yMax = 82;
+        // Wavelength mapping (visible spectrum)
+        var wlMin = 380, wlMax = 780;
+
+        function svgPoint(e) {
+            var pt = svg.createSVGPoint();
+            pt.x = e.clientX; pt.y = e.clientY;
+            return pt.matrixTransform(svg.getScreenCTM().inverse());
+        }
+
+        // Sample Y on a path at a given X (binary search on path length)
+        function sampleY(path, targetX) {
+            var len = path.getTotalLength();
+            var lo = 0, hi = len, mid, pt, iter = 0;
+            while (hi - lo > 0.5 && iter < 50) {
+                mid = (lo + hi) / 2;
+                pt = path.getPointAtLength(mid);
+                if (pt.x < targetX) lo = mid; else hi = mid;
+                iter++;
+            }
+            pt = path.getPointAtLength((lo + hi) / 2);
+            return pt.y;
+        }
+
+        // Intensity: 0 at yMax (baseline), 1 at yMin (top)
+        function toIntensity(y) {
+            return Math.max(0, Math.min(1, (yMax - y) / (yMax - yMin)));
+        }
+
+        function toWavelength(x) {
+            return wlMin + (x - xMin) / (xMax - xMin) * (wlMax - wlMin);
+        }
+
+        function onMove(e) {
+            var p = svgPoint(e);
+            var x = p.x;
+            if (x < xMin || x > xMax) { onLeave(); return; }
+
+            crosshair.style.display = '';
+            tooltip.style.display = '';
+
+            // Crosshair vertical line
+            crossV.setAttribute('x1', x);
+            crossV.setAttribute('x2', x);
+
+            // Sample curves
+            var yB = sampleY(curveBlue, x);
+            var yR = sampleY(curveRed, x);
+            var intB = toIntensity(yB);
+            var intR = toIntensity(yR);
+            var wl = toWavelength(x);
+
+            // Blue dot + horizontal dashed line
+            dotBlue.setAttribute('cx', x);
+            dotBlue.setAttribute('cy', yB);
+            dotBlue.setAttribute('opacity', x <= 438 ? '0.9' : '0');
+            crossHB.setAttribute('y1', yB);
+            crossHB.setAttribute('y2', yB);
+            crossHB.setAttribute('x2', x);
+            crossHB.setAttribute('opacity', x <= 438 ? '0.35' : '0');
+
+            // Red dot + horizontal dashed line
+            dotRed.setAttribute('cx', x);
+            dotRed.setAttribute('cy', yR);
+            dotRed.setAttribute('opacity', x <= 444 ? '0.9' : '0');
+            crossHR.setAttribute('y1', yR);
+            crossHR.setAttribute('y2', yR);
+            crossHR.setAttribute('x2', x);
+            crossHR.setAttribute('opacity', x <= 444 ? '0.35' : '0');
+
+            // Tooltip position (flip if near right edge)
+            var tx = x + 8;
+            var ty = Math.min(yB, yR) - 48;
+            if (tx + 125 > xMax) tx = x - 130;
+            if (ty < 0) ty = 4;
+
+            ttBg.setAttribute('x', tx);
+            ttBg.setAttribute('y', ty);
+            ttWl.setAttribute('x', tx + 6);
+            ttWl.setAttribute('y', ty + 12);
+            ttWl.textContent = '\u03BB = ' + Math.round(wl) + ' nm';
+
+            ttBlue.setAttribute('x', tx + 6);
+            ttBlue.setAttribute('y', ty + 24);
+            ttBlue.textContent = x <= 438 ? ('\u25CF I\u2081 = ' + intB.toFixed(3)) : '';
+
+            ttRedTxt.setAttribute('x', tx + 6);
+            ttRedTxt.setAttribute('y', ty + 35);
+            ttRedTxt.textContent = x <= 444 ? ('\u25CF I\u2082 = ' + intR.toFixed(3)) : '';
+        }
+
+        function onLeave() {
+            crosshair.style.display = 'none';
+            tooltip.style.display = 'none';
+        }
+
+        svg.addEventListener('mousemove', onMove);
+        svg.addEventListener('mouseleave', onLeave);
+
+        // Touch support
+        svg.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+            onMove(e.touches[0]);
+        }, { passive: false });
+        svg.addEventListener('touchend', onLeave);
+    })();
+    </script>
+
+    <!-- 3) KnockoutJS & language-switcher — loaded async, won't block the page -->
     <script>
     require.config({
         baseUrl: "{% webpack_static 'build/js' %}",
