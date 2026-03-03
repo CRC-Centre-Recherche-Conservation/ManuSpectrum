@@ -19,20 +19,20 @@
   </defs>
 
   <!-- "MANU" text (drawn first, curves will overlay) -->
-  <text x="40" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">MANU</text>
+  <text x="124" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">MANU</text>
 
   <!-- Peak 1 (blue) — flat under MANU, rise starts after U, ends above PE -->
-  <path d="M 48,81 C 178,81 192,80 202,72 C 216,42 232,6 256,6 C 264,6 288,30 354,28 L 48,81 Z" fill="url(#glow-blue)"/>
-  <path d="M 48,81 C 178,81 192,80 202,72 C 216,42 232,6 256,6 C 264,6 288,30 354,28"
+  <path d="M 132,81 C 262,81 276,80 286,72 C 300,42 316,6 340,6 C 348,6 372,30 438,28 L 132,81 Z" fill="url(#glow-blue)"/>
+  <path d="M 132,81 C 262,81 276,80 286,72 C 300,42 316,6 340,6 C 348,6 372,30 438,28"
         fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
 
   <!-- Peak 2 (red) — flat under MANU, rise starts after U, ends above PE -->
-  <path d="M 58,81 C 182,81 197,79 210,68 C 228,38 248,10 273,10 C 281,10 305,32 360,30 L 58,81 Z" fill="url(#glow-red)"/>
-  <path d="M 58,81 C 182,81 197,79 210,68 C 228,38 248,10 273,10 C 281,10 305,32 360,30"
+  <path d="M 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 365,10 389,32 444,30 L 142,81 Z" fill="url(#glow-red)"/>
+  <path d="M 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 365,10 389,32 444,30"
         fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
 
   <!-- "PECTRUM" text (drawn last, overlays descending curves) -->
-  <text x="295" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
+  <text x="379" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
 
   <!-- Spectral bar -->
   <rect x="40" y="82" width="620" height="3" rx="1.5" fill="url(#spectral-bar)"/>
