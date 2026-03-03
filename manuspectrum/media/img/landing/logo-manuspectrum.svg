@@ -27,8 +27,8 @@
         fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
 
   <!-- Peak 2 (red) — starts at spectral bar origin, small peak before M, flat under MANU, big peak for S, ends above PE -->
-  <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 365,10 389,32 444,30 L 40,82 Z" fill="url(#glow-red)"/>
-  <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 365,10 389,32 444,30"
+  <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 363,10 378,32 386,30 C 389,30 391,20 394,20 C 397,20 400,30 444,30 L 40,82 Z" fill="url(#glow-red)"/>
+  <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 363,10 378,32 386,30 C 389,30 391,20 394,20 C 397,20 400,30 444,30"
         fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
 
   <!-- "PECTRUM" text (drawn last, overlays descending curves) -->
