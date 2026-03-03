@@ -1,7 +1,11 @@
+import logging
 import uuid
 import re
 import requests
+from functools import lru_cache
+from urllib.parse import urlparse, urlunparse
 
+from django.conf import settings as django_settings
 from arches.app.datatypes.base import BaseDataType
 from arches.app.models.models import IIIFManifest, Widget
 from django.utils.translation import gettext_lazy as _
@@ -22,6 +26,9 @@ details: dict[str, str | Widget | bool | None] = {
 }
 
 
+logger = logging.getLogger(__name__)
+
+
 class FailRegexURLMatch(Exception):
     pass
 
@@ -31,9 +38,81 @@ class FailParsingManifestIIIF(Exception):
 
 
 class ManifestDataType(BaseDataType):
-    URL_REGEX = re.compile(
-        r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _get_request_headers():
+        import arches
+
+        app_name = getattr(django_settings, "APP_NAME", "Arches")
+        app_version = getattr(django_settings, "APP_VERSION", "")
+        arches_version = getattr(arches, "__version__", "")
+        parts = [f"{app_name}/{app_version}" if app_version else app_name]
+        if arches_version:
+            parts.append(f"Arches/{arches_version}")
+        return {
+            "User-Agent": " ".join(parts),
+            "Accept": "application/ld+json, application/json",
+        }
+
+    _LOCAL_MANIFEST_RE = re.compile(
+        r"^(?:https?://[^/]+)?/manifest/"
+        r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
+        re.IGNORECASE,
     )
+
+    _URL_REGEX_STRICT = re.compile(
+        r"https?://"
+        r"(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}"
+        r"\b([-a-zA-Z0-9()@:%_+.~#?&/=]*)"
+    )
+    _URL_REGEX_DEV = re.compile(
+        r"https?://"
+        r"("
+        r"(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}"
+        r"|localhost"
+        r"|(\d{1,3}\.){3}\d{1,3}"
+        r")"
+        r"(:\d{1,5})?"
+        r"(/[-a-zA-Z0-9()@:%_+.~#?&/=]*)?"
+    )
+
+    @classmethod
+    def _get_url_regex(cls):
+        if django_settings.DEBUG:
+            return cls._URL_REGEX_DEV
+        return cls._URL_REGEX_STRICT
+
+    @staticmethod
+    def _normalize_url(url):
+        """Normalize a URL to prevent duplicates from cosmetic differences.
+
+        - Strips trailing slashes
+        - Removes fragments (#...)
+        - Returns the cleaned URL string
+        """
+        if not url:
+            return url
+        parsed = urlparse(url)
+        # Remove fragment, strip trailing slash from path
+        path = parsed.path.rstrip("/")
+        normalized = urlunparse(
+            (parsed.scheme, parsed.netloc, path, parsed.params, parsed.query, "")
+        )
+        return normalized
+
+    @staticmethod
+    def _to_relative_path(url):
+        """Extract the path portion of a URL for DB lookups.
+
+        The manifest_manager stores URLs as relative paths (e.g. /manifest/{uuid}).
+        The widget may send full URLs (e.g. http://host/manifest/{uuid}).
+        """
+        if not url:
+            return url
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.netloc:
+            return parsed.path.rstrip("/")
+        return url
 
     @staticmethod
     def is_iiif_manifest(manifest_json):
@@ -61,6 +140,11 @@ class ManifestDataType(BaseDataType):
         )
 
     def validate(self, value, **kwargs):
+        """Validate the manifest value without creating any DB records.
+
+        Only checks format, URL reachability, and IIIF compliance.
+        Creation is handled exclusively in pre_tile_save().
+        """
         errors = []
 
         if value:
@@ -88,32 +172,43 @@ class ManifestDataType(BaseDataType):
 
             if manifest_id:
                 try:
-                    IIIFManifest.objects.get(id=manifest_id)
+                    IIIFManifest.objects.get(globalid=manifest_id)
                 except IIIFManifest.DoesNotExist:
                     errors.append(
                         {"type": "ERROR", "message": _("Manifest ID does not exist")}
                     )
 
             elif manifest_url:
+                manifest_url = self._normalize_url(manifest_url)
+
+                # Case 1: local manifest path (/manifest/{uuid})
+                local_match = self._LOCAL_MANIFEST_RE.match(manifest_url)
+                if local_match:
+                    if not IIIFManifest.objects.filter(
+                        globalid=local_match.group(1)
+                    ).exists():
+                        errors.append(
+                            {
+                                "type": "ERROR",
+                                "message": _("Manifest not found"),
+                            }
+                        )
+                    return errors
+
+                # Case 2: external URL — validate format, fetch, check IIIF
                 try:
-                    if not self.URL_REGEX.match(manifest_url):
+                    if not self._get_url_regex().match(manifest_url):
                         raise FailRegexURLMatch()
-                    resp = requests.get(manifest_url, timeout=5)
+
+                    resp = requests.get(
+                        manifest_url,
+                        timeout=5,
+                        headers=self._get_request_headers(),
+                        allow_redirects=False,
+                    )
                     resp.raise_for_status()
                     manifest_json = resp.json()
                     self.is_iiif_manifest(manifest_json)
-
-                    label = self._extract_manifest_label(manifest_json)
-                    desc = self._extract_manifest_description(manifest_json)
-
-                    IIIFManifest.objects.get_or_create(
-                        url=manifest_url,
-                        defaults={
-                            "label": label or "IIIF Manifest",
-                            "description": desc or "",
-                            "manifest": manifest_json,
-                        },
-                    )
                 except FailRegexURLMatch:
                     errors.append({"type": "ERROR", "message": _("Invalid URL format")})
                 except requests.Timeout:
@@ -137,30 +232,81 @@ class ManifestDataType(BaseDataType):
 
         return errors
 
+    def pre_tile_save(self, tile, nodeid):
+        """Ensure the IIIFManifest DB record exists and store local path.
+
+        Always normalizes tile.data to a local relative path
+        (/manifest/{globalid}) so all tiles point to the local server,
+        regardless of whether the manifest was created locally or imported.
+        """
+        value = tile.data.get(str(nodeid))
+        if not value or not isinstance(value, str):
+            return
+
+        # Skip UUIDs (legacy manifest_id references)
+        try:
+            uuid.UUID(value)
+            return
+        except ValueError:
+            pass
+
+        manifest_url = self._normalize_url(value)
+        try:
+            # 1. Try relative path lookup (local manifests from manifest_manager)
+            relative_path = self._to_relative_path(manifest_url)
+            manifest = IIIFManifest.objects.filter(url=relative_path).first()
+            if manifest:
+                tile.data[str(nodeid)] = manifest.url
+                return
+
+            # 2. Try full URL lookup (external manifests already imported)
+            manifest = IIIFManifest.objects.filter(url=manifest_url).first()
+            if manifest:
+                tile.data[str(nodeid)] = f"/manifest/{manifest.globalid}"
+                return
+
+            # 3. Fetch and import new external manifest as local
+            if not self._get_url_regex().match(manifest_url):
+                logger.warning("pre_tile_save rejected URL: %s", manifest_url)
+                return
+
+            resp = requests.get(
+                manifest_url,
+                timeout=5,
+                headers=self._get_request_headers(),
+                allow_redirects=False,
+            )
+            resp.raise_for_status()
+            manifest_json = resp.json()
+            self.is_iiif_manifest(manifest_json)
+
+            label = self._extract_manifest_label(manifest_json)
+            desc = self._extract_manifest_description(manifest_json)
+
+            new_globalid = uuid.uuid4()
+            manifest = IIIFManifest.objects.create(
+                globalid=new_globalid,
+                url=f"/manifest/{new_globalid}",
+                label=label or "IIIF Manifest",
+                description=desc or "",
+                manifest=manifest_json,
+            )
+            tile.data[str(nodeid)] = manifest.url
+        except Exception as e:
+            logger.warning("pre_tile_save manifest import failed: %s", e)
+
     def transform_value_for_tile(self, value, **kwargs):
+        """Transform input value for tile storage. Returns a URL string."""
         if not value:
             return None
 
         if isinstance(value, dict):
-            if "manifest_id" in value:
-                return str(value["manifest_id"])
-            elif "manifest_url" in value:
-                try:
-                    manifest = IIIFManifest.objects.get(url=value["manifest_url"])
-                    return str(manifest.id)
-                except IIIFManifest.DoesNotExist:
-                    return None
+            if "manifest_url" in value:
+                return self._normalize_url(value["manifest_url"])
+            return None
 
-        elif isinstance(value, str):
-            try:
-                uuid.UUID(value)
-                return value
-            except ValueError:
-                try:
-                    manifest = IIIFManifest.objects.get(url=value)
-                    return str(manifest.id)
-                except IIIFManifest.DoesNotExist:
-                    return None
+        if isinstance(value, str):
+            return self._normalize_url(value)
 
     def transform_export_values(self, value, *args, **kwargs):
         return value
@@ -168,8 +314,11 @@ class ManifestDataType(BaseDataType):
     def get_display_value(self, tile, node, **kwargs):
         if tile.data and str(node.nodeid) in tile.data:
             value = tile.data[str(node.nodeid)]
+            if not value:
+                return None
             try:
-                manifest = IIIFManifest.objects.get(id=value)
+                db_url = self._to_relative_path(value)
+                manifest = IIIFManifest.objects.get(url=db_url)
                 result = f"{manifest.label}"
                 if manifest.url:
                     result += f" ({manifest.url})"
