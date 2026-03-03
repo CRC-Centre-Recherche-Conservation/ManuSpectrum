@@ -21,14 +21,14 @@
   <!-- "MANU" text (drawn first, curves will overlay) -->
   <text x="124" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">MANU</text>
 
-  <!-- Peak 1 (blue) — flat under MANU, rise starts after U, ends above PE -->
-  <path d="M 132,81 C 262,81 276,80 286,72 C 300,42 316,6 340,6 C 348,6 372,30 438,28 L 132,81 Z" fill="url(#glow-blue)"/>
-  <path d="M 132,81 C 262,81 276,80 286,72 C 300,42 316,6 340,6 C 348,6 372,30 438,28"
+  <!-- Peak 1 (blue) — starts at spectral bar origin, small peak before M, flat under MANU, big peak for S, ends above PE -->
+  <path d="M 40,82 C 50,82 65,45 78,45 C 86,45 100,82 132,81 C 262,81 276,80 286,72 C 300,42 316,6 340,6 C 348,6 372,30 438,28 L 40,82 Z" fill="url(#glow-blue)"/>
+  <path d="M 40,82 C 50,82 65,45 78,45 C 86,45 100,82 132,81 C 262,81 276,80 286,72 C 300,42 316,6 340,6 C 348,6 372,30 438,28"
         fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
 
-  <!-- Peak 2 (red) — flat under MANU, rise starts after U, ends above PE -->
-  <path d="M 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 365,10 389,32 444,30 L 142,81 Z" fill="url(#glow-red)"/>
-  <path d="M 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 365,10 389,32 444,30"
+  <!-- Peak 2 (red) — starts at spectral bar origin, small peak before M, flat under MANU, big peak for S, ends above PE -->
+  <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 365,10 389,32 444,30 L 40,82 Z" fill="url(#glow-red)"/>
+  <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 266,81 281,79 294,68 C 312,38 332,10 357,10 C 365,10 389,32 444,30"
         fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
 
   <!-- "PECTRUM" text (drawn last, overlays descending curves) -->
