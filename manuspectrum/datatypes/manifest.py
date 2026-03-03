@@ -204,6 +204,7 @@ class ManifestDataType(BaseDataType):
                         manifest_url,
                         timeout=5,
                         headers=self._get_request_headers(),
+                        allow_redirects=False,
                     )
                     resp.raise_for_status()
                     manifest_json = resp.json()
@@ -265,8 +266,15 @@ class ManifestDataType(BaseDataType):
                 return
 
             # 3. Fetch and import new external manifest as local
+            if not self._get_url_regex().match(manifest_url):
+                logger.warning("pre_tile_save rejected URL: %s", manifest_url)
+                return
+
             resp = requests.get(
-                manifest_url, timeout=5, headers=self._get_request_headers()
+                manifest_url,
+                timeout=5,
+                headers=self._get_request_headers(),
+                allow_redirects=False,
             )
             resp.raise_for_status()
             manifest_json = resp.json()

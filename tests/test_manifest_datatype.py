@@ -8,7 +8,7 @@ Usage:
 """
 
 import uuid
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch, call
 
 from django.test import TestCase
 import requests
@@ -1228,4 +1228,311 @@ class TestPreTileSave(TestCase):
         # Verify lookup used relative path
         mock_manifest_model.objects.filter.assert_called_once_with(
             url="/manifest/abc-123"
+        )
+
+
+# ======================================================================
+# SSRF Vulnerability Tests
+# ======================================================================
+
+
+class TestSSRF_RedirectBlocked(TestCase):
+    """Verify that allow_redirects=False prevents redirect-based SSRF.
+
+    An attacker provides a valid external URL (passes regex). Their server
+    would return a 302 to an internal IP, but allow_redirects=False stops it.
+    """
+
+    def setUp(self):
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.datatype = ManifestDataType()
+
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    def test_validate_disables_redirects(self, mock_get):
+        """validate() must call requests.get with allow_redirects=False."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_get.return_value = mock_response
+
+        self.datatype.validate("https://evil.com/ssrf-redirect")
+
+        mock_get.assert_called_once()
+        call_kwargs = mock_get.call_args[1]
+        self.assertIn("allow_redirects", call_kwargs)
+        self.assertFalse(
+            call_kwargs["allow_redirects"],
+            "PROTECTION: validate() must disable redirects to prevent SSRF",
+        )
+
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_disables_redirects(
+        self, mock_manifest_model, mock_get
+    ):
+        """pre_tile_save() must call requests.get with allow_redirects=False."""
+        nodeid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: "https://evil.com/ssrf-redirect"}
+
+        mock_filter_none = MagicMock()
+        mock_filter_none.first.return_value = None
+        mock_manifest_model.objects.filter.return_value = mock_filter_none
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_get.return_value = mock_response
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        mock_get.assert_called_once()
+        call_kwargs = mock_get.call_args[1]
+        self.assertIn("allow_redirects", call_kwargs)
+        self.assertFalse(
+            call_kwargs["allow_redirects"],
+            "PROTECTION: pre_tile_save() must disable redirects to prevent SSRF",
+        )
+
+
+class TestSSRF_PreTileSaveURLValidation(TestCase):
+    """Verify that pre_tile_save() now validates URLs with the regex
+    before fetching, blocking private IPs and invalid URLs.
+    """
+
+    def setUp(self):
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.datatype = ManifestDataType()
+
+    @patch("manuspectrum.datatypes.manifest.django_settings")
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_strict_regex_matches_private_ip(
+        self, mock_manifest_model, mock_get, mock_settings
+    ):
+        """Strict regex matches IPs like 192.168.1.1 (dots in char class).
+
+        The regex alone does not block private IPs — but allow_redirects=False
+        prevents redirect-based SSRF through these IPs.
+        """
+        mock_settings.DEBUG = False
+        nodeid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: "http://192.168.1.1/admin"}
+
+        mock_filter_none = MagicMock()
+        mock_filter_none.first.return_value = None
+        mock_manifest_model.objects.filter.return_value = mock_filter_none
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {}
+        mock_get.return_value = mock_response
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        # Strict regex matches IPs — request is made but without redirects
+        mock_get.assert_called_once()
+        call_kwargs = mock_get.call_args[1]
+        self.assertFalse(call_kwargs["allow_redirects"])
+
+    @patch("manuspectrum.datatypes.manifest.django_settings")
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_strict_regex_matches_cloud_metadata(
+        self, mock_manifest_model, mock_get, mock_settings
+    ):
+        """Strict regex matches 169.254.169.254 (dots in char class).
+
+        The regex alone does not block cloud metadata — but allow_redirects=False
+        prevents redirect-based SSRF. Full IP blocking requires url_validator.
+        """
+        mock_settings.DEBUG = False
+        nodeid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: "http://169.254.169.254/latest/meta-data/"}
+
+        mock_filter_none = MagicMock()
+        mock_filter_none.first.return_value = None
+        mock_manifest_model.objects.filter.return_value = mock_filter_none
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {}
+        mock_get.return_value = mock_response
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        mock_get.assert_called_once()
+        call_kwargs = mock_get.call_args[1]
+        self.assertFalse(call_kwargs["allow_redirects"])
+
+    @patch("manuspectrum.datatypes.manifest.django_settings")
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_blocks_localhost_in_prod(
+        self, mock_manifest_model, mock_get, mock_settings
+    ):
+        """pre_tile_save() must reject localhost URLs in production."""
+        mock_settings.DEBUG = False
+        nodeid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: "http://localhost:6379/"}
+
+        mock_filter_none = MagicMock()
+        mock_filter_none.first.return_value = None
+        mock_manifest_model.objects.filter.return_value = mock_filter_none
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        mock_get.assert_not_called()
+
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_pre_tile_save_allows_valid_external_url(
+        self, mock_manifest_model, mock_get
+    ):
+        """pre_tile_save() must still allow valid external URLs."""
+        nodeid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: "https://example.org/iiif/manifest"}
+
+        mock_filter_none = MagicMock()
+        mock_filter_none.first.return_value = None
+        mock_manifest_model.objects.filter.return_value = mock_filter_none
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_get.return_value = mock_response
+
+        self.datatype.pre_tile_save(tile, nodeid)
+
+        mock_get.assert_called_once()
+
+
+class TestSSRF_DevModePrivateIPs(TestCase):
+    """Prove that DEBUG=True allows private IPs through the regex in validate().
+
+    When DEBUG=True, _URL_REGEX_DEV matches any IP address including
+    internal networks, cloud metadata, and loopback.
+    """
+
+    def setUp(self):
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.ManifestDataType = ManifestDataType
+            self.datatype = ManifestDataType()
+
+    def test_dev_regex_allows_aws_metadata_ip(self):
+        """DEV regex matches cloud metadata IP 169.254.169.254."""
+        match = self.ManifestDataType._URL_REGEX_DEV.match(
+            "http://169.254.169.254/latest/meta-data/"
+        )
+        self.assertIsNotNone(
+            match,
+            "SSRF CONFIRMED: dev regex allows cloud metadata endpoint",
+        )
+
+    def test_dev_regex_allows_internal_network(self):
+        """DEV regex matches internal 10.x network."""
+        match = self.ManifestDataType._URL_REGEX_DEV.match(
+            "http://10.0.0.1:8080/internal-api"
+        )
+        self.assertIsNotNone(
+            match,
+            "SSRF CONFIRMED: dev regex allows internal network IPs",
+        )
+
+    def test_dev_regex_allows_docker_network(self):
+        """DEV regex matches Docker bridge network 172.17.x."""
+        match = self.ManifestDataType._URL_REGEX_DEV.match(
+            "http://172.17.0.2:5432/"
+        )
+        self.assertIsNotNone(
+            match,
+            "SSRF CONFIRMED: dev regex allows Docker internal IPs",
+        )
+
+    @patch("manuspectrum.datatypes.manifest.django_settings")
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    def test_validate_fetches_metadata_in_debug_mode(
+        self, mock_get, mock_settings
+    ):
+        """SSRF: validate() in DEBUG mode fetches cloud metadata directly."""
+        mock_settings.DEBUG = True
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {}
+        mock_get.return_value = mock_response
+
+        self.datatype.validate("http://169.254.169.254/latest/meta-data/")
+
+        mock_get.assert_called_once()
+        actual_url = mock_get.call_args[0][0]
+        self.assertIn(
+            "169.254.169.254",
+            actual_url,
+            "SSRF CONFIRMED: validate in DEBUG mode directly fetches "
+            "cloud metadata — no IP blocking",
+        )
+
+
+class TestSSRF_StrictRegexBypassViaRedirect(TestCase):
+    """Prove the strict regex can be bypassed via redirect chains.
+
+    Even in production (DEBUG=False), an attacker can:
+    1. Provide https://evil.com/redirect (passes strict regex)
+    2. evil.com returns 302 → http://169.254.169.254/...
+    3. requests.get() follows the redirect
+    """
+
+    def setUp(self):
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.ManifestDataType = ManifestDataType
+            self.datatype = ManifestDataType()
+
+    def test_strict_regex_accepts_attacker_domain(self):
+        """Attacker-controlled domain passes the strict regex."""
+        match = self.ManifestDataType._URL_REGEX_STRICT.match(
+            "https://evil.com/redirect-to-metadata"
+        )
+        self.assertIsNotNone(
+            match,
+            "Attacker domain passes strict regex — redirect SSRF is possible",
+        )
+
+    @patch("manuspectrum.datatypes.manifest.django_settings")
+    @patch("manuspectrum.datatypes.manifest.requests.get")
+    def test_validate_strict_mode_blocks_redirects(
+        self, mock_get, mock_settings
+    ):
+        """In production (strict regex), redirects are disabled."""
+        mock_settings.DEBUG = False
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = ManifestTestData.VALID_V3
+        mock_get.return_value = mock_response
+
+        self.datatype.validate("https://evil.com/redirect-to-metadata")
+
+        mock_get.assert_called_once()
+        call_kwargs = mock_get.call_args[1]
+        self.assertIn("allow_redirects", call_kwargs)
+        self.assertFalse(
+            call_kwargs["allow_redirects"],
+            "PROTECTION: strict mode must block redirects to prevent SSRF bounce",
         )
