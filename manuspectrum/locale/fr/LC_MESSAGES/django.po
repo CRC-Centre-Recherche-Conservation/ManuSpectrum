@@ -1105,3 +1105,15 @@ msgstr "Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nat
 #: manuspectrum/templates/index.htm
 msgid "Powered by"
 msgstr "Propulsé par"
+
+#: manuspectrum/templates/index.htm
+msgid "Source code on GitHub"
+msgstr "Code source sur GitHub"
+
+#: manuspectrum/templates/index.htm
+msgid "Source code"
+msgstr "Code source"
+
+#: manuspectrum/templates/index.htm
+msgid "GPL-3.0 License"
+msgstr "Licence GPL-3.0"

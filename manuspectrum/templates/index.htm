@@ -330,6 +330,20 @@ Homepage — Prismatic Luminescence aesthetic
         transform: translateY(-1px);
     }
 
+    .ms-nav-github {
+        display: flex;
+        align-items: center;
+        font-size: 1.15rem;
+        color: var(--ink-muted);
+        padding: 0.4rem 0.6rem;
+        transition: color 0.3s, transform 0.3s;
+    }
+
+    .ms-nav-github:hover {
+        color: var(--ink);
+        transform: scale(1.1);
+    }
+
     /* Mobile nav toggle */
     .ms-hamburger {
         display: none;
@@ -1530,6 +1544,30 @@ Homepage — Prismatic Luminescence aesthetic
         font-weight: 300;
     }
 
+    .ms-footer-opensource {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.78rem;
+        color: var(--ink-dim);
+        flex-wrap: wrap;
+    }
+
+    .ms-footer-opensource a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: var(--ink-muted);
+        transition: color 0.3s;
+    }
+
+    .ms-footer-opensource a:hover { color: var(--spectral-5); }
+
+    .ms-footer-separator {
+        color: var(--border-hover);
+        user-select: none;
+    }
+
     .ms-footer-arches {
         font-size: 0.78rem;
         color: var(--ink-dim);
@@ -1556,7 +1594,8 @@ Homepage — Prismatic Luminescence aesthetic
 
         .ms-nav-links,
         .ms-nav-divider,
-        .ms-nav-auth { display: none; }
+        .ms-nav-auth,
+        .ms-nav-github { display: none; }
 
         .ms-hamburger { display: flex; }
         .ms-mobile-nav { display: flex; }
@@ -1568,6 +1607,7 @@ Homepage — Prismatic Luminescence aesthetic
         .ms-footer-inner { flex-direction: column; }
         .ms-footer-links { flex-direction: column; gap: 2rem; }
         .ms-footer-bottom { flex-direction: column; gap: 1rem; text-align: center; }
+        .ms-footer-opensource { justify-content: center; }
     }
 
     @media (max-width: 480px) {
@@ -1617,6 +1657,12 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-nav-divider"></div>
 
+                <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-nav-github" aria-label="GitHub" title="{% trans 'Source code on GitHub' %}">
+                    <i class="fa-brands fa-github"></i>
+                </a>
+
+                <div class="ms-nav-divider"></div>
+
                 <div class="ms-nav-auth">
                     {% if user.username == 'anonymous' %}
                         <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
@@ -1662,6 +1708,9 @@ Homepage — Prismatic Luminescence aesthetic
             <a href="{% url 'user_profile_manager' %}">{{ user.first_name|default:user.username }}</a>
             <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
         {% endif %}
+        <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" style="font-size:1.4rem;margin-top:0.5rem;">
+            <i class="fa-brands fa-github"></i>
+        </a>
     </div>
 
 
@@ -2191,8 +2240,16 @@ Homepage — Prismatic Luminescence aesthetic
 
             <div class="ms-footer-bottom">
                 <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "All rights reserved" %}</p>
-                <div class="ms-footer-arches">
-                    {% trans "Powered by" %} <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>
+                <div class="ms-footer-opensource">
+                    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener">
+                        <i class="fa-brands fa-github"></i> {% trans "Source code" %}
+                    </a>
+                    <span class="ms-footer-separator">·</span>
+                    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/LICENSE" target="_blank" rel="noopener">
+                        {% trans "GPL-3.0 License" %}
+                    </a>
+                    <span class="ms-footer-separator">·</span>
+                    <span class="ms-footer-arches">{% trans "Powered by" %} <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a></span>
                 </div>
             </div>
         </div>
