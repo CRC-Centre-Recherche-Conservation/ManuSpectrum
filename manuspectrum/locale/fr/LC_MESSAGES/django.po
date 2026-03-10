@@ -801,6 +801,10 @@ msgid "Pigments"
 msgstr "Pigments"
 
 #: manuspectrum/templates/index.htm
+msgid "Vermilion"
+msgstr "Vermillon"
+
+#: manuspectrum/templates/index.htm
 msgid "Layers"
 msgstr "Couches"
 
@@ -863,10 +867,6 @@ msgstr "Recherchez par matériau, technique d'analyse, objet patrimonial ou él�
 #: manuspectrum/templates/index.htm
 msgid "Search materials, techniques, objects..."
 msgstr "Rechercher des matériaux, techniques, objets..."
-
-#: manuspectrum/templates/index.htm
-msgid "pigment"
-msgstr "pigment"
 
 #: manuspectrum/templates/index.htm
 msgid "Manuscripts"
