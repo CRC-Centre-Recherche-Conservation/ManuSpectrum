@@ -1798,7 +1798,7 @@ Homepage — Prismatic Luminescence aesthetic
                 </form>
 
                 <div class="ms-search-chips">
-                    <button class="ms-search-chip" data-term="{% trans 'pigment' %}">{% trans "Pigments" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
                     <button class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
                     <button class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
                     <button class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
@@ -1972,9 +1972,7 @@ Homepage — Prismatic Luminescence aesthetic
         var searchInput = document.getElementById('ms-search-input');
         var searchUrl = "{% url 'search_home' %}";
 
-        searchForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            var query = searchInput.value.trim();
+        function navigateToSearch(query) {
             if (query) {
                 var termFilter = JSON.stringify([{
                     "inverted": false,
@@ -1989,15 +1987,18 @@ Homepage — Prismatic Luminescence aesthetic
             } else {
                 window.location.href = searchUrl;
             }
+        }
+
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            navigateToSearch(searchInput.value.trim());
         });
 
         // Search chips
         var chips = document.querySelectorAll('.ms-search-chip');
         for (var c = 0; c < chips.length; c++) {
             chips[c].addEventListener('click', function() {
-                var term = this.getAttribute('data-term');
-                searchInput.value = term;
-                searchForm.dispatchEvent(new Event('submit'));
+                navigateToSearch(this.getAttribute('data-term'));
             });
         }
     })();
