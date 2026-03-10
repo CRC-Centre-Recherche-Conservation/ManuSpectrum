@@ -201,6 +201,7 @@ Homepage — Prismatic Luminescence aesthetic
     .reveal-d5 { transition-delay: 0.40s; }
     .reveal-d6 { transition-delay: 0.48s; }
     .reveal-d7 { transition-delay: 0.56s; }
+    .reveal-d8 { transition-delay: 0.64s; }
 
     .reveal-scale {
         opacity: 0;
@@ -1224,23 +1225,63 @@ Homepage — Prismatic Luminescence aesthetic
         align-items: center;
         justify-content: center;
         flex-wrap: wrap;
-        gap: 2.5rem 3.5rem;
-        max-width: 1000px;
+        gap: 2.5rem 3rem;
+        max-width: 1100px;
         margin: 0 auto;
     }
 
-    .ms-partner-logo {
-        height: 50px;
-        width: auto;
-        opacity: 0.35;
+    .ms-partner-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.4s, filter 0.4s, transform 0.3s var(--ease-out-expo);
+        opacity: 0.4;
         filter: grayscale(100%);
-        transition: opacity 0.4s, filter 0.4s;
     }
 
-    .ms-partner-logo:hover {
-        opacity: 0.9;
+    .ms-partner-link:hover {
+        opacity: 1;
         filter: grayscale(0%);
+        transform: translateY(-2px);
     }
+
+    .ms-partner-link img {
+        display: block;
+        width: auto;
+    }
+
+    /* Ministere de la Culture — white background mandatory (charte) */
+    .ms-partner-link--culture {
+        background: #fff;
+        border-radius: 6px;
+        padding: 10px 14px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .ms-partner-link--culture img { height: 55px; }
+
+    /* CNRS — 60px min digital, protection zone = logo size */
+    .ms-partner-link--cnrs { padding: 12px; }
+    .ms-partner-link--cnrs img { height: 60px; }
+
+    /* MNHN — min 48x55px, breathing space = "Museum" width / 2 */
+    .ms-partner-link--mnhn { padding: 10px 16px; }
+    .ms-partner-link--mnhn img { height: 55px; min-width: 48px; }
+
+    /* CRC */
+    .ms-partner-link--crc img { height: 50px; }
+
+    /* ANR — min 30px, protection zone */
+    .ms-partner-link--anr { padding: 8px 12px; }
+    .ms-partner-link--anr img { height: 45px; min-height: 30px; }
+
+    /* Biblissima */
+    .ms-partner-link--biblissima img { height: 50px; }
+
+    /* Huma-Num */
+    .ms-partner-link--humanum img { height: 45px; }
+
+    /* Arches */
+    .ms-partner-link--arches img { height: 45px; }
 
 
     /* ============================================================
@@ -1378,8 +1419,15 @@ Homepage — Prismatic Luminescence aesthetic
         .ms-btn { width: 100%; justify-content: center; max-width: 280px; }
         .ms-search-chips { gap: 0.4rem; }
         .ms-search-chip { font-size: 0.75rem; padding: 0.4rem 0.9rem; }
-        .ms-partners-grid { gap: 1.5rem 2rem; }
-        .ms-partner-logo { height: 38px; }
+        .ms-partners-grid { gap: 1.5rem 1.5rem; }
+        .ms-partner-link--culture img { height: 42px; }
+        .ms-partner-link--cnrs img { height: 48px; }
+        .ms-partner-link--mnhn img { height: 42px; }
+        .ms-partner-link--crc img { height: 38px; }
+        .ms-partner-link--anr img { height: 34px; }
+        .ms-partner-link--biblissima img { height: 38px; }
+        .ms-partner-link--humanum img { height: 34px; }
+        .ms-partner-link--arches img { height: 34px; }
     }
     </style>
 </head>
@@ -1832,14 +1880,31 @@ Homepage — Prismatic Luminescence aesthetic
         <div class="ms-container">
             <div class="ms-partners-label">{% trans "Our Partners" %}</div>
             <div class="ms-partners-grid">
-                <img class="ms-partner-logo reveal-d5" src="{% static 'img/landing/logo-ministere-de-la-culture.png' %}" alt="{% trans "Ministry of Culture" %}">
-                <img class="ms-partner-logo reveal-d3" src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS">
-                <img class="ms-partner-logo reveal-d4" src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN — Museum national d'Histoire naturelle">
-                <img class="ms-partner-logo reveal-d1" src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC — Centre de Recherche sur la Conservation">
-                <img class="ms-partner-logo reveal-d8" src="{% static 'img/landing/logo-ANR.svg' %}" alt="ANR — Agence Nationale de la Recherche">
-                <img class="ms-partner-logo reveal-d2" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
-                <img class="ms-partner-logo reveal-d6" src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num">
-                <img class="ms-partner-logo reveal-d7" src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches">
+                <!-- Ministere en premier (charte : premier sur les bandeaux, fond blanc obligatoire) -->
+                <a class="ms-partner-link ms-partner-link--culture reveal-d1" href="https://www.culture.gouv.fr" target="_blank" rel="noopener" title="{% trans 'Ministry of Culture' %}">
+                    <img src="{% static 'img/landing/logo-ministere-de-la-culture.png' %}" alt="{% trans 'Ministry of Culture' %}">
+                </a>
+                <a class="ms-partner-link ms-partner-link--cnrs reveal-d2" href="https://www.cnrs.fr" target="_blank" rel="noopener" title="CNRS">
+                    <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS">
+                </a>
+                <a class="ms-partner-link ms-partner-link--mnhn reveal-d3" href="https://www.mnhn.fr" target="_blank" rel="noopener" title="{% trans 'National Museum of Natural History' %}">
+                    <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN">
+                </a>
+                <a class="ms-partner-link ms-partner-link--crc reveal-d4" href="https://crc.mnhn.fr" target="_blank" rel="noopener" title="CRC — Centre de Recherche sur la Conservation">
+                    <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC">
+                </a>
+                <a class="ms-partner-link ms-partner-link--anr reveal-d5" href="https://anr.fr" target="_blank" rel="noopener" title="ANR — Agence Nationale de la Recherche">
+                    <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR">
+                </a>
+                <a class="ms-partner-link ms-partner-link--biblissima reveal-d6" href="https://biblissima.fr" target="_blank" rel="noopener" title="Biblissima+">
+                    <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
+                </a>
+                <a class="ms-partner-link ms-partner-link--humanum reveal-d7" href="https://www.huma-num.fr" target="_blank" rel="noopener" title="Huma-Num">
+                    <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num">
+                </a>
+                <a class="ms-partner-link ms-partner-link--arches reveal-d8" href="https://www.archesproject.org" target="_blank" rel="noopener" title="Arches">
+                    <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches">
+                </a>
             </div>
         </div>
     </section>
