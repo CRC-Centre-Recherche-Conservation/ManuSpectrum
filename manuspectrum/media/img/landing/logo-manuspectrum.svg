@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 95">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 95">
   <defs>
     <linearGradient id="spectral-bar" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#dc3545"/>
@@ -40,8 +40,8 @@
         fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
 
   <!-- "PECTRUM" text (drawn last, overlays descending curves) -->
-  <text x="379" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
+  <text x="345" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
 
   <!-- Spectral bar -->
-  <rect x="40" y="82" width="620" height="3" rx="1.5" fill="url(#spectral-bar)"/>
+  <rect x="40" y="82" width="580" height="3" rx="1.5" fill="url(#spectral-bar)"/>
 </svg>
