@@ -15,7 +15,7 @@ Homepage — Prismatic Luminescence aesthetic
     <title>{% trans "ManuSpectrum — Physicochemical Analysis of Heritage" %}</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{% trans "Interoperable database for heritage materials analysis — Biblissima+ Cluster" %}">
+    <meta name="description" content="{% trans "Interoperable database for written cultural heritage materials analysis — Biblissima+ Cluster" %}">
     <meta name="theme-color" content="#faf9f7">
 
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
@@ -202,6 +202,7 @@ Homepage — Prismatic Luminescence aesthetic
     .reveal-d6 { transition-delay: 0.48s; }
     .reveal-d7 { transition-delay: 0.56s; }
     .reveal-d8 { transition-delay: 0.64s; }
+    .reveal-d9 { transition-delay: 0.72s; }
 
     .reveal-scale {
         opacity: 0;
@@ -829,22 +830,36 @@ Homepage — Prismatic Luminescence aesthetic
         font-weight: 300;
     }
 
-    /* Stats row */
+    /* Stats — analysis techniques grid */
     .ms-stats {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 1.5rem;
+        gap: 1rem;
         margin-top: 4rem;
     }
 
     .ms-stat {
         text-align: center;
-        padding: 2rem 1rem;
+        padding: 1.5rem 0.75rem 1.3rem;
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 12px;
         box-shadow: var(--shadow-sm);
-        transition: box-shadow 0.4s, transform 0.4s var(--ease-out-expo);
+        transition: box-shadow 0.4s, transform 0.4s var(--ease-out-expo), border-color 0.4s;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Spectral top accent — appears on hover */
+    .ms-stat::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        opacity: 0;
+        transition: opacity 0.4s;
     }
 
     .ms-stat:hover {
@@ -852,42 +867,95 @@ Homepage — Prismatic Luminescence aesthetic
         transform: translateY(-3px);
     }
 
+    .ms-stat:hover::before { opacity: 1; }
+
     .ms-stat-icon {
-        font-size: 1.4rem;
-        margin-bottom: 0.75rem;
+        font-size: 1.25rem;
+        margin-bottom: 0.6rem;
     }
 
+    /* Spectral color cycling for each technique */
     .ms-stat:nth-child(1) .ms-stat-icon { color: var(--spectral-1); }
-    .ms-stat:nth-child(2) .ms-stat-icon { color: var(--spectral-5); }
-    .ms-stat:nth-child(3) .ms-stat-icon { color: var(--spectral-4); }
+    .ms-stat:nth-child(1)::before { background: var(--spectral-1); }
+
+    .ms-stat:nth-child(2) .ms-stat-icon { color: var(--spectral-2); }
+    .ms-stat:nth-child(2)::before { background: var(--spectral-2); }
+
+    .ms-stat:nth-child(3) .ms-stat-icon { color: var(--spectral-3); }
+    .ms-stat:nth-child(3)::before { background: var(--spectral-3); }
+
+    .ms-stat:nth-child(4) .ms-stat-icon { color: var(--spectral-4); }
+    .ms-stat:nth-child(4)::before { background: var(--spectral-4); }
+
+    .ms-stat:nth-child(5) .ms-stat-icon { color: var(--teal); }
+    .ms-stat:nth-child(5)::before { background: var(--teal); }
+
+    .ms-stat:nth-child(6) .ms-stat-icon { color: var(--spectral-5); }
+    .ms-stat:nth-child(6)::before { background: var(--spectral-5); }
+
+    .ms-stat:nth-child(7) .ms-stat-icon { color: var(--spectral-6); }
+    .ms-stat:nth-child(7)::before { background: var(--spectral-6); }
+
+    .ms-stat:nth-child(8) .ms-stat-icon { color: var(--spectral-1); }
+    .ms-stat:nth-child(8)::before { background: linear-gradient(90deg, var(--spectral-1), var(--spectral-2)); }
+
+    /* "And many more" — special dashed style */
+    .ms-stat:nth-child(9) {
+        border-style: dashed;
+        border-color: rgba(26,26,46,0.12);
+        background: transparent;
+    }
+    .ms-stat:nth-child(9) .ms-stat-icon { color: var(--ink-dim); }
+    .ms-stat:nth-child(9)::before { background: linear-gradient(90deg, var(--spectral-1), var(--spectral-3), var(--spectral-5), var(--spectral-6)); }
+    .ms-stat:nth-child(9):hover { background: var(--surface); }
 
     .ms-stat-value {
         font-family: var(--font-display);
-        font-size: 2.2rem;
+        font-size: 1.8rem;
         font-weight: 300;
         color: var(--ink);
         line-height: 1;
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.35rem;
     }
 
     .ms-stat-label {
-        font-size: 0.78rem;
+        font-size: 0.68rem;
         color: var(--ink-dim);
-        letter-spacing: 0.05em;
+        letter-spacing: 0.04em;
         text-transform: uppercase;
         font-family: var(--font-mono);
+        line-height: 1.3;
     }
 
-    /* Full-width image showcase */
-    .ms-showcase {
+    /* Showcase carousel */
+    .ms-showcase-carousel {
         margin-top: 4rem;
+        position: relative;
+    }
+
+    .ms-showcase-track {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scroll-behavior: smooth;
+        gap: 1.5rem;
+        padding-bottom: 0.5rem;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    .ms-showcase-track::-webkit-scrollbar { display: none; }
+
+    .ms-showcase-slide {
+        flex: 0 0 100%;
+        scroll-snap-align: start;
         border-radius: 16px;
         overflow: hidden;
         position: relative;
         box-shadow: var(--shadow-lg);
     }
 
-    .ms-showcase img {
+    .ms-showcase-slide img {
         width: 100%;
         height: 400px;
         object-fit: cover;
@@ -915,6 +983,74 @@ Homepage — Prismatic Luminescence aesthetic
         font-size: 0.85rem;
         color: rgba(255,255,255,0.7);
         font-weight: 300;
+    }
+
+    /* Carousel navigation */
+    .ms-showcase-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 1.2rem;
+    }
+
+    .ms-showcase-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        border: 1.5px solid var(--ink-dim);
+        background: transparent;
+        cursor: pointer;
+        padding: 0;
+        transition: background 0.3s, border-color 0.3s, transform 0.3s;
+    }
+
+    .ms-showcase-dot:hover {
+        border-color: var(--spectral-5);
+        transform: scale(1.2);
+    }
+
+    .ms-showcase-dot.active {
+        background: var(--spectral-5);
+        border-color: var(--spectral-5);
+    }
+
+    .ms-showcase-arrows {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        transform: translateY(-50%);
+        display: flex;
+        justify-content: space-between;
+        padding: 0 0.75rem;
+        pointer-events: none;
+        z-index: 3;
+    }
+
+    .ms-showcase-arrow {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.25);
+        background: rgba(26,26,46,0.4);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        pointer-events: all;
+        transition: background 0.3s, transform 0.3s, border-color 0.3s;
+        font-size: 0.85rem;
+        padding: 0;
+    }
+
+    .ms-showcase-arrow:hover {
+        background: rgba(26,26,46,0.65);
+        border-color: rgba(255,255,255,0.4);
+        transform: scale(1.08);
     }
 
 
@@ -1014,6 +1150,26 @@ Homepage — Prismatic Luminescence aesthetic
         border: 1px solid var(--border);
         border-radius: 4px;
         color: var(--ink-dim);
+    }
+
+    a.ms-feature-tag--link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        cursor: pointer;
+        transition: border-color 0.3s, color 0.3s, background 0.3s;
+        text-decoration: none;
+    }
+
+    a.ms-feature-tag--link:hover {
+        color: var(--spectral-5);
+        border-color: var(--spectral-5);
+        background: rgba(59,130,246,0.05);
+    }
+
+    a.ms-feature-tag--link i {
+        font-size: 0.55rem;
+        opacity: 0.6;
     }
 
 
@@ -1407,7 +1563,7 @@ Homepage — Prismatic Luminescence aesthetic
 
         .ms-hero-logo { width: clamp(200px, 65vw, 320px); }
 
-        .ms-stats { grid-template-columns: 1fr; }
+        .ms-stats { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
 
         .ms-footer-inner { flex-direction: column; }
         .ms-footer-links { flex-direction: column; gap: 2rem; }
@@ -1419,6 +1575,8 @@ Homepage — Prismatic Luminescence aesthetic
         .ms-btn { width: 100%; justify-content: center; max-width: 280px; }
         .ms-search-chips { gap: 0.4rem; }
         .ms-search-chip { font-size: 0.75rem; padding: 0.4rem 0.9rem; }
+        .ms-stats { grid-template-columns: repeat(2, 1fr); }
+        .ms-stat:nth-child(9) { grid-column: 1 / -1; }
         .ms-partners-grid { gap: 1.5rem 1.5rem; }
         .ms-partner-link--culture img { height: 42px; }
         .ms-partner-link--cnrs img { height: 48px; }
@@ -1616,11 +1774,11 @@ Homepage — Prismatic Luminescence aesthetic
             <h1 class="ms-hero-tagline">
                 {% trans "Interoperable database for" %}
                 <em>{% trans "physicochemical analysis" %}</em>
-                {% trans "of heritage" %}
+                {% trans "of written cultural heritage" %}
             </h1>
 
             <p class="ms-hero-description">
-                {% trans "Explore, visualize, and share heritage materials analysis data within the Biblissima+ ecosystem." %}
+                {% trans "Explore, visualize, and share written cultural heritage materials analysis data within the Biblissima+ ecosystem." %}
             </p>
 
             <div class="ms-hero-actions">
@@ -1649,16 +1807,16 @@ Homepage — Prismatic Luminescence aesthetic
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "The Project" %}</div>
-                <h2 class="ms-section-title">{% trans "Thinking and modeling heritage materials" %}</h2>
+                <h2 class="ms-section-title">{% trans "Thinking and modeling written cultural heritage materials" %}</h2>
             </div>
 
             <div class="ms-project-grid">
                 <div class="ms-project-text reveal reveal-d1">
                     <p>
-                        {% trans "This cluster aims to address the challenge of effectively reusing physicochemical data for heritage materials analysis by establishing an interoperable database aligned with existing standards, particularly with the Biblissima portal." %}
+                        {% trans "ManuSpectrum was developed within Cluster 2 — \"Consideration and searchability of materials analysis data\" — of the ANR Biblissima+ programme. This cluster aims to ensure the long-term archiving and reuse of physicochemical analysis data for manuscripts, inscriptions, seals and other heritage objects, in partnership with Huma-Num." %}
                     </p>
                     <p>
-                        {% trans "Arches, an open-source platform specialized in heritage and cultural data management, offers a flexible architecture enabling advanced data modeling. This platform aims to facilitate data access and encourage effective collaboration between researchers from different disciplines." %}
+                        {% trans "Through structuring and standardizing data according to shared models, the project provides reliable, easy-to-use tools accessible to non-specialists. Built on Arches, an open-source platform for heritage data management, ManuSpectrum facilitates data access and collaboration between researchers from different disciplines." %}
                     </p>
                     <p>
                         {% trans "The model focuses on identifying the component as a pivot axis between the object, its context, the analyses, and their interpretations, using thesauri and authority databases to contextualize information on heterogeneous documents." %}
@@ -1666,10 +1824,12 @@ Homepage — Prismatic Luminescence aesthetic
                 </div>
 
                 <div class="ms-biblissima-card reveal reveal-d2">
-                    <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
-                    <h3>{% trans "Biblissima+ Cluster" %}</h3>
+                    <a href="https://projet.biblissima.fr/fr/projet/clusters-biblissima/cluster-2" target="_blank" rel="noopener">
+                        <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
+                    </a>
+                    <h3>{% trans "Biblissima+ — Cluster 2" %}</h3>
                     <p>
-                        {% trans "ManuSpectrum is part of the Biblissima+ cluster, an observatory of ancient written cultures. Our objective is to ensure the interoperability of physicochemical data with the Biblissima portal and cultural heritage standards." %}
+                        {% trans "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient written cultures. Within Cluster 2, the objective is to archive, share and enable searching of materials analysis data from the community, ensuring interoperability with the Biblissima portal and written cultural heritage standards." %}
                     </p>
                     <div class="ms-feature-tags" style="margin-top:1.5rem;">
                         <span class="ms-feature-tag">CIDOC-CRM</span>
@@ -1681,30 +1841,96 @@ Homepage — Prismatic Luminescence aesthetic
             </div>
 
             <!-- Stats -->
+            <!-- Stats -->
             <div class="ms-stats">
-                <div class="ms-stat reveal reveal-d2">
-                    <div class="ms-stat-icon"><i class="fa-solid fa-atom"></i></div>
+                <div class="ms-stat reveal reveal-d1">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-radiation"></i></div>
                     <div class="ms-stat-value">XRF</div>
                     <div class="ms-stat-label">{% trans "X-ray Fluorescence" %}</div>
                 </div>
+                <div class="ms-stat reveal reveal-d2">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-border-all"></i></div>
+                    <div class="ms-stat-value">MA-XRF</div>
+                    <div class="ms-stat-label">{% trans "X-ray Micro-Fluorescence" %}</div>
+                </div>
                 <div class="ms-stat reveal reveal-d3">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-bullseye"></i></div>
+                    <div class="ms-stat-value">FORS</div>
+                    <div class="ms-stat-label">{% trans "Fiber Optic Reflectance" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d4">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-burst"></i></div>
+                    <div class="ms-stat-value">Raman</div>
+                    <div class="ms-stat-label">{% trans "Raman Spectroscopy" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d5">
                     <div class="ms-stat-icon"><i class="fa-solid fa-wave-square"></i></div>
                     <div class="ms-stat-value">FTIR</div>
                     <div class="ms-stat-label">{% trans "IR Spectroscopy" %}</div>
                 </div>
-                <div class="ms-stat reveal reveal-d4">
-                    <div class="ms-stat-icon"><i class="fa-solid fa-satellite-dish"></i></div>
+                <div class="ms-stat reveal reveal-d6">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-bars-staggered"></i></div>
+                    <div class="ms-stat-value">HSI</div>
+                    <div class="ms-stat-label">{% trans "Hyperspectral Imaging" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d7">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-layer-group"></i></div>
                     <div class="ms-stat-value">MSI</div>
                     <div class="ms-stat-label">{% trans "Multispectral Imaging" %}</div>
                 </div>
+                <div class="ms-stat reveal reveal-d8">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-dna"></i></div>
+                    <div class="ms-stat-value">MALDI</div>
+                    <div class="ms-stat-label">{% trans "Proteomics (MALDI-TOF)" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d9">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-ellipsis"></i></div>
+                    <div class="ms-stat-value">+</div>
+                    <div class="ms-stat-label">{% trans "And many more" %}</div>
+                </div>
             </div>
 
-            <!-- Showcase image -->
-            <div class="ms-showcase reveal-scale" style="margin-top:4rem;">
-                <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF mapping of a manuscript' %}">
-                <div class="ms-showcase-caption">
-                    <h4>{% trans "XRF mapping of an illuminated manuscript" %}</h4>
-                    <p>{% trans "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments" %}</p>
+            <!-- Showcase carousel -->
+            <div class="ms-showcase-carousel reveal-scale" id="ms-showcase">
+                <div class="ms-showcase-track" id="ms-showcase-track">
+                    <div class="ms-showcase-slide">
+                        <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF mapping of a manuscript' %}">
+                        <div class="ms-showcase-caption">
+                            <h4>{% trans "XRF mapping of an illuminated manuscript" %}</h4>
+                            <p>{% trans "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments" %}</p>
+                        </div>
+                    </div>
+                    <div class="ms-showcase-slide">
+                        <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Raman spectrum on a pigment sample' %}">
+                        <div class="ms-showcase-caption">
+                            <h4>{% trans "Raman spectroscopy on a medieval pigment" %}</h4>
+                            <p>{% trans "Molecular identification of azurite and malachite pigments on a 15th-century illumination" %}</p>
+                        </div>
+                    </div>
+                    <div class="ms-showcase-slide">
+                        <img src="{% static 'img/landing/image-3.svg' %}" alt="{% trans 'Multispectral imaging of a manuscript page' %}">
+                        <div class="ms-showcase-caption">
+                            <h4>{% trans "Multispectral imaging — Revealing hidden texts" %}</h4>
+                            <p>{% trans "UV and infrared reflectography combined to reveal underdrawings and erased inscriptions" %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrows -->
+                <div class="ms-showcase-arrows">
+                    <button class="ms-showcase-arrow" id="ms-showcase-prev" aria-label="{% trans 'Previous' %}">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button class="ms-showcase-arrow" id="ms-showcase-next" aria-label="{% trans 'Next' %}">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+
+                <!-- Dots -->
+                <div class="ms-showcase-nav" id="ms-showcase-nav">
+                    <button class="ms-showcase-dot active" data-slide="0" aria-label="Slide 1"></button>
+                    <button class="ms-showcase-dot" data-slide="1" aria-label="Slide 2"></button>
+                    <button class="ms-showcase-dot" data-slide="2" aria-label="Slide 3"></button>
                 </div>
             </div>
         </div>
@@ -1723,7 +1949,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-section-label">{% trans "Explore" %}</div>
                 <h2 class="ms-section-title">{% trans "What you can discover" %}</h2>
                 <p class="ms-section-subtitle">
-                    {% trans "A platform designed to explore physicochemical analyses on historical documents, correlating data with their heritage context." %}
+                    {% trans "A platform designed to explore physicochemical analyses on historical documents, correlating data with their written cultural heritage context." %}
                 </p>
             </div>
 
@@ -1743,10 +1969,11 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-feature-card reveal reveal-d2">
                     <div class="ms-feature-icon"><i class="fa-solid fa-layer-group"></i></div>
                     <h3>{% trans "IIIF Annotations" %}</h3>
-                    <p>{% trans "Explore high-resolution manuscript images with annotations linked to analysis points. Each annotation connects the image to its physicochemical data." %}</p>
+                    <p>{% trans "Analysis data is exposed as IIIF annotations, making it accessible from any compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, allows any external site to visualize ManuSpectrum's spectral data (XRF, Raman, FTIR, UV-Vis) directly overlaid on high-resolution manuscript images." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">IIIF v2/v3</span>
-                        <span class="ms-feature-tag">Mirador</span>
+                        <span class="ms-feature-tag">Mirador 4</span>
+                        <a href="https://github.com/CRC-Centre-Recherche-Conservation/mirador-xyviewer" target="_blank" rel="noopener" class="ms-feature-tag ms-feature-tag--link">mirador-xyviewer <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                         <span class="ms-feature-tag">Cantaloupe</span>
                     </div>
                 </div>
@@ -1766,7 +1993,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-feature-card reveal reveal-d4">
                     <div class="ms-feature-icon"><i class="fa-solid fa-microscope"></i></div>
                     <h3>{% trans "Material Characterization" %}</h3>
-                    <p>{% trans "Explore the layers, materials, and chemical elements identified on heritage documents, with different levels of reliability and characterization." %}</p>
+                    <p>{% trans "Explore the layers, materials, and chemical elements identified on written cultural heritage documents, with different levels of reliability and characterization." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">{% trans "Pigments" %}</span>
                         <span class="ms-feature-tag">{% trans "Layers" %}</span>
@@ -1788,7 +2015,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-section-label">{% trans "Analyses" %}</div>
                 <h2 class="ms-section-title">{% trans "Visualize physicochemical analyses" %}</h2>
                 <p class="ms-section-subtitle">
-                    {% trans "From elemental mapping to multispectral imaging, explore the different analysis techniques applied to manuscripts and heritage objects." %}
+                    {% trans "From elemental mapping to multispectral imaging, explore the different analysis techniques applied to manuscripts and written cultural heritage objects." %}
                 </p>
             </div>
 
@@ -1836,7 +2063,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-section-label">{% trans "Search" %}</div>
                 <h2 class="ms-section-title">{% trans "Explore the database" %}</h2>
                 <p class="ms-section-subtitle">
-                    {% trans "Search by material, analysis technique, heritage object, or chemical element. Advanced filters available in the search interface." %}
+                    {% trans "Search by material, analysis technique, written cultural heritage object, or chemical element. Advanced filters available in the search interface." %}
                 </p>
             </div>
 
@@ -1923,7 +2150,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-footer-brand">
                     <div class="ms-footer-brand-name">ManuSpectrum</div>
                     <p class="ms-footer-brand-desc">
-                        {% trans "Interoperable database for physicochemical analysis of heritage materials. A Biblissima+ cluster project." %}
+                        {% trans "Interoperable database for physicochemical analysis of written cultural heritage materials. A Biblissima+ cluster project." %}
                     </p>
                 </div>
 

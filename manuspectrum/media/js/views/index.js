@@ -83,6 +83,37 @@ $(function () {
     });
 
     // ================================================================
+    // SHOWCASE CAROUSEL
+    // ================================================================
+    var $track = $('#ms-showcase-track');
+    var $dots = $('#ms-showcase-nav .ms-showcase-dot');
+    var slideCount = $track.children().length;
+    var currentSlide = 0;
+
+    function goToSlide(idx) {
+        currentSlide = (idx + slideCount) % slideCount;
+        $track[0].scrollTo({ left: $track[0].offsetWidth * currentSlide, behavior: 'smooth' });
+        $dots.removeClass('active').eq(currentSlide).addClass('active');
+    }
+
+    $('#ms-showcase-prev').on('click', function () { goToSlide(currentSlide - 1); });
+    $('#ms-showcase-next').on('click', function () { goToSlide(currentSlide + 1); });
+    $dots.on('click', function () { goToSlide($(this).data('slide')); });
+
+    // Sync dots on manual scroll
+    var scrollTimer;
+    $track.on('scroll', function () {
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(function () {
+            var idx = Math.round($track[0].scrollLeft / $track[0].offsetWidth);
+            if (idx !== currentSlide) {
+                currentSlide = idx;
+                $dots.removeClass('active').eq(currentSlide).addClass('active');
+            }
+        }, 80);
+    });
+
+    // ================================================================
     // INTERACTIVE LOGO — Plotly-style crosshair & tooltip
     // ================================================================
     var svg = document.getElementById('ms-logo-svg');
