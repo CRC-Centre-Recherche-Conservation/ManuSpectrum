@@ -786,7 +786,11 @@ msgstr "Interopérabilité et standards"
 
 #: manuspectrum/templates/index.htm
 msgid "Data is structured according to the CIDOC-CRM and CRMsci ontology, ensuring interoperability with international heritage systems and the Biblissima portal."
-msgstr "Les données sont structurées selon l'ontologie CIDOC-CRM et CRMsci, garantissant leur interopérabilité avec les systèmes patrimoniaux internationaux et le portail Biblissima."
+msgstr ""
+
+#: manuspectrum/templates/index.htm
+msgid "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring interoperability with international heritage systems and the Biblissima portal."
+msgstr "Les données sont structurées selon les ontologies CIDOC-CRM (v7.1.2) et CRMsci (v2.0), et enrichies par les thésaurus AGORHA et AAT Getty, garantissant leur interopérabilité avec les systèmes patrimoniaux internationaux et le portail Biblissima."
 
 #: manuspectrum/templates/index.htm
 msgid "Material Characterization"
@@ -935,6 +939,14 @@ msgstr "Standards"
 #: manuspectrum/templates/index.htm
 msgid "All rights reserved"
 msgstr "Tous droits réservés"
+
+#: manuspectrum/templates/index.htm
+msgid "AGORHA thesaurus"
+msgstr "Thésaurus AGORHA"
+
+#: manuspectrum/templates/index.htm
+msgid "This work has benefited from state aid managed by the Agence Nationale de la Recherche under the Investissements d'avenir programme, reference ANR-21-ESRE-0005 (Biblissima+)."
+msgstr "Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale de la Recherche au titre du programme d'Investissements d'avenir portant la référence ANR-21-ESRE-0005 (Biblissima+)."
 
 #: manuspectrum/templates/index.htm
 msgid "Powered by"
