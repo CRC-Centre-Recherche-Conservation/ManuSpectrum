@@ -1606,10 +1606,10 @@ Homepage — Prismatic Luminescence aesthetic
 
             <nav class="ms-nav" aria-label="{% trans 'Main Navigation' %}">
                 <ul class="ms-nav-links">
-                    <li><a href="#projet">{% trans "The Project" %}</a></li>
-                    <li><a href="#explorer">{% trans "Explore" %}</a></li>
+                    <li><a href="#project">{% trans "The Project" %}</a></li>
+                    <li><a href="#explore">{% trans "Explore" %}</a></li>
                     <li><a href="#analyses">{% trans "Analyses" %}</a></li>
-                    <li><a href="#rechercher">{% trans "Search" %}</a></li>
+                    <li><a href="#search">{% trans "Search" %}</a></li>
                     {% if user|can_create_resource_instance and user.username != 'anonymous' %}
                     <li><a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a></li>
                     {% endif %}
@@ -1648,10 +1648,10 @@ Homepage — Prismatic Luminescence aesthetic
 
     <!-- Mobile Navigation -->
     <div class="ms-mobile-nav" id="ms-mobile-nav">
-        <a href="#projet" class="ms-mobile-nav-link">{% trans "The Project" %}</a>
-        <a href="#explorer" class="ms-mobile-nav-link">{% trans "Explore" %}</a>
+        <a href="#project" class="ms-mobile-nav-link">{% trans "The Project" %}</a>
+        <a href="#explore" class="ms-mobile-nav-link">{% trans "Explore" %}</a>
         <a href="#analyses" class="ms-mobile-nav-link">{% trans "Analyses" %}</a>
-        <a href="#rechercher" class="ms-mobile-nav-link">{% trans "Search" %}</a>
+        <a href="#search" class="ms-mobile-nav-link">{% trans "Search" %}</a>
         {% if user|can_create_resource_instance and user.username != 'anonymous' %}
             <a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a>
         {% endif %}
@@ -1785,14 +1785,14 @@ Homepage — Prismatic Luminescence aesthetic
                 <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
                     <i class="fa-solid fa-magnifying-glass"></i> {% trans "Explore the database" %}
                 </a>
-                <a href="#projet" class="ms-btn ms-btn-ghost">
+                <a href="#project" class="ms-btn ms-btn-ghost">
                     {% trans "Learn more" %} <i class="fa-solid fa-arrow-down"></i>
                 </a>
             </div>
         </div>
 
         <div class="ms-hero-scroll">
-            <a href="#projet">
+            <a href="#project">
                 <span>{% trans "scroll" %}</span>
                 <div class="ms-hero-scroll-line"></div>
             </a>
@@ -1803,7 +1803,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- ============================================================
          PROJECT SECTION
          ============================================================ -->
-    <section class="ms-section ms-project" id="projet">
+    <section class="ms-section ms-project" id="project">
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "The Project" %}</div>
@@ -1943,7 +1943,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- ============================================================
          FEATURES / EXPLORER SECTION
          ============================================================ -->
-    <section class="ms-section ms-features" id="explorer">
+    <section class="ms-section ms-features" id="explore">
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "Explore" %}</div>
@@ -2057,7 +2057,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- ============================================================
          SEARCH SECTION
          ============================================================ -->
-    <section class="ms-section ms-search" id="rechercher">
+    <section class="ms-section ms-search" id="search">
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "Search" %}</div>
@@ -2104,7 +2104,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- ============================================================
          PARTNERS SECTION
          ============================================================ -->
-    <section class="ms-partners reveal" id="partenaires">
+    <section class="ms-partners reveal" id="partners">
         <div class="ms-container">
             <div class="ms-partners-label">{% trans "Our Partners" %}</div>
             <div class="ms-partners-grid">
