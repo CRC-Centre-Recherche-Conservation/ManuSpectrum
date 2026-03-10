@@ -1309,6 +1309,16 @@ Homepage — Prismatic Luminescence aesthetic
 
     .ms-footer-col a:hover { color: var(--spectral-5); }
 
+    .ms-footer-anr {
+        font-size: 0.78rem;
+        color: var(--ink-dim);
+        font-weight: 300;
+        line-height: 1.6;
+        font-style: italic;
+        max-width: 720px;
+        margin-bottom: 2rem;
+    }
+
     .ms-footer-bottom {
         display: flex;
         justify-content: space-between;
@@ -1375,8 +1385,7 @@ Homepage — Prismatic Luminescence aesthetic
 </head>
 
 <body>
-    <!-- RequireJS & Arches base config -->
-    <script src="{% webpack_static 'node_modules/requirejs/require.js' %}"></script>
+    <!-- Arches base config (translations, URLs) -->
     {% include 'javascript.htm' %}
 
     <!-- ============================================================
@@ -1881,6 +1890,10 @@ Homepage — Prismatic Luminescence aesthetic
                 </div>
             </div>
 
+            <p class="ms-footer-anr">
+                {% trans "This work has benefited from state aid managed by the Agence Nationale de la Recherche under the Investissements d'avenir programme, reference ANR-21-ESRE-0005 (Biblissima+)." %}
+            </p>
+
             <div class="ms-footer-bottom">
                 <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "All rights reserved" %}</p>
                 <div class="ms-footer-arches">
@@ -1892,306 +1905,8 @@ Homepage — Prismatic Luminescence aesthetic
 
 
     <!-- ============================================================
-         SCRIPTS — Critical JS runs BEFORE RequireJS modules load
+         SCRIPTS — Webpack entry point (views/index)
          ============================================================ -->
-
-    <!-- 1) Standalone scroll-reveal & header — no dependency on RequireJS -->
-    <script>
-    (function() {
-        'use strict';
-
-        // --- Header scroll behavior ---
-        var header = document.getElementById('ms-header');
-        var scrollThreshold = 80;
-
-        function updateHeader() {
-            if (window.scrollY > scrollThreshold) {
-                header.classList.add('scrolled');
-            } else {
-                header.classList.remove('scrolled');
-            }
-        }
-        window.addEventListener('scroll', updateHeader, { passive: true });
-        updateHeader();
-
-        // --- Mobile nav ---
-        var hamburger = document.getElementById('ms-hamburger');
-        var mobileNav = document.getElementById('ms-mobile-nav');
-
-        hamburger.addEventListener('click', function() {
-            hamburger.classList.toggle('active');
-            mobileNav.classList.toggle('open');
-            document.body.style.overflow = mobileNav.classList.contains('open') ? 'hidden' : '';
-        });
-
-        var mobileLinks = mobileNav.querySelectorAll('a');
-        for (var i = 0; i < mobileLinks.length; i++) {
-            mobileLinks[i].addEventListener('click', function() {
-                hamburger.classList.remove('active');
-                mobileNav.classList.remove('open');
-                document.body.style.overflow = '';
-            });
-        }
-
-        // --- Scroll reveal (IntersectionObserver) ---
-        function initReveal() {
-            if ('IntersectionObserver' in window) {
-                var revealObserver = new IntersectionObserver(function(entries) {
-                    entries.forEach(function(entry) {
-                        if (entry.isIntersecting) {
-                            entry.target.classList.add('visible');
-                        }
-                    });
-                }, {
-                    threshold: 0.06,
-                    rootMargin: '0px 0px -30px 0px'
-                });
-
-                var revealElements = document.querySelectorAll('.reveal, .reveal-scale');
-                for (var j = 0; j < revealElements.length; j++) {
-                    revealObserver.observe(revealElements[j]);
-                }
-            } else {
-                // Fallback: show everything immediately
-                var allReveal = document.querySelectorAll('.reveal, .reveal-scale');
-                for (var k = 0; k < allReveal.length; k++) {
-                    allReveal[k].classList.add('visible');
-                }
-            }
-        }
-
-        // Run immediately if DOM already loaded, otherwise wait
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initReveal);
-        } else {
-            initReveal();
-        }
-
-        // --- Search form ---
-        var searchForm = document.getElementById('ms-search-form');
-        var searchInput = document.getElementById('ms-search-input');
-        var searchUrl = "{% url 'search_home' %}";
-
-        function navigateToSearch(query) {
-            if (query) {
-                var termFilter = JSON.stringify([{
-                    "inverted": false,
-                    "type": "string",
-                    "context": "",
-                    "context_label": "",
-                    "id": query,
-                    "text": query,
-                    "value": query
-                }]);
-                window.location.href = searchUrl + '?paging-filter=1&term-filter=' + encodeURIComponent(termFilter);
-            } else {
-                window.location.href = searchUrl;
-            }
-        }
-
-        searchForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            navigateToSearch(searchInput.value.trim());
-        });
-
-        // Search chips
-        var chips = document.querySelectorAll('.ms-search-chip');
-        for (var c = 0; c < chips.length; c++) {
-            chips[c].addEventListener('click', function() {
-                navigateToSearch(this.getAttribute('data-term'));
-            });
-        }
-    })();
-    </script>
-
-    <!-- 2) Interactive logo — Plotly-style crosshair & tooltip -->
-    <script>
-    (function() {
-        'use strict';
-        var svg = document.getElementById('ms-logo-svg');
-        if (!svg) return;
-
-        var curveBlue = document.getElementById('curve-blue');
-        var curveRed  = document.getElementById('curve-red');
-        var crosshair = document.getElementById('ms-logo-crosshair');
-        var tooltip   = document.getElementById('ms-logo-tooltip');
-        var crossV    = document.getElementById('ms-cross-v');
-        var crossHB   = document.getElementById('ms-cross-h-blue');
-        var crossHR   = document.getElementById('ms-cross-h-red');
-        var dotBlue   = document.getElementById('ms-dot-blue');
-        var dotRed    = document.getElementById('ms-dot-red');
-        var ttBg      = document.getElementById('ms-tt-bg');
-        var ttWl      = document.getElementById('ms-tt-wl');
-        var ttBlue    = document.getElementById('ms-tt-blue');
-        var ttRedTxt  = document.getElementById('ms-tt-red');
-
-        // Plot area bounds in SVG coords
-        var xMin = 40, xMax = 620, yMin = 4, yMax = 82;
-        // Wavelength mapping (visible spectrum)
-        var wlMin = 380, wlMax = 780;
-
-        function svgPoint(e) {
-            var pt = svg.createSVGPoint();
-            pt.x = e.clientX; pt.y = e.clientY;
-            return pt.matrixTransform(svg.getScreenCTM().inverse());
-        }
-
-        // Sample Y on a path at a given X (binary search on path length)
-        function sampleY(path, targetX) {
-            var len = path.getTotalLength();
-            var lo = 0, hi = len, mid, pt, iter = 0;
-            while (hi - lo > 0.5 && iter < 50) {
-                mid = (lo + hi) / 2;
-                pt = path.getPointAtLength(mid);
-                if (pt.x < targetX) lo = mid; else hi = mid;
-                iter++;
-            }
-            pt = path.getPointAtLength((lo + hi) / 2);
-            return pt.y;
-        }
-
-        // Intensity: 0 at yMax (baseline), 1 at yMin (top)
-        function toIntensity(y) {
-            return Math.max(0, Math.min(1, (yMax - y) / (yMax - yMin)));
-        }
-
-        function toWavelength(x) {
-            return wlMin + (x - xMin) / (xMax - xMin) * (wlMax - wlMin);
-        }
-
-        function onMove(e) {
-            var p = svgPoint(e);
-            var x = p.x;
-            if (x < xMin || x > xMax) { onLeave(); return; }
-
-            crosshair.style.display = '';
-            tooltip.style.display = '';
-
-            // Crosshair vertical line
-            crossV.setAttribute('x1', x);
-            crossV.setAttribute('x2', x);
-
-            // Sample curves
-            var yB = sampleY(curveBlue, x);
-            var yR = sampleY(curveRed, x);
-            var intB = toIntensity(yB);
-            var intR = toIntensity(yR);
-            var wl = toWavelength(x);
-
-            // Blue dot + horizontal dashed line
-            dotBlue.setAttribute('cx', x);
-            dotBlue.setAttribute('cy', yB);
-            dotBlue.setAttribute('opacity', x <= 438 ? '0.9' : '0');
-            crossHB.setAttribute('y1', yB);
-            crossHB.setAttribute('y2', yB);
-            crossHB.setAttribute('x2', x);
-            crossHB.setAttribute('opacity', x <= 438 ? '0.35' : '0');
-
-            // Red dot + horizontal dashed line
-            dotRed.setAttribute('cx', x);
-            dotRed.setAttribute('cy', yR);
-            dotRed.setAttribute('opacity', x <= 444 ? '0.9' : '0');
-            crossHR.setAttribute('y1', yR);
-            crossHR.setAttribute('y2', yR);
-            crossHR.setAttribute('x2', x);
-            crossHR.setAttribute('opacity', x <= 444 ? '0.35' : '0');
-
-            // Tooltip position (flip if near right edge)
-            var tx = x + 8;
-            var ty = Math.min(yB, yR) - 48;
-            if (tx + 125 > xMax) tx = x - 130;
-            if (ty < 0) ty = 4;
-
-            ttBg.setAttribute('x', tx);
-            ttBg.setAttribute('y', ty);
-            ttWl.setAttribute('x', tx + 6);
-            ttWl.setAttribute('y', ty + 12);
-            ttWl.textContent = '\u03BB = ' + Math.round(wl) + ' nm';
-
-            ttBlue.setAttribute('x', tx + 6);
-            ttBlue.setAttribute('y', ty + 24);
-            ttBlue.textContent = x <= 438 ? ('\u25CF I\u2081 = ' + intB.toFixed(3)) : '';
-
-            ttRedTxt.setAttribute('x', tx + 6);
-            ttRedTxt.setAttribute('y', ty + 35);
-            ttRedTxt.textContent = x <= 444 ? ('\u25CF I\u2082 = ' + intR.toFixed(3)) : '';
-        }
-
-        function onLeave() {
-            crosshair.style.display = 'none';
-            tooltip.style.display = 'none';
-        }
-
-        svg.addEventListener('mousemove', onMove);
-        svg.addEventListener('mouseleave', onLeave);
-
-        // Touch support
-        svg.addEventListener('touchmove', function(e) {
-            e.preventDefault();
-            onMove(e.touches[0]);
-        }, { passive: false });
-        svg.addEventListener('touchend', onLeave);
-
-        // --- Zoom / fullscreen ---
-        var zoomBtn  = document.getElementById('ms-logo-zoom');
-        var overlay  = document.getElementById('ms-logo-overlay');
-        var closeBtn = document.getElementById('ms-logo-close');
-        var target   = document.getElementById('ms-logo-zoom-target');
-        var wrap     = document.getElementById('ms-logo-wrap');
-
-        function openZoom() {
-            // Move the SVG into the overlay
-            target.appendChild(svg);
-            overlay.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeZoom() {
-            overlay.classList.remove('active');
-            document.body.style.overflow = '';
-            // Move SVG back into the hero
-            wrap.insertBefore(svg, zoomBtn);
-        }
-
-        zoomBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            openZoom();
-        });
-
-        closeBtn.addEventListener('click', closeZoom);
-
-        overlay.addEventListener('click', function(e) {
-            if (e.target === overlay) closeZoom();
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && overlay.classList.contains('active')) closeZoom();
-        });
-    })();
-    </script>
-
-    <!-- 3) KnockoutJS & language-switcher — loaded async, won't block the page -->
-    <script>
-    require.config({
-        baseUrl: "{% webpack_static 'build/js' %}",
-        paths: {
-            'text': "{% webpack_static 'node_modules/requirejs-text/text' %}",
-            'jquery': "{% webpack_static 'node_modules/jquery/dist/jquery.min' %}",
-            'jquery-ui': "{% webpack_static 'node_modules/jqueryui/jquery-ui.min' %}",
-            'underscore': "{% webpack_static 'node_modules/underscore/underscore-min' %}",
-            'knockout': "{% webpack_static 'node_modules/knockout/build/output/knockout-latest' %}",
-        },
-        shim: {
-            'jquery': { exports: '$' }
-        }
-    });
-
-    require(['jquery', 'knockout', 'views/components/language-switcher'], function($, ko) {
-        $(document).ready(function() {
-            var ViewModel = function() {};
-            ko.applyBindings(new ViewModel());
-        });
-    });
-    </script>
+    {% render_bundle 'views/index' %}
 </body>
 </html>
