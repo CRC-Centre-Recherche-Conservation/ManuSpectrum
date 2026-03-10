@@ -1754,11 +1754,12 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-feature-card reveal reveal-d3">
                     <div class="ms-feature-icon"><i class="fa-solid fa-diagram-project"></i></div>
                     <h3>{% trans "Interoperability and Standards" %}</h3>
-                    <p>{% trans "Data is structured according to the CIDOC-CRM and CRMsci ontology, ensuring interoperability with international heritage systems and the Biblissima portal." %}</p>
+                    <p>{% trans "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring interoperability with international heritage systems and the Biblissima portal." %}</p>
                     <div class="ms-feature-tags">
-                        <span class="ms-feature-tag">CIDOC-CRM</span>
-                        <span class="ms-feature-tag">CRMsci</span>
-                        <span class="ms-feature-tag">AGORHA</span>
+                        <span class="ms-feature-tag">CIDOC-CRM 7.1.2</span>
+                        <span class="ms-feature-tag">CRMsci 2.0</span>
+                        <span class="ms-feature-tag">{% trans "AGORHA thesaurus" %}</span>
+                        <span class="ms-feature-tag">AAT Getty</span>
                     </div>
                 </div>
 
@@ -1881,13 +1882,13 @@ Homepage — Prismatic Luminescence aesthetic
             <div class="ms-partners-label">{% trans "Our Partners" %}</div>
             <div class="ms-partners-grid">
                 <!-- Ministere en premier (charte : premier sur les bandeaux, fond blanc obligatoire) -->
-                <a class="ms-partner-link ms-partner-link--culture reveal-d1" href="https://www.culture.gouv.fr" target="_blank" rel="noopener" title="{% trans 'Ministry of Culture' %}">
+                <a class="ms-partner-link ms-partner-link--culture reveal-d1" href="https://www.culture.gouv.fr" target="_blank" rel="noopener" title="Ministère de la Culture">
                     <img src="{% static 'img/landing/logo-ministere-de-la-culture.png' %}" alt="{% trans 'Ministry of Culture' %}">
                 </a>
-                <a class="ms-partner-link ms-partner-link--cnrs reveal-d2" href="https://www.cnrs.fr" target="_blank" rel="noopener" title="CNRS">
+                <a class="ms-partner-link ms-partner-link--cnrs reveal-d2" href="https://www.cnrs.fr" target="_blank" rel="noopener" title="Centre National de la Recherche Scientifique">
                     <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS">
                 </a>
-                <a class="ms-partner-link ms-partner-link--mnhn reveal-d3" href="https://www.mnhn.fr" target="_blank" rel="noopener" title="{% trans 'National Museum of Natural History' %}">
+                <a class="ms-partner-link ms-partner-link--mnhn reveal-d3" href="https://www.mnhn.fr" target="_blank" rel="noopener" title="Muséum National d'Histoire Naturelle">
                     <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN">
                 </a>
                 <a class="ms-partner-link ms-partner-link--crc reveal-d4" href="https://crc.mnhn.fr" target="_blank" rel="noopener" title="CRC — Centre de Recherche sur la Conservation">
@@ -1951,6 +1952,7 @@ Homepage — Prismatic Luminescence aesthetic
                         <ul>
                             <li><a href="https://www.cidoc-crm.org" target="_blank" rel="noopener">CIDOC-CRM</a></li>
                             <li><a href="https://www.getty.edu/research/tools/vocabularies/aat/" target="_blank" rel="noopener">AAT Getty</a></li>
+                            <li><a href="https://thesaurus.inha.fr/thesaurus/" target="_blank" rel="noopener">AGORHA</a></li>
                         </ul>
                     </div>
                 </div>
