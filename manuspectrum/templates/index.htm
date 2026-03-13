@@ -486,12 +486,19 @@ Homepage — Prismatic Luminescence aesthetic
                     </div>
                 </div>
 
-                <div class="ms-gallery-item reveal reveal-d2">
-                    <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Manuscript analysis' %}">
+                <div class="ms-gallery-item ms-gallery-analysis reveal reveal-d2" id="ms-analysis-viewer">
+                    <img src="https://iiif.unicaen.fr/mrsh/bvmsm/AVRANCHES_MS059/AVRANCHES_MS059_0011.tif/full/800,/0/default.jpg" alt="{% trans 'Manuscript analysis' %}">
+                    <div class="ms-analysis-points">
+                        <button class="ms-analysis-point ms-apoint-1" data-point="0" aria-label="{% trans 'Analysis point' %} 1"></button>
+                        <button class="ms-analysis-point ms-apoint-2" data-point="1" aria-label="{% trans 'Analysis point' %} 2"></button>
+                        <button class="ms-analysis-point ms-apoint-3" data-point="2" aria-label="{% trans 'Analysis point' %} 3"></button>
+                        <button class="ms-analysis-point ms-apoint-4" data-point="3" aria-label="{% trans 'Analysis point' %} 4"></button>
+                    </div>
+                    <div class="ms-analysis-popup" id="ms-analysis-popup"></div>
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "Spectroscopy" %}</div>
                         <h4>{% trans "Point Analysis" %}</h4>
-                        <p>{% trans "Analysis points and material characterization" %}</p>
+                        <p>{% trans "Click on analysis points to explore spectral data" %}</p>
                     </div>
                 </div>
 

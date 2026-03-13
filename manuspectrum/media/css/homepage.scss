@@ -1281,6 +1281,194 @@ a.ms-feature-tag--link i {
     transform: none;
 }
 
+// --- Interactive Analysis Points ---
+.ms-gallery-analysis .ms-analysis-points {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.ms-analysis-point {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.9);
+    background: var(--spectral-5);
+    cursor: pointer;
+    pointer-events: all;
+    padding: 0;
+    box-shadow: 0 0 8px rgba(59,130,246,0.5);
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+    transition: transform 0.5s var(--ease-out-expo), opacity 0.4s, box-shadow 0.3s;
+
+    &::after {
+        content: '';
+        position: absolute;
+        inset: -8px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(255,255,255,0.25);
+        animation: ms-point-ring 3s ease-out infinite;
+        opacity: 0;
+    }
+
+    &:hover {
+        transform: translate(-50%, -50%) scale(1.4);
+        box-shadow: 0 0 16px rgba(59,130,246,0.7), 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    &.active {
+        background: var(--spectral-3);
+        border-color: var(--spectral-3);
+        box-shadow: 0 0 14px rgba(240,180,41,0.6);
+        transform: translate(-50%, -50%) scale(1.3);
+    }
+}
+
+.ms-gallery-analysis.visible .ms-analysis-point {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    &::after { opacity: 1; }
+}
+
+// Point positions & technique colors
+.ms-apoint-1 { top: 30%; left: 38%; background: var(--spectral-5); transition-delay: 0.2s; }
+.ms-apoint-2 { top: 50%; left: 65%; background: var(--spectral-1); transition-delay: 0.4s; }
+.ms-apoint-3 { top: 40%; left: 22%; background: var(--spectral-4); transition-delay: 0.6s; }
+.ms-apoint-4 { top: 72%; left: 50%; background: var(--spectral-6); transition-delay: 0.8s; }
+
+.ms-apoint-2::after { animation-delay: 0.6s; }
+.ms-apoint-3::after { animation-delay: 1.2s; }
+.ms-apoint-4::after { animation-delay: 1.8s; }
+
+@keyframes ms-point-ring {
+    0%   { transform: scale(1); opacity: 0.5; }
+    60%  { transform: scale(2.5); opacity: 0; }
+    100% { transform: scale(2.5); opacity: 0; }
+}
+
+// Overlay: pointer-events none so points stay clickable
+.ms-gallery-analysis .ms-gallery-overlay {
+    pointer-events: none;
+    z-index: 4;
+    background: linear-gradient(to top, rgba(26,26,46,0.88) 0%, rgba(26,26,46,0.15) 35%, transparent 55%);
+}
+
+// Allow popup to overflow the rounded container
+.ms-gallery-analysis.has-popup {
+    overflow: visible;
+    z-index: 5;
+}
+
+// --- Analysis Popup ---
+.ms-analysis-popup {
+    position: absolute;
+    z-index: 10;
+    width: 260px;
+    background: rgba(26,26,46,0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+    transition: opacity 0.2s, transform 0.3s var(--ease-out-expo);
+    pointer-events: none;
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        display: block;
+        height: 2px;
+        background: linear-gradient(to right, var(--spectral-1), var(--spectral-3), var(--spectral-4), var(--spectral-5), var(--spectral-6));
+    }
+
+    &.active {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        pointer-events: all;
+    }
+}
+
+.ms-popup-header {
+    padding: 10px 14px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ms-popup-technique {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.ms-popup-id {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: rgba(255,255,255,0.35);
+    margin-left: auto;
+}
+
+.ms-popup-spectrum {
+    padding: 4px 14px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    svg { display: block; width: 100%; height: 48px; }
+}
+
+.ms-popup-data { padding: 8px 14px 4px; }
+
+.ms-popup-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 2px 0;
+    font-size: 0.7rem;
+    line-height: 1.6;
+}
+
+.ms-popup-label {
+    color: rgba(255,255,255,0.4);
+    font-weight: 300;
+}
+
+.ms-popup-value {
+    color: rgba(255,255,255,0.9);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+}
+
+.ms-popup-elements {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding: 4px 14px 12px;
+}
+
+.ms-popup-element {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.6);
+}
+
+.ms-popup-element--primary {
+    border-color: rgba(240,180,41,0.4);
+    color: var(--spectral-3);
+    background: rgba(240,180,41,0.06);
+}
+
 
 // ============================================================
 // SEARCH SECTION
@@ -1633,6 +1821,8 @@ a.ms-feature-tag--link i {
     .ms-stats { grid-template-columns: repeat(2, 1fr); }
     .ms-stat:nth-child(9) { grid-column: 1 / -1; }
     .ms-partners-grid { gap: 1.5rem 1.5rem; }
+    .ms-analysis-popup { width: 220px; }
+    .ms-analysis-point { width: 12px; height: 12px; }
     .ms-partner-link--culture img { height: 42px; }
     .ms-partner-link--cnrs img { height: 48px; }
     .ms-partner-link--mnhn img { height: 42px; }
