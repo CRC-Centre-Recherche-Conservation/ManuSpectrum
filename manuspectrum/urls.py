@@ -3,6 +3,8 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.urls import include, path, re_path
 
+from arches.app.views.auth import PasswordResetView
+
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationCollectionView,
@@ -16,6 +18,14 @@ from manuspectrum.views.iiif_annotation import (
 urlpatterns = [
     # path("", include("arches_controlled_lists.urls")),
     path("", include("arches_component_lab.urls")),
+    # Override password reset to send branded HTML email
+    path(
+        "password_reset/",
+        PasswordResetView.as_view(
+            html_email_template_name="registration/password_reset_email_html.html",
+        ),
+        name="password_reset",
+    ),
     re_path(
         r"^renderer/(?P<renderer_id>[^\/]+)", RendererView.as_view(), name="renderer"
     ),
