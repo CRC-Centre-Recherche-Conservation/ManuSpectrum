@@ -77,7 +77,7 @@ Homepage — Prismatic Luminescence aesthetic
                         <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
                     {% else %}
                         <a href="{% url 'user_profile_manager' %}" aria-label="{% trans 'User Profile' %}">
-                            {% trans "Welcome," %} {{ user.first_name|default:user.username }}
+                            {% blocktrans with name=user.first_name|default:user.username %}Welcome, {{ name }}{% endblocktrans %}
                         </a>
                         <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
                     {% endif %}
@@ -230,9 +230,7 @@ Homepage — Prismatic Luminescence aesthetic
             </div>
 
             <h1 class="ms-hero-tagline">
-                {% trans "Interoperable database for" %}
-                <em>{% trans "physicochemical analysis" %}</em>
-                {% trans "of written cultural heritage" %}
+                {% blocktrans %}Interoperable database for <em>physicochemical analysis</em> of written cultural heritage{% endblocktrans %}
             </h1>
 
             <p class="ms-hero-description">
@@ -658,7 +656,7 @@ Homepage — Prismatic Luminescence aesthetic
                         {% trans "GPL-3.0 License" %}
                     </a>
                     <span class="ms-footer-separator">·</span>
-                    <span class="ms-footer-arches">{% trans "Powered by" %} <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a></span>
+                    <span class="ms-footer-arches">{% blocktrans %}Powered by <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>{% endblocktrans %}</span>
                 </div>
             </div>
         </div>
