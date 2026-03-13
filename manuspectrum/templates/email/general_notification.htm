@@ -1,56 +1,39 @@
 <!DOCTYPE html>
-<html>
+<html xmlns="http://www.w3.org/1999/xhtml">
 
     <head>
-        <style>
-            .btn {
-                text-decoration: none;
-                border-width: 1px;
-                color: #fff;
-                background-color: #337ab7;
-                border-color: #2e6da4;
-                font-size: 14px;
-                font-weight: 400;
-                display: inline-block;
-                padding: 6px 12px;
-                margin-bottom: 0;
-                font-size: 14px;
-                font-weight: 400;
-                line-height: 1.42857143;
-                text-align: center;
-                white-space: nowrap;
-                vertical-align: middle;
-                -ms-touch-action: manipulation;
-                touch-action: manipulation;
-                cursor: pointer;
-                -webkit-user-select: none;
-                -moz-user-select: none;
-                -ms-user-select: none;
-                user-select: none;
-                background-image: none;
-                border: 1px solid transparent;
-                border-radius: 4px;
-            }
-        </style>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>ManuSpectrum</title>
         {% include 'custom_email_css.htm' %}
     </head>
 
-    <body>
+    <body style="margin: 0; padding: 0; background-color: #f5f2ed; font-family: Georgia, 'Cormorant Garamond', 'Times New Roman', serif; color: #2c2c3e; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
 
         {% include 'custom_email_header.htm' %}
 
         {% if username != "" %}
-            <p>{{salutation}} {{username}},</p>
+            <p style="margin: 0 0 18px 0; font-size: 15.5px; line-height: 1.75; color: #2c2c3e;">{{salutation}} {{username}},</p>
         {% endif %}
-        <p>
+
+        <p style="margin: 0 0 18px 0; font-size: 15.5px; line-height: 1.75; color: #2c2c3e;">
             {{greeting}}
         </p>
+
         {% if link != "" %}
-            <p><a href="{{link}}">{{button_text}}</a></p>
+            <!-- CTA Button -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0 8px 0;">
+            <tr>
+                <td class="ms-email-btn-td" align="left" style="border-radius: 7px; background-color: #1a1a2e;">
+                    <a href="{{link}}" target="_blank" style="display: inline-block; padding: 13px 32px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0.03em; color: #ffffff; text-decoration: none; border-radius: 7px; border: 1px solid #1a1a2e; mso-padding-alt: 0; mso-text-raise: 4px;"><!--[if mso]><i style="mso-font-width: -100%; mso-text-raise: 8pt;" hidden>&nbsp;</i><![endif]-->{{button_text}}<!--[if mso]><i style="mso-font-width: -100%;" hidden>&nbsp;</i><![endif]--></a>
+                </td>
+            </tr>
+            </table>
         {% endif %}
 
         {% include 'custom_email_footer.htm' %}
 
     </body>
-    
+
 </html>
