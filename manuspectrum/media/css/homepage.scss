@@ -1253,6 +1253,34 @@ a.ms-feature-tag--link i {
     line-height: 1.5;
 }
 
+// --- XRF Comparison (side-by-side reveal on hover) ---
+.ms-gallery-compare .ms-compare-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    min-height: 280px;
+}
+
+.ms-gallery-compare .ms-compare-bottom { z-index: 0; }
+
+.ms-gallery-compare .ms-compare-top {
+    z-index: 1;
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 0.5s var(--ease-out-expo);
+}
+
+.ms-gallery-compare.is-comparing .ms-compare-top {
+    transition: none;
+}
+
+.ms-gallery-compare .ms-gallery-overlay { z-index: 2; }
+
+.ms-gallery-compare:hover .ms-compare-img {
+    transform: none;
+}
+
 
 // ============================================================
 // SEARCH SECTION
