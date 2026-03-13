@@ -1,0 +1,19 @@
+// ============================================
+// Multi Descriptor Function
+// ============================================
+
+.primary-descriptors-container {
+    .reindex-btn {
+        float: right;
+        margin-top: 6px;
+        margin-right: 6px;
+    }
+    .reindex-loading-btn {
+        float: right;
+        margin-top: 6px;
+        margin-right: 6px;
+        padding: 0 5px 0 0;
+
+        i { padding: 8px; }
+    }
+}
