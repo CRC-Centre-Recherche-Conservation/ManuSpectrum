@@ -8,14 +8,6 @@ import WidgetViewModel from 'viewmodels/widget';
 import arches from 'arches';
 import manifestWidgetTemplate from 'templates/views/components/widgets/manifest-widget.htm';
 
-// Inject spinner keyframes once
-if (!document.getElementById('manifest-widget-keyframes')) {
-    const style = document.createElement('style');
-    style.id = 'manifest-widget-keyframes';
-    style.textContent = '@keyframes manifest-spin { to { transform: rotate(360deg); } }';
-    document.head.appendChild(style);
-}
-
 const viewModel = function(params) {
     const self = this;
 

@@ -1,0 +1,40 @@
+// ============================================
+// Importer Configuration Plugin
+// ============================================
+
+.importer-config-panel-wrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #ddd;
+    position: relative;
+    top: 4px;
+}
+.importer-config-panel-inner {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.importer-config-panel-header {
+    background-color: #004577;
+    color: #fff;
+    padding: 10px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+.importer-config-panel-body {
+    background-color: #fafafa;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 12px;
+}
+.importer-config-footer {
+    display: flex;
+    background-color: #eee;
+    border-top: 1px solid #ddd;
+    flex-shrink: 0;
+    padding: 6px;
+}

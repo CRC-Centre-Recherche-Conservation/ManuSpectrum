@@ -5,9 +5,9 @@
         <h5 class="file-config-instructions">{% trans "Define how to import your x/y data" %}</h5>
         <div class="importer-list-container">
             <!-- ko foreach: {data: rendererConfigs, as: 'configuration' } -->
-            <div style="display:flex;align-items: center;">
+            <div class="d-flex align-items-center">
                 <input style="margin: 8px" type="radio" name="selectedConfiguration" data-bind="checked: $parent.selectedConfiguration, value: configuration.configid"></input>
-                <span style="flex:1"><span data-bind="text: configuration.name"></span><span data-bind="if: configuration.description"><span class="tip"><i class="fa fa-info-circle"></i><span class="tooltiptext" data-bind="text: configuration.description"></span></span></span></span>
+                <span class="flex-1"><span data-bind="text: configuration.name"></span><span data-bind="if: configuration.description"><span class="tip"><i class="fa fa-info-circle"></i><span class="tooltiptext" data-bind="text: configuration.description"></span></span></span></span>
                 <i class="fa fa-pencil" role="button" data-bind="click:()=>{$parent.loadConfiguration(configuration);}" aria-label="{% trans 'Edit' %}"></i>
                 <i class="fa fa-trash" role="button" data-bind="click:()=>{$parent.deleteConfiguration(configuration);}" aria-label="{% trans 'Delete' %}"></i>
             </div>
@@ -16,10 +16,10 @@
 
         <button class="btn btn-primary" data-bind="click:()=>{showConfigurationPanel(true); showImporterList(false); editConfigurationId(undefined)}">{% trans "Add Importer Configuration" %}</button>
     </div>
-    <div class="importer-config-panel-wrapper" data-bind="visible: showConfigurationPanel" style="border: 1px solid #ddd; top: 4px;">
+    <div class="importer-config-panel-wrapper" data-bind="visible: showConfigurationPanel">
         <div class="importer-config-panel-inner">
-        <div style="background-color: #004577; color: #fff; padding: 10px; font-weight: bold; flex-shrink: 0;">{% trans "Add Importer Configuration" %}</div>
-        <div style="background-color: #fafafa; overflow-y: auto; flex: 1; min-height: 0; padding-bottom: 12px;">
+        <div class="importer-config-panel-header">{% trans "Add Importer Configuration" %}</div>
+        <div class="importer-config-panel-body">
             <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Importer Name" %}</h4>
                 <input type="text" name="configurationName" data-bind="textInput: configurationName" placeholder="{% trans 'Name of Importer' %}">
@@ -29,10 +29,10 @@
             <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Header" %}</h4>
                 <h5 class="file-config-instructions">{% trans "Define where your x/y data are found in the file" %}</h5>
-                <div style="display: flex; flex-direction: column; padding-bottom: 5px;">
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="header-config-none" type="radio" name="headerConfig" value="none" data-bind="checked: headerConfig"><label for="header-config-none">{% trans "Auto-detect" %}</label></div>
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="header-config-fixed" type="radio" name="headerConfig" value="fixed" data-bind="checked: headerConfig"><label for="header-config-fixed">{% trans "File has a fixed header (constant number of lines)" %}</label></div>
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="header-config-delimited" type="radio" name="headerConfig" value="delimited" data-bind="checked: headerConfig"><label for="header-config-delimited">{% trans "File header ends after specific text" %}</label></div>
+                <div class="radio-group">
+                    <div class="radio-row"><input id="header-config-none" type="radio" name="headerConfig" value="none" data-bind="checked: headerConfig"><label for="header-config-none">{% trans "Auto-detect" %}</label></div>
+                    <div class="radio-row"><input id="header-config-fixed" type="radio" name="headerConfig" value="fixed" data-bind="checked: headerConfig"><label for="header-config-fixed">{% trans "File has a fixed header (constant number of lines)" %}</label></div>
+                    <div class="radio-row"><input id="header-config-delimited" type="radio" name="headerConfig" value="delimited" data-bind="checked: headerConfig"><label for="header-config-delimited">{% trans "File header ends after specific text" %}</label></div>
                 </div>
                 <input type="text" name="headerDelimiter" data-bind="visible: headerConfig()=='delimited', textInput: headerDelimiter" placeholder="{% trans 'Ending Text' %}">
                 <input type="text" name="headerFixedLines" data-bind="visible: headerConfig()=='fixed', textInput: headerFixedLines" placeholder="{% trans 'Number of Lines' %}">
@@ -40,31 +40,31 @@
             <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Footer" %}</h4>
                 <h5 class="file-config-instructions">{% trans "Define where your x/y data end in the file" %}</h5>
-                <div style="display: flex; flex-direction: column; padding-bottom: 5px;">
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="footer-config-none" type="radio" name="footerConfig" value="none" data-bind="checked: footerConfig"><label for="footer-config-none">{% trans "End of File" %}</label></div>
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="footer-config-delimited" type="radio" name="footerConfig" value="delimited" data-bind="checked: footerConfig"><label for="footer-config-delimited">{% trans "File footer begins after specific text (consistent ending text)" %}</label></div>
+                <div class="radio-group">
+                    <div class="radio-row"><input id="footer-config-none" type="radio" name="footerConfig" value="none" data-bind="checked: footerConfig"><label for="footer-config-none">{% trans "End of File" %}</label></div>
+                    <div class="radio-row"><input id="footer-config-delimited" type="radio" name="footerConfig" value="delimited" data-bind="checked: footerConfig"><label for="footer-config-delimited">{% trans "File footer begins after specific text (consistent ending text)" %}</label></div>
                 </div>
                 <input type="text" name="headerDelimiter" data-bind="visible: footerConfig()=='delimited', textInput: footerDelimiter" placeholder="{% trans 'Ending Text' %}">
             </div>
             <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "X Axis Source" %}</h4>
                 <h5 class="file-config-instructions">{% trans "Define how the X axis values are determined" %}</h5>
-                <div style="display: flex; flex-direction: column; padding-bottom: 5px;">
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="x-mode-data" type="radio" name="xColumnMode" value="data" data-bind="checked: xColumnMode"><label for="x-mode-data">{% trans "From data (first column is X)" %}</label></div>
-                    <div style="display:flex; flex-direction: row; align-items:center; margin: 0"><input id="x-mode-generate" type="radio" name="xColumnMode" value="generate" data-bind="checked: xColumnMode"><label for="x-mode-generate">{% trans "Generate from range (no X column in file)" %}</label></div>
+                <div class="radio-group">
+                    <div class="radio-row"><input id="x-mode-data" type="radio" name="xColumnMode" value="data" data-bind="checked: xColumnMode"><label for="x-mode-data">{% trans "From data (first column is X)" %}</label></div>
+                    <div class="radio-row"><input id="x-mode-generate" type="radio" name="xColumnMode" value="generate" data-bind="checked: xColumnMode"><label for="x-mode-generate">{% trans "Generate from range (no X column in file)" %}</label></div>
                 </div>
                 <!-- ko if: xColumnMode() === 'generate' -->
                 <h5 class="file-config-instructions">{% trans "The X axis will be evenly spaced between start and end values, based on the number of data rows." %}</h5>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <div style="flex: 1;">
-                        <label style="font-size: 12px; display: block;">{% trans "Start" %}</label>
+                <div class="input-row--wide">
+                    <div class="flex-1">
+                        <label class="input-label-sm">{% trans "Start" %}</label>
                         <input type="number" step="any" placeholder="{% trans "e.g. -3500" %}"
-                               data-bind="textInput: xGenerateStart" style="width: 100%;">
+                               data-bind="textInput: xGenerateStart" class="w-100">
                     </div>
-                    <div style="flex: 1;">
-                        <label style="font-size: 12px; display: block;">{% trans "End" %}</label>
+                    <div class="flex-1">
+                        <label class="input-label-sm">{% trans "End" %}</label>
                         <input type="number" step="any" placeholder="{% trans "e.g. 500" %}"
-                               data-bind="textInput: xGenerateEnd" style="width: 100%;">
+                               data-bind="textInput: xGenerateEnd" class="w-100">
                     </div>
                 </div>
                 <!-- /ko -->
@@ -72,7 +72,7 @@
             <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Transformations" %}</h4>
                 <h5 class="file-config-instructions">{% trans "If your file has multiple Y columns, they are displayed as separate series. Use \"mean\" to average them into a single series instead." %}</h5>
-                <select style="display:inline-block; flex: 1"
+                <select class="d-inline-block flex-1"
                     data-bind="
                         select2Query: {
                             select2Config: {
@@ -84,16 +84,16 @@
                                 value: selectedTransformation,
                                 closeOnSelect: true,
                                 allowClear: true,
-                                multiple: false 
+                                multiple: false
                             }
                         }">
                 </select>
             </div>
             <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Data Column Delimiter" %}</h4>
-                <div class="afs-error-message ep-alert-red" style="padding:5px;" data-bind="visible: invalidDelimiter()">{% trans "The data delimiter must be a valid regular expression" %}</div>
+                <div class="afs-error-message ep-alert-red p-5" data-bind="visible: invalidDelimiter()">{% trans "The data delimiter must be a valid regular expression" %}</div>
                 <h5 class="file-config-instructions">{% trans "Define how the data are separated" %}</h5>
-                <div style="display: flex; flex-direction: row; flex-wrap: wrap;">
+                <div class="radio-group--horizontal">
                     <div class="data-delimiter-radio"><input id="delimiter-auto" type="radio" name="dataDelimiter" value="auto" data-bind="checked: dataDelimiterRadio"><label for="delimiter-auto">{% trans "Auto-detect" %}</label></div>
                     <div class="data-delimiter-radio"><input id="delimiter-space" type="radio" name="dataDelimiter" value="" data-bind="checked: dataDelimiterRadio"><label for="delimiter-space">{% trans "Whitespace" %}</label></div>
                     <div class="data-delimiter-radio"><input id="delimiter-comma" type="radio" name="dataDelimiter" value="," data-bind="checked: dataDelimiterRadio"><label for="delimiter-comma">{% trans "Comma" %}</label></div>
@@ -101,8 +101,8 @@
                     <div class="data-delimiter-radio"><input id="delimiter-other" type="radio" name="dataDelimiter" value="other" data-bind="checked: dataDelimiterRadio"><label for="delimiter-other">{% trans "Other" %}</label></div>
                 </div>
                 <input type="text" name="delimiterCharacter" placeholder="String or regex, example: [a-zA-Z]+" data-bind="visible: dataDelimiterRadio()=='other', textInput: dataDelimiter">
-                <div style="display: flex; margin: 5px 0;">
-                    <input id="include-delimiter" style="margin: 0px 0px 0px 2px;" type="checkbox" name="includeDelimiter" value="includeDelimiter" data-bind="checked:includeDelimiter">
+                <div class="d-flex" style="margin: 5px 0;">
+                    <input id="include-delimiter" style="margin: 0 0 0 2px;" type="checkbox" name="includeDelimiter" value="includeDelimiter" data-bind="checked:includeDelimiter">
                     <label style="margin-top: 2px;" for="include-delimiter">{% trans "Include Delimiter in Value" %}</label>
                 </div>
             </div>
@@ -113,10 +113,10 @@
                 <input type="text" placeholder="{% trans "Title" %}" name="chartTitle" data-bind="textInput: chartTitle">
 
                 <h4 class="file-config-header">{% trans "X Axis Label" %}</h4>
-                <div style="display: flex; gap: 6px; align-items: center;">
+                <div class="input-row">
                     <input type="text" placeholder="{% trans "X Axis" %}" name="xAxisLabel"
-                           data-bind="textInput: xAxisLabel" style="flex: 1;">
-                    <select style="width: auto; min-width: 100px;"
+                           data-bind="textInput: xAxisLabel" class="flex-1">
+                    <select class="preset-select"
                             data-bind="event: { change: function(data, event) {
                                 if (event.target.value) {
                                     xAxisLabel(event.target.value);
@@ -131,10 +131,10 @@
                 </div>
 
                 <h4 class="file-config-header">{% trans "Y Axis Label" %}</h4>
-                <div style="display: flex; gap: 6px; align-items: center;">
+                <div class="input-row">
                     <input type="text" placeholder="{% trans "Y Axis" %}" name="yAxisLabel"
-                           data-bind="textInput: yAxisLabel" style="flex: 1;">
-                    <select style="width: auto; min-width: 100px;"
+                           data-bind="textInput: yAxisLabel" class="flex-1">
+                    <select class="preset-select"
                             data-bind="event: { change: function(data, event) {
                                 if (event.target.value) {
                                     yAxisLabel(event.target.value);
@@ -151,23 +151,23 @@
 
             <!-- Spectral Range Filter (collapsible) -->
             <div class="importer-config-panel">
-                <h4 class="file-config-header" style="cursor: pointer; user-select: none;"
+                <h4 class="file-config-header collapsible-header"
                     data-bind="click: function() { showAdvancedDisplay(!showAdvancedDisplay()); }">
-                    <i class="fa" data-bind="css: { 'fa-chevron-right': !showAdvancedDisplay(), 'fa-chevron-down': showAdvancedDisplay() }" style="width: 14px; margin-right: 4px;"></i>
+                    <i class="fa chevron-icon" data-bind="css: { 'fa-chevron-right': !showAdvancedDisplay(), 'fa-chevron-down': showAdvancedDisplay() }"></i>
                     {% trans "Spectral Range" %}
                 </h4>
                 <!-- ko if: showAdvancedDisplay -->
                 <h5 class="file-config-instructions">{% trans "Limit the displayed X range. Leave empty for no limit." %}</h5>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <div style="flex: 1;">
-                        <label style="font-size: 12px; display: block;">{% trans "Min X" %}</label>
+                <div class="input-row--wide">
+                    <div class="flex-1">
+                        <label class="input-label-sm">{% trans "Min X" %}</label>
                         <input type="number" step="any" placeholder="{% trans "e.g. 400" %}"
-                               data-bind="textInput: xRangeMin" style="width: 100%;">
+                               data-bind="textInput: xRangeMin" class="w-100">
                     </div>
-                    <div style="flex: 1;">
-                        <label style="font-size: 12px; display: block;">{% trans "Max X" %}</label>
+                    <div class="flex-1">
+                        <label class="input-label-sm">{% trans "Max X" %}</label>
                         <input type="number" step="any" placeholder="{% trans "e.g. 4000" %}"
-                               data-bind="textInput: xRangeMax" style="width: 100%;">
+                               data-bind="textInput: xRangeMax" class="w-100">
                     </div>
                 </div>
                 <!-- /ko -->
@@ -175,20 +175,20 @@
 
             <!-- Column Assignment (collapsible) -->
             <div class="importer-config-panel">
-                <h4 class="file-config-header" style="cursor: pointer; user-select: none;"
+                <h4 class="file-config-header collapsible-header"
                     data-bind="click: function() { showColumnAssignment(!showColumnAssignment()); }">
-                    <i class="fa" data-bind="css: { 'fa-chevron-right': !showColumnAssignment(), 'fa-chevron-down': showColumnAssignment() }" style="width: 14px; margin-right: 4px;"></i>
+                    <i class="fa chevron-icon" data-bind="css: { 'fa-chevron-right': !showColumnAssignment(), 'fa-chevron-down': showColumnAssignment() }"></i>
                     {% trans "Column Assignment" %}
                 </h4>
                 <!-- ko if: showColumnAssignment -->
                 <h5 class="file-config-instructions">{% trans "Define which data columns map to X, Y (left axis), or Y (right axis). Leave empty to use the default: column 1 = X, remaining = Y left." %}</h5>
 
                 <!-- ko foreach: columnAssignments -->
-                <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
-                    <label style="font-size: 12px; min-width: 75px; margin: 0;">
+                <div class="input-row" style="margin-bottom: 4px;">
+                    <label class="text-sm" style="min-width: 75px; margin: 0;">
                         {% trans "Column" %} <span data-bind="text: ko.unwrap(columnIndex) + 1"></span>
                     </label>
-                    <select style="flex: 1;"
+                    <select class="flex-1"
                             data-bind="options: $parent.columnRoleOptions,
                                        optionsText: 'text',
                                        optionsValue: 'value',
@@ -210,11 +210,11 @@
                 <!-- Right Y Axis Label -->
                 <!-- ko if: hasYRightColumn -->
                 <div style="margin-top: 10px;">
-                    <label style="font-size: 12px; display: block;">{% trans "Right Y Axis Label" %}</label>
-                    <div style="display: flex; gap: 6px; align-items: center;">
+                    <label class="input-label-sm">{% trans "Right Y Axis Label" %}</label>
+                    <div class="input-row">
                         <input type="text" placeholder="{% trans "Right Y Axis" %}"
-                               data-bind="textInput: yAxisRightLabel" style="flex: 1;">
-                        <select style="width: auto; min-width: 100px;"
+                               data-bind="textInput: yAxisRightLabel" class="flex-1">
+                        <select class="preset-select"
                                 data-bind="event: { change: function(data, event) {
                                     if (event.target.value) {
                                         yAxisRightLabel(event.target.value);
@@ -232,38 +232,11 @@
                 <!-- /ko -->
             </div>
         </div>
-        <div style="display: flex; background-color: #eee; border-top: 1px solid #ddd; flex-shrink: 0; padding: 6px;">
-            <div style="flex: 1"></div>
+        <div class="importer-config-footer">
+            <div class="flex-1"></div>
             <button class="btn btn-danger" type="text" name="delimiterCharacter" data-bind="click: cancelConfigEdit">{% trans "Cancel" %}</button>
             <button class="btn btn-success" type="text" name="delimiterCharacter" data-bind="disable: invalidDelimiter(), click: saveConfigEdit">{% trans "Save" %}</button>
         </div>
         </div>
     </div>
 </div>
-<style>
-.xy-renderer-config {
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    max-height: calc(100vh - 220px);
-    overflow: hidden;
-}
-.xy-renderer-config .importer-configuration {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-}
-.importer-config-panel-wrapper {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-}
-.importer-config-panel-inner {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-}
-</style>

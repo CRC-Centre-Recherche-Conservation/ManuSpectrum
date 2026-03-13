@@ -4,7 +4,7 @@
 {% block display_value %}
 <!-- Display in editor tree -->
 <span data-bind="text: manifestLabel() || 'IIIF Manifest'"></span>
-<span style="color: #999; font-size: 0.9em;" data-bind="if: manifestDisplayUrl">
+<span class="manifest-meta-text" data-bind="if: manifestDisplayUrl">
     (<span data-bind="text: manifestDisplayUrl"></span>)
 </span>
 {% endblock display_value %}
@@ -31,7 +31,7 @@
     <div class="col-xs-12">
         <div class="file-select-window manifest-create-window">
             <div class="bord-top pad-ver file-select">
-                <div style="padding: 5px;">
+                <div class="p-5">
                     <div class="file-select-h2 h2">
                         {% trans "Create a IIIF Manifest" %}
                     </div>
@@ -57,9 +57,9 @@
     <!-- Loading indicator -->
     <!-- ko if: loading() -->
     <div class="col-xs-12">
-        <div style="display: flex; align-items: center; gap: 10px; padding: 14px 0; margin-top: 6px;">
-            <div style="width: 18px; height: 18px; border: 2.5px solid #e2e8f0; border-top-color: #489EED; border-radius: 50%; animation: manifest-spin 0.7s linear infinite; flex-shrink: 0;"></div>
-            <span style="color: #888; font-size: 0.9rem;">{% trans "Loading manifest..." %}</span>
+        <div class="manifest-loading">
+            <div class="ms-spinner ms-spinner--sm"></div>
+            <span class="manifest-loading-text">{% trans "Loading manifest..." %}</span>
         </div>
     </div>
     <!-- /ko -->
@@ -89,20 +89,17 @@
             </div>
             <!-- /ko -->
 
-            <div class="manifest-info" style="flex: 1; min-width: 0; padding-top: 4px">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <h4 data-bind="text: manifestLabel" style="margin: 0; color: #333; font-size: 2.5rem; font-weight: 600;"></h4>
-                    <button class="btn btn-xs" data-bind="click: clearManifest" title="{% trans 'Remove manifest' %}"
-                            style="width: 18px; height: 18px; min-width: 18px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px; line-height: 1; background: #489EED; border-color: #3a8ddb; color: #fff;"
-                            onmouseover="this.style.background='#dc3545';this.style.borderColor='#c82333';"
-                            onmouseout="this.style.background='#489EED';this.style.borderColor='#3a8ddb';">
+            <div class="manifest-info">
+                <div class="manifest-info-header">
+                    <h4 class="manifest-info-title" data-bind="text: manifestLabel"></h4>
+                    <button class="btn btn-xs manifest-remove-btn" data-bind="click: clearManifest" title="{% trans 'Remove manifest' %}">
                         <i class="ion ion-close"></i>
                     </button>
                 </div>
                 <!-- ko if: manifestDescription -->
-                <p data-bind="text: manifestDescription" style="margin: 4px 0 0; color: #666; font-size: 0.9rem;"></p>
+                <p class="manifest-info-description" data-bind="text: manifestDescription"></p>
                 <!-- /ko -->
-                <a style="display: inline-block; margin-top: 4px; font-size: 1.2rem; color: #5b9bd7; word-break: break-all; text-decoration: none;"
+                <a class="manifest-info-link"
                    data-bind="attr: { href: manifestDisplayUrl }, text: manifestDisplayUrl" target="_blank"></a>
             </div>
         </div>
@@ -123,19 +120,18 @@
         </div>
     </div>
 
-    <div style="padding: 30px 50px;">
+    <div class="manifest-create-form">
         <div class="form-group">
             <label class="control-label">{% trans "Manifest title" %}</label>
-            <input style="max-width: 600px;"
-                   type="text" class="form-control input-lg"
+            <input class="form-control input-lg manifest-create-input"
+                   type="text"
                    data-bind="textInput: newManifestTitle"
                    placeholder="{% trans 'Manifest title' %}">
         </div>
 
         <div class="form-group" style="margin-top: 10px;">
             <label class="control-label">{% trans "Description" %}</label>
-            <textarea class="form-control input-lg"
-                      style="max-width: 600px;"
+            <textarea class="form-control input-lg manifest-create-input"
                       data-bind="textInput: newManifestDescription"
                       placeholder="{% trans 'Manifest description' %}"
                       rows="3" style="resize: vertical;"></textarea>
@@ -144,7 +140,7 @@
         <div class="col-xs-12 dropzone" data-bind="dropzone: dropzoneOptions" style="padding: 0;">
             <div class="file-select-window">
                 <div class="bord-top pad-ver file-select">
-                    <div style="padding: 5px;">
+                    <div class="p-5">
                         <div class="file-select-h2 h2">
                             {% trans "Upload Images" %}
                         </div>
@@ -168,13 +164,13 @@
         </div>
 
         <!-- ko if: isUploading() -->
-        <div style="display: flex; flex-direction: column; align-items: center; padding: 30px 20px; margin-top: 15px; background: #f7f9fc; border: 1px solid #e2e8f0; border-radius: 2px;">
-            <div style="position: relative; width: 48px; height: 48px;">
-                <div style="position: absolute; inset: 0; border: 3px solid #e2e8f0; border-top-color: rgb(138, 115, 255); border-radius: 50%; animation: manifest-spin 0.8s linear infinite;"></div>
-                <div style="position: absolute; inset: 6px; border: 3px solid #e2e8f0; border-bottom-color: #489EED; border-radius: 50%; animation: manifest-spin 1.2s linear infinite reverse;"></div>
+        <div class="manifest-upload-loading">
+            <div class="manifest-upload-spinner">
+                <div class="manifest-upload-spinner-outer"></div>
+                <div class="manifest-upload-spinner-inner"></div>
             </div>
-            <p style="margin: 14px 0 0; color: #555; font-weight: 500; font-size: 0.95rem;">{% trans "Creating manifest..." %}</p>
-            <span style="color: #999; font-size: 0.8rem; margin-top: 4px;">{% trans "Uploading images and generating IIIF manifest" %}</span>
+            <p>{% trans "Creating manifest..." %}</p>
+            <span class="manifest-upload-subtitle">{% trans "Uploading images and generating IIIF manifest" %}</span>
         </div>
         <!-- /ko -->
 
@@ -196,13 +192,13 @@
     <!-- ko if: manifestUrl -->
     <div class="manifest-widget-report">
         <!-- Display manifest title and link -->
-        <div style="margin-bottom: 10px;">
+        <div class="manifest-report-info">
             <strong data-bind="text: manifestLabel() || 'IIIF Manifest'"></strong><br>
-            <a data-bind="attr: { href: manifestDisplayUrl }, text: manifestDisplayUrl" target="_blank" style="font-size: 0.9em; color: #5b9bd7;"></a>
+            <a class="manifest-report-link" data-bind="attr: { href: manifestDisplayUrl }, text: manifestDisplayUrl" target="_blank"></a>
         </div>
 
         <!-- IIIF Viewer -->
-        <div
+        <div class="manifest-viewer"
           data-bind="component: {
               name: 'iiif-viewer',
               params: {
@@ -212,13 +208,6 @@
                   editManifest: false
               }
           }"
-          style="
-            aspect-ratio: 2 / 1;
-            width: 200%;
-            max-height: 90vh;
-            border: 1px solid #ddd;
-            box-sizing: border-box;
-          "
         ></div>
     </div>
     <!-- /ko -->
@@ -227,94 +216,3 @@
     <!-- /ko -->
 </dd>
 {% endblock report %}
-
-<style>
-/* ── Manifest Widget ─────────────────────────────────── */
-.manifest-widget {
-    padding: 0;
-}
-
-/* ── Create manifest window ─────────────────────────── */
-.manifest-create-window {
-    margin-top: 10px;
-}
-
-/* ── Manifest preview card ──────────────────────────── */
-.manifest-preview {
-    margin-top: 15px;
-    padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 2px;
-    background: #fafafa;
-    display: flex;
-    align-items: flex-start;
-    gap: 15px;
-}
-
-.manifest-thumbnail {
-    flex-shrink: 0;
-    width: 100px;
-    height: 100px;
-    border: 1px solid #ddd;
-    border-radius: 2px;
-    overflow: hidden;
-    background: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.manifest-thumbnail img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-}
-
-.manifest-thumbnail--empty {
-    background: #f1f1f1;
-}
-
-.manifest-thumbnail--empty i {
-    font-size: 32px;
-    color: #c4c4c4;
-}
-
-
-
-/* ── Select2 fixes ──────────────────────────────────── */
-.manifest-widget .select2-container {
-    width: 100% !important;
-}
-
-.manifest-widget .select2-search__field {
-    width: 100% !important;
-}
-
-/* ── Report mode ────────────────────────────────────── */
-.manifest-widget-report {
-    width: 100%;
-    margin-top: 10px;
-}
-
-.manifest-widget-report .iiif-viewer {
-    width: 100%;
-    position: relative;
-}
-
-.manifest-widget-report .iiif-leaflet {
-    height: 500px !important;
-    width: 100% !important;
-}
-
-.manifest-widget-report .iiif-viewer-gallery {
-    position: relative !important;
-    height: 108px;
-    bottom: 0;
-    left: 0;
-    right: 0;
-}
-
-.manifest-widget-report .show-gallery-control {
-    position: relative !important;
-}
-</style>
