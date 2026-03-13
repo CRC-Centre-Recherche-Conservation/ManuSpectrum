@@ -175,12 +175,18 @@ $(function () {
 
             var box = $analysis[0].getBoundingClientRect();
             var pt = $btn[0].getBoundingClientRect();
-            var l = pt.left - box.left + pt.width / 2 - 130;
-            var t = pt.bottom - box.top + 10;
+            var popupW = 260;
+            var popupH = 210;
+            var l = pt.left - box.left + pt.width / 2 - popupW / 2;
+            var t = pt.bottom - box.top + 8;
 
-            if (l < 8) l = 8;
-            if (l + 260 > box.width - 8) l = box.width - 268;
-            if (t + 220 > box.height) t = pt.top - box.top - 220;
+            // Clamp horizontal
+            if (l < 4) l = 4;
+            if (l + popupW > box.width - 4) l = box.width - popupW - 4;
+
+            // If no room below, show above — but never go above 0
+            if (t + popupH > box.height) t = pt.top - box.top - popupH - 8;
+            if (t < 4) t = 4;
 
             $analysisPopup.css({ left: l, top: t });
             $analysis.addClass('has-popup');

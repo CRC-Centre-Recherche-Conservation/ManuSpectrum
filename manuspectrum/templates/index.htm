@@ -502,12 +502,20 @@ Homepage — Prismatic Luminescence aesthetic
                     </div>
                 </div>
 
-                <div class="ms-gallery-item reveal reveal-d3">
-                    <img src="{% static 'img/landing/icone2.svg' %}" alt="{% trans 'Multispectral Imaging' %}">
+                <div class="ms-gallery-item ms-gallery-msi reveal reveal-d3">
+                    <img class="ms-msi-base" src="https://iiif.unicaen.fr/mrsh/bvmsm/Avranches_BM_50/Avranches_BM_050_vue006_f1r.tif/full/800,/0/default.jpg" alt="{% trans 'Multispectral Imaging' %}">
+                    <img class="ms-msi-processed" src="https://iiif.unicaen.fr/mrsh/bvmsm/Avranches_BM_50/Avranches_BM_050_vue006_f1r.tif/full/800,/0/default.jpg" alt="" aria-hidden="true">
+                    <div class="ms-msi-scanline"></div>
+                    <div class="ms-msi-indicator">
+                        <div class="ms-msi-indicator-track">
+                            <div class="ms-msi-indicator-dot"></div>
+                        </div>
+                        <span class="ms-msi-indicator-label">λ 365 – 1000 nm</span>
+                    </div>
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "Imaging" %}</div>
                         <h4>{% trans "Multispectral" %}</h4>
-                        <p>{% trans "Multispectral and hyperspectral imaging via IIIF" %}</p>
+                        <p>{% trans "Spectral band scanning and false-color composites via IIIF" %}</p>
                     </div>
                 </div>
             </div>
