@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-13 09:20-0500\n"
+"POT-Creation-Date: 2026-03-13 11:09-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,22 +17,879 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-#: node_modules/arches/tests/test_settings.py:101
-msgid "German"
+
+msgid "Manifest must have a URL or ID"
 msgstr ""
 
-#: node_modules/arches/tests/test_settings.py:102
+msgid "Manifest ID does not exist"
+msgstr ""
+
+msgid "Manifest not found"
+msgstr ""
+
+msgid "Invalid URL format"
+msgstr ""
+
+msgid "Timeout while fetching manifest"
+msgstr ""
+
+msgid "Invalid IIIF manifest: {str(e)}"
+msgstr ""
+
+msgid "Unexpected error: {str(e)}"
+msgstr ""
+
+msgid "Undefined"
+msgstr ""
+
+msgid "Hi"
+msgstr ""
+
 msgid "English"
 msgstr ""
 
-#: node_modules/arches/tests/test_settings.py:103
-msgid "British English"
+msgid ""
+"Interoperable database for physicochemical analysis of written cultural "
+"heritage"
 msgstr ""
 
-#: node_modules/arches/tests/test_settings.py:104
-msgid "Spanish"
+msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
 msgstr ""
 
-#: node_modules/arches/tests/test_settings.py:105
-msgid "Arabic"
+msgid ""
+"Interoperable database for written cultural heritage materials analysis — "
+"Biblissima+ Cluster"
+msgstr ""
+
+msgid "ManuSpectrum — Home"
+msgstr ""
+
+msgid "Main Navigation"
+msgstr ""
+
+msgid "The Project"
+msgstr ""
+
+msgid "Explore"
+msgstr ""
+
+msgid "Analyses"
+msgstr ""
+
+msgid "Search"
+msgstr ""
+
+msgid "Management"
+msgstr ""
+
+msgid "Source code on GitHub"
+msgstr ""
+
+msgid "Sign In"
+msgstr ""
+
+msgid "User Profile"
+msgstr ""
+
+#, python-format
+msgid "Welcome, %(name)s"
+msgstr ""
+
+msgid "Sign Out"
+msgstr ""
+
+msgid "Open Menu"
+msgstr ""
+
+msgid ""
+"Interoperable database for <em>physicochemical analysis</em> of written "
+"cultural heritage"
+msgstr ""
+
+msgid ""
+"Explore, visualize, and share written cultural heritage materials analysis "
+"data within the Biblissima+ ecosystem."
+msgstr ""
+
+msgid "Explore the database"
+msgstr ""
+
+msgid "Learn more"
+msgstr ""
+
+msgid "scroll"
+msgstr ""
+
+msgid "Thinking and modeling written cultural heritage materials"
+msgstr ""
+
+msgid "ManuSpectrum was developed within Cluster 2 — \\"
+msgstr ""
+
+msgid ""
+"Through structuring and standardizing data according to shared models, the "
+"project provides reliable, easy-to-use tools accessible to non-specialists. "
+"Built on Arches, an open-source platform for heritage data management, "
+"ManuSpectrum facilitates data access and collaboration between researchers "
+"from different disciplines."
+msgstr ""
+
+msgid ""
+"The model focuses on identifying the component as a pivot axis between the "
+"object, its context, the analyses, and their interpretations, using thesauri "
+"and authority databases to contextualize information on heterogeneous "
+"documents."
+msgstr ""
+
+msgid "Biblissima+ — Cluster 2"
+msgstr ""
+
+msgid ""
+"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
+"written cultures. Within Cluster 2, the objective is to archive, share and "
+"enable searching of materials analysis data from the community, ensuring "
+"interoperability with the Biblissima portal and written cultural heritage "
+"standards."
+msgstr ""
+
+msgid "X-ray Fluorescence"
+msgstr ""
+
+msgid "X-ray Micro-Fluorescence"
+msgstr ""
+
+msgid "Fiber Optic Reflectance"
+msgstr ""
+
+msgid "Raman Spectroscopy"
+msgstr ""
+
+msgid "IR Spectroscopy"
+msgstr ""
+
+msgid "Hyperspectral Imaging"
+msgstr ""
+
+msgid "Multispectral Imaging"
+msgstr ""
+
+msgid "Proteomics (MALDI-TOF)"
+msgstr ""
+
+msgid "And many more"
+msgstr ""
+
+msgid "XRF mapping of a manuscript"
+msgstr ""
+
+msgid "XRF mapping of an illuminated manuscript"
+msgstr ""
+
+msgid ""
+"Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
+msgstr ""
+
+msgid "Raman spectrum on a pigment sample"
+msgstr ""
+
+msgid "Raman spectroscopy on a medieval pigment"
+msgstr ""
+
+msgid ""
+"Molecular identification of azurite and malachite pigments on a 15th-century "
+"illumination"
+msgstr ""
+
+msgid "Multispectral imaging of a manuscript page"
+msgstr ""
+
+msgid "Multispectral imaging — Revealing hidden texts"
+msgstr ""
+
+msgid ""
+"UV and infrared reflectography combined to reveal underdrawings and erased "
+"inscriptions"
+msgstr ""
+
+msgid "Previous"
+msgstr ""
+
+msgid "Next"
+msgstr ""
+
+msgid "What you can discover"
+msgstr ""
+
+msgid ""
+"A platform designed to explore physicochemical analyses on historical "
+"documents, correlating data with their written cultural heritage context."
+msgstr ""
+
+msgid "Spectra and analysis data"
+msgstr ""
+
+msgid ""
+"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
+"analysis results directly on the platform."
+msgstr ""
+
+msgid "IIIF Annotations"
+msgstr ""
+
+msgid ""
+"Analysis data is exposed as IIIF annotations, making it accessible from any "
+"compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
+"allows any external site to visualize ManuSpectrum's spectral data (XRF, "
+"Raman, FTIR, UV-Vis) directly overlaid on high-resolution manuscript images."
+msgstr ""
+
+msgid "Interoperability and Standards"
+msgstr ""
+
+msgid ""
+"Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
+"ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
+"interoperability with international heritage systems and the Biblissima "
+"portal."
+msgstr ""
+
+msgid "AGORHA thesaurus"
+msgstr ""
+
+msgid "Material Characterization"
+msgstr ""
+
+msgid ""
+"Explore the layers, materials, and chemical elements identified on written "
+"cultural heritage documents, with different levels of reliability and "
+"characterization."
+msgstr ""
+
+msgid "Pigments"
+msgstr ""
+
+msgid "Layers"
+msgstr ""
+
+msgid "Binders"
+msgstr ""
+
+msgid "Substrates"
+msgstr ""
+
+msgid "Visualize physicochemical analyses"
+msgstr ""
+
+msgid ""
+"From elemental mapping to multispectral imaging, explore the different "
+"analysis techniques applied to manuscripts and written cultural heritage "
+"objects."
+msgstr ""
+
+msgid "XRF Mapping — Element A"
+msgstr ""
+
+msgid "XRF Mapping — Element B"
+msgstr ""
+
+msgid "XRF Mapping"
+msgstr ""
+
+msgid "Spatial distribution of chemical elements on an illuminated manuscript"
+msgstr ""
+
+msgid "Manuscript analysis"
+msgstr ""
+
+msgid "Analysis point"
+msgstr ""
+
+msgid "Spectroscopy"
+msgstr ""
+
+msgid "Point Analysis"
+msgstr ""
+
+msgid "Click on analysis points to explore spectral data"
+msgstr ""
+
+msgid "Imaging"
+msgstr ""
+
+msgid "Multispectral"
+msgstr ""
+
+msgid "Spectral band scanning and false-color composites via IIIF"
+msgstr ""
+
+msgid ""
+"Search by material, analysis technique, written cultural heritage object, or "
+"chemical element. Advanced filters available in the search interface."
+msgstr ""
+
+msgid "Search materials, techniques, objects..."
+msgstr ""
+
+msgid "Vermilion"
+msgstr ""
+
+msgid "manuscript"
+msgstr ""
+
+msgid "Manuscripts"
+msgstr ""
+
+msgid "XRF"
+msgstr ""
+
+msgid "parchment"
+msgstr ""
+
+msgid "Parchment"
+msgstr ""
+
+msgid "illumination"
+msgstr ""
+
+msgid "Illuminations"
+msgstr ""
+
+msgid "Raman"
+msgstr ""
+
+msgid "Access advanced search"
+msgstr ""
+
+msgid "Our Partners"
+msgstr ""
+
+msgid "Ministry of Culture"
+msgstr ""
+
+msgid ""
+"Interoperable database for physicochemical analysis of written cultural "
+"heritage materials. A Biblissima+ cluster project."
+msgstr ""
+
+msgid "Platform"
+msgstr ""
+
+msgid "My Profile"
+msgstr ""
+
+msgid "Resources"
+msgstr ""
+
+msgid "Standards"
+msgstr ""
+
+msgid ""
+"This work has benefited from state aid managed by the Agence Nationale de la "
+"Recherche under the Investissements d'avenir programme, reference ANR-21-"
+"ESRE-0005 (Biblissima+)."
+msgstr ""
+
+msgid "All rights reserved"
+msgstr ""
+
+msgid "Source code"
+msgstr ""
+
+msgid "GPL-3.0 License"
+msgstr ""
+
+msgid ""
+"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
+"rel=\"noopener\">Arches</a>"
+msgstr ""
+
+msgid "Data"
+msgstr ""
+
+msgid "X Axis"
+msgstr ""
+
+msgid "Y Axis"
+msgstr ""
+
+msgid "Select a Transformation"
+msgstr ""
+
+msgid "Select an Importer"
+msgstr ""
+
+msgid "Importer in Use"
+msgstr ""
+
+msgid ""
+"This importer is in use - it should be replaced in all files where it is "
+"used before deleting."
+msgstr ""
+
+msgid "Select Primary Description Identifier Card"
+msgstr ""
+
+msgid "An error occurred while creating the manifest."
+msgstr ""
+
+msgid "Material"
+msgstr ""
+
+msgid "Layer"
+msgstr ""
+
+msgid "Range"
+msgstr ""
+
+msgid "Lapis lazuli"
+msgstr ""
+
+msgid "Vermilion (HgS)"
+msgstr ""
+
+msgid "Gold leaf"
+msgstr ""
+
+msgid "Iron gall ink"
+msgstr ""
+
+msgid "Pigment"
+msgstr ""
+
+msgid "Paint"
+msgstr ""
+
+msgid "Gilding"
+msgstr ""
+
+msgid "Text"
+msgstr ""
+
+#, python-format
+msgid ""
+"You're receiving this email because you requested a password reset for your "
+"user account at %(site_name)s."
+msgstr ""
+
+msgid "Reset my password"
+msgstr ""
+
+msgid "Your username, in case you've forgotten:"
+msgstr ""
+
+msgid "If you didn't request this, you can safely ignore this email."
+msgstr ""
+
+#, python-format
+msgid "Password reset — %(site_name)s"
+msgstr ""
+
+msgid "Config"
+msgstr ""
+
+msgid "Chart Configuration"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid ""
+"Select or create a shared configuration that applies to all XY files. For "
+"per-file adjustments, use the Status tab."
+msgstr ""
+
+msgid "XY file(s) staged"
+msgstr ""
+
+msgid "No config"
+msgstr ""
+
+msgid "Apply to"
+msgstr ""
+
+msgid "staged file(s)"
+msgstr ""
+
+msgid "Applying..."
+msgstr ""
+
+msgid "Files Status"
+msgstr ""
+
+msgid ""
+"Check which files have a configuration applied. Select file(s) to customize "
+"parsing settings individually, overriding the shared config."
+msgstr ""
+
+msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
+msgstr ""
+
+msgid "file(s)"
+msgstr ""
+
+msgid "selected"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+msgid "None"
+msgstr ""
+
+msgid "Has custom parsing"
+msgstr ""
+
+msgid "none"
+msgstr ""
+
+msgid "Adjust parsing for"
+msgstr ""
+
+msgid "Custom parsing:"
+msgstr ""
+
+msgid ""
+"These settings override the shared config for the selected file(s) only. "
+"Choose 'Use config' to keep the shared config value."
+msgstr ""
+
+msgid "Delimiter"
+msgstr ""
+
+msgid "Use config"
+msgstr ""
+
+msgid "Auto-detect"
+msgstr ""
+
+msgid "Comma"
+msgstr ""
+
+msgid "Tab"
+msgstr ""
+
+msgid "Other:"
+msgstr ""
+
+msgid "Custom delimiter"
+msgstr ""
+
+msgid "Header"
+msgstr ""
+
+msgid "Fixed lines:"
+msgstr ""
+
+msgid "Number of lines"
+msgstr ""
+
+msgid "Footer"
+msgstr ""
+
+msgid "End of file"
+msgstr ""
+
+msgid "After text:"
+msgstr ""
+
+msgid "Footer text"
+msgstr ""
+
+msgid "Reset to config"
+msgstr ""
+
+msgid "Apply & re-render"
+msgstr ""
+
+msgid ""
+"Specify how to process the data files for viewing.  Any additional files "
+"(such as images) will be automatically displayed if possible."
+msgstr ""
+
+msgid "Data Files"
+msgstr ""
+
+msgid "Additional Files"
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "Configuration"
+msgstr ""
+
+msgid "files"
+msgstr ""
+
+msgid "file"
+msgstr ""
+
+msgid "Select All"
+msgstr ""
+
+msgid "Deselect All"
+msgstr ""
+
+msgid "Import Preview"
+msgstr ""
+
+msgid "Selected Files"
+msgstr ""
+
+msgid "Select an importer configuration on the right to apply to all files"
+msgstr ""
+
+msgid "Apply Importer to Selected Files"
+msgstr ""
+
+msgid "File Preview"
+msgstr ""
+
+msgid "This file type cannot be previewed."
+msgstr ""
+
+msgid "Importer Configurations"
+msgstr ""
+
+msgid "Define how to import your x/y data"
+msgstr ""
+
+msgid "Edit"
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "Add Importer Configuration"
+msgstr ""
+
+msgid "Importer Name"
+msgstr ""
+
+msgid "Name of Importer"
+msgstr ""
+
+msgid "Importer Description"
+msgstr ""
+
+msgid "Describe the Importer"
+msgstr ""
+
+msgid "Define where your x/y data are found in the file"
+msgstr ""
+
+msgid "File has a fixed header (constant number of lines)"
+msgstr ""
+
+msgid "File header ends after specific text"
+msgstr ""
+
+msgid "Ending Text"
+msgstr ""
+
+msgid "Number of Lines"
+msgstr ""
+
+msgid "Define where your x/y data end in the file"
+msgstr ""
+
+msgid "End of File"
+msgstr ""
+
+msgid "File footer begins after specific text (consistent ending text)"
+msgstr ""
+
+msgid "X Axis Source"
+msgstr ""
+
+msgid "Define how the X axis values are determined"
+msgstr ""
+
+msgid "From data (first column is X)"
+msgstr ""
+
+msgid "Generate from range (no X column in file)"
+msgstr ""
+
+msgid ""
+"The X axis will be evenly spaced between start and end values, based on the "
+"number of data rows."
+msgstr ""
+
+msgid "Start"
+msgstr ""
+
+msgid "e.g. -3500"
+msgstr ""
+
+msgid "End"
+msgstr ""
+
+msgid "e.g. 500"
+msgstr ""
+
+msgid "Transformations"
+msgstr ""
+
+msgid ""
+"If your file has multiple Y columns, they are displayed as separate series. "
+"Use \\"
+msgstr ""
+
+msgid "Data Column Delimiter"
+msgstr ""
+
+msgid "The data delimiter must be a valid regular expression"
+msgstr ""
+
+msgid "Define how the data are separated"
+msgstr ""
+
+msgid "Whitespace"
+msgstr ""
+
+msgid "Pipe"
+msgstr ""
+
+msgid "Other"
+msgstr ""
+
+msgid "Include Delimiter in Value"
+msgstr ""
+
+msgid "Display/Charting"
+msgstr ""
+
+msgid "Chart Title"
+msgstr ""
+
+msgid "Title"
+msgstr ""
+
+msgid "X Axis Label"
+msgstr ""
+
+msgid "Presets..."
+msgstr ""
+
+msgid "Y Axis Label"
+msgstr ""
+
+msgid "Spectral Range"
+msgstr ""
+
+msgid "Limit the displayed X range. Leave empty for no limit."
+msgstr ""
+
+msgid "Min X"
+msgstr ""
+
+msgid "e.g. 400"
+msgstr ""
+
+msgid "Max X"
+msgstr ""
+
+msgid "e.g. 4000"
+msgstr ""
+
+msgid "Column Assignment"
+msgstr ""
+
+msgid ""
+"Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
+"empty to use the default: column 1 = X, remaining = Y left."
+msgstr ""
+
+msgid "Column"
+msgstr ""
+
+msgid "Add Column"
+msgstr ""
+
+msgid "Right Y Axis Label"
+msgstr ""
+
+msgid "Right Y Axis"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Files"
+msgstr ""
+
+msgid "Select all"
+msgstr ""
+
+msgid "Deselect all"
+msgstr ""
+
+msgid "Loading charts..."
+msgstr ""
+
+msgid "Unable to load chart data"
+msgstr ""
+
+msgid "Select files to display"
+msgstr ""
+
+msgid "Enter Manifest URL"
+msgstr ""
+
+msgid "Select a manifest"
+msgstr ""
+
+msgid "Create a IIIF Manifest"
+msgstr ""
+
+msgid "Build a manifest from your own images"
+msgstr ""
+
+msgid "Create a manifest"
+msgstr ""
+
+msgid "Accepted formats:"
+msgstr ""
+
+msgid "Loading manifest..."
+msgstr ""
+
+msgid "Remove manifest"
+msgstr ""
+
+msgid "Return"
+msgstr ""
+
+msgid "Manifest title"
+msgstr ""
+
+msgid "Description"
+msgstr ""
+
+msgid "Manifest description"
+msgstr ""
+
+msgid "Upload Images"
+msgstr ""
+
+msgid "Drag and drop image files on this panel"
+msgstr ""
+
+msgid "Select images"
+msgstr ""
+
+msgid "Creating manifest..."
+msgstr ""
+
+msgid "Uploading images and generating IIIF manifest"
+msgstr ""
+
+msgid "<h1>Renderers do not exist</h1>"
+msgstr ""
+
+msgid "<h1>Renderers config does not exist</h1>"
 msgstr ""

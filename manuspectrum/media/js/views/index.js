@@ -120,28 +120,29 @@ $(function () {
     var $analysisPopup = $('#ms-analysis-popup');
 
     if ($analysis.length) {
+        var t = arches.translations;
         var analysisData = [
             {
                 technique: 'XRF', id: 'P-01', color: '#3b82f6',
-                material: 'Lapis lazuli', layer: 'Pigment', range: '1 – 40 keV',
+                material: t.analysisLapisLazuli, layer: t.analysisPigment, range: '1 – 40 keV',
                 elements: [{ s: 'Cu', p: true }, { s: 'S', p: true }, { s: 'Ca', p: false }, { s: 'Si', p: false }, { s: 'Fe', p: false }],
                 spectrum: 'M0,42 8,41 18,39 25,34 30,38 38,36 45,10 50,32 55,38 62,35 70,39 80,18 88,36 95,34 105,38 115,40 130,39 150,40 175,39 200,40 232,41'
             },
             {
                 technique: 'Raman', id: 'P-02', color: '#dc3545',
-                material: 'Vermilion (HgS)', layer: 'Paint', range: '100 – 3000 cm⁻¹',
+                material: t.analysisVermilion, layer: t.analysisPaint, range: '100 – 3000 cm⁻¹',
                 elements: [{ s: 'Hg', p: true }, { s: 'S', p: true }, { s: 'Pb', p: false }],
                 spectrum: 'M0,40 15,39 30,40 42,38 47,6 51,38 60,40 75,39 85,40 91,24 96,40 110,39 125,40 140,39 165,30 172,39 195,40 220,39 232,40'
             },
             {
                 technique: 'FORS', id: 'P-03', color: '#10b981',
-                material: 'Gold leaf', layer: 'Gilding', range: '350 – 2500 nm',
+                material: t.analysisGoldLeaf, layer: t.analysisGilding, range: '350 – 2500 nm',
                 elements: [{ s: 'Au', p: true }, { s: 'Ag', p: false }, { s: 'Cu', p: false }],
                 spectrum: 'M0,40 20,39 40,38 60,34 80,26 100,16 120,10 140,8 160,10 180,13 200,15 220,16 232,17'
             },
             {
                 technique: 'XRF', id: 'P-04', color: '#8b5cf6',
-                material: 'Iron gall ink', layer: 'Text', range: '1 – 40 keV',
+                material: t.analysisIronGallInk, layer: t.analysisText, range: '1 – 40 keV',
                 elements: [{ s: 'Fe', p: true }, { s: 'Zn', p: false }, { s: 'Cu', p: false }, { s: 'K', p: false }],
                 spectrum: 'M0,40 12,39 22,38 30,34 38,10 43,34 52,38 62,36 70,20 76,35 85,38 100,39 120,38 140,39 160,26 168,38 185,39 210,40 232,40'
             }
@@ -163,9 +164,9 @@ $(function () {
                 '<path d="' + d.spectrum + '" fill="none" stroke="' + d.color + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
                 '</svg></div>' +
                 '<div class="ms-popup-data">' +
-                '<div class="ms-popup-row"><span class="ms-popup-label">Material</span><span class="ms-popup-value">' + d.material + '</span></div>' +
-                '<div class="ms-popup-row"><span class="ms-popup-label">Layer</span><span class="ms-popup-value">' + d.layer + '</span></div>' +
-                '<div class="ms-popup-row"><span class="ms-popup-label">Range</span><span class="ms-popup-value">' + d.range + '</span></div>' +
+                '<div class="ms-popup-row"><span class="ms-popup-label">' + t.analysisMaterial + '</span><span class="ms-popup-value">' + d.material + '</span></div>' +
+                '<div class="ms-popup-row"><span class="ms-popup-label">' + t.analysisLayer + '</span><span class="ms-popup-value">' + d.layer + '</span></div>' +
+                '<div class="ms-popup-row"><span class="ms-popup-label">' + t.analysisRange + '</span><span class="ms-popup-value">' + d.range + '</span></div>' +
                 '</div><div class="ms-popup-elements">' + elems + '</div>';
         }
 

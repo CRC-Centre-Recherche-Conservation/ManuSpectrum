@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-13 08:19-0500\n"
+"POT-Creation-Date: 2026-03-13 11:09-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -16,166 +16,990 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: node_modules/arches/tests/test_settings.py:101
-msgid "German"
+msgid "Manifest must have a URL or ID"
 msgstr ""
 
-#: node_modules/arches/tests/test_settings.py:102
+#, fuzzy
+#| msgid "Manifest description"
+msgid "Manifest ID does not exist"
+msgstr "Description du manifeste"
+
+#, fuzzy
+#| msgid "Manifest description"
+msgid "Manifest not found"
+msgstr "Description du manifeste"
+
+msgid "Invalid URL format"
+msgstr ""
+
+#, fuzzy
+#| msgid "An error occurred while creating the manifest."
+msgid "Timeout while fetching manifest"
+msgstr "Une erreur est survenue lors de la création du manifeste."
+
+msgid "Invalid IIIF manifest: {str(e)}"
+msgstr ""
+
+msgid "Unexpected error: {str(e)}"
+msgstr ""
+
+msgid "Undefined"
+msgstr ""
+
+msgid "Hi"
+msgstr ""
+
 msgid "English"
 msgstr ""
 
-#: node_modules/arches/tests/test_settings.py:103
-msgid "British English"
+#, fuzzy
+#| msgid ""
+#| "Interoperable database for physicochemical analysis of written cultural "
+#| "heritage materials. A Biblissima+ cluster project."
+msgid ""
+"Interoperable database for physicochemical analysis of written cultural "
+"heritage"
+msgstr ""
+"Base de données interopérable pour l'analyse physico-chimique des matériaux "
+"du patrimoine culturel écrit. Un projet du cluster Biblissima+."
+
+# ============================================================
+# Homepage — index.htm
+# ============================================================
+msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
+msgstr "ManuSpectrum — Analyse physico-chimique du patrimoine"
+
+msgid ""
+"Interoperable database for written cultural heritage materials analysis — "
+"Biblissima+ Cluster"
+msgstr ""
+"Base de données interopérable pour l'analyse des matériaux du patrimoine "
+"culturel écrit — Cluster Biblissima+"
+
+msgid "ManuSpectrum — Home"
+msgstr "ManuSpectrum — Accueil"
+
+msgid "Main Navigation"
+msgstr "Navigation principale"
+
+msgid "The Project"
+msgstr "Le Projet"
+
+msgid "Explore"
+msgstr "Explorer"
+
+msgid "Analyses"
+msgstr "Analyses"
+
+msgid "Search"
+msgstr "Rechercher"
+
+msgid "Management"
+msgstr "Gestion"
+
+msgid "Source code on GitHub"
+msgstr "Code source sur GitHub"
+
+msgid "Sign In"
+msgstr "Se connecter"
+
+msgid "User Profile"
+msgstr "Profil utilisateur"
+
+#, fuzzy, python-format
+#| msgid "Welcome,"
+msgid "Welcome, %(name)s"
+msgstr "Bienvenue,"
+
+msgid "Sign Out"
+msgstr "Déconnexion"
+
+msgid "Open Menu"
+msgstr "Ouvrir le menu"
+
+#, fuzzy
+#| msgid ""
+#| "Interoperable database for physicochemical analysis of written cultural "
+#| "heritage materials. A Biblissima+ cluster project."
+msgid ""
+"Interoperable database for <em>physicochemical analysis</em> of written "
+"cultural heritage"
+msgstr ""
+"Base de données interopérable pour l'analyse physico-chimique des matériaux "
+"du patrimoine culturel écrit. Un projet du cluster Biblissima+."
+
+msgid ""
+"Explore, visualize, and share written cultural heritage materials analysis "
+"data within the Biblissima+ ecosystem."
+msgstr ""
+"Explorer, visualiser et partager les données d'analyse des matériaux du "
+"patrimoine culturel écrit au sein de l'écosystème Biblissima+."
+
+msgid "Explore the database"
+msgstr "Explorer la base de données"
+
+msgid "Learn more"
+msgstr "En savoir plus"
+
+msgid "scroll"
+msgstr "défiler"
+
+msgid "Thinking and modeling written cultural heritage materials"
+msgstr "Penser et modéliser les matériaux du patrimoine culturel écrit"
+
+msgid "ManuSpectrum was developed within Cluster 2 — \\"
 msgstr ""
 
-#: node_modules/arches/tests/test_settings.py:104
-msgid "Spanish"
+msgid ""
+"Through structuring and standardizing data according to shared models, the "
+"project provides reliable, easy-to-use tools accessible to non-specialists. "
+"Built on Arches, an open-source platform for heritage data management, "
+"ManuSpectrum facilitates data access and collaboration between researchers "
+"from different disciplines."
+msgstr ""
+"Par une structuration et une normalisation des données respectant des "
+"modèles communs, le projet fournit des outils fiables, simples d'utilisation "
+"et accessibles à des non-spécialistes. Construit sur Arches, une plateforme "
+"open source de gestion de données patrimoniales, ManuSpectrum facilite "
+"l'accès aux données et la collaboration entre chercheurs de différentes "
+"disciplines."
+
+msgid ""
+"The model focuses on identifying the component as a pivot axis between the "
+"object, its context, the analyses, and their interpretations, using thesauri "
+"and authority databases to contextualize information on heterogeneous "
+"documents."
+msgstr ""
+"Le modèle se concentre sur l'identification du composant comme axe pivot "
+"entre l'objet, son contexte, les analyses et leurs interprétations, en "
+"utilisant des thésaurus et des bases d'autorité pour contextualiser les "
+"informations sur des documents hétérogènes."
+
+msgid "Biblissima+ — Cluster 2"
+msgstr "Biblissima+ — Cluster 2"
+
+msgid ""
+"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
+"written cultures. Within Cluster 2, the objective is to archive, share and "
+"enable searching of materials analysis data from the community, ensuring "
+"interoperability with the Biblissima portal and written cultural heritage "
+"standards."
+msgstr ""
+"ManuSpectrum s'inscrit dans le cadre du programme Biblissima+, un "
+"observatoire des cultures écrites anciennes. Au sein du Cluster 2, "
+"l'objectif est d'archiver, partager et rendre cherchables les données "
+"d'analyse des matériaux de la communauté, en garantissant leur "
+"interopérabilité avec le portail Biblissima et les standards du patrimoine "
+"culturel écrit."
+
+msgid "X-ray Fluorescence"
+msgstr "Fluorescence X"
+
+msgid "X-ray Micro-Fluorescence"
+msgstr "Microfluorescence X"
+
+msgid "Fiber Optic Reflectance"
+msgstr "Réflectance par fibre optique"
+
+msgid "Raman Spectroscopy"
+msgstr "Spectroscopie Raman"
+
+msgid "IR Spectroscopy"
+msgstr "Spectroscopie IR"
+
+msgid "Hyperspectral Imaging"
+msgstr "Imagerie hyperspectrale"
+
+msgid "Multispectral Imaging"
+msgstr "Imagerie multispectrale"
+
+msgid "Proteomics (MALDI-TOF)"
+msgstr "Protéomique (MALDI-TOF)"
+
+msgid "And many more"
+msgstr "Et bien d'autres"
+
+msgid "XRF mapping of a manuscript"
+msgstr "Cartographie XRF d'un manuscrit"
+
+msgid "XRF mapping of an illuminated manuscript"
+msgstr "Cartographie XRF d'un manuscrit enluminé"
+
+msgid ""
+"Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
+msgstr ""
+"Analyse élémentaire par fluorescence X — Distribution spatiale des pigments"
+
+msgid "Raman spectrum on a pigment sample"
+msgstr "Spectre Raman sur un échantillon de pigment"
+
+msgid "Raman spectroscopy on a medieval pigment"
+msgstr "Spectroscopie Raman sur un pigment médiéval"
+
+msgid ""
+"Molecular identification of azurite and malachite pigments on a 15th-century "
+"illumination"
+msgstr ""
+"Identification moléculaire des pigments d'azurite et de malachite sur une "
+"enluminure du XVe siècle"
+
+msgid "Multispectral imaging of a manuscript page"
+msgstr "Imagerie multispectrale d'une page de manuscrit"
+
+msgid "Multispectral imaging — Revealing hidden texts"
+msgstr "Imagerie multispectrale — Révéler les textes cachés"
+
+msgid ""
+"UV and infrared reflectography combined to reveal underdrawings and erased "
+"inscriptions"
+msgstr ""
+"Réflectographie UV et infrarouge combinées pour révéler les dessins sous-"
+"jacents et les inscriptions effacées"
+
+msgid "Previous"
+msgstr "Précédent"
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "What you can discover"
+msgstr "Ce que vous pouvez découvrir"
+
+msgid ""
+"A platform designed to explore physicochemical analyses on historical "
+"documents, correlating data with their written cultural heritage context."
+msgstr ""
+"Une plateforme conçue pour explorer les analyses physico-chimiques sur les "
+"documents historiques, en corrélant les données avec leur contexte de "
+"patrimoine culturel écrit."
+
+msgid "Spectra and analysis data"
+msgstr "Spectres et données d'analyse"
+
+msgid ""
+"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
+"analysis results directly on the platform."
+msgstr ""
+"Visualisez et comparez les spectres de référence. Explorez les résultats "
+"d'analyses XRF, FTIR, Raman et d'autres techniques directement dans la "
+"plateforme."
+
+msgid "IIIF Annotations"
+msgstr "Annotations IIIF"
+
+msgid ""
+"Analysis data is exposed as IIIF annotations, making it accessible from any "
+"compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
+"allows any external site to visualize ManuSpectrum's spectral data (XRF, "
+"Raman, FTIR, UV-Vis) directly overlaid on high-resolution manuscript images."
+msgstr ""
+"Les données d'analyse sont exposées sous forme d'annotations IIIF, les "
+"rendant accessibles depuis tout visualiseur compatible. Le plugin mirador-"
+"xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser "
+"les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
+"directement superposées aux images haute résolution des manuscrits."
+
+msgid "Interoperability and Standards"
+msgstr "Interopérabilité et standards"
+
+msgid ""
+"Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
+"ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
+"interoperability with international heritage systems and the Biblissima "
+"portal."
+msgstr ""
+"Les données sont structurées selon les ontologies CIDOC-CRM (v7.1.2) et "
+"CRMsci (v2.0), et enrichies par les thésaurus AGORHA et AAT Getty, "
+"garantissant leur interopérabilité avec les systèmes patrimoniaux "
+"internationaux et le portail Biblissima."
+
+msgid "AGORHA thesaurus"
+msgstr "Thésaurus AGORHA"
+
+msgid "Material Characterization"
+msgstr "Caractérisation matérielle"
+
+msgid ""
+"Explore the layers, materials, and chemical elements identified on written "
+"cultural heritage documents, with different levels of reliability and "
+"characterization."
+msgstr ""
+"Explorez les couches, matériaux et éléments chimiques identifiés sur les "
+"documents du patrimoine culturel écrit, avec différents niveaux de fiabilité "
+"et de caractérisation."
+
+msgid "Pigments"
+msgstr "Pigments"
+
+msgid "Layers"
+msgstr "Couches"
+
+msgid "Binders"
+msgstr "Liants"
+
+msgid "Substrates"
+msgstr "Supports"
+
+msgid "Visualize physicochemical analyses"
+msgstr "Visualiser les analyses physico-chimiques"
+
+msgid ""
+"From elemental mapping to multispectral imaging, explore the different "
+"analysis techniques applied to manuscripts and written cultural heritage "
+"objects."
+msgstr ""
+"De la cartographie élémentaire à l'imagerie multispectrale, explorez les "
+"différentes techniques d'analyse appliquées aux manuscrits et objets du "
+"patrimoine culturel écrit."
+
+msgid "XRF Mapping — Element A"
+msgstr "Cartographie XRF — Élément A"
+
+msgid "XRF Mapping — Element B"
+msgstr "Cartographie XRF — Élément B"
+
+msgid "XRF Mapping"
+msgstr "Cartographie XRF"
+
+msgid "Spatial distribution of chemical elements on an illuminated manuscript"
+msgstr "Distribution spatiale des éléments chimiques sur un manuscrit enluminé"
+
+msgid "Manuscript analysis"
+msgstr "Analyse sur manuscrit"
+
+msgid "Analysis point"
+msgstr "Point d'analyse"
+
+msgid "Spectroscopy"
+msgstr "Spectroscopie"
+
+msgid "Point Analysis"
+msgstr "Analyse ponctuelle"
+
+msgid "Click on analysis points to explore spectral data"
+msgstr "Cliquez sur les points d'analyse pour explorer les données spectrales"
+
+msgid "Imaging"
+msgstr "Imagerie"
+
+msgid "Multispectral"
+msgstr "Multispectral"
+
+msgid "Spectral band scanning and false-color composites via IIIF"
+msgstr "Balayage de bandes spectrales et composites fausses couleurs via IIIF"
+
+msgid ""
+"Search by material, analysis technique, written cultural heritage object, or "
+"chemical element. Advanced filters available in the search interface."
+msgstr ""
+"Recherchez par matériau, technique d'analyse, objet du patrimoine culturel "
+"écrit ou élément chimique. Filtres avancés disponibles dans l'interface de "
+"recherche."
+
+msgid "Search materials, techniques, objects..."
+msgstr "Rechercher des matériaux, techniques, objets..."
+
+msgid "Vermilion"
+msgstr "Vermillon"
+
+msgid "manuscript"
+msgstr "manuscrit"
+
+msgid "Manuscripts"
+msgstr "Manuscrits"
+
+msgid "XRF"
+msgstr "XRF"
+
+msgid "parchment"
+msgstr "parchemin"
+
+msgid "Parchment"
+msgstr "Parchemin"
+
+msgid "illumination"
+msgstr "enluminure"
+
+msgid "Illuminations"
+msgstr "Enluminures"
+
+msgid "Raman"
+msgstr "Raman"
+
+msgid "Access advanced search"
+msgstr "Accéder à la recherche avancée"
+
+msgid "Our Partners"
+msgstr "Nos Partenaires"
+
+msgid "Ministry of Culture"
+msgstr "Ministère de la Culture"
+
+msgid ""
+"Interoperable database for physicochemical analysis of written cultural "
+"heritage materials. A Biblissima+ cluster project."
+msgstr ""
+"Base de données interopérable pour l'analyse physico-chimique des matériaux "
+"du patrimoine culturel écrit. Un projet du cluster Biblissima+."
+
+msgid "Platform"
+msgstr "Plateforme"
+
+msgid "My Profile"
+msgstr "Mon profil"
+
+msgid "Resources"
+msgstr "Ressources"
+
+msgid "Standards"
+msgstr "Standards"
+
+msgid ""
+"This work has benefited from state aid managed by the Agence Nationale de la "
+"Recherche under the Investissements d'avenir programme, reference ANR-21-"
+"ESRE-0005 (Biblissima+)."
+msgstr ""
+"Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale de "
+"la Recherche au titre du programme d'Investissements d'avenir portant la "
+"référence ANR-21-ESRE-0005 (Biblissima+)."
+
+msgid "All rights reserved"
+msgstr "Tous droits réservés"
+
+msgid "Source code"
+msgstr "Code source"
+
+msgid "GPL-3.0 License"
+msgstr "Licence GPL-3.0"
+
+msgid ""
+"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
+"rel=\"noopener\">Arches</a>"
 msgstr ""
 
-#: node_modules/arches/tests/test_settings.py:105
-msgid "Arabic"
+msgid "Data"
+msgstr "Données"
+
+msgid "X Axis"
+msgstr "Axe X"
+
+msgid "Y Axis"
+msgstr "Axe Y"
+
+msgid "Select a Transformation"
+msgstr "Sélectionner une transformation"
+
+msgid "Select an Importer"
+msgstr "Sélectionner un importateur"
+
+msgid "Importer in Use"
+msgstr "Importateur en cours d'utilisation"
+
+msgid ""
+"This importer is in use - it should be replaced in all files where it is "
+"used before deleting."
+msgstr ""
+"Cet importateur est en cours d'utilisation — il doit être remplacé dans tous "
+"les fichiers où il est utilisé avant de le supprimer."
+
+msgid "Select Primary Description Identifier Card"
+msgstr "Sélectionner la carte d'identifiant de description principale"
+
+msgid "An error occurred while creating the manifest."
+msgstr "Une erreur est survenue lors de la création du manifeste."
+
+msgid "Material"
+msgstr "Matériau"
+
+msgid "Layer"
+msgstr "Couche"
+
+msgid "Range"
+msgstr "Plage"
+
+msgid "Lapis lazuli"
+msgstr "Lapis-lazuli"
+
+msgid "Vermilion (HgS)"
+msgstr "Vermillon (HgS)"
+
+msgid "Gold leaf"
+msgstr "Feuille d'or"
+
+msgid "Iron gall ink"
+msgstr "Encre ferrogallique"
+
+msgid "Pigment"
+msgstr "Pigment"
+
+msgid "Paint"
+msgstr "Peinture"
+
+msgid "Gilding"
+msgstr "Dorure"
+
+msgid "Text"
+msgstr "Texte"
+
+#, python-format
+msgid ""
+"You're receiving this email because you requested a password reset for your "
+"user account at %(site_name)s."
 msgstr ""
 
-#~ msgid "Data"
-#~ msgstr "Données"
+msgid "Reset my password"
+msgstr ""
 
-#~ msgid "X Axis"
-#~ msgstr "Axe X"
+msgid "Your username, in case you've forgotten:"
+msgstr ""
 
-#~ msgid "Y Axis"
-#~ msgstr "Axe Y"
+msgid "If you didn't request this, you can safely ignore this email."
+msgstr ""
 
-#~ msgid "Select a Transformation"
-#~ msgstr "Sélectionner une transformation"
+#, python-format
+msgid "Password reset — %(site_name)s"
+msgstr ""
 
-#~ msgid "Select an Importer"
-#~ msgstr "Sélectionner un importateur"
+msgid "Config"
+msgstr "Configuration"
 
-#~ msgid "Importer in Use"
-#~ msgstr "Importateur en cours d'utilisation"
+msgid "Chart Configuration"
+msgstr "Configuration du graphique"
 
-#~ msgid "This importer is in use - it should be replaced in all files where it is used before deleting."
-#~ msgstr "Cet importateur est en cours d'utilisation — il doit être remplacé dans tous les fichiers où il est utilisé avant de le supprimer."
+msgid "Status"
+msgstr "Statut"
 
-#~ msgid "Select Primary Description Identifier Card"
-#~ msgstr "Sélectionner la carte d'identifiant de description principale"
+msgid ""
+"Select or create a shared configuration that applies to all XY files. For "
+"per-file adjustments, use the Status tab."
+msgstr ""
+"Sélectionnez ou créez une configuration partagée qui s'applique à tous les "
+"fichiers XY. Pour des ajustements par fichier, utilisez l'onglet Statut."
 
-#~ msgid "An error occurred while creating the manifest."
-#~ msgstr "Une erreur est survenue lors de la création du manifeste."
+msgid "XY file(s) staged"
+msgstr "fichier(s) XY en attente"
 
-#~ msgid "Importer Configurations"
-#~ msgstr "Configurations d'importation"
+msgid "No config"
+msgstr "Aucune config"
 
-#~ msgid "Define how to import your x/y data"
-#~ msgstr "Définissez comment importer vos données x/y"
+msgid "Apply to"
+msgstr "Appliquer à"
 
-#~ msgid "Edit"
-#~ msgstr "Modifier"
+msgid "staged file(s)"
+msgstr "fichier(s) en attente"
 
-#~ msgid "Delete"
-#~ msgstr "Supprimer"
+msgid "Applying..."
+msgstr "Application en cours..."
 
-#~ msgid "Add Importer Configuration"
-#~ msgstr "Ajouter une configuration d'importation"
+msgid "Files Status"
+msgstr "Statut des fichiers"
 
-#~ msgid "Importer Name"
-#~ msgstr "Nom de l'importateur"
+msgid ""
+"Check which files have a configuration applied. Select file(s) to customize "
+"parsing settings individually, overriding the shared config."
+msgstr ""
+"Vérifiez quels fichiers ont une configuration appliquée. Sélectionnez un ou "
+"plusieurs fichiers pour personnaliser les paramètres d'analyse "
+"individuellement, en remplaçant la configuration partagée."
 
-#~ msgid "Name of Importer"
-#~ msgstr "Nom de l'importateur"
+msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
+msgstr ""
+"Aucun fichier XY trouvé. Assignez le rendu XY aux fichiers dans l'onglet "
+"Gérer."
 
-#~ msgid "Importer Description"
-#~ msgstr "Description de l'importateur"
+msgid "file(s)"
+msgstr "fichier(s)"
 
-#~ msgid "Describe the Importer"
-#~ msgstr "Décrire l'importateur"
+msgid "selected"
+msgstr "sélectionné(s)"
 
-#~ msgid "Header"
-#~ msgstr "En-tête"
+msgid "All"
+msgstr "Tous"
 
-#~ msgid "Define where your x/y data are found in the file"
-#~ msgstr "Définissez où vos données x/y se trouvent dans le fichier"
+msgid "None"
+msgstr "Aucun"
+
+msgid "Has custom parsing"
+msgstr "A un parsing personnalisé"
+
+msgid "none"
+msgstr "aucune"
+
+msgid "Adjust parsing for"
+msgstr "Ajuster le parsing pour"
+
+msgid "Custom parsing:"
+msgstr "Parsing personnalisé :"
+
+msgid ""
+"These settings override the shared config for the selected file(s) only. "
+"Choose 'Use config' to keep the shared config value."
+msgstr ""
+"Ces paramètres remplacent la configuration partagée uniquement pour le(s) "
+"fichier(s) sélectionné(s). Choisissez « Utiliser la config » pour conserver "
+"la valeur de la configuration partagée."
+
+msgid "Delimiter"
+msgstr "Délimiteur"
+
+msgid "Use config"
+msgstr "Utiliser la config"
+
+msgid "Auto-detect"
+msgstr "Détection automatique"
+
+msgid "Comma"
+msgstr "Virgule"
+
+msgid "Tab"
+msgstr "Tabulation"
+
+msgid "Other:"
+msgstr "Autre :"
+
+msgid "Custom delimiter"
+msgstr "Délimiteur personnalisé"
+
+msgid "Header"
+msgstr "En-tête"
+
+msgid "Fixed lines:"
+msgstr "Lignes fixes :"
+
+msgid "Number of lines"
+msgstr "Nombre de lignes"
+
+msgid "Footer"
+msgstr "Pied de page"
+
+msgid "End of file"
+msgstr "Fin du fichier"
+
+msgid "After text:"
+msgstr "Après le texte :"
+
+msgid "Footer text"
+msgstr "Texte du pied de page"
+
+msgid "Reset to config"
+msgstr "Réinitialiser à la config"
+
+msgid "Apply & re-render"
+msgstr "Appliquer et re-rendre"
+
+msgid ""
+"Specify how to process the data files for viewing.  Any additional files "
+"(such as images) will be automatically displayed if possible."
+msgstr ""
+"Spécifiez comment traiter les fichiers de données pour la visualisation. "
+"Tout fichier supplémentaire (comme les images) sera automatiquement affiché "
+"si possible."
+
+msgid "Data Files"
+msgstr "Fichiers de données"
+
+msgid "Additional Files"
+msgstr "Fichiers supplémentaires"
+
+msgid "Name"
+msgstr "Nom"
+
+msgid "Configuration"
+msgstr "Configuration"
+
+msgid "files"
+msgstr "fichiers"
+
+msgid "file"
+msgstr "fichier"
+
+msgid "Select All"
+msgstr "Tout sélectionner"
+
+msgid "Deselect All"
+msgstr "Tout désélectionner"
+
+msgid "Import Preview"
+msgstr "Aperçu de l'importation"
+
+msgid "Selected Files"
+msgstr "Fichiers sélectionnés"
+
+msgid "Select an importer configuration on the right to apply to all files"
+msgstr ""
+"Sélectionnez une configuration d'importation à droite pour l'appliquer à "
+"tous les fichiers"
+
+msgid "Apply Importer to Selected Files"
+msgstr "Appliquer l'importateur aux fichiers sélectionnés"
+
+msgid "File Preview"
+msgstr "Aperçu du fichier"
+
+msgid "This file type cannot be previewed."
+msgstr "Ce type de fichier ne peut pas être prévisualisé."
+
+msgid "Importer Configurations"
+msgstr "Configurations d'importation"
+
+msgid "Define how to import your x/y data"
+msgstr "Définissez comment importer vos données x/y"
+
+msgid "Edit"
+msgstr "Modifier"
+
+msgid "Delete"
+msgstr "Supprimer"
+
+msgid "Add Importer Configuration"
+msgstr "Ajouter une configuration d'importation"
+
+msgid "Importer Name"
+msgstr "Nom de l'importateur"
+
+msgid "Name of Importer"
+msgstr "Nom de l'importateur"
+
+msgid "Importer Description"
+msgstr "Description de l'importateur"
+
+msgid "Describe the Importer"
+msgstr "Décrire l'importateur"
+
+msgid "Define where your x/y data are found in the file"
+msgstr "Définissez où vos données x/y se trouvent dans le fichier"
+
+msgid "File has a fixed header (constant number of lines)"
+msgstr "Le fichier a un en-tête fixe (nombre constant de lignes)"
+
+msgid "File header ends after specific text"
+msgstr "L'en-tête du fichier se termine après un texte spécifique"
+
+msgid "Ending Text"
+msgstr "Texte de fin"
+
+msgid "Number of Lines"
+msgstr "Nombre de lignes"
+
+msgid "Define where your x/y data end in the file"
+msgstr "Définissez où vos données x/y se terminent dans le fichier"
+
+msgid "End of File"
+msgstr "Fin du fichier"
+
+msgid "File footer begins after specific text (consistent ending text)"
+msgstr ""
+"Le pied de page du fichier commence après un texte spécifique (texte de fin "
+"constant)"
+
+msgid "X Axis Source"
+msgstr "Source de l'axe X"
+
+msgid "Define how the X axis values are determined"
+msgstr "Définir comment les valeurs de l'axe X sont déterminées"
+
+msgid "From data (first column is X)"
+msgstr "Depuis les données (première colonne = X)"
+
+msgid "Generate from range (no X column in file)"
+msgstr "Générer à partir d'une plage (pas de colonne X dans le fichier)"
+
+msgid ""
+"The X axis will be evenly spaced between start and end values, based on the "
+"number of data rows."
+msgstr ""
+"L'axe X sera uniformément réparti entre les valeurs de début et de fin, en "
+"fonction du nombre de lignes de données."
+
+msgid "Start"
+msgstr "Début"
+
+msgid "e.g. -3500"
+msgstr "ex. -3500"
+
+msgid "End"
+msgstr "Fin"
+
+msgid "e.g. 500"
+msgstr "ex. 500"
+
+msgid "Transformations"
+msgstr "Transformations"
+
+#, fuzzy
+#| msgid ""
+#| "If your file has multiple Y columns, they are displayed as separate "
+#| "series. Use \"mean\" to average them into a single series instead."
+msgid ""
+"If your file has multiple Y columns, they are displayed as separate series. "
+"Use \\"
+msgstr ""
+"Si votre fichier a plusieurs colonnes Y, elles sont affichées comme des "
+"séries distinctes. Utilisez « mean » pour les moyenner en une seule série."
+
+msgid "Data Column Delimiter"
+msgstr "Délimiteur de colonnes de données"
+
+msgid "The data delimiter must be a valid regular expression"
+msgstr "Le délimiteur de données doit être une expression régulière valide"
+
+msgid "Define how the data are separated"
+msgstr "Définissez comment les données sont séparées"
+
+msgid "Whitespace"
+msgstr "Espace"
+
+msgid "Pipe"
+msgstr "Pipe"
+
+msgid "Other"
+msgstr "Autre"
+
+msgid "Include Delimiter in Value"
+msgstr "Inclure le délimiteur dans la valeur"
+
+msgid "Display/Charting"
+msgstr "Affichage / Graphique"
+
+msgid "Chart Title"
+msgstr "Titre du graphique"
+
+msgid "Title"
+msgstr "Titre"
+
+msgid "X Axis Label"
+msgstr "Libellé de l'axe X"
+
+msgid "Presets..."
+msgstr "Préréglages..."
+
+msgid "Y Axis Label"
+msgstr "Libellé de l'axe Y"
+
+msgid "Spectral Range"
+msgstr "Gamme spectrale"
+
+msgid "Limit the displayed X range. Leave empty for no limit."
+msgstr "Limiter la gamme X affichée. Laisser vide pour aucune limite."
+
+msgid "Min X"
+msgstr "X min"
+
+msgid "e.g. 400"
+msgstr "ex. 400"
+
+msgid "Max X"
+msgstr "X max"
+
+msgid "e.g. 4000"
+msgstr "ex. 4000"
+
+msgid "Column Assignment"
+msgstr "Assignation des colonnes"
+
+msgid ""
+"Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
+"empty to use the default: column 1 = X, remaining = Y left."
+msgstr ""
+"Définir quelles colonnes de données correspondent à X, Y (axe gauche) ou Y "
+"(axe droit). Laisser vide pour le comportement par défaut : colonne 1 = X, "
+"les autres = Y gauche."
+
+msgid "Column"
+msgstr "Colonne"
+
+msgid "Add Column"
+msgstr "Ajouter une colonne"
+
+msgid "Right Y Axis Label"
+msgstr "Libellé de l'axe Y droit"
+
+msgid "Right Y Axis"
+msgstr "Axe Y droit"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Save"
+msgstr "Enregistrer"
+
+msgid "Files"
+msgstr "Fichiers"
+
+msgid "Select all"
+msgstr "Tout sélectionner"
+
+msgid "Deselect all"
+msgstr "Tout désélectionner"
+
+msgid "Loading charts..."
+msgstr "Chargement des graphiques..."
+
+msgid "Unable to load chart data"
+msgstr "Impossible de charger les données du graphique"
+
+msgid "Select files to display"
+msgstr "Sélectionnez les fichiers à afficher"
+
+msgid "Enter Manifest URL"
+msgstr "Entrer l'URL du manifeste"
+
+msgid "Select a manifest"
+msgstr "Sélectionner un manifeste"
+
+msgid "Create a IIIF Manifest"
+msgstr "Créer un manifeste IIIF"
+
+msgid "Build a manifest from your own images"
+msgstr "Construire un manifeste à partir de vos propres images"
+
+msgid "Create a manifest"
+msgstr "Créer un manifeste"
+
+msgid "Accepted formats:"
+msgstr "Formats acceptés :"
+
+msgid "Loading manifest..."
+msgstr "Chargement du manifeste..."
+
+msgid "Remove manifest"
+msgstr "Supprimer le manifeste"
+
+msgid "Return"
+msgstr "Retour"
+
+msgid "Manifest title"
+msgstr "Titre du manifeste"
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Manifest description"
+msgstr "Description du manifeste"
+
+msgid "Upload Images"
+msgstr "Téléverser des images"
+
+msgid "Drag and drop image files on this panel"
+msgstr "Glissez-déposez vos images sur ce panneau"
+
+msgid "Select images"
+msgstr "Sélectionner des images"
+
+msgid "Creating manifest..."
+msgstr "Création du manifeste en cours..."
+
+msgid "Uploading images and generating IIIF manifest"
+msgstr "Téléversement des images et génération du manifeste IIIF"
+
+msgid "<h1>Renderers do not exist</h1>"
+msgstr "<h1>Les rendus n'existent pas</h1>"
+
+msgid "<h1>Renderers config does not exist</h1>"
+msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 
 #~ msgid "File does not have a header"
 #~ msgstr "Le fichier n'a pas d'en-tête"
-
-#~ msgid "File has a fixed header (constant number of lines)"
-#~ msgstr "Le fichier a un en-tête fixe (nombre constant de lignes)"
-
-#~ msgid "File header ends after specific text"
-#~ msgstr "L'en-tête du fichier se termine après un texte spécifique"
-
-#~ msgid "Ending Text"
-#~ msgstr "Texte de fin"
-
-#~ msgid "Number of Lines"
-#~ msgstr "Nombre de lignes"
-
-#~ msgid "Footer"
-#~ msgstr "Pied de page"
-
-#~ msgid "Define where your x/y data end in the file"
-#~ msgstr "Définissez où vos données x/y se terminent dans le fichier"
-
-#~ msgid "End of File"
-#~ msgstr "Fin du fichier"
-
-#~ msgid "File footer begins after specific text (consistent ending text)"
-#~ msgstr "Le pied de page du fichier commence après un texte spécifique (texte de fin constant)"
-
-#~ msgid "Transformations"
-#~ msgstr "Transformations"
-
-#~ msgid "If your file has multiple Y columns, they are displayed as separate series. Use \"mean\" to average them into a single series instead."
-#~ msgstr "Si votre fichier a plusieurs colonnes Y, elles sont affichées comme des séries distinctes. Utilisez « mean » pour les moyenner en une seule série."
-
-#~ msgid "Data Column Delimiter"
-#~ msgstr "Délimiteur de colonnes de données"
-
-#~ msgid "The data delimiter must be a valid regular expression"
-#~ msgstr "Le délimiteur de données doit être une expression régulière valide"
-
-#~ msgid "Define how the data are separated"
-#~ msgstr "Définissez comment les données sont séparées"
-
-#~ msgid "Whitespace"
-#~ msgstr "Espace"
-
-#~ msgid "Comma"
-#~ msgstr "Virgule"
-
-#~ msgid "Pipe"
-#~ msgstr "Pipe"
-
-#~ msgid "Other"
-#~ msgstr "Autre"
-
-#~ msgid "Include Delimiter in Value"
-#~ msgstr "Inclure le délimiteur dans la valeur"
-
-#~ msgid "Display/Charting"
-#~ msgstr "Affichage / Graphique"
-
-#~ msgid "Chart Title"
-#~ msgstr "Titre du graphique"
-
-#~ msgid "Title"
-#~ msgstr "Titre"
-
-#~ msgid "X Axis Label"
-#~ msgstr "Libellé de l'axe X"
-
-#~ msgid "Y Axis Label"
-#~ msgstr "Libellé de l'axe Y"
-
-#~ msgid "Cancel"
-#~ msgstr "Annuler"
-
-#~ msgid "Save"
-#~ msgstr "Enregistrer"
-
-#~ msgid "Chart Configuration"
-#~ msgstr "Configuration du graphique"
 
 #~ msgid "Manage Series Data"
 #~ msgstr "Gérer les séries de données"
@@ -185,9 +1009,6 @@ msgstr ""
 
 #~ msgid "Add Series to Chart"
 #~ msgstr "Ajouter des séries au graphique"
-
-#~ msgid "Config"
-#~ msgstr "Configuration"
 
 #~ msgid "File Filter"
 #~ msgstr "Filtre de fichier"
@@ -201,335 +1022,8 @@ msgstr ""
 #~ msgid "Data Series Line Color"
 #~ msgstr "Couleur de la ligne de série de données"
 
-#~ msgid "Specify how to process the data files for viewing.  Any additional files (such as images) will be automatically displayed if possible."
-#~ msgstr "Spécifiez comment traiter les fichiers de données pour la visualisation. Tout fichier supplémentaire (comme les images) sera automatiquement affiché si possible."
-
-#~ msgid "Data Files"
-#~ msgstr "Fichiers de données"
-
-#~ msgid "Additional Files"
-#~ msgstr "Fichiers supplémentaires"
-
-#~ msgid "Name"
-#~ msgstr "Nom"
-
-#~ msgid "Configuration"
-#~ msgstr "Configuration"
-
-#~ msgid "files"
-#~ msgstr "fichiers"
-
-#~ msgid "file"
-#~ msgstr "fichier"
-
-#~ msgid "selected"
-#~ msgstr "sélectionné(s)"
-
-#~ msgid "Select All"
-#~ msgstr "Tout sélectionner"
-
-#~ msgid "Deselect All"
-#~ msgstr "Tout désélectionner"
-
-#~ msgid "Import Preview"
-#~ msgstr "Aperçu de l'importation"
-
-#~ msgid "Selected Files"
-#~ msgstr "Fichiers sélectionnés"
-
-#~ msgid "Select an importer configuration on the right to apply to all files"
-#~ msgstr "Sélectionnez une configuration d'importation à droite pour l'appliquer à tous les fichiers"
-
-#~ msgid "Apply Importer to Selected Files"
-#~ msgstr "Appliquer l'importateur aux fichiers sélectionnés"
-
-#~ msgid "File Preview"
-#~ msgstr "Aperçu du fichier"
-
-#~ msgid "This file type cannot be previewed."
-#~ msgstr "Ce type de fichier ne peut pas être prévisualisé."
-
 #~ msgid "IIIF Manifest"
 #~ msgstr "Manifeste IIIF"
-
-#~ msgid "Enter Manifest URL"
-#~ msgstr "Entrer l'URL du manifeste"
-
-#~ msgid "Select a manifest"
-#~ msgstr "Sélectionner un manifeste"
-
-#~ msgid "Loading manifest..."
-#~ msgstr "Chargement du manifeste..."
-
-#~ msgid "Remove manifest"
-#~ msgstr "Supprimer le manifeste"
-
-#~ msgid "Create a manifest"
-#~ msgstr "Créer un manifeste"
-
-#~ msgid "Create a IIIF Manifest"
-#~ msgstr "Créer un manifeste IIIF"
-
-#~ msgid "Build a manifest from your own images"
-#~ msgstr "Construire un manifeste à partir de vos propres images"
-
-#~ msgid "Accepted formats:"
-#~ msgstr "Formats acceptés :"
-
-#~ msgid "Return"
-#~ msgstr "Retour"
-
-#~ msgid "Manifest title"
-#~ msgstr "Titre du manifeste"
-
-#~ msgid "Description"
-#~ msgstr "Description"
-
-#~ msgid "Manifest description"
-#~ msgstr "Description du manifeste"
-
-#~ msgid "Upload Images"
-#~ msgstr "Téléverser des images"
-
-#~ msgid "Drag and drop image files on this panel"
-#~ msgstr "Glissez-déposez vos images sur ce panneau"
-
-#~ msgid "Select images"
-#~ msgstr "Sélectionner des images"
-
-#~ msgid "Creating manifest..."
-#~ msgstr "Création du manifeste en cours..."
-
-#~ msgid "Uploading images and generating IIIF manifest"
-#~ msgstr "Téléversement des images et génération du manifeste IIIF"
-
-#~ msgid "Status"
-#~ msgstr "Statut"
-
-#~ msgid "Select or create a shared configuration that applies to all XY files. For per-file adjustments, use the Status tab."
-#~ msgstr "Sélectionnez ou créez une configuration partagée qui s'applique à tous les fichiers XY. Pour des ajustements par fichier, utilisez l'onglet Statut."
-
-#~ msgid "XY file(s) staged"
-#~ msgstr "fichier(s) XY en attente"
-
-#~ msgid "No config"
-#~ msgstr "Aucune config"
-
-#~ msgid "Apply to"
-#~ msgstr "Appliquer à"
-
-#~ msgid "staged file(s)"
-#~ msgstr "fichier(s) en attente"
-
-#~ msgid "Applying..."
-#~ msgstr "Application en cours..."
-
-#~ msgid "Files Status"
-#~ msgstr "Statut des fichiers"
-
-#~ msgid "Check which files have a configuration applied. Select file(s) to customize parsing settings individually, overriding the shared config."
-#~ msgstr "Vérifiez quels fichiers ont une configuration appliquée. Sélectionnez un ou plusieurs fichiers pour personnaliser les paramètres d'analyse individuellement, en remplaçant la configuration partagée."
-
-#~ msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
-#~ msgstr "Aucun fichier XY trouvé. Assignez le rendu XY aux fichiers dans l'onglet Gérer."
-
-#~ msgid "file(s)"
-#~ msgstr "fichier(s)"
-
-#~ msgid "All"
-#~ msgstr "Tous"
-
-#~ msgid "None"
-#~ msgstr "Aucun"
-
-#~ msgid "Has custom parsing"
-#~ msgstr "A un parsing personnalisé"
-
-#~ msgid "none"
-#~ msgstr "aucune"
-
-#~ msgid "Adjust parsing for"
-#~ msgstr "Ajuster le parsing pour"
-
-#~ msgid "Custom parsing:"
-#~ msgstr "Parsing personnalisé :"
-
-#~ msgid "These settings override the shared config for the selected file(s) only. Choose 'Use config' to keep the shared config value."
-#~ msgstr "Ces paramètres remplacent la configuration partagée uniquement pour le(s) fichier(s) sélectionné(s). Choisissez « Utiliser la config » pour conserver la valeur de la configuration partagée."
-
-#~ msgid "Delimiter"
-#~ msgstr "Délimiteur"
-
-#~ msgid "Use config"
-#~ msgstr "Utiliser la config"
-
-#~ msgid "Auto-detect"
-#~ msgstr "Détection automatique"
-
-#~ msgid "Tab"
-#~ msgstr "Tabulation"
-
-#~ msgid "Other:"
-#~ msgstr "Autre :"
-
-#~ msgid "Custom delimiter"
-#~ msgstr "Délimiteur personnalisé"
-
-#~ msgid "Fixed lines:"
-#~ msgstr "Lignes fixes :"
-
-#~ msgid "Number of lines"
-#~ msgstr "Nombre de lignes"
-
-#~ msgid "End of file"
-#~ msgstr "Fin du fichier"
-
-#~ msgid "After text:"
-#~ msgstr "Après le texte :"
-
-#~ msgid "Footer text"
-#~ msgstr "Texte du pied de page"
-
-#~ msgid "Reset to config"
-#~ msgstr "Réinitialiser à la config"
-
-#~ msgid "Apply & re-render"
-#~ msgstr "Appliquer et re-rendre"
-
-#~ msgid "Files"
-#~ msgstr "Fichiers"
-
-#~ msgid "Select all"
-#~ msgstr "Tout sélectionner"
-
-#~ msgid "Deselect all"
-#~ msgstr "Tout désélectionner"
-
-#~ msgid "Loading charts..."
-#~ msgstr "Chargement des graphiques..."
-
-#~ msgid "Unable to load chart data"
-#~ msgstr "Impossible de charger les données du graphique"
-
-#~ msgid "Select files to display"
-#~ msgstr "Sélectionnez les fichiers à afficher"
-
-#~ msgid "Presets..."
-#~ msgstr "Préréglages..."
-
-#~ msgid "Spectral Range"
-#~ msgstr "Gamme spectrale"
-
-#~ msgid "Limit the displayed X range. Leave empty for no limit."
-#~ msgstr "Limiter la gamme X affichée. Laisser vide pour aucune limite."
-
-#~ msgid "Min X"
-#~ msgstr "X min"
-
-#~ msgid "Max X"
-#~ msgstr "X max"
-
-#~ msgid "e.g. 400"
-#~ msgstr "ex. 400"
-
-#~ msgid "e.g. 4000"
-#~ msgstr "ex. 4000"
-
-#~ msgid "Column Assignment"
-#~ msgstr "Assignation des colonnes"
-
-#~ msgid "Define which data columns map to X, Y (left axis), or Y (right axis). Leave empty to use the default: column 1 = X, remaining = Y left."
-#~ msgstr "Définir quelles colonnes de données correspondent à X, Y (axe gauche) ou Y (axe droit). Laisser vide pour le comportement par défaut : colonne 1 = X, les autres = Y gauche."
-
-#~ msgid "Column"
-#~ msgstr "Colonne"
-
-#~ msgid "Add Column"
-#~ msgstr "Ajouter une colonne"
-
-#~ msgid "Right Y Axis Label"
-#~ msgstr "Libellé de l'axe Y droit"
-
-#~ msgid "Right Y Axis"
-#~ msgstr "Axe Y droit"
-
-#~ msgid "X Axis Source"
-#~ msgstr "Source de l'axe X"
-
-#~ msgid "Define how the X axis values are determined"
-#~ msgstr "Définir comment les valeurs de l'axe X sont déterminées"
-
-#~ msgid "From data (first column is X)"
-#~ msgstr "Depuis les données (première colonne = X)"
-
-#~ msgid "Generate from range (no X column in file)"
-#~ msgstr "Générer à partir d'une plage (pas de colonne X dans le fichier)"
-
-#~ msgid "The X axis will be evenly spaced between start and end values, based on the number of data rows."
-#~ msgstr "L'axe X sera uniformément réparti entre les valeurs de début et de fin, en fonction du nombre de lignes de données."
-
-#~ msgid "Start"
-#~ msgstr "Début"
-
-#~ msgid "End"
-#~ msgstr "Fin"
-
-#~ msgid "e.g. -3500"
-#~ msgstr "ex. -3500"
-
-#~ msgid "e.g. 500"
-#~ msgstr "ex. 500"
-
-#~ msgid "<h1>Renderers do not exist</h1>"
-#~ msgstr "<h1>Les rendus n'existent pas</h1>"
-
-#~ msgid "<h1>Renderers config does not exist</h1>"
-#~ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
-
-# ============================================================
-# Homepage — index.htm
-# ============================================================
-#~ msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
-#~ msgstr "ManuSpectrum — Analyse physico-chimique du patrimoine"
-
-#~ msgid "Interoperable database for written cultural heritage materials analysis — Biblissima+ Cluster"
-#~ msgstr "Base de données interopérable pour l'analyse des matériaux du patrimoine culturel écrit — Cluster Biblissima+"
-
-#~ msgid "ManuSpectrum — Home"
-#~ msgstr "ManuSpectrum — Accueil"
-
-#~ msgid "Main Navigation"
-#~ msgstr "Navigation principale"
-
-#~ msgid "The Project"
-#~ msgstr "Le Projet"
-
-#~ msgid "Explore"
-#~ msgstr "Explorer"
-
-#~ msgid "Analyses"
-#~ msgstr "Analyses"
-
-#~ msgid "Search"
-#~ msgstr "Rechercher"
-
-#~ msgid "Management"
-#~ msgstr "Gestion"
-
-#~ msgid "Sign In"
-#~ msgstr "Se connecter"
-
-#~ msgid "User Profile"
-#~ msgstr "Profil utilisateur"
-
-#~ msgid "Welcome,"
-#~ msgstr "Bienvenue,"
-
-#~ msgid "Sign Out"
-#~ msgstr "Déconnexion"
-
-#~ msgid "Open Menu"
-#~ msgstr "Ouvrir le menu"
 
 #~ msgid "Interoperable database for"
 #~ msgstr "Base de données interopérable pour"
@@ -540,245 +1034,25 @@ msgstr ""
 #~ msgid "of written cultural heritage"
 #~ msgstr "du patrimoine culturel écrit"
 
-#~ msgid "Explore, visualize, and share written cultural heritage materials analysis data within the Biblissima+ ecosystem."
-#~ msgstr "Explorer, visualiser et partager les données d'analyse des matériaux du patrimoine culturel écrit au sein de l'écosystème Biblissima+."
-
-#~ msgid "Explore the database"
-#~ msgstr "Explorer la base de données"
-
-#~ msgid "Learn more"
-#~ msgstr "En savoir plus"
-
-#~ msgid "scroll"
-#~ msgstr "défiler"
-
-#~ msgid "Thinking and modeling written cultural heritage materials"
-#~ msgstr "Penser et modéliser les matériaux du patrimoine culturel écrit"
-
-#~ msgid "ManuSpectrum was developed within Cluster 2 — \"Consideration and searchability of materials analysis data\" — of the ANR Biblissima+ programme. This cluster aims to ensure the long-term archiving and reuse of physicochemical analysis data for manuscripts, inscriptions, seals and other heritage objects, in partnership with Huma-Num."
-#~ msgstr "ManuSpectrum a été développé dans le cadre du Cluster 2 — « Prise en compte et cherchabilité des données d'analyse des matériaux » — du programme ANR Biblissima+. Ce cluster vise à archiver de manière pérenne et à permettre la réutilisation des données d'analyse physico-chimique des manuscrits, inscriptions, sceaux et autres objets patrimoniaux, en partenariat avec Huma-Num."
-
-#~ msgid "Through structuring and standardizing data according to shared models, the project provides reliable, easy-to-use tools accessible to non-specialists. Built on Arches, an open-source platform for heritage data management, ManuSpectrum facilitates data access and collaboration between researchers from different disciplines."
-#~ msgstr "Par une structuration et une normalisation des données respectant des modèles communs, le projet fournit des outils fiables, simples d'utilisation et accessibles à des non-spécialistes. Construit sur Arches, une plateforme open source de gestion de données patrimoniales, ManuSpectrum facilite l'accès aux données et la collaboration entre chercheurs de différentes disciplines."
-
-#~ msgid "The model focuses on identifying the component as a pivot axis between the object, its context, the analyses, and their interpretations, using thesauri and authority databases to contextualize information on heterogeneous documents."
-#~ msgstr "Le modèle se concentre sur l'identification du composant comme axe pivot entre l'objet, son contexte, les analyses et leurs interprétations, en utilisant des thésaurus et des bases d'autorité pour contextualiser les informations sur des documents hétérogènes."
-
-#~ msgid "Biblissima+ — Cluster 2"
-#~ msgstr "Biblissima+ — Cluster 2"
-
-#~ msgid "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient written cultures. Within Cluster 2, the objective is to archive, share and enable searching of materials analysis data from the community, ensuring interoperability with the Biblissima portal and written cultural heritage standards."
-#~ msgstr "ManuSpectrum s'inscrit dans le cadre du programme Biblissima+, un observatoire des cultures écrites anciennes. Au sein du Cluster 2, l'objectif est d'archiver, partager et rendre cherchables les données d'analyse des matériaux de la communauté, en garantissant leur interopérabilité avec le portail Biblissima et les standards du patrimoine culturel écrit."
-
-#~ msgid "X-ray Fluorescence"
-#~ msgstr "Fluorescence X"
-
-#~ msgid "IR Spectroscopy"
-#~ msgstr "Spectroscopie IR"
-
-#~ msgid "Multispectral Imaging"
-#~ msgstr "Imagerie multispectrale"
-
-#~ msgid "X-ray Micro-Fluorescence"
-#~ msgstr "Microfluorescence X"
-
-#~ msgid "Fiber Optic Reflectance"
-#~ msgstr "Réflectance par fibre optique"
-
-#~ msgid "Raman Spectroscopy"
-#~ msgstr "Spectroscopie Raman"
-
-#~ msgid "Hyperspectral Imaging"
-#~ msgstr "Imagerie hyperspectrale"
-
-#~ msgid "Proteomics (MALDI-TOF)"
-#~ msgstr "Protéomique (MALDI-TOF)"
-
-#~ msgid "And many more"
-#~ msgstr "Et bien d'autres"
-
-#~ msgid "XRF mapping of a manuscript"
-#~ msgstr "Cartographie XRF d'un manuscrit"
-
-#~ msgid "XRF mapping of an illuminated manuscript"
-#~ msgstr "Cartographie XRF d'un manuscrit enluminé"
-
-#~ msgid "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
-#~ msgstr "Analyse élémentaire par fluorescence X — Distribution spatiale des pigments"
-
-#~ msgid "Raman spectrum on a pigment sample"
-#~ msgstr "Spectre Raman sur un échantillon de pigment"
-
-#~ msgid "Raman spectroscopy on a medieval pigment"
-#~ msgstr "Spectroscopie Raman sur un pigment médiéval"
-
-#~ msgid "Molecular identification of azurite and malachite pigments on a 15th-century illumination"
-#~ msgstr "Identification moléculaire des pigments d'azurite et de malachite sur une enluminure du XVe siècle"
-
-#~ msgid "Multispectral imaging of a manuscript page"
-#~ msgstr "Imagerie multispectrale d'une page de manuscrit"
-
-#~ msgid "Multispectral imaging — Revealing hidden texts"
-#~ msgstr "Imagerie multispectrale — Révéler les textes cachés"
-
-#~ msgid "UV and infrared reflectography combined to reveal underdrawings and erased inscriptions"
-#~ msgstr "Réflectographie UV et infrarouge combinées pour révéler les dessins sous-jacents et les inscriptions effacées"
-
-#~ msgid "Previous"
-#~ msgstr "Précédent"
-
-#~ msgid "Next"
-#~ msgstr "Suivant"
-
-#~ msgid "What you can discover"
-#~ msgstr "Ce que vous pouvez découvrir"
-
-#~ msgid "A platform designed to explore physicochemical analyses on historical documents, correlating data with their written cultural heritage context."
-#~ msgstr "Une plateforme conçue pour explorer les analyses physico-chimiques sur les documents historiques, en corrélant les données avec leur contexte de patrimoine culturel écrit."
-
-#~ msgid "Spectra and analysis data"
-#~ msgstr "Spectres et données d'analyse"
-
-#~ msgid "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other analysis results directly on the platform."
-#~ msgstr "Visualisez et comparez les spectres de référence. Explorez les résultats d'analyses XRF, FTIR, Raman et d'autres techniques directement dans la plateforme."
-
-#~ msgid "IIIF Annotations"
-#~ msgstr "Annotations IIIF"
-
-#~ msgid "Analysis data is exposed as IIIF annotations, making it accessible from any compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, allows any external site to visualize ManuSpectrum's spectral data (XRF, Raman, FTIR, UV-Vis) directly overlaid on high-resolution manuscript images."
-#~ msgstr "Les données d'analyse sont exposées sous forme d'annotations IIIF, les rendant accessibles depuis tout visualiseur compatible. Le plugin mirador-xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) directement superposées aux images haute résolution des manuscrits."
-
-#~ msgid "Interoperability and Standards"
-#~ msgstr "Interopérabilité et standards"
-
-#~ msgid "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring interoperability with international heritage systems and the Biblissima portal."
-#~ msgstr "Les données sont structurées selon les ontologies CIDOC-CRM (v7.1.2) et CRMsci (v2.0), et enrichies par les thésaurus AGORHA et AAT Getty, garantissant leur interopérabilité avec les systèmes patrimoniaux internationaux et le portail Biblissima."
-
-#~ msgid "Material Characterization"
-#~ msgstr "Caractérisation matérielle"
-
-#~ msgid "Explore the layers, materials, and chemical elements identified on written cultural heritage documents, with different levels of reliability and characterization."
-#~ msgstr "Explorez les couches, matériaux et éléments chimiques identifiés sur les documents du patrimoine culturel écrit, avec différents niveaux de fiabilité et de caractérisation."
-
-#~ msgid "Pigments"
-#~ msgstr "Pigments"
-
-#~ msgid "Vermilion"
-#~ msgstr "Vermillon"
-
-#~ msgid "Layers"
-#~ msgstr "Couches"
-
-#~ msgid "Binders"
-#~ msgstr "Liants"
-
-#~ msgid "Substrates"
-#~ msgstr "Supports"
-
-#~ msgid "Visualize physicochemical analyses"
-#~ msgstr "Visualiser les analyses physico-chimiques"
-
-#~ msgid "From elemental mapping to multispectral imaging, explore the different analysis techniques applied to manuscripts and written cultural heritage objects."
-#~ msgstr "De la cartographie élémentaire à l'imagerie multispectrale, explorez les différentes techniques d'analyse appliquées aux manuscrits et objets du patrimoine culturel écrit."
-
-#~ msgid "XRF Mapping"
-#~ msgstr "Cartographie XRF"
-
-#~ msgid "Spatial distribution of chemical elements on an illuminated manuscript"
-#~ msgstr "Distribution spatiale des éléments chimiques sur un manuscrit enluminé"
-
-#~ msgid "Spectroscopy"
-#~ msgstr "Spectroscopie"
-
-#~ msgid "Point Analysis"
-#~ msgstr "Analyse ponctuelle"
-
-#~ msgid "Manuscript analysis"
-#~ msgstr "Analyse sur manuscrit"
+#~ msgid ""
+#~ "ManuSpectrum was developed within Cluster 2 — \"Consideration and "
+#~ "searchability of materials analysis data\" — of the ANR Biblissima+ "
+#~ "programme. This cluster aims to ensure the long-term archiving and reuse "
+#~ "of physicochemical analysis data for manuscripts, inscriptions, seals and "
+#~ "other heritage objects, in partnership with Huma-Num."
+#~ msgstr ""
+#~ "ManuSpectrum a été développé dans le cadre du Cluster 2 — « Prise en "
+#~ "compte et cherchabilité des données d'analyse des matériaux » — du "
+#~ "programme ANR Biblissima+. Ce cluster vise à archiver de manière pérenne "
+#~ "et à permettre la réutilisation des données d'analyse physico-chimique "
+#~ "des manuscrits, inscriptions, sceaux et autres objets patrimoniaux, en "
+#~ "partenariat avec Huma-Num."
 
 #~ msgid "Analysis points and material characterization"
 #~ msgstr "Points d'analyse et caractérisation des matériaux"
 
-#~ msgid "Imaging"
-#~ msgstr "Imagerie"
-
-#~ msgid "Multispectral"
-#~ msgstr "Multispectral"
-
 #~ msgid "Multispectral and hyperspectral imaging via IIIF"
 #~ msgstr "Imagerie multispectrale et hyperspectrale via IIIF"
 
-#~ msgid "Search by material, analysis technique, written cultural heritage object, or chemical element. Advanced filters available in the search interface."
-#~ msgstr "Recherchez par matériau, technique d'analyse, objet du patrimoine culturel écrit ou élément chimique. Filtres avancés disponibles dans l'interface de recherche."
-
-#~ msgid "Search materials, techniques, objects..."
-#~ msgstr "Rechercher des matériaux, techniques, objets..."
-
-#~ msgid "Manuscripts"
-#~ msgstr "Manuscrits"
-
-#~ msgid "manuscript"
-#~ msgstr "manuscrit"
-
-#~ msgid "XRF"
-#~ msgstr "XRF"
-
-#~ msgid "parchment"
-#~ msgstr "parchemin"
-
-#~ msgid "Parchment"
-#~ msgstr "Parchemin"
-
-#~ msgid "illumination"
-#~ msgstr "enluminure"
-
-#~ msgid "Illuminations"
-#~ msgstr "Enluminures"
-
-#~ msgid "Raman"
-#~ msgstr "Raman"
-
-#~ msgid "Access advanced search"
-#~ msgstr "Accéder à la recherche avancée"
-
-#~ msgid "Our Partners"
-#~ msgstr "Nos Partenaires"
-
-#~ msgid "Ministry of Culture"
-#~ msgstr "Ministère de la Culture"
-
-#~ msgid "Interoperable database for physicochemical analysis of written cultural heritage materials. A Biblissima+ cluster project."
-#~ msgstr "Base de données interopérable pour l'analyse physico-chimique des matériaux du patrimoine culturel écrit. Un projet du cluster Biblissima+."
-
-#~ msgid "Platform"
-#~ msgstr "Plateforme"
-
-#~ msgid "My Profile"
-#~ msgstr "Mon profil"
-
-#~ msgid "Resources"
-#~ msgstr "Ressources"
-
-#~ msgid "Standards"
-#~ msgstr "Standards"
-
-#~ msgid "All rights reserved"
-#~ msgstr "Tous droits réservés"
-
-#~ msgid "AGORHA thesaurus"
-#~ msgstr "Thésaurus AGORHA"
-
-#~ msgid "This work has benefited from state aid managed by the Agence Nationale de la Recherche under the Investissements d'avenir programme, reference ANR-21-ESRE-0005 (Biblissima+)."
-#~ msgstr "Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale de la Recherche au titre du programme d'Investissements d'avenir portant la référence ANR-21-ESRE-0005 (Biblissima+)."
-
 #~ msgid "Powered by"
 #~ msgstr "Propulsé par"
-
-#~ msgid "Source code on GitHub"
-#~ msgstr "Code source sur GitHub"
-
-#~ msgid "Source code"
-#~ msgstr "Code source"
-
-#~ msgid "GPL-3.0 License"
-#~ msgstr "Licence GPL-3.0"
