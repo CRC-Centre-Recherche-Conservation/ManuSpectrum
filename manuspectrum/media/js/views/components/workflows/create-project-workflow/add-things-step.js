@@ -109,17 +109,13 @@ const viewModel = function(params) {
 
     this.value.subscribe((a) => {
         a.forEach((action) => {
+            const id = ko.unwrap(action.value).resourceinstanceid;
             if (action.status === 'added') {
-                const resource = self.value().find(
-                    r => r.resourceinstanceid === ko.unwrap(action.value).resourceinstanceid
-                );
-                self.selectedResources.push(resource);
+                const resource = self.value().find(r => r.resourceinstanceid === id);
+                if (resource) { self.selectedResources.push(resource); }
             } else if (action.status === 'deleted') {
-                self.selectedResources().forEach((val) => {
-                    if (val.resourceinstanceid === ko.unwrap(action.value).resourceinstanceid) {
-                        self.selectedResources.remove(val);
-                    }
-                });
+                const toRemove = self.selectedResources().find(r => r.resourceinstanceid === id);
+                if (toRemove) { self.selectedResources.remove(toRemove); }
             }
         });
         self.sortSelectedResources();
@@ -140,18 +136,11 @@ const viewModel = function(params) {
     };
 
     this.sortSelectedResources = () => {
-        const sortedDisplayNames = self.selectedResources().map(
-            res => self.getStringValue(res.displayname)
-        ).map(val => val.toLowerCase()).sort();
-
-        const resourceSortFn = (a, b) => {
-            const aIndex = sortedDisplayNames.indexOf(self.getStringValue(a.displayname).toLowerCase());
-            const bIndex = sortedDisplayNames.indexOf(self.getStringValue(b.displayname).toLowerCase());
-            if (aIndex < bIndex) return -1;
-            if (aIndex === bIndex) return 0;
-            return 1;
-        };
-        this.selectedResources().sort(resourceSortFn);
+        self.selectedResources.sort((a, b) => {
+            const aName = self.getStringValue(a.displayname).toLowerCase();
+            const bName = self.getStringValue(b.displayname).toLowerCase();
+            return aName.localeCompare(bName);
+        });
     };
 
     this.initialize = () => {
@@ -236,6 +225,7 @@ const viewModel = function(params) {
             }
         }).then((data) => {
             self.studiedObjectsTileId(data.tileid);
+            self.startValue(ko.unwrap(self.value).slice());
             self.savedData({
                 value: ko.unwrap(self.value),
                 projectResourceId: ko.unwrap(self.projectResourceId),
