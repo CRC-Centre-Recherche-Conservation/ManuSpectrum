@@ -7,16 +7,84 @@ Homepage — Prismatic Luminescence aesthetic
 {% load i18n %}
 {% load render_bundle from webpack_loader %}
 {% load webpack_static from webpack_loader %}
+{% get_current_language as LANGUAGE_CODE %}
+
+{% trans "ManuSpectrum — Physicochemical Analysis of Heritage" as seo_title %}
+{% trans "Interoperable database for written cultural heritage materials analysis — Biblissima+ Cluster" as seo_description %}
 
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ LANGUAGE_CODE }}">
 
 <head>
-    <title>{% trans "ManuSpectrum — Physicochemical Analysis of Heritage" %}</title>
+    <title>{{ seo_title }}</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{% trans "Interoperable database for written cultural heritage materials analysis — Biblissima+ Cluster" %}">
+    <meta name="description" content="{{ seo_description }}">
+    <meta name="keywords" content="{% trans "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, IIIF, CIDOC-CRM, Biblissima, physicochemical analysis, heritage science" %}">
     <meta name="theme-color" content="#faf9f7">
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="{{ request.build_absolute_uri }}">
+
+    <!-- Alternate languages -->
+    {% get_available_languages as LANGUAGES %}
+    {% for lang_code, lang_name in LANGUAGES %}
+    <link rel="alternate" hreflang="{{ lang_code }}" href="{{ request.build_absolute_uri }}">
+    {% endfor %}
+    <link rel="alternate" hreflang="x-default" href="{{ request.build_absolute_uri }}">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="ManuSpectrum">
+    <meta property="og:title" content="{{ seo_title }}">
+    <meta property="og:description" content="{{ seo_description }}">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:locale" content="{{ LANGUAGE_CODE }}">
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ seo_title }}">
+    <meta name="twitter:description" content="{{ seo_description }}">
+    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "ManuSpectrum",
+        "description": "{{ seo_description|escapejs }}",
+        "url": "{{ request.build_absolute_uri }}",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Web",
+        "inLanguage": ["en", "fr"],
+        "provider": {
+            "@type": "ResearchOrganization",
+            "name": "CRC — Centre de Recherche sur la Conservation",
+            "url": "https://crc.mnhn.fr",
+            "parentOrganization": [
+                {"@type": "ResearchOrganization", "name": "CNRS", "url": "https://www.cnrs.fr"},
+                {"@type": "ResearchOrganization", "name": "MNHN", "url": "https://www.mnhn.fr"}
+            ]
+        },
+        "funder": {
+            "@type": "Organization",
+            "name": "ANR — Agence Nationale de la Recherche",
+            "url": "https://anr.fr"
+        },
+        "isPartOf": {
+            "@type": "Project",
+            "name": "Biblissima+",
+            "url": "https://biblissima.fr",
+            "description": "Biblissima+ — Observatory of ancient written cultures"
+        },
+        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+        "keywords": "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, IIIF, CIDOC-CRM"
+    }
+    </script>
 
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
     <link rel="apple-touch-icon" href="{% webpack_static 'favicons/apple-touch-icon.png' %}" />
@@ -350,21 +418,21 @@ Homepage — Prismatic Luminescence aesthetic
             <div class="ms-showcase-carousel reveal-scale" id="ms-showcase">
                 <div class="ms-showcase-track" id="ms-showcase-track">
                     <div class="ms-showcase-slide">
-                        <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF mapping of a manuscript' %}">
+                        <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF mapping of a manuscript' %}" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "XRF mapping of an illuminated manuscript" %}</h4>
                             <p>{% trans "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments" %}</p>
                         </div>
                     </div>
                     <div class="ms-showcase-slide">
-                        <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Raman spectrum on a pigment sample' %}">
+                        <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Raman spectrum on a pigment sample' %}" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "Raman spectroscopy on a medieval pigment" %}</h4>
                             <p>{% trans "Molecular identification of azurite and malachite pigments on a 15th-century illumination" %}</p>
                         </div>
                     </div>
                     <div class="ms-showcase-slide">
-                        <img src="{% static 'img/landing/image-3.svg' %}" alt="{% trans 'Multispectral imaging of a manuscript page' %}">
+                        <img src="{% static 'img/landing/image-3.svg' %}" alt="{% trans 'Multispectral imaging of a manuscript page' %}" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "Multispectral imaging — Revealing hidden texts" %}</h4>
                             <p>{% trans "UV and infrared reflectography combined to reveal underdrawings and erased inscriptions" %}</p>
@@ -477,8 +545,8 @@ Homepage — Prismatic Luminescence aesthetic
 
             <div class="ms-gallery-grid">
                 <div class="ms-gallery-item ms-gallery-compare reveal reveal-d1" id="ms-xrf-compare">
-                    <img class="ms-compare-img ms-compare-bottom" src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF Mapping — Element A' %}">
-                    <img class="ms-compare-img ms-compare-top" src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'XRF Mapping — Element B' %}">
+                    <img class="ms-compare-img ms-compare-bottom" src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF Mapping — Element A' %}" loading="lazy">
+                    <img class="ms-compare-img ms-compare-top" src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'XRF Mapping — Element B' %}" loading="lazy">
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "X-ray Fluorescence" %}</div>
                         <h4>{% trans "XRF Mapping" %}</h4>
@@ -487,7 +555,7 @@ Homepage — Prismatic Luminescence aesthetic
                 </div>
 
                 <div class="ms-gallery-item ms-gallery-analysis reveal reveal-d2" id="ms-analysis-viewer">
-                    <img src="https://iiif.unicaen.fr/mrsh/bvmsm/AVRANCHES_MS059/AVRANCHES_MS059_0011.tif/full/800,/0/default.jpg" alt="{% trans 'Manuscript analysis' %}">
+                    <img src="https://iiif.unicaen.fr/mrsh/bvmsm/AVRANCHES_MS059/AVRANCHES_MS059_0011.tif/full/800,/0/default.jpg" alt="{% trans 'Manuscript analysis' %}" width="800" height="600" loading="lazy">
                     <div class="ms-analysis-points">
                         <button class="ms-analysis-point ms-apoint-1" data-point="0" aria-label="{% trans 'Analysis point' %} 1"></button>
                         <button class="ms-analysis-point ms-apoint-2" data-point="1" aria-label="{% trans 'Analysis point' %} 2"></button>
@@ -503,8 +571,8 @@ Homepage — Prismatic Luminescence aesthetic
                 </div>
 
                 <div class="ms-gallery-item ms-gallery-msi reveal reveal-d3">
-                    <img class="ms-msi-base" src="https://iiif.unicaen.fr/mrsh/bvmsm/Avranches_BM_50/Avranches_BM_050_vue006_f1r.tif/full/800,/0/default.jpg" alt="{% trans 'Multispectral Imaging' %}">
-                    <img class="ms-msi-processed" src="https://iiif.unicaen.fr/mrsh/bvmsm/Avranches_BM_50/Avranches_BM_050_vue006_f1r.tif/full/800,/0/default.jpg" alt="" aria-hidden="true">
+                    <img class="ms-msi-base" src="https://iiif.unicaen.fr/mrsh/bvmsm/Avranches_BM_50/Avranches_BM_050_vue006_f1r.tif/full/800,/0/default.jpg" alt="{% trans 'Multispectral Imaging' %}" width="800" height="600" loading="lazy">
+                    <img class="ms-msi-processed" src="https://iiif.unicaen.fr/mrsh/bvmsm/Avranches_BM_50/Avranches_BM_050_vue006_f1r.tif/full/800,/0/default.jpg" alt="" aria-hidden="true" width="800" height="600" loading="lazy">
                     <div class="ms-msi-scanline"></div>
                     <div class="ms-msi-indicator">
                         <div class="ms-msi-indicator-track">
@@ -582,28 +650,28 @@ Homepage — Prismatic Luminescence aesthetic
             <div class="ms-partners-grid">
                 <!-- Ministere en premier (charte : premier sur les bandeaux, fond blanc obligatoire) -->
                 <a class="ms-partner-link ms-partner-link--culture reveal-d1" href="https://www.culture.gouv.fr" target="_blank" rel="noopener" title="Ministère de la Culture">
-                    <img src="{% static 'img/landing/logo-ministere-de-la-culture.png' %}" alt="{% trans 'Ministry of Culture' %}">
+                    <img src="{% static 'img/landing/logo-ministere-de-la-culture.png' %}" alt="{% trans 'Ministry of Culture' %}" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--cnrs reveal-d2" href="https://www.cnrs.fr" target="_blank" rel="noopener" title="Centre National de la Recherche Scientifique">
-                    <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS">
+                    <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--mnhn reveal-d3" href="https://www.mnhn.fr" target="_blank" rel="noopener" title="Muséum National d'Histoire Naturelle">
-                    <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN">
+                    <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--crc reveal-d4" href="https://crc.mnhn.fr" target="_blank" rel="noopener" title="CRC — Centre de Recherche sur la Conservation">
-                    <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC">
+                    <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--anr reveal-d5" href="https://anr.fr" target="_blank" rel="noopener" title="ANR — Agence Nationale de la Recherche">
-                    <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR">
+                    <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--biblissima reveal-d6" href="https://biblissima.fr" target="_blank" rel="noopener" title="Biblissima+">
-                    <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
+                    <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--humanum reveal-d7" href="https://www.huma-num.fr" target="_blank" rel="noopener" title="Huma-Num">
-                    <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num">
+                    <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--arches reveal-d8" href="https://www.archesproject.org" target="_blank" rel="noopener" title="Arches">
-                    <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches">
+                    <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches" loading="lazy">
                 </a>
             </div>
         </div>
