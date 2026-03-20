@@ -92,6 +92,22 @@ msgstr "Enregistrer et continuer"
 msgid "Reset"
 msgstr "Réinitialiser"
 
+#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
+msgid "Open resource"
+msgstr "Ouvrir la ressource"
+
+#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
+msgid "Project Details"
+msgstr "Détails du projet"
+
+#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
+msgid "Studied Documents"
+msgstr "Documents étudiés"
+
+#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
+msgid "No documents associated"
+msgstr "Aucun document associé"
+
 #: datatypes/manifest.py:161
 msgid "Manifest must have a URL or ID"
 msgstr ""

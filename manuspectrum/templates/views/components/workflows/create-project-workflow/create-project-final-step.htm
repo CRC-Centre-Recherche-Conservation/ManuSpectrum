@@ -1,58 +1,64 @@
-<!-- Arches for Science -->
-<!-- GPL-3.0 license -->
-<!-- https://github.com/archesproject/arches-for-science -->
-
 {% load i18n %}
-<!-- ko if: loading() === false -->
-<div class="final-step">
-    <div class="afs-final-step-section">
-        <h5 class="summary-value">{% trans 'Created Resource Instance' %}</h5>
-        <div class="afs-final-step-block">
-            <div style="display: flex; flex-direction: column;">
-                <a data-bind="attr: { href: urls.resource + '/' + resourceid}" target="_blank">
-                    <div class="summary-value"
-                        data-bind = "text: displayName + ' ({% trans 'Project' %})'">
-                    </div>
-                </a>
-            </div>
-        </div>
-    </div>
-    <div class="afs-final-step-section">
-        <h5 class="summary-value">{% trans 'Project Details' %}</h5>
-        <div class="afs-final-step-block">
-            <div style="display: flex; flex-direction: column;">
-                <div style="display: inline-flex;">
-                    <div class="summary-label" data-bind="text: reportVals.projectName.name + ':'"></div>
-                    <div class="summary-value" data-bind="text: reportVals.projectName.value"></div>
-                </div>
-                <div style="display: inline-flex;">
-                    <div class="summary-label" data-bind="text: reportVals.projectStatement.name + ':'"></div>
-                    <div class="summary-value" data-bind="html: reportVals.projectStatement.value"></div>
-                </div>
-                <div style="display: inline-flex;">
-                    <div class="summary-label" data-bind="text: reportVals.projectTimespan.name + ':'"></div>
-                    <div class="summary-value" data-bind="text: reportVals.projectTimespan.value"></div>
-                </div>
-                <div style="display: inline-flex;">
-                    <div class="summary-label" data-bind="text: reportVals.projectTeam.name + ':'"></div>
-                    <div class="summary-value" data-bind="text: reportVals.projectTeam.value"></div>
-                </div>
-            </div>
-        </div>
-    </div>
+{% trans "No documents associated" as noDocuments %}
 
-    <div class="afs-final-step-section">
-        <h5 class="summary-value">{% trans 'Studied Documents' %}</h5>
-        <div class="afs-final-step-block">
-            <div style="display: flex; flex-direction: column;">
-                <!-- ko if: studiedDocuments().length === 0 -->
-                <div class="summary-value">{% trans 'No documents associated' %}</div>
-                <!-- /ko -->
-                <!-- ko foreach: studiedDocuments -->
-                <a class="summary-value" data-bind="clickBubble: false, attr: {href: $parent.urls.resource + '/' + resourceid}, text: name" target="_blank"></a>
-                <!-- /ko -->
-            </div>
+<!-- ko if: loading() === false -->
+<div class="wf-summary">
+    <header class="wf-summary__header">
+        <div class="wf-summary__badge">
+            <i class="fa fa-check" aria-hidden="true"></i>
         </div>
-    </div>
+        <div>
+            <h3 class="wf-summary__title" data-bind="text: displayName"></h3>
+            <a class="wf-summary__link"
+               data-bind="attr: { href: urls.resource + '/' + resourceid}"
+               target="_blank">
+                <i class="fa fa-external-link" aria-hidden="true"></i>
+                {% trans "Open resource" %}
+            </a>
+        </div>
+    </header>
+
+    <section class="wf-summary__section">
+        <h4 class="wf-summary__section-title">{% trans "Project Details" %}</h4>
+        <dl class="wf-summary__details">
+            <div class="wf-summary__row">
+                <dt data-bind="text: reportVals.projectName.name"></dt>
+                <dd data-bind="text: reportVals.projectName.value"></dd>
+            </div>
+            <div class="wf-summary__row">
+                <dt data-bind="text: reportVals.projectStatement.name"></dt>
+                <dd data-bind="text: reportVals.projectStatement.value"></dd>
+            </div>
+            <div class="wf-summary__row">
+                <dt data-bind="text: reportVals.projectTimespan.name"></dt>
+                <dd data-bind="text: reportVals.projectTimespan.value"></dd>
+            </div>
+            <div class="wf-summary__row">
+                <dt data-bind="text: reportVals.projectTeam.name"></dt>
+                <dd data-bind="text: reportVals.projectTeam.value"></dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="wf-summary__section">
+        <h4 class="wf-summary__section-title">
+            {% trans "Studied Documents" %}
+            <span class="wf-summary__count" data-bind="text: '(' + studiedDocuments().length + ')'"></span>
+        </h4>
+        <!-- ko if: studiedDocuments().length === 0 -->
+        <p class="wf-summary__empty">{{ noDocuments|escapejs }}</p>
+        <!-- /ko -->
+        <!-- ko if: studiedDocuments().length > 0 -->
+        <ul class="wf-summary__resource-list">
+            <!-- ko foreach: studiedDocuments -->
+            <li>
+                <a class="wf-summary__resource-link"
+                   data-bind="attr: {href: $parent.urls.resource + '/' + resourceid}, text: name"
+                   target="_blank"></a>
+            </li>
+            <!-- /ko -->
+        </ul>
+        <!-- /ko -->
+    </section>
 </div>
 <!-- /ko -->
