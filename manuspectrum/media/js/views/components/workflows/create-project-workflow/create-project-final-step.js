@@ -54,19 +54,16 @@ const viewModel = function(params) {
         this.reportVals = {
             projectName: {
                 name: arches.translations.projectName,
-                value: this.getResourceValue(val.resource['Name']?.[0], ['Label of Name', '@display_value']) ||
-                       this.getResourceValue(val.resource['Name']?.[0], ['Name_content', '@display_value']) ||
+                value: this.getResourceValue(val.resource['Name']?.[0], ['Label of name', '@display_value']) ||
                        this.displayName
             },
             projectTimespan: {
                 name: arches.translations.projectTimespan,
-                value: this.getResourceValue(val.resource, ['Period activity', 'Start date of period activity', '@display_value']) ||
-                       this.getResourceValue(val.resource, ['TimeSpan', 'TimeSpan_begin of the begin', '@display_value'])
+                value: this.getResourceValue(val.resource['Period activity']?.[0], ['Start date of period activity', '@display_value'])
             },
             projectTeam: {
                 name: arches.translations.projectTeam,
-                value: this.getResourceValue(val.resource, ['Carried out by Actor', '@display_value']) ||
-                       this.getResourceValue(val.resource, ['carried out by', '@display_value'])
+                value: this.getResourceValue(val.resource, ['Carried out by Actor', '@display_value'])
             },
         };
 
@@ -75,13 +72,11 @@ const viewModel = function(params) {
                 self.reportVals.statements = val.resource['Statement']?.map((statement) => ({
                     content: {
                         name: arches.translations.projectStatement,
-                        value: self.getResourceValue(statement, ['Content of Statement', '@display_value']) ||
-                               self.getResourceValue(statement, ['Statement_content', '@display_value'])
+                        value: self.getResourceValue(statement, ['Content of statement', '@display_value'])
                     },
                     type: {
                         name: arches.translations.type,
-                        value: self.getResourceValue(statement, ['Type of Statement', '@display_value']) ||
-                               self.getResourceValue(statement, ['Statement_type', '@display_value'])
+                        value: self.getResourceValue(statement, ['Type of statement', '@display_value'])
                     }
                 })) || [];
             } catch (e) {
@@ -93,7 +88,7 @@ const viewModel = function(params) {
             return foundStatement ? foundStatement.content : { name: arches.translations.projectStatement, value: 'None' };
         };
 
-        this.reportVals.projectStatement = findStatement('description');
+        this.reportVals.projectStatement = findStatement('brief text');
 
         this.resourceLoading(false);
         if (!this.documentsLoading()) {
