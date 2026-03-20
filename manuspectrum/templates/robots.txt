@@ -1,0 +1,26 @@
+# ManuSpectrum — Crawl directives
+# Only allow homepage and public resource reports.
+# Block application routes (search, editor, API, admin) to protect the site.
+
+User-agent: *
+Allow: /
+Allow: /index.htm
+Allow: /report/
+Disallow: /search
+Disallow: /resource/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /admin/
+Disallow: /password_reset/
+Disallow: /user_profile/
+Disallow: /renderer/
+Disallow: /renderer_config/
+Disallow: /files/
+Disallow: /concepts/
+Disallow: /rdm/
+Disallow: /graph/
+Disallow: /plugins/
+Disallow: /etl_manager
+Disallow: /notifications
+
+Sitemap: {{ request.scheme }}://{{ request.get_host }}/sitemap.xml
