@@ -7,6 +7,9 @@
 // NOT imported by _project.scss to avoid polluting other pages.
 // ============================================================
 
+// --- FA6 ICON SUBSET (replaces CDN) ---
+@import 'homepage/fa-subset';
+
 // --- RESET & CUSTOM PROPERTIES ---
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
