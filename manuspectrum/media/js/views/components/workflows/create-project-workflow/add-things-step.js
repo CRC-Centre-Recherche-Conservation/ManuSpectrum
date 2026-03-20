@@ -365,6 +365,9 @@ const viewModel = function(params) {
 
     this.initialize();
 
+    // Load initial search results (all documents)
+    this.updateSearchResults();
+
     this.stripTags = (original) => original?.replace(/(<([^>]+)>)/gi, "");
 
     this.getStringValue = (value) => {
