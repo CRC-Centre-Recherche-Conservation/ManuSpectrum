@@ -35,7 +35,8 @@
         "typescript": "5.6.2"
     },
     "devDependencies": {
-        "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.0.x"
+        "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.0.x",
+        "webpack": "^5.97.1"
     },
     "nodeModulesPaths": {},
     "overrides": {

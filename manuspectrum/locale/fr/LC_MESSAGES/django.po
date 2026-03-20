@@ -16,6 +16,98 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
+#: templates/javascript.htm
+msgid "Project Name"
+msgstr "Nom du projet"
+
+#: templates/javascript.htm
+msgid "Project Statement"
+msgstr "Description du projet"
+
+#: templates/javascript.htm
+msgid "Project Start"
+msgstr "Début du projet"
+
+#: templates/javascript.htm
+msgid "Project Team"
+msgstr "Équipe du projet"
+
+#: templates/javascript.htm
+msgid "Project Timespan"
+msgstr "Durée du projet"
+
+#: templates/javascript.htm
+msgid "Add Objects"
+msgstr "Ajouter des objets"
+
+#: templates/javascript.htm
+msgid "Summary"
+msgstr "Résumé"
+
+#: templates/javascript.htm
+msgid "Type"
+msgstr "Type"
+
+#: templates/javascript.htm
+msgid "Search for a document..."
+msgstr "Rechercher un document..."
+
+#: templates/javascript.htm
+msgid "Select a primary description identifier card"
+msgstr "Sélectionnez une carte d'identification principale."
+
+#: templates/javascript.htm
+msgid "There was an issue saving the workflow step."
+msgstr "Une erreur s'est produite lors de l'enregistrement de l'étape du workflow."
+
+#: templates/javascript.htm
+msgid "Cleaning up..."
+msgstr "Nettoyage en cours..."
+
+#: templates/views/components/resource-instance-creator.htm
+msgid "New Document"
+msgstr "Nouveau document"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "No description"
+msgstr "Pas de description"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "Documents"
+msgstr "Documents"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "Selected Documents"
+msgstr "Documents sélectionnés"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "You have not added any Documents to this Project"
+msgstr "Vous n'avez ajouté aucun document à ce projet"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "Save and Continue"
+msgstr "Enregistrer et continuer"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "Reset"
+msgstr "Réinitialiser"
+
+#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
+msgid "Open resource"
+msgstr "Ouvrir la ressource"
+
+#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
+msgid "Project Details"
+msgstr "Détails du projet"
+
+#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
+msgid "Studied Documents"
+msgstr "Documents étudiés"
+
+#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
+msgid "No documents associated"
+msgstr "Aucun document associé"
+
 #: datatypes/manifest.py:161
 msgid "Manifest must have a URL or ID"
 msgstr ""

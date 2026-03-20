@@ -1,10 +1,25 @@
 {% extends "javascript.htm" %}
+
+{% load static %}
+{% load l10n %}
 {% load i18n %}
 
 {% block arches_translations %}
 {{ block.super }}
-<div
-    class='arches-translations'
+<div class='arches-translations'
+    style="display: none;"
+    project-name='{% trans "Project Name" as projectName %} "{{ projectName|escapejs }}"'
+    project-statement='{% trans "Project Statement" as projectStatement %} "{{ projectStatement|escapejs }}"'
+    project-start='{% trans "Project Start" as projectStart %} "{{ projectStart|escapejs }}"'
+    project-team='{% trans "Project Team" as projectTeam %} "{{ projectTeam|escapejs }}"'
+    project-timespan='{% trans "Project Timespan" as projectTimespan %} "{{ projectTimespan|escapejs }}"'
+    add-objects='{% trans "Add Objects" as addObjects %} "{{ addObjects|escapejs }}"'
+    summary='{% trans "Summary" as summary %} "{{ summary|escapejs }}"'
+    type='{% trans "Type" as type %} "{{ type|escapejs }}"'
+    document-placeholder='{% trans "Search for a document..." as documentPlaceholder %} "{{ documentPlaceholder|escapejs }}"'
+    select-primary-description-identifier-card='{% trans "Select a primary description identifier card" as selectPrimaryDescriptionIdentifierCard %} "{{ selectPrimaryDescriptionIdentifierCard|escapejs }}"'
+    issue-saving-workflow-step='{% trans "There was an issue saving the workflow step." as issueSavingWorkflowStep %} "{{ issueSavingWorkflowStep|escapejs }}"'
+    cleaning-up='{% trans "Cleaning up..." as cleaningUp %} "{{ cleaningUp|escapejs }}"'
     data='{% trans "Data" as data %} "{{ data|escapejs }}"'
     x-axis='{% trans "X Axis" as xAxis %} "{{ xAxis|escapejs }}"'
     y-axis='{% trans "Y Axis" as yAxis %} "{{ yAxis|escapejs }}"'
@@ -12,7 +27,6 @@
     select-importer='{% trans "Select an Importer" as selectImporter %} "{{ selectImporter|escapejs }}"'
     importer-in-use='{% trans "Importer in Use" as importerInUse %} "{{ importerInUse|escapejs }}"'
     importer-in-use-warning='{% trans "This importer is in use - it should be replaced in all files where it is used before deleting." as importerInUseWarning %} "{{ importerInUseWarning|escapejs }}"'
-    select-primary-description-identifier-card='{% trans "Select Primary Description Identifier Card" as selectPrimaryDescriptionIdentifierCard %} "{{ selectPrimaryDescriptionIdentifierCard|escapejs }}"'
     manifest-create-error='{% trans "An error occurred while creating the manifest." as manifestCreateError %} "{{ manifestCreateError|escapejs }}"'
     analysis-material='{% trans "Material" as analysisMaterial %} "{{ analysisMaterial|escapejs }}"'
     analysis-layer='{% trans "Layer" as analysisLayer %} "{{ analysisLayer|escapejs }}"'
@@ -27,3 +41,7 @@
     analysis-text='{% trans "Text" as analysisText %} "{{ analysisText|escapejs }}"'
 ></div>
 {% endblock arches_translations %}
+
+{% block project_modules %}
+{{ block.super }}
+{% endblock project_modules %}

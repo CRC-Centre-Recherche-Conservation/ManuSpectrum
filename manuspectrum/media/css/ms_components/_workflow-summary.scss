@@ -1,0 +1,190 @@
+// ============================================
+// Workflow Summary — Shared Final Step
+// ============================================
+// Reusable across all workflow final/summary steps.
+// Provides: header, detail rows, resource lists, empty states.
+
+$wf-sum-ink:          #1a2a3a;
+$wf-sum-muted:        #5d6d7e;
+$wf-sum-border:       #d5dbe1;
+$wf-sum-bg:           #fafbfc;
+$wf-sum-accent:       #2c6faa;
+$wf-sum-accent-light: #e8f0f8;
+$wf-sum-success:      #2e7d4f;
+
+.wf-summary {
+    max-width: 720px;
+    margin: 28px auto;
+    padding: 0 20px;
+    animation: wf-summary-fade 0.4s ease-out both;
+}
+
+@keyframes wf-summary-fade {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+// ---- Header: badge + title + link -----------
+.wf-summary__header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid $wf-sum-accent;
+}
+
+.wf-summary__badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: $wf-sum-success;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba($wf-sum-success, 0.3);
+}
+
+.wf-summary__title {
+    margin: 0 0 2px;
+    font-size: 20px;
+    font-weight: 700;
+    color: $wf-sum-ink;
+    font-family: Georgia, "Times New Roman", serif;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+
+.wf-summary__link {
+    font-size: 12px;
+    color: $wf-sum-accent;
+    text-decoration: none;
+    letter-spacing: 0.3px;
+
+    i { margin-right: 3px; }
+
+    &:hover {
+        text-decoration: underline;
+        color: darken($wf-sum-accent, 10%);
+    }
+}
+
+// ---- Sections -------------------------------
+.wf-summary__section {
+    margin-bottom: 24px;
+    animation: wf-summary-fade 0.4s ease-out both;
+
+    &:nth-child(2) { animation-delay: 0.08s; }
+    &:nth-child(3) { animation-delay: 0.16s; }
+}
+
+.wf-summary__section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: $wf-sum-muted;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid $wf-sum-border;
+}
+
+.wf-summary__count {
+    font-weight: 400;
+    letter-spacing: 0;
+    color: lighten($wf-sum-muted, 12%);
+}
+
+// ---- Detail rows (dl) -----------------------
+.wf-summary__details {
+    margin: 0;
+    background: $wf-sum-bg;
+    border: 1px solid $wf-sum-border;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.wf-summary__row {
+    display: flex;
+    padding: 10px 16px;
+    border-bottom: 1px solid lighten($wf-sum-border, 4%);
+
+    &:last-child { border-bottom: none; }
+
+    &:hover { background: $wf-sum-accent-light; }
+
+    dt {
+        flex: 0 0 160px;
+        font-size: 12px;
+        font-weight: 600;
+        color: $wf-sum-muted;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding-right: 12px;
+    }
+
+    dd {
+        flex: 1;
+        margin: 0;
+        font-size: 14px;
+        color: $wf-sum-ink;
+        line-height: 1.45;
+    }
+}
+
+// ---- Resource list --------------------------
+.wf-summary__resource-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: $wf-sum-bg;
+    border: 1px solid $wf-sum-border;
+    border-radius: 3px;
+    overflow: hidden;
+
+    li {
+        border-bottom: 1px solid lighten($wf-sum-border, 4%);
+        &:last-child { border-bottom: none; }
+    }
+}
+
+.wf-summary__resource-link {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: $wf-sum-accent;
+    text-decoration: none;
+    transition: background 0.12s ease, padding-left 0.12s ease;
+
+    &::before {
+        content: "\f15c"; // fa-file-text-o
+        font-family: FontAwesome;
+        margin-right: 10px;
+        font-size: 14px;
+        color: $wf-sum-muted;
+        flex-shrink: 0;
+    }
+
+    &:hover {
+        background: $wf-sum-accent-light;
+        padding-left: 20px;
+        color: darken($wf-sum-accent, 10%);
+    }
+}
+
+// ---- Empty state ----------------------------
+.wf-summary__empty {
+    color: lighten($wf-sum-muted, 10%);
+    font-size: 13px;
+    font-style: italic;
+    margin: 0;
+    padding: 16px;
+    background: $wf-sum-bg;
+    border: 1px dashed $wf-sum-border;
+    border-radius: 3px;
+    text-align: center;
+}

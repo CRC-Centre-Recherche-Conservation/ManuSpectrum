@@ -1,0 +1,64 @@
+{% load i18n %}
+{% trans "No documents associated" as noDocuments %}
+
+<!-- ko if: loading() === false -->
+<div class="wf-summary">
+    <header class="wf-summary__header">
+        <div class="wf-summary__badge">
+            <i class="fa fa-check" aria-hidden="true"></i>
+        </div>
+        <div>
+            <h3 class="wf-summary__title" data-bind="text: displayName"></h3>
+            <a class="wf-summary__link"
+               data-bind="attr: { href: urls.resource + '/' + resourceid}"
+               target="_blank">
+                <i class="fa fa-external-link" aria-hidden="true"></i>
+                {% trans "Open resource" %}
+            </a>
+        </div>
+    </header>
+
+    <section class="wf-summary__section">
+        <h4 class="wf-summary__section-title">{% trans "Project Details" %}</h4>
+        <dl class="wf-summary__details">
+            <div class="wf-summary__row">
+                <dt data-bind="text: reportVals.projectName.name"></dt>
+                <dd data-bind="text: reportVals.projectName.value"></dd>
+            </div>
+            <div class="wf-summary__row">
+                <dt data-bind="text: reportVals.projectStatement.name"></dt>
+                <dd data-bind="text: reportVals.projectStatement.value"></dd>
+            </div>
+            <div class="wf-summary__row">
+                <dt data-bind="text: reportVals.projectTimespan.name"></dt>
+                <dd data-bind="text: reportVals.projectTimespan.value"></dd>
+            </div>
+            <div class="wf-summary__row">
+                <dt data-bind="text: reportVals.projectTeam.name"></dt>
+                <dd data-bind="text: reportVals.projectTeam.value"></dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="wf-summary__section">
+        <h4 class="wf-summary__section-title">
+            {% trans "Studied Documents" %}
+            <span class="wf-summary__count" data-bind="text: '(' + studiedDocuments().length + ')'"></span>
+        </h4>
+        <!-- ko if: studiedDocuments().length === 0 -->
+        <p class="wf-summary__empty">{{ noDocuments|escapejs }}</p>
+        <!-- /ko -->
+        <!-- ko if: studiedDocuments().length > 0 -->
+        <ul class="wf-summary__resource-list">
+            <!-- ko foreach: studiedDocuments -->
+            <li>
+                <a class="wf-summary__resource-link"
+                   data-bind="attr: {href: $parent.urls.resource + '/' + resourceid}, text: name"
+                   target="_blank"></a>
+            </li>
+            <!-- /ko -->
+        </ul>
+        <!-- /ko -->
+    </section>
+</div>
+<!-- /ko -->

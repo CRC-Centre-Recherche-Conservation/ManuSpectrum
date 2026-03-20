@@ -1,0 +1,193 @@
+// ============================================
+// Create Project Workflow — Add Things Step
+// ============================================
+// Layout: search bar (top) → two-column body (results | selection)
+// Uses workflowstepclass "create-project-add-things-step" on the
+// wrapping <div> rendered by Arches' workflow-step.htm (line 44).
+
+// -- Step-level overrides ---------------------
+// Remove default padding from the workflow shell so the two-column
+// layout fills the available height edge-to-edge.
+.create-project-add-things-step {
+    padding: 0;
+    height: 100%;
+}
+
+.create-project-add-things-step .workflow-component-based-step-wrapper {
+    height: 100%;
+}
+
+// Override Arches core rule that hides .search-selection-controls
+// inside tabbed workflows (arches.scss:602).
+.create-project-add-things-step .search-selection-controls {
+    display: block !important;
+    padding: 10px 20px;
+    border-top: 1px solid #ddd;
+    flex-shrink: 0;
+    background: #fff;
+}
+
+// -- Component root ---------------------------
+.object-search-step {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #fff;
+}
+
+// -- Top bar: search + count + create ---------
+.workflow-search-panel {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid #ddd;
+    background: #f5f6f8;
+    flex-shrink: 0;
+}
+
+.search-bar {
+    flex: 1;
+    min-width: 180px;
+
+    .select2-container {
+        width: 100% !important;
+    }
+}
+
+.workflow-search-count {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 13px;
+    color: #5d768f;
+    white-space: nowrap;
+
+    .count-number {
+        font-weight: 700;
+        font-size: 15px;
+        color: #004577;
+    }
+}
+
+// -- Two-column body --------------------------
+.workflow-search-results {
+    flex: 1;
+    min-height: 0; // allow flex child to shrink
+}
+
+.workflow-search-results-full-container {
+    display: flex;
+    height: 100%;
+}
+
+// -- Left column: results ---------------------
+.workflow-search-list-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #ddd;
+    min-width: 0;
+}
+
+.workflow-search-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.afs-project-search-result-details-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.search-result-item {
+    padding: 10px 16px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+
+    &:hover {
+        background-color: #f0f5fa;
+    }
+
+    &.selected-instance {
+        background-color: #e8f0fb;
+        box-shadow: inset 3px 0 0 #489EED;
+    }
+}
+
+.summary-report-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 3px;
+}
+
+.summary-report-description {
+    font-size: 12px;
+    color: #888;
+    max-height: 54px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    line-height: 1.5;
+}
+
+// Pagination footer
+.search-results-footer {
+    border-top: 1px solid #ddd;
+    flex-shrink: 0;
+
+    .pagination {
+        margin: 4px 0;
+        font-size: 12px;
+    }
+}
+
+// -- Right column: selected documents ---------
+.create-project-add-things-step .wf-multi-tile-step-list {
+    flex: 0 0 320px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0 !important;
+    background: #fafbfc;
+}
+
+.wf-multi-tile-step-list-header {
+    padding: 10px 20px;
+    border-bottom: 1px solid #ddd;
+    background: #f5f6f8;
+    flex-shrink: 0;
+
+    h5 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: #004577;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+}
+
+.wf-multi-tile-step-list-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px 0;
+
+    .wf-multi-tile-card-info-details dd {
+        font-size: 12px;
+        color: #888;
+        max-height: 36px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+}
