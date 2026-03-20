@@ -7,6 +7,9 @@
 // NOT imported by _project.scss to avoid polluting other pages.
 // ============================================================
 
+// --- FA6 ICON SUBSET (replaces CDN) ---
+@import 'homepage/fa-subset';
+
 // --- RESET & CUSTOM PROPERTIES ---
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1179,9 +1182,10 @@ a.ms-feature-tag--link i {
 .ms-gallery-grid {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    grid-template-rows: auto auto;
-    gap: 1.5rem;
+    grid-template-rows: 3fr 2fr;
+    gap: 1rem;
     margin-top: 3rem;
+    max-height: 480px;
 }
 
 .ms-gallery-item {
@@ -1205,7 +1209,6 @@ a.ms-feature-tag--link i {
 .ms-gallery-item img {
     width: 100%;
     height: 100%;
-    min-height: 280px;
     object-fit: cover;
     transition: transform 0.6s var(--ease-out-expo);
 }
@@ -1251,6 +1254,352 @@ a.ms-feature-tag--link i {
     color: rgba(255,255,255,0.7);
     font-weight: 300;
     line-height: 1.5;
+}
+
+// --- XRF Comparison (side-by-side reveal on hover) ---
+.ms-gallery-compare .ms-compare-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ms-gallery-compare .ms-compare-bottom { z-index: 0; }
+
+.ms-gallery-compare .ms-compare-top {
+    z-index: 1;
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 0.5s var(--ease-out-expo);
+}
+
+.ms-gallery-compare.is-comparing .ms-compare-top {
+    transition: none;
+}
+
+.ms-gallery-compare .ms-gallery-overlay { z-index: 2; }
+
+.ms-gallery-compare:hover .ms-compare-img {
+    transform: none;
+}
+
+// --- Interactive Analysis Points ---
+.ms-gallery-analysis .ms-analysis-points {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.ms-analysis-point {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.9);
+    background: var(--spectral-5);
+    cursor: pointer;
+    pointer-events: all;
+    padding: 0;
+    box-shadow: 0 0 8px rgba(59,130,246,0.5);
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+    transition: transform 0.5s var(--ease-out-expo), opacity 0.4s, box-shadow 0.3s;
+
+    &::after {
+        content: '';
+        position: absolute;
+        inset: -8px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(255,255,255,0.25);
+        animation: ms-point-ring 3s ease-out infinite;
+        opacity: 0;
+    }
+
+    &:hover {
+        transform: translate(-50%, -50%) scale(1.4);
+        box-shadow: 0 0 16px rgba(59,130,246,0.7), 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    &.active {
+        background: var(--spectral-3);
+        border-color: var(--spectral-3);
+        box-shadow: 0 0 14px rgba(240,180,41,0.6);
+        transform: translate(-50%, -50%) scale(1.3);
+    }
+}
+
+.ms-gallery-analysis.visible .ms-analysis-point {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    &::after { opacity: 1; }
+}
+
+// Point positions & technique colors
+.ms-apoint-1 { top: 30%; left: 38%; background: var(--spectral-5); transition-delay: 0.2s; }
+.ms-apoint-2 { top: 50%; left: 65%; background: var(--spectral-1); transition-delay: 0.4s; }
+.ms-apoint-3 { top: 40%; left: 22%; background: var(--spectral-4); transition-delay: 0.6s; }
+.ms-apoint-4 { top: 72%; left: 50%; background: var(--spectral-6); transition-delay: 0.8s; }
+
+.ms-apoint-2::after { animation-delay: 0.6s; }
+.ms-apoint-3::after { animation-delay: 1.2s; }
+.ms-apoint-4::after { animation-delay: 1.8s; }
+
+@keyframes ms-point-ring {
+    0%   { transform: scale(1); opacity: 0.5; }
+    60%  { transform: scale(2.5); opacity: 0; }
+    100% { transform: scale(2.5); opacity: 0; }
+}
+
+// Overlay: pointer-events none so points stay clickable
+.ms-gallery-analysis .ms-gallery-overlay {
+    pointer-events: none;
+    z-index: 4;
+    background: linear-gradient(to top, rgba(26,26,46,0.88) 0%, rgba(26,26,46,0.15) 35%, transparent 55%);
+}
+
+// Lift analysis item above siblings when popup is active
+.ms-gallery-analysis.has-popup {
+    z-index: 5;
+}
+
+// --- Analysis Popup ---
+.ms-analysis-popup {
+    position: absolute;
+    z-index: 10;
+    width: 260px;
+    background: rgba(26,26,46,0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+    transition: opacity 0.2s, transform 0.3s var(--ease-out-expo);
+    pointer-events: none;
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        display: block;
+        height: 2px;
+        background: linear-gradient(to right, var(--spectral-1), var(--spectral-3), var(--spectral-4), var(--spectral-5), var(--spectral-6));
+    }
+
+    &.active {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        pointer-events: all;
+    }
+}
+
+.ms-popup-header {
+    padding: 10px 14px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ms-popup-technique {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.ms-popup-id {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: rgba(255,255,255,0.35);
+    margin-left: auto;
+}
+
+.ms-popup-spectrum {
+    padding: 4px 14px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    svg { display: block; width: 100%; height: 48px; }
+}
+
+.ms-popup-data { padding: 8px 14px 4px; }
+
+.ms-popup-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 2px 0;
+    font-size: 0.7rem;
+    line-height: 1.6;
+}
+
+.ms-popup-label {
+    color: rgba(255,255,255,0.4);
+    font-weight: 300;
+}
+
+.ms-popup-value {
+    color: rgba(255,255,255,0.9);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+}
+
+.ms-popup-elements {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding: 4px 14px 12px;
+}
+
+.ms-popup-element {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.6);
+}
+
+.ms-popup-element--primary {
+    border-color: rgba(240,180,41,0.4);
+    color: var(--spectral-3);
+    background: rgba(240,180,41,0.06);
+}
+
+// --- Multispectral Imaging (spectral scan effect) ---
+// Base image stays in flow to give the container height
+.ms-gallery-msi .ms-msi-base {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%;
+    z-index: 0;
+}
+
+.ms-gallery-msi .ms-msi-processed {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%;
+    z-index: 1;
+    clip-path: inset(0 100% 0 0);
+    animation:
+        ms-msi-clip 8s ease-in-out infinite,
+        ms-msi-filter 24s ease-in-out infinite;
+    animation-play-state: paused;
+}
+
+// Animations start only when scrolled into view
+.ms-gallery-msi.visible .ms-msi-processed,
+.ms-gallery-msi.visible .ms-msi-scanline,
+.ms-gallery-msi.visible .ms-msi-indicator-dot {
+    animation-play-state: running;
+}
+
+// Spectral scan line
+.ms-msi-scanline {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 0;
+    width: 2px;
+    z-index: 2;
+    background: linear-gradient(to bottom, #8b5cf6, #3b82f6, #10b981, #f0b429, #e67e22, #dc3545);
+    box-shadow: 0 0 12px rgba(59,130,246,0.6), 0 0 30px rgba(59,130,246,0.15);
+    opacity: 0;
+    animation: ms-msi-line 8s ease-in-out infinite;
+    animation-play-state: paused;
+}
+
+// Wavelength indicator badge
+.ms-msi-indicator {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(26,26,46,0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.ms-msi-indicator-track {
+    width: 56px;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, #8b5cf6, #3b82f6, #10b981, #f0b429, #dc3545);
+    position: relative;
+}
+
+.ms-msi-indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1.5px solid rgba(26,26,46,0.3);
+    box-shadow: 0 0 6px rgba(255,255,255,0.5);
+    position: absolute;
+    top: -2px;
+    left: 0;
+    animation: ms-msi-dot 8s ease-in-out infinite;
+    animation-play-state: paused;
+}
+
+.ms-msi-indicator-label {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    color: rgba(255,255,255,0.65);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.ms-gallery-msi .ms-gallery-overlay { z-index: 4; }
+.ms-gallery-msi:hover img { transform: none; }
+
+// --- MSI Keyframes ---
+// Clip: sweep right → pause → sweep left → pause
+@keyframes ms-msi-clip {
+    0%, 10%    { clip-path: inset(0 100% 0 0); }
+    45%, 55%   { clip-path: inset(0 0 0 0); }
+    90%, 100%  { clip-path: inset(0 100% 0 0); }
+}
+
+// Filter cycles through 3 bands (24s = 3× clip duration)
+@keyframes ms-msi-filter {
+    0%, 30%    { filter: brightness(0.8) contrast(1.5) hue-rotate(260deg) saturate(2.5); }
+    34%, 63%   { filter: brightness(1.15) contrast(0.9) grayscale(0.6) sepia(0.15); }
+    67%, 96%   { filter: hue-rotate(180deg) saturate(1.8) contrast(1.15) brightness(1.05); }
+    100%       { filter: brightness(0.8) contrast(1.5) hue-rotate(260deg) saturate(2.5); }
+}
+
+// Scan line tracks the clip edge
+@keyframes ms-msi-line {
+    0%, 10%  { left: 0%;               opacity: 0; }
+    14%      {                          opacity: 1; }
+    43%      { left: calc(100% - 2px); opacity: 1; }
+    47%, 53% { left: calc(100% - 2px); opacity: 0; }
+    57%      { left: calc(100% - 2px); opacity: 1; }
+    86%      { left: 0%;               opacity: 1; }
+    90%      { left: 0%;               opacity: 0; }
+    100%     { left: 0%;               opacity: 0; }
+}
+
+// Indicator dot follows the sweep
+@keyframes ms-msi-dot {
+    0%, 10%    { left: 0; }
+    45%, 55%   { left: calc(100% - 8px); }
+    90%, 100%  { left: 0; }
 }
 
 
@@ -1570,7 +1919,7 @@ a.ms-feature-tag--link i {
 @media (max-width: 1024px) {
     .ms-project-grid { grid-template-columns: 1fr; gap: 2.5rem; }
     .ms-features-grid { grid-template-columns: 1fr; }
-    .ms-gallery-grid { grid-template-columns: 1fr; }
+    .ms-gallery-grid { grid-template-columns: 1fr; max-height: none; }
     .ms-gallery-item:first-child { grid-row: auto; }
     .ms-stats { grid-template-columns: repeat(3, 1fr); }
 }
@@ -1605,6 +1954,8 @@ a.ms-feature-tag--link i {
     .ms-stats { grid-template-columns: repeat(2, 1fr); }
     .ms-stat:nth-child(9) { grid-column: 1 / -1; }
     .ms-partners-grid { gap: 1.5rem 1.5rem; }
+    .ms-analysis-popup { width: 220px; }
+    .ms-analysis-point { width: 12px; height: 12px; }
     .ms-partner-link--culture img { height: 42px; }
     .ms-partner-link--cnrs img { height: 48px; }
     .ms-partner-link--mnhn img { height: 42px; }
