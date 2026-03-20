@@ -134,6 +134,7 @@ INSTALLED_APPS = (
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sitemaps",
     "django.contrib.gis",
     "django_hosts",
     "arches",
@@ -403,6 +404,7 @@ EXTRA_EMAIL_CONTEXT = {
     "expiration": (
         datetime.now() + timedelta(seconds=CELERY_SEARCH_EXPORT_EXPIRES)
     ).strftime("%A, %d %B %Y"),
+    "site_url": PUBLIC_SERVER_ADDRESS.rstrip("/"),
 }
 
 # see https://docs.djangoproject.com/en/1.9/topics/i18n/translation/#how-django-discovers-language-preference

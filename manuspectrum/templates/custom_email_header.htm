@@ -1,0 +1,93 @@
+{% load i18n %}
+<!--
+    ManuSpectrum Email Header — Prismatic Luminescence
+    Matches the homepage aesthetic exactly.
+    All critical styling is inline for maximum email-client compatibility.
+-->
+
+<!-- Full-width wrapper: warm paper background (#faf9f7 = homepage --bg) -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #faf9f7;">
+<tr><td class="ms-email-outer" align="center" style="padding: 40px 16px 32px 16px;">
+
+<!-- Card: white surface (#ffffff = homepage --surface) -->
+<table role="presentation" class="ms-email-card" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width: 560px; width: 100%; background-color: #ffffff; border: 1px solid rgba(26,26,46,0.07); border-radius: 10px; box-shadow: 0 1px 3px rgba(26,26,46,0.04), 0 4px 20px rgba(26,26,46,0.06);">
+
+<!--
+    Spectral accent bar at the very top of the card.
+    Simulates: linear-gradient(90deg, #dc3545, #e67e22, #f0b429, #10b981, #3b82f6, #8b5cf6)
+    Using 12 cells for a smoother gradient feel.
+-->
+<tr>
+<td style="padding: 0; font-size: 0; line-height: 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-radius: 10px 10px 0 0; overflow: hidden;">
+    <tr>
+        <td style="height: 3px; background-color: #dc3545;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #e05830;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #e67e22;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #eb9926;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #f0b429;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #c8b828;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #10b981;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #109eac;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #2596d1;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #3b82f6;" width="8.33%"></td>
+        <td style="height: 3px; background-color: #636ff6;" width="8.34%"></td>
+        <td style="height: 3px; background-color: #8b5cf6;" width="8.34%"></td>
+    </tr>
+    </table>
+</td>
+</tr>
+
+<!-- Header: logo — exact replica of homepage .ms-header-logo -->
+<tr>
+<td class="ms-email-header-cell" style="padding: 32px 36px 0 36px;">
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+        <!--
+            Logo mark: 28px x 3px
+            Homepage uses: linear-gradient(90deg, spectral-1, spectral-3, spectral-5)
+            = linear-gradient(90deg, #dc3545, #f0b429, #3b82f6)
+            Simulated with 7 cells for smooth transition.
+        -->
+        <td style="vertical-align: middle; padding-right: 12px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-radius: 2px; overflow: hidden;">
+            <tr>
+                <td style="width: 4px; height: 3px; background-color: #dc3545; font-size: 0; line-height: 0;"></td>
+                <td style="width: 4px; height: 3px; background-color: #e06837; font-size: 0; line-height: 0;"></td>
+                <td style="width: 4px; height: 3px; background-color: #e69c2a; font-size: 0; line-height: 0;"></td>
+                <td style="width: 4px; height: 3px; background-color: #f0b429; font-size: 0; line-height: 0;"></td>
+                <td style="width: 4px; height: 3px; background-color: #b8a830; font-size: 0; line-height: 0;"></td>
+                <td style="width: 4px; height: 3px; background-color: #7a9b63; font-size: 0; line-height: 0;"></td>
+                <td style="width: 4px; height: 3px; background-color: #3b82f6; font-size: 0; line-height: 0;"></td>
+            </tr>
+            </table>
+        </td>
+        <!--
+            Logo text: Cormorant Garamond, 1.35rem (~21.6px), weight 400,
+            letter-spacing 0.08em, color #1a1a2e (--ink)
+        -->
+        <td class="ms-email-logo-text" style="vertical-align: middle;">
+            <a href="{{site_url}}" style="font-family: Georgia, 'Cormorant Garamond', 'Times New Roman', serif; font-size: 21px; font-weight: 400; color: #1a1a2e; letter-spacing: 0.08em; text-decoration: none;">ManuSpectrum</a>
+        </td>
+    </tr>
+    </table>
+
+</td>
+</tr>
+
+<!--
+    Subtle separator between header and content.
+    Homepage uses border: rgba(26,26,46,0.07)
+-->
+<tr>
+<td style="padding: 20px 36px 0 36px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="height: 1px; background-color: rgba(26,26,46,0.07); font-size: 0; line-height: 0;"></td></tr>
+    </table>
+</td>
+</tr>
+
+<!-- Body content (opened here, closed in custom_email_footer.htm) -->
+<tr>
+<td class="ms-email-body-cell" style="padding: 28px 36px 32px 36px; font-family: Georgia, 'Cormorant Garamond', 'Times New Roman', serif; font-size: 15.5px; line-height: 1.75; color: #1a1a2e;">

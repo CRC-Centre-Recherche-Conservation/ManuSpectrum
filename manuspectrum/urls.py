@@ -1,8 +1,13 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
+from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path, re_path
+from django.views.generic import TemplateView
 
+from arches.app.views.auth import PasswordResetView
+
+from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationCollectionView,
@@ -16,6 +21,14 @@ from manuspectrum.views.iiif_annotation import (
 urlpatterns = [
     # path("", include("arches_controlled_lists.urls")),
     path("", include("arches_component_lab.urls")),
+    # Override password reset to send branded HTML email
+    path(
+        "password_reset/",
+        PasswordResetView.as_view(
+            html_email_template_name="registration/password_reset_email_html.html",
+        ),
+        name="password_reset",
+    ),
     re_path(
         r"^renderer/(?P<renderer_id>[^\/]+)", RendererView.as_view(), name="renderer"
     ),
@@ -99,5 +112,28 @@ urlpatterns.append(
         "iiif/v2/annotation-collection/<uuid:resource_id>/page-<int:page_num>",
         IIIFAnnotationPageViewV2.as_view(),
         name="iiif-v2-annotation-page",
+    )
+)
+
+### SEO — robots.txt & sitemap.xml
+
+sitemaps = {
+    "static": StaticSitemap,
+    "documents": DocumentSitemap,
+}
+
+urlpatterns.append(
+    path(
+        "robots.txt",
+        TemplateView.as_view(template_name="robots.txt", content_type="text/plain"),
+        name="robots",
+    )
+)
+urlpatterns.append(
+    path(
+        "sitemap.xml",
+        sitemap,
+        {"sitemaps": sitemaps},
+        name="django.contrib.sitemaps.views.sitemap",
     )
 )

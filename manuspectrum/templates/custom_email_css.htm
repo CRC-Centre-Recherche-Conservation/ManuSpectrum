@@ -1,1 +1,40 @@
-<style></style>
+<style>
+    /* ============================================================
+       MANUSPECTRUM EMAIL — Prismatic Luminescence
+       Mirrors the homepage design tokens exactly.
+       Inline styles are the primary method; this <style> block
+       is progressive enhancement for Apple Mail, iOS, Thunderbird.
+       ============================================================ */
+
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+        background-color: #faf9f7 !important;  /* homepage --bg */
+    }
+
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+        body { background-color: #1a1a2e !important; }
+        .ms-email-card { background-color: #22223a !important; border-color: rgba(255,255,255,0.08) !important; }
+        .ms-email-logo-text a { color: #e8e6e1 !important; }
+        .ms-email-body-cell { color: #d4d2cd !important; }
+        .ms-email-body-cell p { color: #d4d2cd !important; }
+        .ms-email-muted { color: #8a8a9a !important; }
+        .ms-email-footer-brand { color: #c4c2bd !important; }
+        .ms-email-footer-desc { color: #6a6a7a !important; }
+        .ms-email-footer-copy { color: #55556a !important; }
+    }
+
+    /* Responsive */
+    @media only screen and (max-width: 620px) {
+        .ms-email-outer { padding: 16px 8px !important; }
+        .ms-email-card { border-radius: 6px !important; }
+        .ms-email-header-cell { padding: 24px 24px 0 24px !important; }
+        .ms-email-body-cell { padding: 24px !important; }
+        .ms-email-footer-cell { padding: 0 24px 24px 24px !important; }
+        .ms-email-logo-text a { font-size: 19px !important; }
+    }
+</style>
