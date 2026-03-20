@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-13 11:09-0500\n"
+"POT-Creation-Date: 2026-03-20 04:56-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,114 +18,155 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: datatypes/manifest.py:161
 msgid "Manifest must have a URL or ID"
 msgstr ""
 
+#: datatypes/manifest.py:178
 msgid "Manifest ID does not exist"
 msgstr ""
 
+#: datatypes/manifest.py:193
 msgid "Manifest not found"
 msgstr ""
 
+#: datatypes/manifest.py:213
 msgid "Invalid URL format"
 msgstr ""
 
+#: datatypes/manifest.py:218
 msgid "Timeout while fetching manifest"
 msgstr ""
 
+#: datatypes/manifest.py:225
 msgid "Invalid IIIF manifest: {str(e)}"
 msgstr ""
 
+#: datatypes/manifest.py:230
 msgid "Unexpected error: {str(e)}"
 msgstr ""
 
+#: functions/multi_descriptor.py:105
 msgid "Undefined"
 msgstr ""
 
+#: settings.py:402
 msgid "Hi"
 msgstr ""
 
+#: settings.py:439
 msgid "English"
 msgstr ""
 
+#: templates/custom_email_footer.htm:47
 msgid ""
 "Interoperable database for physicochemical analysis of written cultural "
 "heritage"
 msgstr ""
 
+#: templates/index.htm:12
 msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
 msgstr ""
 
+#: templates/index.htm:13
 msgid ""
 "Interoperable database for written cultural heritage materials analysis — "
 "Biblissima+ Cluster"
 msgstr ""
 
+#: templates/index.htm:23
+msgid ""
+"spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, IIIF, "
+"CIDOC-CRM, Biblissima, physicochemical analysis, heritage science"
+msgstr ""
+
+#: templates/index.htm:119
 msgid "ManuSpectrum — Home"
 msgstr ""
 
+#: templates/index.htm:124
 msgid "Main Navigation"
 msgstr ""
 
+#: templates/index.htm:126 templates/index.htm:174 templates/index.htm:333
 msgid "The Project"
 msgstr ""
 
+#: templates/index.htm:127 templates/index.htm:175 templates/index.htm:473
 msgid "Explore"
 msgstr ""
 
+#: templates/index.htm:128 templates/index.htm:176 templates/index.htm:539
 msgid "Analyses"
 msgstr ""
 
+#: templates/index.htm:129 templates/index.htm:177 templates/index.htm:603
+#: templates/index.htm:701
 msgid "Search"
 msgstr ""
 
+#: templates/index.htm:131 templates/index.htm:179
 msgid "Management"
 msgstr ""
 
+#: templates/index.htm:137
 msgid "Source code on GitHub"
 msgstr ""
 
+#: templates/index.htm:145 templates/index.htm:183 templates/index.htm:703
 msgid "Sign In"
 msgstr ""
 
+#: templates/index.htm:147
 msgid "User Profile"
 msgstr ""
 
+#: templates/index.htm:148
 #, python-format
 msgid "Welcome, %(name)s"
 msgstr ""
 
+#: templates/index.htm:150 templates/index.htm:186
 msgid "Sign Out"
 msgstr ""
 
+#: templates/index.htm:164
 msgid "Open Menu"
 msgstr ""
 
+#: templates/index.htm:301
 msgid ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
 msgstr ""
 
+#: templates/index.htm:305
 msgid ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
 msgstr ""
 
+#: templates/index.htm:310 templates/index.htm:604
 msgid "Explore the database"
 msgstr ""
 
+#: templates/index.htm:313
 msgid "Learn more"
 msgstr ""
 
+#: templates/index.htm:320
 msgid "scroll"
 msgstr ""
 
+#: templates/index.htm:334
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr ""
 
+#: templates/index.htm:340
 msgid "ManuSpectrum was developed within Cluster 2 — \\"
 msgstr ""
 
+#: templates/index.htm:343
 msgid ""
 "Through structuring and standardizing data according to shared models, the "
 "project provides reliable, easy-to-use tools accessible to non-specialists. "
@@ -134,6 +175,7 @@ msgid ""
 "from different disciplines."
 msgstr ""
 
+#: templates/index.htm:346
 msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
 "object, its context, the analyses, and their interpretations, using thesauri "
@@ -141,9 +183,11 @@ msgid ""
 "documents."
 msgstr ""
 
+#: templates/index.htm:354
 msgid "Biblissima+ — Cluster 2"
 msgstr ""
 
+#: templates/index.htm:356
 msgid ""
 "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
 "written cultures. Within Cluster 2, the objective is to archive, share and "
@@ -152,90 +196,116 @@ msgid ""
 "standards."
 msgstr ""
 
+#: templates/index.htm:373 templates/index.htm:551
 msgid "X-ray Fluorescence"
 msgstr ""
 
+#: templates/index.htm:378
 msgid "X-ray Micro-Fluorescence"
 msgstr ""
 
+#: templates/index.htm:383
 msgid "Fiber Optic Reflectance"
 msgstr ""
 
+#: templates/index.htm:388
 msgid "Raman Spectroscopy"
 msgstr ""
 
+#: templates/index.htm:393
 msgid "IR Spectroscopy"
 msgstr ""
 
+#: templates/index.htm:398
 msgid "Hyperspectral Imaging"
 msgstr ""
 
+#: templates/index.htm:403 templates/index.htm:574
 msgid "Multispectral Imaging"
 msgstr ""
 
+#: templates/index.htm:408
 msgid "Proteomics (MALDI-TOF)"
 msgstr ""
 
+#: templates/index.htm:413
 msgid "And many more"
 msgstr ""
 
+#: templates/index.htm:421
 msgid "XRF mapping of a manuscript"
 msgstr ""
 
+#: templates/index.htm:423
 msgid "XRF mapping of an illuminated manuscript"
 msgstr ""
 
+#: templates/index.htm:424
 msgid ""
 "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
 msgstr ""
 
+#: templates/index.htm:428
 msgid "Raman spectrum on a pigment sample"
 msgstr ""
 
+#: templates/index.htm:430
 msgid "Raman spectroscopy on a medieval pigment"
 msgstr ""
 
+#: templates/index.htm:431
 msgid ""
 "Molecular identification of azurite and malachite pigments on a 15th-century "
 "illumination"
 msgstr ""
 
+#: templates/index.htm:435
 msgid "Multispectral imaging of a manuscript page"
 msgstr ""
 
+#: templates/index.htm:437
 msgid "Multispectral imaging — Revealing hidden texts"
 msgstr ""
 
+#: templates/index.htm:438
 msgid ""
 "UV and infrared reflectography combined to reveal underdrawings and erased "
 "inscriptions"
 msgstr ""
 
+#: templates/index.htm:445
 msgid "Previous"
 msgstr ""
 
+#: templates/index.htm:448
 msgid "Next"
 msgstr ""
 
+#: templates/index.htm:474
 msgid "What you can discover"
 msgstr ""
 
+#: templates/index.htm:476
 msgid ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
 msgstr ""
 
+#: templates/index.htm:483
 msgid "Spectra and analysis data"
 msgstr ""
 
+#: templates/index.htm:484
 msgid ""
 "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
 "analysis results directly on the platform."
 msgstr ""
 
+#: templates/index.htm:495
 msgid "IIIF Annotations"
 msgstr ""
 
+#: templates/index.htm:496
 msgid ""
 "Analysis data is exposed as IIIF annotations, making it accessible from any "
 "compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
@@ -243,9 +313,11 @@ msgid ""
 "Raman, FTIR, UV-Vis) directly overlaid on high-resolution manuscript images."
 msgstr ""
 
+#: templates/index.htm:507
 msgid "Interoperability and Standards"
 msgstr ""
 
+#: templates/index.htm:508
 msgid ""
 "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
 "ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
@@ -253,643 +325,840 @@ msgid ""
 "portal."
 msgstr ""
 
+#: templates/index.htm:512
 msgid "AGORHA thesaurus"
 msgstr ""
 
+#: templates/index.htm:519
 msgid "Material Characterization"
 msgstr ""
 
+#: templates/index.htm:520
 msgid ""
 "Explore the layers, materials, and chemical elements identified on written "
 "cultural heritage documents, with different levels of reliability and "
 "characterization."
 msgstr ""
 
+#: templates/index.htm:522
 msgid "Pigments"
 msgstr ""
 
+#: templates/index.htm:523
 msgid "Layers"
 msgstr ""
 
+#: templates/index.htm:524
 msgid "Binders"
 msgstr ""
 
+#: templates/index.htm:525
 msgid "Substrates"
 msgstr ""
 
+#: templates/index.htm:540
 msgid "Visualize physicochemical analyses"
 msgstr ""
 
+#: templates/index.htm:542
 msgid ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to manuscripts and written cultural heritage "
 "objects."
 msgstr ""
 
+#: templates/index.htm:548
 msgid "XRF Mapping — Element A"
 msgstr ""
 
+#: templates/index.htm:549
 msgid "XRF Mapping — Element B"
 msgstr ""
 
+#: templates/index.htm:552
 msgid "XRF Mapping"
 msgstr ""
 
+#: templates/index.htm:553
 msgid "Spatial distribution of chemical elements on an illuminated manuscript"
 msgstr ""
 
+#: templates/index.htm:558
 msgid "Manuscript analysis"
 msgstr ""
 
+#: templates/index.htm:560 templates/index.htm:561 templates/index.htm:562
+#: templates/index.htm:563
 msgid "Analysis point"
 msgstr ""
 
+#: templates/index.htm:567
 msgid "Spectroscopy"
 msgstr ""
 
+#: templates/index.htm:568
 msgid "Point Analysis"
 msgstr ""
 
+#: templates/index.htm:569
 msgid "Click on analysis points to explore spectral data"
 msgstr ""
 
+#: templates/index.htm:584
 msgid "Imaging"
 msgstr ""
 
+#: templates/index.htm:585
 msgid "Multispectral"
 msgstr ""
 
+#: templates/index.htm:586
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr ""
 
+#: templates/index.htm:606
 msgid ""
 "Search by material, analysis technique, written cultural heritage object, or "
 "chemical element. Advanced filters available in the search interface."
 msgstr ""
 
+#: templates/index.htm:619
 msgid "Search materials, techniques, objects..."
 msgstr ""
 
+#: templates/index.htm:626
 msgid "Vermilion"
 msgstr ""
 
+#: templates/index.htm:627
 msgid "manuscript"
 msgstr ""
 
+#: templates/index.htm:627
 msgid "Manuscripts"
 msgstr ""
 
+#: templates/index.htm:628
 msgid "XRF"
 msgstr ""
 
+#: templates/index.htm:629
 msgid "parchment"
 msgstr ""
 
+#: templates/index.htm:629
 msgid "Parchment"
 msgstr ""
 
+#: templates/index.htm:630
 msgid "illumination"
 msgstr ""
 
+#: templates/index.htm:630
 msgid "Illuminations"
 msgstr ""
 
+#: templates/index.htm:631
 msgid "Raman"
 msgstr ""
 
+#: templates/index.htm:636
 msgid "Access advanced search"
 msgstr ""
 
+#: templates/index.htm:649
 msgid "Our Partners"
 msgstr ""
 
+#: templates/index.htm:653
 msgid "Ministry of Culture"
 msgstr ""
 
+#: templates/index.htm:693
 msgid ""
 "Interoperable database for physicochemical analysis of written cultural "
 "heritage materials. A Biblissima+ cluster project."
 msgstr ""
 
+#: templates/index.htm:699
 msgid "Platform"
 msgstr ""
 
+#: templates/index.htm:705
 msgid "My Profile"
 msgstr ""
 
+#: templates/index.htm:710
 msgid "Resources"
 msgstr ""
 
+#: templates/index.htm:718
 msgid "Standards"
 msgstr ""
 
+#: templates/index.htm:729
 msgid ""
 "This work has benefited from state aid managed by the Agence Nationale de la "
 "Recherche under the Investissements d'avenir programme, reference ANR-21-"
 "ESRE-0005 (Biblissima+)."
 msgstr ""
 
+#: templates/index.htm:733
 msgid "All rights reserved"
 msgstr ""
 
+#: templates/index.htm:736
 msgid "Source code"
 msgstr ""
 
+#: templates/index.htm:740
 msgid "GPL-3.0 License"
 msgstr ""
 
+#: templates/index.htm:743
 msgid ""
 "Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
 "rel=\"noopener\">Arches</a>"
 msgstr ""
 
+#: templates/javascript.htm:8
 msgid "Data"
 msgstr ""
 
+#: templates/javascript.htm:9
+#: templates/views/components/plugins/importer-configuration.htm:117
 msgid "X Axis"
 msgstr ""
 
+#: templates/javascript.htm:10
+#: templates/views/components/plugins/importer-configuration.htm:135
 msgid "Y Axis"
 msgstr ""
 
+#: templates/javascript.htm:11
 msgid "Select a Transformation"
 msgstr ""
 
+#: templates/javascript.htm:12
 msgid "Select an Importer"
 msgstr ""
 
+#: templates/javascript.htm:13
 msgid "Importer in Use"
 msgstr ""
 
+#: templates/javascript.htm:14
 msgid ""
 "This importer is in use - it should be replaced in all files where it is "
 "used before deleting."
 msgstr ""
 
+#: templates/javascript.htm:15
 msgid "Select Primary Description Identifier Card"
 msgstr ""
 
+#: templates/javascript.htm:16
 msgid "An error occurred while creating the manifest."
 msgstr ""
 
+#: templates/javascript.htm:17
 msgid "Material"
 msgstr ""
 
+#: templates/javascript.htm:18
 msgid "Layer"
 msgstr ""
 
+#: templates/javascript.htm:19
 msgid "Range"
 msgstr ""
 
+#: templates/javascript.htm:20
 msgid "Lapis lazuli"
 msgstr ""
 
+#: templates/javascript.htm:21
 msgid "Vermilion (HgS)"
 msgstr ""
 
+#: templates/javascript.htm:22
 msgid "Gold leaf"
 msgstr ""
 
+#: templates/javascript.htm:23
 msgid "Iron gall ink"
 msgstr ""
 
+#: templates/javascript.htm:24
 msgid "Pigment"
 msgstr ""
 
+#: templates/javascript.htm:25
 msgid "Paint"
 msgstr ""
 
+#: templates/javascript.htm:26
 msgid "Gilding"
 msgstr ""
 
+#: templates/javascript.htm:27
 msgid "Text"
 msgstr ""
 
-#, python-format
-msgid ""
-"You're receiving this email because you requested a password reset for your "
-"user account at %(site_name)s."
-msgstr ""
-
-msgid "Reset my password"
-msgstr ""
-
-msgid "Your username, in case you've forgotten:"
-msgstr ""
-
-msgid "If you didn't request this, you can safely ignore this email."
-msgstr ""
-
-#, python-format
-msgid "Password reset — %(site_name)s"
-msgstr ""
-
+#: templates/views/components/cards/file-renderers/afs-reader.htm:39
 msgid "Config"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/afs-reader.htm:48
 msgid "Chart Configuration"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:11
 msgid "Status"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:19
 msgid ""
 "Select or create a shared configuration that applies to all XY files. For "
 "per-file adjustments, use the Status tab."
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:27
 msgid "XY file(s) staged"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:43
 msgid "No config"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:68
 msgid "Apply to"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:68
 msgid "staged file(s)"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:72
 msgid "Applying..."
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:94
 msgid "Files Status"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:99
 msgid ""
 "Check which files have a configuration applied. Select file(s) to customize "
 "parsing settings individually, overriding the shared config."
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:104
 msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:111
 msgid "file(s)"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:113
+#: templates/views/components/plugins/file-configuration.htm:54
 msgid "selected"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:117
 msgid "All"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:118
 msgid "None"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:135
 msgid "Has custom parsing"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:141
 msgid "none"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:153
 msgid "Adjust parsing for"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:164
 msgid "Custom parsing:"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:168
 msgid ""
 "These settings override the shared config for the selected file(s) only. "
 "Choose 'Use config' to keep the shared config value."
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:172
 msgid "Delimiter"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:174
+#: templates/views/components/cards/file-renderers/xy-reader.htm:186
+#: templates/views/components/cards/file-renderers/xy-reader.htm:196
 msgid "Use config"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:175
+#: templates/views/components/cards/file-renderers/xy-reader.htm:187
+#: templates/views/components/plugins/importer-configuration.htm:33
+#: templates/views/components/plugins/importer-configuration.htm:97
 msgid "Auto-detect"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:176
+#: templates/views/components/plugins/importer-configuration.htm:99
 msgid "Comma"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:177
 msgid "Tab"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:178
 msgid "Other:"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:180
 msgid "Custom delimiter"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:184
+#: templates/views/components/plugins/importer-configuration.htm:30
 msgid "Header"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:188
 msgid "Fixed lines:"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:190
 msgid "Number of lines"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:194
+#: templates/views/components/plugins/importer-configuration.htm:41
 msgid "Footer"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:197
 msgid "End of file"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:198
 msgid "After text:"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:200
 msgid "Footer text"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:205
 msgid "Reset to config"
 msgstr ""
 
+#: templates/views/components/cards/file-renderers/xy-reader.htm:209
 msgid "Apply & re-render"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:5
 msgid ""
 "Specify how to process the data files for viewing.  Any additional files "
 "(such as images) will be automatically displayed if possible."
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:7
 msgid "Data Files"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:9
 msgid "Additional Files"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:17
 msgid "Name"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:18
 msgid "Configuration"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:54
 msgid "files"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:54
 msgid "file"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:55
 msgid "Select All"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:55
 msgid "Deselect All"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:73
 msgid "Import Preview"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:86
 msgid "Selected Files"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:90
 msgid "Select an importer configuration on the right to apply to all files"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:91
 msgid "Apply Importer to Selected Files"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:94
 msgid "File Preview"
 msgstr ""
 
+#: templates/views/components/plugins/file-configuration.htm:96
 msgid "This file type cannot be previewed."
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:4
 msgid "Importer Configurations"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:5
 msgid "Define how to import your x/y data"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:11
 msgid "Edit"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:12
 msgid "Delete"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:17
+#: templates/views/components/plugins/importer-configuration.htm:21
 msgid "Add Importer Configuration"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:24
 msgid "Importer Name"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:25
 msgid "Name of Importer"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:26
 msgid "Importer Description"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:27
 msgid "Describe the Importer"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:31
 msgid "Define where your x/y data are found in the file"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:34
 msgid "File has a fixed header (constant number of lines)"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:35
 msgid "File header ends after specific text"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:37
+#: templates/views/components/plugins/importer-configuration.htm:47
 msgid "Ending Text"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:38
 msgid "Number of Lines"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:42
 msgid "Define where your x/y data end in the file"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:44
 msgid "End of File"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:45
 msgid "File footer begins after specific text (consistent ending text)"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:50
 msgid "X Axis Source"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:51
 msgid "Define how the X axis values are determined"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:53
 msgid "From data (first column is X)"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:54
 msgid "Generate from range (no X column in file)"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:57
 msgid ""
 "The X axis will be evenly spaced between start and end values, based on the "
 "number of data rows."
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:60
 msgid "Start"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:61
 msgid "e.g. -3500"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:65
 msgid "End"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:66
 msgid "e.g. 500"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:73
 msgid "Transformations"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:74
 msgid ""
 "If your file has multiple Y columns, they are displayed as separate series. "
 "Use \\"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:93
 msgid "Data Column Delimiter"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:94
 msgid "The data delimiter must be a valid regular expression"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:95
 msgid "Define how the data are separated"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:98
 msgid "Whitespace"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:100
 msgid "Pipe"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:101
 msgid "Other"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:106
 msgid "Include Delimiter in Value"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:110
 msgid "Display/Charting"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:112
 msgid "Chart Title"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:113
 msgid "Title"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:115
 msgid "X Axis Label"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:126
+#: templates/views/components/plugins/importer-configuration.htm:144
+#: templates/views/components/plugins/importer-configuration.htm:224
 msgid "Presets..."
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:133
 msgid "Y Axis Label"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:157
 msgid "Spectral Range"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:160
 msgid "Limit the displayed X range. Leave empty for no limit."
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:163
 msgid "Min X"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:164
 msgid "e.g. 400"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:168
 msgid "Max X"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:169
 msgid "e.g. 4000"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:181
 msgid "Column Assignment"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:184
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:189
 msgid "Column"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:207
 msgid "Add Column"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:213
 msgid "Right Y Axis Label"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:215
 msgid "Right Y Axis"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:237
 msgid "Cancel"
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm:238
 msgid "Save"
 msgstr ""
 
+#: templates/views/components/widgets/file-xy.htm:17
 msgid "Files"
 msgstr ""
 
+#: templates/views/components/widgets/file-xy.htm:23
 msgid "Select all"
 msgstr ""
 
+#: templates/views/components/widgets/file-xy.htm:25
 msgid "Deselect all"
 msgstr ""
 
+#: templates/views/components/widgets/file-xy.htm:49
 msgid "Loading charts..."
 msgstr ""
 
+#: templates/views/components/widgets/file-xy.htm:57
 msgid "Unable to load chart data"
 msgstr ""
 
+#: templates/views/components/widgets/file-xy.htm:65
 msgid "Select files to display"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:25
 msgid "Enter Manifest URL"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:25
 msgid "Select a manifest"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:36
 msgid "Create a IIIF Manifest"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:39
 msgid "Build a manifest from your own images"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:45
+#: templates/views/components/widgets/manifest-widget.htm:115
 msgid "Create a manifest"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:50
+#: templates/views/components/widgets/manifest-widget.htm:159
 msgid "Accepted formats:"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:62
 msgid "Loading manifest..."
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:95
 msgid "Remove manifest"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:118
 msgid "Return"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:125
+#: templates/views/components/widgets/manifest-widget.htm:129
 msgid "Manifest title"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:133
 msgid "Description"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:136
 msgid "Manifest description"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:145
 msgid "Upload Images"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:148
 msgid "Drag and drop image files on this panel"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:154
 msgid "Select images"
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:172
 msgid "Creating manifest..."
 msgstr ""
 
+#: templates/views/components/widgets/manifest-widget.htm:173
 msgid "Uploading images and generating IIIF manifest"
 msgstr ""
 
+#: views/renderer_config.py:47
 msgid "<h1>Renderers do not exist</h1>"
 msgstr ""
 
+#: views/renderer_config.py:62
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr ""
