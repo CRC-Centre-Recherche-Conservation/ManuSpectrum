@@ -64,6 +64,34 @@ msgstr "Une erreur s'est produite lors de l'enregistrement de l'étape du workfl
 msgid "Cleaning up..."
 msgstr "Nettoyage en cours..."
 
+#: templates/views/components/resource-instance-creator.htm
+msgid "New Document"
+msgstr "Nouveau document"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "No description"
+msgstr "Pas de description"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "Documents"
+msgstr "Documents"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "Selected Documents"
+msgstr "Documents sélectionnés"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "You have not added any Documents to this Project"
+msgstr "Vous n'avez ajouté aucun document à ce projet"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "Save and Continue"
+msgstr "Enregistrer et continuer"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
+msgid "Reset"
+msgstr "Réinitialiser"
+
 #: datatypes/manifest.py:161
 msgid "Manifest must have a URL or ID"
 msgstr ""
