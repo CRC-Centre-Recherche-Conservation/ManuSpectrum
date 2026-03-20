@@ -57,7 +57,7 @@ const viewModel = function(params) {
     const limit = 7;
     this.projectResourceId = ko.observable();
     this.studiedObjectsTileId = ko.observable();
-    this.reportDataLoading = ko.observable(params.loading());
+    this.reportDataLoading = ko.observable(ko.unwrap(params.loading));
     let projectName;
 
     if (params.projectStepData) {
@@ -102,7 +102,9 @@ const viewModel = function(params) {
     });
 
     this.dirty.subscribe((dirty) => {
-        params.dirty(dirty);
+        if (ko.isObservable(params.form.dirty)) {
+            params.form.dirty(dirty);
+        }
     });
 
     this.value.subscribe((a) => {

@@ -108,7 +108,7 @@ const viewModel = function(params) {
                         {
                             componentName: 'add-things-step',
                             uniqueInstanceName: 'add-documents',
-                            tilesManaged: 'one',
+                            tilesManaged: 'none',
                             parameters: {
                                 graphid: '87a4319d-3ca5-43f6-88cc-a7379fba67f6',
                                 nodegroupid: 'a8fb3c9e-bbc4-11ef-bd5f-ed806b645d76',
