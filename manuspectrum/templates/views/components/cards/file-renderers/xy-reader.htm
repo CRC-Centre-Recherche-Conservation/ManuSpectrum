@@ -1,0 +1,224 @@
+{% extends "views/components/cards/file-renderers/afs-reader.htm" %}
+{% load i18n %}
+
+{% block extra_tabs %}
+<div class="workbench-card-sidebar-tab" data-bind="click: function() {
+    fileViewer.toggleTab('xy-files');
+}, css: {
+    'active': fileViewer.activeTab() === 'xy-files'
+}">
+    <i class="fa fa-list"></i>
+    <span class="map-sidebar-text">{% trans "Status" %}</span>
+</div>
+{% endblock extra_tabs %}
+
+{% block renderer_configuration %}
+<div class="xy-renderer-config">
+
+<span class="hint-text">
+    <i class="fa fa-info-circle"></i> {% trans "Select or create a shared configuration that applies to all XY files. For per-file adjustments, use the Status tab." %}
+</span>
+
+<!-- Feature 1: Staged XY files status -->
+<!-- ko if: stagedXyFiles().length > 0 -->
+<div class="xy-staged-panel">
+    <div class="xy-staged-header">
+        <i class="fa fa-files-o"></i>
+        <span data-bind="text: stagedXyTileCount()"></span> {% trans "XY file(s) staged" %}
+    </div>
+    <div class="xy-staged-list">
+    <!-- ko foreach: stagedXyFiles() -->
+    <div class="xy-staged-item">
+        <!-- ko if: hasConfig -->
+        <i class="fa fa-check-circle text-success"></i>
+        <!-- /ko -->
+        <!-- ko ifnot: hasConfig -->
+        <i class="fa fa-exclamation-circle text-warning"></i>
+        <!-- /ko -->
+        <span class="flex-1 text-ellipsis" data-bind="text: name"></span>
+        <!-- ko if: configName -->
+        <span class="label label-default" data-bind="text: configName"></span>
+        <!-- /ko -->
+        <!-- ko ifnot: configName -->
+        <span class="label label-warning">{% trans "No config" %}</span>
+        <!-- /ko -->
+    </div>
+    <!-- /ko -->
+    </div>
+</div>
+<!-- /ko -->
+
+<!-- ko component: {
+    name: 'importer-configuration',
+    params: {
+        selectedConfiguration: selectedConfig,
+        alert: alert,
+        onConfigSaved: onConfigSaved,
+        showingList: importerShowingList
+    }
+} -->
+<!-- /ko -->
+
+<!-- ko if: canApplyBatch() && importerShowingList() -->
+<div style="margin-top: 12px;">
+    <button class="btn btn-primary btn-block"
+            data-bind="click: applyConfigToStaged, disable: batchApplying()">
+        <!-- ko ifnot: batchApplying() -->
+        <i class="fa fa-check-square-o"></i>
+        {% trans "Apply to" %} <span data-bind="text: stagedXyTileCount()"></span> {% trans "staged file(s)" %}
+        <!-- /ko -->
+        <!-- ko if: batchApplying() -->
+        <i class="fa fa-spinner fa-spin"></i>
+        {% trans "Applying..." %}
+        <!-- /ko -->
+    </button>
+</div>
+<!-- /ko -->
+
+<!-- ko if: batchResult() -->
+<div class="alert" style="margin-top: 8px; padding: 8px 12px;"
+     data-bind="css: { 'alert-success': batchResult().indexOf('error') === -1, 'alert-danger': batchResult().indexOf('error') !== -1 }">
+    <span data-bind="text: batchResult()"></span>
+</div>
+<!-- /ko -->
+
+</div>
+{% endblock renderer_configuration %}
+
+{% block extra_tab_contents %}
+
+<!-- Feature 4: Files overview + per-file overrides -->
+<!--ko if: fileViewer.activeTab() === 'xy-files' -->
+<div class="workbench-card-sidepanel-header-container file-workbench">
+    <h4 class="workbench-card-sidepanel-header" data-bind="click: fileViewer.hideSidePanel">
+        {% trans 'Files Status' %}
+    </h4>
+</div>
+<div style="padding: 10px;">
+    <span class="hint-text">
+        <i class="fa fa-info-circle"></i> {% trans "Check which files have a configuration applied. Select file(s) to customize parsing settings individually, overriding the shared config." %}
+    </span>
+
+    <!-- ko if: allXyFiles().length === 0 -->
+    <div class="alert alert-warning" style="padding: 10px;">
+        <i class="fa fa-info-circle"></i> {% trans "No XY files found. Assign the XY renderer to files in the Manage tab." %}
+    </div>
+    <!-- /ko -->
+
+    <!-- ko if: allXyFiles().length > 0 -->
+    <div class="xy-status-header">
+        <span class="text-sm text-muted">
+            <span data-bind="text: allXyFiles().length"></span> {% trans "file(s)" %}
+            <!-- ko if: statusSelectedFiles().length -->
+            — <strong data-bind="text: statusSelectedFiles().length"></strong> {% trans "selected" %}
+            <!-- /ko -->
+        </span>
+        <span class="text-xs">
+            <a href="#" style="margin-right: 6px;" data-bind="click: statusSelectAll">{% trans "All" %}</a>
+            <a href="#" data-bind="click: statusDeselectAll, visible: statusSelectedFiles().length">{% trans "None" %}</a>
+        </span>
+    </div>
+
+    <div class="xy-files-list">
+    <!-- ko foreach: allXyFiles() -->
+    <div class="xy-file-item"
+         data-bind="click: $parent.toggleStatusFile, css: {'active-file': $parent.statusSelectedFiles.indexOf($data) > -1}">
+        <input type="checkbox" class="xy-file-checkbox" data-bind="checked: $parent.statusSelectedFiles.indexOf($data) > -1">
+        <!-- ko if: hasConfig -->
+        <i class="fa fa-check-circle text-success"></i>
+        <!-- /ko -->
+        <!-- ko ifnot: hasConfig -->
+        <i class="fa fa-exclamation-circle text-warning"></i>
+        <!-- /ko -->
+        <span class="flex-1 text-ellipsis" data-bind="text: name, attr: { title: name }"></span>
+        <!-- ko if: hasOverrides -->
+        <i class="fa fa-sliders text-warning" title="{% trans 'Has custom parsing' %}"></i>
+        <!-- /ko -->
+        <!-- ko if: configName -->
+        <span class="label label-info text-xs" data-bind="text: configName"></span>
+        <!-- /ko -->
+        <!-- ko ifnot: configName -->
+        <span class="label label-warning text-xs">{% trans "none" %}</span>
+        <!-- /ko -->
+    </div>
+    <!-- /ko -->
+    </div>
+
+    <!-- Adjust parsing button -->
+    <!-- ko if: statusSelectedFiles().length > 0 -->
+    <div style="margin-top: 10px;">
+        <button class="btn btn-sm btn-block" style="border-color: #f0ad4e; color: #8a6d3b;"
+                data-bind="click: () => { showOverridePanel(!showOverridePanel()); }, css: {'btn-warning': hasOverrideValues()}">
+            <i class="fa fa-sliders"></i>
+            {% trans "Adjust parsing for" %}
+            <span data-bind="text: overrideTargetLabel()"></span>
+        </button>
+    </div>
+    <!-- /ko -->
+
+    <!-- Override panel -->
+    <!-- ko if: showOverridePanel() && statusSelectedFiles().length > 0 -->
+    <div class="xy-override-panel">
+        <div class="xy-override-header">
+            <i class="fa fa-sliders"></i>
+            {% trans "Custom parsing:" %} <span data-bind="text: overrideTargetLabel()"></span>
+        </div>
+        <div class="xy-override-body">
+            <span class="xy-override-hint">
+                <i class="fa fa-info-circle"></i> {% trans "These settings override the shared config for the selected file(s) only. Choose 'Use config' to keep the shared config value." %}
+            </span>
+
+            <div class="importer-config-panel" style="margin-bottom: 10px;">
+                <label class="override-label">{% trans "Delimiter" %}</label>
+                <div class="override-radio-group">
+                    <div class="radio-row"><input type="radio" name="overrideDelimiterRadio" value="config" data-bind="checked: overrideDelimiterRadio"><label>{% trans "Use config" %} <span class="text-muted" data-bind="text: overridePlaceholder().delimiter"></span></label></div>
+                    <div class="radio-row"><input type="radio" name="overrideDelimiterRadio" value="auto" data-bind="checked: overrideDelimiterRadio"><label>{% trans "Auto-detect" %}</label></div>
+                    <div class="radio-row"><input type="radio" name="overrideDelimiterRadio" value="," data-bind="checked: overrideDelimiterRadio"><label>{% trans "Comma" %}</label></div>
+                    <div class="radio-row"><input type="radio" name="overrideDelimiterRadio" value="tab" data-bind="checked: overrideDelimiterRadio"><label>{% trans "Tab" %}</label></div>
+                    <div class="radio-row"><input type="radio" name="overrideDelimiterRadio" value="other" data-bind="checked: overrideDelimiterRadio"><label>{% trans "Other:" %}</label></div>
+                </div>
+                <input type="text" class="override-input" data-bind="visible: overrideDelimiterRadio() === 'other', textInput: overrideDelimiterCustom" placeholder="{% trans 'Custom delimiter' %}">
+            </div>
+
+            <div class="importer-config-panel" style="margin-bottom: 10px;">
+                <label class="override-label">{% trans "Header" %}</label>
+                <div class="override-radio-group">
+                    <div class="radio-row"><input type="radio" name="overrideHeaderRadio" value="config" data-bind="checked: overrideHeaderRadio"><label>{% trans "Use config" %} <span class="text-muted" data-bind="text: overridePlaceholder().header"></span></label></div>
+                    <div class="radio-row"><input type="radio" name="overrideHeaderRadio" value="auto" data-bind="checked: overrideHeaderRadio"><label>{% trans "Auto-detect" %}</label></div>
+                    <div class="radio-row"><input type="radio" name="overrideHeaderRadio" value="fixed" data-bind="checked: overrideHeaderRadio"><label>{% trans "Fixed lines:" %}</label></div>
+                </div>
+                <input type="text" class="override-input" data-bind="visible: overrideHeaderRadio() === 'fixed', textInput: overrideHeader" placeholder="{% trans 'Number of lines' %}">
+            </div>
+
+            <div class="importer-config-panel" style="margin-bottom: 12px;">
+                <label class="override-label">{% trans "Footer" %}</label>
+                <div class="override-radio-group">
+                    <div class="radio-row"><input type="radio" name="overrideFooterRadio" value="config" data-bind="checked: overrideFooterRadio"><label>{% trans "Use config" %} <span class="text-muted" data-bind="text: overridePlaceholder().footer"></span></label></div>
+                    <div class="radio-row"><input type="radio" name="overrideFooterRadio" value="none" data-bind="checked: overrideFooterRadio"><label>{% trans "End of file" %}</label></div>
+                    <div class="radio-row"><input type="radio" name="overrideFooterRadio" value="delimited" data-bind="checked: overrideFooterRadio"><label>{% trans "After text:" %}</label></div>
+                </div>
+                <input type="text" class="override-input" data-bind="visible: overrideFooterRadio() === 'delimited', textInput: overrideFooter" placeholder="{% trans 'Footer text' %}">
+            </div>
+
+            <div class="override-actions">
+                <button class="btn btn-xs btn-default" data-bind="click: clearOverrides">
+                    <i class="fa fa-eraser"></i> {% trans "Reset to config" %}
+                </button>
+                <button class="btn btn-xs btn-primary" data-bind="click: saveOverrides, disable: overrideSaving()">
+                    <!-- ko ifnot: overrideSaving -->
+                    <i class="fa fa-check"></i> {% trans "Apply & re-render" %}
+                    <!-- /ko -->
+                    <!-- ko if: overrideSaving -->
+                    <i class="fa fa-spinner fa-spin"></i>
+                    <!-- /ko -->
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- /ko -->
+
+    <!-- /ko -->
+</div>
+<!--/ko-->
+
+{% endblock extra_tab_contents %}

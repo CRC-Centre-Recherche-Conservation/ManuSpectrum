@@ -1,7 +1,9 @@
 import ko from 'knockout';
-import koMapping from 'knockout-mapping';
 import $ from 'jquery';
+import Dropzone from 'dropzone'; // eslint-disable-line no-unused-vars
+import uuid from 'uuid';
 import 'bindings/select2-query';
+import 'bindings/dropzone';
 import WidgetViewModel from 'viewmodels/widget';
 import arches from 'arches';
 import manifestWidgetTemplate from 'templates/views/components/widgets/manifest-widget.htm';
@@ -30,16 +32,19 @@ const viewModel = function(params) {
     self.manifestError = ko.observable(false);
     self.errorMessage = ko.observable('');
 
-    self.defaultManifest = self.config.defaultManifest;
+    self.showCreatePanel = ko.observable(false);
+    self.newManifestTitle = ko.observable('');
+    self.newManifestDescription = ko.observable('');
+    self.isUploading = ko.observable(false);
+    self.uploadError = ko.observable('');
 
-    self.buildFullUrl = function(url) {
-        if (!url) return url;
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-            return url;
-        }
-        const baseUrl = window.location.origin;
-        return baseUrl + url;
-    };
+    self.transactionId = uuid.generate();
+    self.uniqueId = uuid.generate();
+    self.uniqueidClass = ko.computed(function() {
+        return "unique_id_" + self.uniqueId;
+    });
+
+    self.defaultManifest = self.config.defaultManifest;
 
     self.manifestSelectConfig = {
         value: self.manifest,
@@ -62,11 +67,11 @@ const viewModel = function(params) {
             processResults: function(data) {
                 return {
                     results: (data.results || []).map(function(manifest) {
-                        const fullUrl = self.buildFullUrl(manifest.url);
+                        const url = manifest.url;
                         return {
-                            id: fullUrl,
-                            text: manifest.label || fullUrl,
-                            manifest: { ...manifest, url: fullUrl }
+                            id: url,
+                            text: manifest.label || url,
+                            manifest: { ...manifest, url: url }
                         };
                     })
                 };
@@ -125,11 +130,14 @@ const viewModel = function(params) {
         }
     };
 
+    self._lastManifestValue = null;
     self.manifest.subscribe(function(newValue) {
+        if (newValue === self._lastManifestValue) return;
+        self._lastManifestValue = newValue;
+
         if (newValue) {
-            const fullUrl = self.buildFullUrl(newValue);
-            self.manifestUrl(fullUrl);
-            self.loadManifestData(fullUrl)
+            self.manifestUrl(newValue);
+            self.loadManifestData(newValue)
                 .then(() => self.updateValue())
                 .catch(() => self.updateValue());
         } else {
@@ -140,25 +148,11 @@ const viewModel = function(params) {
     self.loadManifestFromId = function(manifestId) {
         self.loading(true);
         self.manifestError(false);
-
-        fetch(`${arches.urls.api_iiif_manifest}?id=${manifestId}`)
-            .then(response => {
-                if (!response.ok) throw new Error('Manifest not found');
-                return response.json();
-            })
-            .then(data => {
-                if (data.results && data.results.length > 0) {
-                    const manifest = data.results[0];
-                    const fullUrl = self.buildFullUrl(manifest.url);
-                    self.manifestUrl(fullUrl);
-                    self.manifestLabel(manifest.label || 'IIIF Manifest');
-                    self.manifestDescription(manifest.description || '');
-                    self.loading(false);
-                } else {
-                    throw new Error('Manifest not found');
-                }
-            })
-            .catch(() => {
+        var manifestPath = '/manifest/' + manifestId;
+        self.manifestUrl(manifestPath);
+        self.manifestId(manifestId);
+        self.loadManifestData(manifestPath)
+            .catch(function() {
                 self.manifestError(true);
                 self.errorMessage('Unable to load manifest');
                 self.loading(false);
@@ -167,6 +161,7 @@ const viewModel = function(params) {
 
     self.quickValidateUrl = function(url) {
         if (!url) return { valid: false, error: 'URL is required' };
+        if (url.startsWith('/')) return { valid: true };
         try {
             new URL(url);
             return { valid: true };
@@ -205,16 +200,6 @@ const viewModel = function(params) {
                 return response.json();
             })
             .then(data => {
-                const context = data['@context'];
-                const isV2 = context && (
-                    typeof context === 'string' ? context.includes('iiif.io/api/presentation/2') :
-                    Array.isArray(context) ? context.some(c => c.includes('iiif.io/api/presentation/2')) : false
-                );
-                const isV3 = context && (
-                    typeof context === 'string' ? context.includes('iiif.io/api/presentation/3') :
-                    Array.isArray(context) ? context.some(c => c.includes('iiif.io/api/presentation/3')) : false
-                );
-
                 self.manifestData(data);
 
                 const label = self.getManifestValue(data, 'label');
@@ -263,46 +248,38 @@ const viewModel = function(params) {
         if (!manifest) return '';
 
         if (manifest.thumbnail) {
-            if (typeof manifest.thumbnail === 'string') return self.buildFullUrl(manifest.thumbnail);
+            if (typeof manifest.thumbnail === 'string') return manifest.thumbnail;
             if (manifest.thumbnail['@id'] || manifest.thumbnail['id']) {
-                return self.buildFullUrl(manifest.thumbnail['@id'] || manifest.thumbnail['id']);
+                return manifest.thumbnail['@id'] || manifest.thumbnail['id'];
             } else if (Array.isArray(manifest.thumbnail) && manifest.thumbnail[0]) {
                 const thumb = manifest.thumbnail[0];
-                const thumbUrl = thumb['@id'] || thumb['id'] || thumb;
-                return self.buildFullUrl(thumbUrl);
+                return thumb['@id'] || thumb['id'] || thumb;
             }
         }
 
         if (manifest.sequences?.[0]?.canvases?.[0]) {
             const firstCanvas = manifest.sequences[0].canvases[0];
             if (firstCanvas.thumbnail) {
-                if (typeof firstCanvas.thumbnail === 'string') return self.buildFullUrl(firstCanvas.thumbnail);
-                if (firstCanvas.thumbnail['@id']) return self.buildFullUrl(firstCanvas.thumbnail['@id']);
+                if (typeof firstCanvas.thumbnail === 'string') return firstCanvas.thumbnail;
+                if (firstCanvas.thumbnail['@id']) return firstCanvas.thumbnail['@id'];
             }
             if (firstCanvas.images?.[0]?.resource?.['@id']) {
                 const imageUrl = firstCanvas.images[0].resource['@id'];
-                const fullImageUrl = self.buildFullUrl(imageUrl);
-                return fullImageUrl.includes('/full/full/')
-                    ? fullImageUrl.replace('/full/full/', '/full/200,/')
-                    : fullImageUrl;
+                return imageUrl.includes('/full/full/')
+                    ? imageUrl.replace('/full/full/', '/full/200,/')
+                    : imageUrl;
             }
         }
 
         if (manifest.items?.[0]?.thumbnail?.[0]) {
-            return self.buildFullUrl(manifest.items[0].thumbnail[0].id);
+            return manifest.items[0].thumbnail[0].id;
         }
 
         return '';
     };
 
     self.updateValue = function() {
-        const url = self.manifestUrl();
-        if (url) {
-            const fullUrl = self.buildFullUrl(url);
-            self.value(fullUrl);
-        } else {
-            self.value(null);
-        }
+        self.value(self.manifestUrl() || null);
     };
 
     self.clearManifest = function() {
@@ -318,11 +295,112 @@ const viewModel = function(params) {
         self.errorMessage('');
     };
 
+    self.openCreatePanel = function() {
+        self.showCreatePanel(true);
+    };
+
+    self.closeCreatePanel = function() {
+        self.showCreatePanel(false);
+        self.newManifestTitle('');
+        self.newManifestDescription('');
+        self.uploadError('');
+        self.isUploading(false);
+        if (self.dropzone) {
+            self.dropzone.removeAllFiles(true);
+        }
+    };
+
+    self.formData = new window.FormData();
+
+    self.createManifest = function(fileList) {
+        self.formData.delete("files");
+        self.formData = new window.FormData();
+
+        Array.from(fileList).forEach(function(file) {
+            self.formData.append("files", file, file.name);
+        });
+        self.formData.append("manifest_title", self.newManifestTitle() || 'Untitled manifest');
+        self.formData.append("manifest_description", self.newManifestDescription() || '');
+        self.formData.append("operation", "create");
+        self.formData.append("transaction_id", self.transactionId);
+
+        self.isUploading(true);
+        self.uploadError('');
+
+        $.ajax({
+            type: "POST",
+            url: arches.urls.manifest_manager,
+            data: self.formData,
+            cache: false,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                self.isUploading(false);
+                self.closeCreatePanel();
+
+                // manifest_manager already created the DB record.
+                // Set display state directly, bypassing select2 subscription.
+                self._lastManifestValue = response.url;
+                self.manifestUrl(response.url);
+                self.manifestLabel(response.label || self.newManifestTitle() || 'IIIF Manifest');
+                self.manifestDescription(response.description || '');
+                self.value(response.url);
+
+                // Load full manifest data for thumbnail preview
+                self.loadManifestData(response.url).catch(function() {});
+            },
+            error: function(response) {
+                self.isUploading(false);
+                self.uploadError(
+                    (response.responseJSON && response.responseJSON.message) ||
+                    arches.translations.manifestCreateError
+                );
+                if (self.dropzone) {
+                    self.dropzone.removeAllFiles(true);
+                }
+            }
+        });
+    };
+
+    self.dropzoneOptions = {
+        url: "arches.urls.root",
+        dictDefaultMessage: '',
+        autoProcessQueue: false,
+        uploadMultiple: true,
+        acceptedFiles: ["image/jpeg", "image/png", "image/tiff"].join(','),
+        autoQueue: false,
+        clickable: ".fileinput-create-button." + self.uniqueidClass(),
+        previewsContainer: '#hidden-dz-manifest-previews-' + self.uniqueId,
+        init: function() {
+            self.dropzone = this;
+            this.on("addedfiles", self.createManifest);
+            this.on("error", function(file, error) {
+                file.error = error;
+            });
+            // Hide Dropzone's auto-generated default message button
+            var dzMessage = this.element.querySelector('.dz-default.dz-message');
+            if (dzMessage) dzMessage.style.display = 'none';
+        }
+    };
+
+    self.manifestDisplayUrl = ko.computed(function() {
+        // Show the canonical IIIF id from the JSON if available (original external URL)
+        var data = self.manifestData();
+        if (data) {
+            var canonical = data.id || data['@id'];
+            if (canonical && canonical.startsWith('http')) return canonical;
+        }
+        // Fallback: reconstruct full URL from relative path
+        var url = self.manifestUrl();
+        if (url && url.startsWith('/')) return location.origin + url;
+        return url || '';
+    });
+
     self.displayValue = ko.computed(function() {
         if (self.state === 'report') {
-            return self.manifestUrl() || self.value() || '';
+            return self.manifestDisplayUrl() || self.value() || '';
         }
-        return self.manifestLabel() || self.manifestUrl() || '';
+        return self.manifestLabel() || self.manifestDisplayUrl() || '';
     });
 
     if (self.value()) {

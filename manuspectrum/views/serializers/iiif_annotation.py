@@ -22,6 +22,18 @@ class IIIFAnnotationSerializer:
     base_url = settings.PUBLIC_SERVER_ADDRESS
     base_url_iiif = base_url + "iiif"
 
+    @classmethod
+    def _to_full_manifest_url(cls, url: str) -> str:
+        """Convert a relative manifest path to a full URL.
+
+        Tiles from Manifest Datatype store relative paths like /manifest/{uuid}.
+        """
+        if not url:
+            return url
+        if url.startswith("/"):
+            return cls.base_url.rstrip("/") + url
+        return url
+
     DATATYPE_NODES = {
         "manifest": "9764a2c7-fc1b-46dd-8b4a-8b86588a0294",
         "file_list": "8fe5161a-7bf2-11ef-b1e5-dd514ecd97bc",
@@ -38,6 +50,7 @@ class IIIFAnnotationSerializer:
     }
 
     # caches batch
+    _batch_mode: bool = False
     _concept_cache: Dict[str, dict] = {}
     _resource_cache: Dict[str, dict] = {}
     _manifest_cache: Dict[str, dict] = {}  # url -> {"label": ...}
@@ -159,7 +172,11 @@ class IIIFAnnotationSerializer:
             resource = Resource.objects.get(resourceinstanceid=resource_id)
             uri = f"{cls.base_url}resources/{resource_id}"
 
-            displayname = resource.displayname() if callable(resource.displayname) else resource.displayname
+            displayname = (
+                resource.displayname()
+                if callable(resource.displayname)
+                else resource.displayname
+            )
             if isinstance(displayname, dict):
                 labels = {
                     lang: info["value"]
@@ -195,12 +212,15 @@ class IIIFAnnotationSerializer:
         Process multiple annotations in batch to optimize queries.
 
         Args:
-            annotations_data: List of dicts with 'target' and 'resource_id'
+            annotations_data: List of dicts with 'target', 'resource_id',
+                              and optionally 'canvas_uri' and 'manifest_url'
 
         Returns:
             List of IIIF annotation representations
         """
-        resource_ids = [a["resource_id"] for a in annotations_data if a.get("resource_id")]
+        resource_ids = [
+            a["resource_id"] for a in annotations_data if a.get("resource_id")
+        ]
 
         cls._batch_mode = True
         try:
@@ -212,6 +232,8 @@ class IIIFAnnotationSerializer:
                     cls.to_representation(
                         anno_data["target"],
                         anno_data["resource_id"],
+                        canvas_uri=anno_data.get("canvas_uri"),
+                        manifest_url=anno_data.get("manifest_url"),
                     )
                 )
         finally:
@@ -332,7 +354,11 @@ class IIIFAnnotationSerializer:
             rid = str(resource.resourceinstanceid)
             uri = f"{cls.base_url}resources/{rid}"
 
-            displayname = resource.displayname() if callable(resource.displayname) else resource.displayname
+            displayname = (
+                resource.displayname()
+                if callable(resource.displayname)
+                else resource.displayname
+            )
             if isinstance(displayname, dict):
                 labels = {
                     lang: info["value"]
@@ -358,9 +384,30 @@ class IIIFAnnotationSerializer:
 
     @classmethod
     def _batch_load_manifests(cls, manifest_urls: List[str]):
-        """Load all manifests in one query."""
-        manifests = IIIFManifest.objects.filter(url__in=manifest_urls).values("url", "label")
-        cls._manifest_cache = {m["url"]: {"label": m["label"]} for m in manifests}
+        """Load all manifests in one query, handling both full URLs and relative paths."""
+        from urllib.parse import urlparse
+
+        # Build list of all URL variants to search (full URLs + relative paths)
+        all_variants = set(manifest_urls)
+        url_to_relative = {}
+        for url in manifest_urls:
+            if url.startswith(("http://", "https://")):
+                relative_path = urlparse(url).path
+                if relative_path:
+                    all_variants.add(relative_path)
+                    url_to_relative[url] = relative_path
+
+        manifests = IIIFManifest.objects.filter(url__in=list(all_variants)).values(
+            "url", "label"
+        )
+        cache = {m["url"]: {"label": m["label"]} for m in manifests}
+
+        # Map original full URLs to their data (found via relative path)
+        for full_url, relative_path in url_to_relative.items():
+            if full_url not in cache and relative_path in cache:
+                cache[full_url] = cache[relative_path]
+
+        cls._manifest_cache = cache
 
     @classmethod
     def _clear_caches(cls):
@@ -392,75 +439,144 @@ class IIIFAnnotationSerializer:
     # ----------------------------------------------------------------------
 
     @classmethod
-    def _build_body(cls, tiles_data: dict) -> dict:
-        """Builds the IIIF `body` based on the available datatype nodes."""
-        # 1) Manifest
+    def _build_body(cls, tiles_data: dict) -> dict | list:
+        """
+        Builds the IIIF `body` based on the available datatype nodes.
+
+        Returns a single body dict if only one, or a list if multiple.
+        Per IIIF spec, body can be either a single resource or an array.
+        """
+        bodies: List[dict] = []
+
+        # 1) Manifest(s)
+        manifest_body = cls._build_manifest_body(tiles_data)
+        if manifest_body:
+            bodies.append(manifest_body)
+
+        # 2) Dataset files (can be multiple)
+        file_bodies = cls._build_file_bodies(tiles_data)
+        bodies.extend(file_bodies)
+
+        # 3) Fallback: TextualBody if no other body found
+        if not bodies:
+            name_node = cls.DATATYPE_NODES.get("name")
+            value = "No data available"
+            if name_node and name_node in tiles_data:
+                name_data = tiles_data[name_node]
+                if isinstance(name_data, dict):
+                    for lang_info in name_data.values():
+                        if isinstance(lang_info, dict) and lang_info.get("value"):
+                            value = lang_info["value"]
+                            break
+
+            bodies.append(
+                {
+                    "type": "TextualBody",
+                    "value": value,
+                    "format": "text/plain",
+                    "language": "fr",
+                }
+            )
+
+        # Return single object if only one, list if multiple (cleaner JSON output)
+        return bodies[0] if len(bodies) == 1 else bodies
+
+    @classmethod
+    def _build_manifest_body(cls, tiles_data: dict) -> dict | None:
+        """Build a Manifest body if present in tiles data."""
         manifest_node = cls.DATATYPE_NODES.get("manifest")
-        if manifest_node and manifest_node in tiles_data:
-            manifest_url = tiles_data[manifest_node]
-            if manifest_url:
-                if manifest_url in cls._manifest_cache:
-                    manifest_resource = cls._manifest_cache[manifest_url]
+        if not manifest_node or manifest_node not in tiles_data:
+            return None
+
+        manifest_url = tiles_data[manifest_node]
+        if not manifest_url:
+            return None
+
+        full_url = cls._to_full_manifest_url(manifest_url)
+
+        # Check cache first
+        if manifest_url in cls._manifest_cache:
+            manifest_resource = cls._manifest_cache[manifest_url]
+            label = manifest_resource["label"]
+            return {
+                "id": full_url,
+                "type": "Manifest",
+                "format": "application/ld+json",
+                "label": {"en": [label] if label else ["Manifest"]},
+            }
+
+        # Outside batch, fallback: try exact URL then relative path
+        if not cls._batch_mode:
+            from urllib.parse import urlparse
+
+            urls_to_try = [manifest_url]
+            if manifest_url.startswith(("http://", "https://")):
+                relative_path = urlparse(manifest_url).path
+                if relative_path:
+                    urls_to_try.append(relative_path)
+
+            for url_variant in urls_to_try:
+                try:
+                    m = IIIFManifest.objects.get(url=url_variant)
                     return {
-                        "id": manifest_url,
+                        "id": full_url,
                         "type": "Manifest",
                         "format": "application/ld+json",
-                        "label": {"en": manifest_resource["label"]},
+                        "label": {"en": [m.label] if m.label else ["Manifest"]},
                     }
-                # Outside batch, fallback: only one request possible
-                if not cls._batch_mode:
-                    try:
-                        m = IIIFManifest.objects.get(url=manifest_url)
-                        return {
-                            "id": manifest_url,
-                            "type": "Manifest",
-                            "format": "application/ld+json",
-                            "label": {"en": m.label},
-                        }
-                    except IIIFManifest.DoesNotExist:
-                        logger.info(f"Manifest not found for URL: {manifest_url}")
+                except IIIFManifest.DoesNotExist:
+                    continue
 
-        # 2) Dataset (file list)
+            logger.info(f"Manifest not found for URL: {manifest_url}")
+
+        return None
+
+    @classmethod
+    def _build_file_bodies(cls, tiles_data: dict) -> List[dict]:
+        """Build Dataset bodies for all files in file_list."""
+        bodies: List[dict] = []
+
         filelist_node = cls.DATATYPE_NODES.get("file_list")
-        if filelist_node and filelist_node in tiles_data:
-            file_data = tiles_data[filelist_node]
-            if isinstance(file_data, list) and file_data:
-                first_file = file_data[0]
-                mime_type = tiles_data.get(
-                    cls.DATATYPE_NODES.get("mime_type"),
-                    "application/octet-stream",
-                )
-                name_node = cls.DATATYPE_NODES.get("name")
-                label = cls._get_localized_string(
-                    tiles_data.get(
-                        name_node,
-                        {"en": {"value": "Dataset file"}},
-                    )
-                )
-                return {
-                    "id": settings.PUBLIC_SERVER_ADDRESS + first_file.get("url", "").lstrip("/"),
+        if not filelist_node or filelist_node not in tiles_data:
+            return bodies
+
+        file_data = tiles_data[filelist_node]
+        if not isinstance(file_data, list) or not file_data:
+            return bodies
+
+        mime_type = tiles_data.get(
+            cls.DATATYPE_NODES.get("mime_type"),
+            "application/octet-stream",
+        )
+        name_node = cls.DATATYPE_NODES.get("name")
+        base_label = cls._get_localized_string(
+            tiles_data.get(name_node, {"en": {"value": "Dataset file"}})
+        )
+
+        for idx, file_item in enumerate(file_data):
+            file_url = file_item.get("url", "")
+            if not file_url:
+                continue
+
+            # Add index to label if multiple files
+            if len(file_data) > 1:
+                label = {
+                    lang: [f"{vals[0]} ({idx + 1}/{len(file_data)})"]
+                    for lang, vals in base_label.items()
+                }
+            else:
+                label = base_label
+
+            bodies.append(
+                {
+                    "id": settings.PUBLIC_SERVER_ADDRESS + file_url.lstrip("/"),
                     "type": "Dataset",
                     "format": mime_type,
                     "label": label,
                 }
+            )
 
-        # 3) Fallback: TextualBody
-        name_node = cls.DATATYPE_NODES.get("name")
-        value = "No data available"
-        if name_node and name_node in tiles_data:
-            name_data = tiles_data[name_node]
-            if isinstance(name_data, dict):
-                for lang_info in name_data.values():
-                    if isinstance(lang_info, dict) and lang_info.get("value"):
-                        value = lang_info["value"]
-                        break
-
-        return {
-            "type": "TextualBody",
-            "value": value,
-            "format": "text/plain",
-            "language": "fr",
-        }
+        return bodies
 
     # ----------------------------------------------------------------------
     # Metadata helpers
@@ -476,7 +592,9 @@ class IIIFAnnotationSerializer:
                 for concept_id in raw_value:
                     concept_data = cls._resolve_concept_multilingual(str(concept_id))
                     for lang, label in concept_data["labels"].items():
-                        all_labels.setdefault(lang, []).append(f"{label} ({concept_data['uri']})")
+                        all_labels.setdefault(lang, []).append(
+                            f"{label} ({concept_data['uri']})"
+                        )
                 return all_labels or {"en": [str(raw_value)]}
 
         # Resource-instance fields
@@ -488,7 +606,9 @@ class IIIFAnnotationSerializer:
                 if resource_id:
                     res_data = cls._resolve_resource_multilingual(resource_id)
                     for lang, label in res_data["labels"].items():
-                        all_labels.setdefault(lang, []).append(f"{label} ({res_data['uri']})")
+                        all_labels.setdefault(lang, []).append(
+                            f"{label} ({res_data['uri']})"
+                        )
             return all_labels or {"en": [str(raw_value)]}
 
         # Researchers
@@ -539,7 +659,9 @@ class IIIFAnnotationSerializer:
             node = cls.DATATYPE_NODES.get(field)
             if node and node in tiles_data and tiles_data[node]:
                 try:
-                    formatted_value = cls._format_metadata_value(tiles_data[node], field)
+                    formatted_value = cls._format_metadata_value(
+                        tiles_data[node], field
+                    )
                     metadata.append(
                         {
                             "label": {"en": [label]},
@@ -602,27 +724,106 @@ class IIIFAnnotationSerializer:
         return see_also
 
     # ----------------------------------------------------------------------
+    # Target builder
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _build_target(
+        cls,
+        target_string: str,
+        canvas_uri: str | None = None,
+        manifest_url: str | None = None,
+    ) -> dict | str:
+        """
+        Build a IIIF SpecificResource target from a target string.
+
+        Args:
+            target_string: The target URL, possibly with #xywh fragment
+            canvas_uri: The canvas URI (without fragment)
+            manifest_url: The manifest URL
+
+        Returns:
+            dict: A IIIF SpecificResource target, or str if no fragment
+        """
+        if not target_string:
+            return target_string
+
+        # Parse the target string to extract canvas and fragment
+        fragment = None
+        base_canvas = canvas_uri
+
+        if "#" in target_string:
+            parts = target_string.split("#", 1)
+            if not base_canvas:
+                base_canvas = parts[0]
+            fragment = parts[1] if len(parts) > 1 else None
+        elif not base_canvas:
+            base_canvas = target_string
+
+        # If no fragment, return simple target (just the canvas URI)
+        if not fragment:
+            return base_canvas or target_string
+
+        # Build the SpecificResource target
+        source: dict = {
+            "id": base_canvas,
+            "type": "Canvas",
+        }
+
+        # Add partOf with manifest reference if available
+        if manifest_url:
+            source["partOf"] = [
+                {
+                    "id": manifest_url,
+                    "type": "Manifest",
+                }
+            ]
+
+        target: dict = {
+            "type": "SpecificResource",
+            "source": source,
+            "selector": {
+                "type": "FragmentSelector",
+                "conformsTo": "http://www.w3.org/TR/media-frags/",
+                "value": fragment,
+            },
+        }
+
+        return target
+
+    # ----------------------------------------------------------------------
     # Public API
     # ----------------------------------------------------------------------
 
     @classmethod
-    def to_representation(cls, target: str, resource_id: str) -> dict:
+    def to_representation(
+        cls,
+        target: str,
+        resource_id: str,
+        canvas_uri: str | None = None,
+        manifest_url: str | None = None,
+    ) -> dict:
         """
         Build a full IIIF Annotation representation for a given Arches resource.
 
         Args:
             target (str): The IIIF target (e.g., Canvas URL + #xywh).
             resource_id (str): The Arches resource UUID.
+            canvas_uri (str, optional): The canvas URI (without fragment).
+            manifest_url (str, optional): The manifest URL for partOf reference.
 
         Returns:
             dict: A IIIF Presentation API v3 compliant annotation.
         """
+        # Build structured target
+        structured_target = cls._build_target(target, canvas_uri, manifest_url)
+
         annotation: dict = {
             "@context": "http://iiif.io/api/presentation/3/context.json",
-            "id": f"{cls.base_url_iiif}/annotation/{resource_id}",
+            "id": f"{cls.base_url_iiif}/v3/annotation/{resource_id}",
             "type": "Annotation",
             "motivation": "supplementing",
-            "target": target,
+            "target": structured_target,
         }
 
         if not resource_id:
@@ -651,3 +852,379 @@ class IIIFAnnotationSerializer:
             annotation["seeAlso"] = see_also
 
         return annotation
+
+
+class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
+    """
+    Builds a IIIF Presentation API v2 Annotation (Open Annotation model)
+    from internal Arches resource data.
+
+    This serializer converts the v3 structures to v2 format:
+    - body → resource
+    - target → on
+    - id → @id
+    - type → @type
+    - label dict → label string
+    """
+
+    V2_CONTEXT = "http://iiif.io/api/presentation/2/context.json"
+
+    # Mapping of v3 types to v2 types
+    TYPE_MAPPING = {
+        "Annotation": "oa:Annotation",
+        "Canvas": "sc:Canvas",
+        "Manifest": "sc:Manifest",
+        "SpecificResource": "oa:SpecificResource",
+        "FragmentSelector": "oa:FragmentSelector",
+        "Dataset": "dctypes:Dataset",
+        "Text": "dctypes:Text",
+        "TextualBody": "cnt:ContentAsText",
+    }
+
+    # ----------------------------------------------------------------------
+    # V2 conversion helpers
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _convert_label_to_v2(cls, label_v3: dict | str | None) -> str | None:
+        """
+        Convert v3 label format to v2 simple string.
+        v3: {"en": ["text"], "fr": ["texte"]} → v2: "text"
+        Takes the first value from the first language found.
+        """
+        if label_v3 is None:
+            return None
+        if isinstance(label_v3, str):
+            return label_v3
+        if isinstance(label_v3, dict):
+            # Try common languages first
+            for lang in ["en", "fr", "de", "es", "it"]:
+                if lang in label_v3:
+                    values = label_v3[lang]
+                    if isinstance(values, list) and values:
+                        return values[0]
+                    elif isinstance(values, str):
+                        return values
+            # Fallback: take first available
+            for values in label_v3.values():
+                if isinstance(values, list) and values:
+                    return values[0]
+                elif isinstance(values, str):
+                    return values
+        return str(label_v3)
+
+    @classmethod
+    def _convert_type_to_v2(cls, type_v3: str) -> str:
+        """Convert v3 type to v2 prefixed type."""
+        return cls.TYPE_MAPPING.get(type_v3, type_v3)
+
+    @classmethod
+    def _convert_metadata_to_v2(cls, metadata_v3: list) -> list:
+        """
+        Convert v3 metadata format to v2 format.
+        v3: [{"label": {"en": ["Label"]}, "value": {"en": ["Value"]}}]
+        v2: [{"label": "Label", "value": "Value"}]
+        """
+        metadata_v2 = []
+        for entry in metadata_v3:
+            label = cls._convert_label_to_v2(entry.get("label"))
+            value = cls._convert_label_to_v2(entry.get("value"))
+            if label and value:
+                metadata_v2.append({"label": label, "value": value})
+        return metadata_v2
+
+    # ----------------------------------------------------------------------
+    # V2 Body builder (resource)
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _build_body_v2(cls, tiles_data: dict) -> dict | list:
+        """
+        Builds the IIIF v2 `resource` based on the available datatype nodes.
+        Converts v3 body structure to v2 resource structure.
+        """
+        bodies: List[dict] = []
+
+        # 1) Manifest(s)
+        manifest_body = cls._build_manifest_body_v2(tiles_data)
+        if manifest_body:
+            bodies.append(manifest_body)
+
+        # 2) Dataset files (can be multiple)
+        file_bodies = cls._build_file_bodies_v2(tiles_data)
+        bodies.extend(file_bodies)
+
+        # 3) Fallback: TextualBody if no other body found
+        if not bodies:
+            name_node = cls.DATATYPE_NODES.get("name")
+            value = "No data available"
+            if name_node and name_node in tiles_data:
+                name_data = tiles_data[name_node]
+                if isinstance(name_data, dict):
+                    for lang_info in name_data.values():
+                        if isinstance(lang_info, dict) and lang_info.get("value"):
+                            value = lang_info["value"]
+                            break
+
+            bodies.append(
+                {
+                    "@type": "cnt:ContentAsText",
+                    "chars": value,
+                    "format": "text/plain",
+                }
+            )
+
+        return bodies[0] if len(bodies) == 1 else bodies
+
+    @classmethod
+    def _build_manifest_body_v2(cls, tiles_data: dict) -> dict | None:
+        """Build a Manifest resource body in v2 format."""
+        manifest_node = cls.DATATYPE_NODES.get("manifest")
+        if not manifest_node or manifest_node not in tiles_data:
+            return None
+
+        manifest_url = tiles_data[manifest_node]
+        if not manifest_url:
+            return None
+
+        full_url = cls._to_full_manifest_url(manifest_url)
+
+        # Check cache first
+        if manifest_url in cls._manifest_cache:
+            manifest_resource = cls._manifest_cache[manifest_url]
+            label = manifest_resource["label"]
+            return {
+                "@id": full_url,
+                "@type": "sc:Manifest",
+                "format": "application/ld+json",
+                "label": label if label else "Manifest",
+            }
+
+        # Outside batch, fallback: try exact URL then relative path
+        if not cls._batch_mode:
+            from urllib.parse import urlparse
+
+            urls_to_try = [manifest_url]
+            if manifest_url.startswith(("http://", "https://")):
+                relative_path = urlparse(manifest_url).path
+                if relative_path:
+                    urls_to_try.append(relative_path)
+
+            for url_variant in urls_to_try:
+                try:
+                    m = IIIFManifest.objects.get(url=url_variant)
+                    return {
+                        "@id": full_url,
+                        "@type": "sc:Manifest",
+                        "format": "application/ld+json",
+                        "label": m.label if m.label else "Manifest",
+                    }
+                except IIIFManifest.DoesNotExist:
+                    continue
+
+            logger.info(f"Manifest not found for URL: {manifest_url}")
+
+        return None
+
+    @classmethod
+    def _build_file_bodies_v2(cls, tiles_data: dict) -> List[dict]:
+        """Build Dataset resource bodies for all files in file_list (v2 format)."""
+        bodies: List[dict] = []
+
+        filelist_node = cls.DATATYPE_NODES.get("file_list")
+        if not filelist_node or filelist_node not in tiles_data:
+            return bodies
+
+        file_data = tiles_data[filelist_node]
+        if not isinstance(file_data, list) or not file_data:
+            return bodies
+
+        mime_type = tiles_data.get(
+            cls.DATATYPE_NODES.get("mime_type"),
+            "application/octet-stream",
+        )
+        name_node = cls.DATATYPE_NODES.get("name")
+        base_label = cls._convert_label_to_v2(
+            cls._get_localized_string(
+                tiles_data.get(name_node, {"en": {"value": "Dataset file"}})
+            )
+        )
+
+        for idx, file_item in enumerate(file_data):
+            file_url = file_item.get("url", "")
+            if not file_url:
+                continue
+
+            # Add index to label if multiple files
+            if len(file_data) > 1:
+                label = f"{base_label} ({idx + 1}/{len(file_data)})"
+            else:
+                label = base_label
+
+            bodies.append(
+                {
+                    "@id": settings.PUBLIC_SERVER_ADDRESS + file_url.lstrip("/"),
+                    "@type": "dctypes:Dataset",
+                    "format": mime_type,
+                    "label": label,
+                }
+            )
+
+        return bodies
+
+    # ----------------------------------------------------------------------
+    # V2 Target builder (on)
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _build_target_v2(
+        cls,
+        target_string: str,
+        canvas_uri: str | None = None,
+        manifest_url: str | None = None,
+    ) -> str | dict:
+        """
+        Build a IIIF v2 target (on) from a target string.
+
+        In v2, the target is typically a simple URI with fragment:
+        "https://example.com/canvas/1#xywh=100,100,200,200"
+
+        For more complex selectors, return an oa:SpecificResource structure.
+        """
+        if not target_string:
+            return canvas_uri or ""
+
+        # If target already has fragment, return as-is (simple form)
+        if "#" in target_string:
+            return target_string
+
+        # If no fragment, return the canvas URI
+        return canvas_uri or target_string
+
+    # ----------------------------------------------------------------------
+    # V2 See Also builder
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def _build_see_also_v2(cls, tiles_data: dict, analysis_id: str) -> list:
+        """Builds the IIIF v2 `seeAlso` section with related links."""
+        see_also = [
+            {
+                "@id": f"{cls.base_url}report/{analysis_id}",
+                "@type": "dctypes:Text",
+                "format": "text/html",
+                "label": "Detailed analysis report",
+            }
+        ]
+
+        doi_node = cls.DATATYPE_NODES.get("dataset_uri")
+        if doi_node and doi_node in tiles_data and tiles_data[doi_node]:
+            uri = tiles_data[doi_node]
+            see_also.append(
+                {
+                    "@id": uri,
+                    "@type": "dctypes:Dataset",
+                    "format": "text/html",
+                    "label": "Published dataset",
+                }
+            )
+
+        return see_also
+
+    # ----------------------------------------------------------------------
+    # Public API
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def to_representation(
+        cls,
+        target: str,
+        resource_id: str,
+        canvas_uri: str | None = None,
+        manifest_url: str | None = None,
+    ) -> dict:
+        """
+        Build a full IIIF v2 Annotation representation for a given Arches resource.
+
+        Args:
+            target (str): The IIIF target (e.g., Canvas URL + #xywh).
+            resource_id (str): The Arches resource UUID.
+            canvas_uri (str, optional): The canvas URI (without fragment).
+            manifest_url (str, optional): The manifest URL for partOf reference.
+
+        Returns:
+            dict: A IIIF Presentation API v2 compliant annotation (Open Annotation).
+        """
+        # Build v2 target (on)
+        on_target = cls._build_target_v2(target, canvas_uri, manifest_url)
+
+        annotation: dict = {
+            "@context": cls.V2_CONTEXT,
+            "@id": f"{cls.base_url_iiif}/v2/annotation/{resource_id}",
+            "@type": "oa:Annotation",
+            "motivation": "oa:commenting",
+            "on": on_target,
+        }
+
+        if not resource_id:
+            annotation["resource"] = {
+                "@type": "cnt:ContentAsText",
+                "chars": "No data available",
+                "format": "text/plain",
+            }
+            return annotation
+
+        tiles_data = cls._get_resource_tiles(resource_id)
+
+        label_node = cls.DATATYPE_NODES.get("name")
+        if label_node and label_node in tiles_data:
+            label_v3 = cls._get_localized_string(tiles_data[label_node])
+            annotation["label"] = cls._convert_label_to_v2(label_v3)
+
+        annotation["resource"] = cls._build_body_v2(tiles_data)
+
+        metadata_v3 = cls._build_metadata(tiles_data)
+        if metadata_v3:
+            annotation["metadata"] = cls._convert_metadata_to_v2(metadata_v3)
+
+        see_also = cls._build_see_also_v2(tiles_data, resource_id)
+        if see_also:
+            annotation["seeAlso"] = see_also
+
+        return annotation
+
+    @classmethod
+    def batch_to_representation(cls, annotations_data: List[Dict]) -> List[Dict]:
+        """
+        Process multiple annotations in batch to optimize queries (v2 format).
+
+        Args:
+            annotations_data: List of dicts with 'target', 'resource_id',
+                              and optionally 'canvas_uri' and 'manifest_url'
+
+        Returns:
+            List of IIIF v2 annotation representations
+        """
+        resource_ids = [
+            a["resource_id"] for a in annotations_data if a.get("resource_id")
+        ]
+
+        cls._batch_mode = True
+        try:
+            cls._prefetch_all_data(resource_ids)
+
+            results: List[dict] = []
+            for anno_data in annotations_data:
+                results.append(
+                    cls.to_representation(
+                        anno_data["target"],
+                        anno_data["resource_id"],
+                        canvas_uri=anno_data.get("canvas_uri"),
+                        manifest_url=anno_data.get("manifest_url"),
+                    )
+                )
+        finally:
+            cls._batch_mode = False
+            cls._clear_caches()
+
+        return results

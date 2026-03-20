@@ -1,0 +1,116 @@
+// ============================================
+// File XY Widget (Report - unified chart)
+// ============================================
+
+.rp-report-tile:has(.report-xy-unified-container) {
+    flex: 1;
+    min-width: 0;
+}
+.report-xy-unified-container {
+    margin-left: 0 !important;
+    clear: both;
+    padding: 10px 0;
+    position: relative;
+}
+.report-xy-chart-loading {
+    padding: 20px;
+    text-align: center;
+    color: #999;
+    i { margin-right: 5px; }
+}
+.report-xy-chart-error {
+    padding: 10px 15px;
+    margin: 5px 0;
+    background-color: #fef0ef;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    color: #721c24;
+    i { margin-right: 5px; color: #dc3545; }
+}
+.report-xy-no-selection {
+    padding: 20px;
+    text-align: center;
+    color: #999;
+    i { margin-right: 5px; }
+}
+.report-xy-chart {
+    width: 100%;
+    min-height: 400px;
+}
+
+// File dropdown
+.xy-file-dropdown {
+    display: flex;
+    justify-content: flex-end;
+    position: relative;
+    z-index: 10;
+    margin-bottom: 4px;
+}
+.xy-file-dropdown-toggle {
+    font-size: 12px;
+    i { margin-right: 3px; }
+}
+.xy-file-dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 2px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175);
+    min-width: 220px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 5px 0;
+}
+.xy-file-dropdown-actions {
+    padding: 4px 12px 6px;
+    border-bottom: 1px solid #eee;
+    font-size: 12px;
+    a { cursor: pointer; color: #337ab7; }
+    a:hover { text-decoration: underline; }
+}
+.xy-file-dropdown-sep {
+    margin: 0 6px;
+    color: #ccc;
+}
+.xy-file-dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 12px;
+    margin: 0;
+    font-weight: normal;
+    cursor: pointer;
+    font-size: 13px;
+    white-space: nowrap;
+
+    &:hover { background-color: #f5f5f5; }
+    input[type="checkbox"] {
+        margin: 0 6px 0 0;
+        flex-shrink: 0;
+    }
+}
+.xy-file-color-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+.xy-file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+.xy-file-status-icon {
+    margin-left: 6px;
+    font-size: 11px;
+    color: #999;
+    flex-shrink: 0;
+}
+.xy-file-status-warning {
+    color: #dc3545;
+}

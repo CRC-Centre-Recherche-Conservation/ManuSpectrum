@@ -1,0 +1,96 @@
+// ============================================
+// XY Reader Card (file-renderer)
+// ============================================
+
+// Renderer config wrapper
+.xy-renderer-config {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 220px);
+    overflow: hidden;
+}
+.xy-renderer-config .importer-configuration {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+// Staged files panel
+.xy-staged-panel {
+    margin-bottom: 14px;
+    border: 1px solid #d9edf7;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.xy-staged-header {
+    background: #d9edf7;
+    padding: 6px 10px;
+    font-weight: bold;
+    font-size: 12px;
+}
+.xy-staged-list {
+    max-height: 150px;
+    overflow-y: auto;
+}
+.xy-staged-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    border-top: 1px solid #eee;
+}
+
+// Status tab
+.xy-status-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+.xy-files-list {
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    border-radius: 3px;
+}
+.xy-file-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 12px;
+    cursor: pointer;
+}
+.xy-file-checkbox {
+    margin: 0;
+    pointer-events: none;
+}
+
+// Per-file override panel
+.xy-override-panel {
+    margin-top: 8px;
+    border: 1px solid #f0ad4e;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.xy-override-header {
+    background: #f0ad4e;
+    color: #fff;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: bold;
+}
+.xy-override-body {
+    padding: 10px;
+    background: #fefdf5;
+}
+.xy-override-hint {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 11px;
+    color: #8a6d3b;
+}

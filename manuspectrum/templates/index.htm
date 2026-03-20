@@ -1,548 +1,752 @@
 <!--
-ARCHES - a program developed to inventory and manage immovable cultural heritage.
-Copyright (C) 2013 J. Paul Getty Trust and World Monuments Fund
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
+ManuSpectrum — Base de données interopérable pour l'analyse physico-chimique du patrimoine
+Homepage — Prismatic Luminescence aesthetic
 -->
 {% load static %}
 {% load template_tags %}
 {% load i18n %}
 {% load render_bundle from webpack_loader %}
 {% load webpack_static from webpack_loader %}
+{% get_current_language as LANGUAGE_CODE %}
+
+{% trans "ManuSpectrum — Physicochemical Analysis of Heritage" as seo_title %}
+{% trans "Interoperable database for written cultural heritage materials analysis — Biblissima+ Cluster" as seo_description %}
 
 <!DOCTYPE html>
-<!--[if IE 8]> <html lang="en" class="ie8"> <![endif]-->
-<!--[if IE 9]> <html lang="en" class="ie9"> <![endif]-->
-<!--[if !IE]><!-->
-<html lang="en">
-<!--<![endif]-->
+<html lang="{{ LANGUAGE_CODE }}">
 
 <head>
-    <title>{{app_title}}</title>
-
-    <!-- Meta -->
+    <title>{{ seo_title }}</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="">
-    <meta name="author" content="">
+    <meta name="description" content="{{ seo_description }}">
+    <meta name="keywords" content="{% trans "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, IIIF, CIDOC-CRM, Biblissima, physicochemical analysis, heritage science" %}">
+    <meta name="theme-color" content="#faf9f7">
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="{{ request.build_absolute_uri }}">
+
+    <!-- Alternate languages -->
+    {% get_available_languages as LANGUAGES %}
+    {% for lang_code, lang_name in LANGUAGES %}
+    <link rel="alternate" hreflang="{{ lang_code }}" href="{{ request.build_absolute_uri }}">
+    {% endfor %}
+    <link rel="alternate" hreflang="x-default" href="{{ request.build_absolute_uri }}">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="ManuSpectrum">
+    <meta property="og:title" content="{{ seo_title }}">
+    <meta property="og:description" content="{{ seo_description }}">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:locale" content="{{ LANGUAGE_CODE }}">
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ seo_title }}">
+    <meta name="twitter:description" content="{{ seo_description }}">
+    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "ManuSpectrum",
+        "description": "{{ seo_description|escapejs }}",
+        "url": "{{ request.build_absolute_uri }}",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Web",
+        "inLanguage": ["en", "fr"],
+        "provider": {
+            "@type": "ResearchOrganization",
+            "name": "CRC — Centre de Recherche sur la Conservation",
+            "url": "https://crc.mnhn.fr",
+            "parentOrganization": [
+                {"@type": "ResearchOrganization", "name": "CNRS", "url": "https://www.cnrs.fr"},
+                {"@type": "ResearchOrganization", "name": "MNHN", "url": "https://www.mnhn.fr"}
+            ]
+        },
+        "funder": {
+            "@type": "Organization",
+            "name": "ANR — Agence Nationale de la Recherche",
+            "url": "https://anr.fr"
+        },
+        "isPartOf": {
+            "@type": "Project",
+            "name": "Biblissima+",
+            "url": "https://biblissima.fr",
+            "description": "Biblissima+ — Observatory of ancient written cultures"
+        },
+        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+        "keywords": "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, IIIF, CIDOC-CRM"
+    }
+    </script>
 
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
     <link rel="apple-touch-icon" href="{% webpack_static 'favicons/apple-touch-icon.png' %}" />
-    <link rel="apple-touch-icon" sizes="76x76" href="{% webpack_static 'favicons/apple-touch-icon-76x76.png' %}" />
-    <link rel="apple-touch-icon" sizes="120x120" href="{% webpack_static 'favicons/apple-touch-icon-120x120.png' %}" />
-    <link rel="apple-touch-icon" sizes="152x152" href="{% webpack_static 'favicons/apple-touch-icon-152x152.png' %}" />
-    <link rel="apple-touch-icon" sizes="180x180" href="{% webpack_static 'favicons/apple-touch-icon-180x180.png' %}" />
 
-    {% block css %}
-        <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Open+Sans:400,300,600&amp;subset=cyrillic,latin">
-        <link rel="stylesheet" type="text/css" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.2/css/bootstrap.min.css">
-        <link rel="stylesheet" type="text/css" href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.2.0/css/font-awesome.min.css">
-        <link rel="stylesheet" type="text/css" href="{% webpack_static 'plugins/slick/slick.min.css' %}">
-        <link rel="stylesheet" type="text/css" href="{% webpack_static 'plugins/slick/accessible-slick-theme.min.css' %}">
-        {% render_bundle 'css/index' 'css' %}
-        {% render_bundle 'css/index-slider' 'css' %}
-        
-        {% if app_settings.ACCESSIBILITY_MODE %}
-            {% render_bundle 'css/accessibility' 'css' %}
-        {% endif %}
-    {% endblock css%}
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Fallback: if JS doesn't load, make everything visible -->
+    <noscript>
+        <style>
+            .reveal, .reveal-scale { opacity: 1 !important; transform: none !important; }
+        </style>
+    </noscript>
+
+    {% render_bundle 'css/homepage' 'css' %}
 </head>
 
 <body>
-    <script src="{% webpack_static 'node_modules/requirejs/require.js' %}"></script>
+    <!-- Arches base config (translations, URLs) -->
     {% include 'javascript.htm' %}
 
-    <!--=== Header ===-->
-    <header>
-        <div class="v5-splash-navbar navbar">
-            <div class="container-fluid">
-                <div class="navbar-header">
-                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#myNavbar" aria-expanded="false" aria-controls="myNavbar">
-                        <span class="sr-only">Toggle navigation</span>
-                        <span class="icon-bar"></span>
-                        <span class="icon-bar"></span>
-                        <span class="icon-bar"></span>
-                    </button>
+    <!-- ============================================================
+         HEADER
+         ============================================================ -->
+    <header class="ms-header" id="ms-header">
+        <div class="ms-header-inner">
+            <a href="{% url 'home' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Home' %}">
+                <div class="ms-header-logo-mark"></div>
+                <span class="ms-header-logo-text">ManuSpectrum</span>
+            </a>
 
-                    <div class="relative nav-brand-container">
-                        <div class="navbar-brand-v5-icon-container">
-                            <img class="navbar-brand-v5-icon" src="{% webpack_static 'img/landing/Arches_logo_white.png' %}" alt="{% trans 'Arches Logo' %}">
-                        </div>
-                        <div class="application-name">
-                            <h1>{% blocktrans %}Arches | {{version}}{% endblocktrans %}</h1>
-                        </div>
-                    </div>
+            <nav class="ms-nav" aria-label="{% trans 'Main Navigation' %}">
+                <ul class="ms-nav-links">
+                    <li><a href="#project">{% trans "The Project" %}</a></li>
+                    <li><a href="#explore">{% trans "Explore" %}</a></li>
+                    <li><a href="#analyses">{% trans "Analyses" %}</a></li>
+                    <li><a href="#search">{% trans "Search" %}</a></li>
+                    {% if user|can_create_resource_instance and user.username != 'anonymous' %}
+                    <li><a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a></li>
+                    {% endif %}
+                </ul>
+
+                <div class="ms-nav-divider"></div>
+
+                <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-nav-github" aria-label="GitHub" title="{% trans 'Source code on GitHub' %}">
+                    <i class="fa-brands fa-github"></i>
+                </a>
+
+                <div class="ms-nav-divider"></div>
+
+                <div class="ms-nav-auth">
+                    {% if user.username == 'anonymous' %}
+                        <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
+                    {% else %}
+                        <a href="{% url 'user_profile_manager' %}" aria-label="{% trans 'User Profile' %}">
+                            {% blocktrans with name=user.first_name|default:user.username %}Welcome, {{ name }}{% endblocktrans %}
+                        </a>
+                        <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
+                    {% endif %}
                 </div>
 
-                <nav id="myNavbar" class="navbar-collapse collapse" aria-label="{% trans 'Arches Application Navigation' %}">
-                    <ul class="nav navbar-nav navbar-right">
-                        <li>
-                            <a href="#info-block-1">{% trans "Arches Features" %}</a>
-                        </li>
-                        <li>
-                            <a href="{% url 'search_home' %}">{% trans "Search Arches" %}</a>
-                        </li>
-                        {% if user|can_create_resource_instance and user.username != 'anonymous' %}
-                            <li>
-                                <a href="{% url 'resource' %}" target="_blank">{% trans "Manage" %}</a>
-                            </li>
-                        {% endif %}
-                        {% if user.username == 'anonymous' %}
-                            <li>
-                                <a class="application-login" id="auth-link" href="{% url 'auth' %}?next={% url 'home' %}{% if user.username != 'anonymous' %}&logout=true{% endif %}">{% trans "Sign in" %}</a>
-                            </li>
-                        {% else %}
-                            <li>
-                                <a class="auth-welcome" href="{% url 'user_profile_manager' %}" aria-label="{% trans 'Visit user profile' %}">
-                                    {% trans "Welcome, " %} {{ user.first_name|default:user.username }}
-                                </a>
-                            </li>
-                            <li>
-                                <a class="application-login" href="{% url 'auth' %}?next={% url 'home' %}{% if user.username != 'anonymous' %}&logout=true{% endif %}">{% trans 'Log off' %}</a>
-                            </li>
-                        {% endif %}
-                        {% if show_language_swtich %}
-                        {% csrf_token %}
-                            <li>
-                                {% get_current_language as LANGUAGE_CODE %}
-                                <div class="lang-switch" style="max-width: none;" data-bind='component: {
-                                    name: "views/components/language-switcher",
-                                    params: {
-                                        current_language: "{{LANGUAGE_CODE}}"
-                                    }
-                                }'></div>
-                            </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-            </div>
+                {% if show_language_swtich %}
+                {% csrf_token %}
+                    {% get_current_language as LANGUAGE_CODE %}
+                    <div class="lang-switch" data-bind='component: {
+                        name: "views/components/language-switcher",
+                        params: { current_language: "{{LANGUAGE_CODE}}" }
+                    }'></div>
+                {% endif %}
+            </nav>
+
+            <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Open Menu' %}">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
     </header>
-    <!--=== End Header ===-->
+
+    <!-- Mobile Navigation -->
+    <div class="ms-mobile-nav" id="ms-mobile-nav">
+        <a href="#project" class="ms-mobile-nav-link">{% trans "The Project" %}</a>
+        <a href="#explore" class="ms-mobile-nav-link">{% trans "Explore" %}</a>
+        <a href="#analyses" class="ms-mobile-nav-link">{% trans "Analyses" %}</a>
+        <a href="#search" class="ms-mobile-nav-link">{% trans "Search" %}</a>
+        {% if user|can_create_resource_instance and user.username != 'anonymous' %}
+            <a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a>
+        {% endif %}
+        <div class="spectral-line"></div>
+        {% if user.username == 'anonymous' %}
+            <a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
+        {% else %}
+            <a href="{% url 'user_profile_manager' %}">{{ user.first_name|default:user.username }}</a>
+            <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
+        {% endif %}
+        <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-mobile-nav-github">
+            <i class="fa-brands fa-github"></i>
+        </a>
+    </div>
+
 
     <main>
-        <article>
-            <!-- Intro Section -->
-            <section id="info-block-0" class="app-info-block intro-section relative">
-                <!-- Vertical Nav -->
-                <nav id="cd-vertical-nav" class="vertical-nav-container" aria-label="{% trans 'Page Navigation' %}">
-                    <ul class="vertical-nav-list">
-                        <li class="active">
-                            <a class="vertical-nav-list-link" href="#info-block-0" data-number="1" aria-label="{% trans 'Go to the top of the page' %}"
-                                data-bind="click: function() { document.querySelector('#info-block-0').focus; }"
-                            >
-                                <span class="vertical-nav-list-ref">{% trans "Home" %}</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="vertical-nav-list-link" href="#info-block-1" data-number="2" aria-label="{% trans 'Go to the fast section' %}">
-                                <span class="vertical-nav-list-ref">{% trans "Fast" %}</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="vertical-nav-list-link" href="#info-block-2" data-number="3" aria-label="{% trans 'Go to the workflows section' %}">
-                                <span class="vertical-nav-list-ref">{% trans "Workflows" %}</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a class="vertical-nav-list-link" href="#info-block-3" data-number="4" aria-label="{% trans 'Go to the search tools section' %}">
-                                <span class="vertical-nav-list-ref">{% trans "Search Tools" %}</span>
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
+    <!-- ============================================================
+         HERO SECTION
+         ============================================================ -->
+    <section class="ms-hero" id="hero">
+        <div class="ms-hero-aurora"></div>
+        <div class="ms-hero-spectral-bg"></div>
+        <div class="ms-hero-prism"></div>
 
-                <!-- Slider - Start -->
-                <div class="home-slider">
-                    <div class="slide-img-container">
-                        <img src="{% webpack_static 'img/landing/landing-primary.jpg' %}" alt="" aria-describedby="slide1-attribution">
-                        <div class="slide-caption">
-                            <h2>{% blocktrans %}Arches {{version}}{% endblocktrans %}</h2>
-                            <p>{% trans "A web and mobile platform for" %}</p>
-                            <p>{% trans "managing your most important resource information" %}</p>
-                        </div>
-                        <div id="slide1-attribution" class="slide-img-attribution">{% trans "Image courtesy of Luis Alfonso Orellana" %}</div>
-                    </div>
-                    <div class="slide-img-container">
-                        <img src="{% webpack_static 'img/landing/bhutan_tigersnest_lr.jpg' %}" alt="" aria-describedby="slide2-attribution">
-                        <div class="slide-caption">
-                            <h2>{% blocktrans %}Arches {{version}}{% endblocktrans %}</h2>
-                            <p>{% trans "A web and mobile platform for" %}</p>
-                            <p>{% trans "managing your most important resource information" %}</p>
-                        </div>
-                        <div id="slide2-attribution" class="slide-img-attribution">{% trans "Taktsang Palphug Monastery (also known as Paro Takstang or Tiger's Nest Monastery), Bhutan" %}</div>
-                    </div>
-                    <div class="slide-img-container">
-                        <img src="{% webpack_static 'img/landing/potala_palace.jpg' %}" alt="" aria-describedby="slide3-attribution">
-                        <div class="slide-caption">
-                            <h2>{% blocktrans %}Arches {{version}}{% endblocktrans %}</h2>
-                            <p>{% trans "A web and mobile platform for" %}</p>
-                            <p>{% trans "managing your most important resource information" %}</p>
-                        </div>
-                        <div id="slide3-attribution" class="slide-img-attribution">{% trans "Potala Palace in Lhasa, Tibet" %}</div>
+        <div class="ms-hero-content">
+            <!-- Interactive logo (inline SVG for Plotly-style hover) -->
+            <div class="ms-hero-logo" id="ms-logo-wrap">
+              <svg id="ms-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 95" aria-label="ManuSpectrum">
+                <defs>
+                  <linearGradient id="spectral-bar" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#dc3545"/><stop offset="20%" stop-color="#e67e22"/>
+                    <stop offset="40%" stop-color="#f0b429"/><stop offset="60%" stop-color="#10b981"/>
+                    <stop offset="80%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#8b5cf6"/>
+                  </linearGradient>
+                  <linearGradient id="glow-blue" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stop-color="#3b82f6" stop-opacity="0"/>
+                    <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.10"/>
+                  </linearGradient>
+                  <linearGradient id="glow-red" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stop-color="#dc3545" stop-opacity="0"/>
+                    <stop offset="100%" stop-color="#dc3545" stop-opacity="0.07"/>
+                  </linearGradient>
+                </defs>
+
+                <!-- Y-axis -->
+                <line x1="40" y1="82" x2="40" y2="4" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+                <line x1="37" y1="82" x2="40" y2="82" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+                <line x1="37" y1="43" x2="40" y2="43" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+                <line x1="37" y1="4" x2="40" y2="4" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+                <text x="34" y="85" text-anchor="end" fill="#1a1a2e" font-family="'Sora',system-ui,sans-serif" font-size="8" opacity="0.30">0</text>
+                <text x="34" y="7" text-anchor="end" fill="#1a1a2e" font-family="'Sora',system-ui,sans-serif" font-size="8" opacity="0.30">1</text>
+
+                <!-- MANU text -->
+                <text x="124" y="65" fill="#1a1a2e" font-family="Georgia,'Cormorant Garamond',serif" font-size="44" font-weight="300" letter-spacing="5">MANU</text>
+
+                <!-- Peak 1 (blue) fill + stroke -->
+                <path d="M 40,82 C 50,82 65,45 78,45 C 86,45 100,82 132,81 C 205,81 228,79 245,72 C 253,68 259,68 267,72 C 275,78 280,80 288,74 C 308,40 330,8 342,6 C 354,6 390,38 452,34 L 40,82 Z" fill="url(#glow-blue)"/>
+                <path id="curve-blue" class="ms-logo-curve"
+                      d="M 40,82 C 50,82 65,45 78,45 C 86,45 100,82 132,81 C 205,81 228,79 245,72 C 253,68 259,68 267,72 C 275,78 280,80 288,74 C 308,40 330,8 342,6 C 354,6 390,38 452,34"
+                      fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+
+                <!-- Peak 2 (red) fill + stroke -->
+                <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 210,81 232,78 250,70 C 258,66 264,66 272,70 C 280,77 285,79 292,72 C 314,38 340,12 358,10 C 366,10 390,36 400,34 C 404,32 408,22 412,22 C 416,22 420,34 458,32 L 40,82 Z" fill="url(#glow-red)"/>
+                <path id="curve-red" class="ms-logo-curve"
+                      d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 210,81 232,78 250,70 C 258,66 264,66 272,70 C 280,77 285,79 292,72 C 314,38 340,12 358,10 C 366,10 390,36 400,34 C 404,32 408,22 412,22 C 416,22 420,34 458,32"
+                      fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+
+                <!-- PECTRUM text -->
+                <text x="345" y="65" fill="#1a1a2e" font-family="Georgia,'Cormorant Garamond',serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
+
+                <!-- Spectral bar (x-axis) -->
+                <rect x="40" y="82" width="580" height="3" rx="1.5" fill="url(#spectral-bar)"/>
+
+                <!-- Interactive overlay (hidden by default) -->
+                <g id="ms-logo-crosshair" style="display:none;pointer-events:none;">
+                  <line id="ms-cross-v" x1="0" y1="4" x2="0" y2="82" stroke="#1a1a2e" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
+                  <line id="ms-cross-h-blue" x1="40" y1="0" x2="0" y2="0" stroke="#3b82f6" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
+                  <line id="ms-cross-h-red" x1="40" y1="0" x2="0" y2="0" stroke="#dc3545" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
+                  <circle id="ms-dot-blue" cx="0" cy="0" r="3.5" fill="#3b82f6" opacity="0"/>
+                  <circle id="ms-dot-red" cx="0" cy="0" r="3.5" fill="#dc3545" opacity="0"/>
+                </g>
+
+                <!-- Tooltip background + text -->
+                <g id="ms-logo-tooltip" style="display:none;pointer-events:none;">
+                  <rect id="ms-tt-bg" x="0" y="0" width="120" height="42" rx="4" fill="#1a1a2e" opacity="0.88"/>
+                  <text id="ms-tt-wl" x="0" y="0" fill="#f0b429" font-family="'JetBrains Mono','Sora',monospace" font-size="7.5" font-weight="600"></text>
+                  <text id="ms-tt-blue" x="0" y="0" fill="#3b82f6" font-family="'JetBrains Mono','Sora',monospace" font-size="7"></text>
+                  <text id="ms-tt-red" x="0" y="0" fill="#dc3545" font-family="'JetBrains Mono','Sora',monospace" font-size="7"></text>
+                </g>
+
+                <!-- Peak annotation markers (appear on load) -->
+                <g id="ms-peak-markers" opacity="0">
+                  <circle cx="340" cy="6" r="2" fill="none" stroke="#3b82f6" stroke-width="1" opacity="0.6"/>
+                  <circle cx="357" cy="10" r="2" fill="none" stroke="#dc3545" stroke-width="1" opacity="0.6"/>
+                </g>
+              </svg>
+              <!-- Zoom button (appears on hover) -->
+              <button class="ms-logo-zoom-btn" id="ms-logo-zoom" aria-label="Zoom" title="Zoom">
+                <svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="10" y1="7" x2="10" y2="13"/></svg>
+              </button>
+            </div>
+
+            <!-- Fullscreen overlay for zoomed logo -->
+            <div class="ms-logo-overlay" id="ms-logo-overlay">
+              <div class="ms-logo-overlay-inner">
+                <button class="ms-logo-close-btn" id="ms-logo-close" aria-label="Close">
+                  <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                </button>
+                <div class="ms-logo-overlay-header">
+                  <span class="ms-logo-overlay-title">ManuSpectrum — Spectral Analysis Plot</span>
+                  <span class="ms-logo-overlay-badge">interactive</span>
+                </div>
+                <div id="ms-logo-zoom-target"></div>
+                <div class="ms-logo-overlay-footer">
+                  <span><i class="dot-blue"></i>Channel 1 (XRF)</span>
+                  <span><i class="dot-red"></i>Channel 2 (FORS)</span>
+                  <span>λ : 380 – 780 nm</span>
+                </div>
+              </div>
+            </div>
+
+            <h1 class="ms-hero-tagline">
+                {% blocktrans %}Interoperable database for <em>physicochemical analysis</em> of written cultural heritage{% endblocktrans %}
+            </h1>
+
+            <p class="ms-hero-description">
+                {% trans "Explore, visualize, and share written cultural heritage materials analysis data within the Biblissima+ ecosystem." %}
+            </p>
+
+            <div class="ms-hero-actions">
+                <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
+                    <i class="fa-solid fa-magnifying-glass"></i> {% trans "Explore the database" %}
+                </a>
+                <a href="#project" class="ms-btn ms-btn-ghost">
+                    {% trans "Learn more" %} <i class="fa-solid fa-arrow-down"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="ms-hero-scroll">
+            <a href="#project">
+                <span>{% trans "scroll" %}</span>
+                <div class="ms-hero-scroll-line"></div>
+            </a>
+        </div>
+    </section>
+
+
+    <!-- ============================================================
+         PROJECT SECTION
+         ============================================================ -->
+    <section class="ms-section ms-project" id="project">
+        <div class="ms-container">
+            <div class="reveal">
+                <div class="ms-section-label">{% trans "The Project" %}</div>
+                <h2 class="ms-section-title">{% trans "Thinking and modeling written cultural heritage materials" %}</h2>
+            </div>
+
+            <div class="ms-project-grid">
+                <div class="ms-project-text reveal reveal-d1">
+                    <p>
+                        {% trans "ManuSpectrum was developed within Cluster 2 — \"Consideration and searchability of materials analysis data\" — of the ANR Biblissima+ programme. This cluster aims to ensure the long-term archiving and reuse of physicochemical analysis data for manuscripts, inscriptions, seals and other heritage objects, in partnership with Huma-Num." %}
+                    </p>
+                    <p>
+                        {% trans "Through structuring and standardizing data according to shared models, the project provides reliable, easy-to-use tools accessible to non-specialists. Built on Arches, an open-source platform for heritage data management, ManuSpectrum facilitates data access and collaboration between researchers from different disciplines." %}
+                    </p>
+                    <p>
+                        {% trans "The model focuses on identifying the component as a pivot axis between the object, its context, the analyses, and their interpretations, using thesauri and authority databases to contextualize information on heterogeneous documents." %}
+                    </p>
+                </div>
+
+                <div class="ms-biblissima-card reveal reveal-d2">
+                    <a href="https://projet.biblissima.fr/fr/projet/clusters-biblissima/cluster-2" target="_blank" rel="noopener">
+                        <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
+                    </a>
+                    <h3>{% trans "Biblissima+ — Cluster 2" %}</h3>
+                    <p>
+                        {% trans "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient written cultures. Within Cluster 2, the objective is to archive, share and enable searching of materials analysis data from the community, ensuring interoperability with the Biblissima portal and written cultural heritage standards." %}
+                    </p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">CIDOC-CRM</span>
+                        <span class="ms-feature-tag">IIIF</span>
+                        <span class="ms-feature-tag">CRMsci</span>
+                        <span class="ms-feature-tag">AAT Getty</span>
                     </div>
                 </div>
-                <!-- Slider - End -->
+            </div>
 
-                <!-- Down button -->
-                <a href="#info-block-1" class="down-button" aria-label="{% trans 'Go to content' %}"><i class="fa fa-angle-down down-button-icon"></i></a>
-
-            </section>
-            <!-- End Intro Section -->
-
-            <!-- Info Block 1 -->
-            <section id="info-block-1" class="app-info-block relative">
-                <div>
-
-                    <!-- Heading Info -->
-                    <div class="sub-section">
-                        <div class="col-lg-7">
-                            <div class="app-info-block-intro text-center">
-                                <h2 class="app-info-block-header">{% trans "Fast" %}</h2>
-                                <h3 class="app-info-block-title">{% trans "Deploy Applications Rapidly" %}</h3>
-                                <p class="app-info-block-text">
-                                    {% trans "Design custom information management applications in hours.  Build your databases with Arches Designer, then configure your interface all without having to write any code." %}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content -->
-                    <div class="splash-img">
-                        <img src="{% webpack_static 'img/landing/imac_designer.png' %}"  alt="{% trans 'Arches Designer' %}">
-                    </div>
-
-                    <!-- Sub-section -->
-                    <div class="row app-info-sub-block">
-
-                        <!-- Arches Data Type Block -->
-                        <div class="col-lg-6">
-                            <div class="sub-block-container">
-                                <h3 class="app-info-block-title">{% trans "Interface Manager" %}</h3>
-                                <p class="sub-block-description">
-                                    {% trans "Arches automatically creates data entry forms based on your data models.  Use Arches' Card Manager to configure the look and feel of your data entry UI." %}
-                                </p>
-                                <img class="sub-block-image" src="{% webpack_static 'img/landing/card_manager.png' %}" alt="{% trans 'Card Manager' %}">
-                            </div>
-                        </div>
-
-                        <!-- Arches Data Type Block -->
-                        <div class="col-lg-6">
-                            <div class="sub-block-container">
-                                <h3 class="app-info-block-title">{% trans "Data Security" %}</h3>
-                                <p class="sub-block-description">
-                                    {% trans "Use Arches' Permissions Manager to set up data access rules for all your user groups and individual accounts.  You can define read/write/delete and no-access permissions." %}
-                                </p>
-                                <img class="sub-block-image" src="{% webpack_static 'img/landing/permissions_manager.png' %}" alt="{% trans 'Permissions Manager' %}">
-                            </div>
-                        </div>
-
-                    </div>
-                    <!-- End Sub-section -->
-
+            <!-- Stats -->
+            <!-- Stats -->
+            <div class="ms-stats">
+                <div class="ms-stat reveal reveal-d1">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-radiation"></i></div>
+                    <div class="ms-stat-value">XRF</div>
+                    <div class="ms-stat-label">{% trans "X-ray Fluorescence" %}</div>
                 </div>
-            </section>
-            <!-- End Info Block 1 -->
-
-            <!-- Info Block 2 -->
-            <section id="info-block-2" class="app-info-block relative">
-                <div>
-
-                    <!-- Heading Info -->
-                    <div class="sub-section">
-                        <div class="col-lg-7">
-                            <div class="app-info-block-intro text-center">
-                                <h2 class="app-info-block-header">{% trans "Workflows" %}</h2>
-                                <h3 class="app-info-block-title">{% trans "Orchestrate your data entry" %}</h3>
-                                <p class="app-info-block-text">
-                                    {% trans "Design step-wise data management interfaces that simplify complex editing tasks.  Ensure that everyone enters data completely and consistently" %}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content -->
-                    <div class="splash-img">
-                        <img class="sub-block-image" src="{% webpack_static 'img/landing/consultation_workflow.jpg' %}" alt="{% trans 'Arches Workflows' %}">
-                    </div>
-
+                <div class="ms-stat reveal reveal-d2">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-border-all"></i></div>
+                    <div class="ms-stat-value">MA-XRF</div>
+                    <div class="ms-stat-label">{% trans "X-ray Micro-Fluorescence" %}</div>
                 </div>
-            </section>
-            <!-- End Info Block 2 -->
-
-            <!-- Info Block 3 -->
-            <section id="info-block-3" class="app-info-block relative">
-                <div>
-
-                    <!-- Heading Info -->
-                    <div class="sub-section">
-                        <div class="col-lg-7">
-                            <div class="app-info-block-intro text-center">
-                                <h2 class="app-info-block-header">{% trans "Arches Search Tools" %}</h2>
-                                <h3 class="app-info-block-title">{% trans "Find what you're looking for" %}</h3>
-                                <p class="app-info-block-text">
-                                    {% trans "Arches comes with powerful built-in search tools.  Quickly filter large databases with term, geospatial, and time-based search components" %}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="splash-img">
-                        <img class="sub-block-image" src="{% webpack_static 'img/landing/arches_search.png' %}" alt="{% trans 'Arches Search' %}">
-                    </div>
-
-                    <!-- Sub-section -->
-                    <div class="wide-box">
-                        <div class="box-highlight">
-                            <h3 class="app-info-block-header">{% trans "Search Options" %}</h3>
-                            <p>
-                                {% trans "Arches gives you many ways to find precisely the information you need, even if your Arches application contains 10's of millions of records.  In addition to term, thesaurus, geospatial, and temporal filters, Arches provides you with advanced filtering options that support boolean logic, inverses, and many other filtering options." %}
-                            </p>
-                            <br>
-                            <p>
-                                {% trans "Arches' search capabilities also provide for sophisticated data visualizations, including interactive displays of the connections between your data objects using a Force Directed Graph." %}
-                            </p>
-                            <br>
-                            <p>
-                                {% trans "If you're a software developer, you can build on Arches modular search services and create your own filters, reports, and visualizations to best show off your particular dataset." %}
-                            </p>
-
-                        </div>
-                    </div>
-
+                <div class="ms-stat reveal reveal-d3">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-bullseye"></i></div>
+                    <div class="ms-stat-value">FORS</div>
+                    <div class="ms-stat-label">{% trans "Fiber Optic Reflectance" %}</div>
                 </div>
-            </section>
-            <!-- End Info Block 3 -->
-        </article>
+                <div class="ms-stat reveal reveal-d4">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-burst"></i></div>
+                    <div class="ms-stat-value">Raman</div>
+                    <div class="ms-stat-label">{% trans "Raman Spectroscopy" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d5">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-wave-square"></i></div>
+                    <div class="ms-stat-value">FTIR</div>
+                    <div class="ms-stat-label">{% trans "IR Spectroscopy" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d6">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-bars-staggered"></i></div>
+                    <div class="ms-stat-value">HSI</div>
+                    <div class="ms-stat-label">{% trans "Hyperspectral Imaging" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d7">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-layer-group"></i></div>
+                    <div class="ms-stat-value">MSI</div>
+                    <div class="ms-stat-label">{% trans "Multispectral Imaging" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d8">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-dna"></i></div>
+                    <div class="ms-stat-value">MALDI</div>
+                    <div class="ms-stat-label">{% trans "Proteomics (MALDI-TOF)" %}</div>
+                </div>
+                <div class="ms-stat reveal reveal-d9">
+                    <div class="ms-stat-icon"><i class="fa-solid fa-ellipsis"></i></div>
+                    <div class="ms-stat-value">+</div>
+                    <div class="ms-stat-label">{% trans "And many more" %}</div>
+                </div>
+            </div>
+
+            <!-- Showcase carousel -->
+            <div class="ms-showcase-carousel reveal-scale" id="ms-showcase">
+                <div class="ms-showcase-track" id="ms-showcase-track">
+                    <div class="ms-showcase-slide">
+                        <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF mapping of a manuscript' %}" loading="lazy">
+                        <div class="ms-showcase-caption">
+                            <h4>{% trans "XRF mapping of an illuminated manuscript" %}</h4>
+                            <p>{% trans "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments" %}</p>
+                        </div>
+                    </div>
+                    <div class="ms-showcase-slide">
+                        <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Raman spectrum on a pigment sample' %}" loading="lazy">
+                        <div class="ms-showcase-caption">
+                            <h4>{% trans "Raman spectroscopy on a medieval pigment" %}</h4>
+                            <p>{% trans "Molecular identification of azurite and malachite pigments on a 15th-century illumination" %}</p>
+                        </div>
+                    </div>
+                    <div class="ms-showcase-slide">
+                        <img src="{% static 'img/landing/image-3.svg' %}" alt="{% trans 'Multispectral imaging of a manuscript page' %}" loading="lazy">
+                        <div class="ms-showcase-caption">
+                            <h4>{% trans "Multispectral imaging — Revealing hidden texts" %}</h4>
+                            <p>{% trans "UV and infrared reflectography combined to reveal underdrawings and erased inscriptions" %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrows -->
+                <div class="ms-showcase-arrows">
+                    <button class="ms-showcase-arrow" id="ms-showcase-prev" aria-label="{% trans 'Previous' %}">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button class="ms-showcase-arrow" id="ms-showcase-next" aria-label="{% trans 'Next' %}">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+
+                <!-- Dots -->
+                <div class="ms-showcase-nav" id="ms-showcase-nav">
+                    <button class="ms-showcase-dot active" data-slide="0" aria-label="Slide 1"></button>
+                    <button class="ms-showcase-dot" data-slide="1" aria-label="Slide 2"></button>
+                    <button class="ms-showcase-dot" data-slide="2" aria-label="Slide 3"></button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- spectral separator -->
+    <div class="spectral-line-thin"></div>
+
+
+    <!-- ============================================================
+         FEATURES / EXPLORER SECTION
+         ============================================================ -->
+    <section class="ms-section ms-features" id="explore">
+        <div class="ms-container">
+            <div class="reveal">
+                <div class="ms-section-label">{% trans "Explore" %}</div>
+                <h2 class="ms-section-title">{% trans "What you can discover" %}</h2>
+                <p class="ms-section-subtitle">
+                    {% trans "A platform designed to explore physicochemical analyses on historical documents, correlating data with their written cultural heritage context." %}
+                </p>
+            </div>
+
+            <div class="ms-features-grid">
+                <div class="ms-feature-card reveal reveal-d1">
+                    <div class="ms-feature-icon"><i class="fa-solid fa-chart-line"></i></div>
+                    <h3>{% trans "Spectra and analysis data" %}</h3>
+                    <p>{% trans "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other analysis results directly on the platform." %}</p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">XRF</span>
+                        <span class="ms-feature-tag">FTIR</span>
+                        <span class="ms-feature-tag">Raman</span>
+                        <span class="ms-feature-tag">UV-Vis</span>
+                    </div>
+                </div>
+
+                <div class="ms-feature-card reveal reveal-d2">
+                    <div class="ms-feature-icon"><i class="fa-solid fa-layer-group"></i></div>
+                    <h3>{% trans "IIIF Annotations" %}</h3>
+                    <p>{% trans "Analysis data is exposed as IIIF annotations, making it accessible from any compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, allows any external site to visualize ManuSpectrum's spectral data (XRF, Raman, FTIR, UV-Vis) directly overlaid on high-resolution manuscript images." %}</p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">IIIF v2/v3</span>
+                        <span class="ms-feature-tag">Mirador 4</span>
+                        <a href="https://github.com/CRC-Centre-Recherche-Conservation/mirador-xyviewer" target="_blank" rel="noopener" class="ms-feature-tag ms-feature-tag--link">mirador-xyviewer <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                        <span class="ms-feature-tag">Cantaloupe</span>
+                    </div>
+                </div>
+
+                <div class="ms-feature-card reveal reveal-d3">
+                    <div class="ms-feature-icon"><i class="fa-solid fa-diagram-project"></i></div>
+                    <h3>{% trans "Interoperability and Standards" %}</h3>
+                    <p>{% trans "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring interoperability with international heritage systems and the Biblissima portal." %}</p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">CIDOC-CRM 7.1.2</span>
+                        <span class="ms-feature-tag">CRMsci 2.0</span>
+                        <span class="ms-feature-tag">{% trans "AGORHA thesaurus" %}</span>
+                        <span class="ms-feature-tag">AAT Getty</span>
+                    </div>
+                </div>
+
+                <div class="ms-feature-card reveal reveal-d4">
+                    <div class="ms-feature-icon"><i class="fa-solid fa-microscope"></i></div>
+                    <h3>{% trans "Material Characterization" %}</h3>
+                    <p>{% trans "Explore the layers, materials, and chemical elements identified on written cultural heritage documents, with different levels of reliability and characterization." %}</p>
+                    <div class="ms-feature-tags">
+                        <span class="ms-feature-tag">{% trans "Pigments" %}</span>
+                        <span class="ms-feature-tag">{% trans "Layers" %}</span>
+                        <span class="ms-feature-tag">{% trans "Binders" %}</span>
+                        <span class="ms-feature-tag">{% trans "Substrates" %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ============================================================
+         GALLERY / ANALYSES SECTION
+         ============================================================ -->
+    <section class="ms-section ms-gallery" id="analyses">
+        <div class="ms-container">
+            <div class="reveal">
+                <div class="ms-section-label">{% trans "Analyses" %}</div>
+                <h2 class="ms-section-title">{% trans "Visualize physicochemical analyses" %}</h2>
+                <p class="ms-section-subtitle">
+                    {% trans "From elemental mapping to multispectral imaging, explore the different analysis techniques applied to manuscripts and written cultural heritage objects." %}
+                </p>
+            </div>
+
+            <div class="ms-gallery-grid">
+                <div class="ms-gallery-item ms-gallery-compare reveal reveal-d1" id="ms-xrf-compare">
+                    <img class="ms-compare-img ms-compare-bottom" src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF Mapping — Element A' %}" loading="lazy">
+                    <img class="ms-compare-img ms-compare-top" src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'XRF Mapping — Element B' %}" loading="lazy">
+                    <div class="ms-gallery-overlay">
+                        <div class="ms-gallery-tag">{% trans "X-ray Fluorescence" %}</div>
+                        <h4>{% trans "XRF Mapping" %}</h4>
+                        <p>{% trans "Spatial distribution of chemical elements on an illuminated manuscript" %}</p>
+                    </div>
+                </div>
+
+                <div class="ms-gallery-item ms-gallery-analysis reveal reveal-d2" id="ms-analysis-viewer">
+                    <img src="https://iiif.unicaen.fr/mrsh/bvmsm/AVRANCHES_MS059/AVRANCHES_MS059_0011.tif/full/800,/0/default.jpg" alt="{% trans 'Manuscript analysis' %}" width="800" height="600" loading="lazy">
+                    <div class="ms-analysis-points">
+                        <button class="ms-analysis-point ms-apoint-1" data-point="0" aria-label="{% trans 'Analysis point' %} 1"></button>
+                        <button class="ms-analysis-point ms-apoint-2" data-point="1" aria-label="{% trans 'Analysis point' %} 2"></button>
+                        <button class="ms-analysis-point ms-apoint-3" data-point="2" aria-label="{% trans 'Analysis point' %} 3"></button>
+                        <button class="ms-analysis-point ms-apoint-4" data-point="3" aria-label="{% trans 'Analysis point' %} 4"></button>
+                    </div>
+                    <div class="ms-analysis-popup" id="ms-analysis-popup"></div>
+                    <div class="ms-gallery-overlay">
+                        <div class="ms-gallery-tag">{% trans "Spectroscopy" %}</div>
+                        <h4>{% trans "Point Analysis" %}</h4>
+                        <p>{% trans "Click on analysis points to explore spectral data" %}</p>
+                    </div>
+                </div>
+
+                <div class="ms-gallery-item ms-gallery-msi reveal reveal-d3">
+                    <img class="ms-msi-base" src="https://iiif.unicaen.fr/mrsh/bvmsm/Avranches_BM_50/Avranches_BM_050_vue006_f1r.tif/full/800,/0/default.jpg" alt="{% trans 'Multispectral Imaging' %}" width="800" height="600" loading="lazy">
+                    <img class="ms-msi-processed" src="https://iiif.unicaen.fr/mrsh/bvmsm/Avranches_BM_50/Avranches_BM_050_vue006_f1r.tif/full/800,/0/default.jpg" alt="" aria-hidden="true" width="800" height="600" loading="lazy">
+                    <div class="ms-msi-scanline"></div>
+                    <div class="ms-msi-indicator">
+                        <div class="ms-msi-indicator-track">
+                            <div class="ms-msi-indicator-dot"></div>
+                        </div>
+                        <span class="ms-msi-indicator-label">λ 365 – 1000 nm</span>
+                    </div>
+                    <div class="ms-gallery-overlay">
+                        <div class="ms-gallery-tag">{% trans "Imaging" %}</div>
+                        <h4>{% trans "Multispectral" %}</h4>
+                        <p>{% trans "Spectral band scanning and false-color composites via IIIF" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- spectral separator -->
+    <div class="spectral-line-thin"></div>
+
+
+    <!-- ============================================================
+         SEARCH SECTION
+         ============================================================ -->
+    <section class="ms-section ms-search" id="search">
+        <div class="ms-container">
+            <div class="reveal">
+                <div class="ms-section-label">{% trans "Search" %}</div>
+                <h2 class="ms-section-title">{% trans "Explore the database" %}</h2>
+                <p class="ms-section-subtitle">
+                    {% trans "Search by material, analysis technique, written cultural heritage object, or chemical element. Advanced filters available in the search interface." %}
+                </p>
+            </div>
+
+            <div class="ms-search-box reveal reveal-d1">
+                <form id="ms-search-form" action="{% url 'search_home' %}" method="get">
+                    <div class="ms-search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass ms-search-icon"></i>
+                        <input
+                            type="text"
+                            class="ms-search-input"
+                            id="ms-search-input"
+                            name="q"
+                            placeholder="{% trans "Search materials, techniques, objects..." %}"
+                            autocomplete="off"
+                        >
+                    </div>
+                </form>
+
+                <div class="ms-search-chips">
+                    <button class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
+                    <button class="ms-search-chip" data-term="{% trans 'Raman' %}">{% trans "Raman" %}</button>
+                </div>
+
+                <div class="ms-search-cta">
+                    <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
+                        <i class="fa-solid fa-arrow-right"></i> {% trans "Access advanced search" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ============================================================
+         PARTNERS SECTION
+         ============================================================ -->
+    <section class="ms-partners reveal" id="partners">
+        <div class="ms-container">
+            <div class="ms-partners-label">{% trans "Our Partners" %}</div>
+            <div class="ms-partners-grid">
+                <!-- Ministere en premier (charte : premier sur les bandeaux, fond blanc obligatoire) -->
+                <a class="ms-partner-link ms-partner-link--culture reveal-d1" href="https://www.culture.gouv.fr" target="_blank" rel="noopener" title="Ministère de la Culture">
+                    <img src="{% static 'img/landing/logo-ministere-de-la-culture.png' %}" alt="{% trans 'Ministry of Culture' %}" loading="lazy">
+                </a>
+                <a class="ms-partner-link ms-partner-link--cnrs reveal-d2" href="https://www.cnrs.fr" target="_blank" rel="noopener" title="Centre National de la Recherche Scientifique">
+                    <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS" loading="lazy">
+                </a>
+                <a class="ms-partner-link ms-partner-link--mnhn reveal-d3" href="https://www.mnhn.fr" target="_blank" rel="noopener" title="Muséum National d'Histoire Naturelle">
+                    <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN" loading="lazy">
+                </a>
+                <a class="ms-partner-link ms-partner-link--crc reveal-d4" href="https://crc.mnhn.fr" target="_blank" rel="noopener" title="CRC — Centre de Recherche sur la Conservation">
+                    <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC" loading="lazy">
+                </a>
+                <a class="ms-partner-link ms-partner-link--anr reveal-d5" href="https://anr.fr" target="_blank" rel="noopener" title="ANR — Agence Nationale de la Recherche">
+                    <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR" loading="lazy">
+                </a>
+                <a class="ms-partner-link ms-partner-link--biblissima reveal-d6" href="https://biblissima.fr" target="_blank" rel="noopener" title="Biblissima+">
+                    <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" loading="lazy">
+                </a>
+                <a class="ms-partner-link ms-partner-link--humanum reveal-d7" href="https://www.huma-num.fr" target="_blank" rel="noopener" title="Huma-Num">
+                    <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num" loading="lazy">
+                </a>
+                <a class="ms-partner-link ms-partner-link--arches reveal-d8" href="https://www.archesproject.org" target="_blank" rel="noopener" title="Arches">
+                    <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches" loading="lazy">
+                </a>
+            </div>
+        </div>
+    </section>
+
     </main>
 
+    <!-- ============================================================
+         FOOTER
+         ============================================================ -->
+    <footer class="ms-footer">
+        <div class="ms-container">
+            <div class="spectral-line"></div>
 
-
-    <!-- Footer -->
-    <footer>
-
-        <!-- footer content container -->
-        <div class="row footer-links">
-
-            <!-- branding column -->
-            <div class="col-lg-4">
-                <h2 class="app-footer-heading">{% trans "Sample Institution Name" %}</h2>
-
-                <div class="organization-address">
-                  {% trans "Sample Address" %}<br>
-                  {% trans "Getty Conservation Institute" %}<br>
-                  {% trans "1200 Getty Center Drive" %}<br>
-                  {% trans "Los Angeles, CA  90049" %}<br>
+            <div class="ms-footer-inner">
+                <div class="ms-footer-brand">
+                    <div class="ms-footer-brand-name">ManuSpectrum</div>
+                    <p class="ms-footer-brand-desc">
+                        {% trans "Interoperable database for physicochemical analysis of written cultural heritage materials. A Biblissima+ cluster project." %}
+                    </p>
                 </div>
-            </div>
 
-            <!-- Info Column -->
-            <div class="col-lg-8">
-                <h2 class="app-footer-heading">{% trans "Guides and Documentation" %}</h2>
-
-                <!-- Links -->
-                <div class="splash-links">
-                    <div class="row">
-                        <div class="col-lg-4">
-                            <ul class="splash-link-container">
-                                <li>
-                                    <a class="splash-link-address" href="http://https://www.archesproject.org/what-is-arches/" target="_blank">{% trans "What is Arches" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/implementation-considerations/" target="_blank">{% trans "Implementation Considerations" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/development/" target="_blank">{% trans "Information For Developers" %}</a>
-                                </li>
-
-
-                            </ul>
-                        </div>
-
-                        <div class="col-lg-4">
-                            <ul class="splash-link-container">
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/faq/" target="_blank">{% trans "FAQ" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/standards/" target="_blank">{% trans "Standards and Interoperability" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://arches.readthedocs.io/en/stable/requirements-and-dependencies/" target="_blank">{% trans "Installation Guide" %}</a>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div class="col-lg-4">
-                            <ul class="splash-link-container">
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/project-background/" target="_blank">{% trans "Arches Project Background" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/videos/" target="_blank">{% trans "Arches Webinars/Presentations" %}</a>
-                                </li>
-                                <li>
-                                    <a class="splash-link-address" href="https://www.archesproject.org/resource-models/" target="_blank">{% trans "Resource Models" %}</a>
-                                </li>
-                            </ul>
-                        </div>
-
+                <div class="ms-footer-links">
+                    <div class="ms-footer-col">
+                        <h4>{% trans "Platform" %}</h4>
+                        <ul>
+                            <li><a href="{% url 'search_home' %}">{% trans "Search" %}</a></li>
+                            {% if user.username == 'anonymous' %}
+                                <li><a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a></li>
+                            {% else %}
+                                <li><a href="{% url 'user_profile_manager' %}">{% trans "My Profile" %}</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <div class="ms-footer-col">
+                        <h4>{% trans "Resources" %}</h4>
+                        <ul>
+                            <li><a href="https://biblissima.fr" target="_blank" rel="noopener">Biblissima+</a></li>
+                            <li><a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches Project</a></li>
+                            <li><a href="https://iiif.io" target="_blank" rel="noopener">IIIF</a></li>
+                        </ul>
+                    </div>
+                    <div class="ms-footer-col">
+                        <h4>{% trans "Standards" %}</h4>
+                        <ul>
+                            <li><a href="https://www.cidoc-crm.org" target="_blank" rel="noopener">CIDOC-CRM</a></li>
+                            <li><a href="https://www.getty.edu/research/tools/vocabularies/aat/" target="_blank" rel="noopener">AAT Getty</a></li>
+                            <li><a href="https://thesaurus.inha.fr/thesaurus/" target="_blank" rel="noopener">AGORHA</a></li>
+                        </ul>
                     </div>
                 </div>
+            </div>
 
+            <p class="ms-footer-anr">
+                {% trans "This work has benefited from state aid managed by the Agence Nationale de la Recherche under the Investissements d'avenir programme, reference ANR-21-ESRE-0005 (Biblissima+)." %}
+            </p>
+
+            <div class="ms-footer-bottom">
+                <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "All rights reserved" %}</p>
+                <div class="ms-footer-opensource">
+                    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener">
+                        <i class="fa-brands fa-github"></i> {% trans "Source code" %}
+                    </a>
+                    <span class="ms-footer-separator">·</span>
+                    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/LICENSE" target="_blank" rel="noopener">
+                        {% trans "GPL-3.0 License" %}
+                    </a>
+                    <span class="ms-footer-separator">·</span>
+                    <span class="ms-footer-arches">{% blocktrans %}Powered by <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>{% endblocktrans %}</span>
+                </div>
             </div>
         </div>
-
-        <!-- Copyright Panel -->
-        <div class="row copyright-container">
-            <!-- Arches link -->
-            <div class="app-footer-links">
-                <div class="col-sm-8">
-                    <a class="link-spacing" href="#">{% trans "Terms & Conditions" %}</a>
-                    <a class="link-spacing" href="#">{% trans "Privacy Policy" %}</a>
-                </div>
-                <div class="col-sm-4">
-                    <a class="app-footer-arches-link" href="http://www.archesproject.org" target="_blank">{% trans "Powered by Arches" %}</a>
-                </div>
-            </div>
-        </div>
-        <!-- End Copyright Container -->
-
     </footer>
-    <!-- End Footer -->
-
-<script>
-
-    require.config({
-        baseUrl: "{% webpack_static 'build/js' %}",
-        paths: {
-            'text': "{% webpack_static 'node_modules/requirejs-text/text' %}",
-            'jquery': "{% webpack_static 'node_modules/jquery/dist/jquery.min' %}",
-            'jquery-ui': "{% webpack_static 'node_modules/jqueryui/jquery-ui.min' %}",
-            'jquery-validate': "{% webpack_static 'node_modules/jquery-validation/dist/jquery.validate.min' %}",
-            'underscore': "{% webpack_static 'node_modules/underscore/underscore-min' %}",
-            'chosen': "{% webpack_static 'node_modules/chosen-js/chosen.jquery.min' %}",
-            'knockout': "{% webpack_static 'node_modules/knockout/build/output/knockout-latest' %}",
-            'bootstrap': "{% webpack_static 'node_modules/bootstrap/dist/js/bootstrap.min' %}",
-            'one-app': "{% webpack_static 'plugins/one.app' %}",
-            'themepunch-tools': "{% webpack_static 'plugins/revolution-slider/rs-plugin/js/jquery.themepunch.tools.min' %}",
-            'themepunch-revolution': "{% webpack_static 'plugins/revolution-slider/rs-plugin/js/jquery.themepunch.revolution' %}",
-            'revolution-slider': "{% webpack_static 'plugins/revolution-slider' %}",
-            'slick': "{% webpack_static 'plugins/slick/slick.min' %}",
-        },
-        shim: {
-            'jquery': {
-                exports: '$'
-            },
-            'bootstrap': {
-                deps: ['jquery', 'jquery-ui']
-            },
-            'chosen': {
-                deps: ['jquery'],
-            },
-            'one-app': {
-                deps: ['jquery'],
-            },
-            'themepunch-tools': {
-                deps: ['jquery'],
-            },
-            'themepunch-revolution': {
-                deps: ['jquery'],
-            },
-            'revolution-slider': {
-                deps: ['jquery'],
-            },
-            'slick': {
-                deps: ['jquery'],
-            }
-        }
-    });
-    require(
-        [
-            'jquery',
-            'knockout',
-            'bootstrap',
-            'one-app',
-            'themepunch-tools',
-            'themepunch-revolution',
-            'revolution-slider',
-            'slick',
-            'bindings/chosen',
-            'bindings/key-events-click',
-            'views/components/language-switcher'
-        ], function ($, ko) {
-            $(document).ready(function () {
-                App.init();
-                
-                var contentSections = $('.app-info-block'),
-                    navigationItems = $('#cd-vertical-nav a');
-
-                updateNavigation();
-                $(window).on('scroll', function () {
-                    updateNavigation();
-                });
-
-                //smooth scroll to the section
-                navigationItems.on('click', function (event) {
-                    event.preventDefault();
-                    smoothScroll($(this.hash));
-                });
 
 
-                function updateNavigation() {
-                    contentSections.each(function () {
-                        $this = $(this);
-                        var activeSection = $('#cd-vertical-nav a[href="#' + $this.attr('id') + '"]').data('number') - 1;
-                        if (($this.offset().top - $(window).height() / 2 < $(window).scrollTop()) && ($this.offset().top + $this.height() - $(window).height() / 2 > $(window).scrollTop())) {
-                            navigationItems.eq(activeSection).addClass('is-selected');
-                        } else {
-                            navigationItems.eq(activeSection).removeClass('is-selected');
-                        }
-                    });
-                }
-
-                function smoothScroll(target) {
-                    $('body,html').animate(
-                        { 'scrollTop': target.offset().top },
-                        600
-                    );
-                }
-
-                //slider
-                $('.home-slider').slick({
-                    arrowsPlacement: 'split',
-                    dots: true,
-                    autoplay: true,
-                    autoplaySpeed: 6000,
-                    prevArrow:`<button type='button' class='slick-prev pull-left' aria-label="{% trans 'Go to previous slide' %}"><i class='fa fa-chevron-left' aria-hidden='true'></i></button>`,
-                    nextArrow:`<button type='button' class='slick-next pull-right' aria-label="{% trans 'Go to next slide' %}"><i class='fa fa-chevron-right' aria-hidden='true'></i></button>`
-                });
-
-                var ViewModel = function () {
-                     // place observables here
-                };
-
-                // need to have this to prevent mismatched anonymous define error in require.js
-                setTimeout(function () {
-                    ko.applyBindings(new ViewModel());
-                }, 300);
-            });
-
-        }
-    );
-</script>
-
+    <!-- ============================================================
+         SCRIPTS — Webpack entry point (views/index)
+         ============================================================ -->
+    {% render_bundle 'views/index' %}
 </body>
-
 </html>

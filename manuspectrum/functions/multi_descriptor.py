@@ -7,7 +7,6 @@ from arches.app.datatypes.datatypes import DataTypeFactory
 
 from django.utils.translation import get_language, gettext as _
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +46,9 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
     based on node aliases rather than node names.
     """
 
-    def get_primary_descriptor_from_nodes(self, resource, config, context=None, descriptor=None):
+    def get_primary_descriptor_from_nodes(
+        self, resource, config, context=None, descriptor=None
+    ):
         datatype_factory = None
         language = context.get("language") if context else None
         string_template = config.get("string_template", "")
@@ -71,7 +72,8 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
                 nodegroup_id = node.nodegroup_id
 
                 tiles = models.TileModel.objects.filter(
-                    nodegroup_id=nodegroup_id, resourceinstance_id=resource.resourceinstanceid
+                    nodegroup_id=nodegroup_id,
+                    resourceinstance_id=resource.resourceinstanceid,
                 ).order_by("sortorder")
 
                 for tile in tiles:
@@ -83,7 +85,9 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
                             datatype_factory = DataTypeFactory()
 
                         datatype = datatype_factory.get_instance(node.datatype)
-                        value = datatype.get_display_value(tile, node, language=language)
+                        value = datatype.get_display_value(
+                            tile, node, language=language
+                        )
 
                         if value is None:
                             value = ""
@@ -93,7 +97,9 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
 
                         processed_tiles.add(tile.tileid)
         except Exception as e:
-            logger.error(f"Error in MulticardResourceDescriptor Function: {e} -- {config['nodegroup_id']}")
+            logger.error(
+                f"Error in MulticardResourceDescriptor Function: {e} -- {config['nodegroup_id']}"
+            )
 
         if result.strip() == "":
             result = _("Undefined")

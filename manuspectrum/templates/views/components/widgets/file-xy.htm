@@ -1,0 +1,86 @@
+{% extends "views/components/widgets/file.htm" %}
+{% load i18n %}
+
+{% block report %}
+{{ block.super }}
+
+<!-- XY Unified Chart (only rendered by the first widget instance / chart host) -->
+<!-- ko if: isChartHost() && xyFileEntries().length > 0 -->
+<dd class="report-xy-unified-container">
+
+    <!-- File dropdown (only if 2+ files) -->
+    <!-- ko if: showFileDropdown() -->
+    <div class="xy-file-dropdown" data-bind="css: { open: dropdownOpen() }">
+        <button type="button" class="btn btn-default btn-sm xy-file-dropdown-toggle"
+                data-bind="click: toggleDropdown">
+            <i class="fa fa-layer-group"></i>
+            {% trans "Files" %}: <span data-bind="text: selectedCount()"></span>/<span data-bind="text: xyFileEntries().length"></span>
+            <span class="caret"></span>
+        </button>
+        <!-- ko if: dropdownOpen() -->
+        <div class="xy-file-dropdown-menu">
+            <div class="xy-file-dropdown-actions">
+                <a href="javascript:void(0)" data-bind="click: selectAll">{% trans "Select all" %}</a>
+                <span class="xy-file-dropdown-sep">|</span>
+                <a href="javascript:void(0)" data-bind="click: deselectAll">{% trans "Deselect all" %}</a>
+            </div>
+            <!-- ko foreach: xyFileEntries() -->
+            <label class="xy-file-dropdown-item">
+                <input type="checkbox" data-bind="checked: selected">
+                <span class="xy-file-color-dot" data-bind="style: { backgroundColor: $parent.getFileColor(colorIndex) }"></span>
+                <span class="xy-file-name" data-bind="text: fileName"></span>
+                <!-- ko if: loading() -->
+                <i class="fa fa-spinner fa-spin xy-file-status-icon"></i>
+                <!-- /ko -->
+                <!-- ko if: error() && !loading() -->
+                <i class="fa fa-exclamation-triangle xy-file-status-icon xy-file-status-warning" title="" data-bind="attr: { title: error() }"></i>
+                <!-- /ko -->
+            </label>
+            <!-- /ko -->
+        </div>
+        <!-- /ko -->
+    </div>
+    <!-- /ko -->
+
+    <!-- Loading state -->
+    <!-- ko if: allLoading() -->
+    <div class="report-xy-chart-loading">
+        <i class="fa fa-spinner fa-spin"></i>
+        <span>{% trans "Loading charts..." %}</span>
+    </div>
+    <!-- /ko -->
+
+    <!-- Global error (all entries have errors, none loading) -->
+    <!-- ko if: !allLoading() && xyFileEntries().length > 0 && !hasChartData() && anyError() -->
+    <div class="report-xy-chart-error">
+        <i class="fa fa-exclamation-triangle"></i>
+        <span>{% trans "Unable to load chart data" %}</span>
+    </div>
+    <!-- /ko -->
+
+    <!-- No files selected message -->
+    <!-- ko if: noFilesSelected() -->
+    <div class="report-xy-no-selection">
+        <i class="fa fa-info-circle"></i>
+        <span>{% trans "Select files to display" %}</span>
+    </div>
+    <!-- /ko -->
+
+    <!-- Unified chart -->
+    <!-- ko if: !allLoading() && hasChartData() && !noFilesSelected() -->
+    <div class="report-xy-chart" data-bind='plotly: {
+        traces: unifiedChartData,
+        title: chartTitle,
+        titleSize: chartTitleSize,
+        xAxisLabel: chartXAxisLabel,
+        xAxisLabelSize: chartXAxisLabelSize,
+        yAxisLabel: chartYAxisLabel,
+        yAxisLabelSize: chartYAxisLabelSize,
+        yAxisRightLabel: chartYAxisRightLabel
+    }'></div>
+    <!-- /ko -->
+
+</dd>
+<!-- /ko -->
+
+{% endblock report %}

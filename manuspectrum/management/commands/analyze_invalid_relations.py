@@ -61,25 +61,25 @@ import csv
 
 
 class Command(BaseCommand):
-    help = 'Analyse les relations invalides et propose des solutions'
+    help = "Analyse les relations invalides et propose des solutions"
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--input',
+            "--input",
             type=str,
             required=True,
-            help='Fichier CSV exporté avec les relations',
+            help="Fichier CSV exporté avec les relations",
         )
         parser.add_argument(
-            '--output',
+            "--output",
             type=str,
-            default='invalid_relations_analysis.csv',
-            help='Fichier CSV de sortie avec analyse',
+            default="invalid_relations_analysis.csv",
+            help="Fichier CSV de sortie avec analyse",
         )
 
     def handle(self, *args, **options):
-        input_file = options['input']
-        output_file = options['output']
+        input_file = options["input"]
+        output_file = options["output"]
 
         self.stdout.write("=" * 80)
         self.stdout.write("ANALYSE DES RELATIONS INVALIDES")
@@ -90,16 +90,18 @@ class Command(BaseCommand):
         tiles_with_invalid = set()
 
         # Lire le CSV
-        with open(input_file, 'r', encoding='utf-8') as csvfile:
+        with open(input_file, "r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
 
             for row in reader:
-                if row['status'] in ['INVALID_TARGET', 'ERROR']:
-                    target_id = row['target_id']
-                    tile_id = row['tile_id']
+                if row["status"] in ["INVALID_TARGET", "ERROR"]:
+                    target_id = row["target_id"]
+                    tile_id = row["tile_id"]
 
                     # Compter les occurrences
-                    invalid_uuids_count[target_id] = invalid_uuids_count.get(target_id, 0) + 1
+                    invalid_uuids_count[target_id] = (
+                        invalid_uuids_count.get(target_id, 0) + 1
+                    )
                     tiles_with_invalid.add(tile_id)
 
                     invalid_relations.append(row)
@@ -136,8 +138,8 @@ class Command(BaseCommand):
                                 pass
                         elif isinstance(value, list):
                             for item in value:
-                                if isinstance(item, dict) and 'resourceId' in item:
-                                    uuids_in_value.append(item['resourceId'])
+                                if isinstance(item, dict) and "resourceId" in item:
+                                    uuids_in_value.append(item["resourceId"])
                                 elif isinstance(item, str):
                                     try:
                                         UUID(item)
@@ -149,51 +151,70 @@ class Command(BaseCommand):
                         for uuid_val in uuids_in_value:
                             if uuid_val in invalid_uuids_count:
                                 invalid_count += 1
-                                invalid_nodes.append({
-                                    'node_id': node_id,
-                                    'invalid_uuid': uuid_val
-                                })
+                                invalid_nodes.append(
+                                    {"node_id": node_id, "invalid_uuid": uuid_val}
+                                )
 
-                analysis.append({
-                    'tile_id': tile_id,
-                    'resource_id': str(resource.resourceinstanceid),
-                    'resource_name': resource.displayname() if callable(resource.displayname) else str(
-                        resource.displayname),
-                    'graph_name': str(resource.graph.name) if resource.graph else 'Unknown',
-                    'invalid_count': invalid_count,
-                    'invalid_nodes': invalid_nodes,
-                    'recommendation': 'DELETE_TILE' if invalid_count > 2 else 'CLEAN_NODE'
-                })
+                analysis.append(
+                    {
+                        "tile_id": tile_id,
+                        "resource_id": str(resource.resourceinstanceid),
+                        "resource_name": (
+                            resource.displayname()
+                            if callable(resource.displayname)
+                            else str(resource.displayname)
+                        ),
+                        "graph_name": (
+                            str(resource.graph.name) if resource.graph else "Unknown"
+                        ),
+                        "invalid_count": invalid_count,
+                        "invalid_nodes": invalid_nodes,
+                        "recommendation": (
+                            "DELETE_TILE" if invalid_count > 2 else "CLEAN_NODE"
+                        ),
+                    }
+                )
 
             except Tile.DoesNotExist:
                 self.stdout.write(self.style.ERROR(f"  ✗ Tile introuvable: {tile_id}"))
 
         # Écrire le rapport
-        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+        with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
             fieldnames = [
-                'tile_id', 'resource_id', 'resource_name', 'graph_name',
-                'invalid_count', 'recommendation', 'invalid_uuids'
+                "tile_id",
+                "resource_id",
+                "resource_name",
+                "graph_name",
+                "invalid_count",
+                "recommendation",
+                "invalid_uuids",
             ]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
 
             for item in analysis:
-                writer.writerow({
-                    'tile_id': item['tile_id'],
-                    'resource_id': item['resource_id'],
-                    'resource_name': item['resource_name'],
-                    'graph_name': item['graph_name'],
-                    'invalid_count': item['invalid_count'],
-                    'recommendation': item['recommendation'],
-                    'invalid_uuids': ', '.join([n['invalid_uuid'] for n in item['invalid_nodes']])
-                })
+                writer.writerow(
+                    {
+                        "tile_id": item["tile_id"],
+                        "resource_id": item["resource_id"],
+                        "resource_name": item["resource_name"],
+                        "graph_name": item["graph_name"],
+                        "invalid_count": item["invalid_count"],
+                        "recommendation": item["recommendation"],
+                        "invalid_uuids": ", ".join(
+                            [n["invalid_uuid"] for n in item["invalid_nodes"]]
+                        ),
+                    }
+                )
 
         # Top UUIDs invalides
         self.stdout.write("\n" + "-" * 80)
         self.stdout.write("TOP 10 UUIDs INVALIDES LES PLUS FRÉQUENTS")
         self.stdout.write("-" * 80)
 
-        sorted_uuids = sorted(invalid_uuids_count.items(), key=lambda x: x[1], reverse=True)[:10]
+        sorted_uuids = sorted(
+            invalid_uuids_count.items(), key=lambda x: x[1], reverse=True
+        )[:10]
         for uuid_val, count in sorted_uuids:
             self.stdout.write(f"  {uuid_val}: {count} occurrences")
 
@@ -202,14 +223,24 @@ class Command(BaseCommand):
         self.stdout.write("RECOMMANDATIONS")
         self.stdout.write("=" * 80)
 
-        tiles_to_clean = sum(1 for a in analysis if a['recommendation'] == 'CLEAN_NODE')
-        tiles_to_delete = sum(1 for a in analysis if a['recommendation'] == 'DELETE_TILE')
+        tiles_to_clean = sum(1 for a in analysis if a["recommendation"] == "CLEAN_NODE")
+        tiles_to_delete = sum(
+            1 for a in analysis if a["recommendation"] == "DELETE_TILE"
+        )
 
-        self.stdout.write(f"Tiles à nettoyer (supprimer juste les valeurs invalides): {tiles_to_clean}")
-        self.stdout.write(f"Tiles à supprimer entièrement (trop corrompus): {tiles_to_delete}")
+        self.stdout.write(
+            f"Tiles à nettoyer (supprimer juste les valeurs invalides): {tiles_to_clean}"
+        )
+        self.stdout.write(
+            f"Tiles à supprimer entièrement (trop corrompus): {tiles_to_delete}"
+        )
 
         self.stdout.write(f"\n✓ Rapport détaillé: {output_file}")
         self.stdout.write("\nProchaines étapes:")
-        self.stdout.write("1. Examinez le rapport pour comprendre l'ampleur du problème")
-        self.stdout.write("2. Lancez: python manage.py clean_invalid_relations --input relations_export.csv --dry-run")
+        self.stdout.write(
+            "1. Examinez le rapport pour comprendre l'ampleur du problème"
+        )
+        self.stdout.write(
+            "2. Lancez: python manage.py clean_invalid_relations --input relations_export.csv --dry-run"
+        )
         self.stdout.write("3. Si OK, lancez sans --dry-run")

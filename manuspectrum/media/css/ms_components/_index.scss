@@ -1,0 +1,19 @@
+// ============================================
+// ManuSpectrum Styles — Index
+// ============================================
+// Mirrors the Arches component architecture:
+//
+//   ms/
+//     _utilities.scss   → flex utils, animations (BS3 gap-fill)
+//     _forms.scss       → radio-row, input-row, collapsible, overrides
+//     widgets/          → manifest-widget, file-xy
+//     cards/            → xy-reader (file-renderer)
+//     plugins/          → importer-configuration, file-configuration
+//     functions/        → multi-descriptor
+
+@import "utilities";
+@import "forms";
+@import "widgets";
+@import "cards";
+@import "plugins";
+@import "functions";
