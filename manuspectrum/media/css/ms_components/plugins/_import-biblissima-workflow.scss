@@ -1,4 +1,19 @@
-// Import Biblissima workflow styles
+// ============================================
+// Import Biblissima Workflow
+// ============================================
+
+$bbma-ink: #1a2a3a;
+$bbma-muted: #6b7b8d;
+$bbma-border: #dce1e6;
+$bbma-bg: #f5f7f9;
+$bbma-bg-warm: #fafbfc;
+$bbma-accent: #489EED;
+$bbma-accent-dark: #2c6faa;
+$bbma-accent-light: #e8f0fb;
+$bbma-success: #2e7d4f;
+$bbma-success-bg: #edf7f0;
+$bbma-warning-bg: #fef9ec;
+$bbma-danger-bg: #fdf0f0;
 
 // Step wrapper overrides
 .biblissima-search-step-wrapper,
@@ -9,7 +24,145 @@
     }
 }
 
-// === Search Step ===
+// ============================================
+// STEP 1: Configuration
+// ============================================
+
+.biblissima-config-step {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 24px;
+}
+
+.bbma-config-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid $bbma-accent;
+}
+
+.bbma-config-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: $bbma-accent;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.bbma-config-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: $bbma-ink;
+    line-height: 1.3;
+}
+
+.bbma-config-subtitle {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: $bbma-muted;
+}
+
+.bbma-config-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.bbma-config-field {
+    // each field block
+}
+
+.bbma-config-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: $bbma-ink;
+    margin-bottom: 6px;
+}
+
+.bbma-required {
+    color: #c0392b;
+    font-weight: 700;
+}
+
+.bbma-config-hint {
+    font-size: 12px;
+    color: $bbma-muted;
+    margin: -2px 0 8px;
+    line-height: 1.4;
+}
+
+// Type switcher cards
+.bbma-type-switcher {
+    display: flex;
+    gap: 12px;
+}
+
+.bbma-type-option {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px 12px;
+    border: 2px solid $bbma-border;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    text-align: center;
+
+    input[type="radio"] { display: none; }
+
+    .fa {
+        font-size: 22px;
+        color: $bbma-muted;
+        margin-bottom: 2px;
+        transition: color 0.15s;
+    }
+
+    span {
+        font-size: 14px;
+        font-weight: 600;
+        color: $bbma-ink;
+    }
+
+    small {
+        font-size: 11px;
+        color: $bbma-muted;
+        line-height: 1.3;
+    }
+
+    &:hover {
+        border-color: lighten($bbma-accent, 20%);
+        background: $bbma-accent-light;
+    }
+
+    &.bbma-type-active {
+        border-color: $bbma-accent;
+        background: $bbma-accent-light;
+        box-shadow: 0 0 0 3px rgba($bbma-accent, 0.12);
+
+        .fa { color: $bbma-accent; }
+    }
+}
+
+.bbma-config-actions {
+    padding-top: 8px;
+    text-align: right;
+}
+
+// ============================================
+// STEP 2: Search
+// ============================================
 
 .biblissima-search-step {
     display: flex;
@@ -19,14 +172,14 @@
 
 .biblissima-search-panel {
     padding: 12px 16px;
-    border-bottom: 1px solid #ddd;
-    background: #fafbfc;
+    border-bottom: 1px solid $bbma-border;
+    background: $bbma-bg-warm;
     flex-shrink: 0;
 }
 
 .biblissima-search-controls {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     align-items: flex-end;
 }
 
@@ -34,114 +187,155 @@
     flex: 1;
 }
 
-.biblissima-date-filter {
-    width: 140px;
-    flex-shrink: 0;
+// Search input with embedded icon
+.bbma-search-input-wrap {
+    position: relative;
+
+    .bbma-search-icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #aab;
+        font-size: 13px;
+        pointer-events: none;
+    }
+
+    .form-control {
+        padding-left: 32px;
+    }
 }
 
 .biblissima-search-actions {
     flex-shrink: 0;
-    padding-bottom: 1px;
-}
-
-.biblissima-search-meta {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 8px;
-    gap: 8px;
+    gap: 4px;
+
+    .btn.active {
+        background: $bbma-accent-light;
+        border-color: $bbma-accent;
+        color: $bbma-accent;
+    }
 }
 
-// Filters panel (collapsible)
+// Filters panel
 .biblissima-filters-panel {
-    padding: 10px 0 4px;
-    border-top: 1px solid #eee;
-    margin-top: 8px;
+    padding: 12px 0 4px;
+    border-top: 1px solid lighten($bbma-border, 4%);
+    margin-top: 10px;
 }
+
+.bbma-filters-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.bbma-filter-date { flex: 2; min-width: 280px; }
+.bbma-filter-id { flex: 1; min-width: 200px; }
 
 .biblissima-filter-group {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 
     > label {
         font-size: 12px;
         font-weight: 600;
         color: #555;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
+        display: block;
+
+        input[type="checkbox"] { margin-right: 4px; }
     }
 }
 
-// Date range with noUiSlider
+// Date range
 .biblissima-date-range {
     padding: 6px 0;
 }
 
 .biblissima-date-input {
-    width: 80px !important;
+    width: 72px !important;
     flex-shrink: 0;
     text-align: center;
+    font-size: 12px !important;
 }
 
-// noUiSlider: use high specificity to override defaults
+// noUiSlider
 .biblissima-slider-wrapper.noUi-target.noUi-horizontal {
     flex: 1;
-    min-width: 100px;
-    margin: 0 14px;
+    min-width: 80px;
+    margin: 0 10px;
     height: 3px !important;
     border: none !important;
     border-radius: 2px;
     background: #e0e4e8 !important;
     box-shadow: none !important;
 
-    .noUi-base {
-        height: 3px;
-    }
+    .noUi-base { height: 3px; }
 
-    // Blue fill between the two handles
     .noUi-connect {
-        background: #489EED !important;
+        background: $bbma-accent !important;
         border-radius: 2px;
     }
 
-    // Handles
     .noUi-handle {
         width: 14px !important;
         height: 14px !important;
         border-radius: 50% !important;
         background: #fff !important;
-        border: 2.5px solid #489EED !important;
+        border: 2.5px solid $bbma-accent !important;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18) !important;
         cursor: grab;
         top: -6px !important;
         right: -7px !important;
         transition: box-shadow 0.2s, transform 0.15s, background 0.15s;
 
-        &::before, &::after {
-            display: none !important;
-        }
+        &::before, &::after { display: none !important; }
 
         &:hover {
-            background: #489EED !important;
+            background: $bbma-accent !important;
             transform: scale(1.25);
-            box-shadow: 0 0 0 4px rgba(72, 158, 237, 0.15), 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+            box-shadow: 0 0 0 4px rgba($bbma-accent, 0.15), 0 1px 4px rgba(0, 0, 0, 0.2) !important;
         }
 
-        &:active {
-            cursor: grabbing;
-            transform: scale(1.15);
-        }
-
-        &:focus {
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(72, 158, 237, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15) !important;
-        }
+        &:active { cursor: grabbing; transform: scale(1.15); }
+        &:focus { outline: none; box-shadow: 0 0 0 3px rgba($bbma-accent, 0.25) !important; }
     }
 
-    .noUi-draggable {
-        cursor: grab;
-        &:active { cursor: grabbing; }
+    .noUi-draggable { cursor: grab; &:active { cursor: grabbing; } }
+}
+
+// Results count bar
+.biblissima-search-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid lighten($bbma-border, 4%);
+}
+
+.bbma-results-count {
+    font-size: 12px;
+    color: $bbma-muted;
+
+    strong {
+        color: $bbma-ink;
+        font-size: 14px;
     }
 }
 
+.bbma-date-badge {
+    display: inline-block;
+    font-size: 10px;
+    background: $bbma-accent-light;
+    color: $bbma-accent-dark;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+}
+
+// Results + Cart body
 .biblissima-search-body {
     display: flex;
     flex: 1;
@@ -152,38 +346,63 @@
 .biblissima-results-column {
     flex: 1;
     overflow-y: auto;
-    border-right: 1px solid #ddd;
+    border-right: 1px solid $bbma-border;
+}
+
+// Empty states
+.bbma-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    color: lighten($bbma-muted, 12%);
+    text-align: center;
+
+    .fa {
+        font-size: 32px;
+        margin-bottom: 12px;
+        opacity: 0.4;
+    }
+
+    p {
+        margin: 0;
+        font-size: 13px;
+        max-width: 300px;
+        line-height: 1.5;
+    }
 }
 
 .biblissima-results-grid {
-    padding: 8px;
+    padding: 0;
 }
 
 .biblissima-result-card {
     display: flex;
     gap: 10px;
-    padding: 8px 12px;
-    border-bottom: 1px solid #eee;
+    padding: 10px 14px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
     cursor: pointer;
-    transition: background-color 0.15s;
+    transition: background-color 0.12s;
 
     &:hover {
-        background: #f5f6f8;
+        background: $bbma-bg;
     }
 
     &.selected-instance {
-        background: #e8f0fb;
-        border-left: 3px solid #489EED;
+        background: $bbma-accent-light;
+        border-left: 3px solid $bbma-accent;
+        padding-left: 11px;
     }
 }
 
 .biblissima-result-thumb {
-    width: 60px;
-    height: 60px;
+    width: 52px;
+    height: 52px;
     flex-shrink: 0;
     overflow: hidden;
-    border-radius: 3px;
-    background: #f0f0f0;
+    border-radius: 4px;
+    background: $bbma-bg;
 
     img {
         width: 100%;
@@ -192,14 +411,12 @@
     }
 }
 
-.biblissima-no-thumb {
-    width: 100%;
-    height: 100%;
+.bbma-no-thumb {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #ccc;
-    font-size: 20px;
+    color: darken($bbma-border, 8%);
+    font-size: 18px;
 }
 
 .biblissima-result-info {
@@ -208,36 +425,55 @@
 }
 
 .biblissima-result-title {
-    font-weight: 500;
+    font-weight: 600;
     font-size: 13px;
+    color: $bbma-ink;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin-bottom: 2px;
 }
 
 .biblissima-result-meta {
-    font-size: 12px;
-    color: #888;
+    font-size: 11px;
+    color: $bbma-muted;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.6;
+
+    .fa { width: 12px; text-align: center; margin-right: 2px; font-size: 10px; }
+}
+
+.bbma-meta-iiif {
+    color: $bbma-accent-dark;
+    font-weight: 500;
 }
 
 .biblissima-result-tags {
-    margin-top: 4px;
+    margin-top: 3px;
+}
 
-    .label {
-        margin-right: 4px;
-        font-size: 10px;
-        font-weight: normal;
-    }
+.bbma-tag {
+    display: inline-block;
+    font-size: 10px;
+    background: $bbma-bg;
+    color: $bbma-muted;
+    padding: 1px 5px;
+    border-radius: 2px;
+    margin-right: 3px;
+    border: 1px solid $bbma-border;
 }
 
 .biblissima-result-check {
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    font-size: 18px;
+    font-size: 16px;
+    color: darken($bbma-border, 4%);
+    transition: color 0.15s;
+
+    .fa-check-circle { color: $bbma-accent; }
 }
 
 .biblissima-pagination {
@@ -246,64 +482,90 @@
     align-items: center;
     gap: 12px;
     padding: 10px;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid $bbma-border;
+    background: $bbma-bg-warm;
+}
+
+.bbma-page-indicator {
+    font-size: 12px;
+    color: $bbma-muted;
+    font-weight: 500;
 }
 
 // Cart column
 .biblissima-cart-column {
-    width: 320px;
+    width: 300px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    background: #fafbfc;
+    background: $bbma-bg-warm;
+    border-left: none;
 }
 
 .biblissima-cart-header {
-    padding: 10px 12px;
-    border-bottom: 1px solid #ddd;
+    padding: 10px 14px;
+    border-bottom: 1px solid $bbma-border;
     display: flex;
     justify-content: space-between;
     align-items: center;
 
     h4 {
         margin: 0;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
+        color: $bbma-ink;
 
-        .badge {
-            background: #489EED;
-            font-size: 11px;
-        }
+        .fa { margin-right: 4px; color: $bbma-muted; font-size: 12px; }
+        .badge { background: $bbma-accent; font-size: 10px; vertical-align: 1px; }
     }
 }
 
 .biblissima-cart-body {
     flex: 1;
     overflow-y: auto;
-    padding: 4px 0;
+    padding: 0;
+}
+
+.bbma-cart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px;
+    color: lighten($bbma-muted, 12%);
+    text-align: center;
+
+    .fa { font-size: 20px; margin-bottom: 8px; opacity: 0.5; }
+    p { margin: 0; font-size: 12px; line-height: 1.5; }
 }
 
 .biblissima-cart-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
-    border-bottom: 1px solid #eee;
+    padding: 7px 14px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
+    transition: background 0.12s;
+
+    &:hover { background: $bbma-accent-light; }
 }
 
 .biblissima-cart-item-thumb {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     flex-shrink: 0;
     border-radius: 3px;
     overflow: hidden;
-    background: #f0f0f0;
+    background: $bbma-bg;
 
-    img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
+    img { width: 100%; height: 100%; object-fit: cover; }
+}
+
+.bbma-no-thumb-sm {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: darken($bbma-border, 8%);
+    font-size: 14px;
 }
 
 .biblissima-cart-item-info {
@@ -314,73 +576,241 @@
 .biblissima-cart-item-title {
     font-size: 12px;
     font-weight: 500;
+    color: $bbma-ink;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .biblissima-cart-item-meta {
-    font-size: 11px;
-    color: #888;
+    font-size: 10px;
+    color: $bbma-muted;
+}
+
+.bbma-cart-remove {
+    color: lighten($bbma-muted, 10%) !important;
+    opacity: 0.6;
+    &:hover { opacity: 1; color: #c0392b !important; }
 }
 
 .biblissima-cart-footer {
-    padding: 10px 12px;
-    border-top: 1px solid #ddd;
-    text-align: center;
-}
+    padding: 10px 14px;
+    border-top: 1px solid $bbma-border;
 
-// Select2 "Create new" option
-.biblissima-select2-create {
-    color: #489EED;
-    font-weight: 500;
-    border-top: 1px solid #eee;
-    padding-top: 4px;
-    margin-top: 2px;
-
-    .fa {
-        margin-right: 4px;
+    .btn {
+        font-size: 13px;
+        .fa { margin-left: 4px; }
     }
 }
 
-// === Create Step ===
+// ============================================
+// STEP 3: Create & Validate
+// ============================================
 
 .biblissima-create-step {
-    padding: 16px;
+    padding: 20px;
     overflow-y: auto;
     height: 100%;
 }
 
 .biblissima-create-section {
     margin-bottom: 24px;
+}
+
+.bbma-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid $bbma-border;
+
+    > .fa {
+        color: $bbma-accent;
+        font-size: 15px;
+    }
 
     h4 {
-        margin: 0 0 8px;
+        margin: 0;
+        font-size: 15px;
         font-weight: 600;
+        color: $bbma-ink;
+        flex: 1;
     }
 }
 
-.biblissima-items-table {
-    .biblissima-table-thumb {
-        width: 40px;
-        height: 40px;
-        object-fit: cover;
-        border-radius: 3px;
+.bbma-section-count {
+    font-size: 13px;
+    color: $bbma-muted;
+    font-weight: 500;
+    margin-right: 12px;
+}
+
+.bbma-section-actions {
+    flex-shrink: 0;
+}
+
+.bbma-section-hint {
+    font-size: 12px;
+    color: $bbma-muted;
+    margin: -4px 0 12px;
+    line-height: 1.4;
+}
+
+// Dependencies list
+.bbma-deps-list {
+    background: $bbma-bg-warm;
+    border: 1px solid $bbma-border;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.bbma-dep-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
+
+    &:last-child { border-bottom: none; }
+}
+
+.bbma-dep-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bbma-dep-type {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #fff;
+    background: $bbma-accent;
+    padding: 1px 6px;
+    border-radius: 2px;
+}
+
+.bbma-dep-name {
+    font-size: 13px;
+    color: $bbma-ink;
+}
+
+.bbma-dep-action {
+    width: auto !important;
+    font-size: 12px !important;
+}
+
+// Items list (card-based instead of table)
+.bbma-items-list {
+    background: #fff;
+    border: 1px solid $bbma-border;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.bbma-item-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
+    transition: background 0.12s;
+
+    &:last-child { border-bottom: none; }
+    &:hover { background: $bbma-bg; }
+}
+
+.bbma-item-success { background: $bbma-success-bg; &:hover { background: darken($bbma-success-bg, 2%); } }
+.bbma-item-warning { background: $bbma-warning-bg; }
+.bbma-item-danger { background: $bbma-danger-bg; }
+
+.bbma-item-thumb {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: $bbma-bg;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: darken($bbma-border, 8%);
+    font-size: 16px;
+
+    img { width: 100%; height: 100%; object-fit: cover; }
+}
+
+.bbma-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.bbma-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: $bbma-ink;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bbma-item-details {
+    font-size: 11px;
+    color: $bbma-muted;
+    display: flex;
+    gap: 10px;
+    margin-top: 1px;
+
+    .fa { font-size: 10px; margin-right: 2px; }
+}
+
+.bbma-item-ark {
+    font-size: 10px;
+    color: lighten($bbma-muted, 8%);
+    font-family: monospace;
+    margin-top: 1px;
+}
+
+.bbma-item-status {
+    flex-shrink: 0;
+    text-align: center;
+    min-width: 70px;
+}
+
+.bbma-status-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.2px;
+}
+
+.bbma-status- { background: $bbma-bg; color: $bbma-muted; }  // pending (no class)
+.bbma-status-success { background: $bbma-success-bg; color: $bbma-success; }
+.bbma-status-warning { background: $bbma-warning-bg; color: #b7791f; }
+.bbma-status-danger { background: $bbma-danger-bg; color: #c0392b; }
+.bbma-status-info { background: $bbma-accent-light; color: $bbma-accent-dark; }
+
+.bbma-item-actions {
+    flex-shrink: 0;
+    display: flex;
+    gap: 4px;
+
+    .btn-xs {
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
     }
 }
 
-.biblissima-row-success {
-    background: #f0faf0;
-}
-
-.biblissima-row-warning {
-    background: #fdf8e8;
-}
-
-.biblissima-row-danger {
-    background: #fdf0f0;
-}
-
-.biblissima-row-info {
-    background: #f0f5fd;
+.bbma-item-spinner {
+    color: $bbma-accent;
+    font-size: 16px;
 }

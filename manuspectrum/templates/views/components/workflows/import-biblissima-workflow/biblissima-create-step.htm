@@ -6,37 +6,34 @@
 
     <!-- Section A: Dependencies -->
     <!-- ko if: dependencies().length > 0 -->
-    <div class="biblissima-create-section">
-        <h4>{% trans "Related resources" %}</h4>
-        <p class="text-muted">{% trans "Resources that will be linked to the created items. Choose to use an existing resource or create a new one." %}</p>
-        <table class="table table-condensed">
-            <thead>
-                <tr>
-                    <th>{% trans "Name" %}</th>
-                    <th>{% trans "Type" %}</th>
-                    <th>{% trans "Action" %}</th>
-                </tr>
-            </thead>
-            <tbody data-bind="foreach: dependencies">
-                <tr>
-                    <td data-bind="text: label()"></td>
-                    <td><span class="label label-info" data-bind="text: type"></span></td>
-                    <td>
-                        <select class="form-control input-sm" data-bind="value: action" style="width: auto; display: inline-block;">
-                            <option value="create">{% trans "Create new" %}</option>
-                            <option value="use_existing">{% trans "Use existing" %}</option>
-                            <option value="skip">{% trans "Skip" %}</option>
-                        </select>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <div class="biblissima-create-section bbma-deps-section">
+        <div class="bbma-section-header">
+            <i class="fa fa-link"></i>
+            <h4>{% trans "Related resources" %}</h4>
+        </div>
+        <p class="bbma-section-hint">{% trans "Resources that will be linked to the created items. Choose to use an existing resource or create a new one." %}</p>
+        <div class="bbma-deps-list">
+            <!-- ko foreach: dependencies -->
+            <div class="bbma-dep-row">
+                <div class="bbma-dep-info">
+                    <span class="bbma-dep-type" data-bind="text: type"></span>
+                    <span class="bbma-dep-name" data-bind="text: label()"></span>
+                </div>
+                <select class="form-control input-sm bbma-dep-action" data-bind="value: action">
+                    <option value="create">{% trans "Create new" %}</option>
+                    <option value="use_existing">{% trans "Use existing" %}</option>
+                    <option value="skip">{% trans "Skip" %}</option>
+                </select>
+            </div>
+            <!-- /ko -->
+        </div>
     </div>
     <!-- /ko -->
 
     <!-- Section B: Items -->
     <div class="biblissima-create-section">
-        <div class="d-flex" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div class="bbma-section-header">
+            <i class="fa fa-list"></i>
             <h4>
                 <!-- ko if: resourceType === 'Document' -->
                 {% trans "Documents to create" %}
@@ -44,9 +41,11 @@
                 <!-- ko if: resourceType === 'Component' -->
                 {% trans "Components to create" %}
                 <!-- /ko -->
-                (<span data-bind="text: createdCount()"></span>/<span data-bind="text: totalCount()"></span>)
             </h4>
-            <div>
+            <span class="bbma-section-count">
+                <span data-bind="text: createdCount()"></span> / <span data-bind="text: totalCount()"></span>
+            </span>
+            <div class="bbma-section-actions">
                 <!-- ko ifnot: allDone -->
                 <button class="btn btn-primary"
                         data-bind="click: createAll, disable: creatingAll()">
@@ -67,99 +66,94 @@
             </div>
         </div>
 
-        <table class="table table-condensed table-hover biblissima-items-table">
-            <thead>
-                <tr>
-                    <th style="width: 50px;">{% trans "Thumb" %}</th>
-                    <th>{% trans "Name" %}</th>
-                    <th>{% trans "Manuscript" %}</th>
-                    <th>{% trans "Folio" %}</th>
-                    <th>{% trans "Date" %}</th>
-                    <th style="width: 100px;">{% trans "Status" %}</th>
-                    <th style="width: 130px;">{% trans "Actions" %}</th>
-                </tr>
-            </thead>
-            <tbody data-bind="foreach: items">
-                <tr data-bind="css: 'biblissima-row-' + $parent.statusClass(status())">
-                    <!-- Thumbnail -->
-                    <td>
-                        <!-- ko if: thumbnail -->
-                        <img class="biblissima-table-thumb" data-bind="attr: {src: thumbnail}" loading="lazy">
+        <div class="bbma-items-list">
+            <!-- ko foreach: items -->
+            <div class="bbma-item-row" data-bind="css: 'bbma-item-' + $parent.statusClass(status())">
+                <!-- Thumbnail -->
+                <div class="bbma-item-thumb">
+                    <!-- ko if: thumbnail -->
+                    <img data-bind="attr: {src: thumbnail}" loading="lazy">
+                    <!-- /ko -->
+                    <!-- ko ifnot: thumbnail -->
+                    <i class="fa fa-file-text-o"></i>
+                    <!-- /ko -->
+                </div>
+
+                <!-- Info -->
+                <div class="bbma-item-info">
+                    <div class="bbma-item-name" data-bind="text: legend || label"></div>
+                    <div class="bbma-item-details">
+                        <!-- ko if: manuscript -->
+                        <span><i class="fa fa-bookmark-o"></i> <span data-bind="text: manuscript"></span></span>
                         <!-- /ko -->
-                    </td>
-
-                    <!-- Name -->
-                    <td>
-                        <span data-bind="text: legend || label"></span>
-                        <!-- ko if: arkId -->
-                        <br><small class="text-muted" data-bind="text: arkId"></small>
+                        <!-- ko if: folio -->
+                        <span>f.<span data-bind="text: folio"></span></span>
                         <!-- /ko -->
-                    </td>
-
-                    <!-- Manuscript -->
-                    <td data-bind="text: manuscript"></td>
-
-                    <!-- Folio -->
-                    <td data-bind="text: folio"></td>
-
-                    <!-- Date -->
-                    <td data-bind="text: date"></td>
-
-                    <!-- Status -->
-                    <td>
-                        <span class="label"
-                              data-bind="text: $parent.statusLabel(status()),
-                                         css: 'label-' + $parent.statusClass(status())">
-                        </span>
-                        <!-- ko if: status() === 'error' -->
-                        <br><small class="text-danger" data-bind="text: errorMessage()"></small>
+                        <!-- ko if: date -->
+                        <span data-bind="text: date"></span>
                         <!-- /ko -->
-                    </td>
+                    </div>
+                    <!-- ko if: arkId -->
+                    <div class="bbma-item-ark" data-bind="text: arkId"></div>
+                    <!-- /ko -->
+                </div>
 
-                    <!-- Actions -->
-                    <td>
-                        <!-- ko if: status() === 'pending' -->
-                        <button class="btn btn-xs btn-primary" data-bind="click: $parent.createResource">
-                            <i class="fa fa-plus"></i>
-                        </button>
-                        <!-- /ko -->
+                <!-- Status -->
+                <div class="bbma-item-status">
+                    <span class="bbma-status-badge"
+                          data-bind="text: $parent.statusLabel(status()),
+                                     css: 'bbma-status-' + $parent.statusClass(status())">
+                    </span>
+                    <!-- ko if: status() === 'error' -->
+                    <small class="text-danger" data-bind="text: errorMessage()"></small>
+                    <!-- /ko -->
+                </div>
 
-                        <!-- ko if: status() === 'duplicate' -->
-                        <button class="btn btn-xs btn-default" data-bind="click: $parent.viewDuplicate"
-                                title="{% trans 'View existing' %}">
-                            <i class="fa fa-eye"></i>
-                        </button>
-                        <button class="btn btn-xs btn-warning" data-bind="click: $parent.forceCreate"
-                                title="{% trans 'Create anyway' %}">
-                            <i class="fa fa-plus"></i>
-                        </button>
-                        <button class="btn btn-xs btn-default" data-bind="click: $parent.skipItem"
-                                title="{% trans 'Skip' %}">
-                            <i class="fa fa-ban"></i>
-                        </button>
-                        <!-- /ko -->
+                <!-- Actions -->
+                <div class="bbma-item-actions">
+                    <!-- ko if: status() === 'pending' -->
+                    <button class="btn btn-xs btn-primary" data-bind="click: $parent.createResource"
+                            title="{% trans 'Create' %}">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                    <!-- /ko -->
 
-                        <!-- ko if: status() === 'created' -->
-                        <button class="btn btn-xs btn-default" data-bind="click: $parent.editResource"
-                                title="{% trans 'Edit in Arches' %}">
-                            <i class="fa fa-pencil"></i>
-                        </button>
-                        <!-- /ko -->
+                    <!-- ko if: status() === 'duplicate' -->
+                    <button class="btn btn-xs btn-default" data-bind="click: $parent.viewDuplicate"
+                            title="{% trans 'View existing' %}">
+                        <i class="fa fa-eye"></i>
+                    </button>
+                    <button class="btn btn-xs btn-warning" data-bind="click: $parent.forceCreate"
+                            title="{% trans 'Create anyway' %}">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                    <button class="btn btn-xs btn-default" data-bind="click: $parent.skipItem"
+                            title="{% trans 'Skip' %}">
+                        <i class="fa fa-ban"></i>
+                    </button>
+                    <!-- /ko -->
 
-                        <!-- ko if: status() === 'error' -->
-                        <button class="btn btn-xs btn-warning" data-bind="click: $parent.createResource"
-                                title="{% trans 'Retry' %}">
-                            <i class="fa fa-refresh"></i>
-                        </button>
-                        <!-- /ko -->
+                    <!-- ko if: status() === 'created' -->
+                    <button class="btn btn-xs btn-default" data-bind="click: $parent.editResource"
+                            title="{% trans 'Edit in Arches' %}">
+                        <i class="fa fa-pencil"></i>
+                    </button>
+                    <!-- /ko -->
 
-                        <!-- ko if: status() === 'creating' -->
-                        <i class="fa fa-spinner fa-spin"></i>
-                        <!-- /ko -->
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+                    <!-- ko if: status() === 'error' -->
+                    <button class="btn btn-xs btn-warning" data-bind="click: $parent.createResource"
+                            title="{% trans 'Retry' %}">
+                        <i class="fa fa-refresh"></i>
+                    </button>
+                    <!-- /ko -->
+
+                    <!-- ko if: status() === 'creating' -->
+                    <i class="fa fa-spinner fa-spin bbma-item-spinner"></i>
+                    <!-- /ko -->
+                </div>
+            </div>
+            <!-- /ko -->
+        </div>
     </div>
     <!-- /ko -->
 </div>

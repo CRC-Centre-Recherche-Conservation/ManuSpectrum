@@ -1,68 +1,83 @@
 {% load i18n %}
 
-<div class="biblissima-config-step" style="padding: 20px; max-width: 700px;">
+<div class="biblissima-config-step">
 
-    <div class="form-group">
-        <label class="control-label">{% trans "Resource type to create" %}</label>
-        <div class="radio-row">
-            <label class="radio-inline">
-                <input type="radio" name="resourceType" value="Document"
-                       data-bind="checked: resourceType">
-                {% trans "Document" %}
-            </label>
-            <label class="radio-inline">
-                <input type="radio" name="resourceType" value="Component"
-                       data-bind="checked: resourceType">
-                {% trans "Component" %}
-            </label>
+    <div class="bbma-config-header">
+        <div class="bbma-config-icon">
+            <i class="fa fa-cloud-download"></i>
+        </div>
+        <div>
+            <h3 class="bbma-config-title">{% trans "Import from Biblissima" %}</h3>
+            <p class="bbma-config-subtitle">{% trans "Configure the import before searching the Biblissima portal." %}</p>
         </div>
     </div>
 
-    <div class="form-group" data-bind="visible: isComponent">
-        <label class="control-label">
-            {% trans "Parent document" %} <span class="text-danger">*</span>
-        </label>
-        <p class="help-block text-muted">
-            {% trans "The document this component belongs to. Must already exist." %}
-        </p>
-        <select style="width: 100%;"
-            data-bind="select2Query: { select2Config: parentDocPicker.select2Config }">
-        </select>
-    </div>
+    <div class="bbma-config-body">
 
-    <div class="form-group">
-        <label class="control-label">{% trans "Associate with project" %}</label>
-        <p class="help-block text-muted">
-            {% trans "Optional. Created resources will be added to this project's studied objects." %}
-        </p>
-        <select style="width: 100%;"
-            data-bind="select2Query: { select2Config: projectPicker.select2Config }">
-        </select>
-    </div>
+        <div class="bbma-config-field">
+            <label class="bbma-config-label">{% trans "Resource type to create" %}</label>
+            <div class="bbma-type-switcher">
+                <label class="bbma-type-option" data-bind="css: {'bbma-type-active': resourceType() === 'Document'}">
+                    <input type="radio" name="resourceType" value="Document" data-bind="checked: resourceType">
+                    <i class="fa fa-book"></i>
+                    <span>{% trans "Document" %}</span>
+                    <small>{% trans "Manuscript, book, printed text" %}</small>
+                </label>
+                <label class="bbma-type-option" data-bind="css: {'bbma-type-active': resourceType() === 'Component'}">
+                    <input type="radio" name="resourceType" value="Component" data-bind="checked: resourceType">
+                    <i class="fa fa-puzzle-piece"></i>
+                    <span>{% trans "Component" %}</span>
+                    <small>{% trans "Illumination, lettrine, decoration" %}</small>
+                </label>
+            </div>
+        </div>
 
-    <div class="form-group">
-        <label class="control-label">{% trans "Default type" %}</label>
-        <p class="help-block text-muted">
-            {% trans "Type applied by default to all created resources. Can be changed per item later." %}
-        </p>
-        <div data-bind="component: {
-            name: 'concept-select-widget',
-            params: {
-                node: {config: {rdmCollection: currentRdmCollection}},
-                config: {label: '', placeholder: ''},
-                renderContext: 'workflow',
-                value: defaultType,
-            }
-        }"></div>
-    </div>
+        <div class="bbma-config-field" data-bind="visible: isComponent">
+            <label class="bbma-config-label">
+                {% trans "Parent document" %} <span class="bbma-required">*</span>
+            </label>
+            <p class="bbma-config-hint">
+                {% trans "The document this component belongs to. Must already exist." %}
+            </p>
+            <select style="width: 100%;"
+                data-bind="select2Query: { select2Config: parentDocPicker.select2Config }">
+            </select>
+        </div>
 
-    <div class="form-group" style="margin-top: 24px;">
-        <button class="btn btn-md btn-mint"
-                data-bind="click: submit, disable: !canProceed()">
-            {% trans "Continue" %}
-        </button>
-    </div>
+        <div class="bbma-config-field">
+            <label class="bbma-config-label">{% trans "Associate with project" %}</label>
+            <p class="bbma-config-hint">
+                {% trans "Optional. Created resources will be added to this project's studied objects." %}
+            </p>
+            <select style="width: 100%;"
+                data-bind="select2Query: { select2Config: projectPicker.select2Config }">
+            </select>
+        </div>
 
+        <div class="bbma-config-field">
+            <label class="bbma-config-label">{% trans "Default type" %}</label>
+            <p class="bbma-config-hint">
+                {% trans "Type applied by default to all created resources. Can be changed per item later." %}
+            </p>
+            <div data-bind="component: {
+                name: 'concept-select-widget',
+                params: {
+                    node: {config: {rdmCollection: currentRdmCollection}},
+                    config: {label: '', placeholder: ''},
+                    renderContext: 'workflow',
+                    value: defaultType,
+                }
+            }"></div>
+        </div>
+
+        <div class="bbma-config-actions">
+            <button class="btn btn-primary btn-lg"
+                    data-bind="click: submit, disable: !canProceed()">
+                {% trans "Continue" %} <i class="fa fa-arrow-right"></i>
+            </button>
+        </div>
+
+    </div>
 </div>
 
 <!-- Inline resource creator panel (required by ResourceInstanceSelectViewModel) -->
