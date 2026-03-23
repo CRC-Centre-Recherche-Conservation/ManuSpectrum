@@ -49,6 +49,97 @@
     justify-content: space-between;
     align-items: center;
     margin-top: 8px;
+    gap: 8px;
+}
+
+// Filters panel (collapsible)
+.biblissima-filters-panel {
+    padding: 10px 0 4px;
+    border-top: 1px solid #eee;
+    margin-top: 8px;
+}
+
+.biblissima-filter-group {
+    margin-bottom: 10px;
+
+    > label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 4px;
+    }
+}
+
+// Date range with noUiSlider
+.biblissima-date-range {
+    padding: 6px 0;
+}
+
+.biblissima-date-input {
+    width: 80px !important;
+    flex-shrink: 0;
+    text-align: center;
+}
+
+// noUiSlider: use high specificity to override defaults
+.biblissima-slider-wrapper.noUi-target.noUi-horizontal {
+    flex: 1;
+    min-width: 100px;
+    margin: 0 14px;
+    height: 3px !important;
+    border: none !important;
+    border-radius: 2px;
+    background: #e0e4e8 !important;
+    box-shadow: none !important;
+
+    .noUi-base {
+        height: 3px;
+    }
+
+    // Blue fill between the two handles
+    .noUi-connect {
+        background: #489EED !important;
+        border-radius: 2px;
+    }
+
+    // Handles
+    .noUi-handle {
+        width: 14px !important;
+        height: 14px !important;
+        border-radius: 50% !important;
+        background: #fff !important;
+        border: 2.5px solid #489EED !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18) !important;
+        cursor: grab;
+        top: -6px !important;
+        right: -7px !important;
+        transition: box-shadow 0.2s, transform 0.15s, background 0.15s;
+
+        &::before, &::after {
+            display: none !important;
+        }
+
+        &:hover {
+            background: #489EED !important;
+            transform: scale(1.25);
+            box-shadow: 0 0 0 4px rgba(72, 158, 237, 0.15), 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        &:active {
+            cursor: grabbing;
+            transform: scale(1.15);
+        }
+
+        &:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(72, 158, 237, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15) !important;
+        }
+    }
+
+    .noUi-draggable {
+        cursor: grab;
+        &:active { cursor: grabbing; }
+    }
 }
 
 .biblissima-search-body {

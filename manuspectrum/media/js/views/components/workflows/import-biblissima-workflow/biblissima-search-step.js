@@ -1,7 +1,22 @@
 import ko from 'knockout';
 import arches from 'arches';
 import 'bindings/select2-query';
+import noUiSlider from 'nouislider';
 import biblissimaSearchStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm';
+
+const DATE_MIN = -2000;
+const DATE_MAX = 1850;
+
+// Simple binding to call an init function when the element is rendered
+ko.bindingHandlers.sliderInit = {
+    init: function(element, valueAccessor) {
+        const initFn = valueAccessor();
+        if (typeof initFn === 'function') {
+            // Small delay to ensure element is in DOM with dimensions
+            setTimeout(() => initFn(element), 50);
+        }
+    }
+};
 
 const viewModel = function(params) {
     const self = this;
@@ -9,23 +24,186 @@ const viewModel = function(params) {
     // Workflow step interface
     this.complete = params.form?.complete || ko.observable(false);
     this.saving = ko.observable(false);
-    this.loading = ko.observable(false);
+    this.searching = ko.observable(false);
+
+    // Config from step 1
+    this.config = params.configStepData || {};
+    this.resourceType = this.config.resourceType || 'Document';
+    this.isDocument = this.resourceType === 'Document';
+    this.isComponent = this.resourceType === 'Component';
 
     // Search state
-    this.selectedDescriptors = ko.observableArray();
-    this.dateFilter = ko.observable('');
     this.searchResults = ko.observableArray();
     this.totalResults = ko.observable(0);
     this.currentPage = ko.observable(1);
     this.totalPages = ko.observable(0);
     this.hasSearched = ko.observable(false);
 
-    // Cart (panier)
+    // Cart
     this.cart = ko.observableArray();
-
     this.cartCount = ko.computed(() => self.cart().length);
 
-    // Descriptor search config (Select2 multi-tag)
+    // =====================
+    // SHARED: filters panel (collapsible)
+    // =====================
+    this.showFilters = ko.observable(false);
+    this.toggleFilters = () => self.showFilters(!self.showFilters());
+
+    // Date range slider
+    this.dateFrom = ko.observable(DATE_MIN);
+    this.dateTo = ko.observable(DATE_MAX);
+    this.dateRangeActive = ko.observable(false);
+
+    this.dateRangeLabel = ko.computed(() => {
+        if (!self.dateRangeActive()) return '';
+        const from = self.dateFrom();
+        const to = self.dateTo();
+        const fromLabel = from < 0 ? `${Math.abs(from)} av. J.-C.` : `${from} ap. J.-C.`;
+        const toLabel = to < 0 ? `${Math.abs(to)} av. J.-C.` : `${to} ap. J.-C.`;
+        return `${fromLabel} — ${toLabel}`;
+    });
+
+    // Build Biblissima date param from range
+    this.getDateParam = () => {
+        if (!self.dateRangeActive()) return '';
+        return `${self.dateFrom()}-${self.dateTo()}`;
+    };
+
+    // Direct identifier input (QID or ARK)
+    this.directIdentifier = ko.observable('');
+    this.addingDirect = ko.observable(false);
+
+    this.addByIdentifier = async () => {
+        const id = self.directIdentifier().trim();
+        if (!id) return;
+
+        self.addingDirect(true);
+        try {
+            // Determine if it's a QID (Q12345) or ARK
+            let qid = id;
+            if (id.startsWith('ark:')) {
+                // Search by portal hash — extract hash and search
+                const hash = id.replace('ark:/43093/', '');
+                const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(hash)}&limit=5`);
+                const data = await resp.json();
+                if (data.results?.length > 0) {
+                    qid = data.results[0].id;
+                } else {
+                    console.warn('No Wikibase entity found for ARK:', id);
+                    self.addingDirect(false);
+                    return;
+                }
+            }
+
+            // Fetch entity details
+            const resp = await fetch(`/api/biblissima/entity/${qid}`);
+            if (!resp.ok) {
+                console.warn('Entity not found:', qid);
+                self.addingDirect(false);
+                return;
+            }
+            const d = await resp.json();
+
+            const item = {
+                canvasId: d.qid,
+                arkId: d.portalHash ? `ark:/43093/${d.portalHash}` : null,
+                label: d.label || '',
+                thumbnail: null,
+                manuscript: d.shelfmark || d.label || '',
+                folio: '',
+                legend: d.label || '',
+                date: '',
+                location: '',
+                descriptors: [],
+                portalUrl: d.portalHash ? `https://portail.biblissima.fr/ark:/43093/${d.portalHash}` : '',
+                manifestUrl: d.manifestUrl || '',
+                authorLabel: d.authorLabel || '',
+                authorQid: d.authorQid || '',
+                biblissimaQid: d.qid || '',
+                shelfmark: d.shelfmark || '',
+                mandragoreId: d.mandragoreId || '',
+                collectionLabel: d.collectionLabel || '',
+                digitizationUrl: d.digitizationUrl || '',
+            };
+
+            // Add to cart if not already there
+            const exists = self.cart().some(
+                (c) => c.biblissimaQid === item.biblissimaQid
+            );
+            if (!exists) {
+                self.cart.push(item);
+            }
+            self.directIdentifier('');
+        } catch (err) {
+            console.error('Failed to add by identifier:', err);
+        }
+        self.addingDirect(false);
+    };
+
+    // =====================
+    // DOCUMENT MODE: search by manuscript name/shelfmark
+    // =====================
+    this.manuscriptQuery = ko.observable('');
+
+    this._entityToItem = (d) => ({
+        canvasId: d.qid,
+        arkId: d.portalHash ? `ark:/43093/${d.portalHash}` : null,
+        label: d.label || '',
+        thumbnail: null,
+        manuscript: d.shelfmark || d.label || '',
+        folio: '',
+        legend: d.label || '',
+        date: '',
+        location: '',
+        descriptors: [],
+        portalUrl: d.portalHash ? `https://portail.biblissima.fr/ark:/43093/${d.portalHash}` : '',
+        manifestUrl: d.manifestUrl || '',
+        authorLabel: d.authorLabel || '',
+        authorQid: d.authorQid || '',
+        biblissimaQid: d.qid || '',
+        shelfmark: d.shelfmark || '',
+        mandragoreId: d.mandragoreId || '',
+        collectionLabel: d.collectionLabel || '',
+        digitizationUrl: d.digitizationUrl || '',
+    });
+
+    this.searchManuscripts = async () => {
+        const query = self.manuscriptQuery().trim();
+        if (!query || query.length < 3) return;
+
+        self.searching(true);
+        self.hasSearched(true);
+        self.currentPage(1);
+
+        try {
+            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=20`);
+            const data = await resp.json();
+            const entities = data.results || [];
+
+            const detailPromises = entities.map((e) =>
+                fetch(`/api/biblissima/entity/${e.id}`)
+                    .then((r) => r.json())
+                    .catch(() => null)
+            );
+
+            const details = await Promise.all(detailPromises);
+            const results = details.filter(Boolean).map(self._entityToItem);
+
+            self.searchResults(results);
+            self.totalResults(results.length);
+            self.totalPages(1);
+        } catch (err) {
+            console.error('Biblissima manuscript search failed:', err);
+            self.searchResults([]);
+        }
+        self.searching(false);
+    };
+
+    // =====================
+    // COMPONENT MODE: search by iconographic descriptors
+    // =====================
+    this.selectedDescriptors = ko.observableArray();
+
     this.descriptorSelectConfig = {
         value: self.selectedDescriptors,
         clickBubble: true,
@@ -59,36 +237,79 @@ const viewModel = function(params) {
         escapeMarkup: (m) => m,
     };
 
-    // Century filter options
-    this.centuryOptions = [
-        { value: '', label: arches.translations.biblissimaAllDates || 'All dates' },
-        { value: '401-500', label: 'Ve' },
-        { value: '501-600', label: 'VIe' },
-        { value: '601-700', label: 'VIIe' },
-        { value: '701-800', label: 'VIIIe' },
-        { value: '801-900', label: 'IXe' },
-        { value: '901-1000', label: 'Xe' },
-        { value: '1001-1100', label: 'XIe' },
-        { value: '1101-1200', label: 'XIIe' },
-        { value: '1201-1300', label: 'XIIIe' },
-        { value: '1301-1400', label: 'XIVe' },
-        { value: '1401-1500', label: 'XVe' },
-        { value: '1501-1600', label: 'XVIe' },
-        { value: '1601-1700', label: 'XVIIe' },
-        { value: '1701-1800', label: 'XVIIIe' },
-    ];
+    this.searchComponents = async (page) => {
+        const descriptors = self.selectedDescriptors();
+        if (!descriptors || descriptors.length === 0) return;
 
-    // Check if an item is in the cart
-    this.isInCart = (item) => {
-        return ko.computed(() =>
-            self.cart().some((c) => c.arkId === item.arkId || c.canvasId === item.canvasId)
-        );
+        self.searching(true);
+        self.hasSearched(true);
+        const pageNum = page || 1;
+        self.currentPage(pageNum);
+
+        try {
+            const entityPromises = descriptors.map((qid) =>
+                fetch(`/api/biblissima/entity/${qid}`).then((r) => r.json())
+            );
+            const entities = await Promise.all(entityPromises);
+            const hashes = entities.map((e) => e.portalHash).filter(Boolean);
+
+            if (hashes.length === 0) {
+                self.searchResults([]);
+                self.totalResults(0);
+                self.totalPages(0);
+                self.searching(false);
+                return;
+            }
+
+            const searchParams = new URLSearchParams({
+                descriptors: hashes.join(','),
+                page: pageNum,
+                page_size: 20,
+            });
+            const dateParam = self.getDateParam();
+            if (dateParam) {
+                searchParams.set('date', dateParam);
+            }
+
+            const resp = await fetch(`/api/biblissima/search?${searchParams}`);
+            const data = await resp.json();
+            self.searchResults(data.results || []);
+            self.totalResults(data.total || 0);
+            self.totalPages(data.totalPages || 0);
+        } catch (err) {
+            console.error('Biblissima search failed:', err);
+            self.searchResults([]);
+        }
+        self.searching(false);
     };
 
-    // Toggle item in cart
+    // =====================
+    // SHARED
+    // =====================
+
+    this.search = (page) => {
+        if (self.isDocument) {
+            self.searchManuscripts();
+        } else {
+            self.searchComponents(page);
+        }
+    };
+
+    this.isInCart = (item) =>
+        ko.computed(() =>
+            self.cart().some((c) =>
+                (c.arkId && c.arkId === item.arkId) ||
+                (c.canvasId && c.canvasId === item.canvasId) ||
+                (c.biblissimaQid && c.biblissimaQid === item.biblissimaQid)
+            )
+        );
+
     this.toggleCartItem = (item) => {
         const existing = self.cart().find(
-            (c) => c.arkId === item.arkId || c.canvasId === item.canvasId
+            (c) =>
+                (c.arkId && c.arkId === item.arkId) ||
+                (c.canvasId && c.canvasId === item.canvasId) ||
+                (c.biblissimaQid && c.biblissimaQid === item.biblissimaQid)
         );
         if (existing) {
             self.cart.remove(existing);
@@ -97,123 +318,80 @@ const viewModel = function(params) {
         }
     };
 
-    // Remove from cart
-    this.removeFromCart = (item) => {
-        self.cart.remove(item);
-    };
+    this.removeFromCart = (item) => self.cart.remove(item);
 
-    // Search Biblissima
-    this.search = (page) => {
-        const descriptors = self.selectedDescriptors();
-        if (!descriptors || descriptors.length === 0) return;
-
-        self.loading(true);
-        self.hasSearched(true);
-        const pageNum = page || 1;
-        self.currentPage(pageNum);
-
-        // We need the portal hashes for each descriptor
-        // First fetch entity details to get P129 hashes
-        const entityPromises = descriptors.map((qid) =>
-            fetch(`/api/biblissima/entity/${qid}`).then((r) => r.json())
-        );
-
-        Promise.all(entityPromises)
-            .then((entities) => {
-                const hashes = entities
-                    .map((e) => e.portalHash)
-                    .filter(Boolean);
-
-                if (hashes.length === 0) {
-                    self.searchResults([]);
-                    self.totalResults(0);
-                    self.totalPages(0);
-                    self.loading(false);
-                    return;
-                }
-
-                const params = new URLSearchParams({
-                    descriptors: hashes.join(','),
-                    page: pageNum,
-                    page_size: 20,
-                });
-                if (self.dateFilter()) {
-                    params.set('date', self.dateFilter());
-                }
-
-                return fetch(`/api/biblissima/search?${params}`)
-                    .then((r) => r.json())
-                    .then((data) => {
-                        self.searchResults(data.results || []);
-                        self.totalResults(data.total || 0);
-                        self.totalPages(data.totalPages || 0);
-                    });
-            })
-            .catch((err) => {
-                console.error('Biblissima search failed:', err);
-                self.searchResults([]);
-            })
-            .finally(() => {
-                self.loading(false);
-            });
-    };
-
-    // Pagination
     this.nextPage = () => {
-        if (self.currentPage() < self.totalPages()) {
-            self.search(self.currentPage() + 1);
-        }
+        if (self.currentPage() < self.totalPages()) self.search(self.currentPage() + 1);
     };
 
     this.prevPage = () => {
-        if (self.currentPage() > 1) {
-            self.search(self.currentPage() - 1);
-        }
+        if (self.currentPage() > 1) self.search(self.currentPage() - 1);
     };
 
-    // Add all visible results to cart
     this.addAllVisible = () => {
         self.searchResults().forEach((item) => {
             const exists = self.cart().some(
-                (c) => c.arkId === item.arkId || c.canvasId === item.canvasId
+                (c) =>
+                    (c.arkId && c.arkId === item.arkId) ||
+                    (c.canvasId && c.canvasId === item.canvasId) ||
+                    (c.biblissimaQid && c.biblissimaQid === item.biblissimaQid)
             );
-            if (!exists) {
-                self.cart.push(item);
-            }
+            if (!exists) self.cart.push(item);
         });
     };
 
-    // Clear cart
-    this.clearCart = () => {
-        self.cart.removeAll();
-    };
+    this.clearCart = () => self.cart.removeAll();
 
-    // Submit
     this.submit = () => {
         if (self.cart().length === 0) return;
-        self.saving(true);
         params.value({
             selectedItems: ko.toJS(self.cart()),
             descriptors: ko.toJS(self.selectedDescriptors()),
         });
-        self.saving(false);
         self.complete(true);
     };
 
-    // Dirty tracking
     this.dirty = ko.computed(() => self.cart().length > 0);
 
-    // Restore from cached value
+    // Initialize noUiSlider for date range (dual handles)
+    this.initSlider = (element) => {
+        if (self._slider) return;
+        const slider = noUiSlider.create(element, {
+            start: [self.dateFrom(), self.dateTo()],
+            connect: true,
+            step: 10,
+            range: { min: DATE_MIN, max: DATE_MAX },
+            behaviour: 'drag-tap',
+            format: {
+                to: (v) => Math.round(v),
+                from: (v) => Number(v),
+            },
+        });
+
+        let sliding = false;
+        slider.on('slide', (values) => {
+            sliding = true;
+            self.dateFrom(values[0]);
+            self.dateTo(values[1]);
+            sliding = false;
+        });
+
+        self.dateFrom.subscribe((val) => {
+            if (!sliding) slider.set([val, null]);
+        });
+        self.dateTo.subscribe((val) => {
+            if (!sliding) slider.set([null, val]);
+        });
+
+        self._slider = slider;
+    };
+
     this.initialize = () => {
         if (params.value()) {
             const cached = ko.unwrap(params.value);
-            if (cached.selectedItems) {
-                self.cart(cached.selectedItems);
-            }
+            if (cached.selectedItems) self.cart(cached.selectedItems);
         }
     };
-
-    this.stripTags = (original) => original?.replace(/(<([^>]+)>)/gi, '') || '';
 
     this.initialize();
 };
