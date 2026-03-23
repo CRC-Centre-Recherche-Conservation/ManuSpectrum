@@ -9,6 +9,13 @@ from arches.app.views.auth import PasswordResetView
 
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
+from manuspectrum.views.biblissima_proxy import (
+    BiblissimaCheckDuplicatesView,
+    BiblissimaCreateResourceView,
+    BiblissimaEntityView,
+    BiblissimaSearchView,
+    BiblissimaSuggestView,
+)
 from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationCollectionView,
     IIIFAnnotationPageView,
@@ -61,6 +68,45 @@ if settings.ROOT_URLCONF == __name__:
         urlpatterns = i18n_patterns(*urlpatterns)
 
     urlpatterns.append(path("i18n/", include("django.conf.urls.i18n")))
+
+
+### Manuspectrum URL - Biblissima proxy
+
+urlpatterns.append(
+    path(
+        "api/biblissima/suggest",
+        BiblissimaSuggestView.as_view(),
+        name="biblissima-suggest",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/entity/<str:qid>",
+        BiblissimaEntityView.as_view(),
+        name="biblissima-entity",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/search",
+        BiblissimaSearchView.as_view(),
+        name="biblissima-search",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/check-duplicates",
+        BiblissimaCheckDuplicatesView.as_view(),
+        name="biblissima-check-duplicates",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/create-resource",
+        BiblissimaCreateResourceView.as_view(),
+        name="biblissima-create-resource",
+    )
+)
 
 
 ### Manuspectrum URL - IIIF Annotations

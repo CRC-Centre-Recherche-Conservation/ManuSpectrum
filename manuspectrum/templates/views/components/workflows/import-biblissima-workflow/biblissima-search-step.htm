@@ -1,0 +1,162 @@
+{% load i18n %}
+
+<div class="biblissima-search-step">
+    <!-- Search panel -->
+    <div class="biblissima-search-panel">
+        <div class="biblissima-search-controls">
+            <div class="biblissima-search-bar">
+                <label class="control-label">{% trans "Iconographic descriptors" %}</label>
+                <select data-bind="select2Query: {select2Config: descriptorSelectConfig}" style="width: 100%;"></select>
+            </div>
+            <div class="biblissima-date-filter">
+                <label class="control-label">{% trans "Century" %}</label>
+                <select class="form-control" data-bind="value: dateFilter,
+                    options: centuryOptions, optionsValue: 'value', optionsText: 'label'">
+                </select>
+            </div>
+            <div class="biblissima-search-actions">
+                <button class="btn btn-primary" data-bind="click: function(){ search(); }, disable: selectedDescriptors().length === 0 || loading()">
+                    <i class="fa fa-search"></i> {% trans "Search" %}
+                </button>
+            </div>
+        </div>
+
+        <!-- ko if: hasSearched -->
+        <div class="biblissima-search-meta">
+            <span class="text-muted" data-bind="text: totalResults() + ' {% trans "results" %}'"></span>
+            <!-- ko if: totalResults() > 0 -->
+            <button class="btn btn-xs btn-default" data-bind="click: addAllVisible">
+                <i class="fa fa-plus"></i> {% trans "Add all visible" %}
+            </button>
+            <!-- /ko -->
+        </div>
+        <!-- /ko -->
+    </div>
+
+    <!-- Results + Cart layout -->
+    <div class="biblissima-search-body">
+        <!-- Results column -->
+        <div class="biblissima-results-column">
+            <!-- ko if: loading -->
+            <div class="loading-mask d-flex" style="justify-content: center; padding: 40px;">
+                <div class="ms-spinner ms-spinner--lg"></div>
+            </div>
+            <!-- /ko -->
+
+            <!-- ko ifnot: loading -->
+            <!-- ko if: hasSearched() && searchResults().length === 0 -->
+            <div class="text-center text-muted" style="padding: 40px;">
+                {% trans "No results found. Try different descriptors or date filters." %}
+            </div>
+            <!-- /ko -->
+
+            <!-- ko if: searchResults().length > 0 -->
+            <div class="biblissima-results-grid">
+                <!-- ko foreach: searchResults -->
+                <div class="biblissima-result-card"
+                     data-bind="click: $parent.toggleCartItem, css: {'selected-instance': $parent.isInCart($data)()}">
+                    <div class="biblissima-result-thumb">
+                        <!-- ko if: thumbnail -->
+                        <img data-bind="attr: {src: thumbnail, alt: label}" loading="lazy">
+                        <!-- /ko -->
+                        <!-- ko ifnot: thumbnail -->
+                        <div class="biblissima-no-thumb">
+                            <i class="fa fa-image"></i>
+                        </div>
+                        <!-- /ko -->
+                    </div>
+                    <div class="biblissima-result-info">
+                        <div class="biblissima-result-title" data-bind="text: legend || label"></div>
+                        <div class="biblissima-result-meta">
+                            <span data-bind="text: manuscript"></span>
+                            <!-- ko if: folio -->
+                            <span> &mdash; f.<span data-bind="text: folio"></span></span>
+                            <!-- /ko -->
+                        </div>
+                        <div class="biblissima-result-meta">
+                            <!-- ko if: date -->
+                            <span data-bind="text: date"></span>
+                            <!-- /ko -->
+                            <!-- ko if: location -->
+                            <span> &mdash; <span data-bind="text: location"></span></span>
+                            <!-- /ko -->
+                        </div>
+                        <!-- ko if: descriptors && descriptors.length > 0 -->
+                        <div class="biblissima-result-tags">
+                            <!-- ko foreach: descriptors -->
+                            <span class="label label-default" data-bind="text: $data"></span>
+                            <!-- /ko -->
+                        </div>
+                        <!-- /ko -->
+                    </div>
+                    <div class="biblissima-result-check">
+                        <!-- ko if: $parent.isInCart($data)() -->
+                        <i class="fa fa-check-circle text-success"></i>
+                        <!-- /ko -->
+                    </div>
+                </div>
+                <!-- /ko -->
+            </div>
+
+            <!-- Pagination -->
+            <!-- ko if: totalPages() > 1 -->
+            <div class="biblissima-pagination">
+                <button class="btn btn-sm btn-default" data-bind="click: prevPage, disable: currentPage() <= 1">
+                    <i class="fa fa-chevron-left"></i>
+                </button>
+                <span data-bind="text: currentPage() + ' / ' + totalPages()"></span>
+                <button class="btn btn-sm btn-default" data-bind="click: nextPage, disable: currentPage() >= totalPages()">
+                    <i class="fa fa-chevron-right"></i>
+                </button>
+            </div>
+            <!-- /ko -->
+            <!-- /ko -->
+            <!-- /ko -->
+        </div>
+
+        <!-- Cart column -->
+        <div class="biblissima-cart-column">
+            <div class="biblissima-cart-header">
+                <h4>
+                    {% trans "Selection" %}
+                    <span class="badge" data-bind="text: cartCount()"></span>
+                </h4>
+                <!-- ko if: cartCount() > 0 -->
+                <button class="btn btn-xs btn-link text-danger" data-bind="click: clearCart">
+                    {% trans "Clear all" %}
+                </button>
+                <!-- /ko -->
+            </div>
+            <div class="biblissima-cart-body">
+                <!-- ko if: cartCount() === 0 -->
+                <div class="text-center text-muted" style="padding: 20px;">
+                    {% trans "Click on results to add them to your selection." %}
+                </div>
+                <!-- /ko -->
+
+                <!-- ko foreach: cart -->
+                <div class="biblissima-cart-item">
+                    <div class="biblissima-cart-item-thumb">
+                        <!-- ko if: thumbnail -->
+                        <img data-bind="attr: {src: thumbnail}" loading="lazy">
+                        <!-- /ko -->
+                    </div>
+                    <div class="biblissima-cart-item-info">
+                        <div class="biblissima-cart-item-title" data-bind="text: legend || label"></div>
+                        <div class="biblissima-cart-item-meta" data-bind="text: manuscript"></div>
+                    </div>
+                    <button class="btn btn-xs btn-link text-danger" data-bind="click: $parent.removeFromCart">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <!-- /ko -->
+            </div>
+            <div class="biblissima-cart-footer">
+                <button class="btn btn-md btn-mint"
+                        data-bind="click: submit, disable: cartCount() === 0">
+                    {% trans "Continue with" %} <span data-bind="text: cartCount()"></span> {% trans "items" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

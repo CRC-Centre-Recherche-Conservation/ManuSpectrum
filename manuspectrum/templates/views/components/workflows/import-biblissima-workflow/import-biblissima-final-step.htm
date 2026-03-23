@@ -1,0 +1,53 @@
+{% load i18n %}
+
+<div class="wf-summary" style="padding: 20px;">
+    <div class="wf-summary__header">
+        <div class="wf-summary__badge">
+            <i class="fa fa-check fa-2x text-success"></i>
+        </div>
+        <h3 class="wf-summary__title">{% trans "Import complete" %}</h3>
+    </div>
+
+    <div class="wf-summary__section" style="margin-top: 20px;">
+        <dl class="dl-horizontal">
+            <dt>{% trans "Resource type" %}</dt>
+            <dd data-bind="text: resourceType"></dd>
+
+            <dt>{% trans "Created" %}</dt>
+            <dd><span class="text-success" data-bind="text: createdCount()"></span> {% trans "resources" %}</dd>
+
+            <!-- ko if: skippedCount() > 0 -->
+            <dt>{% trans "Skipped" %}</dt>
+            <dd><span class="text-warning" data-bind="text: skippedCount()"></span></dd>
+            <!-- /ko -->
+
+            <!-- ko if: errorCount() > 0 -->
+            <dt>{% trans "Errors" %}</dt>
+            <dd><span class="text-danger" data-bind="text: errorCount()"></span></dd>
+            <!-- /ko -->
+
+            <!-- ko if: projectName -->
+            <dt>{% trans "Project" %}</dt>
+            <dd>
+                <a data-bind="attr: {href: projectUrl()}, text: projectName" target="_blank"></a>
+            </dd>
+            <!-- /ko -->
+        </dl>
+    </div>
+
+    <!-- ko if: createdCount() > 0 -->
+    <div class="wf-summary__section" style="margin-top: 20px;">
+        <h4>{% trans "Created resources" %}</h4>
+        <div class="wf-summary__resource-list">
+            <!-- ko foreach: createdResources -->
+            <div class="wf-summary__resource-item" style="padding: 6px 0; border-bottom: 1px solid #eee;">
+                <a data-bind="attr: {href: $parent.resourceUrl(resourceId)}, text: label || arkId" target="_blank"></a>
+                <!-- ko if: manuscript -->
+                <span class="text-muted"> &mdash; <span data-bind="text: manuscript"></span></span>
+                <!-- /ko -->
+            </div>
+            <!-- /ko -->
+        </div>
+    </div>
+    <!-- /ko -->
+</div>
