@@ -1,0 +1,17 @@
+{
+    "pluginid": "a7f3b2c1-8d4e-4f5a-b6c7-9e0d1f2a3b4c",
+    "name": "Import Biblissima",
+    "icon": "fa fa-cloud-download",
+    "component": "views/components/plugins/import-biblissima-workflow",
+    "componentname": "import-biblissima-workflow",
+    "config": {
+        "show": false,
+        "is_workflow": true,
+        "thumbnailBackgroundColor": "#d4a574",
+        "thumbnailCircleColor": "#e0bb93",
+        "description": "Import documents or components from the Biblissima portal"
+    },
+    "slug": "import-biblissima-workflow",
+    "sortorder": 1,
+    "helptemplate": ""
+}
