@@ -362,7 +362,11 @@ def _parse_iiif_canvases(manifest_json):
 
 
 class BiblissimaSuggestView(View):
-    """Proxy for Biblissima Wikibase entity search (autocomplete)."""
+    """Proxy for Biblissima Wikibase entity search (autocomplete).
+
+    Combines prefix match (wbsearchentities) and full-text search
+    (CirrusSearch) for flexible matching regardless of word order.
+    """
 
     @method_decorator(cache_page(300))
     def get(self, request):
@@ -370,32 +374,103 @@ class BiblissimaSuggestView(View):
         if len(query) < 2:
             return JsonResponse({"results": []})
 
+        lang = request.GET.get("lang", "fr")
+        limit = int(request.GET.get("limit", 10))
+        seen_ids = set()
+        results = []
+
+        session = requests.Session()
+
+        # 1. Prefix match (fast, good for exact starts)
         try:
-            resp = requests.get(
+            resp = session.get(
                 BIBLISSIMA_WIKIBASE,
                 params={
                     "action": "wbsearchentities",
                     "search": query,
-                    "language": request.GET.get("lang", "fr"),
+                    "language": lang,
                     "format": "json",
-                    "limit": int(request.GET.get("limit", 10)),
+                    "limit": limit,
                 },
                 timeout=REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
-            data = resp.json()
+            for item in resp.json().get("search", []):
+                if item["id"] not in seen_ids:
+                    seen_ids.add(item["id"])
+                    results.append(
+                        {
+                            "id": item["id"],
+                            "label": item.get("label", ""),
+                            "description": item.get("description", ""),
+                        }
+                    )
         except Exception:
-            logger.exception("Biblissima suggest failed for query=%s", query)
-            return JsonResponse({"results": []}, status=502)
+            logger.warning("wbsearchentities failed for query=%s", query)
 
-        results = [
-            {
-                "id": item["id"],
-                "label": item.get("label", ""),
-                "description": item.get("description", ""),
-            }
-            for item in data.get("search", [])
-        ]
+        # 2. Full-text search (flexible word order, partial matches)
+        if len(results) < limit:
+            try:
+                resp = session.get(
+                    BIBLISSIMA_WIKIBASE,
+                    params={
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": query,
+                        "srnamespace": 120,  # Item namespace
+                        "format": "json",
+                        "srlimit": limit,
+                    },
+                    timeout=REQUEST_TIMEOUT,
+                )
+                resp.raise_for_status()
+                search_results = resp.json().get("query", {}).get("search", [])
+                qids_to_fetch = [
+                    r["title"].replace("Item:", "")
+                    for r in search_results
+                    if r["title"].replace("Item:", "") not in seen_ids
+                ]
+
+                # Batch fetch labels for full-text results
+                if qids_to_fetch:
+                    resp = session.get(
+                        BIBLISSIMA_WIKIBASE,
+                        params={
+                            "action": "wbgetentities",
+                            "ids": "|".join(qids_to_fetch[: limit - len(results)]),
+                            "format": "json",
+                            "languages": f"{lang}|en",
+                            "props": "labels|descriptions",
+                        },
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    resp.raise_for_status()
+                    entities = resp.json().get("entities", {})
+                    for qid in qids_to_fetch:
+                        if len(results) >= limit:
+                            break
+                        entity = entities.get(qid, {})
+                        labels = entity.get("labels", {})
+                        label = (
+                            labels.get(lang, {}).get("value")
+                            or labels.get("en", {}).get("value")
+                            or ""
+                        )
+                        descs = entity.get("descriptions", {})
+                        desc = (
+                            descs.get(lang, {}).get("value")
+                            or descs.get("en", {}).get("value")
+                            or ""
+                        )
+                        if label:
+                            seen_ids.add(qid)
+                            results.append(
+                                {"id": qid, "label": label, "description": desc}
+                            )
+            except Exception:
+                logger.warning("CirrusSearch failed for query=%s", query)
+
+        session.close()
         return JsonResponse({"results": results})
 
 
