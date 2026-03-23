@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-20 04:56-0500\n"
+"POT-Creation-Date: 2026-03-23 06:22-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -16,1378 +16,1258 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: templates/javascript.htm
-msgid "Project Name"
-msgstr "Nom du projet"
-
-#: templates/javascript.htm
-msgid "Project Statement"
-msgstr "Description du projet"
-
-#: templates/javascript.htm
-msgid "Project Start"
-msgstr "Début du projet"
-
-#: templates/javascript.htm
-msgid "Project Team"
-msgstr "Équipe du projet"
-
-#: templates/javascript.htm
-msgid "Project Timespan"
-msgstr "Durée du projet"
-
-#: templates/javascript.htm
-msgid "Add Objects"
-msgstr "Ajouter des objets"
-
-#: templates/javascript.htm
-msgid "Summary"
-msgstr "Résumé"
-
-#: templates/javascript.htm
-msgid "Type"
-msgstr "Type"
-
-#: templates/javascript.htm
-msgid "Search for a document..."
-msgstr "Rechercher un document..."
-
-#: templates/javascript.htm
-msgid "Select a primary description identifier card"
-msgstr "Sélectionnez une carte d'identification principale."
-
-#: templates/javascript.htm
-msgid "There was an issue saving the workflow step."
-msgstr "Une erreur s'est produite lors de l'enregistrement de l'étape du workflow."
-
-#: templates/javascript.htm
-msgid "Cleaning up..."
-msgstr "Nettoyage en cours..."
-
-#: templates/views/components/resource-instance-creator.htm
-msgid "New Document"
-msgstr "Nouveau document"
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
-msgid "No description"
-msgstr "Pas de description"
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
-msgid "Documents"
-msgstr "Documents"
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
-msgid "Selected Documents"
-msgstr "Documents sélectionnés"
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
-msgid "You have not added any Documents to this Project"
-msgstr "Vous n'avez ajouté aucun document à ce projet"
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
-msgid "Save and Continue"
-msgstr "Enregistrer et continuer"
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm
-msgid "Reset"
-msgstr "Réinitialiser"
-
-#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
-msgid "Open resource"
-msgstr "Ouvrir la ressource"
-
-#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
-msgid "Project Details"
-msgstr "Détails du projet"
-
-#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
-msgid "Studied Documents"
-msgstr "Documents étudiés"
-
-#: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm
-msgid "No documents associated"
-msgstr "Aucun document associé"
-
-#: datatypes/manifest.py:161
-msgid "Manifest must have a URL or ID"
+msgid "German"
 msgstr ""
 
-#: datatypes/manifest.py:178
-#, fuzzy
-#| msgid "Manifest description"
-msgid "Manifest ID does not exist"
-msgstr "Description du manifeste"
-
-#: datatypes/manifest.py:193
-#, fuzzy
-#| msgid "Manifest description"
-msgid "Manifest not found"
-msgstr "Description du manifeste"
-
-#: datatypes/manifest.py:213
-msgid "Invalid URL format"
-msgstr ""
-
-#: datatypes/manifest.py:218
-#, fuzzy
-#| msgid "An error occurred while creating the manifest."
-msgid "Timeout while fetching manifest"
-msgstr "Une erreur est survenue lors de la création du manifeste."
-
-#: datatypes/manifest.py:225
-msgid "Invalid IIIF manifest: {str(e)}"
-msgstr ""
-
-#: datatypes/manifest.py:230
-msgid "Unexpected error: {str(e)}"
-msgstr ""
-
-#: functions/multi_descriptor.py:105
-msgid "Undefined"
-msgstr ""
-
-#: settings.py:402
-msgid "Hi"
-msgstr ""
-
-#: settings.py:439
 msgid "English"
 msgstr ""
 
-#: templates/custom_email_footer.htm:47
-#, fuzzy
-#| msgid ""
-#| "Interoperable database for physicochemical analysis of written cultural "
-#| "heritage materials. A Biblissima+ cluster project."
-msgid ""
-"Interoperable database for physicochemical analysis of written cultural "
-"heritage"
+msgid "British English"
 msgstr ""
-"Base de données interopérable pour l'analyse physico-chimique des matériaux "
-"du patrimoine culturel écrit. Un projet du cluster Biblissima+."
+
+msgid "Spanish"
+msgstr ""
+
+msgid "Arabic"
+msgstr ""
+
+#: import-biblissima-workflow
+msgid "Resource type to create"
+msgstr "Type de ressource à créer"
+
+msgid "Document"
+msgstr "Document"
+
+msgid "Component"
+msgstr "Composant"
+
+msgid "Parent document"
+msgstr "Document parent"
+
+msgid "The document this component belongs to. Must already exist."
+msgstr "Le document auquel ce composant appartient. Doit déjà exister."
+
+msgid "Associate with project"
+msgstr "Associer à un projet"
+
+msgid "Optional. Created resources will be added to this project's studied objects."
+msgstr "Optionnel. Les ressources créées seront ajoutées aux objets étudiés de ce projet."
+
+msgid "Default type"
+msgstr "Type par défaut"
+
+msgid "Type applied by default to all created resources. Can be changed per item later."
+msgstr "Type appliqué par défaut à toutes les ressources créées. Modifiable par item ensuite."
+
+msgid "Continue"
+msgstr "Continuer"
+
+msgid "Iconographic descriptors"
+msgstr "Descripteurs iconographiques"
+
+msgid "Century"
+msgstr "Siècle"
+
+msgid "Search"
+msgstr "Rechercher"
+
+msgid "results"
+msgstr "résultats"
+
+msgid "Add all visible"
+msgstr "Ajouter tous les visibles"
+
+msgid "No results found. Try different descriptors or date filters."
+msgstr "Aucun résultat. Essayez d'autres descripteurs ou filtres de date."
+
+msgid "Selection"
+msgstr "Sélection"
+
+msgid "Clear all"
+msgstr "Tout retirer"
+
+msgid "Click on results to add them to your selection."
+msgstr "Cliquez sur les résultats pour les ajouter à votre sélection."
+
+msgid "Continue with"
+msgstr "Continuer avec"
+
+msgid "items"
+msgstr "items"
+
+msgid "Checking for duplicates..."
+msgstr "Vérification des doublons..."
+
+msgid "Related resources"
+msgstr "Ressources liées"
+
+msgid "Resources that will be linked to the created items. Choose to use an existing resource or create a new one."
+msgstr "Ressources qui seront liées aux items créés. Choisissez d'utiliser une ressource existante ou d'en créer une nouvelle."
+
+msgid "Name"
+msgstr "Nom"
+
+msgid "Type"
+msgstr "Type"
+
+msgid "Action"
+msgstr "Action"
+
+msgid "Create new"
+msgstr "Créer nouvelle"
+
+msgid "Use existing"
+msgstr "Utiliser existante"
+
+msgid "Skip"
+msgstr "Ignorer"
+
+msgid "Documents to create"
+msgstr "Documents à créer"
+
+msgid "Components to create"
+msgstr "Composants à créer"
+
+msgid "Create all"
+msgstr "Tout créer"
+
+msgid "Finish"
+msgstr "Terminer"
+
+msgid "Thumb"
+msgstr "Vignette"
+
+msgid "Manuscript"
+msgstr "Manuscrit"
+
+msgid "Folio"
+msgstr "Folio"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Status"
+msgstr "Statut"
+
+msgid "Actions"
+msgstr "Actions"
+
+msgid "View existing"
+msgstr "Voir existante"
+
+msgid "Create anyway"
+msgstr "Créer quand même"
+
+msgid "Edit in Arches"
+msgstr "Éditer dans Arches"
+
+msgid "Retry"
+msgstr "Réessayer"
+
+msgid "Import complete"
+msgstr "Import terminé"
+
+msgid "Resource type"
+msgstr "Type de ressource"
+
+msgid "Created"
+msgstr "Créées"
+
+msgid "resources"
+msgstr "ressources"
+
+msgid "Skipped"
+msgstr "Ignorées"
+
+msgid "Errors"
+msgstr "Erreurs"
+
+msgid "Project"
+msgstr "Projet"
+
+msgid "Created resources"
+msgstr "Ressources créées"
+
+msgid "Create a new document in a new tab"
+msgstr "Créer un nouveau document dans un nouvel onglet"
+
+msgid "Create a new project in a new tab"
+msgstr "Créer un nouveau projet dans un nouvel onglet"
+
+#: javascript.htm
+msgid "Configuration"
+msgstr "Configuration"
+
+msgid "Biblissima Search"
+msgstr "Recherche Biblissima"
+
+msgid "Creation & Validation"
+msgstr "Création & Validation"
+
+msgid "Search iconographic descriptors..."
+msgstr "Rechercher des descripteurs iconographiques..."
+
+msgid "All dates"
+msgstr "Toutes les dates"
+
+msgid "Search for a parent document..."
+msgstr "Rechercher un document parent..."
+
+msgid "Associate with a project (optional)..."
+msgstr "Associer à un projet (optionnel)..."
+
+msgid "Pending"
+msgstr "En attente"
+
+msgid "Creating..."
+msgstr "Création..."
+
+msgid "Error"
+msgstr "Erreur"
+
+msgid "Duplicate"
+msgstr "Doublon"
+
+msgid "Create new resource"
+msgstr "Créer une nouvelle ressource"
+
+#~ msgid "Project Name"
+#~ msgstr "Nom du projet"
+
+#~ msgid "Project Statement"
+#~ msgstr "Description du projet"
+
+#~ msgid "Project Start"
+#~ msgstr "Début du projet"
+
+#~ msgid "Project Team"
+#~ msgstr "Équipe du projet"
+
+#~ msgid "Project Timespan"
+#~ msgstr "Durée du projet"
+
+#~ msgid "Add Objects"
+#~ msgstr "Ajouter des objets"
+
+#~ msgid "Summary"
+#~ msgstr "Résumé"
+
+#~ msgid "Search for a document..."
+#~ msgstr "Rechercher un document..."
+
+#~ msgid "Select a primary description identifier card"
+#~ msgstr "Sélectionnez une carte d'identification principale."
+
+#~ msgid "There was an issue saving the workflow step."
+#~ msgstr ""
+#~ "Une erreur s'est produite lors de l'enregistrement de l'étape du workflow."
+
+#~ msgid "Cleaning up..."
+#~ msgstr "Nettoyage en cours..."
+
+#~ msgid "New Document"
+#~ msgstr "Nouveau document"
+
+#~ msgid "No description"
+#~ msgstr "Pas de description"
+
+#~ msgid "Documents"
+#~ msgstr "Documents"
+
+#~ msgid "Selected Documents"
+#~ msgstr "Documents sélectionnés"
+
+#~ msgid "You have not added any Documents to this Project"
+#~ msgstr "Vous n'avez ajouté aucun document à ce projet"
+
+#~ msgid "Save and Continue"
+#~ msgstr "Enregistrer et continuer"
+
+#~ msgid "Reset"
+#~ msgstr "Réinitialiser"
+
+#~ msgid "Open resource"
+#~ msgstr "Ouvrir la ressource"
+
+#~ msgid "Project Details"
+#~ msgstr "Détails du projet"
+
+#~ msgid "Studied Documents"
+#~ msgstr "Documents étudiés"
+
+#~ msgid "No documents associated"
+#~ msgstr "Aucun document associé"
+
+#, fuzzy
+#~| msgid "Manifest description"
+#~ msgid "Manifest ID does not exist"
+#~ msgstr "Description du manifeste"
+
+#, fuzzy
+#~| msgid "Manifest description"
+#~ msgid "Manifest not found"
+#~ msgstr "Description du manifeste"
+
+#, fuzzy
+#~| msgid "An error occurred while creating the manifest."
+#~ msgid "Timeout while fetching manifest"
+#~ msgstr "Une erreur est survenue lors de la création du manifeste."
+
+#, fuzzy
+#~| msgid ""
+#~| "Interoperable database for physicochemical analysis of written cultural "
+#~| "heritage materials. A Biblissima+ cluster project."
+#~ msgid ""
+#~ "Interoperable database for physicochemical analysis of written cultural "
+#~ "heritage"
+#~ msgstr ""
+#~ "Base de données interopérable pour l'analyse physico-chimique des "
+#~ "matériaux du patrimoine culturel écrit. Un projet du cluster Biblissima+."
 
 # ============================================================
 # Homepage — index.htm
 # ============================================================
-#: templates/index.htm:12
-msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
-msgstr "ManuSpectrum — Analyse physico-chimique du patrimoine"
+#~ msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
+#~ msgstr "ManuSpectrum — Analyse physico-chimique du patrimoine"
 
-#: templates/index.htm:13
-msgid ""
-"Interoperable database for written cultural heritage materials analysis — "
-"Biblissima+ Cluster"
-msgstr ""
-"Base de données interopérable pour l'analyse des matériaux du patrimoine "
-"culturel écrit — Cluster Biblissima+"
+#~ msgid ""
+#~ "Interoperable database for written cultural heritage materials analysis — "
+#~ "Biblissima+ Cluster"
+#~ msgstr ""
+#~ "Base de données interopérable pour l'analyse des matériaux du patrimoine "
+#~ "culturel écrit — Cluster Biblissima+"
 
-#: templates/index.htm:23
-msgid ""
-"spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, IIIF, "
-"CIDOC-CRM, Biblissima, physicochemical analysis, heritage science"
-msgstr ""
-"spectroscopie, XRF, Raman, FTIR, FORS, manuscrits, patrimoine culturel, "
-"IIIF, CIDOC-CRM, Biblissima, analyse physico-chimique, science du patrimoine"
+#~ msgid ""
+#~ "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, "
+#~ "IIIF, CIDOC-CRM, Biblissima, physicochemical analysis, heritage science"
+#~ msgstr ""
+#~ "spectroscopie, XRF, Raman, FTIR, FORS, manuscrits, patrimoine culturel, "
+#~ "IIIF, CIDOC-CRM, Biblissima, analyse physico-chimique, science du "
+#~ "patrimoine"
 
-#: templates/index.htm:119
-msgid "ManuSpectrum — Home"
-msgstr "ManuSpectrum — Accueil"
+#~ msgid "ManuSpectrum — Home"
+#~ msgstr "ManuSpectrum — Accueil"
 
-#: templates/index.htm:124
-msgid "Main Navigation"
-msgstr "Navigation principale"
+#~ msgid "Main Navigation"
+#~ msgstr "Navigation principale"
 
-#: templates/index.htm:126 templates/index.htm:174 templates/index.htm:333
-msgid "The Project"
-msgstr "Le Projet"
+#~ msgid "The Project"
+#~ msgstr "Le Projet"
 
-#: templates/index.htm:127 templates/index.htm:175 templates/index.htm:473
-msgid "Explore"
-msgstr "Explorer"
+#~ msgid "Explore"
+#~ msgstr "Explorer"
 
-#: templates/index.htm:128 templates/index.htm:176 templates/index.htm:539
-msgid "Analyses"
-msgstr "Analyses"
+#~ msgid "Analyses"
+#~ msgstr "Analyses"
 
-#: templates/index.htm:129 templates/index.htm:177 templates/index.htm:603
-#: templates/index.htm:701
-msgid "Search"
-msgstr "Rechercher"
+#~ msgid "Management"
+#~ msgstr "Gestion"
 
-#: templates/index.htm:131 templates/index.htm:179
-msgid "Management"
-msgstr "Gestion"
+#~ msgid "Source code on GitHub"
+#~ msgstr "Code source sur GitHub"
 
-#: templates/index.htm:137
-msgid "Source code on GitHub"
-msgstr "Code source sur GitHub"
+#~ msgid "Sign In"
+#~ msgstr "Se connecter"
 
-#: templates/index.htm:145 templates/index.htm:183 templates/index.htm:703
-msgid "Sign In"
-msgstr "Se connecter"
+#~ msgid "User Profile"
+#~ msgstr "Profil utilisateur"
 
-#: templates/index.htm:147
-msgid "User Profile"
-msgstr "Profil utilisateur"
-
-#: templates/index.htm:148
 #, fuzzy, python-format
-#| msgid "Welcome,"
-msgid "Welcome, %(name)s"
-msgstr "Bienvenue,"
+#~| msgid "Welcome,"
+#~ msgid "Welcome, %(name)s"
+#~ msgstr "Bienvenue,"
 
-#: templates/index.htm:150 templates/index.htm:186
-msgid "Sign Out"
-msgstr "Déconnexion"
+#~ msgid "Sign Out"
+#~ msgstr "Déconnexion"
 
-#: templates/index.htm:164
-msgid "Open Menu"
-msgstr "Ouvrir le menu"
+#~ msgid "Open Menu"
+#~ msgstr "Ouvrir le menu"
 
-#: templates/index.htm:301
 #, fuzzy
-#| msgid ""
-#| "Interoperable database for physicochemical analysis of written cultural "
-#| "heritage materials. A Biblissima+ cluster project."
-msgid ""
-"Interoperable database for <em>physicochemical analysis</em> of written "
-"cultural heritage"
-msgstr ""
-"Base de données interopérable pour l'analyse physico-chimique des matériaux "
-"du patrimoine culturel écrit. Un projet du cluster Biblissima+."
-
-#: templates/index.htm:305
-msgid ""
-"Explore, visualize, and share written cultural heritage materials analysis "
-"data within the Biblissima+ ecosystem."
-msgstr ""
-"Explorer, visualiser et partager les données d'analyse des matériaux du "
-"patrimoine culturel écrit au sein de l'écosystème Biblissima+."
-
-#: templates/index.htm:310 templates/index.htm:604
-msgid "Explore the database"
-msgstr "Explorer la base de données"
-
-#: templates/index.htm:313
-msgid "Learn more"
-msgstr "En savoir plus"
-
-#: templates/index.htm:320
-msgid "scroll"
-msgstr "défiler"
-
-#: templates/index.htm:334
-msgid "Thinking and modeling written cultural heritage materials"
-msgstr "Penser et modéliser les matériaux du patrimoine culturel écrit"
-
-#: templates/index.htm:340
-msgid "ManuSpectrum was developed within Cluster 2 — \\"
-msgstr "ManuSpectrum a été développé dans le cadre du Cluster 2 — \\"
-
-#: templates/index.htm:343
-msgid ""
-"Through structuring and standardizing data according to shared models, the "
-"project provides reliable, easy-to-use tools accessible to non-specialists. "
-"Built on Arches, an open-source platform for heritage data management, "
-"ManuSpectrum facilitates data access and collaboration between researchers "
-"from different disciplines."
-msgstr ""
-"Par une structuration et une normalisation des données respectant des "
-"modèles communs, le projet fournit des outils fiables, simples d'utilisation "
-"et accessibles à des non-spécialistes. Construit sur Arches, une plateforme "
-"open source de gestion de données patrimoniales, ManuSpectrum facilite "
-"l'accès aux données et la collaboration entre chercheurs de différentes "
-"disciplines."
-
-#: templates/index.htm:346
-msgid ""
-"The model focuses on identifying the component as a pivot axis between the "
-"object, its context, the analyses, and their interpretations, using thesauri "
-"and authority databases to contextualize information on heterogeneous "
-"documents."
-msgstr ""
-"Le modèle se concentre sur l'identification du composant comme axe pivot "
-"entre l'objet, son contexte, les analyses et leurs interprétations, en "
-"utilisant des thésaurus et des bases d'autorité pour contextualiser les "
-"informations sur des documents hétérogènes."
-
-#: templates/index.htm:354
-msgid "Biblissima+ — Cluster 2"
-msgstr "Biblissima+ — Cluster 2"
-
-#: templates/index.htm:356
-msgid ""
-"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
-"written cultures. Within Cluster 2, the objective is to archive, share and "
-"enable searching of materials analysis data from the community, ensuring "
-"interoperability with the Biblissima portal and written cultural heritage "
-"standards."
-msgstr ""
-"ManuSpectrum s'inscrit dans le cadre du programme Biblissima+, un "
-"observatoire des cultures écrites anciennes. Au sein du Cluster 2, "
-"l'objectif est d'archiver, partager et rendre cherchables les données "
-"d'analyse des matériaux de la communauté, en garantissant leur "
-"interopérabilité avec le portail Biblissima et les standards du patrimoine "
-"culturel écrit."
-
-#: templates/index.htm:373 templates/index.htm:551
-msgid "X-ray Fluorescence"
-msgstr "Fluorescence X"
-
-#: templates/index.htm:378
-msgid "X-ray Micro-Fluorescence"
-msgstr "Microfluorescence X"
-
-#: templates/index.htm:383
-msgid "Fiber Optic Reflectance"
-msgstr "Réflectance par fibre optique"
-
-#: templates/index.htm:388
-msgid "Raman Spectroscopy"
-msgstr "Spectroscopie Raman"
-
-#: templates/index.htm:393
-msgid "IR Spectroscopy"
-msgstr "Spectroscopie IR"
-
-#: templates/index.htm:398
-msgid "Hyperspectral Imaging"
-msgstr "Imagerie hyperspectrale"
-
-#: templates/index.htm:403 templates/index.htm:574
-msgid "Multispectral Imaging"
-msgstr "Imagerie multispectrale"
-
-#: templates/index.htm:408
-msgid "Proteomics (MALDI-TOF)"
-msgstr "Protéomique (MALDI-TOF)"
-
-#: templates/index.htm:413
-msgid "And many more"
-msgstr "Et bien d'autres"
-
-#: templates/index.htm:421
-msgid "XRF mapping of a manuscript"
-msgstr "Cartographie XRF d'un manuscrit"
-
-#: templates/index.htm:423
-msgid "XRF mapping of an illuminated manuscript"
-msgstr "Cartographie XRF d'un manuscrit enluminé"
-
-#: templates/index.htm:424
-msgid ""
-"Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
-msgstr ""
-"Analyse élémentaire par fluorescence X — Distribution spatiale des pigments"
-
-#: templates/index.htm:428
-msgid "Raman spectrum on a pigment sample"
-msgstr "Spectre Raman sur un échantillon de pigment"
-
-#: templates/index.htm:430
-msgid "Raman spectroscopy on a medieval pigment"
-msgstr "Spectroscopie Raman sur un pigment médiéval"
-
-#: templates/index.htm:431
-msgid ""
-"Molecular identification of azurite and malachite pigments on a 15th-century "
-"illumination"
-msgstr ""
-"Identification moléculaire des pigments d'azurite et de malachite sur une "
-"enluminure du XVe siècle"
-
-#: templates/index.htm:435
-msgid "Multispectral imaging of a manuscript page"
-msgstr "Imagerie multispectrale d'une page de manuscrit"
-
-#: templates/index.htm:437
-msgid "Multispectral imaging — Revealing hidden texts"
-msgstr "Imagerie multispectrale — Révéler les textes cachés"
-
-#: templates/index.htm:438
-msgid ""
-"UV and infrared reflectography combined to reveal underdrawings and erased "
-"inscriptions"
-msgstr ""
-"Réflectographie UV et infrarouge combinées pour révéler les dessins sous-"
-"jacents et les inscriptions effacées"
-
-#: templates/index.htm:445
-msgid "Previous"
-msgstr "Précédent"
-
-#: templates/index.htm:448
-msgid "Next"
-msgstr "Suivant"
-
-#: templates/index.htm:474
-msgid "What you can discover"
-msgstr "Ce que vous pouvez découvrir"
-
-#: templates/index.htm:476
-msgid ""
-"A platform designed to explore physicochemical analyses on historical "
-"documents, correlating data with their written cultural heritage context."
-msgstr ""
-"Une plateforme conçue pour explorer les analyses physico-chimiques sur les "
-"documents historiques, en corrélant les données avec leur contexte de "
-"patrimoine culturel écrit."
-
-#: templates/index.htm:483
-msgid "Spectra and analysis data"
-msgstr "Spectres et données d'analyse"
-
-#: templates/index.htm:484
-msgid ""
-"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
-"analysis results directly on the platform."
-msgstr ""
-"Visualisez et comparez les spectres de référence. Explorez les résultats "
-"d'analyses XRF, FTIR, Raman et d'autres techniques directement dans la "
-"plateforme."
-
-#: templates/index.htm:495
-msgid "IIIF Annotations"
-msgstr "Annotations IIIF"
-
-#: templates/index.htm:496
-msgid ""
-"Analysis data is exposed as IIIF annotations, making it accessible from any "
-"compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
-"allows any external site to visualize ManuSpectrum's spectral data (XRF, "
-"Raman, FTIR, UV-Vis) directly overlaid on high-resolution manuscript images."
-msgstr ""
-"Les données d'analyse sont exposées sous forme d'annotations IIIF, les "
-"rendant accessibles depuis tout visualiseur compatible. Le plugin mirador-"
-"xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser "
-"les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
-"directement superposées aux images haute résolution des manuscrits."
-
-#: templates/index.htm:507
-msgid "Interoperability and Standards"
-msgstr "Interopérabilité et standards"
-
-#: templates/index.htm:508
-msgid ""
-"Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
-"ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
-"interoperability with international heritage systems and the Biblissima "
-"portal."
-msgstr ""
-"Les données sont structurées selon les ontologies CIDOC-CRM (v7.1.2) et "
-"CRMsci (v2.0), et enrichies par les thésaurus AGORHA et AAT Getty, "
-"garantissant leur interopérabilité avec les systèmes patrimoniaux "
-"internationaux et le portail Biblissima."
-
-#: templates/index.htm:512
-msgid "AGORHA thesaurus"
-msgstr "Thésaurus AGORHA"
-
-#: templates/index.htm:519
-msgid "Material Characterization"
-msgstr "Caractérisation matérielle"
-
-#: templates/index.htm:520
-msgid ""
-"Explore the layers, materials, and chemical elements identified on written "
-"cultural heritage documents, with different levels of reliability and "
-"characterization."
-msgstr ""
-"Explorez les couches, matériaux et éléments chimiques identifiés sur les "
-"documents du patrimoine culturel écrit, avec différents niveaux de fiabilité "
-"et de caractérisation."
-
-#: templates/index.htm:522
-msgid "Pigments"
-msgstr "Pigments"
-
-#: templates/index.htm:523
-msgid "Layers"
-msgstr "Couches"
-
-#: templates/index.htm:524
-msgid "Binders"
-msgstr "Liants"
-
-#: templates/index.htm:525
-msgid "Substrates"
-msgstr "Supports"
-
-#: templates/index.htm:540
-msgid "Visualize physicochemical analyses"
-msgstr "Visualiser les analyses physico-chimiques"
-
-#: templates/index.htm:542
-msgid ""
-"From elemental mapping to multispectral imaging, explore the different "
-"analysis techniques applied to manuscripts and written cultural heritage "
-"objects."
-msgstr ""
-"De la cartographie élémentaire à l'imagerie multispectrale, explorez les "
-"différentes techniques d'analyse appliquées aux manuscrits et objets du "
-"patrimoine culturel écrit."
-
-#: templates/index.htm:548
-msgid "XRF Mapping — Element A"
-msgstr "Cartographie XRF — Élément A"
-
-#: templates/index.htm:549
-msgid "XRF Mapping — Element B"
-msgstr "Cartographie XRF — Élément B"
-
-#: templates/index.htm:552
-msgid "XRF Mapping"
-msgstr "Cartographie XRF"
-
-#: templates/index.htm:553
-msgid "Spatial distribution of chemical elements on an illuminated manuscript"
-msgstr "Distribution spatiale des éléments chimiques sur un manuscrit enluminé"
-
-#: templates/index.htm:558
-msgid "Manuscript analysis"
-msgstr "Analyse sur manuscrit"
-
-#: templates/index.htm:560 templates/index.htm:561 templates/index.htm:562
-#: templates/index.htm:563
-msgid "Analysis point"
-msgstr "Point d'analyse"
-
-#: templates/index.htm:567
-msgid "Spectroscopy"
-msgstr "Spectroscopie"
-
-#: templates/index.htm:568
-msgid "Point Analysis"
-msgstr "Analyse ponctuelle"
-
-#: templates/index.htm:569
-msgid "Click on analysis points to explore spectral data"
-msgstr "Cliquez sur les points d'analyse pour explorer les données spectrales"
-
-#: templates/index.htm:584
-msgid "Imaging"
-msgstr "Imagerie"
-
-#: templates/index.htm:585
-msgid "Multispectral"
-msgstr "Multispectral"
-
-#: templates/index.htm:586
-msgid "Spectral band scanning and false-color composites via IIIF"
-msgstr "Balayage de bandes spectrales et composites fausses couleurs via IIIF"
-
-#: templates/index.htm:606
-msgid ""
-"Search by material, analysis technique, written cultural heritage object, or "
-"chemical element. Advanced filters available in the search interface."
-msgstr ""
-"Recherchez par matériau, technique d'analyse, objet du patrimoine culturel "
-"écrit ou élément chimique. Filtres avancés disponibles dans l'interface de "
-"recherche."
-
-#: templates/index.htm:619
-msgid "Search materials, techniques, objects..."
-msgstr "Rechercher des matériaux, techniques, objets..."
-
-#: templates/index.htm:626
-msgid "Vermilion"
-msgstr "Vermillon"
-
-#: templates/index.htm:627
-msgid "manuscript"
-msgstr "manuscrit"
-
-#: templates/index.htm:627
-msgid "Manuscripts"
-msgstr "Manuscrits"
-
-#: templates/index.htm:628
-msgid "XRF"
-msgstr "XRF"
-
-#: templates/index.htm:629
-msgid "parchment"
-msgstr "parchemin"
-
-#: templates/index.htm:629
-msgid "Parchment"
-msgstr "Parchemin"
-
-#: templates/index.htm:630
-msgid "illumination"
-msgstr "enluminure"
-
-#: templates/index.htm:630
-msgid "Illuminations"
-msgstr "Enluminures"
-
-#: templates/index.htm:631
-msgid "Raman"
-msgstr "Raman"
-
-#: templates/index.htm:636
-msgid "Access advanced search"
-msgstr "Accéder à la recherche avancée"
-
-#: templates/index.htm:649
-msgid "Our Partners"
-msgstr "Nos Partenaires"
-
-#: templates/index.htm:653
-msgid "Ministry of Culture"
-msgstr "Ministère de la Culture"
-
-#: templates/index.htm:693
-msgid ""
-"Interoperable database for physicochemical analysis of written cultural "
-"heritage materials. A Biblissima+ cluster project."
-msgstr ""
-"Base de données interopérable pour l'analyse physico-chimique des matériaux "
-"du patrimoine culturel écrit. Un projet du cluster Biblissima+."
-
-#: templates/index.htm:699
-msgid "Platform"
-msgstr "Plateforme"
-
-#: templates/index.htm:705
-msgid "My Profile"
-msgstr "Mon profil"
-
-#: templates/index.htm:710
-msgid "Resources"
-msgstr "Ressources"
-
-#: templates/index.htm:718
-msgid "Standards"
-msgstr "Standards"
-
-#: templates/index.htm:729
-msgid ""
-"This work has benefited from state aid managed by the Agence Nationale de la "
-"Recherche under the Investissements d'avenir programme, reference ANR-21-"
-"ESRE-0005 (Biblissima+)."
-msgstr ""
-"Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale de "
-"la Recherche au titre du programme d'Investissements d'avenir portant la "
-"référence ANR-21-ESRE-0005 (Biblissima+)."
-
-#: templates/index.htm:733
-msgid "All rights reserved"
-msgstr "Tous droits réservés"
-
-#: templates/index.htm:736
-msgid "Source code"
-msgstr "Code source"
-
-#: templates/index.htm:740
-msgid "GPL-3.0 License"
-msgstr "Licence GPL-3.0"
-
-#: templates/index.htm:743
-msgid ""
-"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
-"rel=\"noopener\">Arches</a>"
-msgstr ""
-"Propulsé par <a href=\"https://www.archesproject.org\" target=\"_blank\" "
-"rel=\"noopener\">Arches</a>"
-
-#: templates/javascript.htm:8
-msgid "Data"
-msgstr "Données"
-
-#: templates/javascript.htm:9
-#: templates/views/components/plugins/importer-configuration.htm:117
-msgid "X Axis"
-msgstr "Axe X"
-
-#: templates/javascript.htm:10
-#: templates/views/components/plugins/importer-configuration.htm:135
-msgid "Y Axis"
-msgstr "Axe Y"
-
-#: templates/javascript.htm:11
-msgid "Select a Transformation"
-msgstr "Sélectionner une transformation"
-
-#: templates/javascript.htm:12
-msgid "Select an Importer"
-msgstr "Sélectionner un importateur"
-
-#: templates/javascript.htm:13
-msgid "Importer in Use"
-msgstr "Importateur en cours d'utilisation"
-
-#: templates/javascript.htm:14
-msgid ""
-"This importer is in use - it should be replaced in all files where it is "
-"used before deleting."
-msgstr ""
-"Cet importateur est en cours d'utilisation — il doit être remplacé dans tous "
-"les fichiers où il est utilisé avant de le supprimer."
-
-#: templates/javascript.htm:15
-msgid "Select Primary Description Identifier Card"
-msgstr "Sélectionner la carte d'identifiant de description principale"
-
-#: templates/javascript.htm:16
-msgid "An error occurred while creating the manifest."
-msgstr "Une erreur est survenue lors de la création du manifeste."
-
-#: templates/javascript.htm:17
-msgid "Material"
-msgstr "Matériau"
-
-#: templates/javascript.htm:18
-msgid "Layer"
-msgstr "Couche"
-
-#: templates/javascript.htm:19
-msgid "Range"
-msgstr "Plage"
-
-#: templates/javascript.htm:20
-msgid "Lapis lazuli"
-msgstr "Lapis-lazuli"
-
-#: templates/javascript.htm:21
-msgid "Vermilion (HgS)"
-msgstr "Vermillon (HgS)"
-
-#: templates/javascript.htm:22
-msgid "Gold leaf"
-msgstr "Feuille d'or"
-
-#: templates/javascript.htm:23
-msgid "Iron gall ink"
-msgstr "Encre ferrogallique"
-
-#: templates/javascript.htm:24
-msgid "Pigment"
-msgstr "Pigment"
-
-#: templates/javascript.htm:25
-msgid "Paint"
-msgstr "Peinture"
-
-#: templates/javascript.htm:26
-msgid "Gilding"
-msgstr "Dorure"
-
-#: templates/javascript.htm:27
-msgid "Text"
-msgstr "Texte"
-
-#: templates/registration/password_reset_email_html.html
+#~| msgid ""
+#~| "Interoperable database for physicochemical analysis of written cultural "
+#~| "heritage materials. A Biblissima+ cluster project."
+#~ msgid ""
+#~ "Interoperable database for <em>physicochemical analysis</em> of written "
+#~ "cultural heritage"
+#~ msgstr ""
+#~ "Base de données interopérable pour l'analyse physico-chimique des "
+#~ "matériaux du patrimoine culturel écrit. Un projet du cluster Biblissima+."
+
+#~ msgid ""
+#~ "Explore, visualize, and share written cultural heritage materials "
+#~ "analysis data within the Biblissima+ ecosystem."
+#~ msgstr ""
+#~ "Explorer, visualiser et partager les données d'analyse des matériaux du "
+#~ "patrimoine culturel écrit au sein de l'écosystème Biblissima+."
+
+#~ msgid "Explore the database"
+#~ msgstr "Explorer la base de données"
+
+#~ msgid "Learn more"
+#~ msgstr "En savoir plus"
+
+#~ msgid "scroll"
+#~ msgstr "défiler"
+
+#~ msgid "Thinking and modeling written cultural heritage materials"
+#~ msgstr "Penser et modéliser les matériaux du patrimoine culturel écrit"
+
+#~ msgid "ManuSpectrum was developed within Cluster 2 — \\"
+#~ msgstr "ManuSpectrum a été développé dans le cadre du Cluster 2 — \\"
+
+#~ msgid ""
+#~ "Through structuring and standardizing data according to shared models, "
+#~ "the project provides reliable, easy-to-use tools accessible to non-"
+#~ "specialists. Built on Arches, an open-source platform for heritage data "
+#~ "management, ManuSpectrum facilitates data access and collaboration "
+#~ "between researchers from different disciplines."
+#~ msgstr ""
+#~ "Par une structuration et une normalisation des données respectant des "
+#~ "modèles communs, le projet fournit des outils fiables, simples "
+#~ "d'utilisation et accessibles à des non-spécialistes. Construit sur "
+#~ "Arches, une plateforme open source de gestion de données patrimoniales, "
+#~ "ManuSpectrum facilite l'accès aux données et la collaboration entre "
+#~ "chercheurs de différentes disciplines."
+
+#~ msgid ""
+#~ "The model focuses on identifying the component as a pivot axis between "
+#~ "the object, its context, the analyses, and their interpretations, using "
+#~ "thesauri and authority databases to contextualize information on "
+#~ "heterogeneous documents."
+#~ msgstr ""
+#~ "Le modèle se concentre sur l'identification du composant comme axe pivot "
+#~ "entre l'objet, son contexte, les analyses et leurs interprétations, en "
+#~ "utilisant des thésaurus et des bases d'autorité pour contextualiser les "
+#~ "informations sur des documents hétérogènes."
+
+#~ msgid "Biblissima+ — Cluster 2"
+#~ msgstr "Biblissima+ — Cluster 2"
+
+#~ msgid ""
+#~ "ManuSpectrum is part of the Biblissima+ programme, an observatory of "
+#~ "ancient written cultures. Within Cluster 2, the objective is to archive, "
+#~ "share and enable searching of materials analysis data from the community, "
+#~ "ensuring interoperability with the Biblissima portal and written cultural "
+#~ "heritage standards."
+#~ msgstr ""
+#~ "ManuSpectrum s'inscrit dans le cadre du programme Biblissima+, un "
+#~ "observatoire des cultures écrites anciennes. Au sein du Cluster 2, "
+#~ "l'objectif est d'archiver, partager et rendre cherchables les données "
+#~ "d'analyse des matériaux de la communauté, en garantissant leur "
+#~ "interopérabilité avec le portail Biblissima et les standards du "
+#~ "patrimoine culturel écrit."
+
+#~ msgid "X-ray Fluorescence"
+#~ msgstr "Fluorescence X"
+
+#~ msgid "X-ray Micro-Fluorescence"
+#~ msgstr "Microfluorescence X"
+
+#~ msgid "Fiber Optic Reflectance"
+#~ msgstr "Réflectance par fibre optique"
+
+#~ msgid "Raman Spectroscopy"
+#~ msgstr "Spectroscopie Raman"
+
+#~ msgid "IR Spectroscopy"
+#~ msgstr "Spectroscopie IR"
+
+#~ msgid "Hyperspectral Imaging"
+#~ msgstr "Imagerie hyperspectrale"
+
+#~ msgid "Multispectral Imaging"
+#~ msgstr "Imagerie multispectrale"
+
+#~ msgid "Proteomics (MALDI-TOF)"
+#~ msgstr "Protéomique (MALDI-TOF)"
+
+#~ msgid "And many more"
+#~ msgstr "Et bien d'autres"
+
+#~ msgid "XRF mapping of a manuscript"
+#~ msgstr "Cartographie XRF d'un manuscrit"
+
+#~ msgid "XRF mapping of an illuminated manuscript"
+#~ msgstr "Cartographie XRF d'un manuscrit enluminé"
+
+#~ msgid ""
+#~ "Elemental analysis by X-ray fluorescence — Spatial distribution of "
+#~ "pigments"
+#~ msgstr ""
+#~ "Analyse élémentaire par fluorescence X — Distribution spatiale des "
+#~ "pigments"
+
+#~ msgid "Raman spectrum on a pigment sample"
+#~ msgstr "Spectre Raman sur un échantillon de pigment"
+
+#~ msgid "Raman spectroscopy on a medieval pigment"
+#~ msgstr "Spectroscopie Raman sur un pigment médiéval"
+
+#~ msgid ""
+#~ "Molecular identification of azurite and malachite pigments on a 15th-"
+#~ "century illumination"
+#~ msgstr ""
+#~ "Identification moléculaire des pigments d'azurite et de malachite sur une "
+#~ "enluminure du XVe siècle"
+
+#~ msgid "Multispectral imaging of a manuscript page"
+#~ msgstr "Imagerie multispectrale d'une page de manuscrit"
+
+#~ msgid "Multispectral imaging — Revealing hidden texts"
+#~ msgstr "Imagerie multispectrale — Révéler les textes cachés"
+
+#~ msgid ""
+#~ "UV and infrared reflectography combined to reveal underdrawings and "
+#~ "erased inscriptions"
+#~ msgstr ""
+#~ "Réflectographie UV et infrarouge combinées pour révéler les dessins sous-"
+#~ "jacents et les inscriptions effacées"
+
+#~ msgid "Previous"
+#~ msgstr "Précédent"
+
+#~ msgid "Next"
+#~ msgstr "Suivant"
+
+#~ msgid "What you can discover"
+#~ msgstr "Ce que vous pouvez découvrir"
+
+#~ msgid ""
+#~ "A platform designed to explore physicochemical analyses on historical "
+#~ "documents, correlating data with their written cultural heritage context."
+#~ msgstr ""
+#~ "Une plateforme conçue pour explorer les analyses physico-chimiques sur "
+#~ "les documents historiques, en corrélant les données avec leur contexte de "
+#~ "patrimoine culturel écrit."
+
+#~ msgid "Spectra and analysis data"
+#~ msgstr "Spectres et données d'analyse"
+
+#~ msgid ""
+#~ "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and "
+#~ "other analysis results directly on the platform."
+#~ msgstr ""
+#~ "Visualisez et comparez les spectres de référence. Explorez les résultats "
+#~ "d'analyses XRF, FTIR, Raman et d'autres techniques directement dans la "
+#~ "plateforme."
+
+#~ msgid "IIIF Annotations"
+#~ msgstr "Annotations IIIF"
+
+#~ msgid ""
+#~ "Analysis data is exposed as IIIF annotations, making it accessible from "
+#~ "any compatible viewer. The mirador-xyviewer plugin, developed for Mirador "
+#~ "4, allows any external site to visualize ManuSpectrum's spectral data "
+#~ "(XRF, Raman, FTIR, UV-Vis) directly overlaid on high-resolution "
+#~ "manuscript images."
+#~ msgstr ""
+#~ "Les données d'analyse sont exposées sous forme d'annotations IIIF, les "
+#~ "rendant accessibles depuis tout visualiseur compatible. Le plugin mirador-"
+#~ "xyviewer, développé pour Mirador 4, permet à tout site externe de "
+#~ "visualiser les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-"
+#~ "Vis) directement superposées aux images haute résolution des manuscrits."
+
+#~ msgid "Interoperability and Standards"
+#~ msgstr "Interopérabilité et standards"
+
+#~ msgid ""
+#~ "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
+#~ "ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
+#~ "interoperability with international heritage systems and the Biblissima "
+#~ "portal."
+#~ msgstr ""
+#~ "Les données sont structurées selon les ontologies CIDOC-CRM (v7.1.2) et "
+#~ "CRMsci (v2.0), et enrichies par les thésaurus AGORHA et AAT Getty, "
+#~ "garantissant leur interopérabilité avec les systèmes patrimoniaux "
+#~ "internationaux et le portail Biblissima."
+
+#~ msgid "AGORHA thesaurus"
+#~ msgstr "Thésaurus AGORHA"
+
+#~ msgid "Material Characterization"
+#~ msgstr "Caractérisation matérielle"
+
+#~ msgid ""
+#~ "Explore the layers, materials, and chemical elements identified on "
+#~ "written cultural heritage documents, with different levels of reliability "
+#~ "and characterization."
+#~ msgstr ""
+#~ "Explorez les couches, matériaux et éléments chimiques identifiés sur les "
+#~ "documents du patrimoine culturel écrit, avec différents niveaux de "
+#~ "fiabilité et de caractérisation."
+
+#~ msgid "Pigments"
+#~ msgstr "Pigments"
+
+#~ msgid "Layers"
+#~ msgstr "Couches"
+
+#~ msgid "Binders"
+#~ msgstr "Liants"
+
+#~ msgid "Substrates"
+#~ msgstr "Supports"
+
+#~ msgid "Visualize physicochemical analyses"
+#~ msgstr "Visualiser les analyses physico-chimiques"
+
+#~ msgid ""
+#~ "From elemental mapping to multispectral imaging, explore the different "
+#~ "analysis techniques applied to manuscripts and written cultural heritage "
+#~ "objects."
+#~ msgstr ""
+#~ "De la cartographie élémentaire à l'imagerie multispectrale, explorez les "
+#~ "différentes techniques d'analyse appliquées aux manuscrits et objets du "
+#~ "patrimoine culturel écrit."
+
+#~ msgid "XRF Mapping — Element A"
+#~ msgstr "Cartographie XRF — Élément A"
+
+#~ msgid "XRF Mapping — Element B"
+#~ msgstr "Cartographie XRF — Élément B"
+
+#~ msgid "XRF Mapping"
+#~ msgstr "Cartographie XRF"
+
+#~ msgid ""
+#~ "Spatial distribution of chemical elements on an illuminated manuscript"
+#~ msgstr ""
+#~ "Distribution spatiale des éléments chimiques sur un manuscrit enluminé"
+
+#~ msgid "Manuscript analysis"
+#~ msgstr "Analyse sur manuscrit"
+
+#~ msgid "Analysis point"
+#~ msgstr "Point d'analyse"
+
+#~ msgid "Spectroscopy"
+#~ msgstr "Spectroscopie"
+
+#~ msgid "Point Analysis"
+#~ msgstr "Analyse ponctuelle"
+
+#~ msgid "Click on analysis points to explore spectral data"
+#~ msgstr ""
+#~ "Cliquez sur les points d'analyse pour explorer les données spectrales"
+
+#~ msgid "Imaging"
+#~ msgstr "Imagerie"
+
+#~ msgid "Multispectral"
+#~ msgstr "Multispectral"
+
+#~ msgid "Spectral band scanning and false-color composites via IIIF"
+#~ msgstr ""
+#~ "Balayage de bandes spectrales et composites fausses couleurs via IIIF"
+
+#~ msgid ""
+#~ "Search by material, analysis technique, written cultural heritage object, "
+#~ "or chemical element. Advanced filters available in the search interface."
+#~ msgstr ""
+#~ "Recherchez par matériau, technique d'analyse, objet du patrimoine "
+#~ "culturel écrit ou élément chimique. Filtres avancés disponibles dans "
+#~ "l'interface de recherche."
+
+#~ msgid "Search materials, techniques, objects..."
+#~ msgstr "Rechercher des matériaux, techniques, objets..."
+
+#~ msgid "Vermilion"
+#~ msgstr "Vermillon"
+
+#~ msgid "manuscript"
+#~ msgstr "manuscrit"
+
+#~ msgid "Manuscripts"
+#~ msgstr "Manuscrits"
+
+#~ msgid "XRF"
+#~ msgstr "XRF"
+
+#~ msgid "parchment"
+#~ msgstr "parchemin"
+
+#~ msgid "Parchment"
+#~ msgstr "Parchemin"
+
+#~ msgid "illumination"
+#~ msgstr "enluminure"
+
+#~ msgid "Illuminations"
+#~ msgstr "Enluminures"
+
+#~ msgid "Raman"
+#~ msgstr "Raman"
+
+#~ msgid "Access advanced search"
+#~ msgstr "Accéder à la recherche avancée"
+
+#~ msgid "Our Partners"
+#~ msgstr "Nos Partenaires"
+
+#~ msgid "Ministry of Culture"
+#~ msgstr "Ministère de la Culture"
+
+#~ msgid ""
+#~ "Interoperable database for physicochemical analysis of written cultural "
+#~ "heritage materials. A Biblissima+ cluster project."
+#~ msgstr ""
+#~ "Base de données interopérable pour l'analyse physico-chimique des "
+#~ "matériaux du patrimoine culturel écrit. Un projet du cluster Biblissima+."
+
+#~ msgid "Platform"
+#~ msgstr "Plateforme"
+
+#~ msgid "My Profile"
+#~ msgstr "Mon profil"
+
+#~ msgid "Resources"
+#~ msgstr "Ressources"
+
+#~ msgid "Standards"
+#~ msgstr "Standards"
+
+#~ msgid ""
+#~ "This work has benefited from state aid managed by the Agence Nationale de "
+#~ "la Recherche under the Investissements d'avenir programme, reference "
+#~ "ANR-21-ESRE-0005 (Biblissima+)."
+#~ msgstr ""
+#~ "Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale "
+#~ "de la Recherche au titre du programme d'Investissements d'avenir portant "
+#~ "la référence ANR-21-ESRE-0005 (Biblissima+)."
+
+#~ msgid "All rights reserved"
+#~ msgstr "Tous droits réservés"
+
+#~ msgid "Source code"
+#~ msgstr "Code source"
+
+#~ msgid "GPL-3.0 License"
+#~ msgstr "Licence GPL-3.0"
+
+#~ msgid ""
+#~ "Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
+#~ "rel=\"noopener\">Arches</a>"
+#~ msgstr ""
+#~ "Propulsé par <a href=\"https://www.archesproject.org\" target=\"_blank\" "
+#~ "rel=\"noopener\">Arches</a>"
+
+#~ msgid "Data"
+#~ msgstr "Données"
+
+#~ msgid "X Axis"
+#~ msgstr "Axe X"
+
+#~ msgid "Y Axis"
+#~ msgstr "Axe Y"
+
+#~ msgid "Select a Transformation"
+#~ msgstr "Sélectionner une transformation"
+
+#~ msgid "Select an Importer"
+#~ msgstr "Sélectionner un importateur"
+
+#~ msgid "Importer in Use"
+#~ msgstr "Importateur en cours d'utilisation"
+
+#~ msgid ""
+#~ "This importer is in use - it should be replaced in all files where it is "
+#~ "used before deleting."
+#~ msgstr ""
+#~ "Cet importateur est en cours d'utilisation — il doit être remplacé dans "
+#~ "tous les fichiers où il est utilisé avant de le supprimer."
+
+#~ msgid "Select Primary Description Identifier Card"
+#~ msgstr "Sélectionner la carte d'identifiant de description principale"
+
+#~ msgid "An error occurred while creating the manifest."
+#~ msgstr "Une erreur est survenue lors de la création du manifeste."
+
+#~ msgid "Material"
+#~ msgstr "Matériau"
+
+#~ msgid "Layer"
+#~ msgstr "Couche"
+
+#~ msgid "Range"
+#~ msgstr "Plage"
+
+#~ msgid "Lapis lazuli"
+#~ msgstr "Lapis-lazuli"
+
+#~ msgid "Vermilion (HgS)"
+#~ msgstr "Vermillon (HgS)"
+
+#~ msgid "Gold leaf"
+#~ msgstr "Feuille d'or"
+
+#~ msgid "Iron gall ink"
+#~ msgstr "Encre ferrogallique"
+
+#~ msgid "Pigment"
+#~ msgstr "Pigment"
+
+#~ msgid "Paint"
+#~ msgstr "Peinture"
+
+#~ msgid "Gilding"
+#~ msgstr "Dorure"
+
+#~ msgid "Text"
+#~ msgstr "Texte"
+
 #, python-format
-msgid ""
-"You're receiving this email because you requested a password reset for your "
-"user account at %(site_name)s."
-msgstr ""
-"Vous recevez cet e-mail car vous avez demandé la réinitialisation du mot de "
-"passe de votre compte sur %(site_name)s."
+#~ msgid ""
+#~ "You're receiving this email because you requested a password reset for "
+#~ "your user account at %(site_name)s."
+#~ msgstr ""
+#~ "Vous recevez cet e-mail car vous avez demandé la réinitialisation du mot "
+#~ "de passe de votre compte sur %(site_name)s."
 
-#: templates/registration/password_reset_email_html.html
-msgid "Reset my password"
-msgstr "Réinitialiser mon mot de passe"
+#~ msgid "Reset my password"
+#~ msgstr "Réinitialiser mon mot de passe"
 
-#: templates/registration/password_reset_email_html.html
-msgid "Your username, in case you've forgotten:"
-msgstr "Votre nom d'utilisateur, au cas où vous l'auriez oublié :"
+#~ msgid "Your username, in case you've forgotten:"
+#~ msgstr "Votre nom d'utilisateur, au cas où vous l'auriez oublié :"
 
-#: templates/registration/password_reset_email_html.html
-msgid "If you didn't request this, you can safely ignore this email."
-msgstr "Si vous n'avez pas effectué cette demande, vous pouvez ignorer cet e-mail."
+#~ msgid "If you didn't request this, you can safely ignore this email."
+#~ msgstr ""
+#~ "Si vous n'avez pas effectué cette demande, vous pouvez ignorer cet e-mail."
 
-#: templates/registration/password_reset_email_html.html
 #, python-format
-msgid "Password reset — %(site_name)s"
-msgstr "Réinitialisation du mot de passe — %(site_name)s"
-
-#: templates/views/components/cards/file-renderers/afs-reader.htm:39
-msgid "Config"
-msgstr "Configuration"
-
-#: templates/views/components/cards/file-renderers/afs-reader.htm:48
-msgid "Chart Configuration"
-msgstr "Configuration du graphique"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:11
-msgid "Status"
-msgstr "Statut"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:19
-msgid ""
-"Select or create a shared configuration that applies to all XY files. For "
-"per-file adjustments, use the Status tab."
-msgstr ""
-"Sélectionnez ou créez une configuration partagée qui s'applique à tous les "
-"fichiers XY. Pour des ajustements par fichier, utilisez l'onglet Statut."
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:27
-msgid "XY file(s) staged"
-msgstr "fichier(s) XY en attente"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:43
-msgid "No config"
-msgstr "Aucune config"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:68
-msgid "Apply to"
-msgstr "Appliquer à"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:68
-msgid "staged file(s)"
-msgstr "fichier(s) en attente"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:72
-msgid "Applying..."
-msgstr "Application en cours..."
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:94
-msgid "Files Status"
-msgstr "Statut des fichiers"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:99
-msgid ""
-"Check which files have a configuration applied. Select file(s) to customize "
-"parsing settings individually, overriding the shared config."
-msgstr ""
-"Vérifiez quels fichiers ont une configuration appliquée. Sélectionnez un ou "
-"plusieurs fichiers pour personnaliser les paramètres d'analyse "
-"individuellement, en remplaçant la configuration partagée."
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:104
-msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
-msgstr ""
-"Aucun fichier XY trouvé. Assignez le rendu XY aux fichiers dans l'onglet "
-"Gérer."
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:111
-msgid "file(s)"
-msgstr "fichier(s)"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:113
-#: templates/views/components/plugins/file-configuration.htm:54
-msgid "selected"
-msgstr "sélectionné(s)"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:117
-msgid "All"
-msgstr "Tous"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:118
-msgid "None"
-msgstr "Aucun"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:135
-msgid "Has custom parsing"
-msgstr "A un parsing personnalisé"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:141
-msgid "none"
-msgstr "aucune"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:153
-msgid "Adjust parsing for"
-msgstr "Ajuster le parsing pour"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:164
-msgid "Custom parsing:"
-msgstr "Parsing personnalisé :"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:168
-msgid ""
-"These settings override the shared config for the selected file(s) only. "
-"Choose 'Use config' to keep the shared config value."
-msgstr ""
-"Ces paramètres remplacent la configuration partagée uniquement pour le(s) "
-"fichier(s) sélectionné(s). Choisissez « Utiliser la config » pour conserver "
-"la valeur de la configuration partagée."
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:172
-msgid "Delimiter"
-msgstr "Délimiteur"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:174
-#: templates/views/components/cards/file-renderers/xy-reader.htm:186
-#: templates/views/components/cards/file-renderers/xy-reader.htm:196
-msgid "Use config"
-msgstr "Utiliser la config"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:175
-#: templates/views/components/cards/file-renderers/xy-reader.htm:187
-#: templates/views/components/plugins/importer-configuration.htm:33
-#: templates/views/components/plugins/importer-configuration.htm:97
-msgid "Auto-detect"
-msgstr "Détection automatique"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:176
-#: templates/views/components/plugins/importer-configuration.htm:99
-msgid "Comma"
-msgstr "Virgule"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:177
-msgid "Tab"
-msgstr "Tabulation"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:178
-msgid "Other:"
-msgstr "Autre :"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:180
-msgid "Custom delimiter"
-msgstr "Délimiteur personnalisé"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:184
-#: templates/views/components/plugins/importer-configuration.htm:30
-msgid "Header"
-msgstr "En-tête"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:188
-msgid "Fixed lines:"
-msgstr "Lignes fixes :"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:190
-msgid "Number of lines"
-msgstr "Nombre de lignes"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:194
-#: templates/views/components/plugins/importer-configuration.htm:41
-msgid "Footer"
-msgstr "Pied de page"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:197
-msgid "End of file"
-msgstr "Fin du fichier"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:198
-msgid "After text:"
-msgstr "Après le texte :"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:200
-msgid "Footer text"
-msgstr "Texte du pied de page"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:205
-msgid "Reset to config"
-msgstr "Réinitialiser à la config"
-
-#: templates/views/components/cards/file-renderers/xy-reader.htm:209
-msgid "Apply & re-render"
-msgstr "Appliquer et re-rendre"
-
-#: templates/views/components/plugins/file-configuration.htm:5
-msgid ""
-"Specify how to process the data files for viewing.  Any additional files "
-"(such as images) will be automatically displayed if possible."
-msgstr ""
-"Spécifiez comment traiter les fichiers de données pour la visualisation. "
-"Tout fichier supplémentaire (comme les images) sera automatiquement affiché "
-"si possible."
-
-#: templates/views/components/plugins/file-configuration.htm:7
-msgid "Data Files"
-msgstr "Fichiers de données"
-
-#: templates/views/components/plugins/file-configuration.htm:9
-msgid "Additional Files"
-msgstr "Fichiers supplémentaires"
-
-#: templates/views/components/plugins/file-configuration.htm:17
-msgid "Name"
-msgstr "Nom"
-
-#: templates/views/components/plugins/file-configuration.htm:18
-msgid "Configuration"
-msgstr "Configuration"
-
-#: templates/views/components/plugins/file-configuration.htm:54
-msgid "files"
-msgstr "fichiers"
-
-#: templates/views/components/plugins/file-configuration.htm:54
-msgid "file"
-msgstr "fichier"
-
-#: templates/views/components/plugins/file-configuration.htm:55
-msgid "Select All"
-msgstr "Tout sélectionner"
-
-#: templates/views/components/plugins/file-configuration.htm:55
-msgid "Deselect All"
-msgstr "Tout désélectionner"
-
-#: templates/views/components/plugins/file-configuration.htm:73
-msgid "Import Preview"
-msgstr "Aperçu de l'importation"
-
-#: templates/views/components/plugins/file-configuration.htm:86
-msgid "Selected Files"
-msgstr "Fichiers sélectionnés"
-
-#: templates/views/components/plugins/file-configuration.htm:90
-msgid "Select an importer configuration on the right to apply to all files"
-msgstr ""
-"Sélectionnez une configuration d'importation à droite pour l'appliquer à "
-"tous les fichiers"
-
-#: templates/views/components/plugins/file-configuration.htm:91
-msgid "Apply Importer to Selected Files"
-msgstr "Appliquer l'importateur aux fichiers sélectionnés"
-
-#: templates/views/components/plugins/file-configuration.htm:94
-msgid "File Preview"
-msgstr "Aperçu du fichier"
-
-#: templates/views/components/plugins/file-configuration.htm:96
-msgid "This file type cannot be previewed."
-msgstr "Ce type de fichier ne peut pas être prévisualisé."
-
-#: templates/views/components/plugins/importer-configuration.htm:4
-msgid "Importer Configurations"
-msgstr "Configurations d'importation"
-
-#: templates/views/components/plugins/importer-configuration.htm:5
-msgid "Define how to import your x/y data"
-msgstr "Définissez comment importer vos données x/y"
-
-#: templates/views/components/plugins/importer-configuration.htm:11
-msgid "Edit"
-msgstr "Modifier"
-
-#: templates/views/components/plugins/importer-configuration.htm:12
-msgid "Delete"
-msgstr "Supprimer"
-
-#: templates/views/components/plugins/importer-configuration.htm:17
-#: templates/views/components/plugins/importer-configuration.htm:21
-msgid "Add Importer Configuration"
-msgstr "Ajouter une configuration d'importation"
-
-#: templates/views/components/plugins/importer-configuration.htm:24
-msgid "Importer Name"
-msgstr "Nom de l'importateur"
-
-#: templates/views/components/plugins/importer-configuration.htm:25
-msgid "Name of Importer"
-msgstr "Nom de l'importateur"
-
-#: templates/views/components/plugins/importer-configuration.htm:26
-msgid "Importer Description"
-msgstr "Description de l'importateur"
-
-#: templates/views/components/plugins/importer-configuration.htm:27
-msgid "Describe the Importer"
-msgstr "Décrire l'importateur"
-
-#: templates/views/components/plugins/importer-configuration.htm:31
-msgid "Define where your x/y data are found in the file"
-msgstr "Définissez où vos données x/y se trouvent dans le fichier"
-
-#: templates/views/components/plugins/importer-configuration.htm:34
-msgid "File has a fixed header (constant number of lines)"
-msgstr "Le fichier a un en-tête fixe (nombre constant de lignes)"
-
-#: templates/views/components/plugins/importer-configuration.htm:35
-msgid "File header ends after specific text"
-msgstr "L'en-tête du fichier se termine après un texte spécifique"
-
-#: templates/views/components/plugins/importer-configuration.htm:37
-#: templates/views/components/plugins/importer-configuration.htm:47
-msgid "Ending Text"
-msgstr "Texte de fin"
-
-#: templates/views/components/plugins/importer-configuration.htm:38
-msgid "Number of Lines"
-msgstr "Nombre de lignes"
-
-#: templates/views/components/plugins/importer-configuration.htm:42
-msgid "Define where your x/y data end in the file"
-msgstr "Définissez où vos données x/y se terminent dans le fichier"
-
-#: templates/views/components/plugins/importer-configuration.htm:44
-msgid "End of File"
-msgstr "Fin du fichier"
-
-#: templates/views/components/plugins/importer-configuration.htm:45
-msgid "File footer begins after specific text (consistent ending text)"
-msgstr ""
-"Le pied de page du fichier commence après un texte spécifique (texte de fin "
-"constant)"
-
-#: templates/views/components/plugins/importer-configuration.htm:50
-msgid "X Axis Source"
-msgstr "Source de l'axe X"
-
-#: templates/views/components/plugins/importer-configuration.htm:51
-msgid "Define how the X axis values are determined"
-msgstr "Définir comment les valeurs de l'axe X sont déterminées"
-
-#: templates/views/components/plugins/importer-configuration.htm:53
-msgid "From data (first column is X)"
-msgstr "Depuis les données (première colonne = X)"
-
-#: templates/views/components/plugins/importer-configuration.htm:54
-msgid "Generate from range (no X column in file)"
-msgstr "Générer à partir d'une plage (pas de colonne X dans le fichier)"
-
-#: templates/views/components/plugins/importer-configuration.htm:57
-msgid ""
-"The X axis will be evenly spaced between start and end values, based on the "
-"number of data rows."
-msgstr ""
-"L'axe X sera uniformément réparti entre les valeurs de début et de fin, en "
-"fonction du nombre de lignes de données."
-
-#: templates/views/components/plugins/importer-configuration.htm:60
-msgid "Start"
-msgstr "Début"
-
-#: templates/views/components/plugins/importer-configuration.htm:61
-msgid "e.g. -3500"
-msgstr "ex. -3500"
-
-#: templates/views/components/plugins/importer-configuration.htm:65
-msgid "End"
-msgstr "Fin"
-
-#: templates/views/components/plugins/importer-configuration.htm:66
-msgid "e.g. 500"
-msgstr "ex. 500"
-
-#: templates/views/components/plugins/importer-configuration.htm:73
-msgid "Transformations"
-msgstr "Transformations"
-
-#: templates/views/components/plugins/importer-configuration.htm:74
+#~ msgid "Password reset — %(site_name)s"
+#~ msgstr "Réinitialisation du mot de passe — %(site_name)s"
+
+#~ msgid "Config"
+#~ msgstr "Configuration"
+
+#~ msgid "Chart Configuration"
+#~ msgstr "Configuration du graphique"
+
+#~ msgid ""
+#~ "Select or create a shared configuration that applies to all XY files. For "
+#~ "per-file adjustments, use the Status tab."
+#~ msgstr ""
+#~ "Sélectionnez ou créez une configuration partagée qui s'applique à tous "
+#~ "les fichiers XY. Pour des ajustements par fichier, utilisez l'onglet "
+#~ "Statut."
+
+#~ msgid "XY file(s) staged"
+#~ msgstr "fichier(s) XY en attente"
+
+#~ msgid "No config"
+#~ msgstr "Aucune config"
+
+#~ msgid "Apply to"
+#~ msgstr "Appliquer à"
+
+#~ msgid "staged file(s)"
+#~ msgstr "fichier(s) en attente"
+
+#~ msgid "Applying..."
+#~ msgstr "Application en cours..."
+
+#~ msgid "Files Status"
+#~ msgstr "Statut des fichiers"
+
+#~ msgid ""
+#~ "Check which files have a configuration applied. Select file(s) to "
+#~ "customize parsing settings individually, overriding the shared config."
+#~ msgstr ""
+#~ "Vérifiez quels fichiers ont une configuration appliquée. Sélectionnez un "
+#~ "ou plusieurs fichiers pour personnaliser les paramètres d'analyse "
+#~ "individuellement, en remplaçant la configuration partagée."
+
+#~ msgid ""
+#~ "No XY files found. Assign the XY renderer to files in the Manage tab."
+#~ msgstr ""
+#~ "Aucun fichier XY trouvé. Assignez le rendu XY aux fichiers dans l'onglet "
+#~ "Gérer."
+
+#~ msgid "file(s)"
+#~ msgstr "fichier(s)"
+
+#~ msgid "selected"
+#~ msgstr "sélectionné(s)"
+
+#~ msgid "All"
+#~ msgstr "Tous"
+
+#~ msgid "None"
+#~ msgstr "Aucun"
+
+#~ msgid "Has custom parsing"
+#~ msgstr "A un parsing personnalisé"
+
+#~ msgid "none"
+#~ msgstr "aucune"
+
+#~ msgid "Adjust parsing for"
+#~ msgstr "Ajuster le parsing pour"
+
+#~ msgid "Custom parsing:"
+#~ msgstr "Parsing personnalisé :"
+
+#~ msgid ""
+#~ "These settings override the shared config for the selected file(s) only. "
+#~ "Choose 'Use config' to keep the shared config value."
+#~ msgstr ""
+#~ "Ces paramètres remplacent la configuration partagée uniquement pour le(s) "
+#~ "fichier(s) sélectionné(s). Choisissez « Utiliser la config » pour "
+#~ "conserver la valeur de la configuration partagée."
+
+#~ msgid "Delimiter"
+#~ msgstr "Délimiteur"
+
+#~ msgid "Use config"
+#~ msgstr "Utiliser la config"
+
+#~ msgid "Auto-detect"
+#~ msgstr "Détection automatique"
+
+#~ msgid "Comma"
+#~ msgstr "Virgule"
+
+#~ msgid "Tab"
+#~ msgstr "Tabulation"
+
+#~ msgid "Other:"
+#~ msgstr "Autre :"
+
+#~ msgid "Custom delimiter"
+#~ msgstr "Délimiteur personnalisé"
+
+#~ msgid "Header"
+#~ msgstr "En-tête"
+
+#~ msgid "Fixed lines:"
+#~ msgstr "Lignes fixes :"
+
+#~ msgid "Number of lines"
+#~ msgstr "Nombre de lignes"
+
+#~ msgid "Footer"
+#~ msgstr "Pied de page"
+
+#~ msgid "End of file"
+#~ msgstr "Fin du fichier"
+
+#~ msgid "After text:"
+#~ msgstr "Après le texte :"
+
+#~ msgid "Footer text"
+#~ msgstr "Texte du pied de page"
+
+#~ msgid "Reset to config"
+#~ msgstr "Réinitialiser à la config"
+
+#~ msgid "Apply & re-render"
+#~ msgstr "Appliquer et re-rendre"
+
+#~ msgid ""
+#~ "Specify how to process the data files for viewing.  Any additional files "
+#~ "(such as images) will be automatically displayed if possible."
+#~ msgstr ""
+#~ "Spécifiez comment traiter les fichiers de données pour la visualisation. "
+#~ "Tout fichier supplémentaire (comme les images) sera automatiquement "
+#~ "affiché si possible."
+
+#~ msgid "Data Files"
+#~ msgstr "Fichiers de données"
+
+#~ msgid "Additional Files"
+#~ msgstr "Fichiers supplémentaires"
+
+#~ msgid "files"
+#~ msgstr "fichiers"
+
+#~ msgid "file"
+#~ msgstr "fichier"
+
+#~ msgid "Select All"
+#~ msgstr "Tout sélectionner"
+
+#~ msgid "Deselect All"
+#~ msgstr "Tout désélectionner"
+
+#~ msgid "Import Preview"
+#~ msgstr "Aperçu de l'importation"
+
+#~ msgid "Selected Files"
+#~ msgstr "Fichiers sélectionnés"
+
+#~ msgid "Select an importer configuration on the right to apply to all files"
+#~ msgstr ""
+#~ "Sélectionnez une configuration d'importation à droite pour l'appliquer à "
+#~ "tous les fichiers"
+
+#~ msgid "Apply Importer to Selected Files"
+#~ msgstr "Appliquer l'importateur aux fichiers sélectionnés"
+
+#~ msgid "File Preview"
+#~ msgstr "Aperçu du fichier"
+
+#~ msgid "This file type cannot be previewed."
+#~ msgstr "Ce type de fichier ne peut pas être prévisualisé."
+
+#~ msgid "Importer Configurations"
+#~ msgstr "Configurations d'importation"
+
+#~ msgid "Define how to import your x/y data"
+#~ msgstr "Définissez comment importer vos données x/y"
+
+#~ msgid "Edit"
+#~ msgstr "Modifier"
+
+#~ msgid "Delete"
+#~ msgstr "Supprimer"
+
+#~ msgid "Add Importer Configuration"
+#~ msgstr "Ajouter une configuration d'importation"
+
+#~ msgid "Importer Name"
+#~ msgstr "Nom de l'importateur"
+
+#~ msgid "Name of Importer"
+#~ msgstr "Nom de l'importateur"
+
+#~ msgid "Importer Description"
+#~ msgstr "Description de l'importateur"
+
+#~ msgid "Describe the Importer"
+#~ msgstr "Décrire l'importateur"
+
+#~ msgid "Define where your x/y data are found in the file"
+#~ msgstr "Définissez où vos données x/y se trouvent dans le fichier"
+
+#~ msgid "File has a fixed header (constant number of lines)"
+#~ msgstr "Le fichier a un en-tête fixe (nombre constant de lignes)"
+
+#~ msgid "File header ends after specific text"
+#~ msgstr "L'en-tête du fichier se termine après un texte spécifique"
+
+#~ msgid "Ending Text"
+#~ msgstr "Texte de fin"
+
+#~ msgid "Number of Lines"
+#~ msgstr "Nombre de lignes"
+
+#~ msgid "Define where your x/y data end in the file"
+#~ msgstr "Définissez où vos données x/y se terminent dans le fichier"
+
+#~ msgid "End of File"
+#~ msgstr "Fin du fichier"
+
+#~ msgid "File footer begins after specific text (consistent ending text)"
+#~ msgstr ""
+#~ "Le pied de page du fichier commence après un texte spécifique (texte de "
+#~ "fin constant)"
+
+#~ msgid "X Axis Source"
+#~ msgstr "Source de l'axe X"
+
+#~ msgid "Define how the X axis values are determined"
+#~ msgstr "Définir comment les valeurs de l'axe X sont déterminées"
+
+#~ msgid "From data (first column is X)"
+#~ msgstr "Depuis les données (première colonne = X)"
+
+#~ msgid "Generate from range (no X column in file)"
+#~ msgstr "Générer à partir d'une plage (pas de colonne X dans le fichier)"
+
+#~ msgid ""
+#~ "The X axis will be evenly spaced between start and end values, based on "
+#~ "the number of data rows."
+#~ msgstr ""
+#~ "L'axe X sera uniformément réparti entre les valeurs de début et de fin, "
+#~ "en fonction du nombre de lignes de données."
+
+#~ msgid "Start"
+#~ msgstr "Début"
+
+#~ msgid "e.g. -3500"
+#~ msgstr "ex. -3500"
+
+#~ msgid "End"
+#~ msgstr "Fin"
+
+#~ msgid "e.g. 500"
+#~ msgstr "ex. 500"
+
+#~ msgid "Transformations"
+#~ msgstr "Transformations"
+
 #, fuzzy
-#| msgid ""
-#| "If your file has multiple Y columns, they are displayed as separate "
-#| "series. Use \"mean\" to average them into a single series instead."
-msgid ""
-"If your file has multiple Y columns, they are displayed as separate series. "
-"Use \\"
-msgstr ""
-"Si votre fichier a plusieurs colonnes Y, elles sont affichées comme des "
-"séries distinctes. Utilisez « mean » pour les moyenner en une seule série."
+#~| msgid ""
+#~| "If your file has multiple Y columns, they are displayed as separate "
+#~| "series. Use \"mean\" to average them into a single series instead."
+#~ msgid ""
+#~ "If your file has multiple Y columns, they are displayed as separate "
+#~ "series. Use \\"
+#~ msgstr ""
+#~ "Si votre fichier a plusieurs colonnes Y, elles sont affichées comme des "
+#~ "séries distinctes. Utilisez « mean » pour les moyenner en une seule série."
 
-#: templates/views/components/plugins/importer-configuration.htm:93
-msgid "Data Column Delimiter"
-msgstr "Délimiteur de colonnes de données"
+#~ msgid "Data Column Delimiter"
+#~ msgstr "Délimiteur de colonnes de données"
 
-#: templates/views/components/plugins/importer-configuration.htm:94
-msgid "The data delimiter must be a valid regular expression"
-msgstr "Le délimiteur de données doit être une expression régulière valide"
+#~ msgid "The data delimiter must be a valid regular expression"
+#~ msgstr "Le délimiteur de données doit être une expression régulière valide"
 
-#: templates/views/components/plugins/importer-configuration.htm:95
-msgid "Define how the data are separated"
-msgstr "Définissez comment les données sont séparées"
+#~ msgid "Define how the data are separated"
+#~ msgstr "Définissez comment les données sont séparées"
 
-#: templates/views/components/plugins/importer-configuration.htm:98
-msgid "Whitespace"
-msgstr "Espace"
+#~ msgid "Whitespace"
+#~ msgstr "Espace"
 
-#: templates/views/components/plugins/importer-configuration.htm:100
-msgid "Pipe"
-msgstr "Pipe"
+#~ msgid "Pipe"
+#~ msgstr "Pipe"
 
-#: templates/views/components/plugins/importer-configuration.htm:101
-msgid "Other"
-msgstr "Autre"
+#~ msgid "Other"
+#~ msgstr "Autre"
 
-#: templates/views/components/plugins/importer-configuration.htm:106
-msgid "Include Delimiter in Value"
-msgstr "Inclure le délimiteur dans la valeur"
+#~ msgid "Include Delimiter in Value"
+#~ msgstr "Inclure le délimiteur dans la valeur"
 
-#: templates/views/components/plugins/importer-configuration.htm:110
-msgid "Display/Charting"
-msgstr "Affichage / Graphique"
+#~ msgid "Display/Charting"
+#~ msgstr "Affichage / Graphique"
 
-#: templates/views/components/plugins/importer-configuration.htm:112
-msgid "Chart Title"
-msgstr "Titre du graphique"
+#~ msgid "Chart Title"
+#~ msgstr "Titre du graphique"
 
-#: templates/views/components/plugins/importer-configuration.htm:113
-msgid "Title"
-msgstr "Titre"
+#~ msgid "Title"
+#~ msgstr "Titre"
 
-#: templates/views/components/plugins/importer-configuration.htm:115
-msgid "X Axis Label"
-msgstr "Libellé de l'axe X"
+#~ msgid "X Axis Label"
+#~ msgstr "Libellé de l'axe X"
 
-#: templates/views/components/plugins/importer-configuration.htm:126
-#: templates/views/components/plugins/importer-configuration.htm:144
-#: templates/views/components/plugins/importer-configuration.htm:224
-msgid "Presets..."
-msgstr "Préréglages..."
+#~ msgid "Presets..."
+#~ msgstr "Préréglages..."
 
-#: templates/views/components/plugins/importer-configuration.htm:133
-msgid "Y Axis Label"
-msgstr "Libellé de l'axe Y"
+#~ msgid "Y Axis Label"
+#~ msgstr "Libellé de l'axe Y"
 
-#: templates/views/components/plugins/importer-configuration.htm:157
-msgid "Spectral Range"
-msgstr "Gamme spectrale"
+#~ msgid "Spectral Range"
+#~ msgstr "Gamme spectrale"
 
-#: templates/views/components/plugins/importer-configuration.htm:160
-msgid "Limit the displayed X range. Leave empty for no limit."
-msgstr "Limiter la gamme X affichée. Laisser vide pour aucune limite."
+#~ msgid "Limit the displayed X range. Leave empty for no limit."
+#~ msgstr "Limiter la gamme X affichée. Laisser vide pour aucune limite."
 
-#: templates/views/components/plugins/importer-configuration.htm:163
-msgid "Min X"
-msgstr "X min"
+#~ msgid "Min X"
+#~ msgstr "X min"
 
-#: templates/views/components/plugins/importer-configuration.htm:164
-msgid "e.g. 400"
-msgstr "ex. 400"
+#~ msgid "e.g. 400"
+#~ msgstr "ex. 400"
 
-#: templates/views/components/plugins/importer-configuration.htm:168
-msgid "Max X"
-msgstr "X max"
+#~ msgid "Max X"
+#~ msgstr "X max"
 
-#: templates/views/components/plugins/importer-configuration.htm:169
-msgid "e.g. 4000"
-msgstr "ex. 4000"
+#~ msgid "e.g. 4000"
+#~ msgstr "ex. 4000"
 
-#: templates/views/components/plugins/importer-configuration.htm:181
-msgid "Column Assignment"
-msgstr "Assignation des colonnes"
+#~ msgid "Column Assignment"
+#~ msgstr "Assignation des colonnes"
 
-#: templates/views/components/plugins/importer-configuration.htm:184
-msgid ""
-"Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
-"empty to use the default: column 1 = X, remaining = Y left."
-msgstr ""
-"Définir quelles colonnes de données correspondent à X, Y (axe gauche) ou Y "
-"(axe droit). Laisser vide pour le comportement par défaut : colonne 1 = X, "
-"les autres = Y gauche."
+#~ msgid ""
+#~ "Define which data columns map to X, Y (left axis), or Y (right axis). "
+#~ "Leave empty to use the default: column 1 = X, remaining = Y left."
+#~ msgstr ""
+#~ "Définir quelles colonnes de données correspondent à X, Y (axe gauche) ou "
+#~ "Y (axe droit). Laisser vide pour le comportement par défaut : colonne 1 = "
+#~ "X, les autres = Y gauche."
 
-#: templates/views/components/plugins/importer-configuration.htm:189
-msgid "Column"
-msgstr "Colonne"
+#~ msgid "Column"
+#~ msgstr "Colonne"
 
-#: templates/views/components/plugins/importer-configuration.htm:207
-msgid "Add Column"
-msgstr "Ajouter une colonne"
+#~ msgid "Add Column"
+#~ msgstr "Ajouter une colonne"
 
-#: templates/views/components/plugins/importer-configuration.htm:213
-msgid "Right Y Axis Label"
-msgstr "Libellé de l'axe Y droit"
+#~ msgid "Right Y Axis Label"
+#~ msgstr "Libellé de l'axe Y droit"
 
-#: templates/views/components/plugins/importer-configuration.htm:215
-msgid "Right Y Axis"
-msgstr "Axe Y droit"
+#~ msgid "Right Y Axis"
+#~ msgstr "Axe Y droit"
 
-#: templates/views/components/plugins/importer-configuration.htm:237
-msgid "Cancel"
-msgstr "Annuler"
+#~ msgid "Cancel"
+#~ msgstr "Annuler"
 
-#: templates/views/components/plugins/importer-configuration.htm:238
-msgid "Save"
-msgstr "Enregistrer"
+#~ msgid "Save"
+#~ msgstr "Enregistrer"
 
-#: templates/views/components/widgets/file-xy.htm:17
-msgid "Files"
-msgstr "Fichiers"
+#~ msgid "Files"
+#~ msgstr "Fichiers"
 
-#: templates/views/components/widgets/file-xy.htm:23
-msgid "Select all"
-msgstr "Tout sélectionner"
+#~ msgid "Select all"
+#~ msgstr "Tout sélectionner"
 
-#: templates/views/components/widgets/file-xy.htm:25
-msgid "Deselect all"
-msgstr "Tout désélectionner"
+#~ msgid "Deselect all"
+#~ msgstr "Tout désélectionner"
 
-#: templates/views/components/widgets/file-xy.htm:49
-msgid "Loading charts..."
-msgstr "Chargement des graphiques..."
+#~ msgid "Loading charts..."
+#~ msgstr "Chargement des graphiques..."
 
-#: templates/views/components/widgets/file-xy.htm:57
-msgid "Unable to load chart data"
-msgstr "Impossible de charger les données du graphique"
+#~ msgid "Unable to load chart data"
+#~ msgstr "Impossible de charger les données du graphique"
 
-#: templates/views/components/widgets/file-xy.htm:65
-msgid "Select files to display"
-msgstr "Sélectionnez les fichiers à afficher"
+#~ msgid "Select files to display"
+#~ msgstr "Sélectionnez les fichiers à afficher"
 
-#: templates/views/components/widgets/manifest-widget.htm:25
-msgid "Enter Manifest URL"
-msgstr "Entrer l'URL du manifeste"
+#~ msgid "Enter Manifest URL"
+#~ msgstr "Entrer l'URL du manifeste"
 
-#: templates/views/components/widgets/manifest-widget.htm:25
-msgid "Select a manifest"
-msgstr "Sélectionner un manifeste"
+#~ msgid "Select a manifest"
+#~ msgstr "Sélectionner un manifeste"
 
-#: templates/views/components/widgets/manifest-widget.htm:36
-msgid "Create a IIIF Manifest"
-msgstr "Créer un manifeste IIIF"
+#~ msgid "Create a IIIF Manifest"
+#~ msgstr "Créer un manifeste IIIF"
 
-#: templates/views/components/widgets/manifest-widget.htm:39
-msgid "Build a manifest from your own images"
-msgstr "Construire un manifeste à partir de vos propres images"
+#~ msgid "Build a manifest from your own images"
+#~ msgstr "Construire un manifeste à partir de vos propres images"
 
-#: templates/views/components/widgets/manifest-widget.htm:45
-#: templates/views/components/widgets/manifest-widget.htm:115
-msgid "Create a manifest"
-msgstr "Créer un manifeste"
+#~ msgid "Create a manifest"
+#~ msgstr "Créer un manifeste"
 
-#: templates/views/components/widgets/manifest-widget.htm:50
-#: templates/views/components/widgets/manifest-widget.htm:159
-msgid "Accepted formats:"
-msgstr "Formats acceptés :"
+#~ msgid "Accepted formats:"
+#~ msgstr "Formats acceptés :"
 
-#: templates/views/components/widgets/manifest-widget.htm:62
-msgid "Loading manifest..."
-msgstr "Chargement du manifeste..."
+#~ msgid "Loading manifest..."
+#~ msgstr "Chargement du manifeste..."
 
-#: templates/views/components/widgets/manifest-widget.htm:95
-msgid "Remove manifest"
-msgstr "Supprimer le manifeste"
+#~ msgid "Remove manifest"
+#~ msgstr "Supprimer le manifeste"
 
-#: templates/views/components/widgets/manifest-widget.htm:118
-msgid "Return"
-msgstr "Retour"
+#~ msgid "Return"
+#~ msgstr "Retour"
 
-#: templates/views/components/widgets/manifest-widget.htm:125
-#: templates/views/components/widgets/manifest-widget.htm:129
-msgid "Manifest title"
-msgstr "Titre du manifeste"
+#~ msgid "Manifest title"
+#~ msgstr "Titre du manifeste"
 
-#: templates/views/components/widgets/manifest-widget.htm:133
-msgid "Description"
-msgstr "Description"
+#~ msgid "Description"
+#~ msgstr "Description"
 
-#: templates/views/components/widgets/manifest-widget.htm:136
-msgid "Manifest description"
-msgstr "Description du manifeste"
+#~ msgid "Manifest description"
+#~ msgstr "Description du manifeste"
 
-#: templates/views/components/widgets/manifest-widget.htm:145
-msgid "Upload Images"
-msgstr "Téléverser des images"
+#~ msgid "Upload Images"
+#~ msgstr "Téléverser des images"
 
-#: templates/views/components/widgets/manifest-widget.htm:148
-msgid "Drag and drop image files on this panel"
-msgstr "Glissez-déposez vos images sur ce panneau"
+#~ msgid "Drag and drop image files on this panel"
+#~ msgstr "Glissez-déposez vos images sur ce panneau"
 
-#: templates/views/components/widgets/manifest-widget.htm:154
-msgid "Select images"
-msgstr "Sélectionner des images"
+#~ msgid "Select images"
+#~ msgstr "Sélectionner des images"
 
-#: templates/views/components/widgets/manifest-widget.htm:172
-msgid "Creating manifest..."
-msgstr "Création du manifeste en cours..."
+#~ msgid "Creating manifest..."
+#~ msgstr "Création du manifeste en cours..."
 
-#: templates/views/components/widgets/manifest-widget.htm:173
-msgid "Uploading images and generating IIIF manifest"
-msgstr "Téléversement des images et génération du manifeste IIIF"
+#~ msgid "Uploading images and generating IIIF manifest"
+#~ msgstr "Téléversement des images et génération du manifeste IIIF"
 
-#: views/renderer_config.py:47
-msgid "<h1>Renderers do not exist</h1>"
-msgstr "<h1>Les rendus n'existent pas</h1>"
+#~ msgid "<h1>Renderers do not exist</h1>"
+#~ msgstr "<h1>Les rendus n'existent pas</h1>"
 
-#: views/renderer_config.py:62
-msgid "<h1>Renderers config does not exist</h1>"
-msgstr "<h1>La configuration de rendu n'existe pas</h1>"
+#~ msgid "<h1>Renderers config does not exist</h1>"
+#~ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 
 #~ msgid "File does not have a header"
 #~ msgstr "Le fichier n'a pas d'en-tête"
