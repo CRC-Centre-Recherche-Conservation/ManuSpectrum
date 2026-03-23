@@ -231,6 +231,30 @@ msgstr "Doublon"
 msgid "Create new resource"
 msgstr "Créer une nouvelle ressource"
 
+msgid "Manuscript search"
+msgstr "Recherche de manuscrit"
+
+msgid "Shelfmark, title, institution..."
+msgstr "Cote, titre, institution..."
+
+msgid "IIIF manifest available"
+msgstr "Manifeste IIIF disponible"
+
+msgid "No results found. Try different search terms."
+msgstr "Aucun résultat. Essayez d'autres termes de recherche."
+
+msgid "Filter by date"
+msgstr "Filtrer par date"
+
+msgid "Add by Biblissima identifier"
+msgstr "Ajouter par identifiant Biblissima"
+
+msgid "QID (e.g. Q35658) or ARK (e.g. ark:/43093/...)"
+msgstr "QID (ex. Q35658) ou ARK (ex. ark:/43093/...)"
+
+msgid "Add"
+msgstr "Ajouter"
+
 #~ msgid "Project Name"
 #~ msgstr "Nom du projet"
 
