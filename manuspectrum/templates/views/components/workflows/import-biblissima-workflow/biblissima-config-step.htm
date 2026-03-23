@@ -18,8 +18,7 @@
         </div>
     </div>
 
-    <!-- ko if: isComponent -->
-    <div class="form-group">
+    <div class="form-group" data-bind="visible: isComponent">
         <label class="control-label">
             {% trans "Parent document" %} <span class="text-danger">*</span>
         </label>
@@ -30,7 +29,6 @@
             data-bind="select2Query: { select2Config: parentDocPicker.select2Config }">
         </select>
     </div>
-    <!-- /ko -->
 
     <div class="form-group">
         <label class="control-label">{% trans "Associate with project" %}</label>
