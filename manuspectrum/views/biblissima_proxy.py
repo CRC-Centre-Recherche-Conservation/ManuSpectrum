@@ -610,37 +610,207 @@ class BiblissimaSearchView(View):
 
 
 class BiblissimaCheckDuplicatesView(View):
-    """Check if resources with given identifiers already exist in Arches."""
+    """Find potential duplicate resources in Arches using flexible matching.
 
-    def get(self, request):
-        identifiers = request.GET.get("identifiers", "").split(",")
-        graph_id = request.GET.get("graphId", DOCUMENT_GRAPH_ID)
-        identifiers = [i.strip() for i in identifiers if i.strip()]
+    For each item, runs multiple search strategies and returns ranked suggestions.
+    The user decides whether a match is a true duplicate or not.
+    """
 
-        if not identifiers:
-            return JsonResponse({"results": {}})
+    def post(self, request):
+        import json
 
-        results = {}
-        for identifier in identifiers:
-            # Search for tiles with matching identifier value
-            matching_tiles = Tile.objects.filter(
-                nodegroup_id__in=[DOC_IDENTIFIER_NG, COMP_IDENTIFIER_NG],
-                resourceinstance__graph_id=graph_id,
-            )
-            found = None
-            for tile in matching_tiles:
-                val_node = (
-                    DOC_IDENTIFIER_VALUE
-                    if str(tile.nodegroup_id) == DOC_IDENTIFIER_NG
-                    else COMP_IDENTIFIER_VALUE
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        items = body.get("items", [])
+        graph_id = body.get("graphId", DOCUMENT_GRAPH_ID)
+
+        if not items:
+            return JsonResponse({"results": []})
+
+        from arches.app.search.search_engine_factory import SearchEngineInstance
+
+        se = SearchEngineInstance
+        results = []
+
+        for idx, item in enumerate(items):
+            ark_id = item.get("arkId", "")
+            label = item.get("label", "")
+            shelfmark = item.get("shelfmark", "")
+            qid = item.get("biblissimaQid", "")
+
+            suggestions = []
+            seen_ids = set()
+
+            # Strategy 1: Search by identifiers in tiles
+            # Build all possible search tokens from Biblissima data
+            search_tokens = set()
+            if ark_id:
+                search_tokens.add(ark_id)
+                # Hash without ark: prefix
+                ark_hash = ark_id.replace("ark:/43093/", "")
+                if ark_hash != ark_id:
+                    search_tokens.add(ark_hash)
+            if qid:
+                search_tokens.add(qid)
+                # Also match full URL form used in Arches identifiers
+                search_tokens.add(f"https://data.biblissima.fr/entity/{qid}")
+
+            portal_hash = item.get("portalHash", "")
+            if portal_hash:
+                search_tokens.add(portal_hash)
+                search_tokens.add(f"ark:/43093/{portal_hash}")
+
+            manifest_url = item.get("manifestUrl", "")
+            if manifest_url:
+                search_tokens.add(manifest_url)
+
+            if search_tokens:
+                id_ng = DOC_IDENTIFIER_NG if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_NG
+                id_node = DOC_IDENTIFIER_VALUE if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_VALUE
+                try:
+                    matching_tiles = Tile.objects.filter(
+                        nodegroup_id=id_ng,
+                        resourceinstance__graph_id=graph_id,
+                    )
+                    for tile in matching_tiles:
+                        raw_value = tile.data.get(id_node, "")
+                        # Handle i18n dict format
+                        if isinstance(raw_value, dict):
+                            tile_value = ""
+                            for lang in ("en", "fr", "de", "es", "it"):
+                                v = raw_value.get(lang, {})
+                                if isinstance(v, dict) and v.get("value"):
+                                    tile_value = v["value"].strip()
+                                    break
+                        else:
+                            tile_value = str(raw_value).strip() if raw_value else ""
+
+                        if not tile_value:
+                            continue
+
+                        # Check if tile value matches any search token
+                        # or if any search token is contained in the tile value
+                        matched = False
+                        for token in search_tokens:
+                            if token == tile_value or token in tile_value or tile_value in token:
+                                matched = True
+                                break
+
+                        if matched:
+                            rid = str(tile.resourceinstance_id)
+                            if rid not in seen_ids:
+                                seen_ids.add(rid)
+                                dn = self._get_resource_name(rid)
+                                suggestions.append({
+                                    "resourceId": rid,
+                                    "displayname": dn,
+                                    "matchType": "identifier",
+                                    "matchValue": tile_value,
+                                    "confidence": "high",
+                                })
+                except Exception:
+                    logger.warning("Tile identifier search failed for item %d", idx)
+
+            # Strategy 2: ES search by shelfmark (nested strings.string field)
+            if shelfmark:
+                self._es_string_search(
+                    se, graph_id, shelfmark, "shelfmark", seen_ids, suggestions
                 )
-                tile_value = tile.data.get(val_node)
-                if tile_value and str(tile_value).strip() == identifier:
-                    found = str(tile.resourceinstance_id)
-                    break
-            results[identifier] = found
+
+            # Strategy 3: ES search by label/displayname
+            if label and len(suggestions) < 3:
+                self._es_string_search(
+                    se, graph_id, label, "displayname", seen_ids, suggestions
+                )
+
+            results.append({
+                "index": idx,
+                "key": ark_id or label,
+                "suggestions": suggestions[:5],
+            })
 
         return JsonResponse({"results": results})
+
+
+    @staticmethod
+    def _get_resource_name(resource_id):
+        """Get the display name for a resource."""
+        try:
+            ri = ResourceInstance.objects.get(resourceinstanceid=resource_id)
+            return str(ri.name) if ri.name else str(ri)
+        except ResourceInstance.DoesNotExist:
+            return ""
+
+    @staticmethod
+    def _extract_es_displayname(hit):
+        """Extract display name from an ES hit."""
+        dn = hit.get("_source", {}).get("displayname", [])
+        if isinstance(dn, list) and dn:
+            return dn[0].get("value", "") if isinstance(dn[0], dict) else str(dn[0])
+        if isinstance(dn, str):
+            return dn
+        return ""
+
+    def _es_string_search(self, se, graph_id, search_term, match_type, seen_ids, suggestions):
+        """Search ES using nested strings.string field (analyzed text)."""
+        try:
+            query = {
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"term": {"graph_id": graph_id}},
+                            {
+                                "nested": {
+                                    "path": "strings",
+                                    "query": {
+                                        "bool": {
+                                            "should": [
+                                                {
+                                                    "match_phrase": {
+                                                        "strings.string": {
+                                                            "query": search_term,
+                                                            "boost": 3,
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "match": {
+                                                        "strings.string": {
+                                                            "query": search_term,
+                                                            "operator": "and",
+                                                        }
+                                                    }
+                                                },
+                                            ],
+                                            "minimum_should_match": 1,
+                                        }
+                                    },
+                                }
+                            },
+                        ],
+                    }
+                },
+                "_source": ["displayname"],
+                "size": 3,
+            }
+            es_results = se.search(index="resources", body=query)
+            for hit in es_results.get("hits", {}).get("hits", []):
+                rid = hit["_id"]
+                if rid not in seen_ids:
+                    score = hit.get("_score", 0)
+                    seen_ids.add(rid)
+                    suggestions.append({
+                        "resourceId": rid,
+                        "displayname": self._extract_es_displayname(hit),
+                        "matchType": match_type,
+                        "matchValue": search_term,
+                        "confidence": "high" if score > 8 else "medium" if score > 3 else "low",
+                    })
+        except Exception:
+            logger.warning("ES %s search failed for: %s", match_type, search_term)
 
 
 class BiblissimaCreateResourceView(View):
