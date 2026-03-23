@@ -118,18 +118,10 @@
                     </button>
                     <!-- /ko -->
 
-                    <!-- ko if: status() === 'duplicate' -->
-                    <button class="btn btn-xs btn-default" data-bind="click: $parent.viewDuplicate"
-                            title="{% trans 'View existing' %}">
+                    <!-- ko if: status() === 'skipped' -->
+                    <button class="btn btn-xs btn-default" data-bind="click: function(){ $parent.editResource($data); }"
+                            title="{% trans 'View' %}">
                         <i class="fa fa-eye"></i>
-                    </button>
-                    <button class="btn btn-xs btn-warning" data-bind="click: $parent.forceCreate"
-                            title="{% trans 'Create anyway' %}">
-                        <i class="fa fa-plus"></i>
-                    </button>
-                    <button class="btn btn-xs btn-default" data-bind="click: $parent.skipItem"
-                            title="{% trans 'Skip' %}">
-                        <i class="fa fa-ban"></i>
                     </button>
                     <!-- /ko -->
 
@@ -152,6 +144,53 @@
                     <!-- /ko -->
                 </div>
             </div>
+
+            <!-- Suggestion panel (shown inline below the item row) -->
+            <!-- ko if: showSuggestions() && suggestions().length > 0 -->
+            <div class="bbma-suggestions-panel">
+                <div class="bbma-suggestions-header">
+                    <i class="fa fa-info-circle"></i>
+                    {% trans "Possible matches found in database" %}
+                </div>
+                <!-- ko foreach: suggestions -->
+                <div class="bbma-suggestion-row">
+                    <div class="bbma-suggestion-info">
+                        <span class="bbma-suggestion-name" data-bind="text: displayname"></span>
+                        <span class="bbma-suggestion-match">
+                            <!-- ko if: confidence === 'high' -->
+                            <i class="fa fa-circle text-success"></i>
+                            <!-- /ko -->
+                            <!-- ko if: confidence === 'medium' -->
+                            <i class="fa fa-circle text-warning"></i>
+                            <!-- /ko -->
+                            <!-- ko if: confidence === 'low' -->
+                            <i class="fa fa-circle text-muted"></i>
+                            <!-- /ko -->
+                            <small data-bind="text: matchType"></small>
+                        </span>
+                    </div>
+                    <div class="bbma-suggestion-actions">
+                        <button class="btn btn-xs btn-default"
+                                data-bind="click: function(){ $parents[1].viewSuggestion($data); }"
+                                title="{% trans 'View' %}">
+                            <i class="fa fa-eye"></i>
+                        </button>
+                        <button class="btn btn-xs btn-mint"
+                                data-bind="click: function(){ $parents[1].useExisting($parent, $data); }"
+                                title="{% trans 'Use this resource' %}">
+                            <i class="fa fa-link"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- /ko -->
+                <div class="bbma-suggestions-footer">
+                    <button class="btn btn-xs btn-default"
+                            data-bind="click: $parent.dismissSuggestions">
+                        <i class="fa fa-times"></i> {% trans "Not a match, create new" %}
+                    </button>
+                </div>
+            </div>
+            <!-- /ko -->
             <!-- /ko -->
         </div>
     </div>

@@ -51,46 +51,72 @@ const viewModel = function(params) {
     this.initializeItems = () => {
         const items = (self.searchData.selectedItems || []).map((item) => ({
             ...item,
-            status: ko.observable('pending'),   // pending | creating | created | error | skipped | duplicate
+            status: ko.observable('pending'),
             resourceId: ko.observable(null),
             errorMessage: ko.observable(''),
-            duplicateResourceId: ko.observable(null),
+            // Duplicate suggestions
+            suggestions: ko.observableArray([]),
+            showSuggestions: ko.observable(false),
         }));
         self.items(items);
     };
 
-    // Check for duplicates
+    // Check for potential duplicates using flexible matching
     this.checkDuplicates = async () => {
-        const identifiers = self.items()
-            .map((i) => i.arkId)
-            .filter(Boolean);
-
-        if (identifiers.length === 0) {
-            self.loading(false);
-            return;
-        }
-
         const graphId = self.resourceType === 'Document'
             ? '0c8226c1-11a9-4c48-9601-a7a0c6f2df6b'
             : 'd47595b4-f8a6-419c-8f33-b388206280c4';
 
-        try {
-            const resp = await fetch(
-                `/api/biblissima/check-duplicates?identifiers=${identifiers.join(',')}&graphId=${graphId}`
-            );
-            const data = await resp.json();
-            const results = data.results || {};
+        const checkItems = self.items().map((i) => ({
+            arkId: i.arkId || '',
+            label: i.label || i.legend || '',
+            shelfmark: i.shelfmark || '',
+            biblissimaQid: i.biblissimaQid || '',
+            portalHash: (i.arkId || '').replace('ark:/43093/', ''),
+            manifestUrl: i.manifestUrl || '',
+        }));
 
-            self.items().forEach((item) => {
-                if (item.arkId && results[item.arkId]) {
-                    item.status('duplicate');
-                    item.duplicateResourceId(results[item.arkId]);
+        try {
+            const resp = await fetch('/api/biblissima/check-duplicates', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': self.getCSRFToken(),
+                },
+                body: JSON.stringify({ items: checkItems, graphId }),
+            });
+            const data = await resp.json();
+            const results = data.results || [];
+
+            results.forEach((result) => {
+                const item = self.items()[result.index];
+                if (item && result.suggestions.length > 0) {
+                    item.suggestions(result.suggestions);
+                    item.showSuggestions(true);
                 }
             });
         } catch (err) {
             console.error('Duplicate check failed:', err);
         }
         self.loading(false);
+    };
+
+    // User confirms: not a duplicate, create anyway
+    this.dismissSuggestions = (item) => {
+        item.showSuggestions(false);
+        item.suggestions([]);
+    };
+
+    // User confirms: use existing resource instead
+    this.useExisting = (item, suggestion) => {
+        item.status('skipped');
+        item.resourceId(suggestion.resourceId);
+        item.showSuggestions(false);
+    };
+
+    // View a suggested match in new tab
+    this.viewSuggestion = (suggestion) => {
+        window.open(`/resource/${suggestion.resourceId}`, '_blank');
     };
 
     // Resolve dependencies (extract unique places, persons, groups from data)
