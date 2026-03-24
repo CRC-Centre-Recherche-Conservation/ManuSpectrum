@@ -119,43 +119,187 @@ const viewModel = function(params) {
         window.open(`/resource/${suggestion.resourceId}`, '_blank');
     };
 
-    // Resolve dependencies (extract unique places, persons, groups from data)
-    this.resolveDependencies = () => {
+    // Graph IDs for dependency types
+    const PLACE_GRAPH_ID = '3f2b036a-b65d-474d-b692-0b21903655c5';
+    const PERSON_GRAPH_ID = '5bf45c85-84cd-4a76-b64a-3ffe86eea1b8';
+    const GROUP_GRAPH_ID = '4f447dca-dbb3-48d0-bc90-3f2935db8b8c';
+
+    // Resolve dependencies: extract unique Places, Groups, Persons from items
+    // then search Arches to find existing matches
+    this.resolveDependencies = async () => {
         const deps = [];
         const seen = new Set();
 
         self.items().forEach((item) => {
-            // Place from location
-            const location = item.location;
+            // Place (current location from collection)
+            const location = item.locationLabel || item.location;
             if (location && location !== 'Origine inconnue' && !seen.has(`place:${location}`)) {
                 seen.add(`place:${location}`);
                 deps.push({
                     key: location,
                     type: 'Place',
+                    graphId: PLACE_GRAPH_ID,
                     label: ko.observable(location),
-                    action: ko.observable('create'),
+                    action: ko.observable('search'),  // searching...
                     existingId: ko.observable(null),
                     existingLabel: ko.observable(''),
+                    suggestions: ko.observableArray([]),
                 });
             }
 
-            // Author
+            // Group (owner / collection)
+            const owner = item.collectionLabel;
+            if (owner && !seen.has(`group:${owner}`)) {
+                seen.add(`group:${owner}`);
+                deps.push({
+                    key: owner,
+                    type: 'Group',
+                    graphId: GROUP_GRAPH_ID,
+                    label: ko.observable(owner),
+                    action: ko.observable('search'),
+                    existingId: ko.observable(null),
+                    existingLabel: ko.observable(''),
+                    suggestions: ko.observableArray([]),
+                });
+            }
+
+            // Parent institution (top-level Group)
+            const parentInst = item.parentInstitutionLabel;
+            if (parentInst && parentInst !== owner && !seen.has(`group:${parentInst}`)) {
+                seen.add(`group:${parentInst}`);
+                deps.push({
+                    key: parentInst,
+                    type: 'Group',
+                    graphId: GROUP_GRAPH_ID,
+                    label: ko.observable(parentInst),
+                    action: ko.observable('search'),
+                    existingId: ko.observable(null),
+                    existingLabel: ko.observable(''),
+                    suggestions: ko.observableArray([]),
+                });
+            }
+
+            // Author (Person)
             const author = item.authorLabel;
             if (author && !seen.has(`person:${author}`)) {
                 seen.add(`person:${author}`);
                 deps.push({
                     key: author,
                     type: 'Person',
+                    graphId: PERSON_GRAPH_ID,
                     label: ko.observable(author),
-                    action: ko.observable('create'),
+                    action: ko.observable('search'),
                     existingId: ko.observable(null),
                     existingLabel: ko.observable(''),
+                    suggestions: ko.observableArray([]),
                 });
             }
         });
 
         self.dependencies(deps);
+
+        // Search Arches for existing matches for each dependency
+        for (const dep of deps) {
+            try {
+                const resp = await fetch('/api/biblissima/check-duplicates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': self.getCSRFToken(),
+                    },
+                    body: JSON.stringify({
+                        items: [{ label: dep.key, shelfmark: '', arkId: '', biblissimaQid: '' }],
+                        graphId: dep.graphId,
+                    }),
+                });
+                const data = await resp.json();
+                const result = data.results?.[0];
+                if (result?.suggestions?.length > 0) {
+                    dep.suggestions(result.suggestions);
+                    // Auto-select first high-confidence match
+                    const best = result.suggestions.find((s) => s.confidence === 'high');
+                    if (best) {
+                        dep.action('use_existing');
+                        dep.existingId(best.resourceId);
+                        dep.existingLabel(best.displayname);
+                    } else {
+                        dep.action('create');
+                    }
+                } else {
+                    dep.action('create');
+                }
+            } catch (err) {
+                console.warn('Dependency search failed for:', dep.key, err);
+                dep.action('create');
+            }
+        }
+
         self.dependenciesResolved(true);
+    };
+
+    // Build a Select2 config for a dependency picker (search existing resources)
+    this.buildDepPickerConfig = (dep) => {
+        const selectedValue = ko.observable(null);
+        selectedValue.subscribe((val) => {
+            if (val && typeof val === 'string' && val.length > 10) {
+                // Fetch the displayname
+                fetch(`${arches.urls.api_resources(val)}?format=json&compact=false&v=beta`)
+                    .then((r) => r.ok ? r.json() : null)
+                    .then((data) => {
+                        dep.existingId(val);
+                        dep.existingLabel(data?.displayname || val);
+                        dep.action('use_existing');
+                    })
+                    .catch(() => {
+                        dep.existingId(val);
+                        dep.existingLabel(val);
+                        dep.action('use_existing');
+                    });
+            }
+        });
+
+        return {
+            value: selectedValue,
+            clickBubble: true,
+            multiple: false,
+            closeOnSelect: true,
+            allowClear: true,
+            placeholder: arches.translations.biblissimaSearchExisting || 'Search existing resource...',
+            minimumInputLength: 2,
+            ajax: {
+                url: arches.urls.search_results,
+                dataType: 'json',
+                quietMillis: 250,
+                data: (requestParams) => {
+                    const params = {
+                        'paging-filter': 1,
+                        'resource-type-filter': JSON.stringify([
+                            { graphid: dep.graphId, inverted: false }
+                        ]),
+                    };
+                    if (requestParams.term) {
+                        params['term-filter'] = JSON.stringify([{
+                            context: '', context_label: '', id: 0,
+                            text: requestParams.term, type: 'term',
+                            value: requestParams.term, inverted: false,
+                        }]);
+                    }
+                    return params;
+                },
+                processResults: (data) => {
+                    const hits = data?.results?.hits?.hits || [];
+                    return {
+                        results: hits.map((hit) => ({
+                            id: hit._id,
+                            text: hit._source?.displayname || hit._id,
+                        })).filter((r) => r.text && r.text !== 'Undefined'),
+                    };
+                },
+            },
+            templateResult: (item) => item.text || '',
+            templateSelection: (item) => item.text || '',
+            escapeMarkup: (m) => m,
+        };
     };
 
     // Create a single resource

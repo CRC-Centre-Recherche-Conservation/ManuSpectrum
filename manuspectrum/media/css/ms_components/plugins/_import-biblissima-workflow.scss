@@ -667,18 +667,14 @@ $bbma-danger-bg: #fdf0f0;
 
 .bbma-dep-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 14px;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
     border-bottom: 1px solid lighten($bbma-border, 4%);
+    transition: background 0.12s;
 
     &:last-child { border-bottom: none; }
-}
-
-.bbma-dep-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    &.bbma-dep-linked { background: $bbma-success-bg; }
 }
 
 .bbma-dep-type {
@@ -688,18 +684,64 @@ $bbma-danger-bg: #fdf0f0;
     letter-spacing: 0.5px;
     color: #fff;
     background: $bbma-accent;
-    padding: 1px 6px;
+    padding: 2px 7px;
     border-radius: 2px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.bbma-dep-body {
+    flex: 1;
+    min-width: 0;
 }
 
 .bbma-dep-name {
     font-size: 13px;
+    font-weight: 500;
     color: $bbma-ink;
+    margin-bottom: 4px;
 }
 
-.bbma-dep-action {
-    width: auto !important;
-    font-size: 12px !important;
+.bbma-dep-linked-info {
+    font-size: 12px;
+    color: $bbma-success;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+
+    .fa-link { flex-shrink: 0; }
+
+    span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .btn-link {
+        color: lighten($bbma-muted, 10%);
+        padding: 0 2px;
+        &:hover { color: #c0392b; }
+    }
+}
+
+.bbma-dep-create-info,
+.bbma-dep-skip-info {
+    font-size: 11px;
+    margin-bottom: 4px;
+
+    .fa { margin-right: 3px; }
+}
+
+.bbma-dep-picker {
+    margin-top: 4px;
+
+    .select2-container { width: 100% !important; }
+}
+
+.bbma-dep-actions {
+    flex-shrink: 0;
+    margin-top: 2px;
 }
 
 // Items list (card-based instead of table)

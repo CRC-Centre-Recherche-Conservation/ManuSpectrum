@@ -4,33 +4,7 @@
 
     <!-- ko ifnot: loading -->
 
-    <!-- Section A: Dependencies -->
-    <!-- ko if: dependencies().length > 0 -->
-    <div class="biblissima-create-section bbma-deps-section">
-        <div class="bbma-section-header">
-            <i class="fa fa-link"></i>
-            <h4>{% trans "Related resources" %}</h4>
-        </div>
-        <p class="bbma-section-hint">{% trans "Resources that will be linked to the created items. Choose to use an existing resource or create a new one." %}</p>
-        <div class="bbma-deps-list">
-            <!-- ko foreach: dependencies -->
-            <div class="bbma-dep-row">
-                <div class="bbma-dep-info">
-                    <span class="bbma-dep-type" data-bind="text: type"></span>
-                    <span class="bbma-dep-name" data-bind="text: label()"></span>
-                </div>
-                <select class="form-control input-sm bbma-dep-action" data-bind="value: action">
-                    <option value="create">{% trans "Create new" %}</option>
-                    <option value="use_existing">{% trans "Use existing" %}</option>
-                    <option value="skip">{% trans "Skip" %}</option>
-                </select>
-            </div>
-            <!-- /ko -->
-        </div>
-    </div>
-    <!-- /ko -->
-
-    <!-- Section B: Items -->
+    <!-- Section A: Items -->
     <div class="biblissima-create-section">
         <div class="bbma-section-header">
             <i class="fa fa-list"></i>
@@ -194,5 +168,80 @@
             <!-- /ko -->
         </div>
     </div>
+
+    <!-- Section B: Related resources (Places, Groups, Persons) -->
+    <!-- ko if: dependencies().length > 0 -->
+    <div class="biblissima-create-section">
+        <div class="bbma-section-header">
+            <i class="fa fa-link"></i>
+            <h4>{% trans "Related resources" %}</h4>
+        </div>
+        <p class="bbma-section-hint">{% trans "Places, institutions, and persons extracted from Biblissima data. Link to existing resources or create new ones." %}</p>
+
+        <div class="bbma-deps-list">
+            <!-- ko foreach: dependencies -->
+            <div class="bbma-dep-row" data-bind="css: {'bbma-dep-linked': action() === 'use_existing'}">
+                <span class="bbma-dep-type" data-bind="text: type"></span>
+                <div class="bbma-dep-body">
+                    <div class="bbma-dep-name" data-bind="text: label()"></div>
+
+                    <!-- Linked to existing -->
+                    <!-- ko if: action() === 'use_existing' -->
+                    <div class="bbma-dep-linked-info">
+                        <i class="fa fa-link text-success"></i>
+                        <span data-bind="text: existingLabel()"></span>
+                        <button class="btn btn-xs btn-link" data-bind="click: function(){ action('create'); existingId(null); existingLabel(''); }"
+                                title="{% trans 'Unlink' %}">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <!-- /ko -->
+
+                    <!-- Will create new -->
+                    <!-- ko if: action() === 'create' -->
+                    <div class="bbma-dep-create-info">
+                        <i class="fa fa-plus-circle text-warning"></i>
+                        <span class="text-muted">{% trans "Will be created" %}</span>
+                    </div>
+                    <!-- /ko -->
+
+                    <!-- Skipped -->
+                    <!-- ko if: action() === 'skip' -->
+                    <div class="bbma-dep-skip-info">
+                        <i class="fa fa-ban text-muted"></i>
+                        <span class="text-muted">{% trans "Skipped" %}</span>
+                    </div>
+                    <!-- /ko -->
+
+                    <!-- Searching -->
+                    <!-- ko if: action() === 'search' -->
+                    <div class="text-muted"><i class="fa fa-spinner fa-spin"></i></div>
+                    <!-- /ko -->
+
+                    <!-- Search picker: shown when not yet linked -->
+                    <!-- ko if: action() === 'create' || action() === 'skip' -->
+                    <div class="bbma-dep-picker">
+                        <select style="width: 100%;"
+                                data-bind="select2Query: { select2Config: $parent.buildDepPickerConfig($data) }">
+                        </select>
+                    </div>
+                    <!-- /ko -->
+                </div>
+                <div class="bbma-dep-actions">
+                    <!-- ko if: action() !== 'search' -->
+                    <button class="btn btn-xs"
+                            data-bind="click: function(){ action(action() === 'skip' ? 'create' : 'skip'); },
+                                       css: action() === 'skip' ? 'btn-default' : 'btn-warning',
+                                       attr: {title: action() === 'skip' ? '{% trans "Enable" %}' : '{% trans "Skip" %}'}">
+                        <i class="fa" data-bind="css: action() === 'skip' ? 'fa-toggle-off' : 'fa-toggle-on'"></i>
+                    </button>
+                    <!-- /ko -->
+                </div>
+            </div>
+            <!-- /ko -->
+        </div>
+    </div>
+    <!-- /ko -->
+
     <!-- /ko -->
 </div>

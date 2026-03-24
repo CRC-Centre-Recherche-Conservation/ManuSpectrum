@@ -154,7 +154,7 @@ const viewModel = function(params) {
         folio: '',
         legend: d.label || '',
         date: '',
-        location: '',
+        location: d.locationLabel || '',
         descriptors: [],
         portalUrl: d.portalHash ? `https://portail.biblissima.fr/ark:/43093/${d.portalHash}` : '',
         manifestUrl: d.manifestUrl || '',
@@ -165,6 +165,12 @@ const viewModel = function(params) {
         mandragoreId: d.mandragoreId || '',
         collectionLabel: d.collectionLabel || '',
         digitizationUrl: d.digitizationUrl || '',
+        // Location & owner from collection resolution
+        locationLabel: d.locationLabel || '',
+        locationQid: d.locationQid || '',
+        geonamesId: d.geonamesId || '',
+        parentInstitutionLabel: d.parentInstitutionLabel || '',
+        parentInstitutionQid: d.parentInstitutionQid || '',
     });
 
     this.searchManuscripts = async () => {

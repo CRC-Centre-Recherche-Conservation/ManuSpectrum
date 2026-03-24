@@ -66,11 +66,13 @@ const viewModel = function(params) {
     );
 
     // Sync picker values to our observables
+    // With onlyManageResourceIds=true, value is a UUID string (not an object)
     this.parentDocPicker.value.subscribe((val) => {
-        if (val && val.length > 0) {
-            const item = val[0];
-            self.parentDocumentId(item.resourceId || item.resourceinstanceid || item);
-            self.parentDocumentName(item.displayname || item.resourceName?.() || '');
+        if (val && typeof val === 'string' && val.length > 10) {
+            self.parentDocumentId(val);
+            // Get name from selectedItem
+            const selected = self.parentDocPicker.selectedItem?.();
+            self.parentDocumentName(selected?._source?.displayname || val);
         } else {
             self.parentDocumentId(null);
             self.parentDocumentName('');
@@ -78,10 +80,10 @@ const viewModel = function(params) {
     });
 
     this.projectPicker.value.subscribe((val) => {
-        if (val && val.length > 0) {
-            const item = val[0];
-            self.projectId(item.resourceId || item.resourceinstanceid || item);
-            self.projectName(item.displayname || item.resourceName?.() || '');
+        if (val && typeof val === 'string' && val.length > 10) {
+            self.projectId(val);
+            const selected = self.projectPicker.selectedItem?.();
+            self.projectName(selected?._source?.displayname || val);
         } else {
             self.projectId(null);
             self.projectName('');
