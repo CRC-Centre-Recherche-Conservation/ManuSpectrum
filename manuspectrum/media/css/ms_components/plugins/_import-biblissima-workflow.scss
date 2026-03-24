@@ -665,16 +665,28 @@ $bbma-danger-bg: #fdf0f0;
     overflow: hidden;
 }
 
-.bbma-dep-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 10px 14px;
-    border-bottom: 1px solid lighten($bbma-border, 4%);
-    transition: background 0.12s;
+// Dependency cards
+.bbma-dep-card {
+    border: 1px solid $bbma-border;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: #fff;
+    transition: border-color 0.15s, background 0.15s;
 
-    &:last-child { border-bottom: none; }
-    &.bbma-dep-linked { background: $bbma-success-bg; }
+    &.bbma-dep-card-linked {
+        border-color: lighten($bbma-success, 25%);
+        background: $bbma-success-bg;
+    }
+}
+
+.bbma-dep-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
+    background: $bbma-bg;
+    border-radius: 4px 4px 0 0;
 }
 
 .bbma-dep-type {
@@ -687,61 +699,63 @@ $bbma-danger-bg: #fdf0f0;
     padding: 2px 7px;
     border-radius: 2px;
     flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.bbma-dep-body {
-    flex: 1;
-    min-width: 0;
 }
 
 .bbma-dep-name {
     font-size: 13px;
     font-weight: 500;
     color: $bbma-ink;
-    margin-bottom: 4px;
 }
 
-.bbma-dep-linked-info {
-    font-size: 12px;
-    color: $bbma-success;
+.bbma-dep-card-body {
+    padding: 10px 12px;
+}
+
+// Linked state
+.bbma-dep-match-found {
     display: flex;
     align-items: center;
-    gap: 4px;
-    margin-bottom: 2px;
+    gap: 8px;
 
-    .fa-link { flex-shrink: 0; }
-
-    span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .btn-link {
-        color: lighten($bbma-muted, 10%);
-        padding: 0 2px;
-        &:hover { color: #c0392b; }
+    > .fa-check-circle {
+        color: $bbma-success;
+        font-size: 16px;
+        flex-shrink: 0;
     }
 }
 
-.bbma-dep-create-info,
-.bbma-dep-skip-info {
+.bbma-dep-match-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.bbma-dep-match-label {
     font-size: 11px;
-    margin-bottom: 4px;
+    color: $bbma-muted;
+    display: block;
+}
+
+// Search area (not yet linked)
+.bbma-dep-search-area {
+    .select2-container { width: 100% !important; }
+}
+
+.bbma-dep-search-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: $bbma-muted;
+    margin-bottom: 6px;
+    display: block;
 
     .fa { margin-right: 3px; }
 }
 
-.bbma-dep-picker {
-    margin-top: 4px;
+.bbma-dep-auto-create {
+    font-size: 11px;
+    color: lighten($bbma-muted, 8%);
+    margin: 6px 0 0;
 
-    .select2-container { width: 100% !important; }
-}
-
-.bbma-dep-actions {
-    flex-shrink: 0;
-    margin-top: 2px;
+    .fa { margin-right: 3px; }
 }
 
 // Items list (card-based instead of table)

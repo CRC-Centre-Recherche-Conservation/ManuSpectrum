@@ -176,67 +176,61 @@
             <i class="fa fa-link"></i>
             <h4>{% trans "Related resources" %}</h4>
         </div>
-        <p class="bbma-section-hint">{% trans "Places, institutions, and persons extracted from Biblissima data. Link to existing resources or create new ones." %}</p>
+        <p class="bbma-section-hint">{% trans "The following places, institutions, and persons were found in the Biblissima data. If they already exist in your database, select them below. Otherwise they will be created automatically." %}</p>
 
         <div class="bbma-deps-list">
             <!-- ko foreach: dependencies -->
-            <div class="bbma-dep-row" data-bind="css: {'bbma-dep-linked': action() === 'use_existing'}">
-                <span class="bbma-dep-type" data-bind="text: type"></span>
-                <div class="bbma-dep-body">
-                    <div class="bbma-dep-name" data-bind="text: label()"></div>
+            <div class="bbma-dep-card" data-bind="css: {'bbma-dep-card-linked': action() === 'use_existing'}">
+                <div class="bbma-dep-card-header">
+                    <span class="bbma-dep-type" data-bind="text: type"></span>
+                    <span class="bbma-dep-name" data-bind="text: label()"></span>
+                </div>
 
-                    <!-- Linked to existing -->
-                    <!-- ko if: action() === 'use_existing' -->
-                    <div class="bbma-dep-linked-info">
-                        <i class="fa fa-link text-success"></i>
-                        <span data-bind="text: existingLabel()"></span>
-                        <button class="btn btn-xs btn-link" data-bind="click: function(){ action('create'); existingId(null); existingLabel(''); }"
-                                title="{% trans 'Unlink' %}">
-                            <i class="fa fa-times"></i>
+                <!-- ko if: action() === 'search' -->
+                <div class="bbma-dep-card-body">
+                    <i class="fa fa-spinner fa-spin text-muted"></i>
+                    <span class="text-muted">{% trans "Searching..." %}</span>
+                </div>
+                <!-- /ko -->
+
+                <!-- ko if: action() !== 'search' -->
+                <div class="bbma-dep-card-body">
+
+                    <!-- Already linked (auto-detected or user selected) -->
+                    <!-- ko if: action() === 'use_existing' && existingId() -->
+                    <div class="bbma-dep-match-found">
+                        <i class="fa fa-check-circle"></i>
+                        <div class="bbma-dep-match-info">
+                            <span class="bbma-dep-match-label">{% trans "Linked to existing resource:" %}</span>
+                            <strong data-bind="text: existingLabel()"></strong>
+                        </div>
+                        <button class="btn btn-xs btn-link text-muted"
+                                data-bind="click: function(){ action('create'); existingId(null); existingLabel(''); }"
+                                title="{% trans 'Change' %}">
+                            <i class="fa fa-pencil"></i> {% trans "Change" %}
                         </button>
                     </div>
                     <!-- /ko -->
 
-                    <!-- Will create new -->
-                    <!-- ko if: action() === 'create' -->
-                    <div class="bbma-dep-create-info">
-                        <i class="fa fa-plus-circle text-warning"></i>
-                        <span class="text-muted">{% trans "Will be created" %}</span>
-                    </div>
-                    <!-- /ko -->
-
-                    <!-- Skipped -->
-                    <!-- ko if: action() === 'skip' -->
-                    <div class="bbma-dep-skip-info">
-                        <i class="fa fa-ban text-muted"></i>
-                        <span class="text-muted">{% trans "Skipped" %}</span>
-                    </div>
-                    <!-- /ko -->
-
-                    <!-- Searching -->
-                    <!-- ko if: action() === 'search' -->
-                    <div class="text-muted"><i class="fa fa-spinner fa-spin"></i></div>
-                    <!-- /ko -->
-
-                    <!-- Search picker: shown when not yet linked -->
-                    <!-- ko if: action() === 'create' || action() === 'skip' -->
-                    <div class="bbma-dep-picker">
+                    <!-- Not yet linked: show search + info -->
+                    <!-- ko if: action() !== 'use_existing' || !existingId() -->
+                    <div class="bbma-dep-search-area">
+                        <label class="bbma-dep-search-label">
+                            <i class="fa fa-search"></i>
+                            {% trans "Already in your database?" %}
+                        </label>
                         <select style="width: 100%;"
                                 data-bind="select2Query: { select2Config: $parent.buildDepPickerConfig($data) }">
                         </select>
+                        <p class="bbma-dep-auto-create">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "If not found, a new resource will be created automatically." %}
+                        </p>
                     </div>
                     <!-- /ko -->
+
                 </div>
-                <div class="bbma-dep-actions">
-                    <!-- ko if: action() !== 'search' -->
-                    <button class="btn btn-xs"
-                            data-bind="click: function(){ action(action() === 'skip' ? 'create' : 'skip'); },
-                                       css: action() === 'skip' ? 'btn-default' : 'btn-warning',
-                                       attr: {title: action() === 'skip' ? '{% trans "Enable" %}' : '{% trans "Skip" %}'}">
-                        <i class="fa" data-bind="css: action() === 'skip' ? 'fa-toggle-off' : 'fa-toggle-on'"></i>
-                    </button>
-                    <!-- /ko -->
-                </div>
+                <!-- /ko -->
             </div>
             <!-- /ko -->
         </div>
