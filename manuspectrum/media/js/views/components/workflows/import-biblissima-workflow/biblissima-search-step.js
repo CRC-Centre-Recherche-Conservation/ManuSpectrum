@@ -103,28 +103,7 @@ const viewModel = function(params) {
                 return;
             }
             const d = await resp.json();
-
-            const item = {
-                canvasId: d.qid,
-                arkId: d.portalHash ? `ark:/43093/${d.portalHash}` : null,
-                label: d.label || '',
-                thumbnail: null,
-                manuscript: d.shelfmark || d.label || '',
-                folio: '',
-                legend: d.label || '',
-                date: '',
-                location: '',
-                descriptors: [],
-                portalUrl: d.portalHash ? `https://portail.biblissima.fr/ark:/43093/${d.portalHash}` : '',
-                manifestUrl: d.manifestUrl || '',
-                authorLabel: d.authorLabel || '',
-                authorQid: d.authorQid || '',
-                biblissimaQid: d.qid || '',
-                shelfmark: d.shelfmark || '',
-                mandragoreId: d.mandragoreId || '',
-                collectionLabel: d.collectionLabel || '',
-                digitizationUrl: d.digitizationUrl || '',
-            };
+            const item = self._entityToItem(d);
 
             // Add to cart if not already there
             const exists = self.cart().some(
