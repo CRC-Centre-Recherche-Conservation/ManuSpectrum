@@ -902,7 +902,7 @@ class BiblissimaCheckDuplicatesView(View):
                         "confidence": "high" if score > 8 else "medium" if score > 3 else "low",
                     })
         except Exception:
-            logger.warning("ES %s search failed for: %s", match_type, search_term)
+            logger.debug("ES %s search no results for: %s", match_type, search_term)
 
 
 class BiblissimaCreateResourceView(View):
