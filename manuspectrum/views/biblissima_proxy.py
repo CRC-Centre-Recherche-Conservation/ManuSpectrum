@@ -1,7 +1,6 @@
 import logging
 import re
 import uuid
-from functools import lru_cache
 from html import unescape
 
 import requests
@@ -10,7 +9,8 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import cache_page
 
-from arches.app.models.models import ResourceInstance, Value
+from arches.app.models.models import ResourceInstance
+from arches.app.models.models import Value  # used in _concept_valueid
 from arches.app.models.tile import Tile
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,9 @@ P196 = "P196"  # manifeste IIIF
 P197 = "P197"  # numérisation URL
 P270 = "P270"  # identifiant Mandragore
 P354 = "P354"  # auteur
+P201 = "P201"  # localisation (place)
+P169 = "P169"  # partie de (parent institution)
+P123 = "P123"  # identifiant Geonames
 
 # Arches graph UUIDs
 DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
@@ -288,6 +291,91 @@ def _get_wikibase_entity(qid, session=None):
     }
 
 
+def _resolve_collection(collection_qid, session=None):
+    """Resolve a Biblissima collection entity into owner + location data.
+
+    Follows the chain: collection → P201 (localisation) → place with Geonames ID
+                        collection → P169 (partie de) → parent institution
+    Returns dict with ownerLabel, ownerQid, locationLabel, locationQid, geonamesId.
+    """
+    if not collection_qid:
+        return {}
+
+    coll = _get_wikibase_entity(collection_qid, session=session)
+    if not coll:
+        return {}
+
+    result = {
+        "ownerLabel": coll.get("label", ""),
+        "ownerQid": collection_qid,
+    }
+
+    s = session or requests
+    coll_claims = {}
+    try:
+        resp = s.get(
+            BIBLISSIMA_WIKIBASE,
+            params={
+                "action": "wbgetentities",
+                "ids": collection_qid,
+                "format": "json",
+                "languages": "fr|en",
+                "props": "claims",
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        entity = resp.json().get("entities", {}).get(collection_qid, {})
+        coll_claims = entity.get("claims", {})
+    except Exception:
+        logger.warning("Failed to fetch collection claims for %s", collection_qid)
+        return result
+
+    # P201 = localisation (place)
+    loc_claims = coll_claims.get(P201, [])
+    if loc_claims:
+        loc_qid = loc_claims[0].get("mainsnak", {}).get("datavalue", {}).get("value", {}).get("id")
+        if loc_qid:
+            loc_entity = _get_wikibase_entity(loc_qid, session=session)
+            if loc_entity:
+                result["locationLabel"] = loc_entity.get("label", "")
+                result["locationQid"] = loc_qid
+
+                # Get Geonames ID from the place entity
+                try:
+                    loc_resp = s.get(
+                        BIBLISSIMA_WIKIBASE,
+                        params={
+                            "action": "wbgetentities",
+                            "ids": loc_qid,
+                            "format": "json",
+                            "props": "claims",
+                        },
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    loc_resp.raise_for_status()
+                    loc_data = loc_resp.json().get("entities", {}).get(loc_qid, {})
+                    geo_claims = loc_data.get("claims", {}).get(P123, [])
+                    if geo_claims:
+                        geo_val = geo_claims[0].get("mainsnak", {}).get("datavalue", {}).get("value")
+                        if geo_val:
+                            result["geonamesId"] = str(geo_val)
+                except Exception:
+                    pass
+
+    # P169 = partie de (parent institution) — for the top-level owner
+    parent_claims = coll_claims.get(P169, [])
+    if parent_claims:
+        parent_qid = parent_claims[0].get("mainsnak", {}).get("datavalue", {}).get("value", {}).get("id")
+        if parent_qid:
+            parent_entity = _get_wikibase_entity(parent_qid, session=session)
+            if parent_entity:
+                result["parentInstitutionLabel"] = parent_entity.get("label", "")
+                result["parentInstitutionQid"] = parent_qid
+
+    return result
+
+
 def _parse_iiif_canvases(manifest_json):
     """Parse IIIF v2 manifest and extract canvas data."""
     results = []
@@ -490,12 +578,16 @@ class BiblissimaEntityView(View):
                 entity["authorLabel"] = author_entity["label"]
                 entity["authorQid"] = entity["author"]
 
-        # If collection is a QID, resolve its label
+        # If collection is a QID, resolve full collection data (owner + location)
         if entity.get("collection"):
-            coll_entity = _get_wikibase_entity(entity["collection"])
-            if coll_entity:
-                entity["collectionLabel"] = coll_entity["label"]
-                entity["collectionQid"] = entity["collection"]
+            coll_data = _resolve_collection(entity["collection"])
+            entity["collectionLabel"] = coll_data.get("ownerLabel", "")
+            entity["collectionQid"] = entity["collection"]
+            entity["locationLabel"] = coll_data.get("locationLabel", "")
+            entity["locationQid"] = coll_data.get("locationQid", "")
+            entity["geonamesId"] = coll_data.get("geonamesId", "")
+            entity["parentInstitutionLabel"] = coll_data.get("parentInstitutionLabel", "")
+            entity["parentInstitutionQid"] = coll_data.get("parentInstitutionQid", "")
 
         return JsonResponse(entity)
 
@@ -861,30 +953,46 @@ class BiblissimaCreateResourceView(View):
     def _create_resource(
         self, graph_id, resource_type, transaction_id, bbma_data, dependencies, concept_mappings, user
     ):
-        """Create a resource with all its tiles from Biblissima data."""
-        created_deps = {"places": {}, "persons": {}, "groups": {}}
-        resource_instance = ResourceInstance(graph_id=graph_id)
-        resource_instance.save()
-        resource_id = resource_instance.resourceinstanceid
+        """Create a resource with all its tiles from Biblissima data.
 
-        if resource_type == "Document":
-            self._create_document_tiles(
-                resource_id, transaction_id, bbma_data, dependencies, concept_mappings, created_deps
-            )
-        else:
-            self._create_component_tiles(
-                resource_id, transaction_id, bbma_data, dependencies, concept_mappings, created_deps
-            )
+        Wrapped in a DB transaction — if anything fails, everything rolls back.
+        Elasticsearch indexing is deferred until after all DB writes succeed,
+        so a rollback leaves no orphan documents in ES.
+        """
+        from django.db import transaction
+        from arches.app.models.resource import Resource
 
-        # Link to project if specified
-        project_id = dependencies.get("project")
-        if project_id:
-            self._link_to_project(resource_id, project_id, transaction_id)
+        with transaction.atomic():
+            created_deps = {"places": {}, "persons": {}, "groups": {}}
+            resource_instance = ResourceInstance(graph_id=graph_id)
+            resource_instance.save()
+            resource_id = resource_instance.resourceinstanceid
+
+            if resource_type == "Document":
+                self._create_document_tiles(
+                    resource_id, transaction_id, bbma_data, dependencies, concept_mappings, created_deps
+                )
+            else:
+                self._create_component_tiles(
+                    resource_id, transaction_id, bbma_data, dependencies, concept_mappings, created_deps
+                )
+
+            # Link to project if specified
+            project_id = dependencies.get("project")
+            if project_id:
+                self._link_to_project(resource_id, project_id, transaction_id)
+
+        # DB transaction succeeded — now index into Elasticsearch
+        try:
+            resource = Resource.objects.get(resourceinstanceid=resource_id)
+            resource.index()
+        except Exception:
+            logger.warning("ES indexing failed for resource %s (DB is committed)", resource_id)
 
         return resource_id, created_deps
 
     def _create_tile(self, nodegroup_id, resource_id, data, transaction_id=None):
-        """Create a single tile."""
+        """Create a single tile without ES indexing (deferred to after commit)."""
         tile = Tile(
             tileid=uuid.uuid4(),
             nodegroup_id=nodegroup_id,
@@ -894,20 +1002,54 @@ class BiblissimaCreateResourceView(View):
         )
         if transaction_id:
             tile.transaction_id = transaction_id
-        tile.save()
+        tile.save(index=False)
         return tile
+
+    @staticmethod
+    def _i18n_string(value, lang="en"):
+        """Format a string as Arches i18n dict."""
+        return {lang: {"value": str(value), "direction": "ltr"}}
+
+    @staticmethod
+    def _concept_valueid(concept_id):
+        """Get the prefLabel valueid for a concept ID.
+
+        Prefers English, falls back to any language.
+        """
+        try:
+            # Try English first
+            val = Value.objects.filter(
+                concept_id=concept_id, valuetype="prefLabel",
+            ).filter(language__in=["en", "en-US", "en-UK", "English"]).first()
+            if val:
+                return str(val.valueid)
+            # Fallback to any language
+            val = Value.objects.filter(
+                concept_id=concept_id, valuetype="prefLabel",
+            ).first()
+            return str(val.valueid) if val else concept_id
+        except Exception:
+            return concept_id
+
+    def _concept_list(self, concept_ids):
+        """Convert a list of concept IDs to a list of valueids."""
+        if isinstance(concept_ids, str):
+            concept_ids = [concept_ids]
+        return [self._concept_valueid(cid) for cid in concept_ids]
 
     def _create_document_tiles(self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps):
         """Create all tiles for a Document resource."""
+        i18n = self._i18n_string
+        clist = self._concept_list
+
         # Name
         label = bbma_data.get("label", "Untitled")
         self._create_tile(
-            DOC_NAME_NG,
-            resource_id,
+            DOC_NAME_NG, resource_id,
             {
-                DOC_NAME_LABEL: label,
-                DOC_NAME_LANGUAGE: [CONCEPT_FRENCH],
-                DOC_NAME_TYPE: [CONCEPT_PREFERRED_TERMS],
+                DOC_NAME_LABEL: i18n(label),
+                DOC_NAME_LANGUAGE: clist([CONCEPT_FRENCH]),
+                DOC_NAME_TYPE: clist([CONCEPT_PREFERRED_TERMS]),
             },
             transaction_id,
         )
@@ -915,37 +1057,35 @@ class BiblissimaCreateResourceView(View):
         # Second name tile for shelfmark if available
         shelfmark = bbma_data.get("shelfmark")
         if shelfmark:
-            from arches.app.models.models import Value as ConceptValue
             self._create_tile(
-                DOC_NAME_NG,
-                resource_id,
+                DOC_NAME_NG, resource_id,
                 {
-                    DOC_NAME_LABEL: shelfmark,
-                    DOC_NAME_LANGUAGE: [CONCEPT_FRENCH],
-                    DOC_NAME_TYPE: ["7cca3482-44b5-42ea-a1d7-120cd732b350"],  # alternate titles
+                    DOC_NAME_LABEL: i18n(shelfmark),
+                    DOC_NAME_LANGUAGE: clist([CONCEPT_FRENCH]),
+                    DOC_NAME_TYPE: clist(["7cca3482-44b5-42ea-a1d7-120cd732b350"]),
                 },
                 transaction_id,
             )
 
-        # Type
-        doc_type = concepts.get("type", CONCEPT_MANUSCRIT)
-        self._create_tile(
-            DOC_TYPE_NG,
-            resource_id,
-            {DOC_TYPE_NODE: doc_type},
-            transaction_id,
-        )
+        # Type (concept node, single valueid string)
+        doc_type = concepts.get("type")
+        if doc_type:
+            # doc_type from frontend is already a valueid (selected via concept-select-widget)
+            self._create_tile(
+                DOC_TYPE_NG, resource_id,
+                {DOC_TYPE_NODE: doc_type},
+                transaction_id,
+            )
 
         # Identifiers
         ark_id = bbma_data.get("arkId")
         if ark_id:
             self._create_tile(
-                DOC_IDENTIFIER_NG,
-                resource_id,
+                DOC_IDENTIFIER_NG, resource_id,
                 {
-                    DOC_IDENTIFIER_VALUE: ark_id,
-                    DOC_IDENTIFIER_TYPE: [CONCEPT_PERSISTENT_ID],
-                    DOC_IDENTIFIER_SOURCE: [CONCEPT_SOURCE_BIBLISSIMA],
+                    DOC_IDENTIFIER_VALUE: i18n(ark_id),
+                    DOC_IDENTIFIER_TYPE: clist([CONCEPT_PERSISTENT_ID]),
+                    DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BIBLISSIMA]),
                 },
                 transaction_id,
             )
@@ -953,12 +1093,11 @@ class BiblissimaCreateResourceView(View):
         qid = bbma_data.get("biblissimaQid")
         if qid:
             self._create_tile(
-                DOC_IDENTIFIER_NG,
-                resource_id,
+                DOC_IDENTIFIER_NG, resource_id,
                 {
-                    DOC_IDENTIFIER_VALUE: qid,
-                    DOC_IDENTIFIER_TYPE: [CONCEPT_RECORD_ID],
-                    DOC_IDENTIFIER_SOURCE: [CONCEPT_SOURCE_BIBLISSIMA],
+                    DOC_IDENTIFIER_VALUE: i18n(f"https://data.biblissima.fr/entity/{qid}"),
+                    DOC_IDENTIFIER_TYPE: clist([CONCEPT_RECORD_ID]),
+                    DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BIBLISSIMA]),
                 },
                 transaction_id,
             )
@@ -966,12 +1105,11 @@ class BiblissimaCreateResourceView(View):
         mandragore_id = bbma_data.get("mandragoreId")
         if mandragore_id:
             self._create_tile(
-                DOC_IDENTIFIER_NG,
-                resource_id,
+                DOC_IDENTIFIER_NG, resource_id,
                 {
-                    DOC_IDENTIFIER_VALUE: mandragore_id,
-                    DOC_IDENTIFIER_TYPE: [CONCEPT_RECORD_ID],
-                    DOC_IDENTIFIER_SOURCE: [CONCEPT_SOURCE_MANDRAGORE],
+                    DOC_IDENTIFIER_VALUE: i18n(mandragore_id),
+                    DOC_IDENTIFIER_TYPE: clist([CONCEPT_RECORD_ID]),
+                    DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_MANDRAGORE]),
                 },
                 transaction_id,
             )
@@ -981,23 +1119,21 @@ class BiblissimaCreateResourceView(View):
         portal_url = bbma_data.get("portalUrl", "")
         if legend:
             self._create_tile(
-                DOC_STATEMENT_NG,
-                resource_id,
+                DOC_STATEMENT_NG, resource_id,
                 {
-                    DOC_STATEMENT_CONTENT: legend,
-                    DOC_STATEMENT_TYPE: [CONCEPT_DESCRIPTION],
-                    DOC_STATEMENT_LANGUAGE: [CONCEPT_FRENCH],
-                    DOC_STATEMENT_SOURCE: portal_url or None,
+                    DOC_STATEMENT_CONTENT: i18n(legend),
+                    DOC_STATEMENT_TYPE: clist([CONCEPT_DESCRIPTION]),
+                    DOC_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
+                    DOC_STATEMENT_SOURCE: {"url": portal_url, "url_label": ""} if portal_url else None,
                 },
                 transaction_id,
             )
 
-        # Facsimiles (IIIF manifest)
+        # Facsimiles (IIIF manifest) - manifest datatype accepts URL string directly
         manifest_url = bbma_data.get("manifestUrl")
         if manifest_url:
             self._create_tile(
-                DOC_FACSIMILES_NG,
-                resource_id,
+                DOC_FACSIMILES_NG, resource_id,
                 {DOC_FACSIMILES_NODE: manifest_url},
                 transaction_id,
             )
@@ -1007,11 +1143,10 @@ class BiblissimaCreateResourceView(View):
         century_concept = _parse_century(date_str)
         if century_concept:
             self._create_tile(
-                DOC_PERIOD_NG,
-                resource_id,
+                DOC_PERIOD_NG, resource_id,
                 {
-                    DOC_PERIOD_ABSOLUTE: [century_concept],
-                    DOC_PERIOD_PRODUCTION: [CONCEPT_MEDIEVAL],
+                    DOC_PERIOD_ABSOLUTE: clist([century_concept]),
+                    DOC_PERIOD_PRODUCTION: clist([CONCEPT_MEDIEVAL]),
                 },
                 transaction_id,
             )
@@ -1019,24 +1154,20 @@ class BiblissimaCreateResourceView(View):
         # Production
         prod_data = {DOC_PROD_TIME_TYPE: False}
 
-        # Date
         if date_str:
             prod_data[DOC_PROD_DATE_START] = self._century_to_date(date_str)
 
-        # Place
         place_id = deps.get("productionPlace")
         if place_id:
             prod_data[DOC_PROD_PLACE] = self._resource_instance_list(place_id)
 
-        # Actors
         actor_ids = deps.get("productionActors", [])
         if actor_ids:
             prod_data[DOC_PROD_ACTORS] = self._resource_instance_list(actor_ids)
 
-        if any(k != DOC_PROD_TIME_TYPE for k in prod_data):
+        if len(prod_data) > 1:
             self._create_tile(
-                DOC_PRODUCTION_NG,
-                resource_id,
+                DOC_PRODUCTION_NG, resource_id,
                 prod_data,
                 transaction_id,
             )
@@ -1045,8 +1176,7 @@ class BiblissimaCreateResourceView(View):
         location_id = deps.get("currentLocation")
         if location_id:
             self._create_tile(
-                DOC_LOCATION_NG,
-                resource_id,
+                DOC_LOCATION_NG, resource_id,
                 {
                     DOC_LOCATION_NODE: self._resource_instance_ref(location_id),
                     DOC_LOCATION_LITERAL: None,
@@ -1058,8 +1188,7 @@ class BiblissimaCreateResourceView(View):
         owner_ids = deps.get("currentOwner", [])
         if owner_ids:
             self._create_tile(
-                DOC_OWNER_NG,
-                resource_id,
+                DOC_OWNER_NG, resource_id,
                 {DOC_OWNER_NODE: self._resource_instance_list(owner_ids)},
                 transaction_id,
             )
@@ -1068,45 +1197,44 @@ class BiblissimaCreateResourceView(View):
         parent_doc_id = deps.get("partOf")
         if parent_doc_id:
             self._create_tile(
-                DOC_PART_OF_NG,
-                resource_id,
+                DOC_PART_OF_NG, resource_id,
                 {DOC_PART_OF_NODE: self._resource_instance_list(parent_doc_id)},
                 transaction_id,
             )
 
     def _create_component_tiles(self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps):
         """Create all tiles for a Component resource."""
+        i18n = self._i18n_string
+        clist = self._concept_list
+
         # Name
         label = bbma_data.get("legend") or bbma_data.get("label", "Untitled")
         self._create_tile(
-            COMP_NAME_NG,
-            resource_id,
+            COMP_NAME_NG, resource_id,
             {
-                COMP_NAME_LABEL: label,
-                COMP_NAME_LANGUAGE: [CONCEPT_FRENCH],
-                COMP_NAME_TYPE: [CONCEPT_PREFERRED_TERMS],
+                COMP_NAME_LABEL: i18n(label),
+                COMP_NAME_LANGUAGE: clist([CONCEPT_FRENCH]),
+                COMP_NAME_TYPE: clist([CONCEPT_PREFERRED_TERMS]),
             },
             transaction_id,
         )
 
-        # Type
-        comp_type = concepts.get("type", CONCEPT_DECOR)
-        self._create_tile(
-            COMP_TYPE_NG,
-            resource_id,
-            {COMP_TYPE_NODE: [comp_type]},
-            transaction_id,
-        )
+        # Type (concept-list node, expects list of valueids)
+        comp_type = concepts.get("type")
+        if comp_type:
+            # comp_type from frontend is already a valueid
+            self._create_tile(
+                COMP_TYPE_NG, resource_id,
+                {COMP_TYPE_NODE: [comp_type]},
+                transaction_id,
+            )
 
         # Parent Document (required)
         parent_doc_id = deps.get("parentDocument")
         if parent_doc_id:
             self._create_tile(
-                COMP_PARENT_DOC_NG,
-                resource_id,
-                {
-                    COMP_PARENT_DOC_NODE: self._resource_instance_ref(parent_doc_id),
-                },
+                COMP_PARENT_DOC_NG, resource_id,
+                {COMP_PARENT_DOC_NODE: self._resource_instance_ref(parent_doc_id)},
                 transaction_id,
             )
 
@@ -1114,12 +1242,11 @@ class BiblissimaCreateResourceView(View):
         ark_id = bbma_data.get("arkId")
         if ark_id:
             self._create_tile(
-                COMP_IDENTIFIER_NG,
-                resource_id,
+                COMP_IDENTIFIER_NG, resource_id,
                 {
-                    COMP_IDENTIFIER_VALUE: ark_id,
-                    COMP_IDENTIFIER_TYPE: [CONCEPT_PERSISTENT_ID],
-                    COMP_IDENTIFIER_SOURCE: [CONCEPT_SOURCE_BIBLISSIMA],
+                    COMP_IDENTIFIER_VALUE: i18n(ark_id),
+                    COMP_IDENTIFIER_TYPE: clist([CONCEPT_PERSISTENT_ID]),
+                    COMP_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BIBLISSIMA]),
                 },
                 transaction_id,
             )
@@ -1129,34 +1256,31 @@ class BiblissimaCreateResourceView(View):
         portal_url = bbma_data.get("portalUrl", "")
         if legend:
             self._create_tile(
-                COMP_STATEMENT_NG,
-                resource_id,
+                COMP_STATEMENT_NG, resource_id,
                 {
-                    COMP_STATEMENT_CONTENT: legend,
-                    COMP_STATEMENT_TYPE: [CONCEPT_DESCRIPTION],
-                    COMP_STATEMENT_LANGUAGE: [CONCEPT_FRENCH],
-                    COMP_STATEMENT_SOURCE: portal_url or None,
+                    COMP_STATEMENT_CONTENT: i18n(legend),
+                    COMP_STATEMENT_TYPE: clist([CONCEPT_DESCRIPTION]),
+                    COMP_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
+                    COMP_STATEMENT_SOURCE: {"url": portal_url, "url_label": ""} if portal_url else None,
                 },
                 transaction_id,
             )
 
-        # Iconographic representation
+        # Iconographic representation (URL datatype, plain string)
         thumbnail = bbma_data.get("thumbnail") or bbma_data.get("imageUrl")
         if thumbnail:
             self._create_tile(
-                COMP_ICONOGRAPHIC_NG,
-                resource_id,
+                COMP_ICONOGRAPHIC_NG, resource_id,
                 {COMP_ICONOGRAPHIC_NODE: thumbnail},
                 transaction_id,
             )
 
-        # Context (folio)
+        # Context (string datatype, i18n format)
         folio = bbma_data.get("folio")
         if folio:
             self._create_tile(
-                COMP_CONTEXT_NG,
-                resource_id,
-                {COMP_CONTEXT_NODE: folio},
+                COMP_CONTEXT_NG, resource_id,
+                {COMP_CONTEXT_NODE: i18n(folio)},
                 transaction_id,
             )
 
@@ -1165,11 +1289,10 @@ class BiblissimaCreateResourceView(View):
         century_concept = _parse_century(date_str)
         if century_concept:
             self._create_tile(
-                COMP_PERIOD_NG,
-                resource_id,
+                COMP_PERIOD_NG, resource_id,
                 {
-                    COMP_PERIOD_ABSOLUTE: [century_concept],
-                    COMP_PERIOD_PRODUCTION: [CONCEPT_MEDIEVAL],
+                    COMP_PERIOD_ABSOLUTE: clist([century_concept]),
+                    COMP_PERIOD_PRODUCTION: clist([CONCEPT_MEDIEVAL]),
                 },
                 transaction_id,
             )
@@ -1188,10 +1311,9 @@ class BiblissimaCreateResourceView(View):
         if actor_ids:
             prod_data[COMP_PROD_ACTORS] = self._resource_instance_list(actor_ids)
 
-        if any(k != COMP_PROD_TIME_TYPE for k in prod_data):
+        if len(prod_data) > 1:
             self._create_tile(
-                COMP_PRODUCTION_NG,
-                resource_id,
+                COMP_PRODUCTION_NG, resource_id,
                 prod_data,
                 transaction_id,
             )
@@ -1237,6 +1359,15 @@ class BiblissimaCreateResourceView(View):
 
     def _link_to_project(self, resource_id, project_id, transaction_id):
         """Add the created resource to the project's Studied Objects."""
+        # Validate project_id is a proper UUID
+        try:
+            project_uuid = uuid.UUID(str(project_id))
+        except (ValueError, AttributeError):
+            logger.warning("Invalid project_id for linking: %r", project_id)
+            return
+
+        project_id = str(project_uuid)
+
         # Find existing tile or create new one
         existing = Tile.objects.filter(
             nodegroup_id=PROJECT_STUDIED_OBJECTS_NG,
