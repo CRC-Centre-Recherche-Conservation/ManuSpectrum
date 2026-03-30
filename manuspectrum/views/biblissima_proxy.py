@@ -955,6 +955,232 @@ class BiblissimaCheckDuplicatesView(View):
             logger.debug("ES %s search no results for: %s", match_type, search_term)
 
 
+BIBLISSIMA_PORTAL = "https://portail.biblissima.fr/fr/ark:/43093"
+
+# Map Biblissima illumination type/typologie/descriptor strings to Arches Type of Component valueids.
+# Keys are lowercase. Matching is done with startswith() to handle variants like "initiale ornée (1)".
+BIBLISSIMA_TYPE_MAPPING = {
+    "initiale ornée": "31158e76-817a-447d-a40c-3963731296a8",      # lettrine/initial
+    "initiale filigranée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
+    "initiale historiée": "31158e76-817a-447d-a40c-3963731296a8",   # lettrine/initial
+    "initiale animée": "31158e76-817a-447d-a40c-3963731296a8",      # lettrine/initial
+    "initiale zoomorphe": "31158e76-817a-447d-a40c-3963731296a8",   # lettrine/initial
+    "initiale anthropomorphe": "31158e76-817a-447d-a40c-3963731296a8",
+    "initiale de couleur": "31158e76-817a-447d-a40c-3963731296a8",
+    "initiale": "31158e76-817a-447d-a40c-3963731296a8",
+    "lettrine": "31158e76-817a-447d-a40c-3963731296a8",
+    "lettre ornée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",        # decorated letter
+    "lettre cadelée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
+    "lettre or": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
+    "miniature": "63bc98e3-57de-48fc-a656-8d6f9a9acf40",           # miniature
+    "page décorée": "4063b4aa-c50b-4101-947c-d8094eed6e25",        # Decoration
+    "décor": "4063b4aa-c50b-4101-947c-d8094eed6e25",
+    "bordure": "4063b4aa-c50b-4101-947c-d8094eed6e25",
+    "bandeau": "4063b4aa-c50b-4101-947c-d8094eed6e25",
+    "encadrement": "4063b4aa-c50b-4101-947c-d8094eed6e25",
+    "frontispice": "0805a584-1395-48df-8e84-4ae4b25cdeae",         # frontispiece
+    "vignette": "29167061-2645-4d86-8f30-9206c1f83297",            # vignette
+    "photographie": "85e458af-0292-4ecb-84b9-5715071d45e1",        # photography
+    "filigrane": "c3168cc7-23d3-4ddb-9eac-38383b852f5a",           # watermark
+    "planche": "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a",             # board
+    "enluminure": "3ecd8040-7c4b-4b1d-88f7-379297358f66",          # illumination (default)
+}
+
+# Default fallback when no type mapping matches
+BIBLISSIMA_TYPE_DEFAULT = "3ecd8040-7c4b-4b1d-88f7-379297358f66"  # illumination
+
+
+def _resolve_biblissima_type(typologie="", descriptor="", type_field=""):
+    """Resolve a Biblissima illumination to an Arches Type of Component valueid.
+
+    Priority: typologie > descriptor > type_field > default.
+    Uses startswith matching for variants (e.g. "initiale ornée (1)").
+    """
+    for term in (typologie, descriptor, type_field):
+        if not term:
+            continue
+        normalized = term.lower().strip()
+        # Remove trailing numbering like "(1)", "(2)"
+        normalized = re.sub(r'\s*\(\d+\)\s*$', '', normalized)
+        # Try exact match first
+        if normalized in BIBLISSIMA_TYPE_MAPPING:
+            return BIBLISSIMA_TYPE_MAPPING[normalized]
+        # Try startswith match
+        for key, valueid in BIBLISSIMA_TYPE_MAPPING.items():
+            if normalized.startswith(key):
+                return valueid
+    return BIBLISSIMA_TYPE_DEFAULT
+
+
+class BiblissimaManuscriptIlluminationsView(View):
+    """Scrape Biblissima portal page for a manuscript to list its illuminations."""
+
+    @method_decorator(cache_page(60))
+    def get(self, request):
+        portal_hash = request.GET.get("portalHash", "").strip()
+        if not portal_hash:
+            return JsonResponse({"error": "portalHash required"}, status=400)
+
+        try:
+            resp = requests.get(
+                f"{BIBLISSIMA_PORTAL}/{portal_hash}",
+                timeout=REQUEST_TIMEOUT * 2,
+            )
+            resp.raise_for_status()
+            html = resp.text
+        except Exception:
+            logger.warning("Failed to fetch portal page for %s", portal_hash)
+            return JsonResponse({"error": "Failed to fetch portal page"}, status=502)
+
+        results = []
+        # Detect which ifdata entries have a digitization icon
+        has_image_set = set(re.findall(r'fa-picture-o.*?ark:/43093/(ifdata\w+)', html))
+
+        # Parse all ifdata links
+        for match in re.finditer(
+            r'<a\s+href="[^"]*ark:/43093/(ifdata\w+)"[^>]*>([^<]+)</a>', html
+        ):
+            ifdata_hash = match.group(1)
+            label = match.group(2).strip()
+
+            # Descriptor = text before first "("
+            desc_match = re.match(r'^([^(]+)', label)
+            descriptor = desc_match.group(1).strip() if desc_match else label
+
+            # Folio = f.NNN pattern at end
+            folio_match = re.search(r'\bf\.?\s*(\d+\w*)\)?$', label)
+            folio = folio_match.group(1) if folio_match else ""
+
+            # Resolve type from descriptor
+            type_valueid = _resolve_biblissima_type(descriptor=descriptor)
+
+            results.append({
+                "ifdataHash": ifdata_hash,
+                "arkId": f"ark:/43093/{ifdata_hash}",
+                "label": label,
+                "descriptor": descriptor,
+                "folio": folio,
+                "hasImage": ifdata_hash in has_image_set,
+                "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
+                "typeValueId": type_valueid,
+            })
+
+        return JsonResponse({"total": len(results), "results": results})
+
+
+class BiblissimaIlluminationDetailView(View):
+    """Scrape a single illumination page from the Biblissima portal."""
+
+    @method_decorator(cache_page(60))
+    def get(self, request, ifdata_hash):
+        try:
+            resp = requests.get(
+                f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
+                timeout=REQUEST_TIMEOUT * 2,
+            )
+            resp.raise_for_status()
+            html = resp.text
+        except Exception:
+            logger.warning("Failed to fetch illumination page %s", ifdata_hash)
+            return JsonResponse({"error": "Failed to fetch page"}, status=502)
+
+        result = {
+            "ifdataHash": ifdata_hash,
+            "arkId": f"ark:/43093/{ifdata_hash}",
+            "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
+        }
+
+        # Parse presentation section (key: value pairs on alternating lines)
+        pres_match = re.search(r'id="presentation">(.*?)</section>', html, re.DOTALL)
+        if pres_match:
+            text = re.sub(r'<[^>]+>', '\n', pres_match.group(1))
+            lines = [l.strip() for l in text.split('\n') if l.strip()]
+
+            if lines:
+                result["label"] = lines[0]
+
+            field_map = {
+                "Type": "type",
+                "Feuillet / page": "folio",
+                "Typologie": "typologie",
+                "Technique": "technique",
+                "Date de fabrication": "date",
+                "Manuscrit": "manuscript",
+                "Texte": "text",
+                "Lieu de fabrication": "location",
+            }
+            # Collect descriptors (multi-value, comma-separated across lines)
+            in_descriptors = False
+            descriptor_parts = []
+
+            for i, line in enumerate(lines):
+                if line == "Descripteurs :":
+                    in_descriptors = True
+                    continue
+                if in_descriptors:
+                    if line == ",":
+                        continue
+                    if any(line.startswith(f"{k}") for k in field_map) or line.endswith(":"):
+                        in_descriptors = False
+                    else:
+                        descriptor_parts.append(line)
+                        continue
+
+                for key, field in field_map.items():
+                    if line.startswith(key) and ":" in line and i + 1 < len(lines):
+                        result[field] = lines[i + 1]
+                        break
+
+            if descriptor_parts:
+                result["descriptors"] = descriptor_parts
+
+        # Resolve type: typologie > descriptor from label > type field
+        typologie = result.get("typologie", "")
+        descriptor = ""
+        if result.get("label"):
+            desc_match = re.match(r'^([^(]+)', result["label"])
+            if desc_match:
+                descriptor = desc_match.group(1).strip()
+        type_field = result.get("type", "")
+        result["typeValueId"] = _resolve_biblissima_type(typologie, descriptor, type_field)
+
+        # Manuscript ARK
+        ms_match = re.search(r'ark:/43093/(mdata\w+)', html)
+        if ms_match:
+            result["manuscriptHash"] = ms_match.group(1)
+            result["manuscriptArk"] = f"ark:/43093/{ms_match.group(1)}"
+
+        # Gallica image URL
+        gallica_image = re.search(
+            r'(https://gallica\.bnf\.fr/ark:/12148/\w+/f\d+\.image)', html
+        )
+        if gallica_image:
+            result["imageUrl"] = gallica_image.group(1)
+            result["thumbnail"] = gallica_image.group(1).replace(".image", ".thumbnail")
+
+        # Gallica IIIF info (for canvas in annotation)
+        gallica_iiif = re.search(
+            r'(https://gallica\.bnf\.fr/iiif/ark:/12148/\w+/f\d+/info\.json)', html
+        )
+        if gallica_iiif:
+            result["iiifInfoUrl"] = gallica_iiif.group(1)
+            result["canvasUrl"] = gallica_iiif.group(1).replace("/info.json", "")
+
+        # Gallica manifest
+        gallica_manifest = re.search(
+            r'(https://gallica\.bnf\.fr/iiif/ark:/12148/\w+/manifest\.json)', html
+        )
+        if gallica_manifest:
+            result["manifestUrl"] = gallica_manifest.group(1)
+
+        # Mandragore ARK
+        mandragore = re.search(r'mandragore\.bnf\.fr/ark:/12148/(\w+)', html)
+        if mandragore:
+            result["mandragoreArk"] = f"ark:/12148/{mandragore.group(1)}"
+
+        return JsonResponse(result)
+
+
 class BiblissimaCreateResourceView(View):
     """Create a Document or Component resource from Biblissima data."""
 

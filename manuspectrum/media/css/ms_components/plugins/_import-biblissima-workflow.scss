@@ -187,6 +187,18 @@ $bbma-danger-bg: #fdf0f0;
     flex: 1;
 }
 
+// Component search mode tabs
+.bbma-search-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+
+    .btn {
+        font-size: 11px;
+        padding: 3px 8px;
+    }
+}
+
 // Search input with embedded icon
 .bbma-search-input-wrap {
     position: relative;

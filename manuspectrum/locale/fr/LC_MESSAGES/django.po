@@ -291,6 +291,15 @@ msgstr "Utiliser cette ressource"
 msgid "Not a match, create new"
 msgstr "Pas de correspondance, créer"
 
+msgid "By descriptor"
+msgstr "Par descripteur"
+
+msgid "By manuscript"
+msgstr "Par manuscrit"
+
+msgid "Search a manuscript to see its illuminations..."
+msgstr "Rechercher un manuscrit pour voir ses enluminures..."
+
 msgid "Import from Biblissima"
 msgstr "Importer depuis Biblissima"
 
@@ -321,14 +330,11 @@ msgstr "Sera créé"
 msgid "Search existing resource..."
 msgstr "Rechercher une ressource existante..."
 
-msgid "QID (e.g. Q35658) or ARK"
-msgstr "QID (ex. Q35658) ou ARK"
+msgid "Q35658 or ark:/43093/mdata6ca4e39f..."
+msgstr "Q35658 ou ark:/43093/mdata6ca4e39f..."
 
 msgid "Add by Biblissima identifier"
 msgstr "Ajouter par identifiant Biblissima"
-
-msgid "QID (e.g. Q35658) or ARK (e.g. ark:/43093/...)"
-msgstr "QID (ex. Q35658) ou ARK (ex. ark:/43093/...)"
 
 msgid "Add"
 msgstr "Ajouter"

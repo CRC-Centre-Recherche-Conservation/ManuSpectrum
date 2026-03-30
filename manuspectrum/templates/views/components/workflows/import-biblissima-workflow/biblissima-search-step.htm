@@ -15,14 +15,36 @@
                 </div>
                 <!-- /ko -->
                 <!-- ko if: isComponent -->
+                <!-- Tabs: By descriptor / By manuscript -->
+                <div class="bbma-search-tabs">
+                    <button class="btn btn-xs" data-bind="click: function(){ componentSearchMode('descriptor'); },
+                                                          css: {'btn-primary': componentSearchMode() === 'descriptor', 'btn-default': componentSearchMode() !== 'descriptor'}">
+                        <i class="fa fa-tags"></i> {% trans "By descriptor" %}
+                    </button>
+                    <button class="btn btn-xs" data-bind="click: function(){ componentSearchMode('manuscript'); },
+                                                          css: {'btn-primary': componentSearchMode() === 'manuscript', 'btn-default': componentSearchMode() !== 'manuscript'}">
+                        <i class="fa fa-book"></i> {% trans "By manuscript" %}
+                    </button>
+                </div>
+                <!-- ko if: componentSearchMode() === 'descriptor' -->
                 <select data-bind="select2Query: {select2Config: descriptorSelectConfig}" style="width: 100%;"></select>
+                <!-- /ko -->
+                <!-- ko if: componentSearchMode() === 'manuscript' -->
+                <div class="bbma-search-input-wrap">
+                    <i class="fa fa-search bbma-search-icon"></i>
+                    <input type="text" class="form-control"
+                           placeholder="{% trans 'Search a manuscript to see its illuminations...' %}"
+                           data-bind="textInput: manuscriptForComponent,
+                                      event: {keypress: function(d, e) { if (e.keyCode === 13) { search(); } return true; }}">
+                </div>
+                <!-- /ko -->
                 <!-- /ko -->
             </div>
 
             <div class="biblissima-search-actions">
                 <button class="btn btn-primary"
                         data-bind="click: function(){ search(); },
-                                   disable: (isDocument ? manuscriptQuery().length < 3 : selectedDescriptors().length === 0) || searching()">
+                                   disable: (isDocument ? manuscriptQuery().length < 3 : (componentSearchMode() === 'descriptor' ? selectedDescriptors().length === 0 : manuscriptForComponent().length < 3)) || searching()">
                     <!-- ko if: searching -->
                     <i class="fa fa-spinner fa-spin"></i>
                     <!-- /ko -->
@@ -75,7 +97,7 @@
                     <label>{% trans "Add by Biblissima identifier" %}</label>
                     <div class="d-flex gap-6">
                         <input type="text" class="form-control input-sm" style="flex: 1;"
-                               placeholder="{% trans 'QID (e.g. Q35658) or ARK' %}"
+                               placeholder="{% trans 'Q35658 or ark:/43093/mdata6ca4e39f...' %}"
                                data-bind="textInput: directIdentifier,
                                           event: {keypress: function(d, e) { if (e.keyCode === 13) { addByIdentifier(); } return true; }}">
                         <button class="btn btn-sm btn-default"
@@ -97,6 +119,10 @@
         <!-- ko if: hasSearched -->
         <div class="biblissima-search-meta">
             <span class="bbma-results-count">
+                <!-- ko if: selectedManuscriptLabel -->
+                <i class="fa fa-book"></i>
+                <strong data-bind="text: selectedManuscriptLabel()"></strong> &mdash;
+                <!-- /ko -->
                 <strong data-bind="text: totalResults()"></strong> {% trans "results" %}
                 <!-- ko if: dateRangeActive -->
                 <span class="bbma-date-badge" data-bind="text: dateRangeLabel()"></span>

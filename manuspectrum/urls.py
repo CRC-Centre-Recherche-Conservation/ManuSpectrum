@@ -13,6 +13,8 @@ from manuspectrum.views.biblissima_proxy import (
     BiblissimaCheckDuplicatesView,
     BiblissimaCreateResourceView,
     BiblissimaEntityView,
+    BiblissimaIlluminationDetailView,
+    BiblissimaManuscriptIlluminationsView,
     BiblissimaSearchView,
     BiblissimaSuggestView,
 )
@@ -98,6 +100,20 @@ urlpatterns.append(
         "api/biblissima/check-duplicates",
         BiblissimaCheckDuplicatesView.as_view(),
         name="biblissima-check-duplicates",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/manuscript-illuminations",
+        BiblissimaManuscriptIlluminationsView.as_view(),
+        name="biblissima-manuscript-illuminations",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/illumination/<str:ifdata_hash>",
+        BiblissimaIlluminationDetailView.as_view(),
+        name="biblissima-illumination-detail",
     )
 )
 urlpatterns.append(

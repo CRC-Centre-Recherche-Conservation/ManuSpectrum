@@ -32,6 +32,9 @@ const viewModel = function(params) {
     this.isDocument = this.resourceType === 'Document';
     this.isComponent = this.resourceType === 'Component';
 
+    // Component search mode: 'descriptor' (IIIF search) or 'manuscript' (portal scraping)
+    this.componentSearchMode = ko.observable('descriptor');
+
     // Search state
     this.searchResults = ko.observableArray();
     this.totalResults = ko.observable(0);
@@ -83,39 +86,131 @@ const viewModel = function(params) {
 
         self.addingDirect(true);
         try {
-            // Determine if it's a QID (Q12345) or ARK
+            // Handle ifdata ARK (illumination) — add directly as component item
+            if (id.includes('ifdata')) {
+                const hash = id.replace('ark:/43093/', '').replace(/.*ifdata/, 'ifdata');
+                const resp = await fetch(`/api/biblissima/illumination/${hash}`);
+                if (resp.ok) {
+                    const detail = await resp.json();
+                    const item = {
+                        canvasId: detail.ifdataHash,
+                        arkId: detail.arkId,
+                        label: detail.label || '',
+                        thumbnail: detail.thumbnail || null,
+                        manuscript: detail.manuscript || '',
+                        folio: detail.folio || '',
+                        legend: detail.label || '',
+                        date: detail.date || '',
+                        location: detail.location || '',
+                        descriptors: detail.descriptors || [],
+                        portalUrl: detail.portalUrl || '',
+                        manifestUrl: detail.manifestUrl || '',
+                        imageUrl: detail.imageUrl || '',
+                        biblissimaQid: '',
+                        shelfmark: '',
+                        collectionLabel: '',
+                        locationLabel: '',
+                        locationQid: '',
+                        geonamesId: '',
+                        parentInstitutionLabel: '',
+                        parentInstitutionQid: '',
+                        authorLabel: '',
+                        authorQid: '',
+                        mandragoreId: '',
+                        digitizationUrl: '',
+                        hasImage: !!detail.imageUrl,
+                        typeValueId: detail.typeValueId || '',
+                        ifdataHash: detail.ifdataHash,
+                        mandragoreArk: detail.mandragoreArk || '',
+                    };
+                    const exists = self.cart().some((c) => c.arkId === item.arkId);
+                    if (!exists) self.cart.push(item);
+                    self.directIdentifier('');
+                }
+                self.addingDirect(false);
+                return;
+            }
+
+            // Handle QID or mdata ARK
             let qid = id;
-            if (id.startsWith('ark:')) {
-                // Search by portal hash — extract hash and search
+            if (id.startsWith('ark:') || id.startsWith('mdata')) {
+                // It's a manuscript ARK — in Component mode, load its illuminations
                 const hash = id.replace('ark:/43093/', '');
+                if (self.isComponent) {
+                    self.selectedManuscriptHash(hash);
+                    self.componentSearchMode('manuscript');
+                    // Fetch illuminations for this manuscript
+                    const illumResp = await fetch(`/api/biblissima/manuscript-illuminations?portalHash=${hash}`);
+                    const illumData = await illumResp.json();
+                    if (illumData.results?.length > 0) {
+                        self.searchResults(illumData.results.map((item) => ({
+                            canvasId: item.ifdataHash,
+                            arkId: item.arkId,
+                            label: item.label,
+                            thumbnail: null,
+                            manuscript: '',
+                            folio: item.folio,
+                            legend: item.descriptor,
+                            date: '',
+                            location: '',
+                            descriptors: [item.descriptor],
+                            portalUrl: item.portalUrl,
+                            manifestUrl: '',
+                            biblissimaQid: '',
+                            shelfmark: '',
+                            collectionLabel: '',
+                            locationLabel: '',
+                            locationQid: '',
+                            geonamesId: '',
+                            parentInstitutionLabel: '',
+                            parentInstitutionQid: '',
+                            authorLabel: '',
+                            authorQid: '',
+                            mandragoreId: '',
+                            digitizationUrl: '',
+                            hasImage: item.hasImage,
+                            typeValueId: item.typeValueId || '',
+                            ifdataHash: item.ifdataHash,
+                        })));
+                        self.totalResults(illumData.results.length);
+                        self.hasSearched(true);
+                    }
+                    self.directIdentifier('');
+                    self.addingDirect(false);
+                    return;
+                }
+                // In Document mode, try to find the QID
                 const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(hash)}&limit=5`);
                 const data = await resp.json();
                 if (data.results?.length > 0) {
                     qid = data.results[0].id;
                 } else {
-                    console.warn('No Wikibase entity found for ARK:', id);
                     self.addingDirect(false);
                     return;
                 }
             }
 
-            // Fetch entity details
+            // Fetch entity details (for QID)
             const resp = await fetch(`/api/biblissima/entity/${qid}`);
             if (!resp.ok) {
-                console.warn('Entity not found:', qid);
                 self.addingDirect(false);
                 return;
             }
             const d = await resp.json();
-            const item = self._entityToItem(d);
 
-            // Add to cart if not already there
-            const exists = self.cart().some(
-                (c) => c.biblissimaQid === item.biblissimaQid
-            );
-            if (!exists) {
-                self.cart.push(item);
+            // In Component mode: if this is a manuscript, load its illuminations
+            if (self.isComponent && d.portalHash && d.portalHash.startsWith('mdata')) {
+                self.manuscriptForComponent(d.label || qid);
+                self.searchManuscriptIlluminations();
+                self.directIdentifier('');
+                self.addingDirect(false);
+                return;
             }
+
+            // In Document mode: add as document
+            const item = self._entityToItem(d);
+            const exists = self.cart().some((c) => c.biblissimaQid === item.biblissimaQid);
+            if (!exists) self.cart.push(item);
             self.directIdentifier('');
         } catch (err) {
             console.error('Failed to add by identifier:', err);
@@ -155,6 +250,92 @@ const viewModel = function(params) {
         parentInstitutionLabel: d.parentInstitutionLabel || '',
         parentInstitutionQid: d.parentInstitutionQid || '',
     });
+
+    // =====================
+    // COMPONENT MODE "By manuscript": search a manuscript, then get its illuminations
+    // =====================
+    this.manuscriptForComponent = ko.observable('');
+    this.selectedManuscriptLabel = ko.observable('');
+    this.selectedManuscriptHash = ko.observable('');
+
+    this.searchManuscriptIlluminations = async () => {
+        const query = self.manuscriptForComponent().trim();
+        if (!query || query.length < 3) return;
+
+        self.searching(true);
+        self.hasSearched(true);
+
+        try {
+            // Step 1: Search manuscripts
+            const suggestResp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=10&type=manuscript`);
+            const suggestData = await suggestResp.json();
+
+            if (suggestData.results?.length === 0) {
+                self.searchResults([]);
+                self.totalResults(0);
+                self.searching(false);
+                return;
+            }
+
+            // Get entity details for first result to find portalHash
+            const firstResult = suggestData.results[0];
+            const entityResp = await fetch(`/api/biblissima/entity/${firstResult.id}`);
+            const entityData = await entityResp.json();
+            const portalHash = entityData.portalHash;
+
+            if (!portalHash) {
+                self.searchResults([]);
+                self.totalResults(0);
+                self.searching(false);
+                return;
+            }
+
+            self.selectedManuscriptLabel(entityData.label || firstResult.label);
+            self.selectedManuscriptHash(portalHash);
+
+            // Step 2: Get illuminations from portal page
+            const illumResp = await fetch(`/api/biblissima/manuscript-illuminations?portalHash=${portalHash}`);
+            const illumData = await illumResp.json();
+
+            const results = (illumData.results || []).map((item) => ({
+                canvasId: item.ifdataHash,
+                arkId: item.arkId,
+                label: item.label,
+                thumbnail: null,
+                manuscript: self.selectedManuscriptLabel(),
+                folio: item.folio,
+                legend: item.descriptor,
+                date: '',
+                location: '',
+                descriptors: [item.descriptor],
+                portalUrl: item.portalUrl,
+                manifestUrl: entityData.manifestUrl || '',
+                authorLabel: entityData.authorLabel || '',
+                authorQid: entityData.authorQid || '',
+                biblissimaQid: entityData.qid || '',
+                shelfmark: entityData.shelfmark || '',
+                mandragoreId: entityData.mandragoreId || '',
+                collectionLabel: entityData.collectionLabel || '',
+                digitizationUrl: entityData.digitizationUrl || '',
+                locationLabel: entityData.locationLabel || '',
+                locationQid: entityData.locationQid || '',
+                geonamesId: entityData.geonamesId || '',
+                parentInstitutionLabel: entityData.parentInstitutionLabel || '',
+                parentInstitutionQid: entityData.parentInstitutionQid || '',
+                hasImage: item.hasImage,
+                typeValueId: item.typeValueId || '',
+                ifdataHash: item.ifdataHash,
+            }));
+
+            self.searchResults(results);
+            self.totalResults(results.length);
+            self.totalPages(1);
+        } catch (err) {
+            console.error('Manuscript illumination search failed:', err);
+            self.searchResults([]);
+        }
+        self.searching(false);
+    };
 
     this.searchManuscripts = async () => {
         const query = self.manuscriptQuery().trim();
@@ -241,7 +422,11 @@ const viewModel = function(params) {
                 fetch(`/api/biblissima/entity/${qid}`).then((r) => r.json())
             );
             const entities = await Promise.all(entityPromises);
-            const hashes = entities.map((e) => e.portalHash).filter(Boolean);
+            // Only use hashes starting with "desc" (iconographic descriptors)
+            // Other types (pdata, mdata, etc.) are not valid for IIIF manifest search
+            const hashes = entities
+                .map((e) => e.portalHash)
+                .filter((h) => h && h.startsWith('desc'));
 
             if (hashes.length === 0) {
                 self.searchResults([]);
@@ -280,6 +465,8 @@ const viewModel = function(params) {
     this.search = (page) => {
         if (self.isDocument) {
             self.searchManuscripts();
+        } else if (self.componentSearchMode() === 'manuscript') {
+            self.searchManuscriptIlluminations();
         } else {
             self.searchComponents(page);
         }
