@@ -444,6 +444,20 @@ def _parse_iiif_canvases(manifest_json):
                 "location": location,
                 "descriptors": descriptors,
                 "portalUrl": portal_url,
+                # Fields expected by the frontend template (populated during enrichment)
+                "shelfmark": "",
+                "collectionLabel": "",
+                "manifestUrl": "",
+                "authorLabel": "",
+                "authorQid": "",
+                "biblissimaQid": "",
+                "mandragoreId": "",
+                "digitizationUrl": "",
+                "locationLabel": "",
+                "locationQid": "",
+                "geonamesId": "",
+                "parentInstitutionLabel": "",
+                "parentInstitutionQid": "",
             }
         )
     return results
