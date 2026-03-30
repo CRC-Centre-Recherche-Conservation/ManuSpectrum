@@ -246,6 +246,84 @@ msgstr "Aucun résultat. Essayez d'autres termes de recherche."
 msgid "Filter by date"
 msgstr "Filtrer par date"
 
+msgid "Date range"
+msgstr "Période"
+
+msgid "Results per page"
+msgstr "Résultats par page"
+
+msgid "Linked to:"
+msgstr "Lié à :"
+
+msgid "Add missing Biblissima data to existing resource"
+msgstr "Ajouter les données Biblissima manquantes à la ressource existante"
+
+msgid "IIIF manifest"
+msgstr "Manifeste IIIF"
+
+msgid "linked"
+msgstr "liés"
+
+msgid "created"
+msgstr "créés"
+
+msgid "Unlink"
+msgstr "Délier"
+
+msgid "Already in your database?"
+msgstr "Déjà dans votre base de données ?"
+
+msgid "If not found, a new resource will be created automatically."
+msgstr "Si non trouvé, une nouvelle ressource sera créée automatiquement."
+
+msgid "Linked to existing resource:"
+msgstr "Lié à la ressource existante :"
+
+msgid "Change"
+msgstr "Modifier"
+
+msgid "Possible matches found in database"
+msgstr "Correspondances possibles trouvées dans la base"
+
+msgid "Use this resource"
+msgstr "Utiliser cette ressource"
+
+msgid "Not a match, create new"
+msgstr "Pas de correspondance, créer"
+
+msgid "Import from Biblissima"
+msgstr "Importer depuis Biblissima"
+
+msgid "Configure the import before searching the Biblissima portal."
+msgstr "Configurez l'import avant de rechercher sur le portail Biblissima."
+
+msgid "Manuscript, book, printed text"
+msgstr "Manuscrit, livre, texte imprimé"
+
+msgid "Illumination, lettrine, decoration"
+msgstr "Enluminure, lettrine, décor"
+
+msgid "Search by shelfmark, title, or institution to find manuscripts on Biblissima."
+msgstr "Recherchez par cote, titre ou institution pour trouver des manuscrits sur Biblissima."
+
+msgid "Select iconographic descriptors and click Search to find illuminations."
+msgstr "Sélectionnez des descripteurs iconographiques et cliquez Rechercher pour trouver des enluminures."
+
+msgid "Searching..."
+msgstr "Recherche en cours..."
+
+msgid "The following places, institutions, and persons were found in the Biblissima data. If they already exist in your database, select them below. Otherwise they will be created automatically."
+msgstr "Les lieux, institutions et personnes suivants ont été trouvés dans les données Biblissima. S'ils existent déjà dans votre base, sélectionnez-les ci-dessous. Sinon ils seront créés automatiquement."
+
+msgid "Will be created"
+msgstr "Sera créé"
+
+msgid "Search existing resource..."
+msgstr "Rechercher une ressource existante..."
+
+msgid "QID (e.g. Q35658) or ARK"
+msgstr "QID (ex. Q35658) ou ARK"
+
 msgid "Add by Biblissima identifier"
 msgstr "Ajouter par identifiant Biblissima"
 
