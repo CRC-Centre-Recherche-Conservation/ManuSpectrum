@@ -52,6 +52,11 @@ const viewModel = function(params) {
     this.showFilters = ko.observable(false);
     this.toggleFilters = () => self.showFilters(!self.showFilters());
     this.pageSize = ko.observable('20');
+    // Effective limit: 0 means "all" → use a large number for API calls
+    this.effectiveLimit = ko.computed(() => {
+        const val = parseInt(self.pageSize(), 10);
+        return val === 0 ? 500 : val;
+    });
 
     // Date range slider
     this.dateFrom = ko.observable(DATE_MIN);
@@ -388,7 +393,7 @@ const viewModel = function(params) {
 
         try {
             const suggestType = self.isDocument ? 'manuscript' : 'descriptor';
-            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=${self.pageSize()}&type=${suggestType}`);
+            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=${self.effectiveLimit()}&type=${suggestType}`);
             const data = await resp.json();
             const entities = data.results || [];
 
@@ -480,7 +485,7 @@ const viewModel = function(params) {
             const searchParams = new URLSearchParams({
                 descriptors: hashes.join(','),
                 page: pageNum,
-                page_size: self.pageSize(),
+                page_size: self.effectiveLimit(),
             });
             const dateParam = self.getDateParam();
             if (dateParam) {

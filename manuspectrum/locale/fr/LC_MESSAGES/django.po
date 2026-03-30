@@ -249,8 +249,11 @@ msgstr "Filtrer par date"
 msgid "Date range"
 msgstr "Période"
 
-msgid "Results per page"
-msgstr "Résultats par page"
+msgid "Results per request"
+msgstr "Résultats par requête"
+
+msgid "All"
+msgstr "Tous"
 
 msgid "Linked to:"
 msgstr "Lié à :"
@@ -998,8 +1001,6 @@ msgstr "Ajouter"
 #~ msgid "selected"
 #~ msgstr "sélectionné(s)"
 
-#~ msgid "All"
-#~ msgstr "Tous"
 
 #~ msgid "None"
 #~ msgstr "Aucun"
