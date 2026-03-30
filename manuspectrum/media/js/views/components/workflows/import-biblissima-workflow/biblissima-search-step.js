@@ -48,6 +48,7 @@ const viewModel = function(params) {
     // =====================
     this.showFilters = ko.observable(false);
     this.toggleFilters = () => self.showFilters(!self.showFilters());
+    this.pageSize = ko.observable('20');
 
     // Date range slider
     this.dateFrom = ko.observable(DATE_MIN);
@@ -161,7 +162,7 @@ const viewModel = function(params) {
         self.currentPage(1);
 
         try {
-            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=20`);
+            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=${self.pageSize()}`);
             const data = await resp.json();
             const entities = data.results || [];
 
@@ -249,7 +250,7 @@ const viewModel = function(params) {
             const searchParams = new URLSearchParams({
                 descriptors: hashes.join(','),
                 page: pageNum,
-                page_size: 20,
+                page_size: self.pageSize(),
             });
             const dateParam = self.getDateParam();
             if (dateParam) {
