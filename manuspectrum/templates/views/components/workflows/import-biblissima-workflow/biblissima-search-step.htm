@@ -44,11 +44,8 @@
             <div class="bbma-filters-row">
                 <!-- Date range -->
                 <div class="biblissima-filter-group bbma-filter-date">
-                    <label>
-                        <input type="checkbox" data-bind="checked: dateRangeActive">
-                        {% trans "Filter by date" %}
-                    </label>
-                    <div data-bind="visible: dateRangeActive" class="biblissima-date-range">
+                    <label>{% trans "Date range" %}</label>
+                    <div class="biblissima-date-range">
                         <div class="d-flex gap-6" style="align-items: center;">
                             <input type="number" class="form-control input-sm biblissima-date-input"
                                    data-bind="value: dateFrom" min="-2000" max="1850">

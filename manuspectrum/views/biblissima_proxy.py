@@ -456,6 +456,12 @@ class BiblissimaSuggestView(View):
     (CirrusSearch) for flexible matching regardless of word order.
     """
 
+    # Wikibase type QIDs for filtering
+    TYPE_FILTERS = {
+        "manuscript": "Q32810",
+        "descriptor": "Q304387",
+    }
+
     @method_decorator(cache_page(300))
     def get(self, request):
         query = request.GET.get("q", "").strip()
@@ -464,13 +470,18 @@ class BiblissimaSuggestView(View):
 
         lang = request.GET.get("lang", "fr")
         limit = int(request.GET.get("limit", 10))
+        type_filter = request.GET.get("type", "")  # "manuscript" or "descriptor"
+        type_qid = self.TYPE_FILTERS.get(type_filter, "")
         seen_ids = set()
         results = []
 
         session = requests.Session()
 
         # 1. Prefix match (fast, good for exact starts)
+        # wbsearchentities doesn't support type filtering, so we fetch more
+        # and filter by checking P2 claims afterwards
         try:
+            fetch_limit = limit * 3 if type_qid else limit
             resp = session.get(
                 BIBLISSIMA_WIKIBASE,
                 params={
@@ -478,34 +489,73 @@ class BiblissimaSuggestView(View):
                     "search": query,
                     "language": lang,
                     "format": "json",
-                    "limit": limit,
+                    "limit": fetch_limit,
                 },
                 timeout=REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
-            for item in resp.json().get("search", []):
-                if item["id"] not in seen_ids:
-                    seen_ids.add(item["id"])
-                    results.append(
-                        {
+            prefix_items = resp.json().get("search", [])
+
+            if type_qid and prefix_items:
+                # Batch fetch P2 claims to filter by type
+                batch_ids = [item["id"] for item in prefix_items]
+                type_resp = session.get(
+                    BIBLISSIMA_WIKIBASE,
+                    params={
+                        "action": "wbgetentities",
+                        "ids": "|".join(batch_ids),
+                        "format": "json",
+                        "props": "claims",
+                    },
+                    timeout=REQUEST_TIMEOUT,
+                )
+                type_resp.raise_for_status()
+                entities = type_resp.json().get("entities", {})
+                valid_ids = set()
+                for qid, entity in entities.items():
+                    for claim in entity.get("claims", {}).get(P2, []):
+                        val = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+                        if isinstance(val, dict) and val.get("id") == type_qid:
+                            valid_ids.add(qid)
+                            break
+
+                for item in prefix_items:
+                    if item["id"] in valid_ids and item["id"] not in seen_ids:
+                        seen_ids.add(item["id"])
+                        results.append({
                             "id": item["id"],
                             "label": item.get("label", ""),
                             "description": item.get("description", ""),
-                        }
-                    )
+                        })
+                        if len(results) >= limit:
+                            break
+            else:
+                for item in prefix_items:
+                    if item["id"] not in seen_ids:
+                        seen_ids.add(item["id"])
+                        results.append({
+                            "id": item["id"],
+                            "label": item.get("label", ""),
+                            "description": item.get("description", ""),
+                        })
         except Exception:
             logger.warning("wbsearchentities failed for query=%s", query)
 
         # 2. Full-text search (flexible word order, partial matches)
+        # CirrusSearch supports haswbstatement for native type filtering
         if len(results) < limit:
             try:
+                srsearch = query
+                if type_qid:
+                    srsearch = f"{query} haswbstatement:P2={type_qid}"
+
                 resp = session.get(
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "query",
                         "list": "search",
-                        "srsearch": query,
-                        "srnamespace": 120,  # Item namespace
+                        "srsearch": srsearch,
+                        "srnamespace": 120,
                         "format": "json",
                         "srlimit": limit,
                     },

@@ -53,7 +53,10 @@ const viewModel = function(params) {
     // Date range slider
     this.dateFrom = ko.observable(DATE_MIN);
     this.dateTo = ko.observable(DATE_MAX);
-    this.dateRangeActive = ko.observable(false);
+    // dateRangeActive kept for getDateParam — always active when dates differ from extremes
+    this.dateRangeActive = ko.computed(() =>
+        self.dateFrom() > DATE_MIN || self.dateTo() < DATE_MAX
+    );
 
     this.dateRangeLabel = ko.computed(() => {
         if (!self.dateRangeActive()) return '';
@@ -162,7 +165,8 @@ const viewModel = function(params) {
         self.currentPage(1);
 
         try {
-            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=${self.pageSize()}`);
+            const suggestType = self.isDocument ? 'manuscript' : 'descriptor';
+            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=${self.pageSize()}&type=${suggestType}`);
             const data = await resp.json();
             const entities = data.results || [];
 
@@ -202,7 +206,7 @@ const viewModel = function(params) {
             url: '/api/biblissima/suggest',
             dataType: 'json',
             quietMillis: 300,
-            data: (requestParams) => ({ q: requestParams.term || '' }),
+            data: (requestParams) => ({ q: requestParams.term || '', type: 'descriptor' }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
                     id: item.id,
