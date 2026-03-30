@@ -284,7 +284,7 @@ const viewModel = function(params) {
             closeOnSelect: true,
             allowClear: true,
             placeholder: arches.translations.biblissimaSearchExisting || 'Search existing resource...',
-            minimumInputLength: 2,
+            minimumInputLength: 0,
             ajax: {
                 url: arches.urls.search_results,
                 dataType: 'json',
@@ -296,11 +296,16 @@ const viewModel = function(params) {
                             { graphid: dep.graphId, inverted: false }
                         ]),
                     };
-                    if (requestParams.term) {
+                    const term = (requestParams.term || '').trim();
+                    if (term) {
                         params['term-filter'] = JSON.stringify([{
-                            context: '', context_label: '', id: 0,
-                            text: requestParams.term, type: 'term',
-                            value: requestParams.term, inverted: false,
+                            inverted: false,
+                            type: 'string',
+                            context: '',
+                            context_label: '',
+                            id: term,
+                            text: term,
+                            value: term,
                         }]);
                     }
                     return params;
