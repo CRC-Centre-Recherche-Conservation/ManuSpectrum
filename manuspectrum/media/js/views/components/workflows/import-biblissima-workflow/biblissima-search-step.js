@@ -258,29 +258,70 @@ const viewModel = function(params) {
     this.selectedManuscriptLabel = ko.observable('');
     this.selectedManuscriptHash = ko.observable('');
 
+    // Select2 config for manuscript autocomplete in Component mode
+    this.manuscriptForComponentSelect = ko.observable(null);
+    this.manuscriptComponentSelectConfig = {
+        value: self.manuscriptForComponentSelect,
+        clickBubble: true,
+        multiple: false,
+        closeOnSelect: true,
+        allowClear: true,
+        placeholder: arches.translations.biblissimaSearchManuscriptForComponent || 'Search a manuscript to see its illuminations...',
+        minimumInputLength: 3,
+        ajax: {
+            url: '/api/biblissima/suggest',
+            dataType: 'json',
+            quietMillis: 300,
+            data: (requestParams) => ({ q: requestParams.term || '', type: 'manuscript', limit: 15 }),
+            processResults: (data) => ({
+                results: (data.results || []).map((item) => ({
+                    id: item.id,
+                    text: item.label,
+                })),
+            }),
+        },
+        templateResult: (item) => item.text || '',
+        templateSelection: (item) => item.text || '',
+        escapeMarkup: (m) => m,
+    };
+
+    // When a manuscript is selected from autocomplete, load its illuminations
+    this.manuscriptForComponentSelect.subscribe(async (qid) => {
+        if (!qid) return;
+        self.manuscriptForComponent(qid);
+        await self.searchManuscriptIlluminations();
+        // Don't clear — keep the selection visible
+    });
+
     this.searchManuscriptIlluminations = async () => {
         const query = self.manuscriptForComponent().trim();
-        if (!query || query.length < 3) return;
+        if (!query) return;
 
         self.searching(true);
         self.hasSearched(true);
 
         try {
-            // Step 1: Search manuscripts
-            const suggestResp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=10&type=manuscript`);
-            const suggestData = await suggestResp.json();
+            let entityData;
 
-            if (suggestData.results?.length === 0) {
-                self.searchResults([]);
-                self.totalResults(0);
-                self.searching(false);
-                return;
+            // If query looks like a QID (Q + digits), fetch entity directly
+            if (/^Q\d+$/i.test(query)) {
+                const entityResp = await fetch(`/api/biblissima/entity/${query}`);
+                if (!entityResp.ok) { self.searching(false); return; }
+                entityData = await entityResp.json();
+            } else {
+                // Search by text
+                const suggestResp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=10&type=manuscript`);
+                const suggestData = await suggestResp.json();
+                if (!suggestData.results?.length) {
+                    self.searchResults([]);
+                    self.totalResults(0);
+                    self.searching(false);
+                    return;
+                }
+                const entityResp = await fetch(`/api/biblissima/entity/${suggestData.results[0].id}`);
+                entityData = await entityResp.json();
             }
 
-            // Get entity details for first result to find portalHash
-            const firstResult = suggestData.results[0];
-            const entityResp = await fetch(`/api/biblissima/entity/${firstResult.id}`);
-            const entityData = await entityResp.json();
             const portalHash = entityData.portalHash;
 
             if (!portalHash) {

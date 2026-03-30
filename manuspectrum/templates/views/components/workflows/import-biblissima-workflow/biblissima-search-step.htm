@@ -30,13 +30,7 @@
                 <select data-bind="select2Query: {select2Config: descriptorSelectConfig}" style="width: 100%;"></select>
                 <!-- /ko -->
                 <!-- ko if: componentSearchMode() === 'manuscript' -->
-                <div class="bbma-search-input-wrap">
-                    <i class="fa fa-search bbma-search-icon"></i>
-                    <input type="text" class="form-control"
-                           placeholder="{% trans 'Search a manuscript to see its illuminations...' %}"
-                           data-bind="textInput: manuscriptForComponent,
-                                      event: {keypress: function(d, e) { if (e.keyCode === 13) { search(); } return true; }}">
-                </div>
+                <select data-bind="select2Query: {select2Config: manuscriptComponentSelectConfig}" style="width: 100%;"></select>
                 <!-- /ko -->
                 <!-- /ko -->
             </div>
@@ -44,7 +38,8 @@
             <div class="biblissima-search-actions">
                 <button class="btn btn-primary"
                         data-bind="click: function(){ search(); },
-                                   disable: (isDocument ? manuscriptQuery().length < 3 : (componentSearchMode() === 'descriptor' ? selectedDescriptors().length === 0 : manuscriptForComponent().length < 3)) || searching()">
+                                   disable: (isDocument ? manuscriptQuery().length < 3 : selectedDescriptors().length === 0) || searching(),
+                                   visible: !(isComponent && componentSearchMode() === 'manuscript')">
                     <!-- ko if: searching -->
                     <i class="fa fa-spinner fa-spin"></i>
                     <!-- /ko -->
