@@ -33,10 +33,13 @@ const viewModel = function(params) {
     this.createdCount = ko.computed(() =>
         self.items().filter((i) => i.status() === 'created').length
     );
+    this.linkedCount = ko.computed(() =>
+        self.items().filter((i) => i.status() === 'linked').length
+    );
     this.totalCount = ko.computed(() => self.items().length);
     this.allDone = ko.computed(() =>
         self.totalCount() > 0 && self.items().every(
-            (i) => i.status() === 'created' || i.status() === 'skipped'
+            (i) => i.status() === 'created' || i.status() === 'linked' || i.status() === 'skipped'
         )
     );
 
@@ -51,12 +54,17 @@ const viewModel = function(params) {
     this.initializeItems = () => {
         const items = (self.searchData.selectedItems || []).map((item) => ({
             ...item,
+            // pending | creating | created | error | linked
             status: ko.observable('pending'),
             resourceId: ko.observable(null),
             errorMessage: ko.observable(''),
             // Duplicate suggestions
             suggestions: ko.observableArray([]),
             showSuggestions: ko.observable(false),
+            // Linked to existing resource
+            linkedResourceId: ko.observable(null),
+            linkedDisplayname: ko.observable(''),
+            enrichExisting: ko.observable(true),  // checkbox: enrich with Biblissima data
         }));
         self.items(items);
     };
@@ -109,9 +117,20 @@ const viewModel = function(params) {
 
     // User confirms: use existing resource instead
     this.useExisting = (item, suggestion) => {
-        item.status('skipped');
+        item.status('linked');
+        item.linkedResourceId(suggestion.resourceId);
+        item.linkedDisplayname(suggestion.displayname || '');
         item.resourceId(suggestion.resourceId);
         item.showSuggestions(false);
+    };
+
+    // Unlink: go back to pending
+    this.unlinkItem = (item) => {
+        item.status('pending');
+        item.linkedResourceId(null);
+        item.linkedDisplayname('');
+        item.resourceId(null);
+        item.showSuggestions(true);
     };
 
     // View a suggested match in new tab
@@ -449,12 +468,24 @@ const viewModel = function(params) {
     // Submit (go to summary)
     this.submit = () => {
         const created = self.items().filter((i) => i.status() === 'created');
+        const linked = self.items().filter((i) => i.status() === 'linked');
+
         params.value({
             createdResources: created.map((i) => ({
                 resourceId: i.resourceId(),
                 label: i.label || i.legend || '',
                 arkId: i.arkId,
                 manuscript: i.manuscript,
+            })),
+            linkedResources: linked.map((i) => ({
+                resourceId: i.linkedResourceId(),
+                displayname: i.linkedDisplayname(),
+                biblissimaLabel: i.label || i.legend || '',
+                arkId: i.arkId,
+                biblissimaQid: i.biblissimaQid || '',
+                manifestUrl: i.manifestUrl || '',
+                shelfmark: i.shelfmark || '',
+                enrichExisting: i.enrichExisting(),
             })),
             skippedCount: self.items().filter((i) => i.status() === 'skipped').length,
             errorCount: self.items().filter((i) => i.status() === 'error').length,
@@ -476,6 +507,7 @@ const viewModel = function(params) {
             pending: '',
             creating: 'info',
             created: 'success',
+            linked: 'linked',
             error: 'danger',
             skipped: 'warning',
             duplicate: 'warning',
@@ -489,6 +521,7 @@ const viewModel = function(params) {
             pending: arches.translations.biblissimaPending || 'Pending',
             creating: arches.translations.biblissimaCreating || 'Creating...',
             created: arches.translations.biblissimaCreated || 'Created',
+            linked: arches.translations.biblissimaLinked || 'Linked',
             error: arches.translations.biblissimaError || 'Error',
             skipped: arches.translations.biblissimaSkipped || 'Skipped',
             duplicate: arches.translations.biblissimaDuplicate || 'Duplicate',

@@ -17,7 +17,13 @@
                 <!-- /ko -->
             </h4>
             <span class="bbma-section-count">
-                <span data-bind="text: createdCount()"></span> / <span data-bind="text: totalCount()"></span>
+                <!-- ko if: createdCount() > 0 -->
+                <span class="text-success" data-bind="text: createdCount()"></span> {% trans "created" %}
+                <!-- /ko -->
+                <!-- ko if: linkedCount() > 0 -->
+                <span class="text-info" data-bind="text: linkedCount()"></span> {% trans "linked" %}
+                <!-- /ko -->
+                / <span data-bind="text: totalCount()"></span>
             </span>
             <div class="bbma-section-actions">
                 <!-- ko ifnot: allDone -->
@@ -92,10 +98,14 @@
                     </button>
                     <!-- /ko -->
 
-                    <!-- ko if: status() === 'skipped' -->
-                    <button class="btn btn-xs btn-default" data-bind="click: function(){ $parent.editResource($data); }"
+                    <!-- ko if: status() === 'linked' -->
+                    <button class="btn btn-xs btn-default" data-bind="click: $parent.editResource"
                             title="{% trans 'View' %}">
                         <i class="fa fa-eye"></i>
+                    </button>
+                    <button class="btn btn-xs btn-link text-muted" data-bind="click: $parent.unlinkItem"
+                            title="{% trans 'Unlink' %}">
+                        <i class="fa fa-chain-broken"></i>
                     </button>
                     <!-- /ko -->
 
@@ -118,6 +128,37 @@
                     <!-- /ko -->
                 </div>
             </div>
+
+            <!-- Linked panel (shown when item is linked to existing resource) -->
+            <!-- ko if: status() === 'linked' -->
+            <div class="bbma-linked-panel">
+                <div class="bbma-linked-header">
+                    <i class="fa fa-link"></i>
+                    {% trans "Linked to:" %}
+                    <strong data-bind="text: linkedDisplayname()"></strong>
+                </div>
+                <label class="bbma-enrich-checkbox">
+                    <input type="checkbox" data-bind="checked: enrichExisting">
+                    {% trans "Add missing Biblissima data to existing resource" %}
+                </label>
+                <!-- ko if: enrichExisting() -->
+                <div class="bbma-enrich-preview">
+                    <!-- ko if: arkId -->
+                    <span><i class="fa fa-tag"></i> ARK: <code data-bind="text: arkId"></code></span>
+                    <!-- /ko -->
+                    <!-- ko if: biblissimaQid -->
+                    <span><i class="fa fa-tag"></i> QID: <code data-bind="text: biblissimaQid"></code></span>
+                    <!-- /ko -->
+                    <!-- ko if: manifestUrl -->
+                    <span><i class="fa fa-file-image-o"></i> {% trans "IIIF manifest" %}</span>
+                    <!-- /ko -->
+                    <!-- ko if: shelfmark -->
+                    <span><i class="fa fa-bookmark-o"></i> <span data-bind="text: shelfmark"></span></span>
+                    <!-- /ko -->
+                </div>
+                <!-- /ko -->
+            </div>
+            <!-- /ko -->
 
             <!-- Suggestion panel (shown inline below the item row) -->
             <!-- ko if: showSuggestions() && suggestions().length > 0 -->

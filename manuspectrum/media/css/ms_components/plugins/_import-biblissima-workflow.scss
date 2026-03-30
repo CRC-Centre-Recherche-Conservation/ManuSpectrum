@@ -866,9 +866,67 @@ $bbma-danger-bg: #fdf0f0;
     }
 }
 
+.bbma-item-linked {
+    background: lighten($bbma-accent-light, 2%);
+    &:hover { background: $bbma-accent-light; }
+}
+
+.bbma-status-linked {
+    background: $bbma-accent-light;
+    color: $bbma-accent-dark;
+}
+
 .bbma-item-spinner {
     color: $bbma-accent;
     font-size: 16px;
+}
+
+// Linked panel (shown below item when linked to existing resource)
+.bbma-linked-panel {
+    margin: 0 14px 6px 66px;
+    background: $bbma-accent-light;
+    border: 1px solid lighten($bbma-accent, 30%);
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+
+.bbma-linked-header {
+    font-size: 12px;
+    color: $bbma-accent-dark;
+    margin-bottom: 6px;
+
+    .fa-link { margin-right: 3px; }
+    strong { margin-left: 2px; }
+}
+
+.bbma-enrich-checkbox {
+    font-size: 12px;
+    font-weight: 500;
+    color: $bbma-ink;
+    display: block;
+    margin-bottom: 4px;
+    cursor: pointer;
+
+    input[type="checkbox"] { margin-right: 4px; }
+}
+
+.bbma-enrich-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 11px;
+    color: $bbma-muted;
+    padding-left: 20px;
+
+    span {
+        .fa { margin-right: 2px; font-size: 10px; }
+        code {
+            font-size: 10px;
+            background: rgba(0,0,0,0.04);
+            padding: 0 3px;
+            border-radius: 2px;
+        }
+    }
 }
 
 // Suggestions panel (shown below item row when potential matches found)
