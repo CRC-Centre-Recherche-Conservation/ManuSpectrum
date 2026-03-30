@@ -655,17 +655,38 @@ class BiblissimaSearchView(View):
         page_size = min(50, max(1, int(request.GET.get("page_size", 20))))
 
         # Build descriptor query for Biblissima
-        descriptor_parts = ",".join(f"AND|{h.strip()}" for h in descriptors.split(",") if h.strip())
-        params = {"descriptors": descriptor_parts}
-        if date_filter:
-            params["date"] = f"OR|{date_filter}"
+        hash_list = [h.strip() for h in descriptors.split(",") if h.strip()]
+
+        # Ensure all hashes use "desc" prefix for IIIF API compatibility
+        _KNOWN_PREFIXES = ("pdata", "mdata", "oedata", "cdata", "ldata", "ifdata")
+        desc_hashes = []
+        for h in hash_list:
+            if h.startswith("desc"):
+                desc_hashes.append(h)
+            else:
+                # Replace known prefix with desc, keep the base hash intact
+                base = h
+                for prefix in _KNOWN_PREFIXES:
+                    if h.startswith(prefix):
+                        base = h[len(prefix):]
+                        break
+                desc_hashes.append(f"desc{base}")
+
+        headers = {"Accept": "application/ld+json, application/json"}
 
         try:
-            resp = requests.get(
-                BIBLISSIMA_IIIF_MANIFEST,
-                params=params,
-                timeout=REQUEST_TIMEOUT * 2,
-            )
+            if len(desc_hashes) == 1:
+                # Single descriptor: use ARK-based URL
+                url = f"{BIBLISSIMA_IIIF_MANIFEST}/ark:/43093/{desc_hashes[0]}"
+                resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT * 2)
+            else:
+                # Multiple descriptors: use query param format (AND combination)
+                descriptor_parts = ",".join(f"AND|{h}" for h in desc_hashes)
+                params = {"descriptors": descriptor_parts}
+                if date_filter:
+                    params["date"] = f"OR|{date_filter}"
+                resp = requests.get(BIBLISSIMA_IIIF_MANIFEST, params=params, headers=headers, timeout=REQUEST_TIMEOUT * 2)
+
             resp.raise_for_status()
             manifest_json = resp.json()
         except Exception:

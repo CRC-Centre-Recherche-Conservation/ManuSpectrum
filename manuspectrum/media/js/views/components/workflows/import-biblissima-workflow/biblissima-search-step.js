@@ -468,11 +468,12 @@ const viewModel = function(params) {
                 fetch(`/api/biblissima/entity/${qid}`).then((r) => r.json())
             );
             const entities = await Promise.all(entityPromises);
-            // Only use hashes starting with "desc" (iconographic descriptors)
-            // Other types (pdata, mdata, etc.) are not valid for IIIF manifest search
+            // Use portal hashes for IIIF search
+            // For single descriptors, backend uses ARK format which works with any prefix (desc, pdata, etc.)
+            // For multiple descriptors, backend uses AND| query format
             const hashes = entities
                 .map((e) => e.portalHash)
-                .filter((h) => h && h.startsWith('desc'));
+                .filter(Boolean);
 
             if (hashes.length === 0) {
                 self.searchResults([]);
