@@ -17,13 +17,10 @@
                 <!-- /ko -->
             </h4>
             <span class="bbma-section-count">
-                <!-- ko if: createdCount() > 0 -->
-                <span class="text-success" data-bind="text: createdCount()"></span> {% trans "created" %}
-                <!-- /ko -->
+                <span data-bind="text: createdCount() + linkedCount()"></span>/<span data-bind="text: totalCount()"></span>
                 <!-- ko if: linkedCount() > 0 -->
-                <span class="text-info" data-bind="text: linkedCount()"></span> {% trans "linked" %}
+                <small class="text-muted">(<span data-bind="text: linkedCount()"></span> {% trans "linked" %})</small>
                 <!-- /ko -->
-                / <span data-bind="text: totalCount()"></span>
             </span>
             <div class="bbma-section-actions">
                 <!-- ko ifnot: allDone -->
