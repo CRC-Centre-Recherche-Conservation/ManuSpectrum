@@ -653,6 +653,9 @@ class BiblissimaEntityView(View):
             entity["parentInstitutionLabel"] = coll_data.get("parentInstitutionLabel", "")
             entity["parentInstitutionQid"] = coll_data.get("parentInstitutionQid", "")
 
+        # Extract date from portal page
+        entity["date"] = _extract_date_from_portal(entity.get("portalHash"))
+
         return JsonResponse(entity)
 
 
@@ -663,8 +666,6 @@ class BiblissimaSearchView(View):
         descriptors = request.GET.get("descriptors", "").strip()
         if not descriptors:
             return JsonResponse({"error": "descriptors parameter required"}, status=400)
-
-        date_filter = request.GET.get("date", "")
 
         # Build descriptor query for Biblissima
         hash_list = [h.strip() for h in descriptors.split(",") if h.strip()]
@@ -695,8 +696,6 @@ class BiblissimaSearchView(View):
                 # Multiple descriptors: use query param format (AND combination)
                 descriptor_parts = ",".join(f"AND|{h}" for h in desc_hashes)
                 params = {"descriptors": descriptor_parts}
-                if date_filter:
-                    params["date"] = f"OR|{date_filter}"
                 resp = requests.get(BIBLISSIMA_IIIF_MANIFEST, params=params, headers=headers, timeout=REQUEST_TIMEOUT * 2)
 
             resp.raise_for_status()
@@ -976,6 +975,33 @@ class BiblissimaCheckDuplicatesView(View):
 
 
 BIBLISSIMA_PORTAL = "https://portail.biblissima.fr/fr/ark:/43093"
+
+
+def _extract_date_from_portal(portal_hash):
+    """Scrape a Biblissima portal page to extract 'Date de fabrication'."""
+    if not portal_hash:
+        return ""
+    try:
+        resp = requests.get(
+            f"{BIBLISSIMA_PORTAL}/{portal_hash}",
+            timeout=REQUEST_TIMEOUT * 2,
+        )
+        resp.raise_for_status()
+        html = resp.text
+    except Exception:
+        return ""
+
+    pres_match = re.search(r'id="presentation">(.*?)</section>', html, re.DOTALL)
+    if not pres_match:
+        return ""
+
+    text = re.sub(r"<[^>]+>", "\n", pres_match.group(1))
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    for i, line in enumerate(lines):
+        if line.startswith("Date de fabrication") and ":" in line and i + 1 < len(lines):
+            return lines[i + 1]
+    return ""
+
 
 # Map Biblissima illumination type/typologie/descriptor strings to Arches Type of Component valueids.
 # Keys are lowercase. Matching is done with startswith() to handle variants like "initiale ornée (1)".

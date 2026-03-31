@@ -56,30 +56,12 @@ const viewModel = function(params) {
         return val === 0 ? Number.MAX_SAFE_INTEGER : val;
     });
 
-    // Client-side pagination computed observables
-    this.totalResults = ko.computed(() => self.searchResults().length);
-    this.totalPages = ko.computed(() => {
-        const limit = self.effectiveLimit();
-        return Math.ceil(self.searchResults().length / limit) || 0;
-    });
-    this.pagedResults = ko.computed(() => {
-        const all = self.searchResults();
-        const limit = self.effectiveLimit();
-        const page = self.currentPage();
-        const start = (page - 1) * limit;
-        return all.slice(start, start + limit);
-    });
-    // Reset to page 1 when page size changes
-    this.effectiveLimit.subscribe(() => self.currentPage(1));
-
     // Date range slider
     this.dateFrom = ko.observable(DATE_MIN);
     this.dateTo = ko.observable(DATE_MAX);
-    // dateRangeActive kept for getDateParam — always active when dates differ from extremes
     this.dateRangeActive = ko.computed(() =>
         self.dateFrom() > DATE_MIN || self.dateTo() < DATE_MAX
     );
-
     this.dateRangeLabel = ko.computed(() => {
         if (!self.dateRangeActive()) return '';
         const from = self.dateFrom();
@@ -89,11 +71,53 @@ const viewModel = function(params) {
         return `${fromLabel} — ${toLabel}`;
     });
 
-    // Build Biblissima date param from range
-    this.getDateParam = () => {
-        if (!self.dateRangeActive()) return '';
-        return `${self.dateFrom()}-${self.dateTo()}`;
+    // Client-side date filtering + pagination
+    this._parseDateRange = (dateStr) => {
+        if (!dateStr) return null;
+        const s = String(dateStr);
+        // "13e siècle" → 1201–1300
+        const centuryMatch = s.match(/(\d+)e\s+si[eè]cle/i);
+        if (centuryMatch) {
+            const c = parseInt(centuryMatch[1], 10);
+            return [(c - 1) * 100 + 1, c * 100];
+        }
+        // "1201-1300" or "1201 - 1300"
+        const rangeMatch = s.match(/(-?\d+)\s*[-–—]\s*(-?\d+)/);
+        if (rangeMatch) return [parseInt(rangeMatch[1], 10), parseInt(rangeMatch[2], 10)];
+        // Single year "1250"
+        const yearMatch = s.match(/(-?\d{3,4})/);
+        if (yearMatch) { const y = parseInt(yearMatch[1], 10); return [y, y]; }
+        return null;
     };
+
+    this.filteredResults = ko.computed(() => {
+        const all = self.searchResults();
+        if (!self.dateRangeActive()) return all;
+        const from = self.dateFrom();
+        const to = self.dateTo();
+        return all.filter((item) => {
+            const range = self._parseDateRange(item.date);
+            if (!range) return true; // keep items without date
+            return range[1] >= from && range[0] <= to;
+        });
+    });
+
+    this.totalResults = ko.computed(() => self.filteredResults().length);
+    this.totalPages = ko.computed(() => {
+        const limit = self.effectiveLimit();
+        return Math.ceil(self.filteredResults().length / limit) || 0;
+    });
+    this.pagedResults = ko.computed(() => {
+        const all = self.filteredResults();
+        const limit = self.effectiveLimit();
+        const page = self.currentPage();
+        const start = (page - 1) * limit;
+        return all.slice(start, start + limit);
+    });
+    // Reset to page 1 when page size or date filter changes
+    this.effectiveLimit.subscribe(() => self.currentPage(1));
+    this.dateFrom.subscribe(() => self.currentPage(1));
+    this.dateTo.subscribe(() => self.currentPage(1));
 
     // Direct identifier input (QID or ARK)
     this.directIdentifier = ko.observable('');
@@ -250,7 +274,7 @@ const viewModel = function(params) {
         manuscript: d.shelfmark || d.label || '',
         folio: '',
         legend: d.label || '',
-        date: '',
+        date: d.date || '',
         location: d.locationLabel || '',
         descriptors: [],
         portalUrl: d.portalHash ? `https://portail.biblissima.fr/ark:/43093/${d.portalHash}` : '',
@@ -492,10 +516,6 @@ const viewModel = function(params) {
             const searchParams = new URLSearchParams({
                 descriptors: hashes.join(','),
             });
-            const dateParam = self.getDateParam();
-            if (dateParam) {
-                searchParams.set('date', dateParam);
-            }
 
             const resp = await fetch(`/api/biblissima/search?${searchParams}`);
             const data = await resp.json();

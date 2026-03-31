@@ -245,7 +245,7 @@ $bbma-danger-bg: #fdf0f0;
 
 .bbma-filter-date { flex: 2; min-width: 280px; }
 .bbma-filter-pagesize { flex: 0; min-width: 100px; }
-.bbma-filter-id { flex: 1; min-width: 200px; }
+.bbma-filter-id { flex: 1; min-width: 200px; max-width: 600px; }
 
 .biblissima-filter-group {
     margin-bottom: 8px;
