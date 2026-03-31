@@ -163,7 +163,7 @@
             <!-- Results grid -->
             <!-- ko if: searchResults().length > 0 -->
             <div class="biblissima-results-grid">
-                <!-- ko foreach: searchResults -->
+                <!-- ko foreach: pagedResults -->
                 <div class="biblissima-result-card"
                      data-bind="click: $parent.toggleCartItem, css: {'selected-instance': $parent.isInCart($data)()}">
 

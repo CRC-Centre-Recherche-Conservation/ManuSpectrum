@@ -35,11 +35,9 @@ const viewModel = function(params) {
     // Component search mode: 'descriptor' (IIIF search) or 'manuscript' (portal scraping)
     this.componentSearchMode = ko.observable('descriptor');
 
-    // Search state
+    // Search state — all results stored, paginated client-side
     this.searchResults = ko.observableArray();
-    this.totalResults = ko.observable(0);
     this.currentPage = ko.observable(1);
-    this.totalPages = ko.observable(0);
     this.hasSearched = ko.observable(false);
 
     // Cart
@@ -52,11 +50,27 @@ const viewModel = function(params) {
     this.showFilters = ko.observable(false);
     this.toggleFilters = () => self.showFilters(!self.showFilters());
     this.pageSize = ko.observable('20');
-    // Effective limit: 0 means "all" → use a large number for API calls
+    // Effective limit: 0 means "all" → show everything on one page
     this.effectiveLimit = ko.computed(() => {
         const val = parseInt(self.pageSize(), 10);
-        return val === 0 ? 500 : val;
+        return val === 0 ? Number.MAX_SAFE_INTEGER : val;
     });
+
+    // Client-side pagination computed observables
+    this.totalResults = ko.computed(() => self.searchResults().length);
+    this.totalPages = ko.computed(() => {
+        const limit = self.effectiveLimit();
+        return Math.ceil(self.searchResults().length / limit) || 0;
+    });
+    this.pagedResults = ko.computed(() => {
+        const all = self.searchResults();
+        const limit = self.effectiveLimit();
+        const page = self.currentPage();
+        const start = (page - 1) * limit;
+        return all.slice(start, start + limit);
+    });
+    // Reset to page 1 when page size changes
+    this.effectiveLimit.subscribe(() => self.currentPage(1));
 
     // Date range slider
     this.dateFrom = ko.observable(DATE_MIN);
@@ -144,7 +158,8 @@ const viewModel = function(params) {
                 if (self.isComponent) {
                     self.selectedManuscriptHash(hash);
                     self.componentSearchMode('manuscript');
-                    // Fetch illuminations for this manuscript
+                    self.currentPage(1);
+                    // Fetch all illuminations for this manuscript
                     const illumResp = await fetch(`/api/biblissima/manuscript-illuminations?portalHash=${hash}`);
                     const illumData = await illumResp.json();
                     if (illumData.results?.length > 0) {
@@ -177,7 +192,6 @@ const viewModel = function(params) {
                             typeValueId: item.typeValueId || '',
                             ifdataHash: item.ifdataHash,
                         })));
-                        self.totalResults(illumData.results.length);
                         self.hasSearched(true);
                     }
                     self.directIdentifier('');
@@ -304,6 +318,7 @@ const viewModel = function(params) {
 
         self.searching(true);
         self.hasSearched(true);
+        self.currentPage(1);
 
         try {
             let entityData;
@@ -319,7 +334,6 @@ const viewModel = function(params) {
                 const suggestData = await suggestResp.json();
                 if (!suggestData.results?.length) {
                     self.searchResults([]);
-                    self.totalResults(0);
                     self.searching(false);
                     return;
                 }
@@ -331,15 +345,14 @@ const viewModel = function(params) {
 
             if (!portalHash) {
                 self.searchResults([]);
-                self.totalResults(0);
                 self.searching(false);
                 return;
             }
 
-            self.selectedManuscriptLabel(entityData.label || firstResult.label);
+            self.selectedManuscriptLabel(entityData.label || query);
             self.selectedManuscriptHash(portalHash);
 
-            // Step 2: Get illuminations from portal page
+            // Fetch all illuminations from portal page
             const illumResp = await fetch(`/api/biblissima/manuscript-illuminations?portalHash=${portalHash}`);
             const illumData = await illumResp.json();
 
@@ -374,8 +387,6 @@ const viewModel = function(params) {
             }));
 
             self.searchResults(results);
-            self.totalResults(results.length);
-            self.totalPages(1);
         } catch (err) {
             console.error('Manuscript illumination search failed:', err);
             self.searchResults([]);
@@ -393,7 +404,7 @@ const viewModel = function(params) {
 
         try {
             const suggestType = self.isDocument ? 'manuscript' : 'descriptor';
-            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=${self.effectiveLimit()}&type=${suggestType}`);
+            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=50&type=${suggestType}`);
             const data = await resp.json();
             const entities = data.results || [];
 
@@ -407,8 +418,6 @@ const viewModel = function(params) {
             const results = details.filter(Boolean).map(self._entityToItem);
 
             self.searchResults(results);
-            self.totalResults(results.length);
-            self.totalPages(1);
         } catch (err) {
             console.error('Biblissima manuscript search failed:', err);
             self.searchResults([]);
@@ -454,14 +463,13 @@ const viewModel = function(params) {
         escapeMarkup: (m) => m,
     };
 
-    this.searchComponents = async (page) => {
+    this.searchComponents = async () => {
         const descriptors = self.selectedDescriptors();
         if (!descriptors || descriptors.length === 0) return;
 
         self.searching(true);
         self.hasSearched(true);
-        const pageNum = page || 1;
-        self.currentPage(pageNum);
+        self.currentPage(1);
 
         try {
             const entityPromises = descriptors.map((qid) =>
@@ -477,16 +485,12 @@ const viewModel = function(params) {
 
             if (hashes.length === 0) {
                 self.searchResults([]);
-                self.totalResults(0);
-                self.totalPages(0);
                 self.searching(false);
                 return;
             }
 
             const searchParams = new URLSearchParams({
                 descriptors: hashes.join(','),
-                page: pageNum,
-                page_size: self.effectiveLimit(),
             });
             const dateParam = self.getDateParam();
             if (dateParam) {
@@ -496,8 +500,6 @@ const viewModel = function(params) {
             const resp = await fetch(`/api/biblissima/search?${searchParams}`);
             const data = await resp.json();
             self.searchResults(data.results || []);
-            self.totalResults(data.total || 0);
-            self.totalPages(data.totalPages || 0);
         } catch (err) {
             console.error('Biblissima search failed:', err);
             self.searchResults([]);
@@ -509,13 +511,13 @@ const viewModel = function(params) {
     // SHARED
     // =====================
 
-    this.search = (page) => {
+    this.search = () => {
         if (self.isDocument) {
             self.searchManuscripts();
         } else if (self.componentSearchMode() === 'manuscript') {
             self.searchManuscriptIlluminations();
         } else {
-            self.searchComponents(page);
+            self.searchComponents();
         }
     };
 
@@ -545,15 +547,15 @@ const viewModel = function(params) {
     this.removeFromCart = (item) => self.cart.remove(item);
 
     this.nextPage = () => {
-        if (self.currentPage() < self.totalPages()) self.search(self.currentPage() + 1);
+        if (self.currentPage() < self.totalPages()) self.currentPage(self.currentPage() + 1);
     };
 
     this.prevPage = () => {
-        if (self.currentPage() > 1) self.search(self.currentPage() - 1);
+        if (self.currentPage() > 1) self.currentPage(self.currentPage() - 1);
     };
 
     this.addAllVisible = () => {
-        self.searchResults().forEach((item) => {
+        self.pagedResults().forEach((item) => {
             const exists = self.cart().some(
                 (c) =>
                     (c.arkId && c.arkId === item.arkId) ||

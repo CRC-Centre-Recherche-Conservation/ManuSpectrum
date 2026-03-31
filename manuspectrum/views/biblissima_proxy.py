@@ -665,8 +665,6 @@ class BiblissimaSearchView(View):
             return JsonResponse({"error": "descriptors parameter required"}, status=400)
 
         date_filter = request.GET.get("date", "")
-        page = max(1, int(request.GET.get("page", 1)))
-        page_size = min(50, max(1, int(request.GET.get("page_size", 20))))
 
         # Build descriptor query for Biblissima
         hash_list = [h.strip() for h in descriptors.split(",") if h.strip()]
@@ -710,16 +708,11 @@ class BiblissimaSearchView(View):
         all_canvases = _parse_iiif_canvases(manifest_json)
         total = len(all_canvases)
 
-        # Paginate
-        start = (page - 1) * page_size
-        end = start + page_size
-        page_canvases = all_canvases[start:end]
-
         # Enrich with Wikibase data per unique manuscript (cached within request)
         manuscript_cache = {}
         session = requests.Session()
 
-        for canvas in page_canvases:
+        for canvas in all_canvases:
             ms_ark = canvas.get("manuscriptArk")
             if not ms_ark or ms_ark in manuscript_cache:
                 if ms_ark and ms_ark in manuscript_cache:
@@ -775,15 +768,7 @@ class BiblissimaSearchView(View):
 
         session.close()
 
-        return JsonResponse(
-            {
-                "total": total,
-                "page": page,
-                "pageSize": page_size,
-                "totalPages": (total + page_size - 1) // page_size,
-                "results": page_canvases,
-            }
-        )
+        return JsonResponse({"total": total, "results": all_canvases})
 
 
 class BiblissimaCheckDuplicatesView(View):
