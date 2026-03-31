@@ -59,8 +59,8 @@
         <!-- ko if: showFilters -->
         <div class="biblissima-filters-panel">
             <div class="bbma-filters-row">
-                <!-- Date range (hidden in Component/Manuscript mode — no date data) -->
-                <!-- ko ifnot: isComponent && componentSearchMode() === 'manuscript' -->
+                <!-- Date range (only for Component/Descriptor — IIIF results have dates) -->
+                <!-- ko if: isComponent && componentSearchMode() === 'descriptor' -->
                 <div class="biblissima-filter-group bbma-filter-date">
                     <label>{% trans "Date range" %}</label>
                     <div class="biblissima-date-range">

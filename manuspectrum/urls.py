@@ -15,6 +15,7 @@ from manuspectrum.views.biblissima_proxy import (
     BiblissimaEntityView,
     BiblissimaIlluminationDetailView,
     BiblissimaManuscriptIlluminationsView,
+    BiblissimaSearchManuscriptsView,
     BiblissimaSearchView,
     BiblissimaSuggestView,
 )
@@ -93,6 +94,13 @@ urlpatterns.append(
         "api/biblissima/search",
         BiblissimaSearchView.as_view(),
         name="biblissima-search",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/search-manuscripts",
+        BiblissimaSearchManuscriptsView.as_view(),
+        name="biblissima-search-manuscripts",
     )
 )
 urlpatterns.append(

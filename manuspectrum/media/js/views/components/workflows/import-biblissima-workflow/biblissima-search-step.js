@@ -427,19 +427,9 @@ const viewModel = function(params) {
         self.currentPage(1);
 
         try {
-            const suggestType = self.isDocument ? 'manuscript' : 'descriptor';
-            const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=50&type=${suggestType}`);
+            const resp = await fetch(`/api/biblissima/search-manuscripts?q=${encodeURIComponent(query)}`);
             const data = await resp.json();
-            const entities = data.results || [];
-
-            const detailPromises = entities.map((e) =>
-                fetch(`/api/biblissima/entity/${e.id}`)
-                    .then((r) => r.json())
-                    .catch(() => null)
-            );
-
-            const details = await Promise.all(detailPromises);
-            const results = details.filter(Boolean).map(self._entityToItem);
+            const results = (data.results || []).map(self._entityToItem);
 
             self.searchResults(results);
         } catch (err) {

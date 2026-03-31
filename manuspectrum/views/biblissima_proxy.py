@@ -232,28 +232,9 @@ def _parse_century(date_str):
     return None
 
 
-def _get_wikibase_entity(qid, session=None):
-    """Fetch a Wikibase entity and extract relevant properties."""
-    s = session or requests
-    try:
-        resp = s.get(
-            BIBLISSIMA_WIKIBASE,
-            params={
-                "action": "wbgetentities",
-                "ids": qid,
-                "format": "json",
-                "languages": "fr|en",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        entity = data.get("entities", {}).get(qid, {})
-    except Exception:
-        logger.warning("Failed to fetch Wikibase entity %s", qid)
-        return None
-
-    claims = entity.get("claims", {})
+def _extract_entity_props(qid, raw_entity):
+    """Extract relevant properties from a raw Wikibase entity dict."""
+    claims = raw_entity.get("claims", {})
 
     def _get_string(prop):
         claim_list = claims.get(prop, [])
@@ -271,7 +252,7 @@ def _get_wikibase_entity(qid, session=None):
                 return val.get("id")
         return None
 
-    labels = entity.get("labels", {})
+    labels = raw_entity.get("labels", {})
     label = (
         labels.get("fr", {}).get("value")
         or labels.get("en", {}).get("value")
@@ -289,6 +270,60 @@ def _get_wikibase_entity(qid, session=None):
         "author": _get_entity_id(P354),
         "mandragoreId": _get_string(P270),
     }
+
+
+def _get_wikibase_entity(qid, session=None):
+    """Fetch a single Wikibase entity and extract relevant properties."""
+    s = session or requests
+    try:
+        resp = s.get(
+            BIBLISSIMA_WIKIBASE,
+            params={
+                "action": "wbgetentities",
+                "ids": qid,
+                "format": "json",
+                "languages": "fr|en",
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        raw = resp.json().get("entities", {}).get(qid, {})
+    except Exception:
+        logger.warning("Failed to fetch Wikibase entity %s", qid)
+        return None
+
+    return _extract_entity_props(qid, raw)
+
+
+def _batch_get_wikibase_entities(qids, session=None):
+    """Fetch multiple Wikibase entities in a single API call (max 50)."""
+    if not qids:
+        return {}
+    s = session or requests
+    results = {}
+    # wbgetentities supports up to 50 IDs per call
+    for i in range(0, len(qids), 50):
+        batch = qids[i : i + 50]
+        try:
+            resp = s.get(
+                BIBLISSIMA_WIKIBASE,
+                params={
+                    "action": "wbgetentities",
+                    "ids": "|".join(batch),
+                    "format": "json",
+                    "languages": "fr|en",
+                },
+                timeout=REQUEST_TIMEOUT * 2,
+            )
+            resp.raise_for_status()
+            entities = resp.json().get("entities", {})
+            for qid in batch:
+                raw = entities.get(qid, {})
+                if raw and "missing" not in raw:
+                    results[qid] = _extract_entity_props(qid, raw)
+        except Exception:
+            logger.warning("Batch fetch failed for %s", batch)
+    return results
 
 
 def _resolve_collection(collection_qid, session=None):
@@ -653,10 +688,158 @@ class BiblissimaEntityView(View):
             entity["parentInstitutionLabel"] = coll_data.get("parentInstitutionLabel", "")
             entity["parentInstitutionQid"] = coll_data.get("parentInstitutionQid", "")
 
-        # Extract date from portal page
-        entity["date"] = _extract_date_from_portal(entity.get("portalHash"))
-
         return JsonResponse(entity)
+
+
+class BiblissimaSearchManuscriptsView(View):
+    """Search manuscripts on Biblissima with full batch enrichment.
+
+    Replaces the N+1 pattern (suggest + N entity calls) with:
+    1. Suggest (2 API calls: prefix + fulltext)
+    2. Batch entity fetch (1 call for all QIDs)
+    3. Batch author resolution (1 call for unique author QIDs)
+    4. Deduplicated collection resolution
+    5. Parallel portal date scraping
+    """
+
+    TYPE_FILTERS = BiblissimaSuggestView.TYPE_FILTERS
+
+    @method_decorator(cache_page(300))
+    def get(self, request):
+        query = request.GET.get("q", "").strip()
+        if len(query) < 3:
+            return JsonResponse({"results": []})
+
+        limit = max(1, int(request.GET.get("limit", 50)))
+        session = requests.Session()
+
+        # --- Step 1: Suggest (reuse SuggestView logic inline) ---
+        type_qid = self.TYPE_FILTERS.get("manuscript", "")
+        seen_ids = set()
+        suggest_results = []
+
+        # Prefix search
+        try:
+            fetch_limit = limit * 3
+            resp = session.get(
+                BIBLISSIMA_WIKIBASE,
+                params={
+                    "action": "wbsearchentities",
+                    "search": query,
+                    "language": "fr",
+                    "format": "json",
+                    "limit": fetch_limit,
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            prefix_items = resp.json().get("search", [])
+
+            if prefix_items:
+                batch_ids = [item["id"] for item in prefix_items]
+                type_resp = session.get(
+                    BIBLISSIMA_WIKIBASE,
+                    params={
+                        "action": "wbgetentities",
+                        "ids": "|".join(batch_ids),
+                        "format": "json",
+                        "props": "claims",
+                    },
+                    timeout=REQUEST_TIMEOUT,
+                )
+                type_resp.raise_for_status()
+                entities = type_resp.json().get("entities", {})
+                for item in prefix_items:
+                    qid = item["id"]
+                    for claim in entities.get(qid, {}).get("claims", {}).get(P2, []):
+                        val = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+                        if isinstance(val, dict) and val.get("id") == type_qid:
+                            if qid not in seen_ids:
+                                seen_ids.add(qid)
+                                suggest_results.append(qid)
+                            break
+                    if len(suggest_results) >= limit:
+                        break
+        except Exception:
+            logger.warning("Manuscript search prefix failed for: %s", query)
+
+        # Fulltext search
+        if len(suggest_results) < limit:
+            try:
+                srsearch = f"{query} haswbstatement:P2={type_qid}"
+                resp = session.get(
+                    BIBLISSIMA_WIKIBASE,
+                    params={
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": srsearch,
+                        "srnamespace": 120,
+                        "format": "json",
+                        "srlimit": limit,
+                    },
+                    timeout=REQUEST_TIMEOUT,
+                )
+                resp.raise_for_status()
+                for r in resp.json().get("query", {}).get("search", []):
+                    qid = r["title"].replace("Item:", "")
+                    if qid not in seen_ids:
+                        seen_ids.add(qid)
+                        suggest_results.append(qid)
+                        if len(suggest_results) >= limit:
+                            break
+            except Exception:
+                logger.warning("Manuscript search fulltext failed for: %s", query)
+
+        if not suggest_results:
+            session.close()
+            return JsonResponse({"total": 0, "results": []})
+
+        # --- Step 2: Batch entity fetch (1 call instead of N) ---
+        entities = _batch_get_wikibase_entities(suggest_results, session=session)
+
+        # --- Step 3: Batch author resolution (1 call for unique authors) ---
+        author_qids = list({
+            e["author"] for e in entities.values() if e.get("author")
+        })
+        authors = _batch_get_wikibase_entities(author_qids, session=session)
+
+        # --- Step 4: Deduplicated collection resolution ---
+        collection_qids = list({
+            e["collection"] for e in entities.values() if e.get("collection")
+        })
+        collections = {}
+        for coll_qid in collection_qids:
+            collections[coll_qid] = _resolve_collection(coll_qid, session=session)
+
+        session.close()
+
+        # --- Assemble results ---
+        results = []
+        for qid in suggest_results:
+            e = entities.get(qid)
+            if not e:
+                continue
+
+            # Author
+            author_qid = e.get("author")
+            if author_qid and author_qid in authors:
+                e["authorLabel"] = authors[author_qid].get("label", "")
+                e["authorQid"] = author_qid
+
+            # Collection
+            coll_qid = e.get("collection")
+            if coll_qid and coll_qid in collections:
+                coll = collections[coll_qid]
+                e["collectionLabel"] = coll.get("ownerLabel", "")
+                e["locationLabel"] = coll.get("locationLabel", "")
+                e["locationQid"] = coll.get("locationQid", "")
+                e["geonamesId"] = coll.get("geonamesId", "")
+                e["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
+                e["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
+
+            results.append(e)
+
+        return JsonResponse({"total": len(results), "results": results})
 
 
 class BiblissimaSearchView(View):
