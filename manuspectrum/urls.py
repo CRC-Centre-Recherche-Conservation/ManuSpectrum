@@ -10,6 +10,7 @@ from arches.app.views.auth import PasswordResetView
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 from manuspectrum.views.biblissima_proxy import (
+    BiblissimaAddAltNameView,
     BiblissimaCheckDuplicatesView,
     BiblissimaCreateResourceView,
     BiblissimaEntityView,
@@ -129,6 +130,13 @@ urlpatterns.append(
         "api/biblissima/create-resource",
         BiblissimaCreateResourceView.as_view(),
         name="biblissima-create-resource",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/add-alt-name",
+        BiblissimaAddAltNameView.as_view(),
+        name="biblissima-add-alt-name",
     )
 )
 

@@ -149,7 +149,69 @@ COMP_LOCATION_DOC_NG = "fa5cc926-e889-11ef-9bfc-0debd0685137"
 COMP_LOCATION_DOC_NODE = "fa5cc926-e889-11ef-9bfc-0debd0685137"
 COMP_LOCATION_APPELLATION = "f0dcdbf0-e88b-11ef-9bfc-0debd0685137"
 
+# --- Place nodegroups & nodes ---
+PLACE_NAME_NG = "e4513853-7024-11ef-8753-0575b5bada34"
+PLACE_NAME_LABEL = "e4513856-7024-11ef-8753-0575b5bada34"
+PLACE_NAME_LANGUAGE = "e4513855-7024-11ef-8753-0575b5bada34"
+PLACE_NAME_TYPE = "e4513857-7024-11ef-8753-0575b5bada34"
+
+PLACE_IDENTIFIER_NG = "e7bf9151-7024-11ef-8753-0575b5bada34"
+PLACE_IDENTIFIER_VALUE = "e7bf9153-7024-11ef-8753-0575b5bada34"
+PLACE_IDENTIFIER_SOURCE = "e7bf9154-7024-11ef-8753-0575b5bada34"
+PLACE_IDENTIFIER_TYPE = "e7bf9155-7024-11ef-8753-0575b5bada34"
+
+# --- Group nodegroups & nodes ---
+GROUP_NAME_NG = "e69cbd41-7018-11ef-8753-0575b5bada34"
+GROUP_NAME_LABEL = "e69cbd44-7018-11ef-8753-0575b5bada34"
+GROUP_NAME_LANGUAGE = "e69cbd43-7018-11ef-8753-0575b5bada34"
+GROUP_NAME_TYPE = "e69cbd45-7018-11ef-8753-0575b5bada34"
+
+GROUP_IDENTIFIER_NG = "eda9eee7-7018-11ef-8753-0575b5bada34"
+GROUP_IDENTIFIER_VALUE = "eda9eee9-7018-11ef-8753-0575b5bada34"
+GROUP_IDENTIFIER_SOURCE = "eda9eeea-7018-11ef-8753-0575b5bada34"
+GROUP_IDENTIFIER_TYPE = "eda9eeeb-7018-11ef-8753-0575b5bada34"
+
+GROUP_MEMBER_OF_NG = "86e02cce-7019-11ef-8753-0575b5bada34"
+GROUP_MEMBER_OF_NODE = "86e02cce-7019-11ef-8753-0575b5bada34"
+
+GROUP_LOCATION_NG = "636b1b3e-ae2e-11ef-8dd2-3b6c98a10134"
+GROUP_LOCATION_NODE = "636b1b3e-ae2e-11ef-8dd2-3b6c98a10134"
+
+# --- Person nodegroups & nodes ---
+PERSON_NAME_NG = "8e97f1a7-701c-11ef-8753-0575b5bada34"
+PERSON_NAME_LABEL = "8e97f1aa-701c-11ef-8753-0575b5bada34"
+PERSON_NAME_LANGUAGE = "8e97f1a9-701c-11ef-8753-0575b5bada34"
+PERSON_NAME_TYPE = "8e97f1ab-701c-11ef-8753-0575b5bada34"
+
+PERSON_IDENTIFIER_NG = "943a2c65-701c-11ef-8753-0575b5bada34"
+PERSON_IDENTIFIER_VALUE = "943a2c67-701c-11ef-8753-0575b5bada34"
+PERSON_IDENTIFIER_SOURCE = "943a2c68-701c-11ef-8753-0575b5bada34"
+PERSON_IDENTIFIER_TYPE = "943a2c69-701c-11ef-8753-0575b5bada34"
+
+# Dependency nodegroup lookup by graph ID
+DEP_NAME_CONFIG = {
+    PLACE_GRAPH_ID: {
+        "ng": PLACE_NAME_NG,
+        "label": PLACE_NAME_LABEL,
+        "language": PLACE_NAME_LANGUAGE,
+        "type": PLACE_NAME_TYPE,
+    },
+    GROUP_GRAPH_ID: {
+        "ng": GROUP_NAME_NG,
+        "label": GROUP_NAME_LABEL,
+        "language": GROUP_NAME_LANGUAGE,
+        "type": GROUP_NAME_TYPE,
+    },
+    PERSON_GRAPH_ID: {
+        "ng": PERSON_NAME_NG,
+        "label": PERSON_NAME_LABEL,
+        "language": PERSON_NAME_LANGUAGE,
+        "type": PERSON_NAME_TYPE,
+    },
+}
+
 # --- Concept defaults ---
+CONCEPT_ALTERNATE_TITLES = "7cca3482-44b5-42ea-a1d7-120cd732b350"
 CONCEPT_FRENCH = "a1d82c77-ebd6-4215-ab85-2c0b6a68a0e8"
 CONCEPT_PREFERRED_TERMS = "5f400d39-3b6b-4b8a-939b-4e49787c7444"
 CONCEPT_PERSISTENT_ID = "5b292232-52ac-4e71-ba6c-fe4dd6ff02fa"
@@ -189,9 +251,9 @@ CENTURY_MAPPING = {
 
 RELATIONSHIP_CONCEPT = "ac41d9be-79db-4256-b368-2f4559cfbe55"
 
-_ARK_RE = re.compile(r'ark:/43093/(\w+)')
-_CENTURY_RE = re.compile(r'(\d+)e\s+si[eè]cle', re.IGNORECASE)
-_HTML_TAG_RE = re.compile(r'<[^>]+>')
+_ARK_RE = re.compile(r"ark:/43093/(\w+)")
+_CENTURY_RE = re.compile(r"(\d+)e\s+si[eè]cle", re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _strip_html(text):
@@ -247,17 +309,15 @@ def _extract_entity_props(qid, raw_entity):
     def _get_entity_id(prop):
         claim_list = claims.get(prop, [])
         if claim_list:
-            val = claim_list[0].get("mainsnak", {}).get("datavalue", {}).get("value", {})
+            val = (
+                claim_list[0].get("mainsnak", {}).get("datavalue", {}).get("value", {})
+            )
             if isinstance(val, dict):
                 return val.get("id")
         return None
 
     labels = raw_entity.get("labels", {})
-    label = (
-        labels.get("fr", {}).get("value")
-        or labels.get("en", {}).get("value")
-        or ""
-    )
+    label = labels.get("fr", {}).get("value") or labels.get("en", {}).get("value") or ""
 
     return {
         "qid": qid,
@@ -369,7 +429,13 @@ def _resolve_collection(collection_qid, session=None):
     # P201 = localisation (place)
     loc_claims = coll_claims.get(P201, [])
     if loc_claims:
-        loc_qid = loc_claims[0].get("mainsnak", {}).get("datavalue", {}).get("value", {}).get("id")
+        loc_qid = (
+            loc_claims[0]
+            .get("mainsnak", {})
+            .get("datavalue", {})
+            .get("value", {})
+            .get("id")
+        )
         if loc_qid:
             loc_entity = _get_wikibase_entity(loc_qid, session=session)
             if loc_entity:
@@ -392,7 +458,12 @@ def _resolve_collection(collection_qid, session=None):
                     loc_data = loc_resp.json().get("entities", {}).get(loc_qid, {})
                     geo_claims = loc_data.get("claims", {}).get(P123, [])
                     if geo_claims:
-                        geo_val = geo_claims[0].get("mainsnak", {}).get("datavalue", {}).get("value")
+                        geo_val = (
+                            geo_claims[0]
+                            .get("mainsnak", {})
+                            .get("datavalue", {})
+                            .get("value")
+                        )
                         if geo_val:
                             result["geonamesId"] = str(geo_val)
                 except Exception:
@@ -401,7 +472,13 @@ def _resolve_collection(collection_qid, session=None):
     # P169 = partie de (parent institution) — for the top-level owner
     parent_claims = coll_claims.get(P169, [])
     if parent_claims:
-        parent_qid = parent_claims[0].get("mainsnak", {}).get("datavalue", {}).get("value", {}).get("id")
+        parent_qid = (
+            parent_claims[0]
+            .get("mainsnak", {})
+            .get("datavalue", {})
+            .get("value", {})
+            .get("id")
+        )
         if parent_qid:
             parent_entity = _get_wikibase_entity(parent_qid, session=session)
             if parent_entity:
@@ -563,7 +640,11 @@ class BiblissimaSuggestView(View):
                 valid_ids = set()
                 for qid, entity in entities.items():
                     for claim in entity.get("claims", {}).get(P2, []):
-                        val = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+                        val = (
+                            claim.get("mainsnak", {})
+                            .get("datavalue", {})
+                            .get("value", {})
+                        )
                         if isinstance(val, dict) and val.get("id") == type_qid:
                             valid_ids.add(qid)
                             break
@@ -571,22 +652,26 @@ class BiblissimaSuggestView(View):
                 for item in prefix_items:
                     if item["id"] in valid_ids and item["id"] not in seen_ids:
                         seen_ids.add(item["id"])
-                        results.append({
-                            "id": item["id"],
-                            "label": item.get("label", ""),
-                            "description": item.get("description", ""),
-                        })
+                        results.append(
+                            {
+                                "id": item["id"],
+                                "label": item.get("label", ""),
+                                "description": item.get("description", ""),
+                            }
+                        )
                         if len(results) >= limit:
                             break
             else:
                 for item in prefix_items:
                     if item["id"] not in seen_ids:
                         seen_ids.add(item["id"])
-                        results.append({
-                            "id": item["id"],
-                            "label": item.get("label", ""),
-                            "description": item.get("description", ""),
-                        })
+                        results.append(
+                            {
+                                "id": item["id"],
+                                "label": item.get("label", ""),
+                                "description": item.get("description", ""),
+                            }
+                        )
         except Exception:
             logger.warning("wbsearchentities failed for query=%s", query)
 
@@ -685,7 +770,9 @@ class BiblissimaEntityView(View):
             entity["locationLabel"] = coll_data.get("locationLabel", "")
             entity["locationQid"] = coll_data.get("locationQid", "")
             entity["geonamesId"] = coll_data.get("geonamesId", "")
-            entity["parentInstitutionLabel"] = coll_data.get("parentInstitutionLabel", "")
+            entity["parentInstitutionLabel"] = coll_data.get(
+                "parentInstitutionLabel", ""
+            )
             entity["parentInstitutionQid"] = coll_data.get("parentInstitutionQid", "")
 
         return JsonResponse(entity)
@@ -752,7 +839,11 @@ class BiblissimaSearchManuscriptsView(View):
                 for item in prefix_items:
                     qid = item["id"]
                     for claim in entities.get(qid, {}).get("claims", {}).get(P2, []):
-                        val = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+                        val = (
+                            claim.get("mainsnak", {})
+                            .get("datavalue", {})
+                            .get("value", {})
+                        )
                         if isinstance(val, dict) and val.get("id") == type_qid:
                             if qid not in seen_ids:
                                 seen_ids.add(qid)
@@ -798,15 +889,13 @@ class BiblissimaSearchManuscriptsView(View):
         entities = _batch_get_wikibase_entities(suggest_results, session=session)
 
         # --- Step 3: Batch author resolution (1 call for unique authors) ---
-        author_qids = list({
-            e["author"] for e in entities.values() if e.get("author")
-        })
+        author_qids = list({e["author"] for e in entities.values() if e.get("author")})
         authors = _batch_get_wikibase_entities(author_qids, session=session)
 
         # --- Step 4: Deduplicated collection resolution ---
-        collection_qids = list({
-            e["collection"] for e in entities.values() if e.get("collection")
-        })
+        collection_qids = list(
+            {e["collection"] for e in entities.values() if e.get("collection")}
+        )
         collections = {}
         for coll_qid in collection_qids:
             collections[coll_qid] = _resolve_collection(coll_qid, session=session)
@@ -864,7 +953,7 @@ class BiblissimaSearchView(View):
                 base = h
                 for prefix in _KNOWN_PREFIXES:
                     if h.startswith(prefix):
-                        base = h[len(prefix):]
+                        base = h[len(prefix) :]
                         break
                 desc_hashes.append(f"desc{base}")
 
@@ -879,7 +968,12 @@ class BiblissimaSearchView(View):
                 # Multiple descriptors: use query param format (AND combination)
                 descriptor_parts = ",".join(f"AND|{h}" for h in desc_hashes)
                 params = {"descriptors": descriptor_parts}
-                resp = requests.get(BIBLISSIMA_IIIF_MANIFEST, params=params, headers=headers, timeout=REQUEST_TIMEOUT * 2)
+                resp = requests.get(
+                    BIBLISSIMA_IIIF_MANIFEST,
+                    params=params,
+                    headers=headers,
+                    timeout=REQUEST_TIMEOUT * 2,
+                )
 
             resp.raise_for_status()
             manifest_json = resp.json()
@@ -931,7 +1025,9 @@ class BiblissimaSearchView(View):
                         ms_data = entity
                         # Resolve author label
                         if ms_data.get("author"):
-                            author = _get_wikibase_entity(ms_data["author"], session=session)
+                            author = _get_wikibase_entity(
+                                ms_data["author"], session=session
+                            )
                             if author:
                                 ms_data["authorLabel"] = author["label"]
                                 ms_data["authorQid"] = ms_data["author"]
@@ -1012,8 +1108,16 @@ class BiblissimaCheckDuplicatesView(View):
                 search_tokens.add(manifest_url)
 
             if search_tokens:
-                id_ng = DOC_IDENTIFIER_NG if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_NG
-                id_node = DOC_IDENTIFIER_VALUE if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_VALUE
+                id_ng = (
+                    DOC_IDENTIFIER_NG
+                    if graph_id == DOCUMENT_GRAPH_ID
+                    else COMP_IDENTIFIER_NG
+                )
+                id_node = (
+                    DOC_IDENTIFIER_VALUE
+                    if graph_id == DOCUMENT_GRAPH_ID
+                    else COMP_IDENTIFIER_VALUE
+                )
                 try:
                     matching_tiles = Tile.objects.filter(
                         nodegroup_id=id_ng,
@@ -1039,7 +1143,11 @@ class BiblissimaCheckDuplicatesView(View):
                         # or if any search token is contained in the tile value
                         matched = False
                         for token in search_tokens:
-                            if token == tile_value or token in tile_value or tile_value in token:
+                            if (
+                                token == tile_value
+                                or token in tile_value
+                                or tile_value in token
+                            ):
                                 matched = True
                                 break
 
@@ -1048,13 +1156,15 @@ class BiblissimaCheckDuplicatesView(View):
                             if rid not in seen_ids:
                                 seen_ids.add(rid)
                                 dn = self._get_resource_name(rid)
-                                suggestions.append({
-                                    "resourceId": rid,
-                                    "displayname": dn,
-                                    "matchType": "identifier",
-                                    "matchValue": tile_value,
-                                    "confidence": "high",
-                                })
+                                suggestions.append(
+                                    {
+                                        "resourceId": rid,
+                                        "displayname": dn,
+                                        "matchType": "identifier",
+                                        "matchValue": tile_value,
+                                        "confidence": "high",
+                                    }
+                                )
                 except Exception:
                     logger.warning("Tile identifier search failed for item %d", idx)
 
@@ -1070,14 +1180,15 @@ class BiblissimaCheckDuplicatesView(View):
                     se, graph_id, label, "displayname", seen_ids, suggestions
                 )
 
-            results.append({
-                "index": idx,
-                "key": ark_id or label,
-                "suggestions": suggestions[:5],
-            })
+            results.append(
+                {
+                    "index": idx,
+                    "key": ark_id or label,
+                    "suggestions": suggestions[:5],
+                }
+            )
 
         return JsonResponse({"results": results})
-
 
     @staticmethod
     def _get_resource_name(resource_id):
@@ -1098,7 +1209,9 @@ class BiblissimaCheckDuplicatesView(View):
             return dn
         return ""
 
-    def _es_string_search(self, se, graph_id, search_term, match_type, seen_ids, suggestions):
+    def _es_string_search(
+        self, se, graph_id, search_term, match_type, seen_ids, suggestions
+    ):
         """Search ES using nested strings.string field (analyzed text)."""
         try:
             query = {
@@ -1146,13 +1259,19 @@ class BiblissimaCheckDuplicatesView(View):
                 if rid not in seen_ids:
                     score = hit.get("_score", 0)
                     seen_ids.add(rid)
-                    suggestions.append({
-                        "resourceId": rid,
-                        "displayname": self._extract_es_displayname(hit),
-                        "matchType": match_type,
-                        "matchValue": search_term,
-                        "confidence": "high" if score > 8 else "medium" if score > 3 else "low",
-                    })
+                    suggestions.append(
+                        {
+                            "resourceId": rid,
+                            "displayname": self._extract_es_displayname(hit),
+                            "matchType": match_type,
+                            "matchValue": search_term,
+                            "confidence": (
+                                "high"
+                                if score > 8
+                                else "medium" if score > 3 else "low"
+                            ),
+                        }
+                    )
         except Exception:
             logger.debug("ES %s search no results for: %s", match_type, search_term)
 
@@ -1181,7 +1300,11 @@ def _extract_date_from_portal(portal_hash):
     text = re.sub(r"<[^>]+>", "\n", pres_match.group(1))
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     for i, line in enumerate(lines):
-        if line.startswith("Date de fabrication") and ":" in line and i + 1 < len(lines):
+        if (
+            line.startswith("Date de fabrication")
+            and ":" in line
+            and i + 1 < len(lines)
+        ):
             return lines[i + 1]
     return ""
 
@@ -1189,30 +1312,30 @@ def _extract_date_from_portal(portal_hash):
 # Map Biblissima illumination type/typologie/descriptor strings to Arches Type of Component valueids.
 # Keys are lowercase. Matching is done with startswith() to handle variants like "initiale ornée (1)".
 BIBLISSIMA_TYPE_MAPPING = {
-    "initiale ornée": "31158e76-817a-447d-a40c-3963731296a8",      # lettrine/initial
+    "initiale ornée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
     "initiale filigranée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale historiée": "31158e76-817a-447d-a40c-3963731296a8",   # lettrine/initial
-    "initiale animée": "31158e76-817a-447d-a40c-3963731296a8",      # lettrine/initial
-    "initiale zoomorphe": "31158e76-817a-447d-a40c-3963731296a8",   # lettrine/initial
+    "initiale historiée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
+    "initiale animée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
+    "initiale zoomorphe": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
     "initiale anthropomorphe": "31158e76-817a-447d-a40c-3963731296a8",
     "initiale de couleur": "31158e76-817a-447d-a40c-3963731296a8",
     "initiale": "31158e76-817a-447d-a40c-3963731296a8",
     "lettrine": "31158e76-817a-447d-a40c-3963731296a8",
-    "lettre ornée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",        # decorated letter
+    "lettre ornée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",  # decorated letter
     "lettre cadelée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
     "lettre or": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
-    "miniature": "63bc98e3-57de-48fc-a656-8d6f9a9acf40",           # miniature
-    "page décorée": "4063b4aa-c50b-4101-947c-d8094eed6e25",        # Decoration
+    "miniature": "63bc98e3-57de-48fc-a656-8d6f9a9acf40",  # miniature
+    "page décorée": "4063b4aa-c50b-4101-947c-d8094eed6e25",  # Decoration
     "décor": "4063b4aa-c50b-4101-947c-d8094eed6e25",
     "bordure": "4063b4aa-c50b-4101-947c-d8094eed6e25",
     "bandeau": "4063b4aa-c50b-4101-947c-d8094eed6e25",
     "encadrement": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "frontispice": "0805a584-1395-48df-8e84-4ae4b25cdeae",         # frontispiece
-    "vignette": "29167061-2645-4d86-8f30-9206c1f83297",            # vignette
-    "photographie": "85e458af-0292-4ecb-84b9-5715071d45e1",        # photography
-    "filigrane": "c3168cc7-23d3-4ddb-9eac-38383b852f5a",           # watermark
-    "planche": "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a",             # board
-    "enluminure": "3ecd8040-7c4b-4b1d-88f7-379297358f66",          # illumination (default)
+    "frontispice": "0805a584-1395-48df-8e84-4ae4b25cdeae",  # frontispiece
+    "vignette": "29167061-2645-4d86-8f30-9206c1f83297",  # vignette
+    "photographie": "85e458af-0292-4ecb-84b9-5715071d45e1",  # photography
+    "filigrane": "c3168cc7-23d3-4ddb-9eac-38383b852f5a",  # watermark
+    "planche": "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a",  # board
+    "enluminure": "3ecd8040-7c4b-4b1d-88f7-379297358f66",  # illumination (default)
 }
 
 # Default fallback when no type mapping matches
@@ -1230,7 +1353,7 @@ def _resolve_biblissima_type(typologie="", descriptor="", type_field=""):
             continue
         normalized = term.lower().strip()
         # Remove trailing numbering like "(1)", "(2)"
-        normalized = re.sub(r'\s*\(\d+\)\s*$', '', normalized)
+        normalized = re.sub(r"\s*\(\d+\)\s*$", "", normalized)
         # Try exact match first
         if normalized in BIBLISSIMA_TYPE_MAPPING:
             return BIBLISSIMA_TYPE_MAPPING[normalized]
@@ -1263,7 +1386,7 @@ class BiblissimaManuscriptIlluminationsView(View):
 
         results = []
         # Detect which ifdata entries have a digitization icon
-        has_image_set = set(re.findall(r'fa-picture-o.*?ark:/43093/(ifdata\w+)', html))
+        has_image_set = set(re.findall(r"fa-picture-o.*?ark:/43093/(ifdata\w+)", html))
 
         # Parse all ifdata links
         for match in re.finditer(
@@ -1273,26 +1396,28 @@ class BiblissimaManuscriptIlluminationsView(View):
             label = match.group(2).strip()
 
             # Descriptor = text before first "("
-            desc_match = re.match(r'^([^(]+)', label)
+            desc_match = re.match(r"^([^(]+)", label)
             descriptor = desc_match.group(1).strip() if desc_match else label
 
             # Folio = f.NNN pattern at end
-            folio_match = re.search(r'\bf\.?\s*(\d+\w*)\)?$', label)
+            folio_match = re.search(r"\bf\.?\s*(\d+\w*)\)?$", label)
             folio = folio_match.group(1) if folio_match else ""
 
             # Resolve type from descriptor
             type_valueid = _resolve_biblissima_type(descriptor=descriptor)
 
-            results.append({
-                "ifdataHash": ifdata_hash,
-                "arkId": f"ark:/43093/{ifdata_hash}",
-                "label": label,
-                "descriptor": descriptor,
-                "folio": folio,
-                "hasImage": ifdata_hash in has_image_set,
-                "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
-                "typeValueId": type_valueid,
-            })
+            results.append(
+                {
+                    "ifdataHash": ifdata_hash,
+                    "arkId": f"ark:/43093/{ifdata_hash}",
+                    "label": label,
+                    "descriptor": descriptor,
+                    "folio": folio,
+                    "hasImage": ifdata_hash in has_image_set,
+                    "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
+                    "typeValueId": type_valueid,
+                }
+            )
 
         return JsonResponse({"total": len(results), "results": results})
 
@@ -1322,8 +1447,8 @@ class BiblissimaIlluminationDetailView(View):
         # Parse presentation section (key: value pairs on alternating lines)
         pres_match = re.search(r'id="presentation">(.*?)</section>', html, re.DOTALL)
         if pres_match:
-            text = re.sub(r'<[^>]+>', '\n', pres_match.group(1))
-            lines = [l.strip() for l in text.split('\n') if l.strip()]
+            text = re.sub(r"<[^>]+>", "\n", pres_match.group(1))
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
 
             if lines:
                 result["label"] = lines[0]
@@ -1349,7 +1474,9 @@ class BiblissimaIlluminationDetailView(View):
                 if in_descriptors:
                     if line == ",":
                         continue
-                    if any(line.startswith(f"{k}") for k in field_map) or line.endswith(":"):
+                    if any(line.startswith(f"{k}") for k in field_map) or line.endswith(
+                        ":"
+                    ):
                         in_descriptors = False
                     else:
                         descriptor_parts.append(line)
@@ -1367,21 +1494,23 @@ class BiblissimaIlluminationDetailView(View):
         typologie = result.get("typologie", "")
         descriptor = ""
         if result.get("label"):
-            desc_match = re.match(r'^([^(]+)', result["label"])
+            desc_match = re.match(r"^([^(]+)", result["label"])
             if desc_match:
                 descriptor = desc_match.group(1).strip()
         type_field = result.get("type", "")
-        result["typeValueId"] = _resolve_biblissima_type(typologie, descriptor, type_field)
+        result["typeValueId"] = _resolve_biblissima_type(
+            typologie, descriptor, type_field
+        )
 
         # Manuscript ARK
-        ms_match = re.search(r'ark:/43093/(mdata\w+)', html)
+        ms_match = re.search(r"ark:/43093/(mdata\w+)", html)
         if ms_match:
             result["manuscriptHash"] = ms_match.group(1)
             result["manuscriptArk"] = f"ark:/43093/{ms_match.group(1)}"
 
         # Gallica image URL
         gallica_image = re.search(
-            r'(https://gallica\.bnf\.fr/ark:/12148/\w+/f\d+\.image)', html
+            r"(https://gallica\.bnf\.fr/ark:/12148/\w+/f\d+\.image)", html
         )
         if gallica_image:
             result["imageUrl"] = gallica_image.group(1)
@@ -1389,7 +1518,7 @@ class BiblissimaIlluminationDetailView(View):
 
         # Gallica IIIF info (for canvas in annotation)
         gallica_iiif = re.search(
-            r'(https://gallica\.bnf\.fr/iiif/ark:/12148/\w+/f\d+/info\.json)', html
+            r"(https://gallica\.bnf\.fr/iiif/ark:/12148/\w+/f\d+/info\.json)", html
         )
         if gallica_iiif:
             result["iiifInfoUrl"] = gallica_iiif.group(1)
@@ -1397,13 +1526,13 @@ class BiblissimaIlluminationDetailView(View):
 
         # Gallica manifest
         gallica_manifest = re.search(
-            r'(https://gallica\.bnf\.fr/iiif/ark:/12148/\w+/manifest\.json)', html
+            r"(https://gallica\.bnf\.fr/iiif/ark:/12148/\w+/manifest\.json)", html
         )
         if gallica_manifest:
             result["manifestUrl"] = gallica_manifest.group(1)
 
         # Mandragore ARK
-        mandragore = re.search(r'mandragore\.bnf\.fr/ark:/12148/(\w+)', html)
+        mandragore = re.search(r"mandragore\.bnf\.fr/ark:/12148/(\w+)", html)
         if mandragore:
             result["mandragoreArk"] = f"ark:/12148/{mandragore.group(1)}"
 
@@ -1411,7 +1540,16 @@ class BiblissimaIlluminationDetailView(View):
 
 
 class BiblissimaCreateResourceView(View):
-    """Create a Document or Component resource from Biblissima data."""
+    """Create a Document, Component, Place, Group, or Person resource from Biblissima data."""
+
+    # Graph ID mapping for all supported resource types
+    GRAPH_IDS = {
+        "Document": DOCUMENT_GRAPH_ID,
+        "Component": COMPONENT_GRAPH_ID,
+        "Place": PLACE_GRAPH_ID,
+        "Group": GROUP_GRAPH_ID,
+        "Person": PERSON_GRAPH_ID,
+    }
 
     def post(self, request):
         import json
@@ -1427,12 +1565,15 @@ class BiblissimaCreateResourceView(View):
         dependencies = body.get("dependencies", {})
         concept_mappings = body.get("conceptMappings", {})
 
-        if resource_type == "Document":
-            graph_id = DOCUMENT_GRAPH_ID
-        elif resource_type == "Component":
-            graph_id = COMPONENT_GRAPH_ID
-        else:
-            return JsonResponse({"error": f"Unknown resourceType: {resource_type}"}, status=400)
+        graph_id = self.GRAPH_IDS.get(resource_type)
+        if not graph_id:
+            return JsonResponse(
+                {"error": f"Unknown resourceType: {resource_type}"}, status=400
+            )
+
+        # Dependency types (Place/Group/Person): lightweight creation with just a name
+        if resource_type in ("Place", "Group", "Person"):
+            return self._create_dependency_resource(graph_id, resource_type, bbma_data)
 
         try:
             resource_id, created_deps = self._create_resource(
@@ -1455,8 +1596,86 @@ class BiblissimaCreateResourceView(View):
             }
         )
 
+    def _create_dependency_resource(self, graph_id, resource_type, bbma_data):
+        """Create a Place/Group/Person resource with name and relationships."""
+        from django.db import transaction
+        from arches.app.models.resource import Resource
+
+        label = (bbma_data.get("label") or "").strip()
+        if not label:
+            return JsonResponse({"error": "Missing label for dependency"}, status=400)
+
+        name_conf = DEP_NAME_CONFIG[graph_id]
+        member_of_id = bbma_data.get("memberOf")
+        location_id = bbma_data.get("location")
+
+        try:
+            with transaction.atomic():
+                resource_instance = ResourceInstance(graph_id=graph_id)
+                resource_instance.save()
+                resource_id = resource_instance.resourceinstanceid
+
+                # Name tile
+                self._create_tile(
+                    name_conf["ng"],
+                    resource_id,
+                    {
+                        name_conf["label"]: self._i18n_string(label),
+                        name_conf["language"]: self._concept_list([CONCEPT_FRENCH]),
+                        name_conf["type"]: self._concept_list(
+                            [CONCEPT_PREFERRED_TERMS]
+                        ),
+                    },
+                )
+
+                # Group: Member of (parent group)
+                if resource_type == "Group" and member_of_id:
+                    self._create_tile(
+                        GROUP_MEMBER_OF_NG,
+                        resource_id,
+                        {
+                            GROUP_MEMBER_OF_NODE: self._resource_instance_ref(
+                                member_of_id
+                            ),
+                        },
+                    )
+
+                # Group: Location (place)
+                if resource_type == "Group" and location_id:
+                    self._create_tile(
+                        GROUP_LOCATION_NG,
+                        resource_id,
+                        {
+                            GROUP_LOCATION_NODE: self._resource_instance_list(
+                                location_id
+                            ),
+                        },
+                    )
+
+            resource = Resource.objects.get(resourceinstanceid=resource_id)
+            resource.index()
+        except Exception:
+            logger.exception("Failed to create %s dependency", resource_type)
+            return JsonResponse(
+                {"error": f"{resource_type} creation failed"}, status=500
+            )
+
+        return JsonResponse(
+            {
+                "resourceId": str(resource_id),
+                "displayname": label,
+            }
+        )
+
     def _create_resource(
-        self, graph_id, resource_type, transaction_id, bbma_data, dependencies, concept_mappings, user
+        self,
+        graph_id,
+        resource_type,
+        transaction_id,
+        bbma_data,
+        dependencies,
+        concept_mappings,
+        user,
     ):
         """Create a resource with all its tiles from Biblissima data.
 
@@ -1475,11 +1694,21 @@ class BiblissimaCreateResourceView(View):
 
             if resource_type == "Document":
                 self._create_document_tiles(
-                    resource_id, transaction_id, bbma_data, dependencies, concept_mappings, created_deps
+                    resource_id,
+                    transaction_id,
+                    bbma_data,
+                    dependencies,
+                    concept_mappings,
+                    created_deps,
                 )
             else:
                 self._create_component_tiles(
-                    resource_id, transaction_id, bbma_data, dependencies, concept_mappings, created_deps
+                    resource_id,
+                    transaction_id,
+                    bbma_data,
+                    dependencies,
+                    concept_mappings,
+                    created_deps,
                 )
 
             # Link to project if specified
@@ -1492,7 +1721,9 @@ class BiblissimaCreateResourceView(View):
             resource = Resource.objects.get(resourceinstanceid=resource_id)
             resource.index()
         except Exception:
-            logger.warning("ES indexing failed for resource %s (DB is committed)", resource_id)
+            logger.warning(
+                "ES indexing failed for resource %s (DB is committed)", resource_id
+            )
 
         return resource_id, created_deps
 
@@ -1523,14 +1754,20 @@ class BiblissimaCreateResourceView(View):
         """
         try:
             # Try English first
-            val = Value.objects.filter(
-                concept_id=concept_id, valuetype="prefLabel",
-            ).filter(language__in=["en", "en-US", "en-UK", "English"]).first()
+            val = (
+                Value.objects.filter(
+                    concept_id=concept_id,
+                    valuetype="prefLabel",
+                )
+                .filter(language__in=["en", "en-US", "en-UK", "English"])
+                .first()
+            )
             if val:
                 return str(val.valueid)
             # Fallback to any language
             val = Value.objects.filter(
-                concept_id=concept_id, valuetype="prefLabel",
+                concept_id=concept_id,
+                valuetype="prefLabel",
             ).first()
             return str(val.valueid) if val else concept_id
         except Exception:
@@ -1542,7 +1779,9 @@ class BiblissimaCreateResourceView(View):
             concept_ids = [concept_ids]
         return [self._concept_valueid(cid) for cid in concept_ids]
 
-    def _create_document_tiles(self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps):
+    def _create_document_tiles(
+        self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps
+    ):
         """Create all tiles for a Document resource."""
         i18n = self._i18n_string
         clist = self._concept_list
@@ -1550,7 +1789,8 @@ class BiblissimaCreateResourceView(View):
         # Name
         label = bbma_data.get("label", "Untitled")
         self._create_tile(
-            DOC_NAME_NG, resource_id,
+            DOC_NAME_NG,
+            resource_id,
             {
                 DOC_NAME_LABEL: i18n(label),
                 DOC_NAME_LANGUAGE: clist([CONCEPT_FRENCH]),
@@ -1563,7 +1803,8 @@ class BiblissimaCreateResourceView(View):
         shelfmark = bbma_data.get("shelfmark")
         if shelfmark:
             self._create_tile(
-                DOC_NAME_NG, resource_id,
+                DOC_NAME_NG,
+                resource_id,
                 {
                     DOC_NAME_LABEL: i18n(shelfmark),
                     DOC_NAME_LANGUAGE: clist([CONCEPT_FRENCH]),
@@ -1577,7 +1818,8 @@ class BiblissimaCreateResourceView(View):
         if doc_type:
             # doc_type from frontend is already a valueid (selected via concept-select-widget)
             self._create_tile(
-                DOC_TYPE_NG, resource_id,
+                DOC_TYPE_NG,
+                resource_id,
                 {DOC_TYPE_NODE: doc_type},
                 transaction_id,
             )
@@ -1586,7 +1828,8 @@ class BiblissimaCreateResourceView(View):
         ark_id = bbma_data.get("arkId")
         if ark_id:
             self._create_tile(
-                DOC_IDENTIFIER_NG, resource_id,
+                DOC_IDENTIFIER_NG,
+                resource_id,
                 {
                     DOC_IDENTIFIER_VALUE: i18n(ark_id),
                     DOC_IDENTIFIER_TYPE: clist([CONCEPT_PERSISTENT_ID]),
@@ -1598,9 +1841,12 @@ class BiblissimaCreateResourceView(View):
         qid = bbma_data.get("biblissimaQid")
         if qid:
             self._create_tile(
-                DOC_IDENTIFIER_NG, resource_id,
+                DOC_IDENTIFIER_NG,
+                resource_id,
                 {
-                    DOC_IDENTIFIER_VALUE: i18n(f"https://data.biblissima.fr/entity/{qid}"),
+                    DOC_IDENTIFIER_VALUE: i18n(
+                        f"https://data.biblissima.fr/entity/{qid}"
+                    ),
                     DOC_IDENTIFIER_TYPE: clist([CONCEPT_RECORD_ID]),
                     DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BIBLISSIMA]),
                 },
@@ -1610,7 +1856,8 @@ class BiblissimaCreateResourceView(View):
         mandragore_id = bbma_data.get("mandragoreId")
         if mandragore_id:
             self._create_tile(
-                DOC_IDENTIFIER_NG, resource_id,
+                DOC_IDENTIFIER_NG,
+                resource_id,
                 {
                     DOC_IDENTIFIER_VALUE: i18n(mandragore_id),
                     DOC_IDENTIFIER_TYPE: clist([CONCEPT_RECORD_ID]),
@@ -1624,12 +1871,15 @@ class BiblissimaCreateResourceView(View):
         portal_url = bbma_data.get("portalUrl", "")
         if legend:
             self._create_tile(
-                DOC_STATEMENT_NG, resource_id,
+                DOC_STATEMENT_NG,
+                resource_id,
                 {
                     DOC_STATEMENT_CONTENT: i18n(legend),
                     DOC_STATEMENT_TYPE: clist([CONCEPT_DESCRIPTION]),
                     DOC_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
-                    DOC_STATEMENT_SOURCE: {"url": portal_url, "url_label": ""} if portal_url else None,
+                    DOC_STATEMENT_SOURCE: (
+                        {"url": portal_url, "url_label": ""} if portal_url else None
+                    ),
                 },
                 transaction_id,
             )
@@ -1638,7 +1888,8 @@ class BiblissimaCreateResourceView(View):
         manifest_url = bbma_data.get("manifestUrl")
         if manifest_url:
             self._create_tile(
-                DOC_FACSIMILES_NG, resource_id,
+                DOC_FACSIMILES_NG,
+                resource_id,
                 {DOC_FACSIMILES_NODE: manifest_url},
                 transaction_id,
             )
@@ -1648,7 +1899,8 @@ class BiblissimaCreateResourceView(View):
         century_concept = _parse_century(date_str)
         if century_concept:
             self._create_tile(
-                DOC_PERIOD_NG, resource_id,
+                DOC_PERIOD_NG,
+                resource_id,
                 {
                     DOC_PERIOD_ABSOLUTE: clist([century_concept]),
                     DOC_PERIOD_PRODUCTION: clist([CONCEPT_MEDIEVAL]),
@@ -1672,7 +1924,8 @@ class BiblissimaCreateResourceView(View):
 
         if len(prod_data) > 1:
             self._create_tile(
-                DOC_PRODUCTION_NG, resource_id,
+                DOC_PRODUCTION_NG,
+                resource_id,
                 prod_data,
                 transaction_id,
             )
@@ -1681,7 +1934,8 @@ class BiblissimaCreateResourceView(View):
         location_id = deps.get("currentLocation")
         if location_id:
             self._create_tile(
-                DOC_LOCATION_NG, resource_id,
+                DOC_LOCATION_NG,
+                resource_id,
                 {
                     DOC_LOCATION_NODE: self._resource_instance_ref(location_id),
                     DOC_LOCATION_LITERAL: None,
@@ -1693,7 +1947,8 @@ class BiblissimaCreateResourceView(View):
         owner_ids = deps.get("currentOwner", [])
         if owner_ids:
             self._create_tile(
-                DOC_OWNER_NG, resource_id,
+                DOC_OWNER_NG,
+                resource_id,
                 {DOC_OWNER_NODE: self._resource_instance_list(owner_ids)},
                 transaction_id,
             )
@@ -1702,12 +1957,15 @@ class BiblissimaCreateResourceView(View):
         parent_doc_id = deps.get("partOf")
         if parent_doc_id:
             self._create_tile(
-                DOC_PART_OF_NG, resource_id,
+                DOC_PART_OF_NG,
+                resource_id,
                 {DOC_PART_OF_NODE: self._resource_instance_list(parent_doc_id)},
                 transaction_id,
             )
 
-    def _create_component_tiles(self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps):
+    def _create_component_tiles(
+        self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps
+    ):
         """Create all tiles for a Component resource."""
         i18n = self._i18n_string
         clist = self._concept_list
@@ -1715,7 +1973,8 @@ class BiblissimaCreateResourceView(View):
         # Name
         label = bbma_data.get("legend") or bbma_data.get("label", "Untitled")
         self._create_tile(
-            COMP_NAME_NG, resource_id,
+            COMP_NAME_NG,
+            resource_id,
             {
                 COMP_NAME_LABEL: i18n(label),
                 COMP_NAME_LANGUAGE: clist([CONCEPT_FRENCH]),
@@ -1729,7 +1988,8 @@ class BiblissimaCreateResourceView(View):
         if comp_type:
             # comp_type from frontend is already a valueid
             self._create_tile(
-                COMP_TYPE_NG, resource_id,
+                COMP_TYPE_NG,
+                resource_id,
                 {COMP_TYPE_NODE: [comp_type]},
                 transaction_id,
             )
@@ -1738,7 +1998,8 @@ class BiblissimaCreateResourceView(View):
         parent_doc_id = deps.get("parentDocument")
         if parent_doc_id:
             self._create_tile(
-                COMP_PARENT_DOC_NG, resource_id,
+                COMP_PARENT_DOC_NG,
+                resource_id,
                 {COMP_PARENT_DOC_NODE: self._resource_instance_ref(parent_doc_id)},
                 transaction_id,
             )
@@ -1747,7 +2008,8 @@ class BiblissimaCreateResourceView(View):
         ark_id = bbma_data.get("arkId")
         if ark_id:
             self._create_tile(
-                COMP_IDENTIFIER_NG, resource_id,
+                COMP_IDENTIFIER_NG,
+                resource_id,
                 {
                     COMP_IDENTIFIER_VALUE: i18n(ark_id),
                     COMP_IDENTIFIER_TYPE: clist([CONCEPT_PERSISTENT_ID]),
@@ -1761,12 +2023,15 @@ class BiblissimaCreateResourceView(View):
         portal_url = bbma_data.get("portalUrl", "")
         if legend:
             self._create_tile(
-                COMP_STATEMENT_NG, resource_id,
+                COMP_STATEMENT_NG,
+                resource_id,
                 {
                     COMP_STATEMENT_CONTENT: i18n(legend),
                     COMP_STATEMENT_TYPE: clist([CONCEPT_DESCRIPTION]),
                     COMP_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
-                    COMP_STATEMENT_SOURCE: {"url": portal_url, "url_label": ""} if portal_url else None,
+                    COMP_STATEMENT_SOURCE: (
+                        {"url": portal_url, "url_label": ""} if portal_url else None
+                    ),
                 },
                 transaction_id,
             )
@@ -1775,7 +2040,8 @@ class BiblissimaCreateResourceView(View):
         thumbnail = bbma_data.get("thumbnail") or bbma_data.get("imageUrl")
         if thumbnail:
             self._create_tile(
-                COMP_ICONOGRAPHIC_NG, resource_id,
+                COMP_ICONOGRAPHIC_NG,
+                resource_id,
                 {COMP_ICONOGRAPHIC_NODE: thumbnail},
                 transaction_id,
             )
@@ -1784,7 +2050,8 @@ class BiblissimaCreateResourceView(View):
         folio = bbma_data.get("folio")
         if folio:
             self._create_tile(
-                COMP_CONTEXT_NG, resource_id,
+                COMP_CONTEXT_NG,
+                resource_id,
                 {COMP_CONTEXT_NODE: i18n(folio)},
                 transaction_id,
             )
@@ -1794,7 +2061,8 @@ class BiblissimaCreateResourceView(View):
         century_concept = _parse_century(date_str)
         if century_concept:
             self._create_tile(
-                COMP_PERIOD_NG, resource_id,
+                COMP_PERIOD_NG,
+                resource_id,
                 {
                     COMP_PERIOD_ABSOLUTE: clist([century_concept]),
                     COMP_PERIOD_PRODUCTION: clist([CONCEPT_MEDIEVAL]),
@@ -1818,7 +2086,8 @@ class BiblissimaCreateResourceView(View):
 
         if len(prod_data) > 1:
             self._create_tile(
-                COMP_PRODUCTION_NG, resource_id,
+                COMP_PRODUCTION_NG,
+                resource_id,
                 prod_data,
                 transaction_id,
             )
@@ -1937,3 +2206,68 @@ class BiblissimaCreateResourceView(View):
             year = (century - 1) * 100 + 1
             return f"{year:04d}-01-01"
         return None
+
+
+class BiblissimaAddAltNameView(View):
+    """Add a Biblissima label as alternative name to an existing resource."""
+
+    def post(self, request):
+        import json
+        from arches.app.models.resource import Resource
+
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON body"}, status=400)
+
+        resource_id = body.get("resourceId", "")
+        graph_id = body.get("graphId", "")
+        label = body.get("label", "").strip()
+
+        if not resource_id or not label or graph_id not in DEP_NAME_CONFIG:
+            return JsonResponse(
+                {"error": "Missing resourceId, label, or invalid graphId"}, status=400
+            )
+
+        name_conf = DEP_NAME_CONFIG[graph_id]
+
+        # Check if this name already exists on the resource
+        existing_tiles = Tile.objects.filter(
+            nodegroup_id=name_conf["ng"],
+            resourceinstance_id=resource_id,
+        )
+        for tile in existing_tiles:
+            existing_label = tile.data.get(name_conf["label"], {})
+            for lang_data in existing_label.values():
+                if (
+                    isinstance(lang_data, dict)
+                    and lang_data.get("value", "").strip().lower() == label.lower()
+                ):
+                    return JsonResponse(
+                        {"status": "already_exists", "message": "Name already present"}
+                    )
+
+        creator = BiblissimaCreateResourceView()
+        try:
+            tile = Tile(
+                tileid=uuid.uuid4(),
+                nodegroup_id=name_conf["ng"],
+                resourceinstance_id=resource_id,
+                data={
+                    name_conf["label"]: creator._i18n_string(label),
+                    name_conf["language"]: creator._concept_list([CONCEPT_FRENCH]),
+                    name_conf["type"]: creator._concept_list(
+                        [CONCEPT_ALTERNATE_TITLES]
+                    ),
+                },
+                sortorder=0,
+            )
+            tile.save(index=False)
+
+            resource = Resource.objects.get(resourceinstanceid=resource_id)
+            resource.index()
+        except Exception:
+            logger.exception("Failed to add alt name to resource %s", resource_id)
+            return JsonResponse({"error": "Failed to add alternative name"}, status=500)
+
+        return JsonResponse({"status": "added", "message": "Alternative name added"})

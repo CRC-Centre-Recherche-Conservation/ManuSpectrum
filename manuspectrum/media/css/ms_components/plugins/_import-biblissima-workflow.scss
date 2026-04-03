@@ -690,6 +690,21 @@ $bbma-danger-bg: #fdf0f0;
         border-color: lighten($bbma-success, 25%);
         background: $bbma-success-bg;
     }
+
+    &.bbma-dep-card-created {
+        border-color: lighten($bbma-success, 25%);
+        background: $bbma-success-bg;
+    }
+
+    &.bbma-dep-card-pending {
+        border-color: #e0a82e;
+        background: $bbma-warning-bg;
+    }
+
+    &.bbma-dep-card-suggestions {
+        border-color: #e0c56e;
+        background: #fffdf5;
+    }
 }
 
 .bbma-dep-card-header {
@@ -718,13 +733,50 @@ $bbma-danger-bg: #fdf0f0;
     font-size: 13px;
     font-weight: 500;
     color: $bbma-ink;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// Status badges in header
+.bbma-dep-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
+
+    .fa { margin-right: 2px; font-size: 9px; }
+}
+
+.bbma-dep-badge-linked {
+    background: $bbma-success-bg;
+    color: $bbma-success;
+}
+
+.bbma-dep-badge-created {
+    background: $bbma-success-bg;
+    color: $bbma-success;
+}
+
+.bbma-dep-badge-pending {
+    background: #fef3cd;
+    color: #856404;
+}
+
+.bbma-dep-badge-suggestions {
+    background: #fff3cd;
+    color: #856404;
 }
 
 .bbma-dep-card-body {
     padding: 10px 12px;
 }
 
-// Linked state
+// Linked / Created state
 .bbma-dep-match-found {
     display: flex;
     align-items: center;
@@ -748,6 +800,114 @@ $bbma-danger-bg: #fdf0f0;
     display: block;
 }
 
+// Pending confirmation (orange state)
+.bbma-dep-confirm-area {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bbma-dep-confirm-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    color: #856404;
+
+    > .fa-question-circle {
+        font-size: 16px;
+        color: #e0a82e;
+        flex-shrink: 0;
+    }
+}
+
+.bbma-dep-confirm-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+// Dep suggestions (inside card)
+.bbma-dep-suggestions {
+    background: #fffbe6;
+    border: 1px solid #f0e6b8;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.bbma-dep-suggestions-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8a6d0b;
+    padding: 6px 10px;
+    border-bottom: 1px solid #f0e6b8;
+
+    .fa { margin-right: 3px; }
+}
+
+.bbma-dep-suggestion-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    border-bottom: 1px solid #f5eece;
+
+    &:last-child { border-bottom: none; }
+    &:hover { background: #fef8d5; }
+}
+
+.bbma-dep-suggestion-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.bbma-dep-suggestion-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: 8px;
+
+    .btn-xs {
+        padding: 2px 8px;
+        height: auto;
+        width: auto;
+        font-size: 11px;
+    }
+}
+
+.bbma-dep-suggestions-footer {
+    padding: 5px 10px;
+    border-top: 1px solid #f0e6b8;
+    background: #fef8d5;
+}
+
+// Create area (no match found)
+.bbma-dep-create-area {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid lighten($bbma-border, 4%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bbma-dep-create-hint {
+    font-size: 11px;
+    color: $bbma-muted;
+    margin: 0;
+    flex: 1;
+
+    .fa { margin-right: 3px; }
+}
+
 // Search area (not yet linked)
 .bbma-dep-search-area {
     .select2-container { width: 100% !important; }
@@ -759,14 +919,6 @@ $bbma-danger-bg: #fdf0f0;
     color: $bbma-muted;
     margin-bottom: 6px;
     display: block;
-
-    .fa { margin-right: 3px; }
-}
-
-.bbma-dep-auto-create {
-    font-size: 11px;
-    color: lighten($bbma-muted, 8%);
-    margin: 6px 0 0;
 
     .fa { margin-right: 3px; }
 }
