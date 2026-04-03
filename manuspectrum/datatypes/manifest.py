@@ -286,12 +286,12 @@ class ManifestDataType(BaseDataType):
             new_globalid = uuid.uuid4()
             manifest = IIIFManifest.objects.create(
                 globalid=new_globalid,
-                url=f"/manifest/{new_globalid}",
+                url=manifest_url,
                 label=label or "IIIF Manifest",
                 description=desc or "",
                 manifest=manifest_json,
             )
-            tile.data[str(nodeid)] = manifest.url
+            tile.data[str(nodeid)] = f"/manifest/{new_globalid}"
         except Exception as e:
             logger.warning("pre_tile_save manifest import failed: %s", e)
 
