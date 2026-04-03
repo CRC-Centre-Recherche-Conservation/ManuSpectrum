@@ -661,6 +661,51 @@ $bbma-danger-bg: #fdf0f0;
 
 .bbma-section-actions {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+// Dep progress pill (inline next to Create All button)
+.bbma-deps-progress {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px;
+    background: $bbma-bg;
+    border: 1px solid $bbma-border;
+    border-radius: 14px;
+    white-space: nowrap;
+}
+
+.bbma-deps-progress-bar {
+    width: 36px;
+    height: 4px;
+    background: darken($bbma-bg, 6%);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.bbma-deps-progress-fill {
+    height: 100%;
+    background: $bbma-accent;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.bbma-deps-progress-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: $bbma-muted;
+    letter-spacing: 0.2px;
+
+    .fa { font-size: 9px; margin-right: 1px; }
+}
+
+// Muted button state when waiting for deps
+.bbma-btn-waiting {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .bbma-section-hint {

@@ -43,6 +43,57 @@ const viewModel = function(params) {
         )
     );
 
+    // All deps resolved? (blocks "Create All")
+    this.allDepsResolved = ko.computed(() =>
+        self.dependencies().every((d) => {
+            const action = d.action();
+            return action === 'use_existing' || action === 'created';
+        })
+    );
+
+    // Dep progress counts (for progress indicator)
+    this.resolvedDepsCount = ko.computed(() =>
+        self.dependencies().filter((d) => {
+            const action = d.action();
+            return action === 'use_existing' || action === 'created';
+        }).length
+    );
+    this.totalDepsCount = ko.computed(() => self.dependencies().length);
+
+    // Check if deps for a specific item are resolved (blocks individual "Create")
+    this.itemDepsResolved = (item) => {
+        const locationKey = item.locationLabel || item.location;
+        return self.dependencies().every((dep) => {
+            const isRelevant =
+                (dep.type === 'Place' && dep.key === locationKey) ||
+                (dep.type === 'Group' && dep.key === item.collectionLabel) ||
+                (dep.type === 'Group' && dep.key === item.parentInstitutionLabel && dep.key !== item.collectionLabel) ||
+                (dep.type === 'Person' && dep.key === item.authorLabel);
+            if (!isRelevant) return true;
+            const action = dep.action();
+            return action === 'use_existing' || action === 'created';
+        });
+    };
+
+    // Unresolved dep names for a specific item (for tooltip)
+    this.unresolvedDepsLabel = (item) => {
+        const locationKey = item.locationLabel || item.location;
+        const unresolved = [];
+        self.dependencies().forEach((dep) => {
+            const isRelevant =
+                (dep.type === 'Place' && dep.key === locationKey) ||
+                (dep.type === 'Group' && dep.key === item.collectionLabel) ||
+                (dep.type === 'Group' && dep.key === item.parentInstitutionLabel && dep.key !== item.collectionLabel) ||
+                (dep.type === 'Person' && dep.key === item.authorLabel);
+            if (!isRelevant) return;
+            const action = dep.action();
+            if (action !== 'use_existing' && action !== 'created') {
+                unresolved.push(dep.type + ': ' + dep.key);
+            }
+        });
+        return unresolved.join('\n');
+    };
+
     // Dependency cache (shared across creations)
     this.dependencyCache = {
         places: {},

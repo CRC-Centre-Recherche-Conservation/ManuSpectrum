@@ -24,8 +24,28 @@
             </span>
             <div class="bbma-section-actions">
                 <!-- ko ifnot: allDone -->
+
+                <!-- Dep progress pill (visible when deps exist and not all resolved) -->
+                <!-- ko if: totalDepsCount() > 0 && !allDepsResolved() -->
+                <div class="bbma-deps-progress">
+                    <div class="bbma-deps-progress-bar">
+                        <div class="bbma-deps-progress-fill"
+                             data-bind="style: { width: (totalDepsCount() > 0 ? (resolvedDepsCount() / totalDepsCount() * 100) : 0) + '%' }">
+                        </div>
+                    </div>
+                    <span class="bbma-deps-progress-label">
+                        <i class="fa fa-link"></i>
+                        <span data-bind="text: resolvedDepsCount()"></span>/<span data-bind="text: totalDepsCount()"></span>
+                        {% trans "linked" %}
+                    </span>
+                </div>
+                <!-- /ko -->
+
                 <button class="btn btn-primary"
-                        data-bind="click: createAll, disable: creatingAll()">
+                        data-bind="click: createAll,
+                                   disable: creatingAll() || !allDepsResolved(),
+                                   css: { 'bbma-btn-waiting': !allDepsResolved() },
+                                   attr: { title: allDepsResolved() ? '' : '{% trans "Link or create all related resources (places, institutions, persons) before creating documents" %}' }">
                     <!-- ko if: creatingAll -->
                     <i class="fa fa-spinner fa-spin"></i>
                     <!-- /ko -->
@@ -89,8 +109,11 @@
                 <!-- Actions -->
                 <div class="bbma-item-actions">
                     <!-- ko if: status() === 'pending' -->
-                    <button class="btn btn-xs btn-primary" data-bind="click: $parent.createResource"
-                            title="{% trans 'Create' %}">
+                    <button class="btn btn-xs btn-primary"
+                            data-bind="click: $parent.createResource,
+                                       disable: !$parent.itemDepsResolved($data),
+                                       attr: { title: $parent.itemDepsResolved($data) ? '{% trans "Create" %}' : '{% trans "Waiting for:" %}' + '\n' + $parent.unresolvedDepsLabel($data) },
+                                       css: { 'bbma-btn-waiting': !$parent.itemDepsResolved($data) }">
                         <i class="fa fa-plus"></i>
                     </button>
                     <!-- /ko -->
