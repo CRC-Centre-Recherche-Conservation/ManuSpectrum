@@ -1508,28 +1508,19 @@ class BiblissimaIlluminationDetailView(View):
             result["manuscriptHash"] = ms_match.group(1)
             result["manuscriptArk"] = f"ark:/43093/{ms_match.group(1)}"
 
-        # Gallica image URL
-        gallica_image = re.search(
-            r"(https://gallica\.bnf\.fr/ark:/12148/\w+/f\d+\.image)", html
-        )
-        if gallica_image:
-            result["imageUrl"] = gallica_image.group(1)
-            result["thumbnail"] = gallica_image.group(1).replace(".image", ".thumbnail")
+        # --- IIIF extraction (generic, works for any store) ---
 
-        # Gallica IIIF info (for canvas in annotation)
-        gallica_iiif = re.search(
-            r"(https://gallica\.bnf\.fr/iiif/ark:/12148/\w+/f\d+/info\.json)", html
-        )
-        if gallica_iiif:
-            result["iiifInfoUrl"] = gallica_iiif.group(1)
-            result["canvasUrl"] = gallica_iiif.group(1).replace("/info.json", "")
-
-        # Gallica manifest
-        gallica_manifest = re.search(
-            r"(https://gallica\.bnf\.fr/iiif/ark:/12148/\w+/manifest\.json)", html
-        )
-        if gallica_manifest:
-            result["manifestUrl"] = gallica_manifest.group(1)
+        # IIIF manifests: extract all from ?iiif-content= pattern (Biblissima standard)
+        iiif_manifests = re.findall(r'[?&]iiif-content=(https?://[^\s"\'&]+)', html)
+        if iiif_manifests:
+            # Deduplicate while preserving order
+            seen_manifests = []
+            for m in iiif_manifests:
+                if m not in seen_manifests:
+                    seen_manifests.append(m)
+            result["manifestUrl"] = seen_manifests[0]
+            if len(seen_manifests) > 1:
+                result["manifestUrls"] = seen_manifests
 
         # Mandragore ARK
         mandragore = re.search(r"mandragore\.bnf\.fr/ark:/12148/(\w+)", html)
