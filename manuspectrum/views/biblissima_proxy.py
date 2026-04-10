@@ -1,11 +1,17 @@
 import logging
 import re
 import uuid
+from functools import lru_cache
 from html import unescape
 
+import arches
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from django.conf import settings as django_settings
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
+from django.utils.translation import gettext as _
 from django.views import View
 from django.views.decorators.cache import cache_page
 
@@ -19,6 +25,100 @@ BIBLISSIMA_WIKIBASE = "https://data.biblissima.fr/w/api.php"
 BIBLISSIMA_IIIF_MANIFEST = "https://portail.biblissima.fr/iiif/manifest"
 
 REQUEST_TIMEOUT = 10
+# The Biblissima IIIF manifest and portal HTML endpoints can be slow when
+# aggregating descriptor-based manifests or when the portal is under load.
+IIIF_REQUEST_TIMEOUT = 45
+PORTAL_REQUEST_TIMEOUT = 30
+
+
+@lru_cache(maxsize=1)
+def _biblissima_user_agent():
+    # Aligned with ManifestDataType._get_request_headers so external services
+    # see a consistent, identifiable client for all ManuSpectrum outbound calls.
+    app_name = getattr(django_settings, "APP_NAME", "Arches")
+    app_version = getattr(django_settings, "APP_VERSION", "")
+    arches_version = getattr(arches, "__version__", "")
+    parts = [f"{app_name}/{app_version}" if app_version else app_name]
+    if arches_version:
+        parts.append(f"Arches/{arches_version}")
+    return " ".join(parts)
+
+
+def _build_biblissima_session():
+    """Requests session with retry/backoff on transient upstream failures."""
+    session = requests.Session()
+    session.headers.update({"User-Agent": _biblissima_user_agent()})
+    retry = Retry(
+        total=2,
+        connect=2,
+        read=2,
+        status=2,
+        backoff_factor=1.5,
+        status_forcelist=(502, 503, 504),
+        allowed_methods=frozenset(["GET", "HEAD"]),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+def _biblissima_upstream_error(exc, context):
+    """Map a requests exception to a JSON error response with a user-facing message."""
+    if isinstance(exc, requests.exceptions.Timeout):
+        logger.warning("%s timed out", context)
+        return JsonResponse(
+            {
+                "error": "timeout",
+                "message": _(
+                    "The Biblissima portal did not respond in time. Please try again in a moment."
+                ),
+            },
+            status=504,
+        )
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        logger.warning("%s connection error", context)
+        return JsonResponse(
+            {
+                "error": "connection_error",
+                "message": _(
+                    "Unable to reach the Biblissima portal. Check your connection and try again."
+                ),
+            },
+            status=502,
+        )
+    if isinstance(exc, requests.exceptions.HTTPError):
+        status = exc.response.status_code if exc.response is not None else 502
+        logger.warning("%s HTTP error %s", context, status)
+        return JsonResponse(
+            {
+                "error": "upstream_error",
+                "status": status,
+                "message": _(
+                    "The Biblissima portal returned an error (%(status)s). Please try again in a moment."
+                )
+                % {"status": status},
+            },
+            status=502,
+        )
+    if isinstance(exc, ValueError):
+        logger.exception("%s returned invalid JSON", context)
+        return JsonResponse(
+            {
+                "error": "invalid_response",
+                "message": _("Invalid response from the Biblissima portal."),
+            },
+            status=502,
+        )
+    logger.exception("%s failed", context)
+    return JsonResponse(
+        {
+            "error": "unknown_error",
+            "message": _("Unknown error while querying Biblissima."),
+        },
+        status=502,
+    )
 
 # Wikibase property IDs
 P2 = "P2"  # nature de l'élément
@@ -958,28 +1058,28 @@ class BiblissimaSearchView(View):
                 desc_hashes.append(f"desc{base}")
 
         headers = {"Accept": "application/ld+json, application/json"}
+        session = _build_biblissima_session()
 
         try:
             if len(desc_hashes) == 1:
                 # Single descriptor: use ARK-based URL
                 url = f"{BIBLISSIMA_IIIF_MANIFEST}/ark:/43093/{desc_hashes[0]}"
-                resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT * 2)
+                resp = session.get(url, headers=headers, timeout=IIIF_REQUEST_TIMEOUT)
             else:
                 # Multiple descriptors: use query param format (AND combination)
                 descriptor_parts = ",".join(f"AND|{h}" for h in desc_hashes)
                 params = {"descriptors": descriptor_parts}
-                resp = requests.get(
+                resp = session.get(
                     BIBLISSIMA_IIIF_MANIFEST,
                     params=params,
                     headers=headers,
-                    timeout=REQUEST_TIMEOUT * 2,
+                    timeout=IIIF_REQUEST_TIMEOUT,
                 )
 
             resp.raise_for_status()
             manifest_json = resp.json()
-        except Exception:
-            logger.exception("Biblissima IIIF search failed")
-            return JsonResponse({"error": "Biblissima search failed"}, status=502)
+        except Exception as exc:
+            return _biblissima_upstream_error(exc, "Biblissima IIIF search")
 
         all_canvases = _parse_iiif_canvases(manifest_json)
         total = len(all_canvases)
@@ -1284,9 +1384,10 @@ def _extract_date_from_portal(portal_hash):
     if not portal_hash:
         return ""
     try:
-        resp = requests.get(
+        session = _build_biblissima_session()
+        resp = session.get(
             f"{BIBLISSIMA_PORTAL}/{portal_hash}",
-            timeout=REQUEST_TIMEOUT * 2,
+            timeout=PORTAL_REQUEST_TIMEOUT,
         )
         resp.raise_for_status()
         html = resp.text
@@ -1374,15 +1475,17 @@ class BiblissimaManuscriptIlluminationsView(View):
             return JsonResponse({"error": "portalHash required"}, status=400)
 
         try:
-            resp = requests.get(
+            session = _build_biblissima_session()
+            resp = session.get(
                 f"{BIBLISSIMA_PORTAL}/{portal_hash}",
-                timeout=REQUEST_TIMEOUT * 2,
+                timeout=PORTAL_REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
             html = resp.text
-        except Exception:
-            logger.warning("Failed to fetch portal page for %s", portal_hash)
-            return JsonResponse({"error": "Failed to fetch portal page"}, status=502)
+        except Exception as exc:
+            return _biblissima_upstream_error(
+                exc, f"Biblissima portal fetch ({portal_hash})"
+            )
 
         results = []
         # Detect which ifdata entries have a digitization icon
@@ -1428,15 +1531,17 @@ class BiblissimaIlluminationDetailView(View):
     @method_decorator(cache_page(60))
     def get(self, request, ifdata_hash):
         try:
-            resp = requests.get(
+            session = _build_biblissima_session()
+            resp = session.get(
                 f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
-                timeout=REQUEST_TIMEOUT * 2,
+                timeout=PORTAL_REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
             html = resp.text
-        except Exception:
-            logger.warning("Failed to fetch illumination page %s", ifdata_hash)
-            return JsonResponse({"error": "Failed to fetch page"}, status=502)
+        except Exception as exc:
+            return _biblissima_upstream_error(
+                exc, f"Biblissima illumination fetch ({ifdata_hash})"
+            )
 
         result = {
             "ifdataHash": ifdata_hash,

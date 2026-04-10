@@ -342,6 +342,27 @@ msgstr "Ajouter par identifiant Biblissima"
 msgid "Add"
 msgstr "Ajouter"
 
+msgid "The Biblissima portal did not respond in time. Please try again in a moment."
+msgstr "Le portail Biblissima n'a pas répondu à temps. Veuillez réessayer dans un instant."
+
+msgid "Unable to reach the Biblissima portal. Check your connection and try again."
+msgstr "Impossible de joindre le portail Biblissima. Vérifiez votre connexion et réessayez."
+
+msgid "The Biblissima portal returned an error (%(status)s). Please try again in a moment."
+msgstr "Le portail Biblissima a renvoyé une erreur (%(status)s). Veuillez réessayer dans un instant."
+
+msgid "Invalid response from the Biblissima portal."
+msgstr "Réponse invalide du portail Biblissima."
+
+msgid "Unknown error while querying Biblissima."
+msgstr "Erreur inconnue lors de la requête Biblissima."
+
+msgid "The Biblissima search failed. Please try again in a moment."
+msgstr "La recherche Biblissima a échoué. Veuillez réessayer dans un instant."
+
+msgid "Network error while querying Biblissima. Check your connection and try again."
+msgstr "Erreur réseau lors de la requête Biblissima. Vérifiez votre connexion et réessayez."
+
 #~ msgid "Project Name"
 #~ msgstr "Nom du projet"
 

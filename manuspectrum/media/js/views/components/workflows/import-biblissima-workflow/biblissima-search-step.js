@@ -25,6 +25,7 @@ const viewModel = function(params) {
     this.complete = params.form?.complete || ko.observable(false);
     this.saving = ko.observable(false);
     this.searching = ko.observable(false);
+    this.searchError = ko.observable(null);
 
     // Config from step 1
     this.config = params.configStepData || {};
@@ -507,11 +508,25 @@ const viewModel = function(params) {
                 descriptors: hashes.join(','),
             });
 
+            self.searchError(null);
             const resp = await fetch(`/api/biblissima/search?${searchParams}`);
-            const data = await resp.json();
-            self.searchResults(data.results || []);
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                self.searchError(
+                    data.message ||
+                        arches.translations.biblissimaSearchFailed ||
+                        'Biblissima search failed',
+                );
+                self.searchResults([]);
+            } else {
+                self.searchResults(data.results || []);
+            }
         } catch (err) {
             console.error('Biblissima search failed:', err);
+            self.searchError(
+                arches.translations.biblissimaNetworkError ||
+                    'Network error while querying Biblissima',
+            );
             self.searchResults([]);
         }
         self.searching(false);
@@ -522,6 +537,7 @@ const viewModel = function(params) {
     // =====================
 
     this.search = () => {
+        self.searchError(null);
         if (self.isDocument) {
             self.searchManuscripts();
         } else if (self.componentSearchMode() === 'manuscript') {

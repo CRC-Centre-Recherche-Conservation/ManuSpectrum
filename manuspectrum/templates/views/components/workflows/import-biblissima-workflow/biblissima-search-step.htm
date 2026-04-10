@@ -141,8 +141,16 @@
         <div class="biblissima-results-column">
             <!-- ko ifnot: searching -->
 
+            <!-- Error state -->
+            <!-- ko if: searchError() -->
+            <div class="alert alert-danger" style="margin: 12px;">
+                <i class="fa fa-exclamation-triangle"></i>
+                <span data-bind="text: searchError"></span>
+            </div>
+            <!-- /ko -->
+
             <!-- Empty state: no search yet -->
-            <!-- ko if: !hasSearched() -->
+            <!-- ko if: !hasSearched() && !searchError() -->
             <div class="bbma-empty-state">
                 <i class="fa fa-search"></i>
                 <!-- ko if: isDocument -->
