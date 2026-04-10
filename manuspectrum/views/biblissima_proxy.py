@@ -1,16 +1,20 @@
 import logging
 import re
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from html import unescape
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
-from django.views.decorators.cache import cache_page
+from django.views.decorators.cache import cache_page, never_cache
 
 from arches.app.models.models import ResourceInstance
 from arches.app.models.models import Value  # used in _concept_valueid
@@ -31,16 +35,21 @@ PORTAL_REQUEST_TIMEOUT = 30
 
 
 def _build_biblissima_session():
-    """Requests session with retry/backoff on transient upstream failures."""
+    """Requests session with retry/backoff on transient upstream failures.
+
+    The Retry adapter honors Retry-After headers by default
+    (respect_retry_after_header=True), so upstream explicit backoff requests
+    on 429/503 are respected transparently.
+    """
     session = requests.Session()
     session.headers.update({"User-Agent": get_user_agent()})
     retry = Retry(
-        total=2,
+        total=3,
         connect=2,
         read=2,
-        status=2,
+        status=3,
         backoff_factor=1.5,
-        status_forcelist=(502, 503, 504),
+        status_forcelist=(429, 502, 503, 504),
         allowed_methods=frozenset(["GET", "HEAD"]),
         raise_on_status=False,
     )
@@ -48,6 +57,74 @@ def _build_biblissima_session():
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
+
+
+# ---------------------------------------------------------------------------
+# Concurrency control & monitoring for outbound Biblissima calls
+# ---------------------------------------------------------------------------
+
+# Module-level semaphore bounds how many concurrent HTTP calls to Biblissima
+# can run across the whole Django process, regardless of how many users hit
+# the proxy at the same time. Sized to stay a good API citizen.
+_BIBLISSIMA_CONCURRENCY_LIMIT = 12
+_biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
+
+# Cache keys and TTLs for Biblissima data in the Django cache backend.
+_BIBLISSIMA_CACHE_TTL = 24 * 60 * 60  # 24 hours
+_BIBLISSIMA_ENTITY_CACHE_KEY = "biblissima:wikibase:entity:{qid}"
+_BIBLISSIMA_MANUSCRIPT_CACHE_KEY = "biblissima:wikibase:manuscript:{ark_hash}"
+
+# Lightweight counters for observing upstream health via /api/biblissima/stats.
+_biblissima_stats = {
+    "requests_total": 0,
+    "requests_in_flight": 0,
+    "responses_429": 0,
+    "responses_5xx": 0,
+    "errors_total": 0,
+    "cache_hits": 0,
+    "cache_misses": 0,
+}
+_biblissima_stats_lock = threading.Lock()
+
+
+def _incr_stat(key, delta=1):
+    with _biblissima_stats_lock:
+        _biblissima_stats[key] = _biblissima_stats.get(key, 0) + delta
+
+
+@contextmanager
+def _biblissima_slot():
+    """Acquire one concurrency slot for an outbound Biblissima call."""
+    _biblissima_semaphore.acquire()
+    _incr_stat("requests_in_flight", 1)
+    try:
+        yield
+    finally:
+        _incr_stat("requests_in_flight", -1)
+        _biblissima_semaphore.release()
+
+
+def _bib_request(session, url, **kwargs):
+    """Wrapper around session.get bounding concurrency and recording metrics.
+
+    The session's HTTPAdapter already handles Retry-After and transient 5xx/429
+    retries with backoff, so this wrapper only counts the final response that
+    reaches the caller. Retries inside the adapter are invisible here by design
+    (otherwise we'd double-count them).
+    """
+    with _biblissima_slot():
+        _incr_stat("requests_total", 1)
+        try:
+            resp = session.get(url, **kwargs)
+        except Exception:
+            _incr_stat("errors_total", 1)
+            raise
+    status = resp.status_code
+    if status == 429:
+        _incr_stat("responses_429", 1)
+    elif 500 <= status < 600:
+        _incr_stat("responses_5xx", 1)
+    return resp
 
 
 def _biblissima_upstream_error(exc, context):
@@ -419,10 +496,22 @@ def _extract_entity_props(qid, raw_entity):
 
 
 def _get_wikibase_entity(qid, session=None):
-    """Fetch a single Wikibase entity and extract relevant properties."""
-    s = session or requests
+    """Fetch a single Wikibase entity and extract relevant properties.
+
+    Results are cached in the Django cache for 24h keyed by QID, so repeated
+    lookups across requests hit the cache instead of Biblissima.
+    """
+    cache_key = _BIBLISSIMA_ENTITY_CACHE_KEY.format(qid=qid)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        _incr_stat("cache_hits", 1)
+        return cached
+    _incr_stat("cache_misses", 1)
+
+    s = session or _build_biblissima_session()
     try:
-        resp = s.get(
+        resp = _bib_request(
+            s,
             BIBLISSIMA_WIKIBASE,
             params={
                 "action": "wbgetentities",
@@ -438,20 +527,43 @@ def _get_wikibase_entity(qid, session=None):
         logger.warning("Failed to fetch Wikibase entity %s", qid)
         return None
 
-    return _extract_entity_props(qid, raw)
+    result = _extract_entity_props(qid, raw)
+    if result:
+        cache.set(cache_key, result, _BIBLISSIMA_CACHE_TTL)
+    return result
 
 
 def _batch_get_wikibase_entities(qids, session=None):
-    """Fetch multiple Wikibase entities in a single API call (max 50)."""
+    """Fetch multiple Wikibase entities in a single API call (max 50 per batch).
+
+    Entities already present in the Django cache are returned without hitting
+    the network; only uncached QIDs are batched into ``wbgetentities`` calls.
+    Freshly fetched entities are written back to the cache for 24h.
+    """
     if not qids:
         return {}
-    s = session or requests
+
     results = {}
+    uncached = []
+    for qid in qids:
+        cached = cache.get(_BIBLISSIMA_ENTITY_CACHE_KEY.format(qid=qid))
+        if cached is not None:
+            results[qid] = cached
+            _incr_stat("cache_hits", 1)
+        else:
+            uncached.append(qid)
+            _incr_stat("cache_misses", 1)
+
+    if not uncached:
+        return results
+
+    s = session or _build_biblissima_session()
     # wbgetentities supports up to 50 IDs per call
-    for i in range(0, len(qids), 50):
-        batch = qids[i : i + 50]
+    for i in range(0, len(uncached), 50):
+        batch = uncached[i : i + 50]
         try:
-            resp = s.get(
+            resp = _bib_request(
+                s,
                 BIBLISSIMA_WIKIBASE,
                 params={
                     "action": "wbgetentities",
@@ -466,7 +578,14 @@ def _batch_get_wikibase_entities(qids, session=None):
             for qid in batch:
                 raw = entities.get(qid, {})
                 if raw and "missing" not in raw:
-                    results[qid] = _extract_entity_props(qid, raw)
+                    entity = _extract_entity_props(qid, raw)
+                    if entity:
+                        results[qid] = entity
+                        cache.set(
+                            _BIBLISSIMA_ENTITY_CACHE_KEY.format(qid=qid),
+                            entity,
+                            _BIBLISSIMA_CACHE_TTL,
+                        )
         except Exception:
             logger.warning("Batch fetch failed for %s", batch)
     return results
@@ -674,7 +793,7 @@ class BiblissimaSuggestView(View):
         "descriptor": "Q304387",
     }
 
-    @method_decorator(cache_page(300))
+    @method_decorator(cache_page(1800))
     def get(self, request):
         query = request.GET.get("q", "").strip()
         if len(query) < 2:
@@ -687,14 +806,15 @@ class BiblissimaSuggestView(View):
         seen_ids = set()
         results = []
 
-        session = requests.Session()
+        session = _build_biblissima_session()
 
         # 1. Prefix match (fast, good for exact starts)
         # wbsearchentities doesn't support type filtering, so we fetch more
         # and filter by checking P2 claims afterwards
         try:
             fetch_limit = limit * 3 if type_qid else limit
-            resp = session.get(
+            resp = _bib_request(
+                session,
                 BIBLISSIMA_WIKIBASE,
                 params={
                     "action": "wbsearchentities",
@@ -711,7 +831,8 @@ class BiblissimaSuggestView(View):
             if type_qid and prefix_items:
                 # Batch fetch P2 claims to filter by type
                 batch_ids = [item["id"] for item in prefix_items]
-                type_resp = session.get(
+                type_resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "wbgetentities",
@@ -769,7 +890,8 @@ class BiblissimaSuggestView(View):
                 if type_qid:
                     srsearch = f"{query} haswbstatement:P2={type_qid}"
 
-                resp = session.get(
+                resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "query",
@@ -791,7 +913,8 @@ class BiblissimaSuggestView(View):
 
                 # Batch fetch labels for full-text results
                 if qids_to_fetch:
-                    resp = session.get(
+                    resp = _bib_request(
+                        session,
                         BIBLISSIMA_WIKIBASE,
                         params={
                             "action": "wbgetentities",
@@ -835,7 +958,7 @@ class BiblissimaSuggestView(View):
 class BiblissimaEntityView(View):
     """Proxy for fetching a single Wikibase entity with extracted properties."""
 
-    @method_decorator(cache_page(600))
+    @method_decorator(cache_page(1800))
     def get(self, request, qid):
         entity = _get_wikibase_entity(qid)
         if entity is None:
@@ -877,14 +1000,14 @@ class BiblissimaSearchManuscriptsView(View):
 
     TYPE_FILTERS = BiblissimaSuggestView.TYPE_FILTERS
 
-    @method_decorator(cache_page(300))
+    @method_decorator(cache_page(1800))
     def get(self, request):
         query = request.GET.get("q", "").strip()
         if len(query) < 3:
             return JsonResponse({"results": []})
 
         limit = max(1, int(request.GET.get("limit", 50)))
-        session = requests.Session()
+        session = _build_biblissima_session()
 
         # --- Step 1: Suggest (reuse SuggestView logic inline) ---
         type_qid = self.TYPE_FILTERS.get("manuscript", "")
@@ -894,7 +1017,8 @@ class BiblissimaSearchManuscriptsView(View):
         # Prefix search
         try:
             fetch_limit = limit * 3
-            resp = session.get(
+            resp = _bib_request(
+                session,
                 BIBLISSIMA_WIKIBASE,
                 params={
                     "action": "wbsearchentities",
@@ -910,7 +1034,8 @@ class BiblissimaSearchManuscriptsView(View):
 
             if prefix_items:
                 batch_ids = [item["id"] for item in prefix_items]
-                type_resp = session.get(
+                type_resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "wbgetentities",
@@ -944,7 +1069,8 @@ class BiblissimaSearchManuscriptsView(View):
         if len(suggest_results) < limit:
             try:
                 srsearch = f"{query} haswbstatement:P2={type_qid}"
-                resp = session.get(
+                resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "query",
@@ -1017,122 +1143,269 @@ class BiblissimaSearchManuscriptsView(View):
         return JsonResponse({"total": len(results), "results": results})
 
 
-class BiblissimaSearchView(View):
-    """Search Biblissima via IIIF manifest by iconographic descriptors."""
+def _enrich_canvases(canvases, session=None):
+    """Enrich a list of canvases with Wikibase manuscript data in place.
 
-    def get(self, request):
-        descriptors = request.GET.get("descriptors", "").strip()
-        if not descriptors:
-            return JsonResponse({"error": "descriptors parameter required"}, status=400)
+    Uses the 3-phase batch strategy:
+      - Phase 1: deduplicate manuscriptArk across the given canvases
+      - Phase 2: cache lookup, parallel wbsearchentities for uncached
+                 manuscripts, batch wbgetentities for candidate and author
+                 entities. Newly resolved manuscripts are persisted to cache.
+      - Phase 3: copy resolved fields onto every canvas in place.
 
-        # Build descriptor query for Biblissima
-        hash_list = [h.strip() for h in descriptors.split(",") if h.strip()]
+    Only the manuscripts referenced by the given canvases are resolved, which
+    makes it cheap to call on a page slice rather than on the whole result set.
+    """
+    if not canvases:
+        return
 
-        # Ensure all hashes use "desc" prefix for IIIF API compatibility
-        _KNOWN_PREFIXES = ("pdata", "mdata", "oedata", "cdata", "ldata", "ifdata")
-        desc_hashes = []
-        for h in hash_list:
-            if h.startswith("desc"):
-                desc_hashes.append(h)
-            else:
-                # Replace known prefix with desc, keep the base hash intact
-                base = h
-                for prefix in _KNOWN_PREFIXES:
-                    if h.startswith(prefix):
-                        base = h[len(prefix) :]
-                        break
-                desc_hashes.append(f"desc{base}")
-
-        headers = {"Accept": "application/ld+json, application/json"}
+    owned_session = session is None
+    if owned_session:
         session = _build_biblissima_session()
 
-        try:
-            if len(desc_hashes) == 1:
-                # Single descriptor: use ARK-based URL
-                url = f"{BIBLISSIMA_IIIF_MANIFEST}/ark:/43093/{desc_hashes[0]}"
-                resp = session.get(url, headers=headers, timeout=IIIF_REQUEST_TIMEOUT)
-            else:
-                # Multiple descriptors: use query param format (AND combination)
-                descriptor_parts = ",".join(f"AND|{h}" for h in desc_hashes)
-                params = {"descriptors": descriptor_parts}
-                resp = session.get(
-                    BIBLISSIMA_IIIF_MANIFEST,
-                    params=params,
-                    headers=headers,
-                    timeout=IIIF_REQUEST_TIMEOUT,
-                )
-
-            resp.raise_for_status()
-            manifest_json = resp.json()
-        except Exception as exc:
-            return _biblissima_upstream_error(exc, "Biblissima IIIF search")
-
-        all_canvases = _parse_iiif_canvases(manifest_json)
-        total = len(all_canvases)
-
-        # Enrich with Wikibase data per unique manuscript (cached within request)
-        manuscript_cache = {}
-        session = requests.Session()
-
-        for canvas in all_canvases:
+    try:
+        # Phase 1: collect unique manuscripts (ark_hash -> display name)
+        unique_manuscripts = {}
+        for canvas in canvases:
             ms_ark = canvas.get("manuscriptArk")
-            if not ms_ark or ms_ark in manuscript_cache:
-                if ms_ark and ms_ark in manuscript_cache:
-                    ms_data = manuscript_cache[ms_ark]
-                    canvas["manifestUrl"] = ms_data.get("manifestUrl")
-                    canvas["authorLabel"] = ms_data.get("authorLabel")
-                    canvas["authorQid"] = ms_data.get("authorQid")
-                    canvas["biblissimaQid"] = ms_data.get("qid")
-                    canvas["shelfmark"] = ms_data.get("shelfmark")
-                    canvas["mandragoreId"] = ms_data.get("mandragoreId")
+            if not ms_ark:
                 continue
-
-            # Search Wikibase for this manuscript by its portal hash
             ark_hash = ms_ark.replace("ark:/43093/", "")
+            if ark_hash and ark_hash not in unique_manuscripts:
+                unique_manuscripts[ark_hash] = canvas.get("manuscript", "")
+
+        resolved_manuscripts = {}
+        to_resolve = {}
+
+        # Phase 2a: Django cache lookup per manuscript
+        for ark_hash, ms_name in unique_manuscripts.items():
+            cached = cache.get(
+                _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash)
+            )
+            if cached is not None:
+                resolved_manuscripts[ark_hash] = cached
+                _incr_stat("cache_hits", 1)
+            else:
+                to_resolve[ark_hash] = ms_name
+                _incr_stat("cache_misses", 1)
+
+        # Phase 2b: parallel wbsearchentities for uncached manuscripts
+        def _search_candidates(item):
+            ark_hash, ms_name = item
+            if not ms_name:
+                return ark_hash, []
             try:
-                search_resp = session.get(
+                resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "wbsearchentities",
-                        "search": canvas.get("manuscript", ""),
+                        "search": ms_name,
                         "language": "fr",
                         "format": "json",
                         "limit": 5,
                     },
                     timeout=REQUEST_TIMEOUT,
                 )
-                search_resp.raise_for_status()
-                search_data = search_resp.json()
-
-                ms_data = {}
-                for item in search_data.get("search", []):
-                    entity = _get_wikibase_entity(item["id"], session=session)
-                    if entity and entity.get("portalHash") == ark_hash:
-                        ms_data = entity
-                        # Resolve author label
-                        if ms_data.get("author"):
-                            author = _get_wikibase_entity(
-                                ms_data["author"], session=session
-                            )
-                            if author:
-                                ms_data["authorLabel"] = author["label"]
-                                ms_data["authorQid"] = ms_data["author"]
-                        break
-                manuscript_cache[ms_ark] = ms_data
-
-                canvas["manifestUrl"] = ms_data.get("manifestUrl")
-                canvas["authorLabel"] = ms_data.get("authorLabel")
-                canvas["authorQid"] = ms_data.get("authorQid")
-                canvas["biblissimaQid"] = ms_data.get("qid")
-                canvas["shelfmark"] = ms_data.get("shelfmark")
-                canvas["mandragoreId"] = ms_data.get("mandragoreId")
+                resp.raise_for_status()
+                return ark_hash, [it["id"] for it in resp.json().get("search", [])]
             except Exception:
-                logger.warning("Failed to enrich manuscript %s", ms_ark)
-                manuscript_cache[ms_ark] = {}
+                logger.warning("wbsearchentities failed for %s", ms_name)
+                return ark_hash, []
 
-        session.close()
+        candidates_by_ark_hash = {}
+        if to_resolve:
+            max_workers = min(6, len(to_resolve))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                for ark_hash, candidate_qids in executor.map(
+                    _search_candidates, to_resolve.items()
+                ):
+                    candidates_by_ark_hash[ark_hash] = candidate_qids
 
-        return JsonResponse({"total": total, "results": all_canvases})
+        # Phase 2c: batch-fetch all candidate entities in one go
+        all_candidate_qids = list(
+            {qid for qids in candidates_by_ark_hash.values() for qid in qids}
+        )
+        entities_by_qid = _batch_get_wikibase_entities(
+            all_candidate_qids, session=session
+        )
+
+        # Phase 2d: match each manuscript to its QID via portalHash
+        author_qids = set()
+        for ark_hash, candidate_qids in candidates_by_ark_hash.items():
+            ms_data = {}
+            for qid in candidate_qids:
+                entity = entities_by_qid.get(qid)
+                if entity and entity.get("portalHash") == ark_hash:
+                    ms_data = dict(entity)
+                    if ms_data.get("author"):
+                        author_qids.add(ms_data["author"])
+                    break
+            resolved_manuscripts[ark_hash] = ms_data
+
+        # Phase 2e: batch-fetch all author entities in one go
+        authors_by_qid = (
+            _batch_get_wikibase_entities(list(author_qids), session=session)
+            if author_qids
+            else {}
+        )
+
+        # Phase 2f: attach author labels and persist newly-resolved manuscripts
+        for ark_hash in to_resolve:
+            ms_data = resolved_manuscripts.get(ark_hash, {})
+            if ms_data:
+                author_qid = ms_data.get("author")
+                if author_qid and author_qid in authors_by_qid:
+                    author = authors_by_qid[author_qid]
+                    ms_data["authorLabel"] = author.get("label", "")
+                    ms_data["authorQid"] = author_qid
+            cache.set(
+                _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
+                ms_data,
+                _BIBLISSIMA_CACHE_TTL,
+            )
+
+        # Phase 3: decorate every canvas from the resolved manuscript map
+        for canvas in canvases:
+            ms_ark = canvas.get("manuscriptArk")
+            if not ms_ark:
+                continue
+            ark_hash = ms_ark.replace("ark:/43093/", "")
+            ms_data = resolved_manuscripts.get(ark_hash) or {}
+            canvas["manifestUrl"] = ms_data.get("manifestUrl")
+            canvas["authorLabel"] = ms_data.get("authorLabel")
+            canvas["authorQid"] = ms_data.get("authorQid")
+            canvas["biblissimaQid"] = ms_data.get("qid")
+            canvas["shelfmark"] = ms_data.get("shelfmark")
+            canvas["mandragoreId"] = ms_data.get("mandragoreId")
+    finally:
+        if owned_session:
+            session.close()
+
+
+def _normalize_descriptors(descriptors):
+    """Normalize a raw descriptors query string to the canonical desc-prefixed list."""
+    hash_list = [h.strip() for h in descriptors.split(",") if h.strip()]
+    known_prefixes = ("pdata", "mdata", "oedata", "cdata", "ldata", "ifdata")
+    normalized = []
+    for h in hash_list:
+        if h.startswith("desc"):
+            normalized.append(h)
+            continue
+        base = h
+        for prefix in known_prefixes:
+            if h.startswith(prefix):
+                base = h[len(prefix) :]
+                break
+        normalized.append(f"desc{base}")
+    return normalized
+
+
+def _fetch_biblissima_canvases(desc_hashes, session):
+    """Fetch the IIIF manifest from Biblissima and parse its canvases.
+
+    Goes through ``_bib_request`` so the outbound call honors the concurrency
+    semaphore and is counted in the stats counters like every other Biblissima
+    call. The session already carries the shared User-Agent header.
+    """
+    headers = {"Accept": "application/ld+json, application/json"}
+    if len(desc_hashes) == 1:
+        url = f"{BIBLISSIMA_IIIF_MANIFEST}/ark:/43093/{desc_hashes[0]}"
+        resp = _bib_request(
+            session, url, headers=headers, timeout=IIIF_REQUEST_TIMEOUT
+        )
+    else:
+        descriptor_parts = ",".join(f"AND|{h}" for h in desc_hashes)
+        resp = _bib_request(
+            session,
+            BIBLISSIMA_IIIF_MANIFEST,
+            params={"descriptors": descriptor_parts},
+            headers=headers,
+            timeout=IIIF_REQUEST_TIMEOUT,
+        )
+    resp.raise_for_status()
+    return _parse_iiif_canvases(resp.json())
+
+
+# Raw parsed canvases are cached server-side under this key to avoid
+# refetching the (big, slow) IIIF manifest for every paginated request.
+_BIBLISSIMA_RAW_SEARCH_CACHE_KEY = "biblissima:search:raw:{descriptors_key}"
+_BIBLISSIMA_RAW_SEARCH_TTL = 3600  # 1h
+
+_DEFAULT_SEARCH_PAGE_SIZE = 50
+_MAX_SEARCH_PAGE_SIZE = 200
+
+
+class BiblissimaSearchView(View):
+    """Search Biblissima via IIIF manifest by iconographic descriptors.
+
+    Paginated to enable progressive loading: the frontend fetches page 1 first
+    (incurs the one-time IIIF manifest fetch), then continues with pages 2..N
+    in the background while the user is already interacting with page 1.
+
+    Raw parsed canvases are cached server-side for 1h under the normalized
+    descriptor key, so paginated follow-up requests skip the IIIF fetch and
+    only enrich the requested slice.
+    """
+
+    @method_decorator(cache_page(3600))
+    def get(self, request):
+        descriptors = request.GET.get("descriptors", "").strip()
+        if not descriptors:
+            return JsonResponse({"error": "descriptors parameter required"}, status=400)
+
+        try:
+            page = max(1, int(request.GET.get("page", 1)))
+        except ValueError:
+            page = 1
+        try:
+            page_size = int(request.GET.get("page_size", _DEFAULT_SEARCH_PAGE_SIZE))
+        except ValueError:
+            page_size = _DEFAULT_SEARCH_PAGE_SIZE
+        page_size = max(1, min(page_size, _MAX_SEARCH_PAGE_SIZE))
+
+        desc_hashes = _normalize_descriptors(descriptors)
+        if not desc_hashes:
+            return JsonResponse({"error": "descriptors parameter required"}, status=400)
+
+        descriptors_key = ",".join(sorted(desc_hashes))
+        raw_cache_key = _BIBLISSIMA_RAW_SEARCH_CACHE_KEY.format(
+            descriptors_key=descriptors_key
+        )
+
+        session = _build_biblissima_session()
+        try:
+            all_canvases = cache.get(raw_cache_key)
+            if all_canvases is None:
+                try:
+                    all_canvases = _fetch_biblissima_canvases(desc_hashes, session)
+                except Exception as exc:
+                    return _biblissima_upstream_error(exc, "Biblissima IIIF search")
+                cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
+
+            total = len(all_canvases)
+            total_pages = (
+                max(1, (total + page_size - 1) // page_size) if total else 0
+            )
+
+            start = (page - 1) * page_size
+            end = start + page_size
+            page_canvases = all_canvases[start:end]
+
+            # Enrich in place on the slice we're about to return.
+            _enrich_canvases(page_canvases, session=session)
+        finally:
+            session.close()
+
+        return JsonResponse(
+            {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "results": page_canvases,
+            }
+        )
 
 
 class BiblissimaCheckDuplicatesView(View):
@@ -1369,9 +1642,10 @@ def _extract_date_from_portal(portal_hash):
     """Scrape a Biblissima portal page to extract 'Date de fabrication'."""
     if not portal_hash:
         return ""
+    session = _build_biblissima_session()
     try:
-        session = _build_biblissima_session()
-        resp = session.get(
+        resp = _bib_request(
+            session,
             f"{BIBLISSIMA_PORTAL}/{portal_hash}",
             timeout=PORTAL_REQUEST_TIMEOUT,
         )
@@ -1379,6 +1653,8 @@ def _extract_date_from_portal(portal_hash):
         html = resp.text
     except Exception:
         return ""
+    finally:
+        session.close()
 
     pres_match = re.search(r'id="presentation">(.*?)</section>', html, re.DOTALL)
     if not pres_match:
@@ -1451,83 +1727,143 @@ def _resolve_biblissima_type(typologie="", descriptor="", type_field=""):
     return BIBLISSIMA_TYPE_DEFAULT
 
 
-class BiblissimaManuscriptIlluminationsView(View):
-    """Scrape Biblissima portal page for a manuscript to list its illuminations."""
+def _parse_manuscript_illuminations(html):
+    """Parse a Biblissima portal manuscript page and return the illumination list."""
+    results = []
+    has_image_set = set(re.findall(r"fa-picture-o.*?ark:/43093/(ifdata\w+)", html))
 
-    @method_decorator(cache_page(60))
+    for match in re.finditer(
+        r'<a\s+href="[^"]*ark:/43093/(ifdata\w+)"[^>]*>([^<]+)</a>', html
+    ):
+        ifdata_hash = match.group(1)
+        label = match.group(2).strip()
+
+        desc_match = re.match(r"^([^(]+)", label)
+        descriptor = desc_match.group(1).strip() if desc_match else label
+
+        folio_match = re.search(r"\bf\.?\s*(\d+\w*)\)?$", label)
+        folio = folio_match.group(1) if folio_match else ""
+
+        type_valueid = _resolve_biblissima_type(descriptor=descriptor)
+
+        results.append(
+            {
+                "ifdataHash": ifdata_hash,
+                "arkId": f"ark:/43093/{ifdata_hash}",
+                "label": label,
+                "descriptor": descriptor,
+                "folio": folio,
+                "hasImage": ifdata_hash in has_image_set,
+                "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
+                "typeValueId": type_valueid,
+            }
+        )
+    return results
+
+
+# Raw parsed illumination lists are cached server-side under this key to
+# avoid re-scraping the (slow) portal HTML page on every paginated request.
+_BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY = "biblissima:illuminations:raw:{portal_hash}"
+_BIBLISSIMA_RAW_ILLUMINATIONS_TTL = 3600  # 1h
+
+_DEFAULT_ILLUMINATIONS_PAGE_SIZE = 20
+_MAX_ILLUMINATIONS_PAGE_SIZE = 200
+
+
+class BiblissimaManuscriptIlluminationsView(View):
+    """Scrape Biblissima portal page for a manuscript to list its illuminations.
+
+    Paginated like BiblissimaSearchView so the frontend can render the first
+    page quickly and stream the rest in the background with a progress bar.
+    Raw parsed illuminations are cached for 1h under the manuscript portal
+    hash so follow-up page requests skip the (slow) HTML scrape.
+    """
+
+    @method_decorator(cache_page(3600))
     def get(self, request):
         portal_hash = request.GET.get("portalHash", "").strip()
         if not portal_hash:
             return JsonResponse({"error": "portalHash required"}, status=400)
 
         try:
+            page = max(1, int(request.GET.get("page", 1)))
+        except ValueError:
+            page = 1
+        try:
+            page_size = int(
+                request.GET.get("page_size", _DEFAULT_ILLUMINATIONS_PAGE_SIZE)
+            )
+        except ValueError:
+            page_size = _DEFAULT_ILLUMINATIONS_PAGE_SIZE
+        page_size = max(1, min(page_size, _MAX_ILLUMINATIONS_PAGE_SIZE))
+
+        raw_cache_key = _BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY.format(
+            portal_hash=portal_hash
+        )
+        all_illuminations = cache.get(raw_cache_key)
+
+        if all_illuminations is None:
             session = _build_biblissima_session()
-            resp = session.get(
-                f"{BIBLISSIMA_PORTAL}/{portal_hash}",
-                timeout=PORTAL_REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            html = resp.text
-        except Exception as exc:
-            return _biblissima_upstream_error(
-                exc, f"Biblissima portal fetch ({portal_hash})"
-            )
+            try:
+                try:
+                    resp = _bib_request(
+                        session,
+                        f"{BIBLISSIMA_PORTAL}/{portal_hash}",
+                        timeout=PORTAL_REQUEST_TIMEOUT,
+                    )
+                    resp.raise_for_status()
+                    html = resp.text
+                except Exception as exc:
+                    return _biblissima_upstream_error(
+                        exc, f"Biblissima portal fetch ({portal_hash})"
+                    )
+            finally:
+                session.close()
 
-        results = []
-        # Detect which ifdata entries have a digitization icon
-        has_image_set = set(re.findall(r"fa-picture-o.*?ark:/43093/(ifdata\w+)", html))
-
-        # Parse all ifdata links
-        for match in re.finditer(
-            r'<a\s+href="[^"]*ark:/43093/(ifdata\w+)"[^>]*>([^<]+)</a>', html
-        ):
-            ifdata_hash = match.group(1)
-            label = match.group(2).strip()
-
-            # Descriptor = text before first "("
-            desc_match = re.match(r"^([^(]+)", label)
-            descriptor = desc_match.group(1).strip() if desc_match else label
-
-            # Folio = f.NNN pattern at end
-            folio_match = re.search(r"\bf\.?\s*(\d+\w*)\)?$", label)
-            folio = folio_match.group(1) if folio_match else ""
-
-            # Resolve type from descriptor
-            type_valueid = _resolve_biblissima_type(descriptor=descriptor)
-
-            results.append(
-                {
-                    "ifdataHash": ifdata_hash,
-                    "arkId": f"ark:/43093/{ifdata_hash}",
-                    "label": label,
-                    "descriptor": descriptor,
-                    "folio": folio,
-                    "hasImage": ifdata_hash in has_image_set,
-                    "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
-                    "typeValueId": type_valueid,
-                }
+            all_illuminations = _parse_manuscript_illuminations(html)
+            cache.set(
+                raw_cache_key, all_illuminations, _BIBLISSIMA_RAW_ILLUMINATIONS_TTL
             )
 
-        return JsonResponse({"total": len(results), "results": results})
+        total = len(all_illuminations)
+        total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_illuminations = all_illuminations[start:end]
+
+        return JsonResponse(
+            {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "results": page_illuminations,
+            }
+        )
 
 
 class BiblissimaIlluminationDetailView(View):
     """Scrape a single illumination page from the Biblissima portal."""
 
-    @method_decorator(cache_page(60))
+    @method_decorator(cache_page(3600))
     def get(self, request, ifdata_hash):
+        session = _build_biblissima_session()
         try:
-            session = _build_biblissima_session()
-            resp = session.get(
-                f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
-                timeout=PORTAL_REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            html = resp.text
-        except Exception as exc:
-            return _biblissima_upstream_error(
-                exc, f"Biblissima illumination fetch ({ifdata_hash})"
-            )
+            try:
+                resp = _bib_request(
+                    session,
+                    f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
+                    timeout=PORTAL_REQUEST_TIMEOUT,
+                )
+                resp.raise_for_status()
+                html = resp.text
+            except Exception as exc:
+                return _biblissima_upstream_error(
+                    exc, f"Biblissima illumination fetch ({ifdata_hash})"
+                )
+        finally:
+            session.close()
 
         result = {
             "ifdataHash": ifdata_hash,
@@ -2353,3 +2689,35 @@ class BiblissimaAddAltNameView(View):
             return JsonResponse({"error": "Failed to add alternative name"}, status=500)
 
         return JsonResponse({"status": "added", "message": "Alternative name added"})
+
+
+class BiblissimaStatsView(View):
+    """Debug/admin tool exposing outbound Biblissima traffic counters.
+
+    Restricted to authenticated staff users. Intended for quick sanity checks
+    after a deploy or during debugging (e.g. "is Biblissima rate-limiting us?",
+    "is the cache filling up?"). Not a replacement for proper observability:
+
+    - Counters live in process memory and reset on every Django restart.
+    - Each gunicorn worker keeps its own counters, so values are per-process
+      and can be misleading when multiple workers are running.
+
+    For long-term observability, wire django-prometheus or ship 429/5xx
+    events to an external collector.
+    """
+
+    @method_decorator(never_cache)
+    def get(self, request):
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return JsonResponse({"error": "Forbidden"}, status=403)
+
+        with _biblissima_stats_lock:
+            stats = dict(_biblissima_stats)
+        stats["semaphore_capacity"] = _BIBLISSIMA_CONCURRENCY_LIMIT
+        total_cache_lookups = stats["cache_hits"] + stats["cache_misses"]
+        stats["cache_hit_ratio"] = (
+            round(stats["cache_hits"] / total_cache_lookups, 3)
+            if total_cache_lookups
+            else None
+        )
+        return JsonResponse(stats)
