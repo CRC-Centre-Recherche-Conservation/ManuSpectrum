@@ -1216,3 +1216,328 @@ $bbma-danger-bg: #fdf0f0;
     border-top: 1px solid #f0e6b8;
     background: #fef8d5;
 }
+
+// ============================================
+// Loading state (searching = true)
+// "Reading in progress" aesthetic: info banner with pulsing dot +
+// rotating message + elapsed timer, a continuous sweep bar for liveness,
+// and shimmer skeleton cards that preview the result grid shape.
+// ============================================
+
+@keyframes bbma-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.6);
+        opacity: 0.35;
+    }
+}
+
+@keyframes bbma-pulse-ring {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(2.4);
+        opacity: 0;
+    }
+}
+
+@keyframes bbma-sweep {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(400%);
+    }
+}
+
+@keyframes bbma-shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+@keyframes bbma-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.biblissima-loading-state {
+    padding: 16px 14px 20px;
+}
+
+.biblissima-loading-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: linear-gradient(
+        135deg,
+        lighten($bbma-accent-light, 2%) 0%,
+        $bbma-bg-warm 100%
+    );
+    border: 1px solid lighten($bbma-accent, 25%);
+    border-left: 3px solid $bbma-accent;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(26, 42, 58, 0.04);
+}
+
+.biblissima-loading-pulse {
+    position: relative;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    // Outer expanding ring
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid $bbma-accent;
+        animation: bbma-pulse-ring 1.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+    }
+}
+
+.biblissima-pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: $bbma-accent;
+    box-shadow: 0 0 0 2px rgba($bbma-accent, 0.15);
+    animation: bbma-pulse 1.6s ease-in-out infinite;
+}
+
+.biblissima-loading-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.biblissima-loading-message {
+    font-size: 13px;
+    font-weight: 500;
+    color: $bbma-ink;
+    letter-spacing: 0.01em;
+    animation: bbma-fade-in 0.4s ease-out;
+}
+
+.biblissima-loading-hint {
+    margin-top: 3px;
+    font-size: 11px;
+    font-style: italic;
+    color: $bbma-muted;
+    animation: bbma-fade-in 0.4s ease-out;
+}
+
+.biblissima-loading-timer {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    padding-left: 14px;
+    border-left: 1px solid rgba($bbma-accent, 0.25);
+}
+
+.biblissima-timer-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: $bbma-muted;
+    font-weight: 600;
+}
+
+.biblissima-timer-value {
+    font-family: "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", monospace;
+    font-size: 15px;
+    font-weight: 500;
+    color: $bbma-accent-dark;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+// Continuous sweep bar below the banner — the main "alive" signal
+.biblissima-loading-sweep {
+    position: relative;
+    height: 2px;
+    margin: 12px 2px 18px;
+    background: lighten($bbma-border, 4%);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.biblissima-loading-sweep-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 25%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba($bbma-accent, 0.35) 20%,
+        $bbma-accent 50%,
+        rgba($bbma-accent, 0.35) 80%,
+        transparent 100%
+    );
+    animation: bbma-sweep 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+// Skeleton result cards — preview the real result grid while waiting
+.biblissima-skeleton-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.biblissima-skeleton-card {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
+}
+
+.biblissima-skeleton-thumb {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+    border-radius: 2px;
+}
+
+.biblissima-skeleton-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 4px;
+    min-width: 0;
+}
+
+.biblissima-skeleton-line {
+    height: 10px;
+    border-radius: 2px;
+
+    &.skeleton-line-title {
+        width: 72%;
+        height: 13px;
+    }
+
+    &.skeleton-line-meta {
+        width: 88%;
+    }
+
+    &.skeleton-line-meta-short {
+        width: 42%;
+    }
+}
+
+.biblissima-skeleton-chips {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.biblissima-skeleton-chip {
+    display: inline-block;
+    width: 56px;
+    height: 14px;
+    border-radius: 7px;
+}
+
+// Shimmer animation — shared by all skeleton elements
+.shimmer {
+    background: linear-gradient(
+        90deg,
+        rgba($bbma-border, 0.45) 0%,
+        rgba($bbma-border, 0.75) 35%,
+        rgba(255, 255, 255, 0.9) 50%,
+        rgba($bbma-border, 0.75) 65%,
+        rgba($bbma-border, 0.45) 100%
+    );
+    background-size: 200% 100%;
+    animation: bbma-shimmer 1.8s linear infinite;
+}
+
+// Stagger the skeleton cards slightly so the shimmer doesn't feel mechanical
+.biblissima-skeleton-card:nth-child(1) .shimmer { animation-delay: 0s; }
+.biblissima-skeleton-card:nth-child(2) .shimmer { animation-delay: -0.15s; }
+.biblissima-skeleton-card:nth-child(3) .shimmer { animation-delay: -0.30s; }
+.biblissima-skeleton-card:nth-child(4) .shimmer { animation-delay: -0.45s; }
+.biblissima-skeleton-card:nth-child(5) .shimmer { animation-delay: -0.60s; }
+
+// Respect users who prefer reduced motion
+@media (prefers-reduced-motion: reduce) {
+    .biblissima-pulse-dot,
+    .biblissima-loading-pulse::before,
+    .biblissima-loading-sweep-fill,
+    .shimmer {
+        animation: none;
+    }
+
+    .shimmer {
+        background: rgba($bbma-border, 0.6);
+    }
+
+    .biblissima-loading-sweep-fill {
+        width: 100%;
+        background: rgba($bbma-accent, 0.4);
+    }
+}
+
+// Progressive loading progress bar shown while pages 2..N stream in.
+.biblissima-progress-bar {
+    padding: 10px 14px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
+    background: $bbma-bg-warm;
+
+    .biblissima-progress-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: $bbma-muted;
+        margin-bottom: 6px;
+
+        .fa-spinner {
+            color: $bbma-accent;
+        }
+
+        strong {
+            color: $bbma-ink;
+        }
+
+        small {
+            color: lighten($bbma-muted, 10%);
+            margin-left: 4px;
+        }
+    }
+
+    .progress {
+        height: 6px;
+        margin-bottom: 0;
+        background: lighten($bbma-border, 4%);
+        border-radius: 3px;
+        overflow: hidden;
+
+        .progress-bar {
+            background-color: $bbma-accent;
+            transition: width 0.3s ease;
+        }
+    }
+}

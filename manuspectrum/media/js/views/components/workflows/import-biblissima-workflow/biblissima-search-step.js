@@ -27,6 +27,100 @@ const viewModel = function(params) {
     this.searching = ko.observable(false);
     this.searchError = ko.observable(null);
 
+    // Progressive loading state for the component search:
+    // page 1 is awaited blocking, pages 2..N stream in background.
+    this.loadingProgress = ko.observable({
+        loaded: 0,
+        total: 0,
+        loadedPages: 0,
+        totalPages: 0,
+    });
+    this.isProgressiveLoading = ko.computed(() => {
+        const p = self.loadingProgress();
+        return p.totalPages > 0 && p.loadedPages < p.totalPages;
+    });
+    this.loadingProgressPercent = ko.computed(() => {
+        const p = self.loadingProgress();
+        if (!p.total) return 0;
+        return Math.round((p.loaded / p.total) * 100);
+    });
+    // AbortController for in-flight background page fetches. Replaced on every
+    // new search so previous background loads get cancelled cleanly.
+    this._pageLoadAbort = null;
+
+    // Loading state: rotating message + elapsed timer while waiting for
+    // first results. Works uniformly across all search modes.
+    this.loadingElapsed = ko.observable(0); // seconds
+    this._loadingTimer = null;
+    this.loadingElapsedDisplay = ko.computed(() => {
+        const s = self.loadingElapsed();
+        const mm = Math.floor(s / 60).toString().padStart(2, '0');
+        const ss = (s % 60).toString().padStart(2, '0');
+        return `${mm}:${ss}`;
+    });
+    this.loadingMessage = ko.computed(() => {
+        const s = self.loadingElapsed();
+        const t = arches.translations;
+        if (s < 5) return t.biblissimaLoadingConnecting || 'Connecting to Biblissima…';
+        if (s < 15) return t.biblissimaLoadingFetching || 'Fetching manuscripts from the archive…';
+        if (s < 35) return t.biblissimaLoadingEnriching || 'Enriching manuscript metadata…';
+        if (s < 60) return t.biblissimaLoadingMatching || 'Matching records…';
+        return t.biblissimaLoadingStillWorking || 'Still working — large searches may take up to 2 minutes';
+    });
+    this.loadingShowReassurance = ko.computed(() => self.loadingElapsed() >= 20);
+
+    this._startLoadingTimers = () => {
+        self.loadingElapsed(0);
+        if (self._loadingTimer) clearInterval(self._loadingTimer);
+        const started = Date.now();
+        self._loadingTimer = setInterval(() => {
+            self.loadingElapsed(Math.floor((Date.now() - started) / 1000));
+        }, 1000);
+    };
+
+    this._stopLoadingTimers = () => {
+        if (self._loadingTimer) {
+            clearInterval(self._loadingTimer);
+            self._loadingTimer = null;
+        }
+        self.loadingElapsed(0);
+    };
+
+    // Wire loading timer to the searching observable so all 3 search modes
+    // (Document, Component by descriptor, Component by manuscript) get the
+    // same loading state without each having to call _startLoadingTimers().
+    this.searching.subscribe((isSearching) => {
+        if (isSearching) {
+            self._startLoadingTimers();
+        } else {
+            self._stopLoadingTimers();
+        }
+    });
+
+    // Reset search state when switching between Component sub-modes
+    // (descriptor / manuscript). Otherwise the meta bar keeps showing the
+    // previous mode's selectedManuscriptLabel and totalResults, and the
+    // results grid stays populated with stale cards.
+    this._resetSearchState = () => {
+        if (self._pageLoadAbort) {
+            self._pageLoadAbort.abort();
+            self._pageLoadAbort = null;
+        }
+        self.searching(false);
+        self.hasSearched(false);
+        self.searchError(null);
+        self.searchResults([]);
+        self.currentPage(1);
+        self.selectedManuscriptLabel('');
+        self.selectedManuscriptHash('');
+        self.loadingProgress({
+            loaded: 0,
+            total: 0,
+            loadedPages: 0,
+            totalPages: 0,
+        });
+    };
+
     // Config from step 1
     this.config = params.configStepData || {};
     this.resourceType = this.config.resourceType || 'Document';
@@ -35,6 +129,11 @@ const viewModel = function(params) {
 
     // Component search mode: 'descriptor' (IIIF search) or 'manuscript' (portal scraping)
     this.componentSearchMode = ko.observable('descriptor');
+    // Reset search state when switching between Component sub-modes so the
+    // meta bar and stale results from the previous mode don't leak over.
+    this.componentSearchMode.subscribe(() => {
+        self._resetSearchState();
+    });
 
     // Search state — all results stored, paginated client-side
     this.searchResults = ko.observableArray();
@@ -337,86 +436,173 @@ const viewModel = function(params) {
         // Don't clear — keep the selection visible
     });
 
+    // Map a raw illumination from the portal scrape to a result card shape,
+    // merging in manuscript-level data from the resolved Wikibase entity.
+    this._illuminationToResult = (item, entityData, manuscriptLabel) => ({
+        canvasId: item.ifdataHash,
+        arkId: item.arkId,
+        label: item.label,
+        thumbnail: null,
+        manuscript: manuscriptLabel,
+        folio: item.folio,
+        legend: item.descriptor,
+        date: '',
+        location: '',
+        descriptors: [item.descriptor],
+        portalUrl: item.portalUrl,
+        manifestUrl: entityData.manifestUrl || '',
+        authorLabel: entityData.authorLabel || '',
+        authorQid: entityData.authorQid || '',
+        biblissimaQid: entityData.qid || '',
+        shelfmark: entityData.shelfmark || '',
+        mandragoreId: entityData.mandragoreId || '',
+        collectionLabel: entityData.collectionLabel || '',
+        digitizationUrl: entityData.digitizationUrl || '',
+        locationLabel: entityData.locationLabel || '',
+        locationQid: entityData.locationQid || '',
+        geonamesId: entityData.geonamesId || '',
+        parentInstitutionLabel: entityData.parentInstitutionLabel || '',
+        parentInstitutionQid: entityData.parentInstitutionQid || '',
+        hasImage: item.hasImage,
+        typeValueId: item.typeValueId || '',
+        ifdataHash: item.ifdataHash,
+    });
+
     this.searchManuscriptIlluminations = async () => {
         const query = self.manuscriptForComponent().trim();
         if (!query) return;
 
+        // Cancel any in-flight background page fetches from a previous search
+        if (self._pageLoadAbort) {
+            self._pageLoadAbort.abort();
+        }
+        const abortController = new AbortController();
+        self._pageLoadAbort = abortController;
+
         self.searching(true);
+        self.searchError(null);
         self.hasSearched(true);
         self.currentPage(1);
+        self.searchResults([]);
+        self.loadingProgress({
+            loaded: 0,
+            total: 0,
+            loadedPages: 0,
+            totalPages: 0,
+        });
+
+        const PAGE_SIZE = 20;
 
         try {
             let entityData;
 
             // If query looks like a QID (Q + digits), fetch entity directly
             if (/^Q\d+$/i.test(query)) {
-                const entityResp = await fetch(`/api/biblissima/entity/${query}`);
+                const entityResp = await fetch(
+                    `/api/biblissima/entity/${query}`,
+                    { signal: abortController.signal },
+                );
                 if (!entityResp.ok) { self.searching(false); return; }
                 entityData = await entityResp.json();
             } else {
                 // Search by text
-                const suggestResp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=10&type=manuscript`);
+                const suggestResp = await fetch(
+                    `/api/biblissima/suggest?q=${encodeURIComponent(query)}&limit=10&type=manuscript`,
+                    { signal: abortController.signal },
+                );
                 const suggestData = await suggestResp.json();
                 if (!suggestData.results?.length) {
                     self.searchResults([]);
                     self.searching(false);
                     return;
                 }
-                const entityResp = await fetch(`/api/biblissima/entity/${suggestData.results[0].id}`);
+                const entityResp = await fetch(
+                    `/api/biblissima/entity/${suggestData.results[0].id}`,
+                    { signal: abortController.signal },
+                );
                 entityData = await entityResp.json();
             }
 
             const portalHash = entityData.portalHash;
-
             if (!portalHash) {
                 self.searchResults([]);
                 self.searching(false);
                 return;
             }
 
-            self.selectedManuscriptLabel(entityData.label || query);
+            const manuscriptLabel = entityData.label || query;
+            self.selectedManuscriptLabel(manuscriptLabel);
             self.selectedManuscriptHash(portalHash);
 
-            // Fetch all illuminations from portal page
-            const illumResp = await fetch(`/api/biblissima/manuscript-illuminations?portalHash=${portalHash}`);
-            const illumData = await illumResp.json();
+            // --- Stage 1: blocking fetch of page 1 ---
+            const firstUrl = `/api/biblissima/manuscript-illuminations?portalHash=${portalHash}&page=1&page_size=${PAGE_SIZE}`;
+            const firstResp = await fetch(firstUrl, {
+                signal: abortController.signal,
+            });
+            const firstData = await firstResp.json().catch(() => ({}));
+            if (!firstResp.ok) {
+                self.searchError(
+                    firstData.message ||
+                        arches.translations.biblissimaSearchFailed ||
+                        'Biblissima search failed',
+                );
+                self.searchResults([]);
+                self.searching(false);
+                return;
+            }
 
-            const results = (illumData.results || []).map((item) => ({
-                canvasId: item.ifdataHash,
-                arkId: item.arkId,
-                label: item.label,
-                thumbnail: null,
-                manuscript: self.selectedManuscriptLabel(),
-                folio: item.folio,
-                legend: item.descriptor,
-                date: '',
-                location: '',
-                descriptors: [item.descriptor],
-                portalUrl: item.portalUrl,
-                manifestUrl: entityData.manifestUrl || '',
-                authorLabel: entityData.authorLabel || '',
-                authorQid: entityData.authorQid || '',
-                biblissimaQid: entityData.qid || '',
-                shelfmark: entityData.shelfmark || '',
-                mandragoreId: entityData.mandragoreId || '',
-                collectionLabel: entityData.collectionLabel || '',
-                digitizationUrl: entityData.digitizationUrl || '',
-                locationLabel: entityData.locationLabel || '',
-                locationQid: entityData.locationQid || '',
-                geonamesId: entityData.geonamesId || '',
-                parentInstitutionLabel: entityData.parentInstitutionLabel || '',
-                parentInstitutionQid: entityData.parentInstitutionQid || '',
-                hasImage: item.hasImage,
-                typeValueId: item.typeValueId || '',
-                ifdataHash: item.ifdataHash,
-            }));
+            const firstResults = (firstData.results || []).map((item) =>
+                self._illuminationToResult(item, entityData, manuscriptLabel),
+            );
+            self.searchResults(firstResults);
+            self.searching(false); // page 1 visible
 
-            self.searchResults(results);
+            const total = firstData.total || firstResults.length;
+            const totalPages = firstData.total_pages || 1;
+            self.loadingProgress({
+                loaded: firstResults.length,
+                total: total,
+                loadedPages: 1,
+                totalPages: totalPages,
+            });
+
+            // --- Stage 2: background, sequential load of pages 2..N ---
+            for (let page = 2; page <= totalPages; page++) {
+                if (abortController.signal.aborted) return;
+                try {
+                    const pageUrl = `/api/biblissima/manuscript-illuminations?portalHash=${portalHash}&page=${page}&page_size=${PAGE_SIZE}`;
+                    const pageResp = await fetch(pageUrl, {
+                        signal: abortController.signal,
+                    });
+                    if (!pageResp.ok) continue;
+                    const pageData = await pageResp.json();
+                    const pageResults = (pageData.results || []).map((item) =>
+                        self._illuminationToResult(item, entityData, manuscriptLabel),
+                    );
+
+                    const current = self.searchResults();
+                    self.searchResults(current.concat(pageResults));
+                    self.loadingProgress({
+                        loaded: self.searchResults().length,
+                        total: total,
+                        loadedPages: page,
+                        totalPages: totalPages,
+                    });
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    console.warn(`Biblissima illuminations page ${page} load failed`, err);
+                }
+            }
         } catch (err) {
+            if (err.name === 'AbortError') return;
             console.error('Manuscript illumination search failed:', err);
+            self.searchError(
+                arches.translations.biblissimaNetworkError ||
+                    'Network error while querying Biblissima',
+            );
             self.searchResults([]);
+            self.searching(false);
         }
-        self.searching(false);
     };
 
     this.searchManuscripts = async () => {
@@ -482,21 +668,34 @@ const viewModel = function(params) {
         const descriptors = self.selectedDescriptors();
         if (!descriptors || descriptors.length === 0) return;
 
+        // Cancel any in-flight background page fetches from a previous search
+        if (self._pageLoadAbort) {
+            self._pageLoadAbort.abort();
+        }
+        const abortController = new AbortController();
+        self._pageLoadAbort = abortController;
+
         self.searching(true);
+        self.searchError(null);
         self.hasSearched(true);
         self.currentPage(1);
+        self.searchResults([]);
+        self.loadingProgress({
+            loaded: 0,
+            total: 0,
+            loadedPages: 0,
+            totalPages: 0,
+        });
+
+        const PAGE_SIZE = 50;
 
         try {
             const entityPromises = descriptors.map((qid) =>
                 fetch(`/api/biblissima/entity/${qid}`).then((r) => r.json())
             );
             const entities = await Promise.all(entityPromises);
-            // Use portal hashes for IIIF search
-            // For single descriptors, backend uses ARK format which works with any prefix (desc, pdata, etc.)
-            // For multiple descriptors, backend uses AND| query format
-            const hashes = entities
-                .map((e) => e.portalHash)
-                .filter(Boolean);
+            // Use portal hashes for IIIF search.
+            const hashes = entities.map((e) => e.portalHash).filter(Boolean);
 
             if (hashes.length === 0) {
                 self.searchResults([]);
@@ -504,32 +703,78 @@ const viewModel = function(params) {
                 return;
             }
 
-            const searchParams = new URLSearchParams({
+            const baseParams = new URLSearchParams({
                 descriptors: hashes.join(','),
+                page_size: String(PAGE_SIZE),
             });
 
-            self.searchError(null);
-            const resp = await fetch(`/api/biblissima/search?${searchParams}`);
-            const data = await resp.json().catch(() => ({}));
-            if (!resp.ok) {
+            // --- Stage 1: blocking fetch of page 1 so we have something
+            //              complete to show immediately ---
+            const firstUrl = `/api/biblissima/search?${baseParams}&page=1`;
+            const firstResp = await fetch(firstUrl, {
+                signal: abortController.signal,
+            });
+            const firstData = await firstResp.json().catch(() => ({}));
+            if (!firstResp.ok) {
                 self.searchError(
-                    data.message ||
+                    firstData.message ||
                         arches.translations.biblissimaSearchFailed ||
                         'Biblissima search failed',
                 );
                 self.searchResults([]);
-            } else {
-                self.searchResults(data.results || []);
+                self.searching(false);
+                return;
+            }
+
+            const firstResults = firstData.results || [];
+            self.searchResults(firstResults);
+            self.searching(false); // page 1 visible — stop the global spinner
+
+            const total = firstData.total || firstResults.length;
+            const totalPages = firstData.total_pages || 1;
+            self.loadingProgress({
+                loaded: firstResults.length,
+                total: total,
+                loadedPages: 1,
+                totalPages: totalPages,
+            });
+
+            // --- Stage 2: background, sequential load of pages 2..N ---
+            for (let page = 2; page <= totalPages; page++) {
+                if (abortController.signal.aborted) return;
+                try {
+                    const pageUrl = `/api/biblissima/search?${baseParams}&page=${page}`;
+                    const pageResp = await fetch(pageUrl, {
+                        signal: abortController.signal,
+                    });
+                    if (!pageResp.ok) continue;
+                    const pageData = await pageResp.json();
+                    const pageResults = pageData.results || [];
+
+                    // Append the new page to searchResults (Knockout re-render)
+                    const current = self.searchResults();
+                    self.searchResults(current.concat(pageResults));
+                    self.loadingProgress({
+                        loaded: self.searchResults().length,
+                        total: total,
+                        loadedPages: page,
+                        totalPages: totalPages,
+                    });
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    console.warn(`Biblissima page ${page} load failed`, err);
+                }
             }
         } catch (err) {
+            if (err.name === 'AbortError') return;
             console.error('Biblissima search failed:', err);
             self.searchError(
                 arches.translations.biblissimaNetworkError ||
                     'Network error while querying Biblissima',
             );
             self.searchResults([]);
+            self.searching(false);
         }
-        self.searching(false);
     };
 
     // =====================

@@ -363,6 +363,33 @@ msgstr "La recherche Biblissima a échoué. Veuillez réessayer dans un instant.
 msgid "Network error while querying Biblissima. Check your connection and try again."
 msgstr "Erreur réseau lors de la requête Biblissima. Vérifiez votre connexion et réessayez."
 
+msgid "Loading results"
+msgstr "Chargement des résultats"
+
+msgid "page"
+msgstr "page"
+
+msgid "Connecting to Biblissima…"
+msgstr "Connexion à Biblissima…"
+
+msgid "Fetching manuscripts from the archive…"
+msgstr "Récupération des manuscrits depuis l'archive…"
+
+msgid "Enriching manuscript metadata…"
+msgstr "Enrichissement des métadonnées…"
+
+msgid "Matching records…"
+msgstr "Rapprochement des notices…"
+
+msgid "Still working — large searches may take up to 2 minutes"
+msgstr "Toujours en cours — les recherches larges peuvent prendre jusqu'à 2 minutes"
+
+msgid "Biblissima can be slow for large searches. You can keep this tab open."
+msgstr "Biblissima peut être lent sur les recherches larges. Vous pouvez laisser cet onglet ouvert."
+
+msgid "Elapsed"
+msgstr "Écoulé"
+
 #~ msgid "Project Name"
 #~ msgstr "Nom du projet"
 

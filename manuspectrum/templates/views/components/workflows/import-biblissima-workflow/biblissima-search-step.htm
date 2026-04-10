@@ -139,6 +139,50 @@
     <div class="biblissima-search-body">
         <!-- Results column -->
         <div class="biblissima-results-column">
+            <!-- Loading state: info banner + skeleton cards -->
+            <!-- ko if: searching -->
+            <div class="biblissima-loading-state">
+                <div class="biblissima-loading-banner">
+                    <div class="biblissima-loading-pulse">
+                        <span class="biblissima-pulse-dot"></span>
+                    </div>
+                    <div class="biblissima-loading-text">
+                        <div class="biblissima-loading-message" data-bind="text: loadingMessage"></div>
+                        <!-- ko if: loadingShowReassurance() -->
+                        <div class="biblissima-loading-hint">
+                            {% trans "Biblissima can be slow for large searches. You can keep this tab open." %}
+                        </div>
+                        <!-- /ko -->
+                    </div>
+                    <div class="biblissima-loading-timer">
+                        <span class="biblissima-timer-label">{% trans "Elapsed" %}</span>
+                        <span class="biblissima-timer-value" data-bind="text: loadingElapsedDisplay"></span>
+                    </div>
+                </div>
+
+                <div class="biblissima-loading-sweep">
+                    <div class="biblissima-loading-sweep-fill"></div>
+                </div>
+
+                <div class="biblissima-skeleton-grid">
+                    <!-- ko foreach: [1, 2, 3, 4, 5] -->
+                    <div class="biblissima-skeleton-card">
+                        <div class="biblissima-skeleton-thumb shimmer"></div>
+                        <div class="biblissima-skeleton-body">
+                            <div class="biblissima-skeleton-line shimmer skeleton-line-title"></div>
+                            <div class="biblissima-skeleton-line shimmer skeleton-line-meta"></div>
+                            <div class="biblissima-skeleton-line shimmer skeleton-line-meta-short"></div>
+                            <div class="biblissima-skeleton-chips">
+                                <span class="biblissima-skeleton-chip shimmer"></span>
+                                <span class="biblissima-skeleton-chip shimmer"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- /ko -->
+                </div>
+            </div>
+            <!-- /ko -->
+
             <!-- ko ifnot: searching -->
 
             <!-- Error state -->
@@ -167,6 +211,31 @@
             <div class="bbma-empty-state">
                 <i class="fa fa-inbox"></i>
                 <p>{% trans "No results found. Try different search terms." %}</p>
+            </div>
+            <!-- /ko -->
+
+            <!-- Progressive loading bar (pages 2..N streaming in) -->
+            <!-- ko if: isProgressiveLoading() -->
+            <div class="biblissima-progress-bar">
+                <div class="biblissima-progress-label">
+                    <i class="fa fa-spinner fa-spin"></i>
+                    <span>
+                        {% trans "Loading results" %}:
+                        <strong data-bind="text: loadingProgress().loaded"></strong>
+                        / <span data-bind="text: loadingProgress().total"></span>
+                        <small>
+                            ({% trans "page" %}
+                            <span data-bind="text: loadingProgress().loadedPages"></span>
+                            / <span data-bind="text: loadingProgress().totalPages"></span>)
+                        </small>
+                    </span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped active"
+                         role="progressbar"
+                         data-bind="style: { width: loadingProgressPercent() + '%' }">
+                    </div>
+                </div>
             </div>
             <!-- /ko -->
 
