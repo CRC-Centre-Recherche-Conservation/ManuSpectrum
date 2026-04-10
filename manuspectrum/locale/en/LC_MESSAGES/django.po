@@ -32,3 +32,53 @@ msgstr ""
 
 msgid "Arabic"
 msgstr ""
+
+# Biblissima search & workflow — added in the progressive-loading refactor
+
+msgid "The Biblissima portal did not respond in time. Please try again in a moment."
+msgstr "The Biblissima portal did not respond in time. Please try again in a moment."
+
+msgid "Unable to reach the Biblissima portal. Check your connection and try again."
+msgstr "Unable to reach the Biblissima portal. Check your connection and try again."
+
+msgid "The Biblissima portal returned an error (%(status)s). Please try again in a moment."
+msgstr "The Biblissima portal returned an error (%(status)s). Please try again in a moment."
+
+msgid "Invalid response from the Biblissima portal."
+msgstr "Invalid response from the Biblissima portal."
+
+msgid "Unknown error while querying Biblissima."
+msgstr "Unknown error while querying Biblissima."
+
+msgid "The Biblissima search failed. Please try again in a moment."
+msgstr "The Biblissima search failed. Please try again in a moment."
+
+msgid "Network error while querying Biblissima. Check your connection and try again."
+msgstr "Network error while querying Biblissima. Check your connection and try again."
+
+msgid "Loading results"
+msgstr "Loading results"
+
+msgid "page"
+msgstr "page"
+
+msgid "Elapsed"
+msgstr "Elapsed"
+
+msgid "Connecting to Biblissima…"
+msgstr "Connecting to Biblissima…"
+
+msgid "Fetching manuscripts from the archive…"
+msgstr "Fetching manuscripts from the archive…"
+
+msgid "Enriching manuscript metadata…"
+msgstr "Enriching manuscript metadata…"
+
+msgid "Matching records…"
+msgstr "Matching records…"
+
+msgid "Still working — large searches may take up to 2 minutes"
+msgstr "Still working — large searches may take up to 2 minutes"
+
+msgid "Biblissima can be slow for large searches. You can keep this tab open."
+msgstr "Biblissima can be slow for large searches. You can keep this tab open."
