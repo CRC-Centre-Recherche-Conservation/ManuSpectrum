@@ -806,14 +806,15 @@ class BiblissimaSuggestView(View):
         seen_ids = set()
         results = []
 
-        session = requests.Session()
+        session = _build_biblissima_session()
 
         # 1. Prefix match (fast, good for exact starts)
         # wbsearchentities doesn't support type filtering, so we fetch more
         # and filter by checking P2 claims afterwards
         try:
             fetch_limit = limit * 3 if type_qid else limit
-            resp = session.get(
+            resp = _bib_request(
+                session,
                 BIBLISSIMA_WIKIBASE,
                 params={
                     "action": "wbsearchentities",
@@ -830,7 +831,8 @@ class BiblissimaSuggestView(View):
             if type_qid and prefix_items:
                 # Batch fetch P2 claims to filter by type
                 batch_ids = [item["id"] for item in prefix_items]
-                type_resp = session.get(
+                type_resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "wbgetentities",
@@ -888,7 +890,8 @@ class BiblissimaSuggestView(View):
                 if type_qid:
                     srsearch = f"{query} haswbstatement:P2={type_qid}"
 
-                resp = session.get(
+                resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "query",
@@ -910,7 +913,8 @@ class BiblissimaSuggestView(View):
 
                 # Batch fetch labels for full-text results
                 if qids_to_fetch:
-                    resp = session.get(
+                    resp = _bib_request(
+                        session,
                         BIBLISSIMA_WIKIBASE,
                         params={
                             "action": "wbgetentities",
@@ -1003,7 +1007,7 @@ class BiblissimaSearchManuscriptsView(View):
             return JsonResponse({"results": []})
 
         limit = max(1, int(request.GET.get("limit", 50)))
-        session = requests.Session()
+        session = _build_biblissima_session()
 
         # --- Step 1: Suggest (reuse SuggestView logic inline) ---
         type_qid = self.TYPE_FILTERS.get("manuscript", "")
@@ -1013,7 +1017,8 @@ class BiblissimaSearchManuscriptsView(View):
         # Prefix search
         try:
             fetch_limit = limit * 3
-            resp = session.get(
+            resp = _bib_request(
+                session,
                 BIBLISSIMA_WIKIBASE,
                 params={
                     "action": "wbsearchentities",
@@ -1029,7 +1034,8 @@ class BiblissimaSearchManuscriptsView(View):
 
             if prefix_items:
                 batch_ids = [item["id"] for item in prefix_items]
-                type_resp = session.get(
+                type_resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "wbgetentities",
@@ -1063,7 +1069,8 @@ class BiblissimaSearchManuscriptsView(View):
         if len(suggest_results) < limit:
             try:
                 srsearch = f"{query} haswbstatement:P2={type_qid}"
-                resp = session.get(
+                resp = _bib_request(
+                    session,
                     BIBLISSIMA_WIKIBASE,
                     params={
                         "action": "query",
