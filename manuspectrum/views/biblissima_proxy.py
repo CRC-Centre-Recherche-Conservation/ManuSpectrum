@@ -1,14 +1,11 @@
 import logging
 import re
 import uuid
-from functools import lru_cache
 from html import unescape
 
-import arches
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from django.conf import settings as django_settings
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -18,6 +15,8 @@ from django.views.decorators.cache import cache_page
 from arches.app.models.models import ResourceInstance
 from arches.app.models.models import Value  # used in _concept_valueid
 from arches.app.models.tile import Tile
+
+from manuspectrum.utils.http import get_user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -31,23 +30,10 @@ IIIF_REQUEST_TIMEOUT = 45
 PORTAL_REQUEST_TIMEOUT = 30
 
 
-@lru_cache(maxsize=1)
-def _biblissima_user_agent():
-    # Aligned with ManifestDataType._get_request_headers so external services
-    # see a consistent, identifiable client for all ManuSpectrum outbound calls.
-    app_name = getattr(django_settings, "APP_NAME", "Arches")
-    app_version = getattr(django_settings, "APP_VERSION", "")
-    arches_version = getattr(arches, "__version__", "")
-    parts = [f"{app_name}/{app_version}" if app_version else app_name]
-    if arches_version:
-        parts.append(f"Arches/{arches_version}")
-    return " ".join(parts)
-
-
 def _build_biblissima_session():
     """Requests session with retry/backoff on transient upstream failures."""
     session = requests.Session()
-    session.headers.update({"User-Agent": _biblissima_user_agent()})
+    session.headers.update({"User-Agent": get_user_agent()})
     retry = Retry(
         total=2,
         connect=2,

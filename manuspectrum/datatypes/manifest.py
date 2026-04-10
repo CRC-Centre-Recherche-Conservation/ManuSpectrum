@@ -2,13 +2,14 @@ import logging
 import uuid
 import re
 import requests
-from functools import lru_cache
 from urllib.parse import urlparse, urlunparse
 
 from django.conf import settings as django_settings
 from arches.app.datatypes.base import BaseDataType
 from arches.app.models.models import IIIFManifest, Widget
 from django.utils.translation import gettext_lazy as _
+
+from manuspectrum.utils.http import get_json_request_headers
 
 text: Widget = Widget.objects.get(name="manifest-widget")
 
@@ -39,20 +40,8 @@ class FailParsingManifestIIIF(Exception):
 
 class ManifestDataType(BaseDataType):
     @staticmethod
-    @lru_cache(maxsize=1)
     def _get_request_headers():
-        import arches
-
-        app_name = getattr(django_settings, "APP_NAME", "Arches")
-        app_version = getattr(django_settings, "APP_VERSION", "")
-        arches_version = getattr(arches, "__version__", "")
-        parts = [f"{app_name}/{app_version}" if app_version else app_name]
-        if arches_version:
-            parts.append(f"Arches/{arches_version}")
-        return {
-            "User-Agent": " ".join(parts),
-            "Accept": "application/ld+json, application/json",
-        }
+        return get_json_request_headers()
 
     _LOCAL_MANIFEST_RE = re.compile(
         r"^(?:https?://[^/]+)?/manifest/"
