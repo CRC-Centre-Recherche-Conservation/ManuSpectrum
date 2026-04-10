@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-10 09:03-0500\n"
+"POT-Creation-Date: 2026-04-10 10:21-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -754,6 +754,10 @@ msgstr "Matching records…"
 #: templates/javascript.htm:64
 msgid "Still working — large searches may take up to 2 minutes"
 msgstr "Still working — large searches may take up to 2 minutes"
+
+#: templates/javascript.htm:65
+msgid "Cart limit reached"
+msgstr "Cart limit reached"
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -1688,60 +1692,60 @@ msgstr ""
 msgid "results"
 msgstr "Loading results"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:131
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:134
 msgid "Add all visible"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:153
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:156
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
 msgstr "Biblissima can be slow for large searches. You can keep this tab open."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:158
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:161
 msgid "Elapsed"
 msgstr "Elapsed"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:201
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:204
 msgid ""
 "Search by shelfmark, title, or institution to find manuscripts on Biblissima."
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:204
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:207
 msgid "Select iconographic descriptors and click Search to find illuminations."
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:213
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:216
 msgid "No results found. Try different search terms."
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:223
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:226
 msgid "Loading results"
 msgstr "Loading results"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:227
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:230
 msgid "page"
 msgstr "page"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:270
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:273
 msgid "IIIF"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:333
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:336
 msgid "Selection"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:340
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:343
 msgid "Clear"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:348
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:351
 msgid "Click on results to add them to your selection."
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:377
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:380
 msgid "Continue with"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:377
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:380
 msgid "items"
 msgstr ""
 

@@ -140,9 +140,14 @@ const viewModel = function(params) {
     this.currentPage = ko.observable(1);
     this.hasSearched = ko.observable(false);
 
-    // Cart
+    // Cart — hard cap forces the user to curate selections rather than
+    // bulk-importing search results. Resources are only created when an
+    // analysis campaign justifies it, so we keep the Document limit tight.
     this.cart = ko.observableArray();
     this.cartCount = ko.computed(() => self.cart().length);
+    this.cartMax = self.isDocument ? 10 : 25;
+    this.cartIsFull = ko.computed(() => self.cart().length >= self.cartMax);
+    this.cartLimitLabel = arches.translations.biblissimaCartLimitReached || 'Cart limit reached';
 
     // =====================
     // SHARED: filters panel (collapsible)
@@ -267,7 +272,7 @@ const viewModel = function(params) {
                         mandragoreArk: detail.mandragoreArk || '',
                     };
                     const exists = self.cart().some((c) => c.arkId === item.arkId);
-                    if (!exists) self.cart.push(item);
+                    if (!exists && !self.cartIsFull()) self.cart.push(item);
                     self.directIdentifier('');
                 }
                 self.addingDirect(false);
@@ -353,7 +358,7 @@ const viewModel = function(params) {
             // In Document mode: add as document
             const item = self._entityToItem(d);
             const exists = self.cart().some((c) => c.biblissimaQid === item.biblissimaQid);
-            if (!exists) self.cart.push(item);
+            if (!exists && !self.cartIsFull()) self.cart.push(item);
             self.directIdentifier('');
         } catch (err) {
             console.error('Failed to add by identifier:', err);
@@ -810,7 +815,7 @@ const viewModel = function(params) {
         );
         if (existing) {
             self.cart.remove(existing);
-        } else {
+        } else if (!self.cartIsFull()) {
             self.cart.push(item);
         }
     };
@@ -826,15 +831,17 @@ const viewModel = function(params) {
     };
 
     this.addAllVisible = () => {
-        self.pagedResults().forEach((item) => {
+        const toAdd = self.pagedResults().filter((item) => {
             const exists = self.cart().some(
                 (c) =>
                     (c.arkId && c.arkId === item.arkId) ||
                     (c.canvasId && c.canvasId === item.canvasId) ||
                     (c.biblissimaQid && c.biblissimaQid === item.biblissimaQid)
             );
-            if (!exists) self.cart.push(item);
+            return !exists;
         });
+        if (self.cart().length + toAdd.length > self.cartMax) return;
+        toAdd.forEach((item) => self.cart.push(item));
     };
 
     this.clearCart = () => self.cart.removeAll();

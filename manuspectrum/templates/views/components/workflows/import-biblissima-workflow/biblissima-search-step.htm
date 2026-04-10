@@ -127,7 +127,10 @@
                 <!-- /ko -->
             </span>
             <!-- ko if: totalResults() > 0 -->
-            <button class="btn btn-xs btn-default" data-bind="click: addAllVisible">
+            <button class="btn btn-xs btn-default"
+                    data-bind="click: addAllVisible,
+                               disable: cart().length + pagedResults().length > cartMax,
+                               attr: { title: (cart().length + pagedResults().length > cartMax) ? cartLimitLabel : '' }">
                 <i class="fa fa-plus"></i> {% trans "Add all visible" %}
             </button>
             <!-- /ko -->
@@ -331,9 +334,9 @@
                 <h4>
                     <i class="fa fa-shopping-basket"></i>
                     {% trans "Selection" %}
-                    <!-- ko if: cartCount() > 0 -->
-                    <span class="badge" data-bind="text: cartCount()"></span>
-                    <!-- /ko -->
+                    <span class="badge" data-bind="css: { 'text-danger': cartIsFull }">
+                        <span data-bind="text: cartCount()"></span> / <span data-bind="text: cartMax"></span>
+                    </span>
                 </h4>
                 <!-- ko if: cartCount() > 0 -->
                 <button class="btn btn-xs btn-link text-danger" data-bind="click: clearCart">
