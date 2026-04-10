@@ -18,6 +18,7 @@ from manuspectrum.views.biblissima_proxy import (
     BiblissimaManuscriptIlluminationsView,
     BiblissimaSearchManuscriptsView,
     BiblissimaSearchView,
+    BiblissimaStatsView,
     BiblissimaSuggestView,
 )
 from manuspectrum.views.iiif_annotation import (
@@ -137,6 +138,13 @@ urlpatterns.append(
         "api/biblissima/add-alt-name",
         BiblissimaAddAltNameView.as_view(),
         name="biblissima-add-alt-name",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/stats",
+        BiblissimaStatsView.as_view(),
+        name="biblissima-stats",
     )
 )
 

@@ -2543,15 +2543,25 @@ class BiblissimaAddAltNameView(View):
 
 
 class BiblissimaStatsView(View):
-    """Expose lightweight metrics for outbound Biblissima traffic.
+    """Debug/admin tool exposing outbound Biblissima traffic counters.
 
-    Useful for observing semaphore pressure, cache hit ratio, and the rate of
-    upstream 429/5xx responses to decide whether to tune the concurrency limit
-    or cache TTL.
+    Restricted to authenticated staff users. Intended for quick sanity checks
+    after a deploy or during debugging (e.g. "is Biblissima rate-limiting us?",
+    "is the cache filling up?"). Not a replacement for proper observability:
+
+    - Counters live in process memory and reset on every Django restart.
+    - Each gunicorn worker keeps its own counters, so values are per-process
+      and can be misleading when multiple workers are running.
+
+    For long-term observability, wire django-prometheus or ship 429/5xx
+    events to an external collector.
     """
 
     @method_decorator(never_cache)
     def get(self, request):
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return JsonResponse({"error": "Forbidden"}, status=403)
+
         with _biblissima_stats_lock:
             stats = dict(_biblissima_stats)
         stats["semaphore_capacity"] = _BIBLISSIMA_CONCURRENCY_LIMIT
