@@ -1642,9 +1642,10 @@ def _extract_date_from_portal(portal_hash):
     """Scrape a Biblissima portal page to extract 'Date de fabrication'."""
     if not portal_hash:
         return ""
+    session = _build_biblissima_session()
     try:
-        session = _build_biblissima_session()
-        resp = session.get(
+        resp = _bib_request(
+            session,
             f"{BIBLISSIMA_PORTAL}/{portal_hash}",
             timeout=PORTAL_REQUEST_TIMEOUT,
         )
@@ -1652,6 +1653,8 @@ def _extract_date_from_portal(portal_hash):
         html = resp.text
     except Exception:
         return ""
+    finally:
+        session.close()
 
     pres_match = re.search(r'id="presentation">(.*?)</section>', html, re.DOTALL)
     if not pres_match:
@@ -1845,18 +1848,22 @@ class BiblissimaIlluminationDetailView(View):
 
     @method_decorator(cache_page(3600))
     def get(self, request, ifdata_hash):
+        session = _build_biblissima_session()
         try:
-            session = _build_biblissima_session()
-            resp = session.get(
-                f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
-                timeout=PORTAL_REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            html = resp.text
-        except Exception as exc:
-            return _biblissima_upstream_error(
-                exc, f"Biblissima illumination fetch ({ifdata_hash})"
-            )
+            try:
+                resp = _bib_request(
+                    session,
+                    f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
+                    timeout=PORTAL_REQUEST_TIMEOUT,
+                )
+                resp.raise_for_status()
+                html = resp.text
+            except Exception as exc:
+                return _biblissima_upstream_error(
+                    exc, f"Biblissima illumination fetch ({ifdata_hash})"
+                )
+        finally:
+            session.close()
 
         result = {
             "ifdataHash": ifdata_hash,
