@@ -7,14 +7,6 @@ import biblissimaConfigStepTemplate from 'templates/views/components/workflows/i
 const DOCUMENT_GRAPH_ID = '0c8226c1-11a9-4c48-9601-a7a0c6f2df6b';
 const PROJECT_GRAPH_ID = '87a4319d-3ca5-43f6-88cc-a7379fba67f6';
 
-// Default type value IDs (prefLabel valueid, not conceptid)
-const VALUEID_MANUSCRIT = '30931466-b4e0-4527-ac93-b7290e80084c';
-const VALUEID_DECOR = '3ff3726d-2a5a-450e-a558-105e065bb60f';
-
-// RDM Collections
-const RDM_DOC_TYPE = '73cf3108-5fef-429b-a92f-24074871aed9';
-const RDM_COMP_TYPE = 'e85080b2-c39b-4e37-b6bc-b57d34092b7b';
-
 /**
  * Create a resource picker using Arches' ResourceInstanceSelectViewModel.
  * Returns an object with select2Config ready to use in template.
@@ -43,11 +35,9 @@ const viewModel = function(params) {
     this.parentDocumentName = ko.observable('');
     this.projectId = ko.observable(null);
     this.projectName = ko.observable('');
-    this.defaultType = ko.observable(null);
 
     // Computed
     this.isComponent = ko.computed(() => self.resourceType() === 'Component');
-    this.currentRdmCollection = ko.observable(RDM_DOC_TYPE);
 
     // Resource pickers using Arches' native VM
     this.parentDocPicker = createResourcePicker([DOCUMENT_GRAPH_ID], true);
@@ -90,22 +80,14 @@ const viewModel = function(params) {
         }
     });
 
-    // Reset parent document and update RDM collection when switching type
+    // Reset parent document when switching back to Document type
     this.resourceType.subscribe((type) => {
         if (type === 'Document') {
             self.parentDocumentId(null);
             self.parentDocumentName('');
             self.parentDocPicker.value([]);
-            self.defaultType(VALUEID_MANUSCRIT);
-            self.currentRdmCollection(RDM_DOC_TYPE);
-        } else {
-            self.defaultType(VALUEID_DECOR);
-            self.currentRdmCollection(RDM_COMP_TYPE);
         }
     });
-
-    // Set initial default type
-    this.defaultType(VALUEID_MANUSCRIT);
 
     // Validation
     this.canProceed = ko.computed(() => {
@@ -124,7 +106,6 @@ const viewModel = function(params) {
             if (cached.parentDocumentName) self.parentDocumentName(cached.parentDocumentName);
             if (cached.projectId) self.projectId(cached.projectId);
             if (cached.projectName) self.projectName(cached.projectName);
-            if (cached.defaultType) self.defaultType(cached.defaultType);
         }
     };
 
@@ -135,7 +116,6 @@ const viewModel = function(params) {
             parentDocumentName: self.parentDocumentName(),
             projectId: self.projectId(),
             projectName: self.projectName(),
-            defaultType: self.defaultType(),
         };
         params.value(data);
         self.complete(true);

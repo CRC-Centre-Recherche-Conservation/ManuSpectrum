@@ -844,6 +844,36 @@ msgstr ""
 msgid "Cart limit reached"
 msgstr "Limite du panier atteinte"
 
+#: templates/javascript.htm:66
+msgid "default"
+msgstr "par défaut"
+
+#: templates/javascript.htm:67
+msgid "type"
+msgstr "type"
+
+#: templates/javascript.htm:68
+msgid "Manuscript"
+msgstr "Manuscrit"
+
+#: templates/javascript.htm:69
+msgid "Custom type"
+msgstr "Type personnalisé"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "items have a default type — click the yellow badge to adjust."
+msgstr ""
+"éléments ont un type par défaut — cliquez sur le badge jaune pour le "
+"corriger."
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Click to change type"
+msgstr "Cliquer pour changer le type"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Done"
+msgstr "Terminé"
+
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
 msgid ""

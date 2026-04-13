@@ -2,6 +2,36 @@ import ko from 'knockout';
 import arches from 'arches';
 import biblissimaCreateStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm';
 
+// Type of Document: "manuscrit" valueid — default for every imported Document
+// since Biblissima's search already filters on type=manuscript.
+const VALUEID_MANUSCRIT = '30931466-b4e0-4527-ac93-b7290e80084c';
+
+// RDM collections for the per-item inline concept-select-widget
+const RDM_DOC_TYPE = '73cf3108-5fef-429b-a92f-24074871aed9';
+const RDM_COMP_TYPE = 'e85080b2-c39b-4e37-b6bc-b57d34092b7b';
+
+// Server-side fallback when no Component mapping matches (illumination générique).
+// Must stay in sync with BIBLISSIMA_TYPE_DEFAULT in views/biblissima_proxy.py.
+const COMPONENT_FALLBACK_TYPE_VALUEID = '3ecd8040-7c4b-4b1d-88f7-379297358f66';
+
+// Label lookup for known Component type valueids — mirrors
+// BIBLISSIMA_TYPE_VALUEID_LABELS in views/biblissima_proxy.py. Used when the
+// user picks a new valueid via the inline editor so the badge can update
+// without round-tripping the RDM. Any valueid not in this map falls back to
+// a generic "Custom type" label.
+const BIBLISSIMA_TYPE_LABELS = {
+    '31158e76-817a-447d-a40c-3963731296a8': 'Lettrine',
+    '2f5df709-4f32-40b4-8858-d0d54ba25d61': 'Lettre ornée',
+    '63bc98e3-57de-48fc-a656-8d6f9a9acf40': 'Miniature',
+    '4063b4aa-c50b-4101-947c-d8094eed6e25': 'Décor',
+    '0805a584-1395-48df-8e84-4ae4b25cdeae': 'Frontispice',
+    '29167061-2645-4d86-8f30-9206c1f83297': 'Vignette',
+    '85e458af-0292-4ecb-84b9-5715071d45e1': 'Photographie',
+    'c3168cc7-23d3-4ddb-9eac-38383b852f5a': 'Filigrane',
+    '36a20d43-f316-4d0f-bf58-ec8a2cb71d0a': 'Planche',
+    '3ecd8040-7c4b-4b1d-88f7-379297358f66': 'Enluminure',
+};
+
 const viewModel = function(params) {
     const self = this;
 
@@ -15,7 +45,12 @@ const viewModel = function(params) {
     this.resourceType = this.config.resourceType || 'Document';
     this.parentDocumentId = this.config.parentDocumentId || null;
     this.projectId = this.config.projectId || null;
-    this.defaultType = this.config.defaultType || null;
+    this.isComponent = this.resourceType === 'Component';
+    // RDM collection used by the inline type editor. Depends on mode, wrapped
+    // as an observable because concept-select-widget expects one.
+    this.typeRdmCollection = ko.observable(
+        this.isComponent ? RDM_COMP_TYPE : RDM_DOC_TYPE
+    );
 
     // Items from step 2
     this.searchData = params.searchStepData || {};
@@ -127,9 +162,65 @@ const viewModel = function(params) {
             linkedResourceId: ko.observable(null),
             linkedDisplayname: ko.observable(''),
             enrichExisting: ko.observable(true),
+            // Per-item type: observable so the inline editor can mutate it and
+            // the badge can re-render. Component items carry a typeValueId
+            // resolved server-side from the Biblissima descriptor; Documents
+            // all default to "manuscrit" (Biblissima filters on manuscripts).
+            typeValueId: ko.observable(
+                item.typeValueId
+                || (self.isComponent ? COMPONENT_FALLBACK_TYPE_VALUEID : VALUEID_MANUSCRIT)
+            ),
+            typeEditing: ko.observable(false),
         }));
         self.items(items);
     };
+
+    // True when a Component item is still resolved to the server-side generic
+    // fallback ("illumination") — used to flag items that need user attention.
+    // Document mode has no ambiguous fallback: all items are manuscrits by
+    // construction, so the badge stays neutral.
+    this.isTypeFallback = (item) =>
+        self.isComponent
+        && item.typeValueId() === COMPONENT_FALLBACK_TYPE_VALUEID;
+
+    // Short human label for the badge. In Component mode we deliberately show
+    // the raw descriptor / typologie text from the Biblissima scrape rather
+    // than looking up the concept label, since the whole point of the badge
+    // is to tell the user what Biblissima sent so they can spot mis-mappings.
+    // In Document mode there is no descriptor and all items default to the
+    // same "manuscrit" value — so we show a generic label.
+    // Short human label for the badge. Looks up the current valueid against
+    // the local label map (mirrors backend BIBLISSIMA_TYPE_VALUEID_LABELS),
+    // so the badge updates immediately when the user picks a new value via
+    // the inline editor. Unknown valueids (rare — only if the user picks a
+    // concept not in our Biblissima mapping) show as "Custom type".
+    this.typeBadgeLabel = (item) => {
+        const vid = item.typeValueId();
+        if (!self.isComponent && vid === VALUEID_MANUSCRIT) {
+            return arches.translations.biblissimaTypeManuscript || 'Manuscrit';
+        }
+        if (BIBLISSIMA_TYPE_LABELS[vid]) {
+            return BIBLISSIMA_TYPE_LABELS[vid];
+        }
+        return arches.translations.biblissimaTypeCustom || 'Custom type';
+    };
+
+    this.toggleTypeEditor = (item) => {
+        item.typeEditing(!item.typeEditing());
+    };
+
+    this.closeTypeEditor = (item) => {
+        item.typeEditing(false);
+    };
+
+    // Count of items still resolved to the generic fallback, for the
+    // "X items to review" header hint.
+    this.fallbackItemsCount = ko.computed(() =>
+        self.items().filter((i) =>
+            i.typeValueId() === COMPONENT_FALLBACK_TYPE_VALUEID
+            && i.status() === 'pending'
+        ).length
+    );
 
     this.checkDuplicates = async () => {
         const graphId = self.resourceType === 'Document'
@@ -473,13 +564,16 @@ const viewModel = function(params) {
             deps.productionActors = [personDep.existingId()];
         }
 
+        // Per-item resolved type (may have been corrected by the user via
+        // the inline concept-select-widget). Document items default to
+        // VALUEID_MANUSCRIT, Component items to the server-resolved valueid.
         const body = {
             resourceType: self.resourceType,
             transactionId: null,
             biblissimaData: item,
             dependencies: deps,
             conceptMappings: {
-                type: self.defaultType,
+                type: ko.unwrap(item.typeValueId),
             },
         };
 

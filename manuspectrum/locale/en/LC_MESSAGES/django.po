@@ -759,6 +759,34 @@ msgstr "Still working — large searches may take up to 2 minutes"
 msgid "Cart limit reached"
 msgstr "Cart limit reached"
 
+#: templates/javascript.htm:66
+msgid "default"
+msgstr "default"
+
+#: templates/javascript.htm:67
+msgid "type"
+msgstr "type"
+
+#: templates/javascript.htm:68
+msgid "Manuscript"
+msgstr "Manuscript"
+
+#: templates/javascript.htm:69
+msgid "Custom type"
+msgstr "Custom type"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "items have a default type — click the yellow badge to adjust."
+msgstr "items have a default type — click the yellow badge to adjust."
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Click to change type"
+msgstr "Click to change type"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Done"
+msgstr "Done"
+
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
 msgid ""

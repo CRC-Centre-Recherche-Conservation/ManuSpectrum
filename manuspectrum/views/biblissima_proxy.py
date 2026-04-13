@@ -746,11 +746,21 @@ def _parse_iiif_canvases(manifest_json):
         else:
             location = _strip_html(location_raw)
 
+        # Resolve Component type from descriptors / canvas label.
+        # The first descriptor is usually the iconographic type (e.g.
+        # "Miniature", "Lettrine ornée") — fall through to the label if
+        # nothing matches, which will default to "Enluminure".
+        canvas_label = _strip_html(canvas.get("label", "")) or ""
+        first_desc = descriptors[0] if descriptors else ""
+        type_valueid = _resolve_biblissima_type(
+            descriptor=first_desc, type_field=canvas_label
+        )
+
         results.append(
             {
                 "canvasId": canvas.get("@id", ""),
                 "arkId": item_ark,
-                "label": _strip_html(canvas.get("label", "")),
+                "label": canvas_label,
                 "thumbnail": thumbnail,
                 "imageUrl": image_url,
                 "manuscript": manuscript_label,
@@ -761,6 +771,8 @@ def _parse_iiif_canvases(manifest_json):
                 "location": location,
                 "descriptors": descriptors,
                 "portalUrl": portal_url,
+                "typeValueId": type_valueid,
+                "typeLabel": _biblissima_type_label(type_valueid),
                 # Fields expected by the frontend template (populated during enrichment)
                 "shelfmark": "",
                 "collectionLabel": "",
@@ -1704,6 +1716,28 @@ BIBLISSIMA_TYPE_MAPPING = {
 # Default fallback when no type mapping matches
 BIBLISSIMA_TYPE_DEFAULT = "3ecd8040-7c4b-4b1d-88f7-379297358f66"  # illumination
 
+# Human-readable labels for each target valueid. Used by the import workflow
+# so the per-item type badge can show a real concept name (e.g. "Enluminure")
+# instead of a generic "default" string. Labels are in French to match the
+# underlying concept collection.
+BIBLISSIMA_TYPE_VALUEID_LABELS = {
+    "31158e76-817a-447d-a40c-3963731296a8": "Lettrine",
+    "2f5df709-4f32-40b4-8858-d0d54ba25d61": "Lettre ornée",
+    "63bc98e3-57de-48fc-a656-8d6f9a9acf40": "Miniature",
+    "4063b4aa-c50b-4101-947c-d8094eed6e25": "Décor",
+    "0805a584-1395-48df-8e84-4ae4b25cdeae": "Frontispice",
+    "29167061-2645-4d86-8f30-9206c1f83297": "Vignette",
+    "85e458af-0292-4ecb-84b9-5715071d45e1": "Photographie",
+    "c3168cc7-23d3-4ddb-9eac-38383b852f5a": "Filigrane",
+    "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a": "Planche",
+    "3ecd8040-7c4b-4b1d-88f7-379297358f66": "Enluminure",
+}
+
+
+def _biblissima_type_label(valueid):
+    """Return the display label for a resolved Component type valueid."""
+    return BIBLISSIMA_TYPE_VALUEID_LABELS.get(valueid, "")
+
 
 def _resolve_biblissima_type(typologie="", descriptor="", type_field=""):
     """Resolve a Biblissima illumination to an Arches Type of Component valueid.
@@ -1756,6 +1790,7 @@ def _parse_manuscript_illuminations(html):
                 "hasImage": ifdata_hash in has_image_set,
                 "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
                 "typeValueId": type_valueid,
+                "typeLabel": _biblissima_type_label(type_valueid),
             }
         )
     return results
@@ -1928,6 +1963,7 @@ class BiblissimaIlluminationDetailView(View):
         result["typeValueId"] = _resolve_biblissima_type(
             typologie, descriptor, type_field
         )
+        result["typeLabel"] = _biblissima_type_label(result["typeValueId"])
 
         # Manuscript ARK
         ms_match = re.search(r"ark:/43093/(mdata\w+)", html)

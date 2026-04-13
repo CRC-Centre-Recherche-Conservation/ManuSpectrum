@@ -268,6 +268,7 @@ const viewModel = function(params) {
                         digitizationUrl: '',
                         hasImage: !!detail.imageUrl,
                         typeValueId: detail.typeValueId || '',
+                        typeLabel: detail.typeLabel || '',
                         ifdataHash: detail.ifdataHash,
                         mandragoreArk: detail.mandragoreArk || '',
                     };
@@ -319,6 +320,7 @@ const viewModel = function(params) {
                             digitizationUrl: '',
                             hasImage: item.hasImage,
                             typeValueId: item.typeValueId || '',
+                            typeLabel: item.typeLabel || '',
                             ifdataHash: item.ifdataHash,
                         })));
                         self.hasSearched(true);
@@ -470,6 +472,7 @@ const viewModel = function(params) {
         parentInstitutionQid: entityData.parentInstitutionQid || '',
         hasImage: item.hasImage,
         typeValueId: item.typeValueId || '',
+        typeLabel: item.typeLabel || '',
         ifdataHash: item.ifdataHash,
     });
 

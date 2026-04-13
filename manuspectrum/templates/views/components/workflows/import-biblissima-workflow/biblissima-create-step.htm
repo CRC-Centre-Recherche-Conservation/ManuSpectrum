@@ -63,6 +63,15 @@
             </div>
         </div>
 
+        <!-- Review hint: items still resolved to the generic fallback type -->
+        <!-- ko if: isComponent && fallbackItemsCount() > 0 -->
+        <div class="bbma-review-hint">
+            <i class="fa fa-exclamation-triangle"></i>
+            <span data-bind="text: fallbackItemsCount"></span>
+            {% trans "items have a default type — click the yellow badge to adjust." %}
+        </div>
+        <!-- /ko -->
+
         <div class="bbma-items-list">
             <!-- ko foreach: items -->
             <div class="bbma-item-row" data-bind="css: 'bbma-item-' + $parent.statusClass(status())">
@@ -92,6 +101,37 @@
                     </div>
                     <!-- ko if: arkId -->
                     <div class="bbma-item-ark" data-bind="text: arkId"></div>
+                    <!-- /ko -->
+
+                    <!-- Per-item type: badge → inline editor -->
+                    <!-- ko ifnot: typeEditing -->
+                    <button type="button"
+                            class="bbma-item-type"
+                            data-bind="click: $parent.toggleTypeEditor,
+                                       css: { 'bbma-item-type-fallback': $parent.isTypeFallback($data) },
+                                       attr: { title: '{% trans 'Click to change type' %}' }">
+                        <i class="fa fa-tag"></i>
+                        <span data-bind="text: $parent.typeBadgeLabel($data)"></span>
+                    </button>
+                    <!-- /ko -->
+                    <!-- ko if: typeEditing -->
+                    <div class="bbma-item-type-editor">
+                        <div class="bbma-item-type-editor-field"
+                             data-bind="component: {
+                                name: 'concept-select-widget',
+                                params: {
+                                    node: {config: {rdmCollection: $parent.typeRdmCollection}},
+                                    config: {label: '', placeholder: ''},
+                                    renderContext: 'workflow',
+                                    value: typeValueId,
+                                }
+                             }"></div>
+                        <button type="button" class="btn btn-xs btn-default"
+                                data-bind="click: $parent.closeTypeEditor"
+                                title="{% trans 'Done' %}">
+                            <i class="fa fa-check"></i>
+                        </button>
+                    </div>
                     <!-- /ko -->
                 </div>
 
