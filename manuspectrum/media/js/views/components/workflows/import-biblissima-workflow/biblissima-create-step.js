@@ -95,6 +95,18 @@ const viewModel = function(params) {
     );
     this.totalDepsCount = ko.computed(() => self.dependencies().length);
 
+    // Return the Place dep key for an item, mode-aware:
+    //   - Document → `locationLabel` = current location of the manuscript
+    //     (used for the `currentLocation` tile on Documents).
+    //   - Component → `location` = production place of the illumination,
+    //     scraped from the individual portal page. Component graph has no
+    //     "current location" card, so the parent manuscript's shelving
+    //     place is irrelevant here; we want the place of production.
+    this._placeKeyForItem = (item) =>
+        self.isComponent
+            ? (item.location || '')
+            : (item.locationLabel || item.location || '');
+
     // Check if deps for a specific item are resolved (blocks individual "Create")
     this.itemDepsResolved = (item) => {
         // Block Component creates until the enrichment has landed: otherwise
@@ -105,7 +117,7 @@ const viewModel = function(params) {
             const es = item.enrichStatus();
             if (es === 'pending' || es === 'loading') return false;
         }
-        const locationKey = item.locationLabel || item.location;
+        const locationKey = self._placeKeyForItem(item);
         return self.dependencies().every((dep) => {
             const isRelevant =
                 (dep.type === 'Place' && dep.key === locationKey) ||
@@ -120,7 +132,7 @@ const viewModel = function(params) {
 
     // Unresolved dep names for a specific item (for tooltip)
     this.unresolvedDepsLabel = (item) => {
-        const locationKey = item.locationLabel || item.location;
+        const locationKey = self._placeKeyForItem(item);
         const unresolved = [];
         self.dependencies().forEach((dep) => {
             const isRelevant =
@@ -508,30 +520,61 @@ const viewModel = function(params) {
 
         const newDeps = [];
         self.items().forEach((item) => {
-            const location = item.locationLabel || item.location;
-            if (location && location !== 'Origine inconnue') {
-                const d = addDep(location, 'Place', PLACE_GRAPH_ID);
+            // Two distinct Places can be relevant for a single item:
+            //
+            //   - `ownerPlace` = where the *parent manuscript / owning
+            //     institution* is kept. For both modes, this comes from
+            //     `item.locationLabel` (resolved via the manuscript's
+            //     Wikibase entity, e.g. "Paris (France)" for a BnF codex).
+            //     - In Document mode → becomes the Document's
+            //       `currentLocation` tile.
+            //     - In both modes → becomes the `locationKey` of any
+            //       Group dep (BnF is *in* Paris, not wherever the item
+            //       was produced).
+            //
+            //   - `productionPlace` = where the illumination was *made*.
+            //     Only surfaces in Component mode, from the individual
+            //     portal page's "Lieu de fabrication" field (e.g.
+            //     "Naples (Campanie, Italie)" for an illumination made
+            //     in Naples and later shelved at the BnF in Paris).
+            //     → becomes the Component's `productionPlace` tile.
+            //
+            // For Document mode, only ownerPlace is used; for Component
+            // mode both can exist and end up as two separate Place deps
+            // in the Related resources panel.
+            const ownerPlace = item.locationLabel || "";
+            const productionPlace = self.isComponent ? (item.location || "") : "";
+
+            if (ownerPlace && ownerPlace !== "Origine inconnue") {
+                const d = addDep(ownerPlace, "Place", PLACE_GRAPH_ID);
+                if (d) newDeps.push(d);
+            }
+            if (
+                productionPlace
+                && productionPlace !== "Origine inconnue"
+                && productionPlace !== ownerPlace
+            ) {
+                const d = addDep(productionPlace, "Place", PLACE_GRAPH_ID);
                 if (d) newDeps.push(d);
             }
 
-            // Parent institution first (so collection can reference it)
+            // Groups are always located at the owner place (Paris BnF for
+            // the running example) — NOT at the production place.
             const parentInst = item.parentInstitutionLabel;
             const owner = item.collectionLabel;
             if (parentInst && parentInst !== owner) {
-                const d = addDep(parentInst, 'Group', GROUP_GRAPH_ID, null, location);
+                const d = addDep(parentInst, "Group", GROUP_GRAPH_ID, null, ownerPlace);
                 if (d) newDeps.push(d);
             }
-
-            // Collection: member of parent institution, located at place
             if (owner) {
                 const parentKey = (parentInst && parentInst !== owner) ? parentInst : null;
-                const d = addDep(owner, 'Group', GROUP_GRAPH_ID, parentKey, location);
+                const d = addDep(owner, "Group", GROUP_GRAPH_ID, parentKey, ownerPlace);
                 if (d) newDeps.push(d);
             }
 
             const author = item.authorLabel;
             if (author) {
-                const d = addDep(author, 'Person', PERSON_GRAPH_ID);
+                const d = addDep(author, "Person", PERSON_GRAPH_ID);
                 if (d) newDeps.push(d);
             }
         });
@@ -741,13 +784,22 @@ const viewModel = function(params) {
             parentDocument: self.parentDocumentId,
         };
 
-        // Place dep (fix: match on locationLabel || location)
-        const locationKey = item.locationLabel || item.location;
+        // Place dep. For Document → currentLocation tile (where the
+        // manuscript is kept). For Component → productionPlace tile
+        // (where the illumination was made). The backend
+        // `_create_component_tiles` reads `deps.productionPlace`, and
+        // `_create_document_tiles` reads `deps.currentLocation`; we have
+        // to send the right key.
+        const locationKey = self._placeKeyForItem(item);
         const placeDep = self.dependencies().find(
             (d) => d.type === 'Place' && d.key === locationKey
         );
         if (placeDep && placeDep.existingId()) {
-            deps.currentLocation = placeDep.existingId();
+            if (self.isComponent) {
+                deps.productionPlace = placeDep.existingId();
+            } else {
+                deps.currentLocation = placeDep.existingId();
+            }
         }
 
         // Owner Group deps (collection + parent institution, deduplicated)
@@ -827,7 +879,7 @@ const viewModel = function(params) {
     // Auto-create deps that are not yet resolved for a given item
     this._ensureDepsCreated = async (item) => {
         const itemDeps = [];
-        const locationKey = item.locationLabel || item.location;
+        const locationKey = self._placeKeyForItem(item);
 
         for (const dep of self.dependencies()) {
             if (dep.type === 'Place' && dep.key === locationKey) itemDeps.push(dep);
