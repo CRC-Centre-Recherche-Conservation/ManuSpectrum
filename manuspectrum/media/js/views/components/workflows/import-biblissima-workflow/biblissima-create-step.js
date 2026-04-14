@@ -307,11 +307,6 @@ const viewModel = function(params) {
     // we never overwrite values the user might have edited in step 2.
     this._applyEnrichment = (item, data) => {
         if (!data) return;
-        // One-shot debug trace of the raw enrichment payload — makes it
-        // obvious in the browser console when a field like `location` is
-        // missing from the backend response (the #1 cause of Naples not
-        // showing up in Related resources).
-        console.debug('[biblissima] enrichment data', item.ifdataHash, data);
         if (data.pageTitle) {
             // Don't overwrite a name the user already picked; just stash
             // the richer title on the item so the backend can prefer it.
@@ -416,34 +411,11 @@ const viewModel = function(params) {
             )
         );
 
-        // Debug visibility — quickly confirm in the browser console which
-        // items ended up with what location/owner strings after enrichment.
-        console.info(
-            '[biblissima] enrichment complete',
-            targets.map((i) => ({
-                ifdata: i.ifdataHash,
-                status: i.enrichStatus(),
-                location: i.location,
-                hasManifest: !!i.manifestUrl,
-                canvasSize: `${i.canvasWidth()}x${i.canvasHeight()}`,
-            }))
-        );
-
-        // Now that enrichment has filled in `location` / ownership fields
-        // on Component items, re-run the dep resolution so places like
-        // "Naples (Campanie, Italie)" — which only surface on the
-        // individual portal page — actually become Related Resources.
-        // The merge-friendly version above preserves any deps that were
-        // already resolved during the first pass.
+        // Re-run dep resolution now that enrichment has filled in `location`
+        // (production place from the individual portal page) and the other
+        // per-item fields. The merge-friendly `resolveDependencies` preserves
+        // deps already resolved during the first pass.
         await self.resolveDependencies();
-        console.info(
-            '[biblissima] deps after re-resolution',
-            self.dependencies().map((d) => ({
-                type: d.type,
-                key: d.key,
-                action: d.action(),
-            }))
-        );
     };
 
     // True when a Component item's type wasn't actually matched against the
