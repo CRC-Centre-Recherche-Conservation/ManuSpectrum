@@ -1,3 +1,75 @@
+/**
+ * Import Biblissima workflow — step 3 (Create & Validate).
+ *
+ * Takes the cart from step 2 and, on user action, creates the resources
+ * and their related Place / Group / Person dependencies in Arches.
+ *
+ * ## State machine (per item)
+ *
+ *   pending → creating → created      (happy path)
+ *   pending → creating → error        (write failed, retryable)
+ *   pending → linked                  (user linked to an existing resource)
+ *   pending → skipped                 (user dismissed the item)
+ *
+ * Components additionally carry ``enrichStatus`` (pending → loading → done/error)
+ * driven by `enrichComponentItems`: this must be ``done`` before the Create
+ * button unlocks, to avoid racing the illumination detail fetch that fills
+ * in text, rubric, descriptorLinks, Mandragore ARK, canvas dimensions, and
+ * the production ``location`` that drives the Place dep.
+ *
+ * ## Init sequence
+ *
+ *     initializeItems()        // build per-item observables
+ *     resolveDependencies()    // first pass — detects deps from cart data only
+ *     checkDuplicates()        // ES search for duplicate main items
+ *     enrichComponentItems()   // Component only — fetches each ifdata portal
+ *                              // page with concurrency=5, then re-runs
+ *                              // resolveDependencies so newly-surfaced
+ *                              // `location` (= production place) becomes a
+ *                              // Place dep.
+ *
+ * ## Staging
+ *
+ * Everything above is **read-only**: dup checks, enrichment, dep matching
+ * are all ``GET`` calls against ``/api/biblissima/*``. No DB writes happen
+ * until the user clicks *Create* on an item (or *Create all*). The single
+ * exception is ``_addAltName`` — when `resolveDependencies` finds a
+ * high-confidence match for a dep, it auto-links and POSTs the Biblissima
+ * label as an altLabel on the existing resource. That's a soft annotation
+ * on a resource the user already agreed to reuse, not a creation.
+ *
+ * ## Dependency cascade
+ *
+ * ``createDependency(dep)`` is recursive. A Group dep with
+ * ``{ parentKey, locationKey }`` resolves its parent Group and its Place
+ * before creating itself, so ``Place Paris → Group Département → Group
+ * BnF`` is a single depth-first walk. ``_ensureDepsCreated`` drives this
+ * from the top when the user hits Create on an item.
+ *
+ * ## Two Places for one Component
+ *
+ * Component items can carry two orthogonal places:
+ *
+ *   - ``item.locationLabel`` — current location of the **parent manuscript**
+ *     (Wikibase-resolved), e.g. "Paris (France)" for any BnF codex. Used
+ *     as the `locationKey` of Group deps (the BnF is in Paris, period).
+ *   - ``item.location`` — production place of **this specific illumination**
+ *     (scraped from the individual portal page), e.g. "Naples (Campanie,
+ *     Italie)". Goes into ``deps.productionPlace`` on the Component tile.
+ *
+ * `_placeKeyForItem(item)` returns the mode-appropriate key:
+ *  Component → `item.location` (production); Document → `item.locationLabel`
+ *  (current location). Callers match Place deps with it.
+ *
+ * ## Type badge editor
+ *
+ * Each item carries a `typeValueId` observable backed by an inline
+ * `concept-select-widget` editor. Component items additionally have a
+ * `typeIsFallback` flag set by the backend resolver: it's ``true`` **only**
+ * when no Biblissima input matched the type mapping at all, so that an
+ * explicit "Enluminure" (which genuinely matches the mapping) isn't
+ * highlighted the same as a real "couldn't resolve" case.
+ */
 import ko from 'knockout';
 import arches from 'arches';
 import biblissimaCreateStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm';

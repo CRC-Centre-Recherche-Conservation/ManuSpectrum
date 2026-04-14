@@ -1,3 +1,31 @@
+/**
+ * Import Biblissima workflow — step 2 (Search & Curate).
+ *
+ * Queries Biblissima via the backend proxy and builds an in-memory cart
+ * of items to create at step 3. Three search modes, all gated on the
+ * resourceType picked at step 1:
+ *
+ *   - **Document mode** (`searchManuscripts`): searches manuscripts by
+ *     name/shelfmark via the Wikibase suggest endpoint.
+ *   - **Component mode, descriptor sub-mode** (`searchComponents`): resolves
+ *     selected iconographic descriptors to portal hashes and hits the IIIF
+ *     manifest search. Progressive loading: blocks on page 1, streams the
+ *     rest in the background behind an AbortController so switching modes
+ *     cancels cleanly.
+ *   - **Component mode, manuscript sub-mode** (`searchManuscriptIlluminations`):
+ *     resolves a manuscript QID/ARK to its portal hash, then scrapes its
+ *     illumination list page-by-page.
+ *
+ * Cart cap is hard (10 Documents / 25 Components) — enforced in every
+ * add path (`toggleCartItem`, `addByIdentifier`, `addAllVisible`). The
+ * cap is editorial, not technical: imports cost analyst time downstream.
+ *
+ * Output: ``params.value({ selectedItems: ko.toJS(cart), descriptors })``
+ * — the full cart snapshot for step 3 to consume via ``searchStepData``.
+ *
+ * No DB writes anywhere in this step. All fetches are read-only proxy
+ * calls (`/api/biblissima/search*`, `/entity/`, `/suggest`, …).
+ */
 import ko from 'knockout';
 import arches from 'arches';
 import 'bindings/select2-query';

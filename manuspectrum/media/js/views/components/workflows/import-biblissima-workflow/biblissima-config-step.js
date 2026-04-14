@@ -1,3 +1,19 @@
+/**
+ * Import Biblissima workflow — step 1 (Configuration).
+ *
+ * Pick the resource type (Document or Component), the parent Document if
+ * creating a Component, and an optional Project to link the imports to.
+ * The chosen resourceType is fixed for the rest of the session: steps 2
+ * and 3 branch on it and don't support mid-workflow mode switching.
+ *
+ * Output: ``params.value({ resourceType, parentDocumentId, projectId, … })``
+ * consumed by subsequent steps via ``configStepData``.
+ *
+ * Uses Arches' ``ResourceInstanceSelectViewModel`` for the parent Document
+ * and Project pickers so that the user can also create a new resource
+ * inline (the resource-creator panel shares its slot between both pickers
+ * via ``activeNewResourceInstance``).
+ */
 import ko from 'knockout';
 import arches from 'arches';
 import 'bindings/select2-query';

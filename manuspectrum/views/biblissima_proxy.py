@@ -1,3 +1,51 @@
+"""Biblissima connector: HTTP proxy + Arches write path.
+
+Shared module — not workflow-specific. Any feature that needs Biblissima
+data (imports, enrichments, search suggestions, future connectors…) should
+go through the views here rather than calling the portal / Wikibase / IIIF
+endpoints directly, so that concurrency limits, caching, and user-agent /
+language headers stay consistent for the whole server.
+
+Two surface areas:
+
+- **Read-only proxy views** (``BiblissimaSuggestView``, ``BiblissimaEntityView``,
+  ``BiblissimaSearchView``, ``BiblissimaSearchManuscriptsView``,
+  ``BiblissimaManuscriptIlluminationsView``, ``BiblissimaIlluminationDetailView``,
+  …) — HTTP facades over the Biblissima portal, Wikibase, and IIIF manifests.
+  Never write to the Arches DB. Safe to call from any frontend or service.
+
+- **Write path** (``BiblissimaCreateResourceView``, ``BiblissimaAddAltNameView``)
+  — create or annotate Arches resources from Biblissima-derived data. The
+  ``Import Biblissima`` workflow plugin is the primary consumer today,
+  but the endpoints are generic: they take a ``resourceType`` + payload
+  and don't assume a specific UI flow.
+
+Outbound HTTP all goes through ``_build_biblissima_session()`` +
+``_bib_request()``, which share a module-level concurrency semaphore and
+force ``Accept-Language: fr`` so that scraped portal field labels
+(``Type :``, ``Lieu de fabrication :``, …) always match our French field
+map regardless of the end-user's browser locale.
+
+## Attention points for devs
+
+- **HTML parsing**: use ``lxml.html`` + XPath scoped to
+  ``section#presentation`` (see ``BiblissimaIlluminationDetailView``).
+  Regex is only used for URL-level transformations and the
+  ``?iiif-content=`` query-param extraction that has no DOM home.
+- **Caching**: every scraping view is wrapped with ``@cache_page(3600)``.
+  Code changes to any parser are **invisible** until the cache expires or
+  is flushed::
+
+      redis-cli --scan --pattern "*biblissima*" | xargs -r redis-cli DEL
+      redis-cli --scan --pattern "*views.decorators.cache*" | xargs -r redis-cli DEL
+
+- **Type resolution**: ``_resolve_biblissima_type`` returns
+  ``(valueid, is_fallback)``. ``is_fallback=True`` only when **no** input
+  term matched the mapping at all — an explicit ``"Enluminure"`` matches
+  and returns ``is_fallback=False`` even though it happens to share the
+  same valueid as the generic default. Callers that want to flag items
+  needing user review must check the flag, not compare valueids.
+"""
 import logging
 import re
 import threading
@@ -2223,7 +2271,37 @@ class BiblissimaIlluminationDetailView(View):
 
 
 class BiblissimaCreateResourceView(View):
-    """Create a Document, Component, Place, Group, or Person resource from Biblissima data."""
+    """Create one Arches resource per POST — the only write-path view.
+
+    Expected body::
+
+        {
+            "resourceType": "Document" | "Component" | "Place" | "Group" | "Person",
+            "transactionId": <uuid | null>,
+            "biblissimaData": { ... ko.toJS(item) ... },
+            "dependencies": {
+                "parentDocument":   <uuid>,      // Component only, required
+                "project":          <uuid>,      // optional
+                "productionPlace":  <uuid>,      // Component → Production.Place
+                "currentLocation":  <uuid>,      // Document → currentLocation
+                "currentOwner":     [<uuid>],    // Document → Owner
+                "productionActors": [<uuid>]
+            },
+            "conceptMappings": { "type": <valueid> }
+        }
+
+    Dispatch:
+
+    - ``Place | Group | Person`` → ``_create_dependency_resource`` (lightweight
+      name + optional ``memberOf`` / ``location``). Called recursively by
+      the frontend cascade, so parent deps are always created first.
+    - ``Document`` → ``_create_document_tiles``.
+    - ``Component`` → ``_create_component_tiles``.
+
+    Tile writes run inside a single ``transaction.atomic()``. ES indexing is
+    deferred until after the DB transaction commits — a rollback therefore
+    leaves no orphan ES docs.
+    """
 
     # Graph ID mapping for all supported resource types
     GRAPH_IDS = {
@@ -2649,7 +2727,30 @@ class BiblissimaCreateResourceView(View):
     def _create_component_tiles(
         self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps
     ):
-        """Create all tiles for a Component resource."""
+        """Create all tiles for an illumination (Component) resource.
+
+        Mapping Biblissima → Arches tiles (all cards cardinality=n unless
+        noted; values pulled from the ``ko.toJS(item)`` payload enriched at
+        step 3):
+
+        ============================ =========================================================================
+        Card                         Source
+        ============================ =========================================================================
+        Name of Component            ``pageTitle`` > ``label`` > ``legend``
+        Type of Component            ``concepts["type"]`` (per-item valueid, correctable via inline editor)
+        Item Feature                 ``deps["parentDocument"]``
+        Identifier                   Biblissima ARK (``arkId``) + Mandragore ARK (``mandragoreArk``) if present
+        Statement                    ``text`` → ``identification`` ; ``rubric`` → ``inscriptions``
+        Iconographic representation  one tile per ``descriptorLinks[i]``: ``url = desc ARK``, ``url_label = label``
+        Period                       ``date`` → century concept + medieval production period
+        Production                   ``date``, ``deps["productionPlace"]``, ``deps["productionActors"]``
+        Location in Document         whole-page Polygon sized from ``canvasWidth/canvasHeight``
+                                     (fallback 4000×5000); ``folio`` → Location appellation
+        ============================ =========================================================================
+
+        Attention: ``folio`` lives **only** in Location appellation, not
+        in Context of Component (which has no Biblissima source).
+        """
         i18n = self._i18n_string
         clist = self._concept_list
 
