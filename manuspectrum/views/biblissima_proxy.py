@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from html import unescape
 
 import requests
+from lxml import html as lxml_html
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from django.core.cache import cache
@@ -40,9 +41,20 @@ def _build_biblissima_session():
     The Retry adapter honors Retry-After headers by default
     (respect_retry_after_header=True), so upstream explicit backoff requests
     on 429/503 are respected transparently.
+
+    ``Accept-Language: fr`` is forced on every outbound request: the portal
+    URLs themselves are already locked to ``/fr/`` paths, but this header
+    ensures that any content negotiation (on Biblissima side or on an
+    intermediate proxy / CDN) still serves us the French page — our
+    scrape field map (``"Type :"``, ``"Lieu de fabrication :"``, …) only
+    matches French labels. Whatever locale the end-user's browser runs in
+    is irrelevant, only what *this server* sends to Biblissima counts.
     """
     session = requests.Session()
-    session.headers.update({"User-Agent": get_user_agent()})
+    session.headers.update({
+        "User-Agent": get_user_agent(),
+        "Accept-Language": "fr-FR,fr;q=0.9",
+    })
     retry = Retry(
         total=3,
         connect=2,
@@ -382,6 +394,8 @@ CONCEPT_RECORD_ID = "e10752d3-d8fa-47cb-92f9-dd7277dfc97a"
 CONCEPT_SOURCE_BIBLISSIMA = "39124989-dfb1-4e2a-9d1a-4bff0827ed71"
 CONCEPT_SOURCE_MANDRAGORE = "3b78627a-c751-43df-b427-73e1dd11ec38"
 CONCEPT_DESCRIPTION = "9a51d30b-48e8-4f94-9344-cd2bb1d4b33a"
+CONCEPT_IDENTIFICATION = "d2a8104a-312a-4f1d-acb7-3ecb1335e2fc"  # Statement type for "Texte" (which work)
+CONCEPT_INSCRIPTIONS = "9076a3e5-06f5-4ed7-91e4-985914c7178b"  # Statement type for "Rubrique"
 CONCEPT_MANUSCRIT = "56c61151-3bc5-45b4-957e-3cccde26abe7"
 CONCEPT_DECOR = "c19f3196-d1e9-4f08-9917-4d627e61e153"
 CONCEPT_SHELF_MARKS = "2cbf15b4-aa04-4b5b-bf4a-2594bbeb72ca"
@@ -752,7 +766,7 @@ def _parse_iiif_canvases(manifest_json):
         # nothing matches, which will default to "Enluminure".
         canvas_label = _strip_html(canvas.get("label", "")) or ""
         first_desc = descriptors[0] if descriptors else ""
-        type_valueid = _resolve_biblissima_type(
+        type_valueid, type_is_fallback = _resolve_biblissima_type(
             descriptor=first_desc, type_field=canvas_label
         )
 
@@ -773,6 +787,7 @@ def _parse_iiif_canvases(manifest_json):
                 "portalUrl": portal_url,
                 "typeValueId": type_valueid,
                 "typeLabel": _biblissima_type_label(type_valueid),
+                "typeIsFallback": type_is_fallback,
                 # Fields expected by the frontend template (populated during enrichment)
                 "shelfmark": "",
                 "collectionLabel": "",
@@ -1733,7 +1748,6 @@ BIBLISSIMA_TYPE_VALUEID_LABELS = {
     "3ecd8040-7c4b-4b1d-88f7-379297358f66": "Enluminure",
 }
 
-
 def _biblissima_type_label(valueid):
     """Return the display label for a resolved Component type valueid."""
     return BIBLISSIMA_TYPE_VALUEID_LABELS.get(valueid, "")
@@ -1744,6 +1758,11 @@ def _resolve_biblissima_type(typologie="", descriptor="", type_field=""):
 
     Priority: typologie > descriptor > type_field > default.
     Uses startswith matching for variants (e.g. "initiale ornée (1)").
+
+    Returns ``(valueid, is_fallback)``. ``is_fallback`` is True only when no
+    input term matched the mapping at all — distinct from the case where an
+    input explicitly says "Enluminure" (which matches the mapping even
+    though it happens to share the same valueid as the generic default).
     """
     for term in (typologie, descriptor, type_field):
         if not term:
@@ -1753,24 +1772,47 @@ def _resolve_biblissima_type(typologie="", descriptor="", type_field=""):
         normalized = re.sub(r"\s*\(\d+\)\s*$", "", normalized)
         # Try exact match first
         if normalized in BIBLISSIMA_TYPE_MAPPING:
-            return BIBLISSIMA_TYPE_MAPPING[normalized]
+            return BIBLISSIMA_TYPE_MAPPING[normalized], False
         # Try startswith match
         for key, valueid in BIBLISSIMA_TYPE_MAPPING.items():
             if normalized.startswith(key):
-                return valueid
-    return BIBLISSIMA_TYPE_DEFAULT
+                return valueid, False
+    return BIBLISSIMA_TYPE_DEFAULT, True
 
 
 def _parse_manuscript_illuminations(html):
-    """Parse a Biblissima portal manuscript page and return the illumination list."""
-    results = []
-    has_image_set = set(re.findall(r"fa-picture-o.*?ark:/43093/(ifdata\w+)", html))
+    """Parse a Biblissima portal manuscript page and return the illumination list.
 
-    for match in re.finditer(
-        r'<a\s+href="[^"]*ark:/43093/(ifdata\w+)"[^>]*>([^<]+)</a>', html
-    ):
-        ifdata_hash = match.group(1)
-        label = match.group(2).strip()
+    HTML structure (section#illuminations):
+
+        <ul class="list-inline-block-container">
+            <li>
+                <span class="fa fa-picture-o" ...></span>  <!-- optional icon -->
+                <a href=".../ark:/43093/ifdataXXX">Full label with manuscript…</a>
+            </li>
+            …
+        </ul>
+
+    We iterate over every ``<a>`` link pointing at an ``ifdata`` ARK and
+    detect the presence of a sibling ``.fa-picture-o`` icon inside the same
+    ``<li>`` to flag whether a digitization is available. Dedupes by
+    ifdata hash in case the same illumination is rendered twice.
+    """
+    tree = lxml_html.fromstring(html)
+    results = []
+    seen_hashes = set()
+
+    for a in tree.xpath('.//a[contains(@href, "/ark:/43093/ifdata")]'):
+        href = a.get("href", "")
+        m = re.search(r"(ifdata\w+)", href)
+        if not m:
+            continue
+        ifdata_hash = m.group(1)
+        if ifdata_hash in seen_hashes:
+            continue
+        seen_hashes.add(ifdata_hash)
+
+        label = " ".join(a.text_content().split()).strip()
 
         desc_match = re.match(r"^([^(]+)", label)
         descriptor = desc_match.group(1).strip() if desc_match else label
@@ -1778,7 +1820,21 @@ def _parse_manuscript_illuminations(html):
         folio_match = re.search(r"\bf\.?\s*(\d+\w*)\)?$", label)
         folio = folio_match.group(1) if folio_match else ""
 
-        type_valueid = _resolve_biblissima_type(descriptor=descriptor)
+        # "Has image" → look for a `fa-picture-o` icon in the enclosing <li>
+        # (or up to 3 ancestors if the portal nests things deeper in future).
+        has_image = False
+        parent = a.getparent()
+        for _ in range(3):
+            if parent is None:
+                break
+            if parent.xpath('.//*[contains(@class, "fa-picture-o")]'):
+                has_image = True
+                break
+            parent = parent.getparent()
+
+        type_valueid, type_is_fallback = _resolve_biblissima_type(
+            descriptor=descriptor
+        )
 
         results.append(
             {
@@ -1787,10 +1843,11 @@ def _parse_manuscript_illuminations(html):
                 "label": label,
                 "descriptor": descriptor,
                 "folio": folio,
-                "hasImage": ifdata_hash in has_image_set,
+                "hasImage": has_image,
                 "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
                 "typeValueId": type_valueid,
                 "typeLabel": _biblissima_type_label(type_valueid),
+                "typeIsFallback": type_is_fallback,
             }
         )
     return results
@@ -1878,8 +1935,140 @@ class BiblissimaManuscriptIlluminationsView(View):
         )
 
 
+def _fetch_canvas_dimensions(manifest_url, folio, session):
+    """Fetch an IIIF manifest and return the target canvas' id + dimensions.
+
+    Canvas matching happens by **folio** (e.g. "323v"), not by ifdata hash:
+    Biblissima IIIF v2 canvases are numbered per page
+    (``…/canvas/650``) and their ``label`` carries the folio, so that's our
+    only reliable join key between a portal illumination and its canvas.
+    Falls back to the first canvas of the first sequence when no label match.
+
+    Cached under ``(manifest_url, folio)`` so sibling cart items from the
+    same manuscript only pay the download once.
+
+    Returns ``{"canvasId": str, "canvasWidth": int, "canvasHeight": int}``
+    or ``{}`` on any failure.
+    """
+    if not manifest_url:
+        return {}
+    cache_key = f"biblissima:manifest-canvas:{manifest_url}:{folio or ''}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        resp = _bib_request(
+            session,
+            manifest_url,
+            headers={"Accept": "application/ld+json, application/json"},
+            timeout=IIIF_REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        manifest = resp.json()
+    except Exception as exc:
+        logger.warning(
+            "Biblissima manifest fetch failed for %s: %s", manifest_url, exc
+        )
+        return {}
+
+    # Normalize folio for comparison: strip leading "f." and whitespace, lower
+    folio_norm = (folio or "").strip().lstrip("f.").strip().lower()
+
+    target = None
+    # IIIF v2: sequences[].canvases[]
+    for seq in manifest.get("sequences", []):
+        for canvas in seq.get("canvases", []) or []:
+            if folio_norm:
+                raw_label = canvas.get("label", "") or ""
+                if isinstance(raw_label, list):
+                    raw_label = " ".join(str(x) for x in raw_label)
+                label = str(raw_label).lower()
+                # Match "f. 323v", "323v", "fol. 323v", etc.
+                if folio_norm in label:
+                    target = canvas
+                    break
+        if target:
+            break
+    # Fallback: first canvas of the first sequence
+    if target is None:
+        seqs = manifest.get("sequences") or []
+        if seqs:
+            canvases = seqs[0].get("canvases") or []
+            if canvases:
+                target = canvases[0]
+                logger.info(
+                    "Biblissima canvas match fallback to first canvas for "
+                    "manifest=%s folio=%r",
+                    manifest_url,
+                    folio,
+                )
+    if target is None:
+        logger.warning(
+            "Biblissima manifest has no canvases: %s", manifest_url
+        )
+        return {}
+
+    result = {
+        "canvasId": target.get("@id", ""),
+        "canvasWidth": int(target.get("width") or 0),
+        "canvasHeight": int(target.get("height") or 0),
+    }
+    cache.set(cache_key, result, 3600)
+    return result
+
+
+def _gallica_viewer_to_image(url):
+    """Turn a Gallica viewer URL into a direct JPEG URL.
+
+    Gallica's ``/ark:/12148/<id>/f<n>.image`` endpoint serves the interactive
+    viewer HTML — worthless in an ``<img>`` tag. The ``.thumbnail`` variant
+    serves a small JPEG directly, which is what we want for both display in
+    the create step and for storage in the Iconographic representation tile
+    so Arches can render it as an image.
+    """
+    if not url:
+        return url
+    return re.sub(r"\.image(?=[?#]|$)", ".thumbnail", url)
+
+
 class BiblissimaIlluminationDetailView(View):
-    """Scrape a single illumination page from the Biblissima portal."""
+    """Scrape a single illumination page from the Biblissima portal.
+
+    Uses lxml.html + CSS selectors to walk the portal's stable DOM:
+
+        <section id="presentation">
+            <h1>Full name with manuscript info</h1>
+            <ul class="description">
+                <li><strong>Type :</strong><span>enluminure</span></li>
+                <li><strong>Feuillet / page :</strong><span>323v</span></li>
+                <li><strong>Descripteurs :</strong>
+                    <span><a href="…/desc…">prophète</a>, …</span></li>
+                <li><strong>Manuscrit :</strong>
+                    <span><a href="…/mdata…">Paris. BnF…</a></span></li>
+                …
+            </ul>
+        </section>
+
+    A handful of non-DOM facts still come from regex over the raw HTML
+    (Gallica image links, Mandragore ARK, the ``iiif-content=`` query-param
+    embedded in viewer URLs) — parsing those through the DOM would be
+    over-engineering.
+    """
+
+    # Portal <strong> label → normalized result key. Exact-match only, so
+    # there's no more risk of "Type" accidentally swallowing "Typologie".
+    _FIELD_MAP = {
+        "Type": "type",
+        "Feuillet / page": "folio",
+        "Typologie": "typologie",
+        "Technique": "technique",
+        "Date de fabrication": "date",
+        "Manuscrit": "manuscript",
+        "Texte": "text",
+        "Rubrique": "rubric",
+        "Lieu de fabrication": "location",
+    }
 
     @method_decorator(cache_page(3600))
     def get(self, request, ifdata_hash):
@@ -1897,100 +2086,140 @@ class BiblissimaIlluminationDetailView(View):
                 return _biblissima_upstream_error(
                     exc, f"Biblissima illumination fetch ({ifdata_hash})"
                 )
+
+            tree = lxml_html.fromstring(html)
+
+            result = {
+                "ifdataHash": ifdata_hash,
+                "arkId": f"ark:/43093/{ifdata_hash}",
+                "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
+            }
+
+            # h1 → full canonical name with the manuscript/folio tail
+            # ("Abdias prophétisant (France, Paris. BnF, …, Latin 40 f.323v)")
+            # Stored as both `pageTitle` and `label` so the create step can
+            # prefer this long form over any shorter variant. The portal
+            # page has several h1s (navbar, "Numérisations", "Source des
+            # données"…), so scope to the presentation section.
+            h1 = tree.xpath('.//section[@id="presentation"]//h1')
+            if h1:
+                title = " ".join(h1[0].text_content().split()).strip()
+                if title:
+                    result["pageTitle"] = title
+                    result["label"] = title
+
+            # Presentation list fields — each <li> is a label/value pair.
+            for li in tree.xpath('.//section[@id="presentation"]//li'):
+                strong_el = li.xpath(".//strong")
+                if not strong_el:
+                    continue
+                strong_text = strong_el[0].text_content()
+                label_text = strong_text.replace(":", "").strip()
+                key = self._FIELD_MAP.get(label_text)
+                if key is None:
+                    continue
+                span = li.xpath(".//span")
+                if span:
+                    value = " ".join(span[0].text_content().split()).strip()
+                else:
+                    full = li.text_content()
+                    value = full.replace(strong_text, "", 1)
+                    value = " ".join(value.split()).strip(" :")
+                if value:
+                    result[key] = value
+
+            # Iconographic descriptor links — scoped to the presentation
+            # section so we don't pick up stray `desc` ARKs elsewhere on the
+            # page. Deduped by URI.
+            descriptor_links = []
+            seen_uris = set()
+            for a in tree.xpath(
+                './/section[@id="presentation"]'
+                '//a[contains(@href, "/ark:/43093/desc")]'
+            ):
+                uri = (a.get("href") or "").strip()
+                if not uri or uri in seen_uris:
+                    continue
+                seen_uris.add(uri)
+                label = " ".join(a.text_content().split()).strip()
+                descriptor_links.append({"label": label, "uri": uri})
+            if descriptor_links:
+                result["descriptorLinks"] = descriptor_links
+
+            # Resolve type: typologie > descriptor from label > type field
+            typologie = result.get("typologie", "")
+            descriptor = ""
+            if result.get("label"):
+                desc_match = re.match(r"^([^(]+)", result["label"])
+                if desc_match:
+                    descriptor = desc_match.group(1).strip()
+            type_field = result.get("type", "")
+            type_valueid, type_is_fallback = _resolve_biblissima_type(
+                typologie, descriptor, type_field
+            )
+            result["typeValueId"] = type_valueid
+            result["typeLabel"] = _biblissima_type_label(type_valueid)
+            result["typeIsFallback"] = type_is_fallback
+
+            # Parent manuscript ARK — first <a> pointing at an mdata ARK
+            # found anywhere on the page.
+            for a in tree.xpath('.//a[contains(@href, "/ark:/43093/mdata")]'):
+                m = re.search(r"(mdata\w+)", a.get("href", ""))
+                if m:
+                    result["manuscriptHash"] = m.group(1)
+                    result["manuscriptArk"] = f"ark:/43093/{m.group(1)}"
+                    break
+
+            # Mandragore cross-reference
+            for a in tree.xpath('.//a[contains(@href, "mandragore.bnf.fr")]'):
+                m = re.search(
+                    r"mandragore\.bnf\.fr/ark:/12148/(\w+)", a.get("href", "")
+                )
+                if m:
+                    result["mandragoreArk"] = f"ark:/12148/{m.group(1)}"
+                    break
+
+            # Gallica digitization — rewrite `.image` → `.thumbnail` so the
+            # URL is directly renderable in <img> / Arches' URL widget.
+            # Other providers (e-codices, DigiVatLib, …) will be added
+            # during the generic IIIF-Image-API effort — Gallica covers
+            # ~95 % of the BnF-heavy corpus today.
+            for a in tree.xpath(
+                './/a[contains(@href, "gallica.bnf.fr/ark:/12148/")]'
+            ):
+                href = a.get("href", "")
+                if href:
+                    result["digitizationUrl"] = _gallica_viewer_to_image(href)
+                    break
+
+            # IIIF manifest URL — embedded in viewer query strings as
+            # `?iiif-content=…`. No clean DOM home for it, so a raw regex
+            # over the HTML text stays.
+            iiif_manifests = re.findall(
+                r'[?&]iiif-content=(https?://[^\s"\'&]+)', html
+            )
+            if iiif_manifests:
+                seen_manifests = []
+                for mu in iiif_manifests:
+                    if mu not in seen_manifests:
+                        seen_manifests.append(mu)
+                result["manifestUrl"] = seen_manifests[0]
+                if len(seen_manifests) > 1:
+                    result["manifestUrls"] = seen_manifests
+
+            # Target canvas dimensions — needed for the whole-page polygon
+            # annotation. Matched against the folio string ("323v") since
+            # Biblissima v2 canvases are numbered per page.
+            if result.get("manifestUrl"):
+                canvas_info = _fetch_canvas_dimensions(
+                    result["manifestUrl"], result.get("folio", ""), session
+                )
+                if canvas_info:
+                    result.update(canvas_info)
+
+            return JsonResponse(result)
         finally:
             session.close()
-
-        result = {
-            "ifdataHash": ifdata_hash,
-            "arkId": f"ark:/43093/{ifdata_hash}",
-            "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
-        }
-
-        # Parse presentation section (key: value pairs on alternating lines)
-        pres_match = re.search(r'id="presentation">(.*?)</section>', html, re.DOTALL)
-        if pres_match:
-            text = re.sub(r"<[^>]+>", "\n", pres_match.group(1))
-            lines = [l.strip() for l in text.split("\n") if l.strip()]
-
-            if lines:
-                result["label"] = lines[0]
-
-            field_map = {
-                "Type": "type",
-                "Feuillet / page": "folio",
-                "Typologie": "typologie",
-                "Technique": "technique",
-                "Date de fabrication": "date",
-                "Manuscrit": "manuscript",
-                "Texte": "text",
-                "Lieu de fabrication": "location",
-            }
-            # Collect descriptors (multi-value, comma-separated across lines)
-            in_descriptors = False
-            descriptor_parts = []
-
-            for i, line in enumerate(lines):
-                if line == "Descripteurs :":
-                    in_descriptors = True
-                    continue
-                if in_descriptors:
-                    if line == ",":
-                        continue
-                    if any(line.startswith(f"{k}") for k in field_map) or line.endswith(
-                        ":"
-                    ):
-                        in_descriptors = False
-                    else:
-                        descriptor_parts.append(line)
-                        continue
-
-                for key, field in field_map.items():
-                    if line.startswith(key) and ":" in line and i + 1 < len(lines):
-                        result[field] = lines[i + 1]
-                        break
-
-            if descriptor_parts:
-                result["descriptors"] = descriptor_parts
-
-        # Resolve type: typologie > descriptor from label > type field
-        typologie = result.get("typologie", "")
-        descriptor = ""
-        if result.get("label"):
-            desc_match = re.match(r"^([^(]+)", result["label"])
-            if desc_match:
-                descriptor = desc_match.group(1).strip()
-        type_field = result.get("type", "")
-        result["typeValueId"] = _resolve_biblissima_type(
-            typologie, descriptor, type_field
-        )
-        result["typeLabel"] = _biblissima_type_label(result["typeValueId"])
-
-        # Manuscript ARK
-        ms_match = re.search(r"ark:/43093/(mdata\w+)", html)
-        if ms_match:
-            result["manuscriptHash"] = ms_match.group(1)
-            result["manuscriptArk"] = f"ark:/43093/{ms_match.group(1)}"
-
-        # --- IIIF extraction (generic, works for any store) ---
-
-        # IIIF manifests: extract all from ?iiif-content= pattern (Biblissima standard)
-        iiif_manifests = re.findall(r'[?&]iiif-content=(https?://[^\s"\'&]+)', html)
-        if iiif_manifests:
-            # Deduplicate while preserving order
-            seen_manifests = []
-            for m in iiif_manifests:
-                if m not in seen_manifests:
-                    seen_manifests.append(m)
-            result["manifestUrl"] = seen_manifests[0]
-            if len(seen_manifests) > 1:
-                result["manifestUrls"] = seen_manifests
-
-        # Mandragore ARK
-        mandragore = re.search(r"mandragore\.bnf\.fr/ark:/12148/(\w+)", html)
-        if mandragore:
-            result["mandragoreArk"] = f"ark:/12148/{mandragore.group(1)}"
-
-        return JsonResponse(result)
 
 
 class BiblissimaCreateResourceView(View):
@@ -2424,8 +2653,17 @@ class BiblissimaCreateResourceView(View):
         i18n = self._i18n_string
         clist = self._concept_list
 
-        # Name
-        label = bbma_data.get("legend") or bbma_data.get("label", "Untitled")
+        # Name of Component — prefer the h1 title we pulled from the
+        # individual portal page, which is the canonical full-form name
+        # with the manuscript tail ("Abdias prophétisant (France, Paris.
+        # BnF, …, Latin 40 f.323v)"). Falls back to the cart label /
+        # legend for items that weren't enriched yet.
+        label = (
+            bbma_data.get("pageTitle")
+            or bbma_data.get("label")
+            or bbma_data.get("legend")
+            or "Untitled"
+        )
         self._create_tile(
             COMP_NAME_NG,
             resource_id,
@@ -2458,7 +2696,8 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Identifiers
+        # --- Identifiers (Identifier card is cardinality=n) -------------
+        # Primary Biblissima ARK
         ark_id = bbma_data.get("arkId")
         if ark_id:
             self._create_tile(
@@ -2472,43 +2711,92 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Statement
-        legend = bbma_data.get("label", "")
-        portal_url = bbma_data.get("portalUrl", "")
-        if legend:
+        # Mandragore ARK — added only if the individual portal page surfaced
+        # a Mandragore cross-reference (BnF manuscript lookups). Note: the
+        # `mandragoreId` field that comes from the Wikibase resolution of
+        # the parent manuscript is a numeric record identifier ("1449"),
+        # NOT an ARK, so we deliberately don't fall back to it here.
+        mandragore_ark = bbma_data.get("mandragoreArk")
+        if mandragore_ark:
             self._create_tile(
-                COMP_STATEMENT_NG,
+                COMP_IDENTIFIER_NG,
                 resource_id,
                 {
-                    COMP_STATEMENT_CONTENT: i18n(legend),
-                    COMP_STATEMENT_TYPE: clist([CONCEPT_DESCRIPTION]),
-                    COMP_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
-                    COMP_STATEMENT_SOURCE: (
-                        {"url": portal_url, "url_label": ""} if portal_url else None
-                    ),
+                    COMP_IDENTIFIER_VALUE: i18n(mandragore_ark),
+                    COMP_IDENTIFIER_TYPE: clist([CONCEPT_PERSISTENT_ID]),
+                    COMP_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_MANDRAGORE]),
                 },
                 transaction_id,
             )
 
-        # Iconographic representation (URL datatype, plain string)
-        thumbnail = bbma_data.get("thumbnail") or bbma_data.get("imageUrl")
-        if thumbnail:
+        # Keep only external *identifiers* of the component itself in the
+        # Identifier card (Biblissima ARK + Mandragore ARK above). The
+        # iconographic descriptors — what the illumination *depicts* —
+        # belong in Iconographic representation below, not here.
+        descriptor_links = bbma_data.get("descriptorLinks") or []
+
+        # --- Statements (Statement card is cardinality=n) ---------------
+        # The "legend / Description" statement that used to mirror the
+        # Name of Component was redundant and noisy — Name of Component now
+        # holds the cleaner h1 title. We only emit Statements for Texte
+        # (identification of the underlying work) and Rubrique (literal
+        # inscription on the folio) below.
+
+        # "Texte" → identifies the work the illumination illustrates
+        text_content = bbma_data.get("text", "")
+        if text_content:
             self._create_tile(
-                COMP_ICONOGRAPHIC_NG,
+                COMP_STATEMENT_NG,
                 resource_id,
-                {COMP_ICONOGRAPHIC_NODE: thumbnail},
+                {
+                    COMP_STATEMENT_CONTENT: i18n(text_content),
+                    COMP_STATEMENT_TYPE: clist([CONCEPT_IDENTIFICATION]),
+                    COMP_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
+                    COMP_STATEMENT_SOURCE: None,
+                },
                 transaction_id,
             )
 
-        # Context (string datatype, i18n format)
-        folio = bbma_data.get("folio")
-        if folio:
+        # "Rubrique" → literal rubric text on the folio
+        rubric_content = bbma_data.get("rubric", "")
+        if rubric_content:
             self._create_tile(
-                COMP_CONTEXT_NG,
+                COMP_STATEMENT_NG,
                 resource_id,
-                {COMP_CONTEXT_NODE: i18n(folio)},
+                {
+                    COMP_STATEMENT_CONTENT: i18n(rubric_content),
+                    COMP_STATEMENT_TYPE: clist([CONCEPT_INSCRIPTIONS]),
+                    COMP_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
+                    COMP_STATEMENT_SOURCE: None,
+                },
                 transaction_id,
             )
+
+        # --- Iconographic representation (cardinality=n) ----------------
+        # Semantically: "what is iconographically represented in this
+        # component". That's the set of iconographic descriptors
+        # (prophète, Abdias, ville, Dieu…), each a link to its own
+        # Biblissima desc-ARK. One tile per descriptor → the Arches widget
+        # renders each as a clickable hyperlink with its label.
+        #
+        # Digital-facsimile URLs (Gallica thumbnails, etc.) do NOT belong
+        # here: they are reproductions of the page, not a description of
+        # what's depicted. They surface in the workflow step-3 UI only
+        # (via `item.thumbnail` / `item.digitizationUrl`) for preview.
+        for dlink in descriptor_links:
+            uri = (dlink.get("uri") or "").strip()
+            label = (dlink.get("label") or "").strip()
+            if not uri:
+                continue
+            self._create_tile(
+                COMP_ICONOGRAPHIC_NG,
+                resource_id,
+                {COMP_ICONOGRAPHIC_NODE: {"url": uri, "url_label": label}},
+                transaction_id,
+            )
+
+        # Folio now lives only inside Location in Document's appellation
+        # (built below). We no longer write it into Context of Component.
 
         # Period
         date_str = bbma_data.get("date", "")
@@ -2546,10 +2834,26 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Location in Document (annotation)
+        # Location in Document (annotation) — build a "whole page" polygon
+        # covering the full canvas when we know its dimensions, so the
+        # annotation actually points at something on the IIIF viewer instead
+        # of the unusable Point at (0, 0). Fallback to a small rectangle if
+        # dimensions are missing.
+        folio = bbma_data.get("folio", "")
         canvas_url = bbma_data.get("canvasId") or bbma_data.get("imageUrl")
         manifest_url = bbma_data.get("manifestUrl")
         if canvas_url and manifest_url:
+            width = int(bbma_data.get("canvasWidth") or 0) or 4000
+            height = int(bbma_data.get("canvasHeight") or 0) or 5000
+            polygon_coords = [
+                [
+                    [0, 0],
+                    [width, 0],
+                    [width, height],
+                    [0, height],
+                    [0, 0],
+                ]
+            ]
             annotation_data = {
                 "type": "FeatureCollection",
                 "features": [
@@ -2557,15 +2861,14 @@ class BiblissimaCreateResourceView(View):
                         "id": str(uuid.uuid4()),
                         "type": "Feature",
                         "geometry": {
-                            "type": "Point",
-                            "coordinates": [0, 0],
+                            "type": "Polygon",
+                            "coordinates": polygon_coords,
                         },
                         "properties": {
                             "canvas": canvas_url,
                             "manifest": manifest_url,
                             "nodeId": COMP_LOCATION_DOC_NODE,
                             "color": "#3388ff",
-                            "radius": 10,
                             "weight": 3,
                             "opacity": 1,
                             "fillColor": "#3388ff",

@@ -1095,6 +1095,26 @@ $bbma-danger-bg: #fdf0f0;
     min-width: 0;
 }
 
+.bbma-item-thumb {
+    position: relative;
+}
+
+.bbma-item-enriching {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    color: $bbma-accent;
+    font-size: 10px;
+}
+
 .bbma-review-hint {
     display: flex;
     align-items: center;

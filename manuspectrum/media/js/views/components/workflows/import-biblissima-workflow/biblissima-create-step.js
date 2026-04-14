@@ -97,6 +97,14 @@ const viewModel = function(params) {
 
     // Check if deps for a specific item are resolved (blocks individual "Create")
     this.itemDepsResolved = (item) => {
+        // Block Component creates until the enrichment has landed: otherwise
+        // we race the illumination-detail fetch and end up missing text,
+        // rubric, descriptorLinks, Mandragore ARK, canvas dimensions and
+        // the Lieu de fabrication that drives the Place dep.
+        if (self.isComponent) {
+            const es = item.enrichStatus();
+            if (es === 'pending' || es === 'loading') return false;
+        }
         const locationKey = item.locationLabel || item.location;
         return self.dependencies().every((dep) => {
             const isRelevant =
@@ -170,18 +178,196 @@ const viewModel = function(params) {
                 item.typeValueId
                 || (self.isComponent ? COMPONENT_FALLBACK_TYPE_VALUEID : VALUEID_MANUSCRIT)
             ),
+            // Flag set by the backend resolver: True only when no Biblissima
+            // input term matched the mapping (distinct from the case where
+            // an explicit "Enluminure" correctly maps to the default valueid).
+            // Defaults to True when the item has no type at all.
+            typeIsFallback: ko.observable(
+                item.typeIsFallback !== undefined
+                    ? !!item.typeIsFallback
+                    : !item.typeValueId
+            ),
             typeEditing: ko.observable(false),
+            // Enrichment state — Component items get lazy-enriched by fetching
+            // their individual Biblissima portal page once we land on step 3.
+            // The new metadata (Texte, Rubrique, descriptorLinks, Mandragore,
+            // canvas dimensions…) is merged back onto the item below in
+            // `_applyEnrichment` and stays in-memory until the user confirms
+            // creation — nothing is persisted to the backend before the
+            // explicit Create click.
+            enrichStatus: ko.observable(self.isComponent ? 'pending' : 'na'),
+            // Extra observables that the enrichment fills in. Flat storage
+            // keeps the createResource payload a direct spread of the item.
+            text: ko.observable(item.text || ''),
+            rubric: ko.observable(item.rubric || ''),
+            descriptorLinks: ko.observableArray(item.descriptorLinks || []),
+            // Only take the real Mandragore ARK if the enrichment has set it.
+            // item.mandragoreId is the *manuscript-level* numeric record
+            // identifier from Wikibase (e.g. "1449") — it belongs to the
+            // parent Document, not to this Component illumination, so we
+            // must not propagate it here.
+            mandragoreArk: ko.observable(item.mandragoreArk || ''),
+            digitizationUrl: ko.observable(item.digitizationUrl || ''),
+            canvasWidth: ko.observable(item.canvasWidth || 0),
+            canvasHeight: ko.observable(item.canvasHeight || 0),
+            // Observable so the `<img>` template binding refreshes once the
+            // enrichment pulls a thumbnail / digitization URL down.
+            thumbnail: ko.observable(item.thumbnail || ''),
         }));
         self.items(items);
     };
 
-    // True when a Component item is still resolved to the server-side generic
-    // fallback ("illumination") — used to flag items that need user attention.
-    // Document mode has no ambiguous fallback: all items are manuscrits by
-    // construction, so the badge stays neutral.
-    this.isTypeFallback = (item) =>
-        self.isComponent
-        && item.typeValueId() === COMPONENT_FALLBACK_TYPE_VALUEID;
+    // Merge fields returned by /api/biblissima/illumination/{hash} into the
+    // live observable item. Only updates fields that are currently empty so
+    // we never overwrite values the user might have edited in step 2.
+    this._applyEnrichment = (item, data) => {
+        if (!data) return;
+        // One-shot debug trace of the raw enrichment payload — makes it
+        // obvious in the browser console when a field like `location` is
+        // missing from the backend response (the #1 cause of Naples not
+        // showing up in Related resources).
+        console.debug('[biblissima] enrichment data', item.ifdataHash, data);
+        if (data.pageTitle) {
+            // Don't overwrite a name the user already picked; just stash
+            // the richer title on the item so the backend can prefer it.
+            item.pageTitle = data.pageTitle;
+        }
+        // Type: always honour a confidently-resolved enrichment result,
+        // even if the item already had a typeValueId from step 2 — the
+        // individual portal page is the richer source of truth.
+        if (data.typeValueId && !data.typeIsFallback) {
+            item.typeValueId(data.typeValueId);
+            item.typeIsFallback(false);
+        } else if (data.typeIsFallback !== undefined) {
+            // Enrichment confirmed the resolver still fell through to the
+            // default. Leave the current valueid but sync the flag.
+            item.typeIsFallback(!!data.typeIsFallback);
+        }
+        if (data.text && !item.text()) item.text(data.text);
+        if (data.rubric && !item.rubric()) item.rubric(data.rubric);
+        if (data.descriptorLinks && !item.descriptorLinks().length) {
+            item.descriptorLinks(data.descriptorLinks);
+        }
+        if (data.mandragoreArk && !item.mandragoreArk()) {
+            item.mandragoreArk(data.mandragoreArk);
+        }
+        if (data.digitizationUrl && !item.digitizationUrl()) {
+            item.digitizationUrl(data.digitizationUrl);
+        }
+        if (data.canvasWidth && !item.canvasWidth()) {
+            item.canvasWidth(data.canvasWidth);
+        }
+        if (data.canvasHeight && !item.canvasHeight()) {
+            item.canvasHeight(data.canvasHeight);
+        }
+        // Always overwrite manifestUrl/canvasId with the enrichment values.
+        // The manuscript-scrape path in step 2 stuffs `item.canvasId` with
+        // the raw ifdata hash (e.g. "ifdata5be7529…") as a placeholder and
+        // may carry a manuscript-level manifest URL — the illumination
+        // detail view gives us the actual IIIF @id and a canonical manifest
+        // for this specific folio, which is what the Location annotation
+        // tile needs.
+        if (data.manifestUrl) {
+            item.manifestUrl = data.manifestUrl;
+        }
+        if (data.canvasId) {
+            item.canvasId = data.canvasId;
+        }
+        // `location` is what surfaces the "Lieu de fabrication" string on
+        // the individual page — it's what `resolveDependencies` reads to
+        // propose a Place dependency. We only fill it when the item didn't
+        // already have one from the IIIF search path.
+        if (data.location && !item.location) {
+            item.location = data.location;
+        }
+        // Display-only: prefer a real thumbnail; if none was returned, fall
+        // back to the Gallica digitization URL (already rewritten to a
+        // direct JPEG server-side) so the user at least sees something.
+        const newThumb = data.thumbnail || data.digitizationUrl;
+        if (newThumb && !item.thumbnail()) {
+            item.thumbnail(newThumb);
+        }
+    };
+
+    // Pooled parallel enrichment for Component cart items. We fire at most
+    // `concurrency` requests at a time so 25 items don't blast 25 parallel
+    // HTTP requests — the server already caches responses for 1h, so the
+    // whole batch settles quickly on re-runs.
+    this.enrichComponentItems = async () => {
+        if (!self.isComponent) return;
+        const targets = self.items().filter(
+            (i) => i.ifdataHash && i.enrichStatus() === 'pending'
+        );
+        if (!targets.length) return;
+
+        const concurrency = 5;
+        let cursor = 0;
+
+        const worker = async () => {
+            while (cursor < targets.length) {
+                const idx = cursor++;
+                const item = targets[idx];
+                item.enrichStatus('loading');
+                try {
+                    const resp = await fetch(
+                        `/api/biblissima/illumination/${item.ifdataHash}`
+                    );
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    const data = await resp.json();
+                    self._applyEnrichment(item, data);
+                    item.enrichStatus('done');
+                } catch (err) {
+                    console.warn(
+                        `Biblissima enrichment failed for ${item.ifdataHash}`,
+                        err
+                    );
+                    item.enrichStatus('error');
+                }
+            }
+        };
+
+        await Promise.all(
+            Array.from(
+                { length: Math.min(concurrency, targets.length) },
+                () => worker()
+            )
+        );
+
+        // Debug visibility — quickly confirm in the browser console which
+        // items ended up with what location/owner strings after enrichment.
+        console.info(
+            '[biblissima] enrichment complete',
+            targets.map((i) => ({
+                ifdata: i.ifdataHash,
+                status: i.enrichStatus(),
+                location: i.location,
+                hasManifest: !!i.manifestUrl,
+                canvasSize: `${i.canvasWidth()}x${i.canvasHeight()}`,
+            }))
+        );
+
+        // Now that enrichment has filled in `location` / ownership fields
+        // on Component items, re-run the dep resolution so places like
+        // "Naples (Campanie, Italie)" — which only surface on the
+        // individual portal page — actually become Related Resources.
+        // The merge-friendly version above preserves any deps that were
+        // already resolved during the first pass.
+        await self.resolveDependencies();
+        console.info(
+            '[biblissima] deps after re-resolution',
+            self.dependencies().map((d) => ({
+                type: d.type,
+                key: d.key,
+                action: d.action(),
+            }))
+        );
+    };
+
+    // True when a Component item's type wasn't actually matched against the
+    // Biblissima mapping (i.e. the resolver fell through to the generic
+    // "Illumination" default because nothing Biblissima sent us matched a
+    // known term). Document mode items never flag: they're all manuscrits.
+    this.isTypeFallback = (item) => self.isComponent && item.typeIsFallback();
 
     // Short human label for the badge. In Component mode we deliberately show
     // the raw descriptor / typologie text from the Biblissima scrape rather
@@ -211,6 +397,10 @@ const viewModel = function(params) {
 
     this.closeTypeEditor = (item) => {
         item.typeEditing(false);
+        // Once the user confirms the editor, whatever is in typeValueId is
+        // their explicit pick — clear the yellow "needs review" flag so we
+        // don't keep nagging them.
+        item.typeIsFallback(false);
     };
 
     // Count of items still resolved to the generic fallback, for the
@@ -291,41 +481,64 @@ const viewModel = function(params) {
     // =============================================
 
     this.resolveDependencies = async () => {
+        // Merge-friendly dep builder: we reuse deps that already exist on
+        // self.dependencies() (keyed by `${type}:${key}`) so that reruns
+        // triggered after enrichment don't blow away already-resolved
+        // Place/Group/Person states. Only genuinely new keys get a fresh
+        // dep instance + check-duplicates round-trip.
+        const existing = new Map(
+            self.dependencies().map((d) => [`${d.type}:${d.key}`, d])
+        );
         const deps = [];
         const seen = new Set();
 
+        const addDep = (key, type, graphId, parentKey, locationKey) => {
+            const mapKey = `${type}:${key}`;
+            if (seen.has(mapKey)) return null;
+            seen.add(mapKey);
+            const reused = existing.get(mapKey);
+            if (reused) {
+                deps.push(reused);
+                return null; // already has an action, don't re-check
+            }
+            const dep = self._makeDep(key, type, graphId, parentKey, locationKey);
+            deps.push(dep);
+            return dep; // new dep → needs duplicate check
+        };
+
+        const newDeps = [];
         self.items().forEach((item) => {
             const location = item.locationLabel || item.location;
-            if (location && location !== 'Origine inconnue' && !seen.has(`place:${location}`)) {
-                seen.add(`place:${location}`);
-                deps.push(self._makeDep(location, 'Place', PLACE_GRAPH_ID));
+            if (location && location !== 'Origine inconnue') {
+                const d = addDep(location, 'Place', PLACE_GRAPH_ID);
+                if (d) newDeps.push(d);
             }
 
             // Parent institution first (so collection can reference it)
             const parentInst = item.parentInstitutionLabel;
             const owner = item.collectionLabel;
-            if (parentInst && parentInst !== owner && !seen.has(`group:${parentInst}`)) {
-                seen.add(`group:${parentInst}`);
-                deps.push(self._makeDep(parentInst, 'Group', GROUP_GRAPH_ID, null, location));
+            if (parentInst && parentInst !== owner) {
+                const d = addDep(parentInst, 'Group', GROUP_GRAPH_ID, null, location);
+                if (d) newDeps.push(d);
             }
 
             // Collection: member of parent institution, located at place
-            if (owner && !seen.has(`group:${owner}`)) {
-                seen.add(`group:${owner}`);
+            if (owner) {
                 const parentKey = (parentInst && parentInst !== owner) ? parentInst : null;
-                deps.push(self._makeDep(owner, 'Group', GROUP_GRAPH_ID, parentKey, location));
+                const d = addDep(owner, 'Group', GROUP_GRAPH_ID, parentKey, location);
+                if (d) newDeps.push(d);
             }
 
             const author = item.authorLabel;
-            if (author && !seen.has(`person:${author}`)) {
-                seen.add(`person:${author}`);
-                deps.push(self._makeDep(author, 'Person', PERSON_GRAPH_ID));
+            if (author) {
+                const d = addDep(author, 'Person', PERSON_GRAPH_ID);
+                if (d) newDeps.push(d);
             }
         });
 
         self.dependencies(deps);
 
-        for (const dep of deps) {
+        for (const dep of newDeps) {
             try {
                 const resp = await fetch('/api/biblissima/check-duplicates', {
                     method: 'POST',
@@ -567,10 +780,13 @@ const viewModel = function(params) {
         // Per-item resolved type (may have been corrected by the user via
         // the inline concept-select-widget). Document items default to
         // VALUEID_MANUSCRIT, Component items to the server-resolved valueid.
+        // ko.toJS unwraps all observables on the item (status, typeValueId,
+        // enriched text/rubric/descriptorLinks/...) so the payload is a pure
+        // JSON-serializable snapshot of the current in-memory state.
         const body = {
             resourceType: self.resourceType,
             transactionId: null,
-            biblissimaData: item,
+            biblissimaData: ko.toJS(item),
             dependencies: deps,
             conceptMappings: {
                 type: ko.unwrap(item.typeValueId),
@@ -839,6 +1055,10 @@ const viewModel = function(params) {
     this.initializeItems();
     this.resolveDependencies();
     this.checkDuplicates();
+    // Fire-and-forget: enrichment runs in parallel with dup check and dep
+    // resolution so the user can start interacting with step 3 immediately.
+    // Nothing here blocks the "Create" buttons — those gate on dep status.
+    this.enrichComponentItems();
 };
 
 ko.components.register('biblissima-create-step', {

@@ -874,6 +874,10 @@ msgstr "Cliquer pour changer le type"
 msgid "Done"
 msgstr "Terminé"
 
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Enriching from Biblissima…"
+msgstr "Enrichissement depuis Biblissima…"
+
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
 msgid ""

@@ -83,6 +83,11 @@
                     <!-- ko ifnot: thumbnail -->
                     <i class="fa fa-file-text-o"></i>
                     <!-- /ko -->
+                    <!-- ko if: enrichStatus() === 'loading' -->
+                    <span class="bbma-item-enriching" title="{% trans 'Enriching from Biblissima…' %}">
+                        <i class="fa fa-circle-o-notch fa-spin"></i>
+                    </span>
+                    <!-- /ko -->
                 </div>
 
                 <!-- Info -->

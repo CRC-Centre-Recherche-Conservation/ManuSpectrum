@@ -787,6 +787,10 @@ msgstr "Click to change type"
 msgid "Done"
 msgstr "Done"
 
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Enriching from Biblissima…"
+msgstr "Enriching from Biblissima…"
+
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
 msgid ""
