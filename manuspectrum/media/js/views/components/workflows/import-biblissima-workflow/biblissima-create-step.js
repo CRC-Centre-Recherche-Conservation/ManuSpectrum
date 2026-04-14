@@ -291,11 +291,12 @@ const viewModel = function(params) {
             // parent Document, not to this Component illumination, so we
             // must not propagate it here.
             mandragoreArk: ko.observable(item.mandragoreArk || ''),
-            digitizationUrl: ko.observable(item.digitizationUrl || ''),
             canvasWidth: ko.observable(item.canvasWidth || 0),
             canvasHeight: ko.observable(item.canvasHeight || 0),
             // Observable so the `<img>` template binding refreshes once the
-            // enrichment pulls a thumbnail / digitization URL down.
+            // enrichment returns an IIIF thumbnail URL. Backend derives it
+            // generically via `{imageService}/full/200,/0/default.jpg`, so
+            // any IIIF-compliant provider (Gallica, e-codices, …) works.
             thumbnail: ko.observable(item.thumbnail || ''),
         }));
         self.items(items);
@@ -335,9 +336,6 @@ const viewModel = function(params) {
         if (data.mandragoreArk && !item.mandragoreArk()) {
             item.mandragoreArk(data.mandragoreArk);
         }
-        if (data.digitizationUrl && !item.digitizationUrl()) {
-            item.digitizationUrl(data.digitizationUrl);
-        }
         if (data.canvasWidth && !item.canvasWidth()) {
             item.canvasWidth(data.canvasWidth);
         }
@@ -364,10 +362,11 @@ const viewModel = function(params) {
         if (data.location && !item.location) {
             item.location = data.location;
         }
-        // Display-only: prefer a real thumbnail; if none was returned, fall
-        // back to the Gallica digitization URL (already rewritten to a
-        // direct JPEG server-side) so the user at least sees something.
-        const newThumb = data.thumbnail || data.digitizationUrl;
+        // Display-only thumbnail for the step-3 preview. Prefers a real
+        // canvas thumbnail if the IIIF search path surfaced one, otherwise
+        // uses `thumbnailUrl` derived provider-agnostically by
+        // `_fetch_canvas_dimensions` via the IIIF Image API pattern.
+        const newThumb = data.thumbnail || data.thumbnailUrl;
         if (newThumb && !item.thumbnail()) {
             item.thumbnail(newThumb);
         }

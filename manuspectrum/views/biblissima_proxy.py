@@ -28,10 +28,10 @@ map regardless of the end-user's browser locale.
 
 ## Attention points for devs
 
-- **HTML parsing**: use ``lxml.html`` + XPath scoped to
-  ``section#presentation`` (see ``BiblissimaIlluminationDetailView``).
-  Regex is only used for URL-level transformations and the
-  ``?iiif-content=`` query-param extraction that has no DOM home.
+- **HTML parsing**: use ``lxml.html`` + XPath (see
+  ``BiblissimaIlluminationDetailView``). Regex is only used for URL-level
+  string transformations on already-extracted values, never to find
+  content inside HTML.
 - **Caching**: every scraping view is wrapped with ``@cache_page(3600)``.
   Code changes to any parser are **invisible** until the cache expires or
   is flushed::
@@ -1984,18 +1984,32 @@ class BiblissimaManuscriptIlluminationsView(View):
 
 
 def _fetch_canvas_dimensions(manifest_url, folio, session):
-    """Fetch an IIIF manifest and return the target canvas' id + dimensions.
+    """Fetch a source IIIF manifest and return the target canvas info.
 
-    Canvas matching happens by **folio** (e.g. "323v"), not by ifdata hash:
-    Biblissima IIIF v2 canvases are numbered per page
-    (``…/canvas/650``) and their ``label`` carries the folio, so that's our
-    only reliable join key between a portal illumination and its canvas.
-    Falls back to the first canvas of the first sequence when no label match.
+    Canvas matching is done by **folio** — Biblissima portal pages expose
+    the folio label (e.g. ``"323v"``) and IIIF manifests carry it in
+    ``canvas.label``, so this join works for any IIIF-conformant provider
+    (Gallica, e-codices, DigiVatLib, Bodleian, Morgan, …) without
+    per-provider special casing. First canvas is used as a last-resort
+    fallback so the Location annotation still lands on *some* page rather
+    than failing silently.
 
-    Cached under ``(manifest_url, folio)`` so sibling cart items from the
-    same manuscript only pay the download once.
+    Also extracts the image service URL from
+    ``canvas.images[0].resource.service`` and derives a provider-agnostic
+    thumbnail URL via the IIIF Image API pattern
+    (``/full/200,/0/default.jpg``).
 
-    Returns ``{"canvasId": str, "canvasWidth": int, "canvasHeight": int}``
+    Cached under ``(manifest_url, folio)``.
+
+    Returns::
+
+        {
+            "canvasId": str,
+            "canvasWidth": int,
+            "canvasHeight": int,
+            "thumbnailUrl": str,   # empty if the canvas has no image service
+        }
+
     or ``{}`` on any failure.
     """
     if not manifest_url:
@@ -2020,25 +2034,22 @@ def _fetch_canvas_dimensions(manifest_url, folio, session):
         )
         return {}
 
-    # Normalize folio for comparison: strip leading "f." and whitespace, lower
     folio_norm = (folio or "").strip().lstrip("f.").strip().lower()
 
     target = None
-    # IIIF v2: sequences[].canvases[]
     for seq in manifest.get("sequences", []):
         for canvas in seq.get("canvases", []) or []:
-            if folio_norm:
-                raw_label = canvas.get("label", "") or ""
-                if isinstance(raw_label, list):
-                    raw_label = " ".join(str(x) for x in raw_label)
-                label = str(raw_label).lower()
-                # Match "f. 323v", "323v", "fol. 323v", etc.
-                if folio_norm in label:
-                    target = canvas
-                    break
+            if not folio_norm:
+                continue
+            raw_label = canvas.get("label", "") or ""
+            if isinstance(raw_label, list):
+                raw_label = " ".join(str(x) for x in raw_label)
+            if folio_norm in str(raw_label).lower():
+                target = canvas
+                break
         if target:
             break
-    # Fallback: first canvas of the first sequence
+
     if target is None:
         seqs = manifest.get("sequences") or []
         if seqs:
@@ -2048,36 +2059,44 @@ def _fetch_canvas_dimensions(manifest_url, folio, session):
                 logger.info(
                     "Biblissima canvas match fallback to first canvas for "
                     "manifest=%s folio=%r",
-                    manifest_url,
-                    folio,
+                    manifest_url, folio,
                 )
     if target is None:
-        logger.warning(
-            "Biblissima manifest has no canvases: %s", manifest_url
-        )
+        logger.warning("Biblissima manifest has no canvases: %s", manifest_url)
         return {}
+
+    # Derive the image service URL from the first image on this canvas.
+    service_id = ""
+    for img in target.get("images", []) or []:
+        resource = img.get("resource") or {}
+        service = resource.get("service") or {}
+        if isinstance(service, list):
+            service = service[0] if service else {}
+        if isinstance(service, dict):
+            service_id = service.get("@id") or ""
+            if service_id:
+                break
 
     result = {
         "canvasId": target.get("@id", ""),
         "canvasWidth": int(target.get("width") or 0),
         "canvasHeight": int(target.get("height") or 0),
+        "thumbnailUrl": _iiif_thumbnail_from_service(service_id),
     }
     cache.set(cache_key, result, 3600)
     return result
 
 
-def _gallica_viewer_to_image(url):
-    """Turn a Gallica viewer URL into a direct JPEG URL.
+def _iiif_thumbnail_from_service(service_id, width=200):
+    """Build a provider-agnostic IIIF Image API thumbnail URL.
 
-    Gallica's ``/ark:/12148/<id>/f<n>.image`` endpoint serves the interactive
-    viewer HTML — worthless in an ``<img>`` tag. The ``.thumbnail`` variant
-    serves a small JPEG directly, which is what we want for both display in
-    the create step and for storage in the Iconographic representation tile
-    so Arches can render it as an image.
+    Works against any IIIF Image API 2.x / 3.x compliant service: Gallica,
+    e-codices, DigiVatLib, Bodleian, Morgan, … — they all answer to
+    ``{service_id}/full/{w},/0/default.jpg``.
     """
-    if not url:
-        return url
-    return re.sub(r"\.image(?=[?#]|$)", ".thumbnail", url)
+    if not service_id:
+        return ""
+    return f"{service_id.rstrip('/')}/full/{width},/0/default.jpg"
 
 
 class BiblissimaIlluminationDetailView(View):
@@ -2098,10 +2117,12 @@ class BiblissimaIlluminationDetailView(View):
             </ul>
         </section>
 
-    A handful of non-DOM facts still come from regex over the raw HTML
-    (Gallica image links, Mandragore ARK, the ``iiif-content=`` query-param
-    embedded in viewer URLs) — parsing those through the DOM would be
-    over-engineering.
+    Provider-agnostic by design: the source IIIF manifest URL is read
+    from the ``data-manifest`` attribute on the ``.numerisation-iiif``
+    link (Biblissima exposes this regardless of the origin provider —
+    Gallica, e-codices, DigiVatLib, …), and ``_fetch_canvas_dimensions``
+    derives the canvas dimensions + a IIIF-Image-API thumbnail without any
+    per-provider special casing.
     """
 
     # Portal <strong> label → normalized result key. Exact-match only, so
@@ -2227,37 +2248,30 @@ class BiblissimaIlluminationDetailView(View):
                     result["mandragoreArk"] = f"ark:/12148/{m.group(1)}"
                     break
 
-            # Gallica digitization — rewrite `.image` → `.thumbnail` so the
-            # URL is directly renderable in <img> / Arches' URL widget.
-            # Other providers (e-codices, DigiVatLib, …) will be added
-            # during the generic IIIF-Image-API effort — Gallica covers
-            # ~95 % of the BnF-heavy corpus today.
+            # Source IIIF manifest — the ``.numerisation-iiif`` block on
+            # the portal exposes the clean manifest URL via ``data-manifest``
+            # on the IIIF drag-and-drop link. Provider-agnostic: Biblissima
+            # writes the same attribute whether the source is Gallica,
+            # e-codices, DigiVatLib, Bodleian, Morgan, … Fallback to the
+            # companion ``<input id="iiifUrl">`` in case the attribute moves.
+            manifest_url = ""
             for a in tree.xpath(
-                './/a[contains(@href, "gallica.bnf.fr/ark:/12148/")]'
+                './/div[contains(@class, "numerisation-iiif")]//a[@data-manifest]'
             ):
-                href = a.get("href", "")
-                if href:
-                    result["digitizationUrl"] = _gallica_viewer_to_image(href)
+                manifest_url = (a.get("data-manifest") or "").strip()
+                if manifest_url:
                     break
+            if not manifest_url:
+                for inp in tree.xpath('.//input[@id="iiifUrl"]'):
+                    manifest_url = (inp.get("value") or "").strip()
+                    if manifest_url:
+                        break
+            if manifest_url:
+                result["manifestUrl"] = manifest_url
 
-            # IIIF manifest URL — embedded in viewer query strings as
-            # `?iiif-content=…`. No clean DOM home for it, so a raw regex
-            # over the HTML text stays.
-            iiif_manifests = re.findall(
-                r'[?&]iiif-content=(https?://[^\s"\'&]+)', html
-            )
-            if iiif_manifests:
-                seen_manifests = []
-                for mu in iiif_manifests:
-                    if mu not in seen_manifests:
-                        seen_manifests.append(mu)
-                result["manifestUrl"] = seen_manifests[0]
-                if len(seen_manifests) > 1:
-                    result["manifestUrls"] = seen_manifests
-
-            # Target canvas dimensions — needed for the whole-page polygon
-            # annotation. Matched against the folio string ("323v") since
-            # Biblissima v2 canvases are numbered per page.
+            # Canvas dimensions, canvas @id, and a provider-agnostic
+            # thumbnail URL — all derived in one cached manifest fetch by
+            # ``_fetch_canvas_dimensions``, matched against the folio.
             if result.get("manifestUrl"):
                 canvas_info = _fetch_canvas_dimensions(
                     result["manifestUrl"], result.get("folio", ""), session
@@ -2880,10 +2894,10 @@ class BiblissimaCreateResourceView(View):
         # Biblissima desc-ARK. One tile per descriptor → the Arches widget
         # renders each as a clickable hyperlink with its label.
         #
-        # Digital-facsimile URLs (Gallica thumbnails, etc.) do NOT belong
-        # here: they are reproductions of the page, not a description of
-        # what's depicted. They surface in the workflow step-3 UI only
-        # (via `item.thumbnail` / `item.digitizationUrl`) for preview.
+        # Digital-facsimile URLs (IIIF thumbnails) do not belong here; they
+        # surface in the workflow step-3 UI only (via ``item.thumbnailUrl``
+        # derived from ``_iiif_thumbnail_from_service`` on any IIIF
+        # provider) for preview.
         for dlink in descriptor_links:
             uri = (dlink.get("uri") or "").strip()
             label = (dlink.get("label") or "").strip()
