@@ -383,7 +383,7 @@ const viewModel = function(params) {
                         ifdataHash: detail.ifdataHash,
                         mandragoreArk: detail.mandragoreArk || '',
                     };
-                    const exists = self.cart().some((c) => c.arkId === item.arkId);
+                    const exists = self.cart().some((c) => self._sameItem(c, item));
                     if (!exists && !self.cartIsFull()) self.cart.push(item);
                     self.directIdentifier('');
                 }
@@ -470,7 +470,7 @@ const viewModel = function(params) {
 
             // In Document mode: add as document
             const item = self._entityToItem(d);
-            const exists = self.cart().some((c) => c.biblissimaQid === item.biblissimaQid);
+            const exists = self.cart().some((c) => self._sameItem(c, item));
             if (!exists && !self.cartIsFull()) self.cart.push(item);
             self.directIdentifier('');
         } catch (err) {
@@ -911,22 +911,33 @@ const viewModel = function(params) {
         }
     };
 
+    // Cart identity: pick the most-specific unique identifier on the
+    // item. ``arkId`` is the **illumination** ARK in Component mode and
+    // the **manuscript** ARK in Document mode — unique either way.
+    // ``canvasId`` is unique per IIIF canvas (page-level, even more
+    // specific). ``biblissimaQid`` is *manuscript-level* on enriched
+    // illumination canvases (set in ``_enrich_canvases`` from the
+    // resolved Wikibase entity), so it must NEVER be used to compare
+    // two illuminations against each other — falling back to it would
+    // make every illumination of the same manuscript look "selected"
+    // after a single click. Only kept as a last-resort key for items
+    // that genuinely lack an ARK / canvas (e.g. a manuscript added by
+    // direct QID via ``addByIdentifier``).
+    this._itemKey = (item) => {
+        if (!item) return '';
+        return String(item.arkId || item.canvasId || item.biblissimaQid || '');
+    };
+    this._sameItem = (a, b) => {
+        const ka = self._itemKey(a);
+        if (!ka) return false;
+        return ka === self._itemKey(b);
+    };
+
     this.isInCart = (item) =>
-        ko.computed(() =>
-            self.cart().some((c) =>
-                (c.arkId && c.arkId === item.arkId) ||
-                (c.canvasId && c.canvasId === item.canvasId) ||
-                (c.biblissimaQid && c.biblissimaQid === item.biblissimaQid)
-            )
-        );
+        ko.computed(() => self.cart().some((c) => self._sameItem(c, item)));
 
     this.toggleCartItem = (item) => {
-        const existing = self.cart().find(
-            (c) =>
-                (c.arkId && c.arkId === item.arkId) ||
-                (c.canvasId && c.canvasId === item.canvasId) ||
-                (c.biblissimaQid && c.biblissimaQid === item.biblissimaQid)
-        );
+        const existing = self.cart().find((c) => self._sameItem(c, item));
         if (existing) {
             self.cart.remove(existing);
         } else if (!self.cartIsFull()) {
@@ -945,15 +956,9 @@ const viewModel = function(params) {
     };
 
     this.addAllVisible = () => {
-        const toAdd = self.pagedResults().filter((item) => {
-            const exists = self.cart().some(
-                (c) =>
-                    (c.arkId && c.arkId === item.arkId) ||
-                    (c.canvasId && c.canvasId === item.canvasId) ||
-                    (c.biblissimaQid && c.biblissimaQid === item.biblissimaQid)
-            );
-            return !exists;
-        });
+        const toAdd = self.pagedResults().filter(
+            (item) => !self.cart().some((c) => self._sameItem(c, item))
+        );
         if (self.cart().length + toAdd.length > self.cartMax) return;
         toAdd.forEach((item) => self.cart.push(item));
     };
