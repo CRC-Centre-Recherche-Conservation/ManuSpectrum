@@ -69,6 +69,11 @@ from arches.app.models.models import ResourceInstance
 from arches.app.models.models import Value  # used in _concept_valueid
 from arches.app.models.tile import Tile
 
+from manuspectrum.utils.dates import (
+    CENTURY_MAPPING,
+    parse_century,
+    parse_historical_date,
+)
 from manuspectrum.utils.http import get_user_agent
 
 logger = logging.getLogger(__name__)
@@ -450,34 +455,13 @@ CONCEPT_SHELF_MARKS = "2cbf15b4-aa04-4b5b-bf4a-2594bbeb72ca"
 CONCEPT_MEDIEVAL = "f8101404-1570-35cf-ac70-1a18a84072ca"
 
 # Century mapping: "13e siècle" → concept UUID
-CENTURY_MAPPING = {
-    "1": "82f4c4ef-1ca8-3721-8ee0-fc9bfdd4d2e7",
-    "2": "8130e10c-175c-36bd-b16f-a3f19e3bab2c",
-    "3": "aa2f7cf8-216a-3b3d-8b93-d85f24d12bc5",
-    "4": "a8e9c250-2c00-3eba-a26d-652621ba4e1f",
-    "5": "f208e4bb-e67a-3ca4-87ac-18d6974d85e2",
-    "6": "cb813afa-b776-3597-a474-e06788bc0a83",
-    "7": "6aceda91-36e6-3471-9a17-155cbdb7e84d",
-    "8": "9618da23-9cd1-3f39-918b-b4f72b1ea10c",
-    "9": "e7b0401b-69f6-3790-b3aa-b19b96513987",
-    "10": "a9856744-3b8a-397e-a6da-82f35ced1423",
-    "11": "e869b370-57bf-37a6-9f28-16f2f51292ec",
-    "12": "97d12923-2a27-326f-92ed-0ddb0d83bafc",
-    "13": "58b33dfa-7337-368b-8272-ed5b7953493a",
-    "14": "831aeae8-3c26-3c3c-a2e6-d605a5f2b09d",
-    "15": "04db53cd-8a0a-3e1a-90e3-2d2ac158c29d",
-    "16": "5252cc19-b82f-33bb-93c2-05d5cac9652c",
-    "17": "47e91572-82f6-35a3-882c-d20a2631b9db",
-    "18": "f28e962b-5441-32a9-aef3-670fb896e4f3",
-    "19": "3ff0aafb-1afb-362c-b228-7a5d704ae924",
-    "20": "95e228f8-2434-3e84-9092-289b3c2fac87",
-    "21": "1b45307f-a121-3aef-8fe2-9d7a3535be89",
-}
+# CENTURY_MAPPING + _CENTURY_RE + parse_century now live in
+# ``manuspectrum.utils.dates`` (imported above) so other connectors and
+# importers can share the same vocabulary → valueid mapping.
 
 RELATIONSHIP_CONCEPT = "ac41d9be-79db-4256-b368-2f4559cfbe55"
 
 _ARK_RE = re.compile(r"ark:/43093/(\w+)")
-_CENTURY_RE = re.compile(r"(\d+)e\s+si[eè]cle", re.IGNORECASE)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -506,17 +490,6 @@ def _extract_href(html_value):
     text = html_value if isinstance(html_value, str) else str(html_value)
     match = re.search(r'href="([^"]+)"', text)
     return match.group(1) if match else None
-
-
-def _parse_century(date_str):
-    """Parse a century string like '13e siècle' and return the concept UUID."""
-    if not date_str:
-        return None
-    match = _CENTURY_RE.search(str(date_str))
-    if match:
-        century_num = match.group(1)
-        return CENTURY_MAPPING.get(century_num)
-    return None
 
 
 def _extract_entity_props(qid, raw_entity):
@@ -836,6 +809,15 @@ def _parse_iiif_canvases(manifest_json):
                 "typeValueId": type_valueid,
                 "typeLabel": _biblissima_type_label(type_valueid),
                 "typeIsFallback": type_is_fallback,
+                # Derive ifdataHash from the portal ARK so that step 3
+                # enrichment can fetch the individual page and fill in
+                # the fields that only the portal scrape surfaces (text,
+                # rubric, descriptors, mandragore, canvas dims…).
+                "ifdataHash": (
+                    re.search(r"(ifdata\w+)", item_ark or "").group(1)
+                    if item_ark and "ifdata" in (item_ark or "")
+                    else ""
+                ),
                 # Fields expected by the frontend template (populated during enrichment)
                 "shelfmark": "",
                 "collectionLabel": "",
@@ -1340,7 +1322,29 @@ def _enrich_canvases(canvases, session=None):
                 _BIBLISSIMA_CACHE_TTL,
             )
 
-        # Phase 3: decorate every canvas from the resolved manuscript map
+        # Phase 2g: resolve collection chains (location + parent institution)
+        # for each unique collection QID, so downstream consumers get
+        # collectionLabel / locationLabel / parentInstitutionLabel.
+        collection_data = {}
+        collection_qids = {
+            ms.get("collection")
+            for ms in resolved_manuscripts.values()
+            if ms.get("collection")
+        }
+        for coll_qid in collection_qids:
+            try:
+                collection_data[coll_qid] = _resolve_collection(
+                    coll_qid, session=session
+                )
+            except Exception:
+                logger.warning("Collection resolution failed for %s", coll_qid)
+
+        # Phase 3: decorate every canvas from the resolved manuscript map.
+        # All manuscript-level fields that downstream consumers need (dep
+        # resolution for Places/Groups, identifier creation, etc.) must be
+        # copied here — _illuminationToResult in the search-step JS reads
+        # entityData.* for the manuscript scrape path, but the IIIF
+        # descriptor search path gets its data entirely from this enrichment.
         for canvas in canvases:
             ms_ark = canvas.get("manuscriptArk")
             if not ms_ark:
@@ -1353,6 +1357,20 @@ def _enrich_canvases(canvases, session=None):
             canvas["biblissimaQid"] = ms_data.get("qid")
             canvas["shelfmark"] = ms_data.get("shelfmark")
             canvas["mandragoreId"] = ms_data.get("mandragoreId")
+            # Institution / location chain from the collection resolution.
+            coll_qid = ms_data.get("collection")
+            coll = collection_data.get(coll_qid) or {} if coll_qid else {}
+            canvas["collectionLabel"] = coll.get("ownerLabel", "")
+            canvas["collectionQid"] = coll.get("ownerQid", "")
+            canvas["locationLabel"] = coll.get("locationLabel", "")
+            canvas["locationQid"] = coll.get("locationQid", "")
+            canvas["geonamesId"] = coll.get("geonamesId", "")
+            canvas["parentInstitutionLabel"] = coll.get(
+                "parentInstitutionLabel", ""
+            )
+            canvas["parentInstitutionQid"] = coll.get(
+                "parentInstitutionQid", ""
+            )
     finally:
         if owned_session:
             session.close()
@@ -1711,6 +1729,7 @@ class BiblissimaCheckDuplicatesView(View):
 
 
 BIBLISSIMA_PORTAL = "https://portail.biblissima.fr/fr/ark:/43093"
+BIBLISSIMA_PORTAL_EN = "https://portail.biblissima.fr/en/ark:/43093"
 
 
 def _extract_date_from_portal(portal_hash):
@@ -2082,6 +2101,11 @@ def _fetch_canvas_dimensions(manifest_url, folio, session):
         "canvasWidth": int(target.get("width") or 0),
         "canvasHeight": int(target.get("height") or 0),
         "thumbnailUrl": _iiif_thumbnail_from_service(service_id),
+        # The Image Service URL is what Arches' annotation viewer
+        # expects in the `canvas` property of a GeoJSON feature — NOT
+        # the Presentation API canvas @id. The viewer uses it to build
+        # IIIF Image API tile requests for the Leaflet layer.
+        "imageServiceUrl": service_id,
     }
     cache.set(cache_key, result, 3600)
     return result
@@ -2125,9 +2149,12 @@ class BiblissimaIlluminationDetailView(View):
     per-provider special casing.
     """
 
-    # Portal <strong> label → normalized result key. Exact-match only, so
-    # there's no more risk of "Type" accidentally swallowing "Typologie".
+    # Portal <strong> label → normalized result key. Exact-match only,
+    # so there's no more risk of "Type" accidentally swallowing
+    # "Typologie". Both French and English labels are listed — the same
+    # parser runs against /fr/ and /en/ variants of the portal page.
     _FIELD_MAP = {
+        # French labels (from /fr/ ark:/... pages)
         "Type": "type",
         "Feuillet / page": "folio",
         "Typologie": "typologie",
@@ -2137,85 +2164,178 @@ class BiblissimaIlluminationDetailView(View):
         "Texte": "text",
         "Rubrique": "rubric",
         "Lieu de fabrication": "location",
+        # English labels (from /en/ ark:/... pages) — same internal keys
+        "Folio / page": "folio",
+        "Date of Origin": "date",
+        "Manuscript": "manuscript",
+        "Text": "text",
+        "Rubric": "rubric",
+        "Place of Origin": "location",
     }
+
+    def _parse_page(self, html):
+        """Extract structured fields from a single portal HTML document.
+
+        Returns a plain dict of scraped values. Language-agnostic: runs on
+        either the ``/fr/`` or ``/en/`` variant of an illumination page —
+        the same DOM structure, only the <strong> field labels differ
+        (handled by ``_FIELD_MAP``).
+        """
+        tree = lxml_html.fromstring(html)
+        page = {}
+
+        # h1 inside the presentation section (full name with manuscript
+        # + folio tail). Biblissima doesn't translate the title, so the
+        # FR and EN versions return the same string here.
+        h1 = tree.xpath('.//section[@id="presentation"]//h1')
+        if h1:
+            title = " ".join(h1[0].text_content().split()).strip()
+            if title:
+                page["pageTitle"] = title
+                page["label"] = title
+
+        # Presentation field list.
+        for li in tree.xpath('.//section[@id="presentation"]//li'):
+            strong_el = li.xpath(".//strong")
+            if not strong_el:
+                continue
+            strong_text = strong_el[0].text_content()
+            label_text = strong_text.replace(":", "").strip()
+            key = self._FIELD_MAP.get(label_text)
+            if key is None:
+                continue
+            span = li.xpath(".//span")
+            if span:
+                value = " ".join(span[0].text_content().split()).strip()
+            else:
+                full = li.text_content()
+                value = full.replace(strong_text, "", 1)
+                value = " ".join(value.split()).strip(" :")
+            if value:
+                page[key] = value
+
+        # Iconographic descriptor links — scoped to the presentation
+        # section so we don't pick up stray `desc` ARKs elsewhere.
+        descriptor_links = []
+        seen_uris = set()
+        for a in tree.xpath(
+            './/section[@id="presentation"]'
+            '//a[contains(@href, "/ark:/43093/desc")]'
+        ):
+            uri = (a.get("href") or "").strip()
+            if not uri or uri in seen_uris:
+                continue
+            seen_uris.add(uri)
+            label = " ".join(a.text_content().split()).strip()
+            descriptor_links.append({"label": label, "uri": uri})
+        if descriptor_links:
+            page["descriptorLinks"] = descriptor_links
+
+        # Parent manuscript ARK — first <a> pointing at an mdata ARK.
+        for a in tree.xpath('.//a[contains(@href, "/ark:/43093/mdata")]'):
+            m = re.search(r"(mdata\w+)", a.get("href", ""))
+            if m:
+                page["manuscriptHash"] = m.group(1)
+                page["manuscriptArk"] = f"ark:/43093/{m.group(1)}"
+                break
+
+        # Mandragore cross-reference.
+        for a in tree.xpath('.//a[contains(@href, "mandragore.bnf.fr")]'):
+            m = re.search(
+                r"mandragore\.bnf\.fr/ark:/12148/(\w+)", a.get("href", "")
+            )
+            if m:
+                page["mandragoreArk"] = f"ark:/12148/{m.group(1)}"
+                break
+
+        # Source IIIF manifest — clean URL via ``data-manifest`` on the
+        # IIIF drag-and-drop link, with fallback on the companion
+        # ``<input id="iiifUrl">``.
+        for a in tree.xpath(
+            './/div[contains(@class, "numerisation-iiif")]//a[@data-manifest]'
+        ):
+            mu = (a.get("data-manifest") or "").strip()
+            if mu:
+                page["manifestUrl"] = mu
+                break
+        if "manifestUrl" not in page:
+            for inp in tree.xpath('.//input[@id="iiifUrl"]'):
+                mu = (inp.get("value") or "").strip()
+                if mu:
+                    page["manifestUrl"] = mu
+                    break
+
+        return page
 
     @method_decorator(cache_page(3600))
     def get(self, request, ifdata_hash):
+        """Fetch the /fr/ and /en/ portal pages in sequence, merge, enrich.
+
+        Biblissima only translates a handful of fields between the two
+        locale variants (notably ``Date de fabrication`` → ``Date of
+        Origin`` — English dates feed straight into ``edtf`` without
+        custom French-idiom handling). Everything else (titles,
+        descriptors, place names, etc.) is the same French content on
+        both pages, so we prefer the French values for them.
+
+        The /en/ fetch is best-effort: if it fails the French-only
+        result is returned and date parsing may degrade for century
+        idioms, but the create step still works.
+        """
         session = _build_biblissima_session()
         try:
             try:
-                resp = _bib_request(
+                fr_resp = _bib_request(
                     session,
                     f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
                     timeout=PORTAL_REQUEST_TIMEOUT,
                 )
-                resp.raise_for_status()
-                html = resp.text
+                fr_resp.raise_for_status()
             except Exception as exc:
                 return _biblissima_upstream_error(
                     exc, f"Biblissima illumination fetch ({ifdata_hash})"
                 )
 
-            tree = lxml_html.fromstring(html)
+            fr_page = self._parse_page(fr_resp.text)
 
-            result = {
-                "ifdataHash": ifdata_hash,
-                "arkId": f"ark:/43093/{ifdata_hash}",
-                "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
-            }
-
-            # h1 → full canonical name with the manuscript/folio tail
-            # ("Abdias prophétisant (France, Paris. BnF, …, Latin 40 f.323v)")
-            # Stored as both `pageTitle` and `label` so the create step can
-            # prefer this long form over any shorter variant. The portal
-            # page has several h1s (navbar, "Numérisations", "Source des
-            # données"…), so scope to the presentation section.
-            h1 = tree.xpath('.//section[@id="presentation"]//h1')
-            if h1:
-                title = " ".join(h1[0].text_content().split()).strip()
-                if title:
-                    result["pageTitle"] = title
-                    result["label"] = title
-
-            # Presentation list fields — each <li> is a label/value pair.
-            for li in tree.xpath('.//section[@id="presentation"]//li'):
-                strong_el = li.xpath(".//strong")
-                if not strong_el:
-                    continue
-                strong_text = strong_el[0].text_content()
-                label_text = strong_text.replace(":", "").strip()
-                key = self._FIELD_MAP.get(label_text)
-                if key is None:
-                    continue
-                span = li.xpath(".//span")
-                if span:
-                    value = " ".join(span[0].text_content().split()).strip()
+            # /en/ page — best effort, but loud on failure: when it does
+            # fail we lose the date parsing path (edtf doesn't understand
+            # French century idioms), so the operator should know.
+            en_page = {}
+            try:
+                en_resp = _bib_request(
+                    session,
+                    f"{BIBLISSIMA_PORTAL_EN}/{ifdata_hash}",
+                    timeout=PORTAL_REQUEST_TIMEOUT,
+                )
+                if en_resp.ok:
+                    en_page = self._parse_page(en_resp.text)
                 else:
-                    full = li.text_content()
-                    value = full.replace(strong_text, "", 1)
-                    value = " ".join(value.split()).strip(" :")
-                if value:
-                    result[key] = value
+                    logger.warning(
+                        "Biblissima /en/ fetch returned %s for %s — date "
+                        "parsing will fall back to French and likely fail",
+                        en_resp.status_code, ifdata_hash,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Biblissima /en/ fetch raised for %s: %s — date "
+                    "parsing will fall back to French and likely fail",
+                    ifdata_hash, exc,
+                )
 
-            # Iconographic descriptor links — scoped to the presentation
-            # section so we don't pick up stray `desc` ARKs elsewhere on the
-            # page. Deduped by URI.
-            descriptor_links = []
-            seen_uris = set()
-            for a in tree.xpath(
-                './/section[@id="presentation"]'
-                '//a[contains(@href, "/ark:/43093/desc")]'
-            ):
-                uri = (a.get("href") or "").strip()
-                if not uri or uri in seen_uris:
-                    continue
-                seen_uris.add(uri)
-                label = " ".join(a.text_content().split()).strip()
-                descriptor_links.append({"label": label, "uri": uri})
-            if descriptor_links:
-                result["descriptorLinks"] = descriptor_links
+            # Merge: start from the French scrape, then prefer the English
+            # value only for fields Biblissima actually translates. Date is
+            # the one that matters — the edtf parser handles English
+            # natural language ("13th century") natively.
+            result = dict(fr_page)
+            result["ifdataHash"] = ifdata_hash
+            result["arkId"] = f"ark:/43093/{ifdata_hash}"
+            result["portalUrl"] = f"{BIBLISSIMA_PORTAL}/{ifdata_hash}"
+            if en_page.get("date"):
+                result["date"] = en_page["date"]
 
-            # Resolve type: typologie > descriptor from label > type field
+            # Resolve the Component type: typologie > descriptor from label
+            # > raw Type field > default.
             typologie = result.get("typologie", "")
             descriptor = ""
             if result.get("label"):
@@ -2230,48 +2350,22 @@ class BiblissimaIlluminationDetailView(View):
             result["typeLabel"] = _biblissima_type_label(type_valueid)
             result["typeIsFallback"] = type_is_fallback
 
-            # Parent manuscript ARK — first <a> pointing at an mdata ARK
-            # found anywhere on the page.
-            for a in tree.xpath('.//a[contains(@href, "/ark:/43093/mdata")]'):
-                m = re.search(r"(mdata\w+)", a.get("href", ""))
-                if m:
-                    result["manuscriptHash"] = m.group(1)
-                    result["manuscriptArk"] = f"ark:/43093/{m.group(1)}"
-                    break
-
-            # Mandragore cross-reference
-            for a in tree.xpath('.//a[contains(@href, "mandragore.bnf.fr")]'):
-                m = re.search(
-                    r"mandragore\.bnf\.fr/ark:/12148/(\w+)", a.get("href", "")
+            # Parse the date string (English preferred, French fallback)
+            # into ISO bounds + century concept so the create step doesn't
+            # have to redo the work. Legacy ``parse_century`` is still
+            # exposed via ``utils.dates`` for document-side callers.
+            if result.get("date"):
+                start_iso, end_iso, century = parse_historical_date(
+                    result["date"]
                 )
-                if m:
-                    result["mandragoreArk"] = f"ark:/12148/{m.group(1)}"
-                    break
+                if start_iso:
+                    result["dateStart"] = start_iso
+                if end_iso:
+                    result["dateEnd"] = end_iso
+                if century:
+                    result["centuryConcept"] = century
 
-            # Source IIIF manifest — the ``.numerisation-iiif`` block on
-            # the portal exposes the clean manifest URL via ``data-manifest``
-            # on the IIIF drag-and-drop link. Provider-agnostic: Biblissima
-            # writes the same attribute whether the source is Gallica,
-            # e-codices, DigiVatLib, Bodleian, Morgan, … Fallback to the
-            # companion ``<input id="iiifUrl">`` in case the attribute moves.
-            manifest_url = ""
-            for a in tree.xpath(
-                './/div[contains(@class, "numerisation-iiif")]//a[@data-manifest]'
-            ):
-                manifest_url = (a.get("data-manifest") or "").strip()
-                if manifest_url:
-                    break
-            if not manifest_url:
-                for inp in tree.xpath('.//input[@id="iiifUrl"]'):
-                    manifest_url = (inp.get("value") or "").strip()
-                    if manifest_url:
-                        break
-            if manifest_url:
-                result["manifestUrl"] = manifest_url
-
-            # Canvas dimensions, canvas @id, and a provider-agnostic
-            # thumbnail URL — all derived in one cached manifest fetch by
-            # ``_fetch_canvas_dimensions``, matched against the folio.
+            # Canvas dimensions + thumbnail via one cached manifest fetch.
             if result.get("manifestUrl"):
                 canvas_info = _fetch_canvas_dimensions(
                     result["manifestUrl"], result.get("folio", ""), session
@@ -2502,8 +2596,18 @@ class BiblissimaCreateResourceView(View):
 
         return resource_id, created_deps
 
-    def _create_tile(self, nodegroup_id, resource_id, data, transaction_id=None):
-        """Create a single tile without ES indexing (deferred to after commit)."""
+    def _create_tile(
+        self, nodegroup_id, resource_id, data, transaction_id=None,
+        parenttile=None,
+    ):
+        """Create a single tile without ES indexing (deferred to after commit).
+
+        ``parenttile`` must be set when the nodegroup has a
+        ``parentnodegroup`` in the graph — without it, Arches can't
+        reconstruct the tile hierarchy and the card UI won't display
+        the child data under the right parent. Query the NodeGroup model
+        to find which nodegroups are nested.
+        """
         tile = Tile(
             tileid=uuid.uuid4(),
             nodegroup_id=nodegroup_id,
@@ -2511,14 +2615,45 @@ class BiblissimaCreateResourceView(View):
             data=data,
             sortorder=0,
         )
+        if parenttile is not None:
+            tile.parenttile = parenttile
         if transaction_id:
             tile.transaction_id = transaction_id
         tile.save(index=False)
         return tile
 
     @staticmethod
-    def _i18n_string(value, lang="en"):
-        """Format a string as Arches i18n dict."""
+    def _i18n_string(value, lang=None):
+        """Format a string as an Arches i18n dict.
+
+        Three calling forms:
+
+        - **plain string, no ``lang``** → mirrored under both ``"fr"`` and
+          ``"en"`` keys with the same value. This is the default for
+          scraped Biblissima content (which is French) and ensures the
+          string displays regardless of which locale the running Arches
+          server uses to render the resource — Arches has no
+          "any-language" fallback in the i18n datatype, so any tile
+          stored under a single key vanishes when the server picks a
+          different one.
+        - **plain string, explicit ``lang``** → single-language tile.
+          Use when you really only want one locale (rare).
+        - **dict ``{lang_code: str}``** → multilingual tile with each
+          language carried separately. Empty / None values are dropped.
+          Used when we genuinely have distinct French and English
+          translations (e.g. dates from the ``/en/`` portal scrape).
+        """
+        if isinstance(value, dict):
+            return {
+                lang_code: {"value": str(v), "direction": "ltr"}
+                for lang_code, v in value.items()
+                if v
+            }
+        if lang is None:
+            return {
+                "fr": {"value": str(value), "direction": "ltr"},
+                "en": {"value": str(value), "direction": "ltr"},
+            }
         return {lang: {"value": str(value), "direction": "ltr"}}
 
     @staticmethod
@@ -2669,9 +2804,19 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Period
-        date_str = bbma_data.get("date", "")
-        century_concept = _parse_century(date_str)
+        # Period + Production dates. The illumination detail view parses
+        # the date at enrichment time and stores ISO bounds + century
+        # concept on the item (``dateStart``, ``dateEnd``,
+        # ``centuryConcept``). Fallback to in-situ parsing for call sites
+        # that haven't enriched the item yet (e.g. IIIF search path).
+        century_concept = bbma_data.get("centuryConcept")
+        date_start = bbma_data.get("dateStart")
+        date_end = bbma_data.get("dateEnd")
+        if not (century_concept or date_start or date_end):
+            raw_date = bbma_data.get("date", "")
+            if raw_date:
+                date_start, date_end, century_concept = parse_historical_date(raw_date)
+
         if century_concept:
             self._create_tile(
                 DOC_PERIOD_NG,
@@ -2686,8 +2831,10 @@ class BiblissimaCreateResourceView(View):
         # Production
         prod_data = {DOC_PROD_TIME_TYPE: False}
 
-        if date_str:
-            prod_data[DOC_PROD_DATE_START] = self._century_to_date(date_str)
+        if date_start:
+            prod_data[DOC_PROD_DATE_START] = date_start
+        if date_end:
+            prod_data[DOC_PROD_DATE_END] = date_end
 
         place_id = deps.get("productionPlace")
         if place_id:
@@ -2801,10 +2948,13 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Parent Document (required)
+        # Parent Document (required) — this is the Item Feature of
+        # Component tile, which is the ROOT parent for the nested
+        # Production and Location in Document tiles.
         parent_doc_id = deps.get("parentDocument")
+        item_feature_tile = None
         if parent_doc_id:
-            self._create_tile(
+            item_feature_tile = self._create_tile(
                 COMP_PARENT_DOC_NG,
                 resource_id,
                 {COMP_PARENT_DOC_NODE: self._resource_instance_ref(parent_doc_id)},
@@ -2913,25 +3063,39 @@ class BiblissimaCreateResourceView(View):
         # Folio now lives only inside Location in Document's appellation
         # (built below). We no longer write it into Context of Component.
 
-        # Period
-        date_str = bbma_data.get("date", "")
-        century_concept = _parse_century(date_str)
-        if century_concept:
-            self._create_tile(
-                COMP_PERIOD_NG,
-                resource_id,
-                {
-                    COMP_PERIOD_ABSOLUTE: clist([century_concept]),
-                    COMP_PERIOD_PRODUCTION: clist([CONCEPT_MEDIEVAL]),
-                },
-                transaction_id,
-            )
+        # Period + Production dates. Same pre-parsed fields as for
+        # Documents — ``dateStart`` / ``dateEnd`` / ``centuryConcept`` are
+        # set at enrichment time by ``BiblissimaIlluminationDetailView``.
+        # Fallback to in-situ parsing for items that never went through
+        # enrichment (unusual but possible via direct-ARK add paths).
+        century_concept = bbma_data.get("centuryConcept")
+        date_start = bbma_data.get("dateStart")
+        date_end = bbma_data.get("dateEnd")
+        if not (century_concept or date_start or date_end):
+            raw_date = bbma_data.get("date", "")
+            if raw_date:
+                date_start, date_end, century_concept = parse_historical_date(raw_date)
 
-        # Production
+        # --- Nested tile chain: Item Feature → Production → Production
+        # period. Each child tile must reference its parent tile via
+        # `parenttile`, otherwise Arches can't reconstruct the hierarchy
+        # and the card UI shows empty sub-cards even though the data
+        # exists in the DB.
+        #
+        # IMPORTANT: "Production period" (NG e67686af) and "Absolute
+        # period attribution" (node e67686b6) belong to the SAME
+        # nodegroup. They must be in a single tile — not split into two.
+        # The "Period" NG (e67686b1) is for alternative period identifiers
+        # that we don't use from Biblissima, so we don't create a tile
+        # for it.
+
+        # Production (parent = Item Feature)
         prod_data = {COMP_PROD_TIME_TYPE: False}
 
-        if date_str:
-            prod_data[COMP_PROD_DATE_START] = self._century_to_date(date_str)
+        if date_start:
+            prod_data[COMP_PROD_DATE_START] = date_start
+        if date_end:
+            prod_data[COMP_PROD_DATE_END] = date_end
 
         place_id = deps.get("productionPlace")
         if place_id:
@@ -2941,12 +3105,30 @@ class BiblissimaCreateResourceView(View):
         if actor_ids:
             prod_data[COMP_PROD_ACTORS] = self._resource_instance_list(actor_ids)
 
+        production_tile = None
         if len(prod_data) > 1:
-            self._create_tile(
+            production_tile = self._create_tile(
                 COMP_PRODUCTION_NG,
                 resource_id,
                 prod_data,
                 transaction_id,
+                parenttile=item_feature_tile,
+            )
+
+        # Production period — single tile with both:
+        #   - "Production period" concept (e.g. medieval)
+        #   - "Absolute period attribution" concept (e.g. 13th century)
+        # Both nodes live in NG e67686af. Parent = Production tile.
+        if production_tile:
+            period_data = {COMP_PERIOD_PRODUCTION: clist([CONCEPT_MEDIEVAL])}
+            if century_concept:
+                period_data[COMP_PERIOD_ABSOLUTE] = clist([century_concept])
+            self._create_tile(
+                COMP_PERIOD_NG,
+                resource_id,
+                period_data,
+                transaction_id,
+                parenttile=production_tile,
             )
 
         # Location in Document (annotation) — build a "whole page" polygon
@@ -2955,17 +3137,35 @@ class BiblissimaCreateResourceView(View):
         # of the unusable Point at (0, 0). Fallback to a small rectangle if
         # dimensions are missing.
         folio = bbma_data.get("folio", "")
-        canvas_url = bbma_data.get("canvasId") or bbma_data.get("imageUrl")
+        # The annotation's `canvas` property must point at the IIIF
+        # *Image Service* URL (the base from which Arches' Leaflet viewer
+        # constructs tile requests), NOT the Presentation API canvas @id
+        # (which is JSON, not an image). `imageServiceUrl` is extracted
+        # from `canvas.images[0].resource.service.@id` during enrichment.
+        canvas_url = (
+            bbma_data.get("imageServiceUrl")
+            or bbma_data.get("canvasId")
+            or bbma_data.get("imageUrl")
+        )
         manifest_url = bbma_data.get("manifestUrl")
         if canvas_url and manifest_url:
             width = int(bbma_data.get("canvasWidth") or 0) or 4000
             height = int(bbma_data.get("canvasHeight") or 0) or 5000
+
+            # Arches stores annotations in Leaflet CRS.simple coordinates,
+            # not raw pixels. The conversion is:
+            #   lng = pixel_x / scale
+            #   lat = -pixel_y / scale   (Y axis is inverted)
+            # with scale = 2^zoom. Arches' annotation widget defaults to
+            # zoom=5 (scale=32). See BBoxCalculator in utils/iiif_tools.py
+            # for the inverse conversion.
+            scale = 2**5  # 32 — must match the Arches annotation viewer
             polygon_coords = [
                 [
                     [0, 0],
-                    [width, 0],
-                    [width, height],
-                    [0, height],
+                    [width / scale, 0],
+                    [width / scale, -height / scale],
+                    [0, -height / scale],
                     [0, 0],
                 ]
             ]
@@ -2984,6 +3184,7 @@ class BiblissimaCreateResourceView(View):
                             "manifest": manifest_url,
                             "nodeId": COMP_LOCATION_DOC_NODE,
                             "color": "#3388ff",
+                            "radius": 10,
                             "weight": 3,
                             "opacity": 1,
                             "fillColor": "#3388ff",
@@ -2992,7 +3193,7 @@ class BiblissimaCreateResourceView(View):
                     }
                 ],
             }
-            appellation_data = {"en": {"value": folio or "", "direction": "ltr"}}
+            appellation_data = i18n(folio or "")
             self._create_tile(
                 COMP_LOCATION_DOC_NG,
                 resource_id,
@@ -3001,6 +3202,7 @@ class BiblissimaCreateResourceView(View):
                     COMP_LOCATION_APPELLATION: appellation_data,
                 },
                 transaction_id,
+                parenttile=item_feature_tile,
             )
 
     def _link_to_project(self, resource_id, project_id, transaction_id):
@@ -3069,16 +3271,6 @@ class BiblissimaCreateResourceView(View):
             for rid in resource_ids
             if rid
         ]
-
-    def _century_to_date(self, date_str):
-        """Convert a century string to an approximate start date."""
-        match = _CENTURY_RE.search(str(date_str))
-        if match:
-            century = int(match.group(1))
-            year = (century - 1) * 100 + 1
-            return f"{year:04d}-01-01"
-        return None
-
 
 class BiblissimaAddAltNameView(View):
     """Add a Biblissima label as alternative name to an existing resource."""

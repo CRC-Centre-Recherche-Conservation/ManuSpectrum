@@ -279,7 +279,14 @@ const viewModel = function(params) {
             // `_applyEnrichment` and stays in-memory until the user confirms
             // creation — nothing is persisted to the backend before the
             // explicit Create click.
-            enrichStatus: ko.observable(self.isComponent ? 'pending' : 'na'),
+            // Items with an ifdataHash will be enriched via the individual
+            // portal page fetch. Items without one (IIIF descriptor search
+            // path) can't be enriched — mark them as 'na' immediately so
+            // the Create button doesn't stay blocked on a never-completing
+            // enrichment.
+            enrichStatus: ko.observable(
+                self.isComponent && item.ifdataHash ? 'pending' : 'na'
+            ),
             // Extra observables that the enrichment fills in. Flat storage
             // keeps the createResource payload a direct spread of the item.
             text: ko.observable(item.text || ''),
@@ -331,24 +338,43 @@ const viewModel = function(params) {
         if (data.mandragoreArk && !item.mandragoreArk()) {
             item.mandragoreArk(data.mandragoreArk);
         }
+        // Plain (non-observable) fields that the backend scrape fills in
+        // and the create-resource payload reads straight off `ko.toJS(item)`.
+        // Without these merges the cart items stay stuck on their pre-
+        // enrichment values (empty string from the manuscript scrape)
+        // and the backend writes nothing into Period / Production / etc.
+        // The date is carried both as the raw English string (for display)
+        // and as pre-parsed ISO bounds + century concept (so the create
+        // step can write Period + Production date tiles without re-
+        // parsing and without custom French-idiom handling).
+        if (data.date && !item.date) item.date = data.date;
+        if (data.dateStart && !item.dateStart) item.dateStart = data.dateStart;
+        if (data.dateEnd && !item.dateEnd) item.dateEnd = data.dateEnd;
+        if (data.centuryConcept && !item.centuryConcept) {
+            item.centuryConcept = data.centuryConcept;
+        }
+        if (data.typologie && !item.typologie) item.typologie = data.typologie;
+        if (data.technique && !item.technique) item.technique = data.technique;
+        if (data.manuscript && !item.manuscript) item.manuscript = data.manuscript;
         if (data.canvasWidth && !item.canvasWidth()) {
             item.canvasWidth(data.canvasWidth);
         }
         if (data.canvasHeight && !item.canvasHeight()) {
             item.canvasHeight(data.canvasHeight);
         }
-        // Always overwrite manifestUrl/canvasId with the enrichment values.
-        // The manuscript-scrape path in step 2 stuffs `item.canvasId` with
-        // the raw ifdata hash (e.g. "ifdata5be7529…") as a placeholder and
-        // may carry a manuscript-level manifest URL — the illumination
-        // detail view gives us the actual IIIF @id and a canonical manifest
-        // for this specific folio, which is what the Location annotation
-        // tile needs.
+        // Always overwrite manifestUrl/canvasId/imageServiceUrl with the
+        // enrichment values. The manuscript-scrape path in step 2 stuffs
+        // `item.canvasId` with the raw ifdata hash as a placeholder —
+        // the illumination detail view gives us the actual IIIF Image
+        // Service URL + manifest, which is what the annotation tile needs.
         if (data.manifestUrl) {
             item.manifestUrl = data.manifestUrl;
         }
         if (data.canvasId) {
             item.canvasId = data.canvasId;
+        }
+        if (data.imageServiceUrl) {
+            item.imageServiceUrl = data.imageServiceUrl;
         }
         // `location` is what surfaces the "Lieu de fabrication" string on
         // the individual page — it's what `resolveDependencies` reads to
@@ -1147,13 +1173,20 @@ const viewModel = function(params) {
     // Init
     // =============================================
 
+    // Init sequence — proper ordering to avoid race conditions:
+    // 1. Build items from cart data (sync)
+    // 2. First dep resolution pass from cart data (await: must complete
+    //    before enrichment's second pass can merge correctly)
+    // 3. Duplicate check + enrichment run in parallel
+    // 4. Enrichment ends with its own resolveDependencies (second pass)
+    //    that merge-adds newly discovered deps (e.g. Naples production
+    //    place) without losing the first-pass deps (Paris, Groups).
     this.initializeItems();
-    this.resolveDependencies();
-    this.checkDuplicates();
-    // Fire-and-forget: enrichment runs in parallel with dup check and dep
-    // resolution so the user can start interacting with step 3 immediately.
-    // Nothing here blocks the "Create" buttons — those gate on dep status.
-    this.enrichComponentItems();
+    (async () => {
+        await self.resolveDependencies();
+        self.checkDuplicates();
+        await self.enrichComponentItems();
+    })();
 };
 
 ko.components.register('biblissima-create-step', {
