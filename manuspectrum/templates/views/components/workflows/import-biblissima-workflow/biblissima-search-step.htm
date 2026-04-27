@@ -121,11 +121,40 @@
                 <i class="fa fa-book"></i>
                 <strong data-bind="text: selectedManuscriptLabel()"></strong> &mdash;
                 <!-- /ko -->
+                <!-- ko if: textFilterActive() || dateRangeActive() -->
+                <strong data-bind="text: totalResults()"></strong>
+                <span class="text-muted">
+                    / <span data-bind="text: totalUnfilteredResults()"></span>
+                </span>
+                {% trans "results" %}
+                <!-- /ko -->
+                <!-- ko ifnot: textFilterActive() || dateRangeActive() -->
                 <strong data-bind="text: totalResults()"></strong> {% trans "results" %}
+                <!-- /ko -->
                 <!-- ko if: dateRangeActive -->
                 <span class="bbma-date-badge" data-bind="text: dateRangeLabel()"></span>
                 <!-- /ko -->
             </span>
+
+            <!-- Inline text filter — always visible once results land. -->
+            <!-- ko if: searchResults().length > 0 -->
+            <div class="bbma-text-filter">
+                <i class="fa fa-filter bbma-text-filter-icon"></i>
+                <input type="text"
+                       class="form-control input-sm bbma-text-filter-input"
+                       placeholder="{% trans 'Filter results…' %}"
+                       data-bind="textInput: textFilter">
+                <!-- ko if: textFilterActive -->
+                <button type="button"
+                        class="btn btn-link btn-xs bbma-text-filter-clear"
+                        title="{% trans 'Clear filter' %}"
+                        data-bind="click: clearTextFilter">
+                    <i class="fa fa-times"></i>
+                </button>
+                <!-- /ko -->
+            </div>
+            <!-- /ko -->
+
             <!-- ko if: totalResults() > 0 -->
             <button class="btn btn-xs btn-default"
                     data-bind="click: addAllVisible,
@@ -214,6 +243,18 @@
             <div class="bbma-empty-state">
                 <i class="fa fa-inbox"></i>
                 <p>{% trans "No results found. Try different search terms." %}</p>
+            </div>
+            <!-- /ko -->
+
+            <!-- Empty state: results exist but the text/date filter narrowed to zero -->
+            <!-- ko if: searchResults().length > 0 && filteredResults().length === 0 -->
+            <div class="bbma-empty-state">
+                <i class="fa fa-filter"></i>
+                <p>{% trans "No result matches the current filter." %}</p>
+                <button class="btn btn-sm btn-default"
+                        data-bind="click: clearTextFilter, visible: textFilterActive">
+                    <i class="fa fa-times"></i> {% trans "Clear filter" %}
+                </button>
             </div>
             <!-- /ko -->
 

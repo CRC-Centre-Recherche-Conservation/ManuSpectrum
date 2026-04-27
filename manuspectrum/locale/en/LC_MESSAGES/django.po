@@ -1728,6 +1728,18 @@ msgstr "Loading results"
 msgid "Add all visible"
 msgstr ""
 
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
+msgid "Filter results…"
+msgstr ""
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
+msgid "Clear filter"
+msgstr ""
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
+msgid "No result matches the current filter."
+msgstr ""
+
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:156
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
 msgstr "Biblissima can be slow for large searches. You can keep this tab open."

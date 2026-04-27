@@ -139,6 +139,7 @@ const viewModel = function(params) {
         self.searchError(null);
         self.searchResults([]);
         self.currentPage(1);
+        if (self.textFilter) self.textFilter('');
         self.selectedManuscriptLabel('');
         self.selectedManuscriptHash('');
         self.loadingProgress({
@@ -223,19 +224,99 @@ const viewModel = function(params) {
         return null;
     };
 
+    // Free-text filter on top of the date filter. Tokenize the query on
+    // whitespace, normalize (lowercase + accent strip), and require every
+    // token to appear as a substring in the haystack built from the
+    // user-visible fields. Fast — O(items × fields × tokens) — and good
+    // enough for "find where in 500 results my Latin 9926 hides" without
+    // pulling in a fuzzy-search dependency.
+    this.textFilter = ko.observable('');
+    this.textFilterActive = ko.computed(() => self.textFilter().trim().length > 0);
+    this.clearTextFilter = () => self.textFilter('');
+
+    const _normalize = (s) =>
+        String(s || '')
+            .toLowerCase()
+            .normalize('NFD')
+            // Strip Unicode combining diacritics (U+0300..U+036F) so that
+            // "Latin" matches "Lâtin", "Latín", "Lätïn", etc.
+            .replace(/[̀-ͯ]/g, '');
+
+    const _haystack = (item) => {
+        // Concatenate every searchable field. Descriptors is an array,
+        // join with spaces. Includes manuscript ARK/QID so users can
+        // also search by identifier fragments.
+        const parts = [
+            item.label, item.legend, item.shelfmark, item.collectionLabel,
+            item.manuscript, item.folio, item.date, item.location,
+            item.authorLabel, item.locationLabel, item.parentInstitutionLabel,
+            item.arkId, item.biblissimaQid, item.mandragoreId,
+            (item.descriptors || []).join(' '),
+        ];
+        return _normalize(parts.filter(Boolean).join(' '));
+    };
+
+    // Compile a token to a matcher function. Numeric tokens (purely
+    // digits) must be **standalone words** in the haystack — surrounded
+    // by non-word characters on both sides — so that typing "4" doesn't
+    // also match digits embedded in hex hashes (``e4e`` in an ARK), in
+    // longer numbers (``452``, ``342``), or inside date phrases like
+    // ``14e siècle``. ``\b`` enforces the word boundary against any
+    // word char (letter or digit), which is exactly the behavior we
+    // want here. Non-numeric tokens keep cheap substring matching for
+    // friendly free-text search ("abdi" → "Abdias").
+    const _ALL_DIGITS_RE = /^\d+$/;
+    const _compileToken = (token) => {
+        if (_ALL_DIGITS_RE.test(token)) {
+            const re = new RegExp('\\b' + token + '\\b');
+            return (hay) => re.test(hay);
+        }
+        const needle = token;
+        return (hay) => hay.indexOf(needle) !== -1;
+    };
+
+    this._matchesTextFilter = (item, matchers) => {
+        if (!matchers || matchers.length === 0) return true;
+        const hay = _haystack(item);
+        for (let i = 0; i < matchers.length; i++) {
+            if (!matchers[i](hay)) return false;
+        }
+        return true;
+    };
+
     this.filteredResults = ko.computed(() => {
         const all = self.searchResults();
-        if (!self.dateRangeActive()) return all;
+        const dateActive = self.dateRangeActive();
+        const textActive = self.textFilterActive();
+        if (!dateActive && !textActive) return all;
+
         const from = self.dateFrom();
         const to = self.dateTo();
+        // Pre-compile token matchers once per filter pass — avoids
+        // re-building a RegExp for every item in the result set.
+        const matchers = textActive
+            ? _normalize(self.textFilter())
+                .split(/\s+/)
+                .filter(Boolean)
+                .map(_compileToken)
+            : [];
+
         return all.filter((item) => {
-            const range = self._parseDateRange(item.date);
-            if (!range) return true; // keep items without date
-            return range[1] >= from && range[0] <= to;
+            if (dateActive) {
+                const range = self._parseDateRange(item.date);
+                // Items without parseable date are kept (don't penalize
+                // entries the connector couldn't date).
+                if (range && !(range[1] >= from && range[0] <= to)) return false;
+            }
+            if (textActive && !self._matchesTextFilter(item, matchers)) return false;
+            return true;
         });
     });
 
     this.totalResults = ko.computed(() => self.filteredResults().length);
+    // Total before any client-side filter, used to render "X / Y results"
+    // when a filter narrows the pool.
+    this.totalUnfilteredResults = ko.computed(() => self.searchResults().length);
     this.totalPages = ko.computed(() => {
         const limit = self.effectiveLimit();
         return Math.ceil(self.filteredResults().length / limit) || 0;
@@ -247,10 +328,12 @@ const viewModel = function(params) {
         const start = (page - 1) * limit;
         return all.slice(start, start + limit);
     });
-    // Reset to page 1 when page size or date filter changes
+    // Reset to page 1 when page size or any filter changes — without this
+    // the user can land on an out-of-range page after narrowing the set.
     this.effectiveLimit.subscribe(() => self.currentPage(1));
     this.dateFrom.subscribe(() => self.currentPage(1));
     this.dateTo.subscribe(() => self.currentPage(1));
+    this.textFilter.subscribe(() => self.currentPage(1));
 
     // Direct identifier input (QID or ARK)
     this.directIdentifier = ko.observable('');

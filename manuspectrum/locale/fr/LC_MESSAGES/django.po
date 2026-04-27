@@ -1878,6 +1878,18 @@ msgstr "résultats"
 msgid "Add all visible"
 msgstr "Ajouter tous les visibles"
 
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
+msgid "Filter results…"
+msgstr "Filtrer les résultats…"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
+msgid "Clear filter"
+msgstr "Effacer le filtre"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
+msgid "No result matches the current filter."
+msgstr "Aucun résultat ne correspond au filtre actuel."
+
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:156
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
 msgstr ""
@@ -2032,9 +2044,6 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 
 #~ msgid "Thumb"
 #~ msgstr "Vignette"
-
-#~ msgid "Manuscript"
-#~ msgstr "Manuscrit"
 
 #~ msgid "Folio"
 #~ msgstr "Folio"
