@@ -488,8 +488,7 @@ const viewModel = function(params) {
     // "X items to review" header hint.
     this.fallbackItemsCount = ko.computed(() =>
         self.items().filter((i) =>
-            i.typeValueId() === COMPONENT_FALLBACK_TYPE_VALUEID
-            && i.status() === 'pending'
+            i.typeIsFallback() && i.status() === 'pending'
         ).length
     );
 
