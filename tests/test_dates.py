@@ -14,6 +14,7 @@ yield ``[]``.
 Usage:
     python manage.py test tests.test_dates --settings="tests.test_settings"
 """
+
 from unittest import TestCase
 
 from manuspectrum.utils.dates import (
@@ -109,9 +110,7 @@ class ParseHistoricalDateTests(TestCase):
         # Per module docstring: French century idioms are not handled
         # natively. edtf misinterprets "13e siècle" as day-of-month 13
         # (year 0000 → 9999). Plausibility check should reject this.
-        self.assertEqual(
-            parse_historical_date("13e siècle"), (None, None, [])
-        )
+        self.assertEqual(parse_historical_date("13e siècle"), (None, None, []))
 
     # --- Plausibility window (edtf garbage rejection) ---------------------
 
@@ -124,9 +123,7 @@ class ParseHistoricalDateTests(TestCase):
         self.assertEqual(parse_historical_date("2200"), (None, None, []))
 
     def test_rejects_unparseable_garbage(self):
-        self.assertEqual(
-            parse_historical_date("not a date at all"), (None, None, [])
-        )
+        self.assertEqual(parse_historical_date("not a date at all"), (None, None, []))
 
     # --- Century derivation rule ------------------------------------------
 
@@ -343,9 +340,7 @@ class ComplexEdtfDateTests(TestCase):
         # "12xx/13xx" — interval of unspecified centuries. edtf can't
         # parse it; document the current behavior so a future "fix" that
         # changes it shows up in CI.
-        self.assertEqual(
-            parse_historical_date("12xx/13xx"), (None, None, [])
-        )
+        self.assertEqual(parse_historical_date("12xx/13xx"), (None, None, []))
 
     def test_natural_language_between_phrase_not_supported(self):
         self.assertEqual(
@@ -354,9 +349,7 @@ class ComplexEdtfDateTests(TestCase):
         )
 
     def test_double_dot_range_not_supported(self):
-        self.assertEqual(
-            parse_historical_date("1200..1250"), (None, None, [])
-        )
+        self.assertEqual(parse_historical_date("1200..1250"), (None, None, []))
 
 
 class CenturyMappingTests(TestCase):
@@ -374,9 +367,7 @@ class CenturyMappingTests(TestCase):
             _uuid.UUID(valueid)
 
     def test_values_are_unique(self):
-        self.assertEqual(
-            len(set(CENTURY_MAPPING.values())), len(CENTURY_MAPPING)
-        )
+        self.assertEqual(len(set(CENTURY_MAPPING.values())), len(CENTURY_MAPPING))
 
 
 class CenturyConceptResolutionTests(TestCase):
@@ -392,10 +383,26 @@ class CenturyConceptResolutionTests(TestCase):
     # Representative single year per century, chosen so the strict rule
     # ``(year - 1) // 100 + 1`` yields the labelled century unambiguously.
     REPRESENTATIVE_YEARS = {
-        1: "0050", 2: "0150", 3: "0250", 4: "0350", 5: "0450",
-        6: "0550", 7: "0650", 8: "0750", 9: "0850", 10: "0950",
-        11: "1050", 12: "1150", 13: "1250", 14: "1350", 15: "1450",
-        16: "1550", 17: "1650", 18: "1750", 19: "1850", 20: "1950",
+        1: "0050",
+        2: "0150",
+        3: "0250",
+        4: "0350",
+        5: "0450",
+        6: "0550",
+        7: "0650",
+        8: "0750",
+        9: "0850",
+        10: "0950",
+        11: "1050",
+        12: "1150",
+        13: "1250",
+        14: "1350",
+        15: "1450",
+        16: "1550",
+        17: "1650",
+        18: "1750",
+        19: "1850",
+        20: "1950",
         21: "2050",
     }
 
@@ -451,10 +458,21 @@ class CenturyConceptResolutionTests(TestCase):
         # present in CENTURY_MAPPING — never some other UUID.
         valid_valueids = set(CENTURY_MAPPING.values())
         for date_str in (
-            "1250", "1290-1310", "1500/1600", "ca. 1250",
-            "1250?", "1250~", "1250-06", "1250-06-15",
-            "125x", "12xx", "1250~/1300~", "[1250,1260,1270]",
-            "13th century", "early 13th century", "circa 1250-1300",
+            "1250",
+            "1290-1310",
+            "1500/1600",
+            "ca. 1250",
+            "1250?",
+            "1250~",
+            "1250-06",
+            "1250-06-15",
+            "125x",
+            "12xx",
+            "1250~/1300~",
+            "[1250,1260,1270]",
+            "13th century",
+            "early 13th century",
+            "circa 1250-1300",
         ):
             with self.subTest(date_str=date_str):
                 centuries = parse_century(date_str)
@@ -467,8 +485,12 @@ class CenturyConceptResolutionTests(TestCase):
     def test_unsupported_inputs_return_empty_list(self):
         # Garbage must yield [] — never a stray valueid.
         for bad in (
-            "13e siècle", "12xx/13xx", "between 1200 and 1250",
-            "1200..1250", "garbage", "9999",
+            "13e siècle",
+            "12xx/13xx",
+            "between 1200 and 1250",
+            "1200..1250",
+            "garbage",
+            "9999",
         ):
             with self.subTest(bad=bad):
                 self.assertEqual(parse_century(bad), [])

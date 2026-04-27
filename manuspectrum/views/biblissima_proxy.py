@@ -46,6 +46,7 @@ map regardless of the end-user's browser locale.
   same valueid as the generic default. Callers that want to flag items
   needing user review must check the flag, not compare valueids.
 """
+
 import logging
 import re
 import threading
@@ -104,10 +105,12 @@ def _build_biblissima_session():
     is irrelevant, only what *this server* sends to Biblissima counts.
     """
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": get_user_agent(),
-        "Accept-Language": "fr-FR,fr;q=0.9",
-    })
+    session.headers.update(
+        {
+            "User-Agent": get_user_agent(),
+            "Accept-Language": "fr-FR,fr;q=0.9",
+        }
+    )
     retry = Retry(
         total=3,
         connect=2,
@@ -247,6 +250,7 @@ def _biblissima_upstream_error(exc, context):
         },
         status=502,
     )
+
 
 # Wikibase property IDs
 P2 = "P2"  # nature de l'élément
@@ -447,8 +451,12 @@ CONCEPT_RECORD_ID = "e10752d3-d8fa-47cb-92f9-dd7277dfc97a"
 CONCEPT_SOURCE_BIBLISSIMA = "39124989-dfb1-4e2a-9d1a-4bff0827ed71"
 CONCEPT_SOURCE_MANDRAGORE = "3b78627a-c751-43df-b427-73e1dd11ec38"
 CONCEPT_DESCRIPTION = "9a51d30b-48e8-4f94-9344-cd2bb1d4b33a"
-CONCEPT_IDENTIFICATION = "d2a8104a-312a-4f1d-acb7-3ecb1335e2fc"  # Statement type for "Texte" (which work)
-CONCEPT_INSCRIPTIONS = "9076a3e5-06f5-4ed7-91e4-985914c7178b"  # Statement type for "Rubrique"
+CONCEPT_IDENTIFICATION = (
+    "d2a8104a-312a-4f1d-acb7-3ecb1335e2fc"  # Statement type for "Texte" (which work)
+)
+CONCEPT_INSCRIPTIONS = (
+    "9076a3e5-06f5-4ed7-91e4-985914c7178b"  # Statement type for "Rubrique"
+)
 CONCEPT_MANUSCRIT = "56c61151-3bc5-45b4-957e-3cccde26abe7"
 CONCEPT_DECOR = "c19f3196-d1e9-4f08-9917-4d627e61e153"
 CONCEPT_SHELF_MARKS = "2cbf15b4-aa04-4b5b-bf4a-2594bbeb72ca"
@@ -1404,12 +1412,8 @@ def _enrich_canvases(canvases, session=None):
             canvas["locationLabel"] = coll.get("locationLabel", "")
             canvas["locationQid"] = coll.get("locationQid", "")
             canvas["geonamesId"] = coll.get("geonamesId", "")
-            canvas["parentInstitutionLabel"] = coll.get(
-                "parentInstitutionLabel", ""
-            )
-            canvas["parentInstitutionQid"] = coll.get(
-                "parentInstitutionQid", ""
-            )
+            canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
+            canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
     finally:
         if owned_session:
             session.close()
@@ -1443,9 +1447,7 @@ def _fetch_biblissima_canvases(desc_hashes, session):
     headers = {"Accept": "application/ld+json, application/json"}
     if len(desc_hashes) == 1:
         url = f"{BIBLISSIMA_IIIF_MANIFEST}/ark:/43093/{desc_hashes[0]}"
-        resp = _bib_request(
-            session, url, headers=headers, timeout=IIIF_REQUEST_TIMEOUT
-        )
+        resp = _bib_request(session, url, headers=headers, timeout=IIIF_REQUEST_TIMEOUT)
     else:
         descriptor_parts = ",".join(f"AND|{h}" for h in desc_hashes)
         resp = _bib_request(
@@ -1516,9 +1518,7 @@ class BiblissimaSearchView(View):
                 cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
 
             total = len(all_canvases)
-            total_pages = (
-                max(1, (total + page_size - 1) // page_size) if total else 0
-            )
+            total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
 
             start = (page - 1) * page_size
             end = start + page_size
@@ -1820,6 +1820,7 @@ BIBLISSIMA_TYPE_VALUEID_LABELS = {
     "3ecd8040-7c4b-4b1d-88f7-379297358f66": "Enluminure",
 }
 
+
 def _biblissima_type_label(valueid):
     """Return the display label for a resolved Component type valueid."""
     return BIBLISSIMA_TYPE_VALUEID_LABELS.get(valueid, "")
@@ -1904,9 +1905,7 @@ def _parse_manuscript_illuminations(html):
                 break
             parent = parent.getparent()
 
-        type_valueid, type_is_fallback = _resolve_biblissima_type(
-            descriptor=descriptor
-        )
+        type_valueid, type_is_fallback = _resolve_biblissima_type(descriptor=descriptor)
 
         results.append(
             {
@@ -2053,9 +2052,7 @@ def _fetch_canvas_dimensions(manifest_url, folio, session):
         resp.raise_for_status()
         manifest = resp.json()
     except Exception as exc:
-        logger.warning(
-            "Biblissima manifest fetch failed for %s: %s", manifest_url, exc
-        )
+        logger.warning("Biblissima manifest fetch failed for %s: %s", manifest_url, exc)
         return {}
 
     folio_norm = (folio or "").strip().lstrip("f.").strip().lower()
@@ -2083,7 +2080,8 @@ def _fetch_canvas_dimensions(manifest_url, folio, session):
                 logger.info(
                     "Biblissima canvas match fallback to first canvas for "
                     "manifest=%s folio=%r",
-                    manifest_url, folio,
+                    manifest_url,
+                    folio,
                 )
     if target is None:
         logger.warning("Biblissima manifest has no canvases: %s", manifest_url)
@@ -2224,8 +2222,7 @@ class BiblissimaIlluminationDetailView(View):
         descriptor_links = []
         seen_uris = set()
         for a in tree.xpath(
-            './/section[@id="presentation"]'
-            '//a[contains(@href, "/ark:/43093/desc")]'
+            './/section[@id="presentation"]' '//a[contains(@href, "/ark:/43093/desc")]'
         ):
             uri = (a.get("href") or "").strip()
             if not uri or uri in seen_uris:
@@ -2246,9 +2243,7 @@ class BiblissimaIlluminationDetailView(View):
 
         # Mandragore cross-reference.
         for a in tree.xpath('.//a[contains(@href, "mandragore.bnf.fr")]'):
-            m = re.search(
-                r"mandragore\.bnf\.fr/ark:/12148/(\w+)", a.get("href", "")
-            )
+            m = re.search(r"mandragore\.bnf\.fr/ark:/12148/(\w+)", a.get("href", ""))
             if m:
                 page["mandragoreArk"] = f"ark:/12148/{m.group(1)}"
                 break
@@ -2319,13 +2314,15 @@ class BiblissimaIlluminationDetailView(View):
                     logger.warning(
                         "Biblissima /en/ fetch returned %s for %s — date "
                         "parsing will fall back to French and likely fail",
-                        en_resp.status_code, ifdata_hash,
+                        en_resp.status_code,
+                        ifdata_hash,
                     )
             except Exception as exc:
                 logger.warning(
                     "Biblissima /en/ fetch raised for %s: %s — date "
                     "parsing will fall back to French and likely fail",
-                    ifdata_hash, exc,
+                    ifdata_hash,
+                    exc,
                 )
 
             # Merge: start from the French scrape, then prefer the English
@@ -2361,9 +2358,7 @@ class BiblissimaIlluminationDetailView(View):
             # because cross-century ranges (e.g. ``1290-1310``) cover more
             # than one period concept.
             if result.get("date"):
-                start_iso, end_iso, centuries = parse_historical_date(
-                    result["date"]
-                )
+                start_iso, end_iso, centuries = parse_historical_date(result["date"])
                 if start_iso:
                     result["dateStart"] = start_iso
                 if end_iso:
@@ -2603,7 +2598,11 @@ class BiblissimaCreateResourceView(View):
         return resource_id, created_deps
 
     def _create_tile(
-        self, nodegroup_id, resource_id, data, transaction_id=None,
+        self,
+        nodegroup_id,
+        resource_id,
+        data,
+        transaction_id=None,
         parenttile=None,
     ):
         """Create a single tile without ES indexing (deferred to after commit).
@@ -3281,6 +3280,7 @@ class BiblissimaCreateResourceView(View):
             for rid in resource_ids
             if rid
         ]
+
 
 class BiblissimaAddAltNameView(View):
     """Add a Biblissima label as alternative name to an existing resource."""

@@ -29,6 +29,7 @@ Public API:
 - ``parse_century(date_str)`` — convenience returning only the century
   list.
 """
+
 import re
 
 from edtf import parse_edtf, text_to_edtf

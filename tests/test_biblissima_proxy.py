@@ -24,6 +24,7 @@ don't leak across cases.
 Usage:
     python manage.py test tests.test_biblissima_proxy --settings="tests.test_settings"
 """
+
 import json
 import os
 from unittest.mock import MagicMock, patch
@@ -59,9 +60,7 @@ def _make_response(json_data=None, status_code=200, text=""):
     resp.text = text
     resp.json.return_value = json_data if json_data is not None else {}
     if status_code >= 400:
-        resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            response=resp
-        )
+        resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=resp)
     else:
         resp.raise_for_status.return_value = None
     return resp
@@ -100,19 +99,13 @@ class StripHtmlTests(TestCase):
         self.assertEqual(bp._strip_html("Caf&eacute;"), "Café")
 
     def test_strips_simple_tags(self):
-        self.assertEqual(
-            bp._strip_html("<a href='x'>Paris. BnF</a>"), "Paris. BnF"
-        )
+        self.assertEqual(bp._strip_html("<a href='x'>Paris. BnF</a>"), "Paris. BnF")
 
     def test_collapses_whitespace(self):
-        self.assertEqual(
-            bp._strip_html("<p>foo\n\n   bar  </p>"), "foo bar"
-        )
+        self.assertEqual(bp._strip_html("<p>foo\n\n   bar  </p>"), "foo bar")
 
     def test_processes_lists_recursively(self):
-        self.assertEqual(
-            bp._strip_html(["<b>a</b>", "<i>b</i>"]), ["a", "b"]
-        )
+        self.assertEqual(bp._strip_html(["<b>a</b>", "<i>b</i>"]), ["a", "b"])
 
     def test_falls_back_to_unescape_on_parse_failure(self):
         # Hard to make lxml fail, but the unescape branch is exercised by
@@ -157,10 +150,7 @@ class ExtractHrefTests(TestCase):
     def test_handles_anchor_without_href_attribute(self):
         # First <a> has the keyword "href" inside text but no attribute,
         # making sure we still find the second one with a real href.
-        html = (
-            '<a class="href-like">no</a>'
-            '<a href="https://real.example">yes</a>'
-        )
+        html = '<a class="href-like">no</a>' '<a href="https://real.example">yes</a>'
         self.assertEqual(bp._extract_href(html), "https://real.example")
 
 
@@ -204,7 +194,9 @@ class ExtractEntityPropsTests(TestCase):
                 ]
             }
         )
-        self.assertEqual(bp._extract_entity_props("Q1", raw)["shelfmark"], "Latin 12345")
+        self.assertEqual(
+            bp._extract_entity_props("Q1", raw)["shelfmark"], "Latin 12345"
+        )
 
     def test_extracts_entity_id_property(self):
         raw = self._entity(
@@ -232,11 +224,7 @@ class ExtractEntityPropsTests(TestCase):
         # _get_string only returns when the value is a str — entity-typed
         # snak landing in a string slot must not blow up, just return None.
         raw = self._entity(
-            claims={
-                bp.P195: [
-                    {"mainsnak": {"datavalue": {"value": {"id": "Q5"}}}}
-                ]
-            }
+            claims={bp.P195: [{"mainsnak": {"datavalue": {"value": {"id": "Q5"}}}}]}
         )
         self.assertIsNone(bp._extract_entity_props("Q1", raw)["shelfmark"])
 
@@ -343,9 +331,7 @@ class BatchGetWikibaseEntitiesTests(TestCase):
             }
         )
         with patch.object(bp, "_bib_request", return_value=resp) as mocked:
-            result = bp._batch_get_wikibase_entities(
-                ["Q1", "Q2"], session=session
-            )
+            result = bp._batch_get_wikibase_entities(["Q1", "Q2"], session=session)
         self.assertEqual(set(result.keys()), {"Q1", "Q2"})
         self.assertEqual(mocked.call_count, 1)
         ids_param = mocked.call_args.kwargs["params"]["ids"]
@@ -362,9 +348,7 @@ class BatchGetWikibaseEntitiesTests(TestCase):
             }
         )
         with patch.object(bp, "_bib_request", return_value=resp):
-            result = bp._batch_get_wikibase_entities(
-                ["Q1", "Q2"], session=session
-            )
+            result = bp._batch_get_wikibase_entities(["Q1", "Q2"], session=session)
         self.assertIn("Q1", result)
         self.assertNotIn("Q2", result)
 
@@ -436,22 +420,10 @@ class ResolveCollectionTests(TestCase):
                         "Q1": {
                             "claims": {
                                 bp.P201: [
-                                    {
-                                        "mainsnak": {
-                                            "datavalue": {
-                                                "value": {"id": "Q2"}
-                                            }
-                                        }
-                                    }
+                                    {"mainsnak": {"datavalue": {"value": {"id": "Q2"}}}}
                                 ],
                                 bp.P169: [
-                                    {
-                                        "mainsnak": {
-                                            "datavalue": {
-                                                "value": {"id": "Q3"}
-                                            }
-                                        }
-                                    }
+                                    {"mainsnak": {"datavalue": {"value": {"id": "Q3"}}}}
                                 ],
                             }
                         }
@@ -464,11 +436,7 @@ class ResolveCollectionTests(TestCase):
                         "Q2": {
                             "claims": {
                                 bp.P123: [
-                                    {
-                                        "mainsnak": {
-                                            "datavalue": {"value": "2988507"}
-                                        }
-                                    }
+                                    {"mainsnak": {"datavalue": {"value": "2988507"}}}
                                 ]
                             }
                         }
@@ -544,11 +512,7 @@ class ParseIiifCanvasesTests(TestCase):
                 "label": "f. 1r",
                 "thumbnail": {"@id": "https://example/thumb/1.jpg"},
                 "images": [
-                    {
-                        "resource": {
-                            "service": {"@id": "https://example/iiif/page1"}
-                        }
-                    }
+                    {"resource": {"service": {"@id": "https://example/iiif/page1"}}}
                 ],
                 "metadata": [
                     {
@@ -596,13 +560,7 @@ class ParseIiifCanvasesTests(TestCase):
             {
                 "@id": "c1",
                 "images": [
-                    {
-                        "resource": {
-                            "service": [
-                                {"@id": "https://example/iiif/list"}
-                            ]
-                        }
-                    }
+                    {"resource": {"service": [{"@id": "https://example/iiif/list"}]}}
                 ],
                 "metadata": [],
             }
@@ -615,11 +573,7 @@ class ParseIiifCanvasesTests(TestCase):
             {
                 "@id": "c1",
                 "images": [
-                    {
-                        "resource": {
-                            "service": {"@id": "https://example/iiif/x"}
-                        }
-                    }
+                    {"resource": {"service": {"@id": "https://example/iiif/x"}}}
                 ],
                 "metadata": [],
             }
@@ -642,9 +596,7 @@ class ParseIiifCanvasesTests(TestCase):
         self.assertEqual(result[0]["thumbnail"], "https://example/thumb-direct.jpg")
 
     def test_no_descriptors_falls_back_to_default_type(self):
-        canvases = [
-            {"@id": "c1", "label": "anything", "images": [], "metadata": []}
-        ]
+        canvases = [{"@id": "c1", "label": "anything", "images": [], "metadata": []}]
         result = bp._parse_iiif_canvases(self._manifest(canvases))
         self.assertEqual(result[0]["typeValueId"], bp.BIBLISSIMA_TYPE_DEFAULT)
         self.assertTrue(result[0]["typeIsFallback"])
@@ -670,9 +622,7 @@ class NormalizeDescriptorsTests(TestCase):
         self.assertEqual(bp._normalize_descriptors("ifdata123"), ["desc123"])
 
     def test_handles_mixed_prefixes(self):
-        result = bp._normalize_descriptors(
-            "ifdataA,mdataB,pdataC,desc999"
-        )
+        result = bp._normalize_descriptors("ifdataA,mdataB,pdataC,desc999")
         self.assertEqual(result, ["descA", "descB", "descC", "desc999"])
 
     def test_strips_whitespace_and_skips_empty_segments(self):
@@ -702,9 +652,7 @@ class ResolveBiblissimaTypeTests(TestCase):
         self.assertEqual(valueid, bp.BIBLISSIMA_TYPE_MAPPING["miniature"])
 
     def test_descriptor_used_when_typologie_empty(self):
-        valueid, _ = bp._resolve_biblissima_type(
-            typologie="", descriptor="Lettrine"
-        )
+        valueid, _ = bp._resolve_biblissima_type(typologie="", descriptor="Lettrine")
         self.assertEqual(valueid, bp.BIBLISSIMA_TYPE_MAPPING["lettrine"])
 
     def test_type_field_used_as_last_resort(self):
@@ -715,9 +663,7 @@ class ResolveBiblissimaTypeTests(TestCase):
     def test_strips_trailing_numbering(self):
         # "initiale ornée (1)" → "initiale ornée"
         valueid, _ = bp._resolve_biblissima_type(descriptor="initiale ornée (1)")
-        self.assertEqual(
-            valueid, bp.BIBLISSIMA_TYPE_MAPPING["initiale ornée"]
-        )
+        self.assertEqual(valueid, bp.BIBLISSIMA_TYPE_MAPPING["initiale ornée"])
 
     def test_startswith_matching_for_variants(self):
         # "miniature historiée" not in mapping but starts with "miniature"
@@ -821,9 +767,9 @@ class ParseManuscriptIlluminationsTests(TestCase):
 
     def test_portal_url_uses_french_portal(self):
         results = bp._parse_manuscript_illuminations(
-            '<html><body><ul><li>'
+            "<html><body><ul><li>"
             '<a href="/fr/ark:/43093/ifdataABC">x (f. 1r)</a>'
-            '</li></ul></body></html>'
+            "</li></ul></body></html>"
         )
         self.assertEqual(len(results), 1)
         self.assertEqual(
@@ -856,9 +802,7 @@ class FetchCanvasDimensionsTests(TestCase):
                         "images": [
                             {
                                 "resource": {
-                                    "service": {
-                                        "@id": "https://example/iiif/p1"
-                                    }
+                                    "service": {"@id": "https://example/iiif/p1"}
                                 }
                             }
                         ],
@@ -871,9 +815,7 @@ class FetchCanvasDimensionsTests(TestCase):
                         "images": [
                             {
                                 "resource": {
-                                    "service": {
-                                        "@id": "https://example/iiif/p323"
-                                    }
+                                    "service": {"@id": "https://example/iiif/p323"}
                                 }
                             }
                         ],
@@ -892,9 +834,7 @@ class FetchCanvasDimensionsTests(TestCase):
             bp, "_bib_request", side_effect=requests.exceptions.Timeout()
         ):
             self.assertEqual(
-                bp._fetch_canvas_dimensions(
-                    "https://example/manifest", "1r", session
-                ),
+                bp._fetch_canvas_dimensions("https://example/manifest", "1r", session),
                 {},
             )
 
@@ -924,12 +864,8 @@ class FetchCanvasDimensionsTests(TestCase):
     def test_caches_result(self):
         resp = _make_response(json_data=self.MANIFEST)
         with patch.object(bp, "_bib_request", return_value=resp) as mocked:
-            bp._fetch_canvas_dimensions(
-                "https://example/manifest", "1r", MagicMock()
-            )
-            bp._fetch_canvas_dimensions(
-                "https://example/manifest", "1r", MagicMock()
-            )
+            bp._fetch_canvas_dimensions("https://example/manifest", "1r", MagicMock())
+            bp._fetch_canvas_dimensions("https://example/manifest", "1r", MagicMock())
         self.assertEqual(mocked.call_count, 1)
 
     def test_strips_f_prefix_from_folio(self):
@@ -956,9 +892,7 @@ class FetchCanvasDimensionsTests(TestCase):
 
 class BiblissimaUpstreamErrorTests(TestCase):
     def test_timeout_returns_504(self):
-        resp = bp._biblissima_upstream_error(
-            requests.exceptions.Timeout(), "ctx"
-        )
+        resp = bp._biblissima_upstream_error(requests.exceptions.Timeout(), "ctx")
         self.assertEqual(resp.status_code, 504)
         import json as _json
 
@@ -1089,9 +1023,7 @@ class ParseManuscriptIlluminationsRealFixtureTests(TestCase):
 
     def test_target_illumination_is_present(self):
         target_hash = "ifdata5be7529b7987eadf417506e4ea42ac11b8ff7105"
-        target = next(
-            (r for r in self.results if r["ifdataHash"] == target_hash), None
-        )
+        target = next((r for r in self.results if r["ifdataHash"] == target_hash), None)
         self.assertIsNotNone(target)
         self.assertEqual(target["arkId"], f"ark:/43093/{target_hash}")
         self.assertEqual(target["folio"], "323v")
@@ -1159,9 +1091,7 @@ class FetchCanvasDimensionsRealManifestTests(TestCase):
 
     def test_matches_target_folio_323v(self):
         with self._patched_request():
-            result = bp._fetch_canvas_dimensions(
-                self.MANIFEST_URL, "323v", MagicMock()
-            )
+            result = bp._fetch_canvas_dimensions(self.MANIFEST_URL, "323v", MagicMock())
         self.assertEqual(
             result["canvasId"],
             "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f650",
@@ -1190,23 +1120,15 @@ class FetchCanvasDimensionsRealManifestTests(TestCase):
         # "999r" is not in the slim fixture → fallback to the first canvas
         # (label "plat supérieur").
         with self._patched_request():
-            result = bp._fetch_canvas_dimensions(
-                self.MANIFEST_URL, "999r", MagicMock()
-            )
+            result = bp._fetch_canvas_dimensions(self.MANIFEST_URL, "999r", MagicMock())
         self.assertIn("f1", result["canvasId"])
 
     def test_caches_by_manifest_and_folio(self):
         with self._patched_request() as mocked:
-            bp._fetch_canvas_dimensions(
-                self.MANIFEST_URL, "323v", MagicMock()
-            )
-            bp._fetch_canvas_dimensions(
-                self.MANIFEST_URL, "323v", MagicMock()
-            )
+            bp._fetch_canvas_dimensions(self.MANIFEST_URL, "323v", MagicMock())
+            bp._fetch_canvas_dimensions(self.MANIFEST_URL, "323v", MagicMock())
             # Different folio → different cache key → second fetch.
-            bp._fetch_canvas_dimensions(
-                self.MANIFEST_URL, "323r", MagicMock()
-            )
+            bp._fetch_canvas_dimensions(self.MANIFEST_URL, "323r", MagicMock())
         self.assertEqual(mocked.call_count, 2)
 
 
