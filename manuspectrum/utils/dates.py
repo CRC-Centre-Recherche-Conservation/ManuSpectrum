@@ -6,7 +6,8 @@ date strings from external sources (Biblissima, Mandragore, …) and need
 to coerce them into:
 
 - ISO ``YYYY-MM-DD`` bounds for ``date``-typed Arches tiles, and
-- a century concept valueid for the project's period thesaurus.
+- the **list** of century concept valueids the date range covers, for the
+  project's period thesaurus.
 
 Input is expected to be in a form edtf can understand — primarily English
 natural language (``"13th century"``, ``"circa 1250"``) and standard EDTF
@@ -20,9 +21,13 @@ Public API:
 - ``CENTURY_MAPPING``: ``{"1".."21": valueid}`` — century number → Arches
   concept valueid.
 - ``parse_historical_date(date_str)`` — main parser, returns
-  ``(start_iso, end_iso, century_concept_valueid)``.
+  ``(start_iso, end_iso, [century_valueid, ...])``. The third element is a
+  list because a date range can span multiple centuries (``"1290-1310"``
+  → 13th *and* 14th century concepts). Empty list when the input is
+  unparseable, exactly one entry when the range stays within a single
+  century.
 - ``parse_century(date_str)`` — convenience returning only the century
-  concept valueid.
+  list.
 """
 import re
 
@@ -66,8 +71,27 @@ _MIN_PLAUSIBLE_YEAR = 100
 _MAX_PLAUSIBLE_YEAR = 2100
 
 
+def _centuries_for_span(low_year, high_year):
+    """Return the century concept valueids covered by years ``low_year``..``high_year``.
+
+    Uses the strict mathematical century rule on **both** bounds — a year
+    Y is in century ``(Y - 1) // 100 + 1`` — and emits one valueid per
+    century in the inclusive span. ``"1290/1310"`` therefore returns the
+    13th *and* 14th century concepts; ``"1250"`` returns just the 13th.
+    Centuries outside ``CENTURY_MAPPING`` (i.e. outside 1..21) are
+    silently skipped.
+    """
+    low_c = (low_year - 1) // 100 + 1
+    high_c = (high_year - 1) // 100 + 1
+    return [
+        CENTURY_MAPPING[str(c)]
+        for c in range(low_c, high_c + 1)
+        if str(c) in CENTURY_MAPPING
+    ]
+
+
 def parse_historical_date(date_str):
-    """Parse a historical date string and return ISO bounds + century concept.
+    """Parse a historical date string and return ISO bounds + century concepts.
 
     Tries three strategies in order:
 
@@ -77,19 +101,22 @@ def parse_historical_date(date_str):
        (``"13th century"``, ``"circa 1250"``).
     3. Pre-normalised year range (``"1200-1250"`` → ``"1200/1250"``).
 
-    Returns ``(start_iso, end_iso, century_concept_valueid)``. Each element
-    can be None if the input is unparseable.
+    Returns ``(start_iso, end_iso, [century_valueid, ...])``. The first
+    two are ``None`` and the third is ``[]`` when the input is
+    unparseable.
 
-    Century derivation uses the **upper bound** year with the strict rule
-    ``(year - 1) // 100 + 1``, which yields the expected century whether
-    edtf returns an inclusive range (``12xx`` = 1200-1299) or a strict
-    EDTF interval (``1201/1300``).
+    The century list contains every Arches concept valueid for centuries
+    spanned by the parsed range, low → high inclusive, using the strict
+    rule ``(year - 1) // 100 + 1``. A single-year input or a range that
+    stays within one century yields a single-element list; a cross-century
+    interval (``"1290-1310"``, ``"1500/1600"``, ``"12xx"`` parsed as
+    1200-1299) yields the full sequence of centuries it covers.
     """
     if not date_str:
-        return None, None, None
+        return None, None, []
     s = str(date_str).strip()
     if not s:
-        return None, None, None
+        return None, None, []
 
     m = _YEAR_RANGE_RE.match(s)
     if m:
@@ -107,31 +134,32 @@ def parse_historical_date(date_str):
             obj = None
 
     if obj is None:
-        return None, None, None
+        return None, None, []
 
     try:
         low = obj.lower_strict()
         high = obj.upper_strict()
     except Exception:
-        return None, None, None
+        return None, None, []
 
     # Plausibility check: reject obviously broken bounds (edtf returns
     # 0000 / 9999 when it can't make sense of the input).
     if not (_MIN_PLAUSIBLE_YEAR <= low.tm_year <= _MAX_PLAUSIBLE_YEAR):
-        return None, None, None
+        return None, None, []
     if not (_MIN_PLAUSIBLE_YEAR <= high.tm_year <= _MAX_PLAUSIBLE_YEAR):
-        return None, None, None
+        return None, None, []
 
     start_iso = f"{low.tm_year:04d}-{low.tm_mon:02d}-{low.tm_mday:02d}"
     end_iso = f"{high.tm_year:04d}-{high.tm_mon:02d}-{high.tm_mday:02d}"
-    century = (high.tm_year - 1) // 100 + 1
-    return start_iso, end_iso, CENTURY_MAPPING.get(str(century))
+    centuries = _centuries_for_span(low.tm_year, high.tm_year)
+    return start_iso, end_iso, centuries
 
 
 def parse_century(date_str):
-    """Return just the century concept valueid for ``date_str``.
+    """Return the list of century concept valueids covered by ``date_str``.
 
-    Convenience wrapper over ``parse_historical_date``.
+    Convenience wrapper over ``parse_historical_date``. Empty list for
+    unparseable input.
     """
-    _, _, century = parse_historical_date(date_str)
-    return century
+    _, _, centuries = parse_historical_date(date_str)
+    return centuries

@@ -2356,19 +2356,20 @@ class BiblissimaIlluminationDetailView(View):
             result["typeIsFallback"] = type_is_fallback
 
             # Parse the date string (English preferred, French fallback)
-            # into ISO bounds + century concept so the create step doesn't
-            # have to redo the work. Legacy ``parse_century`` is still
-            # exposed via ``utils.dates`` for document-side callers.
+            # into ISO bounds + century concept list so the create step
+            # doesn't have to redo the work. ``centuryConcept`` is a list
+            # because cross-century ranges (e.g. ``1290-1310``) cover more
+            # than one period concept.
             if result.get("date"):
-                start_iso, end_iso, century = parse_historical_date(
+                start_iso, end_iso, centuries = parse_historical_date(
                     result["date"]
                 )
                 if start_iso:
                     result["dateStart"] = start_iso
                 if end_iso:
                     result["dateEnd"] = end_iso
-                if century:
-                    result["centuryConcept"] = century
+                if centuries:
+                    result["centuryConcept"] = centuries
 
             # Canvas dimensions + thumbnail via one cached manifest fetch.
             if result.get("manifestUrl"):
@@ -2814,20 +2815,22 @@ class BiblissimaCreateResourceView(View):
         # concept on the item (``dateStart``, ``dateEnd``,
         # ``centuryConcept``). Fallback to in-situ parsing for call sites
         # that haven't enriched the item yet (e.g. IIIF search path).
-        century_concept = bbma_data.get("centuryConcept")
+        century_concepts = bbma_data.get("centuryConcept") or []
+        if isinstance(century_concepts, str):
+            century_concepts = [century_concepts]
         date_start = bbma_data.get("dateStart")
         date_end = bbma_data.get("dateEnd")
-        if not (century_concept or date_start or date_end):
+        if not (century_concepts or date_start or date_end):
             raw_date = bbma_data.get("date", "")
             if raw_date:
-                date_start, date_end, century_concept = parse_historical_date(raw_date)
+                date_start, date_end, century_concepts = parse_historical_date(raw_date)
 
-        if century_concept:
+        if century_concepts:
             self._create_tile(
                 DOC_PERIOD_NG,
                 resource_id,
                 {
-                    DOC_PERIOD_ABSOLUTE: clist([century_concept]),
+                    DOC_PERIOD_ABSOLUTE: clist(century_concepts),
                     DOC_PERIOD_PRODUCTION: clist([CONCEPT_MEDIEVAL]),
                 },
                 transaction_id,
@@ -3073,13 +3076,15 @@ class BiblissimaCreateResourceView(View):
         # set at enrichment time by ``BiblissimaIlluminationDetailView``.
         # Fallback to in-situ parsing for items that never went through
         # enrichment (unusual but possible via direct-ARK add paths).
-        century_concept = bbma_data.get("centuryConcept")
+        century_concepts = bbma_data.get("centuryConcept") or []
+        if isinstance(century_concepts, str):
+            century_concepts = [century_concepts]
         date_start = bbma_data.get("dateStart")
         date_end = bbma_data.get("dateEnd")
-        if not (century_concept or date_start or date_end):
+        if not (century_concepts or date_start or date_end):
             raw_date = bbma_data.get("date", "")
             if raw_date:
-                date_start, date_end, century_concept = parse_historical_date(raw_date)
+                date_start, date_end, century_concepts = parse_historical_date(raw_date)
 
         # --- Nested tile chain: Item Feature → Production → Production
         # period. Each child tile must reference its parent tile via
@@ -3126,8 +3131,8 @@ class BiblissimaCreateResourceView(View):
         # Both nodes live in NG e67686af. Parent = Production tile.
         if production_tile:
             period_data = {COMP_PERIOD_PRODUCTION: clist([CONCEPT_MEDIEVAL])}
-            if century_concept:
-                period_data[COMP_PERIOD_ABSOLUTE] = clist([century_concept])
+            if century_concepts:
+                period_data[COMP_PERIOD_ABSOLUTE] = clist(century_concepts)
             self._create_tile(
                 COMP_PERIOD_NG,
                 resource_id,
