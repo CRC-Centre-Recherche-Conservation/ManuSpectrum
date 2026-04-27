@@ -1890,6 +1890,60 @@ msgstr "Effacer le filtre"
 msgid "No result matches the current filter."
 msgstr "Aucun résultat ne correspond au filtre actuel."
 
+# --- Step 4 (Summary) --------------------------------------------------------
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "resource created"
+msgstr "ressource créée"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "resources created"
+msgstr "ressources créées"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "Created resources"
+msgstr "Ressources créées"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "Linked to existing resources"
+msgstr "Liées à des ressources existantes"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "skipped"
+msgstr "ignoré(s)"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "errors"
+msgstr "erreur(s)"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "See step 3 for details."
+msgstr "Voir l'étape 3 pour les détails."
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "Open project"
+msgstr "Ouvrir le projet"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "With issues"
+msgstr "Avec avertissements"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "Show"
+msgstr "Afficher"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "more"
+msgstr "de plus"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
+msgid "Collapse"
+msgstr "Réduire"
+
+#: templates/javascript.htm
+msgid "Illumination"
+msgstr "Enluminure"
+
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:156
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
 msgstr ""
@@ -1970,10 +2024,6 @@ msgstr "Erreurs"
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:30
 msgid "Project"
 msgstr "Projet"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:40
-msgid "Created resources"
-msgstr "Ressources créées"
 
 #: views/biblissima_proxy.py:138
 msgid ""

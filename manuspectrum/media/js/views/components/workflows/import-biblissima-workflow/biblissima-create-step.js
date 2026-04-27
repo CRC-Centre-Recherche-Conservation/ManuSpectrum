@@ -1114,6 +1114,10 @@ const viewModel = function(params) {
                 label: i.label || i.legend || '',
                 arkId: i.arkId,
                 manuscript: i.manuscript,
+                shelfmark: i.shelfmark || '',
+                folio: i.folio || '',
+                date: i.date || '',
+                thumbnail: (typeof i.thumbnail === 'function' ? i.thumbnail() : i.thumbnail) || '',
             })),
             linkedResources: linked.map((i) => ({
                 resourceId: i.linkedResourceId(),
