@@ -462,16 +462,38 @@ CONCEPT_MEDIEVAL = "f8101404-1570-35cf-ac70-1a18a84072ca"
 RELATIONSHIP_CONCEPT = "ac41d9be-79db-4256-b368-2f4559cfbe55"
 
 _ARK_RE = re.compile(r"ark:/43093/(\w+)")
-_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _parse_html_fragment(text):
+    """Parse an HTML fragment with lxml, tolerant of mixed text/markup.
+
+    ``fragment_fromstring(create_parent=...)`` accepts text-only input,
+    multiple top-level tags, and ill-formed-but-real HTML — all things a
+    bare ``fromstring`` rejects. Returns ``None`` if parsing fails.
+    """
+    try:
+        return lxml_html.fragment_fromstring(text, create_parent="div")
+    except Exception:
+        return None
 
 
 def _strip_html(text):
-    """Remove HTML tags and unescape entities."""
+    """Remove HTML tags and unescape entities from a (possibly HTML) value.
+
+    Uses lxml on actual fragments so attributes containing ``>`` or other
+    HTML-y content don't break the strip. Lists are processed recursively.
+    """
     if not text:
         return text
     if isinstance(text, list):
         return [_strip_html(t) for t in text]
-    return unescape(_HTML_TAG_RE.sub("", str(text)))
+    s = str(text)
+    if "<" not in s:
+        return unescape(s)
+    frag = _parse_html_fragment(s)
+    if frag is None:
+        return unescape(s)
+    return " ".join(frag.text_content().split())
 
 
 def _extract_ark(html_value):
@@ -484,12 +506,20 @@ def _extract_ark(html_value):
 
 
 def _extract_href(html_value):
-    """Extract the first href URL from an HTML link."""
+    """Extract the first href URL from an HTML fragment."""
     if not html_value:
         return None
-    text = html_value if isinstance(html_value, str) else str(html_value)
-    match = re.search(r'href="([^"]+)"', text)
-    return match.group(1) if match else None
+    s = html_value if isinstance(html_value, str) else str(html_value)
+    if "href" not in s:
+        return None
+    frag = _parse_html_fragment(s)
+    if frag is None:
+        return None
+    for a in frag.iter("a"):
+        href = a.get("href")
+        if href:
+            return href
+    return None
 
 
 def _extract_entity_props(qid, raw_entity):
@@ -741,21 +771,30 @@ def _parse_iiif_canvases(manifest_json):
         for m in canvas.get("metadata", []):
             metadata[m.get("label", "")] = m.get("value")
 
-        # Extract thumbnail
+        # Extract image service URL — ``service`` may be a dict or a list
+        # of dicts depending on the provider (Gallica returns a dict,
+        # e-codices/DigiVatLib/Bodleian sometimes return a list).
+        image_url = None
+        images = canvas.get("images", [])
+        if images:
+            resource = images[0].get("resource") or {}
+            service = resource.get("service") or {}
+            if isinstance(service, list):
+                service = service[0] if service else {}
+            if isinstance(service, dict):
+                image_url = service.get("@id") or ""
+
+        # Extract thumbnail. Fall back to deriving one from the IIIF Image
+        # API when the manifest doesn't ship a ``thumbnail`` field — true
+        # for several non-Gallica providers.
         thumbnail = None
         thumb_obj = canvas.get("thumbnail")
         if isinstance(thumb_obj, dict):
             thumbnail = thumb_obj.get("@id")
         elif isinstance(thumb_obj, str):
             thumbnail = thumb_obj
-
-        # Extract image URL
-        image_url = None
-        images = canvas.get("images", [])
-        if images:
-            resource = images[0].get("resource", {})
-            service = resource.get("service", {})
-            image_url = service.get("@id") if isinstance(service, dict) else None
+        if not thumbnail and image_url:
+            thumbnail = _iiif_thumbnail_from_service(image_url)
 
         # Extract ARK identifiers
         portal_link = metadata.get("Sur le portail Biblissima", "")
@@ -1730,40 +1769,6 @@ class BiblissimaCheckDuplicatesView(View):
 
 BIBLISSIMA_PORTAL = "https://portail.biblissima.fr/fr/ark:/43093"
 BIBLISSIMA_PORTAL_EN = "https://portail.biblissima.fr/en/ark:/43093"
-
-
-def _extract_date_from_portal(portal_hash):
-    """Scrape a Biblissima portal page to extract 'Date de fabrication'."""
-    if not portal_hash:
-        return ""
-    session = _build_biblissima_session()
-    try:
-        resp = _bib_request(
-            session,
-            f"{BIBLISSIMA_PORTAL}/{portal_hash}",
-            timeout=PORTAL_REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        html = resp.text
-    except Exception:
-        return ""
-    finally:
-        session.close()
-
-    pres_match = re.search(r'id="presentation">(.*?)</section>', html, re.DOTALL)
-    if not pres_match:
-        return ""
-
-    text = re.sub(r"<[^>]+>", "\n", pres_match.group(1))
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
-    for i, line in enumerate(lines):
-        if (
-            line.startswith("Date de fabrication")
-            and ":" in line
-            and i + 1 < len(lines)
-        ):
-            return lines[i + 1]
-    return ""
 
 
 # Map Biblissima illumination type/typologie/descriptor strings to Arches Type of Component valueids.
