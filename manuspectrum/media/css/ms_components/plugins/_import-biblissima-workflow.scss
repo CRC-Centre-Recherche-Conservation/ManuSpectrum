@@ -1668,3 +1668,156 @@ $bbma-danger-bg: #fdf0f0;
         }
     }
 }
+
+// ============================================
+// Parent-resolver panel (step 3, Component mode)
+// One panel per Biblissima manuscript group: matches against existing
+// Documents in Arches, lets the user pick a match, create a new parent,
+// or override manually. State machine in parentResolver.js.
+// ============================================
+
+.parent-resolver-panel {
+    margin-bottom: 16px;
+    border: 1px solid $bbma-border;
+    border-radius: 3px;
+    background: $bbma-bg-warm;
+    padding: 12px;
+
+    &__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+
+        strong {
+            color: $bbma-ink;
+            font-size: 14px;
+        }
+    }
+
+    &__progress {
+        font-size: 12px;
+        color: $bbma-muted;
+    }
+
+    &__loading {
+        padding: 8px 0;
+        font-style: italic;
+        color: $bbma-muted;
+
+        .fa-circle-o-notch {
+            color: $bbma-accent;
+            margin-right: 6px;
+        }
+    }
+
+    &__groups {
+        margin: 0;
+    }
+}
+
+.parent-group {
+    border-top: 1px solid lighten($bbma-border, 4%);
+    padding: 10px 0;
+
+    &:first-child {
+        border-top: none;
+    }
+
+    &__header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 6px;
+
+        strong {
+            color: $bbma-ink;
+        }
+
+        small {
+            color: $bbma-muted;
+        }
+    }
+
+    &__resolved {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        background: $bbma-success-bg;
+        border-radius: 3px;
+
+        .fa-check {
+            color: $bbma-success;
+        }
+    }
+
+    &__suggestions {
+        margin-top: 4px;
+    }
+
+    &__suggestion-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 0;
+    }
+
+    &__actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    &__manual-picker {
+        min-width: 240px;
+    }
+
+    &__enrich {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: normal;
+        margin: 0;
+        color: $bbma-muted;
+    }
+
+    &--resolved {
+        background: lighten($bbma-success-bg, 2%);
+    }
+
+    &--error {
+        background: $bbma-danger-bg;
+    }
+
+    &__error {
+        margin-top: 8px;
+    }
+}
+
+.parent-orphan-bucket {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 3px;
+    background: $bbma-warning-bg;
+
+    h5 {
+        margin-top: 0;
+        color: $bbma-ink;
+
+        .fa-exclamation-triangle {
+            color: darken($bbma-warning-bg, 30%);
+            margin-right: 6px;
+        }
+    }
+}
+
+.parent-orphan {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}

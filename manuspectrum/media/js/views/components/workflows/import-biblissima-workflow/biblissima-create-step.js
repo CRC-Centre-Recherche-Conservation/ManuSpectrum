@@ -72,11 +72,17 @@
  */
 import ko from 'knockout';
 import arches from 'arches';
+import 'bindings/select2-query';
+import ResourceInstanceSelectViewModel from 'viewmodels/resource-instance-select';
 import biblissimaCreateStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm';
+import ParentResolver from './parentResolver';
 
 // Type of Document: "manuscrit" valueid — default for every imported Document
 // since Biblissima's search already filters on type=manuscript.
 const VALUEID_MANUSCRIT = '30931466-b4e0-4527-ac93-b7290e80084c';
+
+// Document graph ID (used by the parent-resolver manual picker).
+const DOCUMENT_GRAPH_ID = '0c8226c1-11a9-4c48-9601-a7a0c6f2df6b';
 
 // RDM collections for the per-item inline concept-select-widget
 const RDM_DOC_TYPE = '73cf3108-5fef-429b-a92f-24074871aed9';
@@ -115,7 +121,6 @@ const viewModel = function(params) {
     // Config from step 1
     this.config = params.configStepData || {};
     this.resourceType = this.config.resourceType || 'Document';
-    this.parentDocumentId = this.config.parentDocumentId || null;
     this.projectId = this.config.projectId || null;
     this.isComponent = this.resourceType === 'Component';
     // RDM collection used by the inline type editor. Depends on mode, wrapped
@@ -135,6 +140,23 @@ const viewModel = function(params) {
     // Items with status tracking
     this.items = ko.observableArray();
     this.creatingAll = ko.observable(false);
+
+    // ParentResolver (Component mode only) — resolves one parent Document
+    // per Biblissima manuscript group. See parentResolver.js. We construct
+    // it eagerly so the template can bind to its observables, but
+    // resolveAll() is only fired in Component mode (see init sequence
+    // below).
+    this.parentResolver = new ParentResolver({
+        cart: this.items,
+        projectId: this.projectId,
+        isComponent: this.isComponent,
+        getCSRFToken: () => self.getCSRFToken(),
+    });
+
+    this.shouldShowParentPanel = ko.computed(
+        () => self.isComponent
+            && (self.parentResolver.totalCount() + self.parentResolver.unidentifiedItems().length) > 0
+    );
 
     // Stats
     this.createdCount = ko.computed(() =>
@@ -157,6 +179,84 @@ const viewModel = function(params) {
             return action === 'use_existing' || action === 'created';
         })
     );
+
+    // Gate the global "Create All" button on parent-resolution AND
+    // dep-resolution AND no pending enrichment AND at least one pending item.
+    this.canCreateAll = ko.computed(() => {
+        if (self.isComponent) {
+            if (self.parentResolver.resolving()) return false;
+            if (!self.parentResolver.allResolved()) return false;
+        }
+        if (!self.allDepsResolved()) return false;
+        if (self.items().some((i) => i.enrichStatus && i.enrichStatus() === 'pending')) {
+            return false;
+        }
+        return self.items().some((i) => i.status() === 'pending');
+    });
+
+    // Gate the per-item Create button on the item being pending AND, for
+    // Component, having a resolved parent Document.
+    this.canCreateItem = (item) => {
+        if (item.status() !== 'pending') return false;
+        if (!self.isComponent) return self.itemDepsResolved(item);
+        return self.itemDepsResolved(item)
+            && !!self.parentResolver.parentIdFor(item);
+    };
+
+    // Manual-picker factories used by the parent-resolver UI. We cache one
+    // picker per group/item so KO doesn't re-create the underlying select2
+    // on every render (which would lose its DOM state). The picker mutates
+    // its `value` observable, and we forward changes to parentResolver.
+    this._groupPickers = {};
+    this._orphanPickers = {};
+
+    this._makeManualPicker = () => {
+        const picker = {};
+        ResourceInstanceSelectViewModel.apply(picker, [{
+            graphids: [DOCUMENT_GRAPH_ID],
+            value: ko.observableArray([]),
+            allowInstanceCreation: false,
+            displayOntologyTable: false,
+            renderContext: 'workflow',
+            multiple: false,
+            onlyManageResourceIds: true,
+            disabled: ko.observable(false),
+        }]);
+        return picker;
+    };
+
+    this.manualPickerForGroup = (group) => {
+        const key = group.portalHash || group.biblissimaQid || '';
+        if (!self._groupPickers[key]) {
+            const picker = self._makeManualPicker();
+            // With onlyManageResourceIds=true, value is a UUID string.
+            picker.value.subscribe((val) => {
+                if (val && typeof val === 'string' && val.length > 10) {
+                    const selected = picker.selectedItem?.();
+                    const displayname = selected?._source?.displayname || val;
+                    self.parentResolver.pickManual(group, val, displayname);
+                }
+            });
+            self._groupPickers[key] = picker;
+        }
+        return self._groupPickers[key];
+    };
+
+    this.orphanPickerForItem = (item) => {
+        const key = item.canvasId || item.arkId || '';
+        if (!self._orphanPickers[key]) {
+            const picker = self._makeManualPicker();
+            picker.value.subscribe((val) => {
+                if (val && typeof val === 'string' && val.length > 10) {
+                    const selected = picker.selectedItem?.();
+                    const displayname = selected?._source?.displayname || val;
+                    self.parentResolver.assignManualToOrphan(item, val, displayname);
+                }
+            });
+            self._orphanPickers[key] = picker;
+        }
+        return self._orphanPickers[key];
+    };
 
     // Dep progress counts (for progress indicator)
     this.resolvedDepsCount = ko.computed(() =>
@@ -258,18 +358,28 @@ const viewModel = function(params) {
             // the badge can re-render. Component items carry a typeValueId
             // resolved server-side from the Biblissima descriptor; Documents
             // all default to "manuscrit" (Biblissima filters on manuscripts).
+            // For Document items, prefer the backend-resolved Document Type
+            // valueid (from documentTypeValueId, attached by _enrich_canvases
+            // and BiblissimaSearchManuscriptsView). For Component items, the
+            // existing per-descriptor resolution still wins.
             typeValueId: ko.observable(
                 item.typeValueId
-                || (self.isComponent ? COMPONENT_FALLBACK_TYPE_VALUEID : VALUEID_MANUSCRIT)
+                || (self.isComponent
+                        ? COMPONENT_FALLBACK_TYPE_VALUEID
+                        : (item.documentTypeValueId || VALUEID_MANUSCRIT))
             ),
-            // Flag set by the backend resolver: True only when no Biblissima
-            // input term matched the mapping (distinct from the case where
-            // an explicit "Enluminure" correctly maps to the default valueid).
-            // Defaults to True when the item has no type at all.
+            // Flag set by the backend resolver:
+            //  - Component: True only when no Biblissima input matched the
+            //    type mapping (distinct from an explicit "Enluminure" that
+            //    correctly maps to the default valueid).
+            //  - Document: True when the backend's _resolve_biblissima_document_type
+            //    fell back to MANUSCRIT for an unknown nature (e.g. estampe).
             typeIsFallback: ko.observable(
                 item.typeIsFallback !== undefined
                     ? !!item.typeIsFallback
-                    : !item.typeValueId
+                    : (self.isComponent
+                        ? !item.typeValueId
+                        : !!item.documentTypeIsFallback)
             ),
             typeEditing: ko.observable(false),
             // Enrichment state — Component items get lazy-enriched by fetching
@@ -849,7 +959,9 @@ const viewModel = function(params) {
 
         const deps = {
             project: self.projectId,
-            parentDocument: self.parentDocumentId,
+            parentDocument: self.isComponent
+                ? self.parentResolver.parentIdFor(item)
+                : null,
         };
 
         // Place dep. For Document → currentLocation tile (where the
@@ -1186,9 +1298,16 @@ const viewModel = function(params) {
     //    place) without losing the first-pass deps (Paris, Groups).
     this.initializeItems();
     (async () => {
+        // Parent-resolver runs in parallel with deps/enrichment in
+        // Component mode — they are independent: parent resolution hits
+        // /check-duplicates on Documents, deps hit Place/Person/Group.
+        const parentPromise = self.isComponent
+            ? self.parentResolver.resolveAll()
+            : Promise.resolve();
         await self.resolveDependencies();
         self.checkDuplicates();
         await self.enrichComponentItems();
+        await parentPromise;
     })();
 };
 
