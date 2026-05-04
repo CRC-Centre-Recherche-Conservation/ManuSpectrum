@@ -304,8 +304,21 @@ const viewModel = function(params) {
 
     // Unresolved dep names for a specific item (for tooltip)
     this.unresolvedDepsLabel = (item) => {
-        const locationKey = self._placeKeyForItem(item);
         const unresolved = [];
+        // In Component mode, the per-item Create button also requires the
+        // parent Document to be resolved in the parent-resolver panel above.
+        // Surface that requirement explicitly so the tooltip isn't empty when
+        // Place/Person/Group are all linked but the parent group is still
+        // pending — which is exactly the case after fresh /check-duplicates.
+        if (self.isComponent && !self.parentResolver.parentIdFor(item)) {
+            const parentLabel = item.manuscript
+                || item.shelfmark
+                || item.portalHash
+                || item.biblissimaQid
+                || '?';
+            unresolved.push('Parent Document: ' + parentLabel);
+        }
+        const locationKey = self._placeKeyForItem(item);
         self.dependencies().forEach((dep) => {
             const isRelevant =
                 (dep.type === 'Place' && dep.key === locationKey) ||
