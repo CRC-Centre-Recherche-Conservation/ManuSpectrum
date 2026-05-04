@@ -132,23 +132,45 @@ export default function ParentResolver(params) {
     };
 
     // -------------------------------------------------------------------
-    // Step 1: groupBy(portalHash || biblissimaQid). Items without either go
-    // to orphans; orphans with an ifdataHash get a best-effort resolution
-    // via /api/biblissima/illumination/<hash>, which often surfaces the
-    // parent manuscript and lets us re-route the item to the correct group.
+    // Step 1: groupBy(portalHash || biblissimaQid || manuscriptArk).
+    //
+    // We derive portalHash from manuscriptArk when both portalHash and
+    // biblissimaQid are missing — this happens when _enrich_canvases failed
+    // to resolve the manuscript on Wikibase (e.g. wbsearchentities on a
+    // shelfmark that is just a number like "579" returns garbage candidates,
+    // none of which match the portalHash). The IIIF manifest still gives us
+    // a canonical manuscriptArk per canvas, so we never lose track of which
+    // manuscript an illumination belongs to.
+    //
+    // Items still without ANY identifier go to orphans; orphans with an
+    // ifdataHash get a best-effort resolution via
+    // /api/biblissima/illumination/<hash>, which often surfaces the parent
+    // manuscript and lets us re-route the item to the correct group.
     // -------------------------------------------------------------------
     self._buildGroups = async (items) => {
         const groupSeeds = new Map(); // key → seed
         const orphans = [];
         for (const item of items) {
-            const key = item.portalHash || item.biblissimaQid;
+            // Derive portalHash from manuscriptArk when missing (failed
+            // Wikibase enrichment fallback).
+            let portalHash = item.portalHash || null;
+            if (!portalHash && item.manuscriptArk) {
+                portalHash = String(item.manuscriptArk).replace(
+                    /^ark:\/43093\//,
+                    "",
+                );
+                // Hydrate the cart item so parentIdFor() finds it later via
+                // the same key path as natively-grouped items.
+                item.portalHash = portalHash;
+            }
+            const key = portalHash || item.biblissimaQid;
             if (!key) {
                 orphans.push(item);
                 continue;
             }
             if (!groupSeeds.has(key)) {
                 groupSeeds.set(key, {
-                    portalHash: item.portalHash || null,
+                    portalHash: portalHash,
                     biblissimaQid: item.biblissimaQid || null,
                     label: item.manuscript || item.shelfmark || key,
                     shelfmark: item.shelfmark || "",
@@ -344,17 +366,34 @@ export default function ParentResolver(params) {
     };
 
     self.createParent = async (group) => {
-        if (!group.biblissimaQid) {
-            group.errorMessage(
-                arches.translations.biblissimaParentResolverNoQid ||
-                    "Cannot create parent — no Biblissima QID",
-            );
-            group.state("error");
-            return;
-        }
         group.creating(true);
         group.errorMessage("");
         try {
+            // If the group only carries a portalHash (Wikibase enrichment
+            // failed in _enrich_canvases — typical for shelfmark-only labels
+            // like "579" that wbsearchentities can't disambiguate), resolve
+            // the QID from the portalHash via the suggest endpoint first.
+            // The suggest backend matches portalHash against P129 statements.
+            if (!group.biblissimaQid && group.portalHash) {
+                const suggestResp = await fetch(
+                    `/api/biblissima/suggest?q=${encodeURIComponent(
+                        group.portalHash,
+                    )}&limit=5`,
+                );
+                if (suggestResp.ok) {
+                    const suggestData = await suggestResp.json();
+                    const first = (suggestData.results || [])[0];
+                    if (first && first.id) {
+                        group.biblissimaQid = first.id;
+                    }
+                }
+            }
+            if (!group.biblissimaQid) {
+                throw new Error(
+                    arches.translations.biblissimaParentResolverNoQid ||
+                        "Cannot create parent — no Biblissima QID",
+                );
+            }
             const entityResp = await fetch(
                 `/api/biblissima/entity/${group.biblissimaQid}`,
             );
