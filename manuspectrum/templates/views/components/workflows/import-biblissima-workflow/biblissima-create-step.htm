@@ -122,7 +122,7 @@
                         <span class="label label-default" data-bind="text: resolutionMode"></span>
                         <button type="button"
                                 class="btn btn-default btn-xs"
-                                data-bind="click: $root.parentResolver.unlinkParent.bind($root.parentResolver, $data)">
+                                data-bind="click: $component.parentResolver.unlinkParent.bind($component.parentResolver, $data)">
                             {% trans "Unlink" %}
                         </button>
                     </div>
@@ -139,7 +139,7 @@
                                 <span class="text-muted">— <span data-bind="text: matchType"></span> (<span data-bind="text: confidence"></span>)</span>
                                 <button type="button"
                                         class="btn btn-primary btn-xs"
-                                        data-bind="click: $root.parentResolver.useMatch.bind($root.parentResolver, $parent, $data)">
+                                        data-bind="click: $component.parentResolver.useMatch.bind($component.parentResolver, $parent, $data)">
                                     {% trans "Use this" %}
                                 </button>
                             </li>
@@ -150,7 +150,7 @@
                         <div class="parent-group__actions">
                             <button type="button"
                                     class="btn btn-success btn-sm"
-                                    data-bind="click: $root.parentResolver.createParent.bind($root.parentResolver, $data),
+                                    data-bind="click: $component.parentResolver.createParent.bind($component.parentResolver, $data),
                                                disable: creating, css: { 'btn-loading': creating }">
                                 <!-- ko if: creating -->
                                 <i class="fa fa-spinner fa-spin"></i> {% trans "Creating…" %}
@@ -163,7 +163,7 @@
                             <!-- Manual override picker (Q8) -->
                             <select class="form-control input-sm parent-group__manual-picker"
                                     data-bind="select2Query: {
-                                        select2Config: $root.manualPickerForGroup($data).select2Config
+                                        select2Config: $component.manualPickerForGroup($data).select2Config
                                     }"></select>
 
                             <label class="parent-group__enrich">
@@ -194,7 +194,7 @@
                         <span data-bind="text: canvasId || arkId || label"></span>
                         <select class="form-control input-sm"
                                 data-bind="select2Query: {
-                                    select2Config: $root.orphanPickerForItem($data).select2Config
+                                    select2Config: $component.orphanPickerForItem($data).select2Config
                                 }"></select>
                     </li>
                 </ul>
