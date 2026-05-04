@@ -15,6 +15,7 @@ from manuspectrum.views.biblissima_proxy import (
     BiblissimaCreateResourceView,
     BiblissimaEntityView,
     BiblissimaIlluminationDetailView,
+    BiblissimaLinkToProjectView,
     BiblissimaManuscriptIlluminationsView,
     BiblissimaSearchManuscriptsView,
     BiblissimaSearchView,
@@ -145,6 +146,13 @@ urlpatterns.append(
         "api/biblissima/stats",
         BiblissimaStatsView.as_view(),
         name="biblissima-stats",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/link-to-project",
+        BiblissimaLinkToProjectView.as_view(),
+        name="biblissima-link-to-project",
     )
 )
 
