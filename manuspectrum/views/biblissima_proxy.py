@@ -565,6 +565,13 @@ def _extract_entity_props(qid, raw_entity):
         "collection": _get_entity_id(P194),
         "author": _get_entity_id(P354),
         "mandragoreId": _get_string(P270),
+        # P2 = "nature de l'élément" (manuscrit / imprimé / etc.). The QID is
+        # extracted here; the human-readable label is filled in later by
+        # _enrich_canvases (batch fetch) or by BiblissimaEntityView (single
+        # synchronous fetch). Left as None at this stage so callers know the
+        # field needs resolution before being used as a mapping key.
+        "documentNatureQid": _get_entity_id(P2),
+        "documentNatureLabel": None,
     }
 
 
@@ -1068,6 +1075,10 @@ class BiblissimaEntityView(View):
         if entity is None:
             return JsonResponse({"error": "Entity not found"}, status=404)
 
+        # Resolve P2 nature label and pre-compute Document Type valueid
+        # (helper is idempotent and used by SearchManuscriptsView too).
+        _attach_document_type(entity)
+
         # If author is a QID, resolve its label
         if entity.get("author"):
             author_entity = _get_wikibase_entity(entity["author"])
@@ -1242,6 +1253,10 @@ class BiblissimaSearchManuscriptsView(View):
                 e["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
                 e["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
 
+            # Document Type — resolve P2 nature → label → Arches valueid
+            # (idempotent; cached lookup on _get_wikibase_entity).
+            _attach_document_type(e)
+
             results.append(e)
 
         return JsonResponse({"total": len(results), "results": results})
@@ -1334,8 +1349,10 @@ def _enrich_canvases(canvases, session=None):
             all_candidate_qids, session=session
         )
 
-        # Phase 2d: match each manuscript to its QID via portalHash
+        # Phase 2d: match each manuscript to its QID via portalHash, and
+        # collect both author and nature (P2) QIDs for the batch fetch.
         author_qids = set()
+        nature_qids = set()
         for ark_hash, candidate_qids in candidates_by_ark_hash.items():
             ms_data = {}
             for qid in candidate_qids:
@@ -1344,25 +1361,45 @@ def _enrich_canvases(canvases, session=None):
                     ms_data = dict(entity)
                     if ms_data.get("author"):
                         author_qids.add(ms_data["author"])
+                    if ms_data.get("documentNatureQid"):
+                        nature_qids.add(ms_data["documentNatureQid"])
                     break
             resolved_manuscripts[ark_hash] = ms_data
 
-        # Phase 2e: batch-fetch all author entities in one go
-        authors_by_qid = (
-            _batch_get_wikibase_entities(list(author_qids), session=session)
-            if author_qids
+        # Phase 2e: batch-fetch authors and natures together (single round-trip).
+        # Cached natures (which is most of them — Biblissima only uses ~5
+        # distinct nature concepts) hit the Django cache and don't go to
+        # Biblissima at all.
+        secondary_qids = list(author_qids | nature_qids)
+        secondaries_by_qid = (
+            _batch_get_wikibase_entities(secondary_qids, session=session)
+            if secondary_qids
             else {}
         )
 
-        # Phase 2f: attach author labels and persist newly-resolved manuscripts
+        # Phase 2f: attach author and nature labels, pre-resolve the Arches
+        # Document-Type valueid once per manuscript, and persist newly-resolved
+        # manuscripts to cache so subsequent enrichments are zero-cost. Doing
+        # the type resolution here (vs. per-canvas in phase 3) avoids calling
+        # the resolver N times for an N-page manuscript with identical nature
+        # label across canvases.
         for ark_hash in to_resolve:
             ms_data = resolved_manuscripts.get(ark_hash, {})
             if ms_data:
                 author_qid = ms_data.get("author")
-                if author_qid and author_qid in authors_by_qid:
-                    author = authors_by_qid[author_qid]
+                if author_qid and author_qid in secondaries_by_qid:
+                    author = secondaries_by_qid[author_qid]
                     ms_data["authorLabel"] = author.get("label", "")
                     ms_data["authorQid"] = author_qid
+                nature_qid = ms_data.get("documentNatureQid")
+                if nature_qid and nature_qid in secondaries_by_qid:
+                    nature = secondaries_by_qid[nature_qid]
+                    ms_data["documentNatureLabel"] = nature.get("label", "") or None
+                type_valueid, type_is_fallback = _resolve_biblissima_document_type(
+                    ms_data.get("documentNatureLabel")
+                )
+                ms_data["documentTypeValueId"] = type_valueid
+                ms_data["documentTypeIsFallback"] = type_is_fallback
             cache.set(
                 _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
                 ms_data,
@@ -1414,6 +1451,20 @@ def _enrich_canvases(canvases, session=None):
             canvas["geonamesId"] = coll.get("geonamesId", "")
             canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
             canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
+            # Document Type — pre-resolved once in phase 2f for fresh manuscripts;
+            # for cache-hit manuscripts that pre-date this change we resolve here
+            # as a one-time fallback. Falls back to MANUSCRIT with
+            # is_fallback=True if the nature label is missing or unknown.
+            canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
+            if "documentTypeValueId" in ms_data:
+                canvas["documentTypeValueId"] = ms_data["documentTypeValueId"]
+                canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
+            else:
+                type_valueid, type_is_fallback = _resolve_biblissima_document_type(
+                    ms_data.get("documentNatureLabel")
+                )
+                canvas["documentTypeValueId"] = type_valueid
+                canvas["documentTypeIsFallback"] = type_is_fallback
     finally:
         if owned_session:
             session.close()
@@ -1819,6 +1870,79 @@ BIBLISSIMA_TYPE_VALUEID_LABELS = {
     "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a": "Planche",
     "3ecd8040-7c4b-4b1d-88f7-379297358f66": "Enluminure",
 }
+
+
+# ----------------------------------------------------------------------------
+# Document Type mapping — Biblissima 'nature de l'élément' (P2 label) →
+# Arches Document Type valueid. Sample of 1500 random Biblissima items shows
+# ~96% are some flavour of 'manuscrit' and ~7.5% are 'imprimé'; the remainder
+# is <1% (estampe, …) for which AGORHA has no direct equivalent — those fall
+# through to the default and the UI shows a "needs review" badge so the
+# analyst can correct the type inline.
+# Mapping is keyed by lowercase canonical label, not QID, for two reasons:
+#   • robust if Biblissima reorganises entities under different QIDs
+#   • mirrors _resolve_biblissima_type (Component) which also keys on labels
+# ----------------------------------------------------------------------------
+VALUEID_MANUSCRIT = "30931466-b4e0-4527-ac93-b7290e80084c"
+VALUEID_TEXTE_IMPRIME = "feff36de-e9d0-4723-b00b-142dc19df8ed"
+
+BIBLISSIMA_DOCUMENT_NATURE_MAP = {
+    "manuscrit": VALUEID_MANUSCRIT,
+    "manuscrits en plusieurs volumes": VALUEID_MANUSCRIT,
+    "unité codicologique": VALUEID_MANUSCRIT,
+    "imprimé": VALUEID_TEXTE_IMPRIME,
+    "texte imprimé": VALUEID_TEXTE_IMPRIME,
+}
+
+DOCUMENT_NATURE_DEFAULT = VALUEID_MANUSCRIT  # 96% Biblissima is manuscrit
+
+# Human-readable labels for the resolved valueids — used by the badge UI
+# (mirrors BIBLISSIMA_TYPE_VALUEID_LABELS for Components).
+BIBLISSIMA_DOCUMENT_TYPE_VALUEID_LABELS = {
+    VALUEID_MANUSCRIT: "Manuscrit",
+    VALUEID_TEXTE_IMPRIME: "Texte imprimé",
+}
+
+
+def _resolve_biblissima_document_type(nature_label):
+    """Map Biblissima 'nature de l'élément' label → Arches Document Type valueid.
+
+    Returns (valueid, is_fallback). is_fallback=True signals the UI to flag
+    the value as "needs review" (same convention as Component types).
+    """
+    if nature_label:
+        # Exact-match (vs. startswith for Components): nature labels are canonical
+        # and have no variant suffixes. Switch to startswith if that ever changes.
+        normalized = nature_label.strip().lower()
+        if normalized in BIBLISSIMA_DOCUMENT_NATURE_MAP:
+            return BIBLISSIMA_DOCUMENT_NATURE_MAP[normalized], False
+        logger.warning(
+            "Unknown Biblissima document nature: %r — falling back",
+            nature_label,
+        )
+    return DOCUMENT_NATURE_DEFAULT, True
+
+
+def _attach_document_type(entity, session=None):
+    """Resolve P2 nature label and attach Document Type valueid in place.
+
+    Idempotent: safe to call on an entity that already has the fields. Used
+    by both BiblissimaEntityView and BiblissimaSearchManuscriptsView so the
+    two flows return the same payload shape to the frontend. The label
+    lookup is a single cached call (24h TTL on _get_wikibase_entity).
+    """
+    if entity is None:
+        return
+    nature_qid = entity.get("documentNatureQid")
+    nature_label = entity.get("documentNatureLabel")
+    if nature_qid and not nature_label:
+        nature_entity = _get_wikibase_entity(nature_qid, session=session)
+        if nature_entity:
+            nature_label = nature_entity.get("label") or None
+            entity["documentNatureLabel"] = nature_label
+    type_valueid, type_is_fallback = _resolve_biblissima_document_type(nature_label)
+    entity["documentTypeValueId"] = type_valueid
+    entity["documentTypeIsFallback"] = type_is_fallback
 
 
 def _biblissima_type_label(valueid):
@@ -3240,6 +3364,13 @@ class BiblissimaCreateResourceView(View):
 
         if existing:
             current_data = existing.data.get(PROJECT_STUDIED_OBJECTS_NODE, []) or []
+            target_id = str(resource_id)
+            # Idempotence: skip if this resource is already in the project's
+            # studied_objects. Prevents duplicate entries when a Document
+            # parent that was already linked is re-linked from a new
+            # workflow run (cf. Q6 of the design).
+            if any(ref.get("resourceId") == target_id for ref in current_data):
+                return
             current_data.append(new_ref)
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
             existing.save()
@@ -3377,3 +3508,44 @@ class BiblissimaStatsView(View):
             else None
         )
         return JsonResponse(stats)
+
+
+class BiblissimaLinkToProjectView(View):
+    """Idempotently link an existing resource to a Project's studied objects.
+
+    Used by the step-3 parent-resolver (parentResolver.js) for Documents that
+    were matched in Arches or manually picked, where the create-resource path
+    is not invoked. Created Documents are linked through their dependencies
+    payload directly. The dedup happens inside _link_to_project (cf. Task 1.7).
+    """
+
+    def post(self, request):
+        import json
+
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        resource_id = body.get("resourceId")
+        project_id = body.get("projectId")
+        if not resource_id or not project_id:
+            return JsonResponse(
+                {"error": "resourceId and projectId are required"},
+                status=400,
+            )
+
+        try:
+            uuid.UUID(str(resource_id))
+            uuid.UUID(str(project_id))
+        except (ValueError, AttributeError):
+            return JsonResponse({"error": "Invalid UUID"}, status=400)
+
+        # Reuse the helper on BiblissimaCreateResourceView so the dedup logic
+        # stays in a single place. transaction_id is None for ad-hoc links.
+        BiblissimaCreateResourceView()._link_to_project(
+            resource_id,
+            project_id,
+            transaction_id=None,
+        )
+        return JsonResponse({"ok": True})
