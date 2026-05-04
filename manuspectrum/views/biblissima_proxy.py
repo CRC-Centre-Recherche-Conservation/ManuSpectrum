@@ -1710,17 +1710,28 @@ class BiblissimaCheckDuplicatesView(View):
                 except Exception:
                     logger.warning("Tile identifier search failed for item %d", idx)
 
-            # Strategy 2: ES search by shelfmark (nested strings.string field)
-            if shelfmark:
-                self._es_string_search(
-                    se, graph_id, shelfmark, "shelfmark", seen_ids, suggestions
-                )
+            # Strategies 2 and 3 are skipped only for Components. Components
+            # share the parent manuscript's shelfmark, and their displayname
+            # embeds that shelfmark too — so an ES match on either field
+            # returns sibling-illumination false positives (e.g. "Aggée et
+            # Dieu" f.328v matching "Abdias prophétisant" f.323v just because
+            # both belong to BnF Latin 40). For Components, only the ARK
+            # ifdata identifier (strategy 1) is unique per illumination.
+            # Documents AND non-graph dependencies (Place / Person / Group,
+            # resolved separately via the dependency-resolution flow) all
+            # need label-based ES matching.
+            if graph_id != COMPONENT_GRAPH_ID:
+                # Strategy 2: ES search by shelfmark (nested strings.string field)
+                if shelfmark:
+                    self._es_string_search(
+                        se, graph_id, shelfmark, "shelfmark", seen_ids, suggestions
+                    )
 
-            # Strategy 3: ES search by label/displayname
-            if label and len(suggestions) < 3:
-                self._es_string_search(
-                    se, graph_id, label, "displayname", seen_ids, suggestions
-                )
+                # Strategy 3: ES search by label/displayname
+                if label and len(suggestions) < 3:
+                    self._es_string_search(
+                        se, graph_id, label, "displayname", seen_ids, suggestions
+                    )
 
             results.append(
                 {

@@ -1928,3 +1928,151 @@ class BiblissimaLinkToProjectViewTests(TestCase):
         view = BiblissimaLinkToProjectView()
         resp = view.post(req)
         self.assertEqual(resp.status_code, 400)
+
+
+class CheckDuplicatesComponentScopeTests(TestCase):
+    """For Components, strategies 2 and 3 must NOT run.
+
+    Components share the parent manuscript's shelfmark, so an ES search on
+    shelfmark or label returns sibling-illumination false positives. Only
+    the ARK ifdata identifier (strategy 1) is unique per illumination.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
+    )
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_component_skips_shelfmark_and_label_strategies(self, mock_tile, mock_es):
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import (
+            BiblissimaCheckDuplicatesView,
+            COMPONENT_GRAPH_ID,
+        )
+
+        # No tile-identifier matches — strategy 1 yields nothing here.
+        mock_tile.objects.filter.return_value = []
+
+        rf = RequestFactory()
+        body = json.dumps(
+            {
+                "graphId": COMPONENT_GRAPH_ID,
+                "items": [
+                    {
+                        "arkId": "ark:/43093/ifdataXYZ",
+                        "shelfmark": "Latin 40",
+                        "label": "Aggée et Dieu",
+                        "biblissimaQid": "",
+                        "portalHash": "",
+                    }
+                ],
+            }
+        )
+        req = rf.post(
+            "/api/biblissima/check-duplicates",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaCheckDuplicatesView()
+        view.post(req)
+
+        # Strategy 2 (shelfmark) and strategy 3 (label) must NOT have fired.
+        mock_es.assert_not_called()
+
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
+    )
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_document_still_runs_shelfmark_and_label_strategies(
+        self, mock_tile, mock_es
+    ):
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import (
+            BiblissimaCheckDuplicatesView,
+            DOCUMENT_GRAPH_ID,
+        )
+
+        mock_tile.objects.filter.return_value = []
+
+        rf = RequestFactory()
+        body = json.dumps(
+            {
+                "graphId": DOCUMENT_GRAPH_ID,
+                "items": [
+                    {
+                        "arkId": "ark:/43093/mdataXYZ",
+                        "shelfmark": "Latin 40",
+                        "label": "Latin 40",
+                        "biblissimaQid": "Q123",
+                        "portalHash": "mdataXYZ",
+                    }
+                ],
+            }
+        )
+        req = rf.post(
+            "/api/biblissima/check-duplicates",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaCheckDuplicatesView()
+        view.post(req)
+
+        # Strategies 2 and 3 must both have fired for Documents.
+        # _es_string_search is called twice (once for shelfmark, once for label).
+        self.assertEqual(mock_es.call_count, 2)
+        match_types = [call.args[3] for call in mock_es.call_args_list]
+        self.assertIn("shelfmark", match_types)
+        self.assertIn("displayname", match_types)
+
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
+    )
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_other_graphs_also_run_label_strategy(self, mock_tile, mock_es):
+        """Place / Person / Group dep resolution depends on strategy 3 to find
+        existing resources by displayname (e.g. 'Paris (France)'). The skip
+        guard must target Components only."""
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+        mock_tile.objects.filter.return_value = []
+        place_graph_id = "3f2b036a-b65d-474d-b692-0b21903655c5"  # Place graph
+
+        rf = RequestFactory()
+        body = json.dumps(
+            {
+                "graphId": place_graph_id,
+                "items": [
+                    {
+                        "arkId": "",
+                        "shelfmark": "",
+                        "label": "Paris (France)",
+                        "biblissimaQid": "",
+                        "portalHash": "",
+                    }
+                ],
+            }
+        )
+        req = rf.post(
+            "/api/biblissima/check-duplicates",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaCheckDuplicatesView()
+        view.post(req)
+
+        # Strategy 3 (displayname) must have fired for the Place graph.
+        match_types = [call.args[3] for call in mock_es.call_args_list]
+        self.assertIn("displayname", match_types)
