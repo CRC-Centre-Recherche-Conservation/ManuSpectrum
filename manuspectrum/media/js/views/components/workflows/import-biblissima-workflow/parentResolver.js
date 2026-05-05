@@ -89,6 +89,11 @@ export default function ParentResolver(params) {
     const projectId = params.projectId; // string | null
     const isComponent = params.isComponent; // boolean
     const getCSRFToken = params.getCSRFToken; // () => string
+    // Delegate to biblissima-create-step.js's createResource so parent
+    // Document creation reuses the same dep resolution (currentLocation,
+    // currentOwner, etc.) as top-level Document mode — single source of
+    // truth for the create-resource payload shape.
+    const createResource = params.createResource; // (item, options) => Promise<resourceId>
 
     self.groups = ko.observableArray([]);
     self.unidentifiedItems = ko.observableArray([]);
@@ -369,11 +374,10 @@ export default function ParentResolver(params) {
         group.creating(true);
         group.errorMessage("");
         try {
-            // If the group only carries a portalHash (Wikibase enrichment
-            // failed in _enrich_canvases — typical for shelfmark-only labels
-            // like "579" that wbsearchentities can't disambiguate), resolve
-            // the QID from the portalHash via the suggest endpoint first.
-            // The suggest backend matches portalHash against P129 statements.
+            // Defensive fallback: if the backend's portalHash → QID lookup
+            // failed at enrichment time (network hiccup, Biblissima down)
+            // we still let the user create a parent by re-resolving the
+            // QID from the portalHash via the suggest endpoint.
             if (!group.biblissimaQid && group.portalHash) {
                 const suggestResp = await fetch(
                     `/api/biblissima/suggest?q=${encodeURIComponent(
@@ -404,36 +408,31 @@ export default function ParentResolver(params) {
             }
             const entityData = await entityResp.json();
 
-            const body = {
-                resourceType: "Document",
-                transactionId: null,
+            // A representative cart item from this group — its
+            // collectionLabel / parentInstitutionLabel / locationLabel feed
+            // the dep resolution in createResource, so the parent Document
+            // gets the same currentLocation / currentOwner tiles a
+            // top-level Document would.
+            const repItem = group.items()[0];
+            if (!repItem) {
+                throw new Error("No items in parent group");
+            }
+
+            await createResource(repItem, {
+                asParent: true,
                 biblissimaData: entityData,
-                dependencies: projectId ? { project: projectId } : {},
                 conceptMappings: {
                     type: entityData.documentTypeValueId || null,
                 },
-            };
-            const createResp = await fetch("/api/biblissima/create-resource", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCSRFToken(),
+                onSuccess: (resourceId) => {
+                    group.resolvedResourceId(resourceId);
+                    group.resolvedDisplayname(entityData.label || group.label);
+                    group.resolutionMode("created");
+                    group.typeValueId(entityData.documentTypeValueId || null);
+                    group.typeIsFallback(!!entityData.documentTypeIsFallback);
+                    group.state("resolved");
                 },
-                body: JSON.stringify(body),
             });
-            if (!createResp.ok) {
-                const err = await createResp.json().catch(() => ({}));
-                throw new Error(
-                    err.error || `create-resource → ${createResp.status}`,
-                );
-            }
-            const data = await createResp.json();
-            group.resolvedResourceId(data.resourceId);
-            group.resolvedDisplayname(entityData.label || group.label);
-            group.resolutionMode("created");
-            group.typeValueId(entityData.documentTypeValueId || null);
-            group.typeIsFallback(!!entityData.documentTypeIsFallback);
-            group.state("resolved");
         } catch (err) {
             group.errorMessage(err.message || String(err));
             group.state("error");

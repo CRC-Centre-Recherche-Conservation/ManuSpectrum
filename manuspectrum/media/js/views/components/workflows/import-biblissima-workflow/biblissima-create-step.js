@@ -151,6 +151,10 @@ const viewModel = function(params) {
         projectId: this.projectId,
         isComponent: this.isComponent,
         getCSRFToken: () => self.getCSRFToken(),
+        // Lambda so parentResolver picks up createResource even though the
+        // method is defined later in this constructor — at call time
+        // ``self.createResource`` is bound.
+        createResource: (item, opts) => self.createResource(item, opts),
     });
 
     this.shouldShowParentPanel = ko.computed(
@@ -962,17 +966,61 @@ const viewModel = function(params) {
     // Resource creation
     // =============================================
 
-    this.createResource = async (item) => {
-        if (item.status() === 'created' || item.status() === 'skipped') return;
+    /**
+     * Create a single Arches resource from a cart item.
+     *
+     * Two call modes, sharing the same dep-resolution logic so that a
+     * parent Document created on the fly receives the same
+     * currentLocation / currentOwner / etc. tiles as a top-level Document
+     * created in Document mode:
+     *
+     *   1. Default (`options` omitted): create the cart item itself —
+     *      Component or top-level Document depending on ``self.resourceType``.
+     *      Item status transitions are managed here.
+     *   2. Parent mode (``options.asParent === true``): create a parent
+     *      Document on behalf of ``parentResolver``. The cart item is only
+     *      used as the source for dep lookups (its collectionLabel,
+     *      parentInstitutionLabel, locationLabel) — the actual payload
+     *      ``biblissimaData`` comes from ``options.biblissimaData`` (the
+     *      Wikibase entity payload), and state updates flow through
+     *      ``options.onSuccess(resourceId)`` instead of mutating
+     *      ``item.status``.
+     *
+     * Options:
+     *   - ``asParent``       (bool) flip Component→Document behavior for
+     *                        this single call (Place dep → currentLocation,
+     *                        no parentDocument link, etc.).
+     *   - ``biblissimaData`` (object) override the payload body sent to
+     *                        the backend; defaults to ``ko.toJS(item)``.
+     *   - ``conceptMappings`` (object) override (defaults to ``{type: item.typeValueId}``).
+     *   - ``onSuccess``      (fn) called with ``(resourceId, data)`` on
+     *                        success when ``asParent`` is true. Caller is
+     *                        responsible for updating the parent group state.
+     *
+     * Returns the created ``resourceId`` (string) or ``undefined`` on
+     * skip/error in default mode. Throws in parent mode so the caller can
+     * branch on success/failure.
+     */
+    this.createResource = async (item, options = {}) => {
+        const asParent = !!options.asParent;
 
-        item.status('creating');
+        if (!asParent) {
+            if (item.status() === 'created' || item.status() === 'skipped') return;
+            item.status('creating');
+        }
 
-        // Auto-create any unresolved deps before creating the item
+        // Auto-create any unresolved deps before creating the resource.
+        // ``item`` is the dep source in both modes (a representative cart
+        // item from the parent group in parent mode).
         await self._ensureDepsCreated(item);
+
+        // A parent Document creation behaves like Document mode: Place dep
+        // → currentLocation tile, no parentDocument link, etc.
+        const isDocumentLike = asParent || !self.isComponent;
 
         const deps = {
             project: self.projectId,
-            parentDocument: self.isComponent
+            parentDocument: (!asParent && self.isComponent)
                 ? self.parentResolver.parentIdFor(item)
                 : null,
         };
@@ -988,10 +1036,10 @@ const viewModel = function(params) {
             (d) => d.type === 'Place' && d.key === locationKey
         );
         if (placeDep && placeDep.existingId()) {
-            if (self.isComponent) {
-                deps.productionPlace = placeDep.existingId();
-            } else {
+            if (isDocumentLike) {
                 deps.currentLocation = placeDep.existingId();
+            } else {
+                deps.productionPlace = placeDep.existingId();
             }
         }
 
@@ -1029,11 +1077,11 @@ const viewModel = function(params) {
         // enriched text/rubric/descriptorLinks/...) so the payload is a pure
         // JSON-serializable snapshot of the current in-memory state.
         const body = {
-            resourceType: self.resourceType,
+            resourceType: asParent ? 'Document' : self.resourceType,
             transactionId: null,
-            biblissimaData: ko.toJS(item),
+            biblissimaData: options.biblissimaData || ko.toJS(item),
             dependencies: deps,
-            conceptMappings: {
+            conceptMappings: options.conceptMappings || {
                 type: ko.unwrap(item.typeValueId),
             },
         };
@@ -1054,15 +1102,24 @@ const viewModel = function(params) {
             }
 
             const data = await resp.json();
-            item.resourceId(data.resourceId);
-            item.status('created');
 
             if (data.createdDependencies) {
                 Object.assign(self.dependencyCache.places, data.createdDependencies.places || {});
                 Object.assign(self.dependencyCache.persons, data.createdDependencies.persons || {});
                 Object.assign(self.dependencyCache.groups, data.createdDependencies.groups || {});
             }
+
+            if (asParent) {
+                if (options.onSuccess) options.onSuccess(data.resourceId, data);
+            } else {
+                item.resourceId(data.resourceId);
+                item.status('created');
+            }
+            return data.resourceId;
         } catch (err) {
+            if (asParent) {
+                throw err;
+            }
             item.status('error');
             item.errorMessage(err.message || 'Unknown error');
             console.error('Resource creation failed:', err);
