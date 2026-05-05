@@ -1265,6 +1265,32 @@ class BiblissimaSearchManuscriptsView(View):
         return JsonResponse({"total": len(results), "results": results})
 
 
+# Canvas labels from Biblissima IIIF descriptor manifests look like
+# "Lettre ornée (Paris, Arsenal, 12 f.3)". The text inside parens carries
+# the full manuscript context (institution + shelfmark) — much more
+# distinctive than the bare ``manuscript`` field which is often just the
+# shelfmark fragment ("12"). Extracting it gives the manuscript-resolution
+# query a fighting chance against generic shelfmarks.
+_CANVAS_MS_CONTEXT_RE = re.compile(r"\(([^)]+)\)")
+_CANVAS_FOLIO_TAIL_RE = re.compile(r"\s+ff?\.\S+\s*$")
+
+
+def _extract_ms_search_query(canvas):
+    """Build a Wikibase-friendly search string for a canvas's parent
+    manuscript. Tries the ``( …institution, shelfmark f.X )`` parenthetical
+    in the canvas label first (strips the trailing folio), falls back to
+    the raw ``manuscript`` field which works for distinctive shelfmarks
+    like "Anglais 32" but fails on generic numerics like "12" / "579".
+    """
+    label = canvas.get("label") or ""
+    m = _CANVAS_MS_CONTEXT_RE.search(label)
+    if m:
+        ctx = _CANVAS_FOLIO_TAIL_RE.sub("", m.group(1).strip())
+        if ctx:
+            return ctx
+    return canvas.get("manuscript", "") or ""
+
+
 def _enrich_canvases(canvases, session=None):
     """Enrich a list of canvases with Wikibase manuscript data in place.
 
@@ -1286,7 +1312,11 @@ def _enrich_canvases(canvases, session=None):
         session = _build_biblissima_session()
 
     try:
-        # Phase 1: collect unique manuscripts (ark_hash -> display name)
+        # Phase 1: collect unique manuscripts. The "name" we keep here is the
+        # query string used to look up the manuscript in Wikibase later — we
+        # extract the institution+shelfmark context from the canvas label
+        # (e.g. "Paris, Arsenal, 12") rather than the bare ``manuscript``
+        # field which is often just the shelfmark fragment.
         unique_manuscripts = {}
         for canvas in canvases:
             ms_ark = canvas.get("manuscriptArk")
@@ -1294,7 +1324,7 @@ def _enrich_canvases(canvases, session=None):
                 continue
             ark_hash = ms_ark.replace("ark:/43093/", "")
             if ark_hash and ark_hash not in unique_manuscripts:
-                unique_manuscripts[ark_hash] = canvas.get("manuscript", "")
+                unique_manuscripts[ark_hash] = _extract_ms_search_query(canvas)
 
         resolved_manuscripts = {}
         to_resolve = {}
@@ -1311,15 +1341,19 @@ def _enrich_canvases(canvases, session=None):
                 to_resolve[ark_hash] = ms_name
                 _incr_stat("cache_misses", 1)
 
-        # Phase 2b: resolve QID by exact portalHash (P129) lookup. Using
-        # CirrusSearch's ``haswbstatement`` is exact — the previous
-        # ``wbsearchentities`` path searched by manuscript label, which
-        # silently failed on generic labels like "579" by returning
-        # unrelated candidates. ARK hashes are unique per manuscript on
-        # Biblissima, so this returns at most one QID per call.
+        # Phase 2b: parallel CirrusSearch fulltext lookup for uncached
+        # manuscripts. We use ``action=query&list=search`` rather than
+        # ``wbsearchentities`` because the latter only matches against
+        # labels/aliases as a prefix and silently returns garbage for the
+        # bare-shelfmark labels that the IIIF manifest provides ("12",
+        # "579"). The richer ``ms_name`` extracted from the canvas label
+        # (e.g. "Paris, Arsenal, 12") is distinctive enough that fulltext
+        # search returns the correct entity in the top results, and the
+        # Phase 2d ``portalHash == ark_hash`` filter rejects any false
+        # positive — so reconciliation is done without scraping.
         def _search_candidates(item):
-            ark_hash, _ms_name = item
-            if not ark_hash:
+            ark_hash, ms_name = item
+            if not ms_name:
                 return ark_hash, []
             try:
                 resp = _bib_request(
@@ -1328,10 +1362,10 @@ def _enrich_canvases(canvases, session=None):
                     params={
                         "action": "query",
                         "list": "search",
-                        "srsearch": f"haswbstatement:{P129}={ark_hash}",
+                        "srsearch": ms_name,
                         "srnamespace": 120,
                         "format": "json",
-                        "srlimit": 1,
+                        "srlimit": 5,
                     },
                     timeout=REQUEST_TIMEOUT,
                 )
@@ -1345,7 +1379,7 @@ def _enrich_canvases(canvases, session=None):
                         qids.append(qid)
                 return ark_hash, qids
             except Exception:
-                logger.warning("haswbstatement lookup failed for %s", ark_hash)
+                logger.warning("CirrusSearch failed for %s", ms_name)
                 return ark_hash, []
 
         candidates_by_ark_hash = {}
@@ -1451,6 +1485,13 @@ def _enrich_canvases(canvases, session=None):
                 continue
             ark_hash = ms_ark.replace("ark:/43093/", "")
             ms_data = resolved_manuscripts.get(ark_hash) or {}
+            # Prefer the full Wikibase entity label (e.g. "Paris. Bibliothèque
+            # de l'Arsenal, 12") over the raw IIIF metadata value, which is
+            # often just the shelfmark fragment ("12") for Arsenal/BnF
+            # manifests where Biblissima only inlines the shelfmark text in
+            # the <a>Manuscrit</a> link.
+            if ms_data.get("label"):
+                canvas["manuscript"] = ms_data["label"]
             canvas["manifestUrl"] = ms_data.get("manifestUrl")
             canvas["authorLabel"] = ms_data.get("authorLabel")
             canvas["authorQid"] = ms_data.get("authorQid")
