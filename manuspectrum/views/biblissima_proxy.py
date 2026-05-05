@@ -451,7 +451,7 @@ CONCEPT_PERSISTENT_ID = "5b292232-52ac-4e71-ba6c-fe4dd6ff02fa"
 CONCEPT_RECORD_ID = "e10752d3-d8fa-47cb-92f9-dd7277dfc97a"
 CONCEPT_SOURCE_BIBLISSIMA = "39124989-dfb1-4e2a-9d1a-4bff0827ed71"
 CONCEPT_SOURCE_MANDRAGORE = "3b78627a-c751-43df-b427-73e1dd11ec38"
-CONCEPT_TYPE_BNF_ID = "bd1fa4c5-c7e7-45d2-b58c-e5f54a1da34d"
+CONCEPT_SOURCE_BNF = "bd1fa4c5-c7e7-45d2-b58c-e5f54a1da34d"
 CONCEPT_DESCRIPTION = "9a51d30b-48e8-4f94-9344-cd2bb1d4b33a"
 CONCEPT_IDENTIFICATION = (
     "d2a8104a-312a-4f1d-acb7-3ecb1335e2fc"  # Statement type for "Texte" (which work)
@@ -556,10 +556,17 @@ def _extract_entity_props(qid, raw_entity):
 
     labels = raw_entity.get("labels", {})
     label = labels.get("fr", {}).get("value") or labels.get("en", {}).get("value") or ""
+    descriptions = raw_entity.get("descriptions", {})
+    description = (
+        descriptions.get("fr", {}).get("value")
+        or descriptions.get("en", {}).get("value")
+        or ""
+    )
 
     return {
         "biblissimaQid": qid,
         "label": label,
+        "description": description,
         "portalHash": _get_string(P129),
         "manifestUrl": _get_string(P196),
         "digitizationUrl": _get_string(P197),
@@ -2976,8 +2983,8 @@ class BiblissimaCreateResourceView(View):
                     DOC_IDENTIFIER_VALUE: i18n(
                         f"https://archivesetmanuscrits.bnf.fr/ark:/12148/cc{aem_id}"
                     ),
-                    DOC_IDENTIFIER_TYPE: clist([CONCEPT_TYPE_BNF_ID]),
-                    DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BIBLISSIMA]),
+                    DOC_IDENTIFIER_TYPE: clist([CONCEPT_PERSISTENT_ID]),
+                    DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BNF]),
                 },
                 transaction_id,
             )
@@ -2995,15 +3002,20 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Statement (description)
-        legend = bbma_data.get("legend") or bbma_data.get("label", "")
+        # Statement (description) — only create the tile if Biblissima has
+        # an actual description text. The label is the manuscript title and
+        # belongs in the Name tile, not as a fallback description.
+        # ``legend`` is set by the Component-side enrichment (illumination
+        # legend, not relevant for Documents); ``description`` comes from
+        # the Wikibase entity's ``descriptions.fr/en.value``.
+        description = bbma_data.get("description") or bbma_data.get("legend") or ""
         portal_url = bbma_data.get("portalUrl", "")
-        if legend:
+        if description:
             self._create_tile(
                 DOC_STATEMENT_NG,
                 resource_id,
                 {
-                    DOC_STATEMENT_CONTENT: i18n(legend),
+                    DOC_STATEMENT_CONTENT: i18n(description),
                     DOC_STATEMENT_TYPE: clist([CONCEPT_DESCRIPTION]),
                     DOC_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
                     DOC_STATEMENT_SOURCE: (
