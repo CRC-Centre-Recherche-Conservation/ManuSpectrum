@@ -558,12 +558,6 @@ def _extract_entity_props(qid, raw_entity):
     label = labels.get("fr", {}).get("value") or labels.get("en", {}).get("value") or ""
 
     return {
-        # ``qid`` is the canonical key used by the JS search step
-        # (entityData.qid) and by historical callers; ``biblissimaQid`` is
-        # the cart-item shape produced by _enrich_canvases. Expose both
-        # under their respective canonical names so downstream consumers
-        # don't need defensive ``or`` fallbacks.
-        "qid": qid,
         "biblissimaQid": qid,
         "label": label,
         "portalHash": _get_string(P129),
@@ -1460,7 +1454,7 @@ def _enrich_canvases(canvases, session=None):
             canvas["manifestUrl"] = ms_data.get("manifestUrl")
             canvas["authorLabel"] = ms_data.get("authorLabel")
             canvas["authorQid"] = ms_data.get("authorQid")
-            canvas["biblissimaQid"] = ms_data.get("qid")
+            canvas["biblissimaQid"] = ms_data.get("biblissimaQid")
             canvas["shelfmark"] = ms_data.get("shelfmark")
             canvas["mandragoreId"] = ms_data.get("mandragoreId")
             # Institution / location chain from the collection resolution.

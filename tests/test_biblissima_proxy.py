@@ -170,7 +170,7 @@ class ExtractEntityPropsTests(TestCase):
             }
         )
         result = bp._extract_entity_props("Q1", raw)
-        self.assertEqual(result["qid"], "Q1")
+        self.assertEqual(result["biblissimaQid"], "Q1")
         self.assertEqual(result["label"], "Manuscrit FR")
 
     def test_falls_back_to_english_label(self):
@@ -288,7 +288,7 @@ class GetWikibaseEntityTests(TestCase):
         with patch.object(bp, "_bib_request", return_value=resp) as mocked:
             result = bp._get_wikibase_entity("Q1", session=session)
         self.assertIsNotNone(result)
-        self.assertEqual(result["qid"], "Q1")
+        self.assertEqual(result["biblissimaQid"], "Q1")
         self.assertEqual(result["label"], "Hello")
         # Hit the wikibase URL once.
         self.assertEqual(mocked.call_count, 1)
@@ -319,7 +319,7 @@ class GetWikibaseEntityTests(TestCase):
         # implementation does cache it; assert it's at least not None
         # and shaped right.
         self.assertIsNotNone(result)
-        self.assertEqual(result["qid"], "Q999")
+        self.assertEqual(result["biblissimaQid"], "Q999")
 
 
 class BatchGetWikibaseEntitiesTests(TestCase):
@@ -335,11 +335,11 @@ class BatchGetWikibaseEntitiesTests(TestCase):
     def test_uses_cache_for_known_qids(self):
         cache.set(
             bp._BIBLISSIMA_ENTITY_CACHE_KEY.format(qid="Q1"),
-            {"qid": "Q1", "label": "Cached"},
+            {"biblissimaQid": "Q1", "label": "Cached"},
         )
         with patch.object(bp, "_bib_request") as mocked:
             result = bp._batch_get_wikibase_entities(["Q1"])
-        self.assertEqual(result, {"Q1": {"qid": "Q1", "label": "Cached"}})
+        self.assertEqual(result, {"Q1": {"biblissimaQid": "Q1", "label": "Cached"}})
         mocked.assert_not_called()
 
     def test_batches_uncached_qids_into_single_request(self):
@@ -1222,7 +1222,7 @@ class WikibaseEntityFixtureTests(TestCase):
         ):
             entity = bp._get_wikibase_entity("Q27392", session=session)
         self.assertIsNotNone(entity)
-        self.assertEqual(entity["qid"], "Q27392")
+        self.assertEqual(entity["biblissimaQid"], "Q27392")
         self.assertEqual(entity["label"], "Paris (France)")
 
     def test_batch_get_against_real_multi_entity_response(self):
@@ -1435,7 +1435,7 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
         def side_effect(qid, session=None):
             if qid == "Q123":
                 return {
-                    "qid": "Q123",
+                    "biblissimaQid": "Q123",
                     "label": "Test ms",
                     "portalHash": None,
                     "manifestUrl": None,
@@ -1449,7 +1449,7 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
                 }
             if qid == "Q32810":
                 return {
-                    "qid": "Q32810",
+                    "biblissimaQid": "Q32810",
                     "label": "manuscrit",
                     "portalHash": None,
                     "manifestUrl": None,
@@ -1485,7 +1485,7 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
         def side_effect(qid, session=None):
             if qid == "Q1":
                 return {
-                    "qid": "Q1",
+                    "biblissimaQid": "Q1",
                     "label": "Mystery",
                     "portalHash": None,
                     "manifestUrl": None,
@@ -1499,7 +1499,7 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
                 }
             if qid == "Q120869":
                 return {
-                    "qid": "Q120869",
+                    "biblissimaQid": "Q120869",
                     "label": "estampe",
                     "portalHash": None,
                     "manifestUrl": None,
@@ -1533,7 +1533,7 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
         from manuspectrum.views.biblissima_proxy import DOCUMENT_NATURE_DEFAULT
 
         mock_get.return_value = {
-            "qid": "Q1",
+            "biblissimaQid": "Q1",
             "label": "x",
             "portalHash": None,
             "manifestUrl": None,
@@ -1581,10 +1581,13 @@ class EnrichCanvasesDocumentNatureTests(TestCase):
             VALUEID_MANUSCRIT,
         )
 
-        # _bib_request is used for wbsearchentities — return a single candidate.
+        # _bib_request is used for CirrusSearch haswbstatement:P129=<hash>
+        # — return a single matching item.
         bib_resp = MagicMock()
         bib_resp.raise_for_status = MagicMock()
-        bib_resp.json.return_value = {"search": [{"id": "Q123"}]}
+        bib_resp.json.return_value = {
+            "query": {"search": [{"title": "Item:Q123"}]}
+        }
         mock_bib.return_value = bib_resp
 
         # _batch_get_wikibase_entities is called twice:
@@ -1596,7 +1599,7 @@ class EnrichCanvasesDocumentNatureTests(TestCase):
             if "Q123" in qids_set:
                 return {
                     "Q123": {
-                        "qid": "Q123",
+                        "biblissimaQid": "Q123",
                         "label": "ms",
                         "portalHash": "mdataXYZ",
                         "manifestUrl": "https://m",
@@ -1612,7 +1615,7 @@ class EnrichCanvasesDocumentNatureTests(TestCase):
             if "Q32810" in qids_set:
                 return {
                     "Q32810": {
-                        "qid": "Q32810",
+                        "biblissimaQid": "Q32810",
                         "label": "manuscrit",
                     }
                 }
@@ -1651,7 +1654,7 @@ class AttachDocumentTypeHelperTests(TestCase):
             VALUEID_MANUSCRIT,
         )
 
-        mock_get.return_value = {"qid": "Q32810", "label": "manuscrit"}
+        mock_get.return_value = {"biblissimaQid": "Q32810", "label": "manuscrit"}
         entity = {"documentNatureQid": "Q32810", "documentNatureLabel": None}
         _attach_document_type(entity)
         self.assertEqual(entity["documentNatureLabel"], "manuscrit")
@@ -1761,7 +1764,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
         # Batch entity fetch returns Q123 with documentNatureQid -> Q32810
         mock_batch.return_value = {
             "Q123": {
-                "qid": "Q123",
+                "biblissimaQid": "Q123",
                 "label": "Test ms",
                 "portalHash": "mdataXYZ",
                 "manifestUrl": "https://m",
@@ -1776,7 +1779,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
         }
 
         # _get_wikibase_entity is called for the nature-label resolution
-        mock_get_single.return_value = {"qid": "Q32810", "label": "manuscrit"}
+        mock_get_single.return_value = {"biblissimaQid": "Q32810", "label": "manuscrit"}
 
         from django.test import RequestFactory
 
