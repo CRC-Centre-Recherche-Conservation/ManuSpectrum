@@ -856,8 +856,14 @@ class BiblissimaSuggestView(View):
                             results.append(
                                 {"id": qid, "label": label, "description": desc}
                             )
-            except Exception:
-                logger.warning("CirrusSearch failed for query=%s", query)
+            except Exception as exc:
+                logger.warning(
+                    "[biblissima.suggest] Wikibase CirrusSearch fulltext search "
+                    "failed for query=%r: %s (results truncated to wbsearchentities prefix matches)",
+                    query,
+                    exc,
+                    exc_info=True,
+                )
 
         session.close()
         return JsonResponse({"results": results})
@@ -1148,7 +1154,7 @@ def _enrich_canvases(canvases, session=None):
         def _search_candidates(item):
             ark_hash, ms_name = item
             if not ms_name:
-                return ark_hash, []
+                return ark_hash, [], None
             try:
                 resp = _bib_request(
                     session,
@@ -1171,19 +1177,37 @@ def _enrich_canvases(canvases, session=None):
                     qid = title.split(":")[-1] if ":" in title else title
                     if qid:
                         qids.append(qid)
-                return ark_hash, qids
-            except Exception:
-                logger.warning("CirrusSearch failed for %s", ms_name)
-                return ark_hash, []
+                return ark_hash, qids, None
+            except Exception as exc:
+                logger.debug(
+                    "[biblissima.parent-resolver] Wikibase CirrusSearch lookup "
+                    "failed for manuscript=%r: %s",
+                    ms_name,
+                    exc,
+                    exc_info=True,
+                )
+                return ark_hash, [], ms_name
 
         candidates_by_ark_hash = {}
+        cirrus_failures = []
         if to_resolve:
             max_workers = min(6, len(to_resolve))
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                for ark_hash, candidate_qids in executor.map(
+                for ark_hash, candidate_qids, failure in executor.map(
                     _search_candidates, to_resolve.items()
                 ):
                     candidates_by_ark_hash[ark_hash] = candidate_qids
+                    if failure:
+                        cirrus_failures.append(failure)
+            if cirrus_failures:
+                logger.warning(
+                    "[biblissima.parent-resolver] Wikibase CirrusSearch failed "
+                    "for %d/%d manuscripts (graceful fallback applied; "
+                    "common causes: rate-limit, timeout, 5xx). Sample: %s",
+                    len(cirrus_failures),
+                    len(to_resolve),
+                    cirrus_failures[:3],
+                )
 
         # Phase 2c: batch-fetch all candidate entities in one go
         all_candidate_qids = list(
@@ -1384,7 +1408,6 @@ class BiblissimaSearchView(View):
     only enrich the requested slice.
     """
 
-    @method_decorator(cache_page(3600))
     def get(self, request):
         descriptors = request.GET.get("descriptors", "").strip()
         if not descriptors:
