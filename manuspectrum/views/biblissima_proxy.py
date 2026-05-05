@@ -259,6 +259,7 @@ P194 = "P194"  # collection (institution)
 P195 = "P195"  # cote (shelfmark)
 P196 = "P196"  # manifeste IIIF
 P197 = "P197"  # numérisation URL
+P198 = "P198"  # identifiant BnF Archives et Manuscrits (AeM)
 P270 = "P270"  # identifiant Mandragore
 P354 = "P354"  # auteur
 P201 = "P201"  # localisation (place)
@@ -450,6 +451,7 @@ CONCEPT_PERSISTENT_ID = "5b292232-52ac-4e71-ba6c-fe4dd6ff02fa"
 CONCEPT_RECORD_ID = "e10752d3-d8fa-47cb-92f9-dd7277dfc97a"
 CONCEPT_SOURCE_BIBLISSIMA = "39124989-dfb1-4e2a-9d1a-4bff0827ed71"
 CONCEPT_SOURCE_MANDRAGORE = "3b78627a-c751-43df-b427-73e1dd11ec38"
+CONCEPT_TYPE_BNF_ID = "bd1fa4c5-c7e7-45d2-b58c-e5f54a1da34d"
 CONCEPT_DESCRIPTION = "9a51d30b-48e8-4f94-9344-cd2bb1d4b33a"
 CONCEPT_IDENTIFICATION = (
     "d2a8104a-312a-4f1d-acb7-3ecb1335e2fc"  # Statement type for "Texte" (which work)
@@ -556,7 +558,13 @@ def _extract_entity_props(qid, raw_entity):
     label = labels.get("fr", {}).get("value") or labels.get("en", {}).get("value") or ""
 
     return {
+        # ``qid`` is the canonical key used by the JS search step
+        # (entityData.qid) and by historical callers; ``biblissimaQid`` is
+        # the cart-item shape produced by _enrich_canvases. Expose both
+        # under their respective canonical names so downstream consumers
+        # don't need defensive ``or`` fallbacks.
         "qid": qid,
+        "biblissimaQid": qid,
         "label": label,
         "portalHash": _get_string(P129),
         "manifestUrl": _get_string(P196),
@@ -565,6 +573,7 @@ def _extract_entity_props(qid, raw_entity):
         "collection": _get_entity_id(P194),
         "author": _get_entity_id(P354),
         "mandragoreId": _get_string(P270),
+        "aemId": _get_string(P198),
         # P2 = "nature de l'élément" (manuscrit / imprimé / etc.). The QID is
         # extracted here; the human-readable label is filled in later by
         # _enrich_canvases (batch fetch) or by BiblissimaEntityView (single
@@ -2887,8 +2896,15 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Identifiers
-        ark_id = bbma_data.get("arkId")
+        # Identifiers — canvas-derived payloads already carry ``arkId``;
+        # entity-derived payloads only carry ``portalHash``, so derive the
+        # ARK from it when needed. (``biblissimaQid`` is now exposed by
+        # both shapes via _extract_entity_props.)
+        ark_id = bbma_data.get("arkId") or (
+            f"ark:/43093/{bbma_data['portalHash']}"
+            if bbma_data.get("portalHash")
+            else None
+        )
         if ark_id:
             self._create_tile(
                 DOC_IDENTIFIER_NG,
@@ -2911,6 +2927,21 @@ class BiblissimaCreateResourceView(View):
                         f"https://data.biblissima.fr/entity/{qid}"
                     ),
                     DOC_IDENTIFIER_TYPE: clist([CONCEPT_RECORD_ID]),
+                    DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BIBLISSIMA]),
+                },
+                transaction_id,
+            )
+
+        aem_id = bbma_data.get("aemId")
+        if aem_id:
+            self._create_tile(
+                DOC_IDENTIFIER_NG,
+                resource_id,
+                {
+                    DOC_IDENTIFIER_VALUE: i18n(
+                        f"https://archivesetmanuscrits.bnf.fr/ark:/12148/cc{aem_id}"
+                    ),
+                    DOC_IDENTIFIER_TYPE: clist([CONCEPT_TYPE_BNF_ID]),
                     DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BIBLISSIMA]),
                 },
                 transaction_id,
