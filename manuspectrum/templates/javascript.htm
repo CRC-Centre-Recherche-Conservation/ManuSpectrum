@@ -44,7 +44,6 @@
     biblissima-create='{% trans "Creation & Validation" as biblissimaCreate %} "{{ biblissimaCreate|escapejs }}"'
     biblissima-search-descriptors='{% trans "Search iconographic descriptors..." as biblissimaSearchDescriptors %} "{{ biblissimaSearchDescriptors|escapejs }}"'
     biblissima-all-dates='{% trans "All dates" as biblissimaAllDates %} "{{ biblissimaAllDates|escapejs }}"'
-    biblissima-select-parent-doc='{% trans "Search for a parent document..." as biblissimaSelectParentDoc %} "{{ biblissimaSelectParentDoc|escapejs }}"'
     biblissima-select-project='{% trans "Associate with a project (optional)..." as biblissimaSelectProject %} "{{ biblissimaSelectProject|escapejs }}"'
     biblissima-pending='{% trans "Pending" as biblissimaPending %} "{{ biblissimaPending|escapejs }}"'
     biblissima-creating='{% trans "Creating..." as biblissimaCreating %} "{{ biblissimaCreating|escapejs }}"'
@@ -69,6 +68,17 @@
     biblissima-type-custom='{% trans "Custom type" as biblissimaTypeCustom %} "{{ biblissimaTypeCustom|escapejs }}"'
     biblissima-resource-type-document='{% trans "Manuscript" as biblissimaResourceTypeDocument %} "{{ biblissimaResourceTypeDocument|escapejs }}"'
     biblissima-resource-type-component='{% trans "Illumination" as biblissimaResourceTypeComponent %} "{{ biblissimaResourceTypeComponent|escapejs }}"'
+    biblissima-parent-resolver-header='{% trans "Detected parent Documents" as biblissimaParentResolverHeader %} "{{ biblissimaParentResolverHeader|escapejs }}"'
+    biblissima-parent-resolver-loading='{% trans "Resolving parent manuscripts…" as biblissimaParentResolverLoading %} "{{ biblissimaParentResolverLoading|escapejs }}"'
+    biblissima-parent-resolver-use='{% trans "Use this" as biblissimaParentResolverUse %} "{{ biblissimaParentResolverUse|escapejs }}"'
+    biblissima-parent-resolver-unlink='{% trans "Unlink" as biblissimaParentResolverUnlink %} "{{ biblissimaParentResolverUnlink|escapejs }}"'
+    biblissima-parent-resolver-create='{% trans "Create new parent Document" as biblissimaParentResolverCreate %} "{{ biblissimaParentResolverCreate|escapejs }}"'
+    biblissima-parent-resolver-creating='{% trans "Creating…" as biblissimaParentResolverCreating %} "{{ biblissimaParentResolverCreating|escapejs }}"'
+    biblissima-parent-resolver-enrich='{% trans "Add Biblissima ARK as alt-name on existing" as biblissimaParentResolverEnrich %} "{{ biblissimaParentResolverEnrich|escapejs }}"'
+    biblissima-parent-resolver-orphans='{% trans "Items with no identified manuscript" as biblissimaParentResolverOrphans %} "{{ biblissimaParentResolverOrphans|escapejs }}"'
+    biblissima-parent-resolver-pick-manual='{% trans "Pick a Document manually…" as biblissimaParentResolverPickManual %} "{{ biblissimaParentResolverPickManual|escapejs }}"'
+    biblissima-parent-resolver-pick-manual-required='{% trans "Pick a Document (required)…" as biblissimaParentResolverPickManualRequired %} "{{ biblissimaParentResolverPickManualRequired|escapejs }}"'
+    biblissima-parent-resolver-no-qid='{% trans "Cannot create parent — no Biblissima QID" as biblissimaParentResolverNoQid %} "{{ biblissimaParentResolverNoQid|escapejs }}"'
 ></div>
 {% endblock arches_translations %}
 

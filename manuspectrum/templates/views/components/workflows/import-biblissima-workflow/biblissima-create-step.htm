@@ -24,36 +24,77 @@
             </span>
             <div class="bbma-section-actions">
                 <!-- ko ifnot: allDone -->
+                <div class="bbma-create-all-wrapper">
 
-                <!-- Dep progress pill (visible when deps exist and not all resolved) -->
-                <!-- ko if: totalDepsCount() > 0 && !allDepsResolved() -->
-                <div class="bbma-deps-progress">
-                    <div class="bbma-deps-progress-bar">
-                        <div class="bbma-deps-progress-fill"
-                             data-bind="style: { width: (totalDepsCount() > 0 ? (resolvedDepsCount() / totalDepsCount() * 100) : 0) + '%' }">
-                        </div>
+                    <!-- Adaptive progress pill: explains why "Create all" is disabled.
+                         Replaces both the standalone deps pill and the yellow blocker. -->
+                    <!-- ko if: !canCreateAll() && !creatingAll() -->
+                    <div class="bbma-deps-progress" role="status" aria-live="polite">
+
+                        <!-- Resolving state — takes over the whole pill -->
+                        <!-- ko if: isComponent && parentResolver.resolving() -->
+                        <span class="bbma-deps-progress-spinner">
+                            <i class="fa fa-circle-o-notch fa-spin"></i>
+                            {% trans "Resolving parent manuscripts…" %}
+                        </span>
+                        <!-- /ko -->
+
+                        <!-- ko ifnot: isComponent && parentResolver.resolving() -->
+
+                        <!-- Parent segment (Component mode only, while parents unresolved) -->
+                        <!-- ko if: isComponent && !parentResolver.allResolved() -->
+                        <span class="bbma-deps-progress-seg">
+                            <i class="fa fa-sitemap"></i>
+                            <span class="bbma-deps-progress-bar">
+                                <span class="bbma-deps-progress-fill"
+                                      data-bind="style: { width: (parentResolver.totalCount() > 0 ? (parentResolver.resolvedCount() / parentResolver.totalCount() * 100) : 0) + '%' }">
+                                </span>
+                            </span>
+                            <span class="bbma-deps-progress-label">
+                                <span data-bind="text: parentResolver.resolvedCount()"></span>/<span data-bind="text: parentResolver.totalCount()"></span>
+                                {% trans "parents" %}
+                            </span>
+                        </span>
+                        <!-- /ko -->
+
+                        <!-- Separator only when both segments are visible -->
+                        <!-- ko if: isComponent && !parentResolver.allResolved() && totalDepsCount() > 0 && !allDepsResolved() -->
+                        <span class="bbma-deps-progress-sep" aria-hidden="true">·</span>
+                        <!-- /ko -->
+
+                        <!-- Deps segment (always relevant when deps exist & not all linked) -->
+                        <!-- ko if: totalDepsCount() > 0 && !allDepsResolved() -->
+                        <span class="bbma-deps-progress-seg">
+                            <i class="fa fa-link"></i>
+                            <span class="bbma-deps-progress-bar">
+                                <span class="bbma-deps-progress-fill"
+                                      data-bind="style: { width: (totalDepsCount() > 0 ? (resolvedDepsCount() / totalDepsCount() * 100) : 0) + '%' }">
+                                </span>
+                            </span>
+                            <span class="bbma-deps-progress-label">
+                                <span data-bind="text: resolvedDepsCount()"></span>/<span data-bind="text: totalDepsCount()"></span>
+                                {% trans "linked" %}
+                            </span>
+                        </span>
+                        <!-- /ko -->
+
+                        <!-- /ko -->
                     </div>
-                    <span class="bbma-deps-progress-label">
-                        <i class="fa fa-link"></i>
-                        <span data-bind="text: resolvedDepsCount()"></span>/<span data-bind="text: totalDepsCount()"></span>
-                        {% trans "linked" %}
-                    </span>
-                </div>
-                <!-- /ko -->
+                    <!-- /ko -->
 
-                <button class="btn btn-primary"
-                        data-bind="click: createAll,
-                                   disable: creatingAll() || !allDepsResolved(),
-                                   css: { 'bbma-btn-waiting': !allDepsResolved() },
-                                   attr: { title: allDepsResolved() ? '' : '{% trans "Link or create all related resources (places, institutions, persons) before creating documents" %}' }">
-                    <!-- ko if: creatingAll -->
-                    <i class="fa fa-spinner fa-spin"></i>
-                    <!-- /ko -->
-                    <!-- ko ifnot: creatingAll -->
-                    <i class="fa fa-magic"></i>
-                    <!-- /ko -->
-                    {% trans "Create all" %}
-                </button>
+                    <button class="btn btn-primary"
+                            data-bind="click: createAll,
+                                       disable: creatingAll() || !canCreateAll(),
+                                       css: { 'bbma-btn-waiting': !canCreateAll() }">
+                        <!-- ko if: creatingAll -->
+                        <i class="fa fa-spinner fa-spin"></i>
+                        <!-- /ko -->
+                        <!-- ko ifnot: creatingAll -->
+                        <i class="fa fa-magic"></i>
+                        <!-- /ko -->
+                        {% trans "Create all" %}
+                    </button>
+                </div>
                 <!-- /ko -->
                 <!-- ko if: allDone -->
                 <button class="btn btn-mint" data-bind="click: submit">
@@ -156,9 +197,9 @@
                     <!-- ko if: status() === 'pending' -->
                     <button class="btn btn-xs btn-primary"
                             data-bind="click: $parent.createResource,
-                                       disable: !$parent.itemDepsResolved($data),
-                                       attr: { title: $parent.itemDepsResolved($data) ? '{% trans "Create" %}' : '{% trans "Waiting for:" %}' + '\n' + $parent.unresolvedDepsLabel($data) },
-                                       css: { 'bbma-btn-waiting': !$parent.itemDepsResolved($data) }">
+                                       disable: !$parent.canCreateItem($data),
+                                       attr: { title: $parent.canCreateItem($data) ? '{% trans "Create" %}' : '{% trans "Waiting for:" %}' + '\n' + $parent.unresolvedDepsLabel($data) },
+                                       css: { 'bbma-btn-waiting': !$parent.canCreateItem($data) }">
                         <i class="fa fa-plus"></i>
                     </button>
                     <!-- /ko -->
@@ -169,7 +210,7 @@
                         <i class="fa fa-eye"></i>
                     </button>
                     <button class="btn btn-xs btn-link text-muted" data-bind="click: $parent.unlinkItem"
-                            title="{% trans 'Unlink' %}">
+                            title="{% trans 'Edit selection' %}">
                         <i class="fa fa-chain-broken"></i>
                     </button>
                     <!-- /ko -->
@@ -257,7 +298,7 @@
                         </button>
                         <button class="btn btn-xs btn-mint"
                                 data-bind="click: function(){ $parents[1].useExisting($parent, $data); }"
-                                title="{% trans 'Use this resource' %}">
+                                title="{% trans 'Link to this resource' %}">
                             <i class="fa fa-link"></i>
                         </button>
                     </div>
@@ -274,6 +315,220 @@
             <!-- /ko -->
         </div>
     </div>
+
+    <!-- ===========================================================
+         Parent-resolver panel — Component mode only.
+         Resolves one parent Document per Biblissima manuscript group
+         (cf. parentResolver.js + design 7.7).
+         =========================================================== -->
+    <!-- ko if: shouldShowParentPanel -->
+    <div class="biblissima-create-section">
+        <div class="bbma-section-header">
+            <i class="fa fa-sitemap"></i>
+            <h4>{% trans "Detected parent Documents" %}</h4>
+            <span class="bbma-section-count">
+                <span data-bind="text: parentResolver.resolvedCount()"></span>/<span data-bind="text: parentResolver.totalCount()"></span>
+            </span>
+        </div>
+
+        <p class="bbma-section-hint">
+            {% trans "Each Biblissima manuscript needs a parent Document. Pick an existing match or create a new one." %}
+        </p>
+
+        <!-- ko if: parentResolver.resolving -->
+        <div class="bbma-section-hint">
+            <i class="fa fa-circle-o-notch fa-spin"></i>
+            {% trans "Resolving parent manuscripts…" %}
+        </div>
+        <!-- /ko -->
+
+        <div class="bbma-deps-list" data-bind="foreach: parentResolver.groups">
+            <div class="bbma-dep-card"
+                 data-bind="css: {
+                    'bbma-dep-card-linked': state() === 'resolved' && resolutionMode() !== 'created',
+                    'bbma-dep-card-created': state() === 'resolved' && resolutionMode() === 'created',
+                    'bbma-dep-card-suggestions': state() !== 'resolved' && suggestions().length > 0,
+                    'bbma-dep-card-pending': state() === 'error'
+                 }">
+                <div class="bbma-dep-card-header">
+                    <span class="bbma-dep-type">{% trans "Document" %}</span>
+                    <span class="bbma-dep-name" data-bind="text: label, attr: { title: label }"></span>
+
+                    <!-- ko if: state() === 'resolved' && resolutionMode() !== 'created' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-linked">
+                        <i class="fa fa-check"></i> {% trans "Linked" %}
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko if: state() === 'resolved' && resolutionMode() === 'created' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-created">
+                        <i class="fa fa-plus"></i> {% trans "Created" %}
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko if: state() !== 'resolved' && suggestions().length > 0 -->
+                    <span class="bbma-dep-badge bbma-dep-badge-suggestions">
+                        <i class="fa fa-exclamation-circle"></i> {% trans "Matches found" %}
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko if: state() === 'error' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-pending">
+                        <i class="fa fa-times"></i> {% trans "Error" %}
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko if: state() !== 'resolved' && state() !== 'error' && suggestions().length === 0 -->
+                    <span class="bbma-dep-badge bbma-dep-badge-pending">
+                        <i class="fa fa-circle-o"></i> {% trans "Pending" %}
+                    </span>
+                    <!-- /ko -->
+                </div>
+
+                <div class="bbma-dep-card-body">
+                    <!-- Manuscript meta line: shelfmark · portalHash · items count -->
+                    <p class="bbma-dep-create-hint">
+                        <!-- ko if: shelfmark -->
+                        <span><i class="fa fa-bookmark-o"></i> <span data-bind="text: shelfmark"></span></span>
+                        <!-- /ko -->
+                        <!-- ko if: portalHash || biblissimaQid -->
+                        <span><i class="fa fa-hashtag"></i> <span data-bind="text: portalHash || biblissimaQid"></span></span>
+                        <!-- /ko -->
+                        <span><i class="fa fa-cubes"></i> <span data-bind="text: items().length"></span> {% trans "items" %}</span>
+                    </p>
+
+                    <!-- Resolved (matched / manual / created) -->
+                    <!-- ko if: state() === 'resolved' -->
+                    <div class="bbma-dep-match-found">
+                        <i class="fa fa-check-circle"></i>
+                        <div class="bbma-dep-match-info">
+                            <!-- ko if: resolutionMode() === 'created' -->
+                            <span class="bbma-dep-match-label">{% trans "New parent Document created:" %}</span>
+                            <!-- /ko -->
+                            <!-- ko ifnot: resolutionMode() === 'created' -->
+                            <span class="bbma-dep-match-label">{% trans "Linked to existing Document:" %}</span>
+                            <!-- /ko -->
+                            <strong data-bind="text: resolvedDisplayname"></strong>
+                        </div>
+                        <button type="button"
+                                class="btn btn-xs btn-link text-muted"
+                                data-bind="click: $component.parentResolver.unlinkParent.bind($component.parentResolver, $data)">
+                            <i class="fa fa-pencil"></i> {% trans "Edit selection" %}
+                        </button>
+                    </div>
+                    <!-- /ko -->
+
+                    <!-- Suggestions list (existing Arches resources that look like a match) -->
+                    <!-- ko if: state() !== 'resolved' && suggestions().length > 0 -->
+                    <div class="bbma-dep-suggestions">
+                        <div class="bbma-dep-suggestions-header">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "Possible matches in your database:" %}
+                        </div>
+                        <!-- ko foreach: suggestions -->
+                        <div class="bbma-dep-suggestion-row">
+                            <div class="bbma-dep-suggestion-info">
+                                <span class="bbma-suggestion-name" data-bind="text: displayname"></span>
+                                <span class="bbma-suggestion-match">
+                                    <!-- ko if: confidence === 'high' -->
+                                    <i class="fa fa-circle text-success"></i>
+                                    <!-- /ko -->
+                                    <!-- ko if: confidence === 'medium' -->
+                                    <i class="fa fa-circle text-warning"></i>
+                                    <!-- /ko -->
+                                    <!-- ko if: confidence === 'low' -->
+                                    <i class="fa fa-circle text-muted"></i>
+                                    <!-- /ko -->
+                                    <small data-bind="text: matchType"></small>
+                                </span>
+                            </div>
+                            <div class="bbma-dep-suggestion-actions">
+                                <button type="button"
+                                        class="btn btn-xs btn-mint"
+                                        data-bind="click: $component.parentResolver.useMatch.bind($component.parentResolver, $parent, $data)">
+                                    <i class="fa fa-link"></i> {% trans "Link" %}
+                                </button>
+                            </div>
+                        </div>
+                        <!-- /ko -->
+                    </div>
+                    <!-- /ko -->
+
+                    <!-- Inline error -->
+                    <!-- ko if: state() === 'error' -->
+                    <p class="bbma-dep-create-hint text-danger">
+                        <i class="fa fa-exclamation-circle"></i>
+                        <span data-bind="text: errorMessage"></span>
+                    </p>
+                    <!-- /ko -->
+
+                    <!-- Manual search picker (always available until resolved) -->
+                    <!-- ko if: state() !== 'resolved' -->
+                    <div class="bbma-dep-search-area">
+                        <label class="bbma-dep-search-label">
+                            <i class="fa fa-search"></i>
+                            {% trans "Or search manually:" %}
+                        </label>
+                        <select data-bind="select2Query: {
+                                    select2Config: $component.manualPickerForGroup($data).select2Config
+                                }"></select>
+                        <label class="checkbox-inline text-muted bbma-dep-enrich">
+                            <input type="checkbox" data-bind="checked: enrichExisting" />
+                            {% trans "Add Biblissima ARK as alt-name on the matched resource" %}
+                        </label>
+                    </div>
+
+                    <!-- Create-new branch -->
+                    <div class="bbma-dep-create-area">
+                        <p class="bbma-dep-create-hint">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "No match found. Create a new parent Document from Biblissima data — required before its components can be imported." %}
+                        </p>
+                        <button type="button"
+                                class="btn btn-xs btn-primary"
+                                data-bind="click: $component.parentResolver.createParent.bind($component.parentResolver, $data),
+                                           disable: creating">
+                            <!-- ko if: creating -->
+                            <i class="fa fa-spinner fa-spin"></i>
+                            <!-- /ko -->
+                            <!-- ko ifnot: creating -->
+                            <i class="fa fa-plus"></i>
+                            <!-- /ko -->
+                            {% trans "Create parent" %}
+                        </button>
+                    </div>
+                    <!-- /ko -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Orphan bucket (Q9 — items without a Biblissima manuscript identifier) -->
+        <!-- ko if: parentResolver.unidentifiedItems().length > 0 -->
+        <p class="bbma-section-hint">
+            <i class="fa fa-exclamation-triangle text-warning"></i>
+            {% trans "Items with no identified manuscript — pick a Document for each." %}
+        </p>
+        <div class="bbma-deps-list" data-bind="foreach: parentResolver.unidentifiedItems">
+            <div class="bbma-dep-card">
+                <div class="bbma-dep-card-header">
+                    <span class="bbma-dep-type">{% trans "Orphan" %}</span>
+                    <span class="bbma-dep-name" data-bind="text: canvasId || arkId || label"></span>
+                    <span class="bbma-dep-badge bbma-dep-badge-pending">
+                        <i class="fa fa-question-circle"></i> {% trans "To assign" %}
+                    </span>
+                </div>
+                <div class="bbma-dep-card-body">
+                    <div class="bbma-dep-search-area">
+                        <label class="bbma-dep-search-label">
+                            <i class="fa fa-search"></i>
+                            {% trans "Or search manually:" %}
+                        </label>
+                        <select data-bind="select2Query: {
+                                    select2Config: $component.orphanPickerForItem($data).select2Config
+                                }"></select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- /ko -->
+    </div>
+    <!-- /ko -->
 
     <!-- Section B: Related resources (Places, Groups, Persons) -->
     <!-- ko if: dependencies().length > 0 -->
@@ -301,7 +556,7 @@
                     <span class="bbma-dep-badge bbma-dep-badge-linked"><i class="fa fa-check"></i> {% trans "Linked" %}</span>
                     <!-- /ko -->
                     <!-- ko if: action() === 'created' -->
-                    <span class="bbma-dep-badge bbma-dep-badge-created"><i class="fa fa-check"></i> {% trans "Created" %}</span>
+                    <span class="bbma-dep-badge bbma-dep-badge-created"><i class="fa fa-plus"></i> {% trans "Created" %}</span>
                     <!-- /ko -->
                     <!-- ko if: action() === 'pending_confirm' -->
                     <span class="bbma-dep-badge bbma-dep-badge-pending"><i class="fa fa-question-circle"></i> {% trans "To confirm" %}</span>
@@ -338,8 +593,8 @@
                         </div>
                         <button class="btn btn-xs btn-link text-muted"
                                 data-bind="click: $parent.unlinkDep"
-                                title="{% trans 'Change' %}">
-                            <i class="fa fa-pencil"></i> {% trans "Change" %}
+                                title="{% trans 'Edit selection' %}">
+                            <i class="fa fa-pencil"></i> {% trans "Edit selection" %}
                         </button>
                     </div>
                 </div>
@@ -419,8 +674,8 @@
                                 </button>
                                 <button class="btn btn-xs btn-mint"
                                         data-bind="click: function(){ $parents[1].useExistingDep($parent, $data); }"
-                                        title="{% trans 'Use this resource' %}">
-                                    <i class="fa fa-link"></i> {% trans "Use" %}
+                                        title="{% trans 'Link to this resource' %}">
+                                    <i class="fa fa-link"></i> {% trans "Link" %}
                                 </button>
                             </div>
                         </div>
@@ -471,7 +726,7 @@
                             <!-- ko ifnot: creating() -->
                             <i class="fa fa-plus"></i>
                             <!-- /ko -->
-                            {% trans "Create now" %}
+                            {% trans "Create resource" %}
                         </button>
                     </div>
                 </div>

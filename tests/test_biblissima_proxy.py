@@ -35,7 +35,6 @@ from django.test import TestCase
 
 from manuspectrum.views import biblissima_proxy as bp
 
-
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "biblissima")
 
 
@@ -171,7 +170,7 @@ class ExtractEntityPropsTests(TestCase):
             }
         )
         result = bp._extract_entity_props("Q1", raw)
-        self.assertEqual(result["qid"], "Q1")
+        self.assertEqual(result["biblissimaQid"], "Q1")
         self.assertEqual(result["label"], "Manuscrit FR")
 
     def test_falls_back_to_english_label(self):
@@ -228,6 +227,29 @@ class ExtractEntityPropsTests(TestCase):
         )
         self.assertIsNone(bp._extract_entity_props("Q1", raw)["shelfmark"])
 
+    def test_extracts_p2_document_nature_qid(self):
+        from manuspectrum.views.biblissima_proxy import _extract_entity_props
+
+        raw = {
+            "claims": {
+                "P2": [{"mainsnak": {"datavalue": {"value": {"id": "Q32810"}}}}]
+            },
+            "labels": {"fr": {"value": "Test manuscript"}},
+        }
+        result = _extract_entity_props("Q123", raw)
+        self.assertEqual(result["documentNatureQid"], "Q32810")
+        # Label is resolved later by _enrich_canvases via batch fetch — at
+        # this stage we only have the QID.
+        self.assertIsNone(result["documentNatureLabel"])
+
+    def test_returns_none_for_p2_when_missing(self):
+        from manuspectrum.views.biblissima_proxy import _extract_entity_props
+
+        raw = {"claims": {}, "labels": {"fr": {"value": "x"}}}
+        result = _extract_entity_props("Q1", raw)
+        self.assertIsNone(result["documentNatureQid"])
+        self.assertIsNone(result["documentNatureLabel"])
+
 
 # ---------------------------------------------------------------------------
 # Wikibase HTTP helpers — _get_wikibase_entity / _batch_get_wikibase_entities
@@ -266,7 +288,7 @@ class GetWikibaseEntityTests(TestCase):
         with patch.object(bp, "_bib_request", return_value=resp) as mocked:
             result = bp._get_wikibase_entity("Q1", session=session)
         self.assertIsNotNone(result)
-        self.assertEqual(result["qid"], "Q1")
+        self.assertEqual(result["biblissimaQid"], "Q1")
         self.assertEqual(result["label"], "Hello")
         # Hit the wikibase URL once.
         self.assertEqual(mocked.call_count, 1)
@@ -297,7 +319,7 @@ class GetWikibaseEntityTests(TestCase):
         # implementation does cache it; assert it's at least not None
         # and shaped right.
         self.assertIsNotNone(result)
-        self.assertEqual(result["qid"], "Q999")
+        self.assertEqual(result["biblissimaQid"], "Q999")
 
 
 class BatchGetWikibaseEntitiesTests(TestCase):
@@ -313,11 +335,11 @@ class BatchGetWikibaseEntitiesTests(TestCase):
     def test_uses_cache_for_known_qids(self):
         cache.set(
             bp._BIBLISSIMA_ENTITY_CACHE_KEY.format(qid="Q1"),
-            {"qid": "Q1", "label": "Cached"},
+            {"biblissimaQid": "Q1", "label": "Cached"},
         )
         with patch.object(bp, "_bib_request") as mocked:
             result = bp._batch_get_wikibase_entities(["Q1"])
-        self.assertEqual(result, {"Q1": {"qid": "Q1", "label": "Cached"}})
+        self.assertEqual(result, {"Q1": {"biblissimaQid": "Q1", "label": "Cached"}})
         mocked.assert_not_called()
 
     def test_batches_uncached_qids_into_single_request(self):
@@ -1200,7 +1222,7 @@ class WikibaseEntityFixtureTests(TestCase):
         ):
             entity = bp._get_wikibase_entity("Q27392", session=session)
         self.assertIsNotNone(entity)
-        self.assertEqual(entity["qid"], "Q27392")
+        self.assertEqual(entity["biblissimaQid"], "Q27392")
         self.assertEqual(entity["label"], "Paris (France)")
 
     def test_batch_get_against_real_multi_entity_response(self):
@@ -1320,3 +1342,740 @@ class IlluminationPortalPageFixtureTests(TestCase):
             "ark:/43093/mdatad3888c6b14fc49ee485c226af71a65b0d35b2ef9",
             self.html,
         )
+
+
+class ResolveBiblissimaDocumentTypeTests(TestCase):
+    def test_returns_manuscrit_valueid_for_canonical_label(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _resolve_biblissima_document_type,
+            VALUEID_MANUSCRIT,
+        )
+
+        valueid, is_fallback = _resolve_biblissima_document_type("manuscrit")
+        self.assertEqual(valueid, VALUEID_MANUSCRIT)
+        self.assertFalse(is_fallback)
+
+    def test_normalizes_case_and_whitespace(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _resolve_biblissima_document_type,
+            VALUEID_MANUSCRIT,
+        )
+
+        valueid, is_fallback = _resolve_biblissima_document_type("  Manuscrit  ")
+        self.assertEqual(valueid, VALUEID_MANUSCRIT)
+        self.assertFalse(is_fallback)
+
+    def test_maps_imprime_variants_to_texte_imprime(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _resolve_biblissima_document_type,
+            VALUEID_TEXTE_IMPRIME,
+        )
+
+        for label in ("imprimé", "texte imprimé"):
+            valueid, is_fallback = _resolve_biblissima_document_type(label)
+            self.assertEqual(valueid, VALUEID_TEXTE_IMPRIME)
+            self.assertFalse(is_fallback)
+
+    def test_maps_codicological_unit_to_manuscrit(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _resolve_biblissima_document_type,
+            VALUEID_MANUSCRIT,
+        )
+
+        valueid, is_fallback = _resolve_biblissima_document_type("unité codicologique")
+        self.assertEqual(valueid, VALUEID_MANUSCRIT)
+        self.assertFalse(is_fallback)
+
+    def test_returns_default_with_fallback_flag_for_unknown_label(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _resolve_biblissima_document_type,
+            DOCUMENT_NATURE_DEFAULT,
+        )
+
+        valueid, is_fallback = _resolve_biblissima_document_type("estampe")
+        self.assertEqual(valueid, DOCUMENT_NATURE_DEFAULT)
+        self.assertTrue(is_fallback)
+
+    def test_returns_default_with_fallback_flag_for_none(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _resolve_biblissima_document_type,
+            DOCUMENT_NATURE_DEFAULT,
+        )
+
+        valueid, is_fallback = _resolve_biblissima_document_type(None)
+        self.assertEqual(valueid, DOCUMENT_NATURE_DEFAULT)
+        self.assertTrue(is_fallback)
+
+    def test_returns_default_with_fallback_flag_for_empty_string(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _resolve_biblissima_document_type,
+            DOCUMENT_NATURE_DEFAULT,
+        )
+
+        valueid, is_fallback = _resolve_biblissima_document_type("")
+        self.assertEqual(valueid, DOCUMENT_NATURE_DEFAULT)
+        self.assertTrue(is_fallback)
+
+
+class BiblissimaEntityViewDocumentNatureTests(TestCase):
+    """Verify P2 nature is resolved and a Document-Type valueid is pre-computed."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
+    def test_resolves_label_and_valueid_for_known_nature(self, mock_get):
+        from manuspectrum.views.biblissima_proxy import VALUEID_MANUSCRIT
+
+        # First call: the manuscript itself with a P2 pointing to Q32810
+        # Second call: Q32810's own entity, where label is "manuscrit"
+        def side_effect(qid, session=None):
+            if qid == "Q123":
+                return {
+                    "biblissimaQid": "Q123",
+                    "label": "Test ms",
+                    "portalHash": None,
+                    "manifestUrl": None,
+                    "digitizationUrl": None,
+                    "shelfmark": None,
+                    "collection": None,
+                    "author": None,
+                    "mandragoreId": None,
+                    "documentNatureQid": "Q32810",
+                    "documentNatureLabel": None,
+                }
+            if qid == "Q32810":
+                return {
+                    "biblissimaQid": "Q32810",
+                    "label": "manuscrit",
+                    "portalHash": None,
+                    "manifestUrl": None,
+                    "digitizationUrl": None,
+                    "shelfmark": None,
+                    "collection": None,
+                    "author": None,
+                    "mandragoreId": None,
+                    "documentNatureQid": None,
+                    "documentNatureLabel": None,
+                }
+            return None
+
+        mock_get.side_effect = side_effect
+
+        from django.test import RequestFactory
+        from manuspectrum.views.biblissima_proxy import BiblissimaEntityView
+
+        rf = RequestFactory()
+        view = BiblissimaEntityView()
+        resp = view.get(rf.get("/api/biblissima/entity/Q123"), qid="Q123")
+        import json
+
+        data = json.loads(resp.content)
+        self.assertEqual(data["documentNatureLabel"], "manuscrit")
+        self.assertEqual(data["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertFalse(data["documentTypeIsFallback"])
+
+    @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
+    def test_returns_fallback_flag_for_unknown_nature(self, mock_get):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_NATURE_DEFAULT
+
+        def side_effect(qid, session=None):
+            if qid == "Q1":
+                return {
+                    "biblissimaQid": "Q1",
+                    "label": "Mystery",
+                    "portalHash": None,
+                    "manifestUrl": None,
+                    "digitizationUrl": None,
+                    "shelfmark": None,
+                    "collection": None,
+                    "author": None,
+                    "mandragoreId": None,
+                    "documentNatureQid": "Q120869",
+                    "documentNatureLabel": None,
+                }
+            if qid == "Q120869":
+                return {
+                    "biblissimaQid": "Q120869",
+                    "label": "estampe",
+                    "portalHash": None,
+                    "manifestUrl": None,
+                    "digitizationUrl": None,
+                    "shelfmark": None,
+                    "collection": None,
+                    "author": None,
+                    "mandragoreId": None,
+                    "documentNatureQid": None,
+                    "documentNatureLabel": None,
+                }
+            return None
+
+        mock_get.side_effect = side_effect
+
+        from django.test import RequestFactory
+        from manuspectrum.views.biblissima_proxy import BiblissimaEntityView
+
+        rf = RequestFactory()
+        view = BiblissimaEntityView()
+        resp = view.get(rf.get("/api/biblissima/entity/Q1"), qid="Q1")
+        import json
+
+        data = json.loads(resp.content)
+        self.assertEqual(data["documentNatureLabel"], "estampe")
+        self.assertEqual(data["documentTypeValueId"], DOCUMENT_NATURE_DEFAULT)
+        self.assertTrue(data["documentTypeIsFallback"])
+
+    @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
+    def test_handles_missing_p2_gracefully(self, mock_get):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_NATURE_DEFAULT
+
+        mock_get.return_value = {
+            "biblissimaQid": "Q1",
+            "label": "x",
+            "portalHash": None,
+            "manifestUrl": None,
+            "digitizationUrl": None,
+            "shelfmark": None,
+            "collection": None,
+            "author": None,
+            "mandragoreId": None,
+            "documentNatureQid": None,
+            "documentNatureLabel": None,
+        }
+
+        from django.test import RequestFactory
+        from manuspectrum.views.biblissima_proxy import BiblissimaEntityView
+
+        rf = RequestFactory()
+        view = BiblissimaEntityView()
+        resp = view.get(rf.get("/api/biblissima/entity/Q1"), qid="Q1")
+        import json
+
+        data = json.loads(resp.content)
+        self.assertIsNone(data["documentNatureLabel"])
+        self.assertEqual(data["documentTypeValueId"], DOCUMENT_NATURE_DEFAULT)
+        self.assertTrue(data["documentTypeIsFallback"])
+
+
+class EnrichCanvasesDocumentNatureTests(TestCase):
+    """Verify _enrich_canvases decorates every canvas with documentTypeValueId."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @patch("manuspectrum.views.biblissima_proxy._batch_get_wikibase_entities")
+    @patch("manuspectrum.views.biblissima_proxy._bib_request")
+    def test_attaches_document_type_to_canvases(self, mock_bib, mock_batch):
+        from manuspectrum.views.biblissima_proxy import (
+            _enrich_canvases,
+            VALUEID_MANUSCRIT,
+        )
+
+        # _bib_request is used for the CirrusSearch fulltext call
+        # (action=query, list=search) — return a single matching item.
+        bib_resp = MagicMock()
+        bib_resp.raise_for_status = MagicMock()
+        bib_resp.json.return_value = {
+            "query": {"search": [{"title": "Item:Q123"}]}
+        }
+        mock_bib.return_value = bib_resp
+
+        # _batch_get_wikibase_entities is called twice:
+        #  • once for candidate manuscript entities (Q123)
+        #  • once for author + nature QIDs together (Q32810 here)
+        # Discriminate by the QIDs requested.
+        def batch(qids, session=None):
+            qids_set = set(qids)
+            if "Q123" in qids_set:
+                return {
+                    "Q123": {
+                        "biblissimaQid": "Q123",
+                        "label": "ms",
+                        "portalHash": "mdataXYZ",
+                        "manifestUrl": "https://m",
+                        "digitizationUrl": None,
+                        "shelfmark": "Lat 1",
+                        "collection": None,
+                        "author": None,
+                        "mandragoreId": None,
+                        "documentNatureQid": "Q32810",
+                        "documentNatureLabel": None,
+                    }
+                }
+            if "Q32810" in qids_set:
+                return {
+                    "Q32810": {
+                        "biblissimaQid": "Q32810",
+                        "label": "manuscrit",
+                    }
+                }
+            return {}
+
+        mock_batch.side_effect = batch
+
+        canvases = [
+            {"manuscriptArk": "ark:/43093/mdataXYZ", "manuscript": "Lat 1"},
+        ]
+        _enrich_canvases(canvases)
+
+        c = canvases[0]
+        self.assertEqual(c["documentNatureLabel"], "manuscrit")
+        self.assertEqual(c["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertFalse(c["documentTypeIsFallback"])
+
+
+class AttachDocumentTypeHelperTests(TestCase):
+    """Verify the _attach_document_type helper resolves and is idempotent."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
+    def test_resolves_label_and_valueid(self, mock_get):
+        from manuspectrum.views.biblissima_proxy import (
+            _attach_document_type,
+            VALUEID_MANUSCRIT,
+        )
+
+        mock_get.return_value = {"biblissimaQid": "Q32810", "label": "manuscrit"}
+        entity = {"documentNatureQid": "Q32810", "documentNatureLabel": None}
+        _attach_document_type(entity)
+        self.assertEqual(entity["documentNatureLabel"], "manuscrit")
+        self.assertEqual(entity["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertFalse(entity["documentTypeIsFallback"])
+
+    @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
+    def test_does_not_refetch_when_label_already_set(self, mock_get):
+        from manuspectrum.views.biblissima_proxy import (
+            _attach_document_type,
+            VALUEID_MANUSCRIT,
+        )
+
+        entity = {
+            "documentNatureQid": "Q32810",
+            "documentNatureLabel": "manuscrit",
+        }
+        _attach_document_type(entity)
+        # Helper should NOT call _get_wikibase_entity when label is already set.
+        mock_get.assert_not_called()
+        self.assertEqual(entity["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertFalse(entity["documentTypeIsFallback"])
+
+    def test_is_safe_on_none_entity(self):
+        from manuspectrum.views.biblissima_proxy import _attach_document_type
+
+        # Must not raise.
+        _attach_document_type(None)
+
+    @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
+    def test_falls_back_when_no_nature_qid(self, mock_get):
+        from manuspectrum.views.biblissima_proxy import (
+            _attach_document_type,
+            DOCUMENT_NATURE_DEFAULT,
+        )
+
+        entity = {"documentNatureQid": None, "documentNatureLabel": None}
+        _attach_document_type(entity)
+        mock_get.assert_not_called()
+        self.assertEqual(entity["documentTypeValueId"], DOCUMENT_NATURE_DEFAULT)
+        self.assertTrue(entity["documentTypeIsFallback"])
+
+
+class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
+    """Verify BiblissimaSearchManuscriptsView.get returns documentType fields."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
+    @patch("manuspectrum.views.biblissima_proxy._batch_get_wikibase_entities")
+    @patch("manuspectrum.views.biblissima_proxy._bib_request")
+    @patch("manuspectrum.views.biblissima_proxy._build_biblissima_session")
+    def test_results_include_document_type(
+        self, mock_build_session, mock_bib, mock_batch, mock_get_single
+    ):
+        from manuspectrum.views.biblissima_proxy import VALUEID_MANUSCRIT
+
+        # Stub session
+        mock_session = MagicMock()
+        mock_session.close = MagicMock()
+        mock_build_session.return_value = mock_session
+
+        # Stub the wbsearchentities + wbgetentities prefix-search response.
+        # Two responses needed in order: first a search response, then a
+        # claims response that has a P2 pointing to the manuscript type QID.
+        # The TYPE_FILTERS["manuscript"] target is whatever the view requires;
+        # we mirror it by giving each item a P2=that type. The view stores
+        # qids whose P2 matches; we rely on TYPE_FILTERS["manuscript"]
+        # already being the canonical "manuscrit" type qid in production.
+        from manuspectrum.views.biblissima_proxy import BiblissimaSearchManuscriptsView
+
+        ms_type_qid = BiblissimaSearchManuscriptsView.TYPE_FILTERS["manuscript"]
+
+        search_resp = MagicMock()
+        search_resp.raise_for_status = MagicMock()
+        search_resp.json.return_value = {"search": [{"id": "Q123"}]}
+
+        claims_resp = MagicMock()
+        claims_resp.raise_for_status = MagicMock()
+        claims_resp.json.return_value = {
+            "entities": {
+                "Q123": {
+                    "claims": {
+                        "P2": [
+                            {"mainsnak": {"datavalue": {"value": {"id": ms_type_qid}}}}
+                        ]
+                    }
+                }
+            }
+        }
+
+        # Fulltext search response (used as the second-pass; can be empty)
+        fulltext_resp = MagicMock()
+        fulltext_resp.raise_for_status = MagicMock()
+        fulltext_resp.json.return_value = {"query": {"search": []}}
+
+        mock_bib.side_effect = [search_resp, claims_resp, fulltext_resp]
+
+        # Batch entity fetch returns Q123 with documentNatureQid -> Q32810
+        mock_batch.return_value = {
+            "Q123": {
+                "biblissimaQid": "Q123",
+                "label": "Test ms",
+                "portalHash": "mdataXYZ",
+                "manifestUrl": "https://m",
+                "digitizationUrl": None,
+                "shelfmark": "Lat 1",
+                "collection": None,
+                "author": None,
+                "mandragoreId": None,
+                "documentNatureQid": "Q32810",
+                "documentNatureLabel": None,
+            }
+        }
+
+        # _get_wikibase_entity is called for the nature-label resolution
+        mock_get_single.return_value = {"biblissimaQid": "Q32810", "label": "manuscrit"}
+
+        from django.test import RequestFactory
+
+        rf = RequestFactory()
+        req = rf.get("/api/biblissima/search-manuscripts?q=test")
+        view = BiblissimaSearchManuscriptsView()
+        resp = view.get(req)
+
+        import json
+
+        data = json.loads(resp.content)
+        self.assertEqual(data["total"], 1)
+        first = data["results"][0]
+        self.assertEqual(first["documentNatureLabel"], "manuscrit")
+        self.assertEqual(first["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertFalse(first["documentTypeIsFallback"])
+
+
+class LinkToProjectIdempotenceTests(TestCase):
+    """_link_to_project must not duplicate refs when called twice."""
+
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_skips_when_resource_already_linked(self, mock_tile):
+        from manuspectrum.views.biblissima_proxy import (
+            BiblissimaCreateResourceView,
+            PROJECT_STUDIED_OBJECTS_NODE,
+        )
+
+        rid = "11111111-1111-1111-1111-111111111111"
+        pid = "22222222-2222-2222-2222-222222222222"
+
+        existing = MagicMock()
+        existing.data = {
+            PROJECT_STUDIED_OBJECTS_NODE: [
+                {
+                    "resourceId": rid,
+                    "ontologyProperty": "",
+                    "inverseOntologyProperty": "",
+                    "resourceXresourceId": "",
+                }
+            ]
+        }
+        mock_tile.objects.filter.return_value.first.return_value = existing
+
+        view = BiblissimaCreateResourceView()
+        view._link_to_project(rid, pid, transaction_id=None)
+
+        # The tile data must still contain exactly one ref.
+        self.assertEqual(
+            len(existing.data[PROJECT_STUDIED_OBJECTS_NODE]),
+            1,
+            "Idempotence broken: a duplicate ref was appended",
+        )
+        existing.save.assert_not_called()
+
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_appends_when_resource_not_yet_linked(self, mock_tile):
+        from manuspectrum.views.biblissima_proxy import (
+            BiblissimaCreateResourceView,
+            PROJECT_STUDIED_OBJECTS_NODE,
+        )
+
+        rid = "11111111-1111-1111-1111-111111111111"
+        pid = "22222222-2222-2222-2222-222222222222"
+
+        existing = MagicMock()
+        existing.data = {PROJECT_STUDIED_OBJECTS_NODE: []}
+        mock_tile.objects.filter.return_value.first.return_value = existing
+
+        view = BiblissimaCreateResourceView()
+        view._link_to_project(rid, pid, transaction_id=None)
+
+        self.assertEqual(len(existing.data[PROJECT_STUDIED_OBJECTS_NODE]), 1)
+        self.assertEqual(
+            existing.data[PROJECT_STUDIED_OBJECTS_NODE][0]["resourceId"],
+            rid,
+        )
+        existing.save.assert_called_once()
+
+
+class BiblissimaLinkToProjectViewTests(TestCase):
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCreateResourceView._link_to_project"
+    )
+    def test_calls_link_helper_with_validated_inputs(self, mock_link):
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import BiblissimaLinkToProjectView
+
+        rf = RequestFactory()
+        body = json.dumps(
+            {
+                "resourceId": "11111111-1111-1111-1111-111111111111",
+                "projectId": "22222222-2222-2222-2222-222222222222",
+            }
+        )
+        req = rf.post(
+            "/api/biblissima/link-to-project",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaLinkToProjectView()
+        resp = view.post(req)
+        self.assertEqual(resp.status_code, 200)
+        mock_link.assert_called_once()
+
+    def test_rejects_invalid_uuid(self):
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import BiblissimaLinkToProjectView
+
+        rf = RequestFactory()
+        body = json.dumps({"resourceId": "not-a-uuid", "projectId": "x"})
+        req = rf.post(
+            "/api/biblissima/link-to-project",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaLinkToProjectView()
+        resp = view.post(req)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_rejects_missing_fields(self):
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import BiblissimaLinkToProjectView
+
+        rf = RequestFactory()
+        body = json.dumps({"resourceId": "11111111-1111-1111-1111-111111111111"})
+        req = rf.post(
+            "/api/biblissima/link-to-project",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaLinkToProjectView()
+        resp = view.post(req)
+        self.assertEqual(resp.status_code, 400)
+
+    def test_rejects_invalid_json(self):
+        from django.test import RequestFactory
+        from manuspectrum.views.biblissima_proxy import BiblissimaLinkToProjectView
+
+        rf = RequestFactory()
+        req = rf.post(
+            "/api/biblissima/link-to-project",
+            data="not json",
+            content_type="application/json",
+        )
+        view = BiblissimaLinkToProjectView()
+        resp = view.post(req)
+        self.assertEqual(resp.status_code, 400)
+
+
+class CheckDuplicatesComponentScopeTests(TestCase):
+    """For Components, strategies 2 and 3 must NOT run.
+
+    Components share the parent manuscript's shelfmark, so an ES search on
+    shelfmark or label returns sibling-illumination false positives. Only
+    the ARK ifdata identifier (strategy 1) is unique per illumination.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
+    )
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_component_skips_shelfmark_and_label_strategies(self, mock_tile, mock_es):
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import (
+            BiblissimaCheckDuplicatesView,
+            COMPONENT_GRAPH_ID,
+        )
+
+        # No tile-identifier matches — strategy 1 yields nothing here.
+        mock_tile.objects.filter.return_value = []
+
+        rf = RequestFactory()
+        body = json.dumps(
+            {
+                "graphId": COMPONENT_GRAPH_ID,
+                "items": [
+                    {
+                        "arkId": "ark:/43093/ifdataXYZ",
+                        "shelfmark": "Latin 40",
+                        "label": "Aggée et Dieu",
+                        "biblissimaQid": "",
+                        "portalHash": "",
+                    }
+                ],
+            }
+        )
+        req = rf.post(
+            "/api/biblissima/check-duplicates",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaCheckDuplicatesView()
+        view.post(req)
+
+        # Strategy 2 (shelfmark) and strategy 3 (label) must NOT have fired.
+        mock_es.assert_not_called()
+
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
+    )
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_document_still_runs_shelfmark_and_label_strategies(
+        self, mock_tile, mock_es
+    ):
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import (
+            BiblissimaCheckDuplicatesView,
+            DOCUMENT_GRAPH_ID,
+        )
+
+        mock_tile.objects.filter.return_value = []
+
+        rf = RequestFactory()
+        body = json.dumps(
+            {
+                "graphId": DOCUMENT_GRAPH_ID,
+                "items": [
+                    {
+                        "arkId": "ark:/43093/mdataXYZ",
+                        "shelfmark": "Latin 40",
+                        "label": "Latin 40",
+                        "biblissimaQid": "Q123",
+                        "portalHash": "mdataXYZ",
+                    }
+                ],
+            }
+        )
+        req = rf.post(
+            "/api/biblissima/check-duplicates",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaCheckDuplicatesView()
+        view.post(req)
+
+        # Strategies 2 and 3 must both have fired for Documents.
+        # _es_string_search is called twice (once for shelfmark, once for label).
+        self.assertEqual(mock_es.call_count, 2)
+        match_types = [call.args[3] for call in mock_es.call_args_list]
+        self.assertIn("shelfmark", match_types)
+        self.assertIn("displayname", match_types)
+
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
+    )
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_other_graphs_also_run_label_strategy(self, mock_tile, mock_es):
+        """Place / Person / Group dep resolution depends on strategy 3 to find
+        existing resources by displayname (e.g. 'Paris (France)'). The skip
+        guard must target Components only."""
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+        mock_tile.objects.filter.return_value = []
+        place_graph_id = "3f2b036a-b65d-474d-b692-0b21903655c5"  # Place graph
+
+        rf = RequestFactory()
+        body = json.dumps(
+            {
+                "graphId": place_graph_id,
+                "items": [
+                    {
+                        "arkId": "",
+                        "shelfmark": "",
+                        "label": "Paris (France)",
+                        "biblissimaQid": "",
+                        "portalHash": "",
+                    }
+                ],
+            }
+        )
+        req = rf.post(
+            "/api/biblissima/check-duplicates",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaCheckDuplicatesView()
+        view.post(req)
+
+        # Strategy 3 (displayname) must have fired for the Place graph.
+        match_types = [call.args[3] for call in mock_es.call_args_list]
+        self.assertIn("displayname", match_types)

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-10 10:21-0500\n"
+"POT-Creation-Date: 2026-05-04 09:38-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -634,6 +634,7 @@ msgid "Summary"
 msgstr "Résumé"
 
 #: templates/javascript.htm:18
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:49
 msgid "Type"
 msgstr "Type"
 
@@ -758,125 +759,161 @@ msgid "All dates"
 msgstr "Toutes les dates"
 
 #: templates/javascript.htm:47
-msgid "Search for a parent document..."
-msgstr "Rechercher un document parent..."
-
-#: templates/javascript.htm:48
 msgid "Associate with a project (optional)..."
 msgstr "Associer à un projet (optionnel)..."
 
-#: templates/javascript.htm:49
+#: templates/javascript.htm:48
 msgid "Pending"
 msgstr "En attente"
 
-#: templates/javascript.htm:50
+#: templates/javascript.htm:49
 msgid "Creating..."
 msgstr "Création..."
 
-#: templates/javascript.htm:51
+#: templates/javascript.htm:50
 #: templates/views/components/plugins/init-workflow.htm:52
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:259
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:16
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:435
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:26
 msgid "Created"
 msgstr "Créées"
 
-#: templates/javascript.htm:52
+#: templates/javascript.htm:51
 msgid "Error"
 msgstr "Erreur"
 
-#: templates/javascript.htm:53
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:20
+#: templates/javascript.htm:52
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:37
 msgid "Skipped"
 msgstr "Ignorées"
 
-#: templates/javascript.htm:54
+#: templates/javascript.htm:53
 msgid "Duplicate"
 msgstr "Doublon"
 
-#: templates/javascript.htm:55
+#: templates/javascript.htm:54
 msgid "Create new resource"
 msgstr "Créer une nouvelle ressource"
 
-#: templates/javascript.htm:56
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:256
+#: templates/javascript.htm:55
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:432
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:31
 #, fuzzy
 #| msgid "linked"
 msgid "Linked"
 msgstr "liés"
 
-#: templates/javascript.htm:57
+#: templates/javascript.htm:56
 msgid "Search existing resource..."
 msgstr "Rechercher une ressource existante..."
 
-#: templates/javascript.htm:58
+#: templates/javascript.htm:57
 msgid "The Biblissima search failed. Please try again in a moment."
 msgstr "La recherche Biblissima a échoué. Veuillez réessayer dans un instant."
 
-#: templates/javascript.htm:59
+#: templates/javascript.htm:58
 msgid ""
 "Network error while querying Biblissima. Check your connection and try again."
 msgstr ""
 "Erreur réseau lors de la requête Biblissima. Vérifiez votre connexion et "
 "réessayez."
 
-#: templates/javascript.htm:60
+#: templates/javascript.htm:59
 msgid "Connecting to Biblissima…"
 msgstr "Connexion à Biblissima…"
 
-#: templates/javascript.htm:61
+#: templates/javascript.htm:60
 msgid "Fetching manuscripts from the archive…"
 msgstr "Récupération des manuscrits depuis l'archive…"
 
-#: templates/javascript.htm:62
+#: templates/javascript.htm:61
 msgid "Enriching manuscript metadata…"
 msgstr "Enrichissement des métadonnées…"
 
-#: templates/javascript.htm:63
+#: templates/javascript.htm:62
 msgid "Matching records…"
 msgstr "Rapprochement des notices…"
 
-#: templates/javascript.htm:64
+#: templates/javascript.htm:63
 msgid "Still working — large searches may take up to 2 minutes"
 msgstr ""
 "Toujours en cours — les recherches larges peuvent prendre jusqu'à 2 minutes"
 
-#: templates/javascript.htm:65
+#: templates/javascript.htm:64
 msgid "Cart limit reached"
 msgstr "Limite du panier atteinte"
 
-#: templates/javascript.htm:66
+#: templates/javascript.htm:65
 msgid "default"
 msgstr "par défaut"
 
-#: templates/javascript.htm:67
+#: templates/javascript.htm:66
 msgid "type"
 msgstr "type"
 
-#: templates/javascript.htm:68
+#: templates/javascript.htm:67 templates/javascript.htm:69
 msgid "Manuscript"
 msgstr "Manuscrit"
 
-#: templates/javascript.htm:69
+#: templates/javascript.htm:68
 msgid "Custom type"
 msgstr "Type personnalisé"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
-msgid "items have a default type — click the yellow badge to adjust."
-msgstr ""
-"éléments ont un type par défaut — cliquez sur le badge jaune pour le "
-"corriger."
+#: templates/javascript.htm:70
+msgid "Illumination"
+msgstr "Enluminure"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
-msgid "Click to change type"
-msgstr "Cliquer pour changer le type"
+#: templates/javascript.htm:71
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:83
+msgid "Detected parent Documents"
+msgstr "Documents parents détectés"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
-msgid "Done"
-msgstr "Terminé"
+#: templates/javascript.htm:72
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:94
+msgid "Resolving parent manuscripts…"
+msgstr "Résolution des manuscrits parents…"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
-msgid "Enriching from Biblissima…"
-msgstr "Enrichissement depuis Biblissima…"
+#: templates/javascript.htm:73
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:143
+msgid "Use this"
+msgstr "Utiliser celui-ci"
+
+#: templates/javascript.htm:74
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:126
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:303
+msgid "Unlink"
+msgstr "Délier"
+
+#: templates/javascript.htm:75
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:159
+msgid "Create new parent Document"
+msgstr "Créer un nouveau Document parent"
+
+#: templates/javascript.htm:76
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:156
+msgid "Creating…"
+msgstr "Création…"
+
+#: templates/javascript.htm:77
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:171
+msgid "Add Biblissima ARK as alt-name on existing"
+msgstr "Ajouter l'ARK Biblissima comme nom alternatif"
+
+#: templates/javascript.htm:78
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:189
+msgid "Items with no identified manuscript"
+msgstr "Items sans manuscrit identifié"
+
+#: templates/javascript.htm:79
+msgid "Pick a Document manually…"
+msgstr "Choisir un Document manuellement…"
+
+#: templates/javascript.htm:80
+msgid "Pick a Document (required)…"
+msgstr "Choisir un Document (obligatoire)…"
+
+#: templates/javascript.htm:81
+msgid "Cannot create parent — no Biblissima QID"
+msgstr "Impossible de créer le parent — pas de QID Biblissima"
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -1378,7 +1415,7 @@ msgid "Right Y Axis"
 msgstr "Axe Y droit"
 
 #: templates/views/components/plugins/importer-configuration.htm:237
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:337
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:513
 msgid "Cancel"
 msgstr "Annuler"
 
@@ -1408,7 +1445,7 @@ msgstr ""
 
 #: templates/views/components/plugins/init-workflow.htm:63
 msgid "Link"
-msgstr ""
+msgstr "Lier"
 
 #: templates/views/components/plugins/init-workflow.htm:79
 msgid "Go to Workflow"
@@ -1615,38 +1652,18 @@ msgstr "Composant"
 msgid "Illumination, lettrine, decoration"
 msgstr "Enluminure, lettrine, décor"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:37
-msgid "Parent document"
-msgstr "Document parent"
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:40
-msgid "The document this component belongs to. Must already exist."
-msgstr "Le document auquel ce composant appartient. Doit déjà exister."
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:48
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:36
 msgid "Associate with project"
 msgstr "Associer à un projet"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:50
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:38
 msgid ""
 "Optional. Created resources will be added to this project's studied objects."
 msgstr ""
 "Optionnel. Les ressources créées seront ajoutées aux objets étudiés de ce "
 "projet."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:58
-msgid "Default type"
-msgstr "Type par défaut"
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:60
-msgid ""
-"Type applied by default to all created resources. Can be changed per item "
-"later."
-msgstr ""
-"Type appliqué par défaut à toutes les ressources créées. Modifiable par item "
-"ensuite."
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:76
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:48
 msgid "Continue"
 msgstr "Continuer"
 
@@ -1665,9 +1682,11 @@ msgstr "liés"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:48
 msgid ""
-"Link or create all related resources (places, institutions, persons) before "
-"creating documents"
+"Link or create all related resources (places, institutions, persons) and "
+"parent Documents before creating components"
 msgstr ""
+"Liez ou créez toutes les ressources associées (lieux, institutions, "
+"personnes) et les Documents parents avant de créer les composants"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:55
 msgid "Create all"
@@ -1677,65 +1696,85 @@ msgstr "Tout créer"
 msgid "Finish"
 msgstr "Terminer"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:115
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:71
+msgid "items have a default type — click the yellow badge to adjust."
+msgstr ""
+"éléments ont un type par défaut — cliquez sur le badge jaune pour le "
+"corriger."
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:111
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:421
+msgid "items"
+msgstr "items"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:218
+msgid "Enriching from Biblissima…"
+msgstr "Enrichissement depuis Biblissima…"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:248
+msgid "Click to change type"
+msgstr "Cliquer pour changer le type"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:267
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:17
+msgid "Done"
+msgstr "Terminé"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:291
 #, fuzzy
 #| msgid "Created"
 msgid "Create"
 msgstr "Créées"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:115
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:291
 msgid "Waiting for:"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:123
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:210
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:315
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:372
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:299
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:386
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:491
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:548
 msgid "View"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:127
-msgid "Unlink"
-msgstr "Délier"
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:134
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:310
 msgid "Edit in Arches"
 msgstr "Éditer dans Arches"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:141
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:317
 msgid "Retry"
 msgstr "Réessayer"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:157
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:333
 msgid "Linked to:"
 msgstr "Lié à :"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:162
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:338
 msgid "Add missing Biblissima data to existing resource"
 msgstr "Ajouter les données Biblissima manquantes à la ressource existante"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:173
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:349
 msgid "IIIF manifest"
 msgstr "Manifeste IIIF"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:188
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:364
 msgid "Possible matches found in database"
 msgstr "Correspondances possibles trouvées dans la base"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:215
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:377
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:391
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:553
 msgid "Use this resource"
 msgstr "Utiliser cette ressource"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:224
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:400
 msgid "Not a match, create new"
 msgstr "Pas de correspondance, créer"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:238
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:414
 msgid "Related resources"
 msgstr "Ressources liées"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:240
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:416
 #, fuzzy
 #| msgid ""
 #| "The following places, institutions, and persons were found in the "
@@ -1749,80 +1788,78 @@ msgstr ""
 "données Biblissima. S'ils existent déjà dans votre base, sélectionnez-les ci-"
 "dessous. Sinon ils seront créés automatiquement."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:262
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:438
 #, fuzzy
 #| msgid "No config"
 msgid "To confirm"
 msgstr "Aucune config"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
-#, fuzzy
-#| msgid "Manifest description"
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:441
 msgid "Matches found"
-msgstr "Description du manifeste"
+msgstr "Correspondances trouvées"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:273
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:449
 msgid "Searching..."
 msgstr "Recherche en cours..."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:281
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:457
 #, fuzzy
 #| msgid "Create new resource"
 msgid "Creating resource..."
 msgstr "Créer une nouvelle ressource"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:291
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:467
 msgid "Linked to existing resource:"
 msgstr "Lié à la ressource existante :"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:296
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:297
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:472
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:473
 msgid "Change"
 msgstr "Modifier"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:309
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:485
 #, fuzzy
 #| msgid "Resource type to create"
 msgid "New resource created:"
 msgstr "Type de ressource à créer"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:328
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:504
 #, fuzzy
 #| msgid "Linked to:"
 msgid "Link to:"
 msgstr "Lié à :"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:333
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:509
 #, fuzzy
 #| msgid "Config"
 msgid "Confirm"
 msgstr "Configuration"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:350
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:526
 #, fuzzy
 #| msgid "Possible matches found in database"
 msgid "Possible matches in your database:"
 msgstr "Correspondances possibles trouvées dans la base"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:378
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:554
 msgid "Use"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:386
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:562
 #, fuzzy
 #| msgid "Not a match, create new"
 msgid "Not a match"
 msgstr "Pas de correspondance, créer"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:395
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:571
 msgid "Or search manually:"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:410
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:586
 msgid "Already in your database?"
 msgstr "Déjà dans votre base de données ?"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:419
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:595
 #, fuzzy
 #| msgid "If not found, a new resource will be created automatically."
 msgid ""
@@ -1830,7 +1867,7 @@ msgid ""
 "automatically when you create the documents."
 msgstr "Si non trouvé, une nouvelle ressource sera créée automatiquement."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:429
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:605
 #, fuzzy
 #| msgid "Create new"
 msgid "Create now"
@@ -1870,176 +1907,151 @@ msgstr "Ajouter par identifiant Biblissima"
 msgid "Q35658 or ark:/43093/mdata6ca4e39f..."
 msgstr "Q35658 ou ark:/43093/mdata6ca4e39f..."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:124
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:129
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:132
 msgid "results"
 msgstr "résultats"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:134
-msgid "Add all visible"
-msgstr "Ajouter tous les visibles"
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:145
 msgid "Filter results…"
 msgstr "Filtrer les résultats…"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:150
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:256
 msgid "Clear filter"
 msgstr "Effacer le filtre"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm
-msgid "No result matches the current filter."
-msgstr "Aucun résultat ne correspond au filtre actuel."
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:163
+msgid "Add all visible"
+msgstr "Ajouter tous les visibles"
 
-# --- Step 4 (Summary) --------------------------------------------------------
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "resource created"
-msgstr "ressource créée"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "resources created"
-msgstr "ressources créées"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "Created resources"
-msgstr "Ressources créées"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "Linked to existing resources"
-msgstr "Liées à des ressources existantes"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "skipped"
-msgstr "ignoré(s)"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "errors"
-msgstr "erreur(s)"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "See step 3 for details."
-msgstr "Voir l'étape 3 pour les détails."
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "Open project"
-msgstr "Ouvrir le projet"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "With issues"
-msgstr "Avec avertissements"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "Show"
-msgstr "Afficher"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "more"
-msgstr "de plus"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm
-msgid "Collapse"
-msgstr "Réduire"
-
-#: templates/javascript.htm
-msgid "Illumination"
-msgstr "Enluminure"
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:156
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:185
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
 msgstr ""
 "Biblissima peut être lent sur les recherches larges. Vous pouvez laisser cet "
 "onglet ouvert."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:161
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:190
 msgid "Elapsed"
 msgstr "Écoulé"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:204
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:233
 msgid ""
 "Search by shelfmark, title, or institution to find manuscripts on Biblissima."
 msgstr ""
 "Recherchez par cote, titre ou institution pour trouver des manuscrits sur "
 "Biblissima."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:207
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:236
 msgid "Select iconographic descriptors and click Search to find illuminations."
 msgstr ""
 "Sélectionnez des descripteurs iconographiques et cliquez Rechercher pour "
 "trouver des enluminures."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:216
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:245
 msgid "No results found. Try different search terms."
 msgstr "Aucun résultat. Essayez d'autres termes de recherche."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:226
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:253
+msgid "No result matches the current filter."
+msgstr "Aucun résultat ne correspond au filtre actuel."
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:267
 msgid "Loading results"
 msgstr "Chargement des résultats"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:230
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:271
 msgid "page"
 msgstr "page"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:273
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:314
 msgid "IIIF"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:336
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:377
 msgid "Selection"
 msgstr "Sélection"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:343
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:384
 #, fuzzy
 #| msgid "Clear all"
 msgid "Clear"
 msgstr "Tout retirer"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:351
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:392
 msgid "Click on results to add them to your selection."
 msgstr "Cliquez sur les résultats pour les ajouter à votre sélection."
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:380
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:421
 msgid "Continue with"
 msgstr "Continuer avec"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:380
-msgid "items"
-msgstr "items"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:8
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:14
 msgid "Import complete"
 msgstr "Import terminé"
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:13
-msgid "Resource type"
-msgstr "Type de ressource"
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:18
+msgid "With issues"
+msgstr "Avec avertissements"
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:17
-msgid "resources"
-msgstr "ressources"
-
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:25
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:43
 msgid "Errors"
 msgstr "Erreurs"
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:30
-msgid "Project"
-msgstr "Projet"
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:57
+msgid "Created resources"
+msgstr "Ressources créées"
 
-#: views/biblissima_proxy.py:138
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:104
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:159
+msgid "Show"
+msgstr "Afficher"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:106
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:161
+msgid "more"
+msgstr "de plus"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:110
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:165
+msgid "Collapse"
+msgstr "Réduire"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:121
+msgid "Linked to existing resources"
+msgstr "Liées à des ressources existantes"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:179
+msgid "skipped"
+msgstr "ignoré(s)"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:186
+msgid "errors"
+msgstr "erreur(s)"
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:188
+msgid "See step 3 for details."
+msgstr "Voir l'étape 3 pour les détails."
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:199
+msgid "Open project"
+msgstr "Ouvrir le projet"
+
+#: views/biblissima_proxy.py:206
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "Le portail Biblissima n'a pas répondu à temps. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:149
+#: views/biblissima_proxy.py:217
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Impossible de joindre le portail Biblissima. Vérifiez votre connexion et "
 "réessayez."
 
-#: views/biblissima_proxy.py:162
+#: views/biblissima_proxy.py:230
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -2048,11 +2060,11 @@ msgstr ""
 "Le portail Biblissima a renvoyé une erreur (%(status)s). Veuillez réessayer "
 "dans un instant."
 
-#: views/biblissima_proxy.py:173
+#: views/biblissima_proxy.py:241
 msgid "Invalid response from the Biblissima portal."
 msgstr "Réponse invalide du portail Biblissima."
 
-#: views/biblissima_proxy.py:181
+#: views/biblissima_proxy.py:249
 msgid "Unknown error while querying Biblissima."
 msgstr "Erreur inconnue lors de la requête Biblissima."
 
@@ -2063,6 +2075,61 @@ msgstr "<h1>Les rendus n'existent pas</h1>"
 #: views/renderer_config.py:62
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Edit selection"
+msgstr "Modifier la sélection"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Create parent"
+msgstr "Créer le parent"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Create resource"
+msgstr "Créer la ressource"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Link to this resource"
+msgstr "Lier à cette ressource"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "parents"
+msgstr "parents"
+
+#~ msgid "Search for a parent document..."
+#~ msgstr "Rechercher un document parent..."
+
+#~ msgid "Parent document"
+#~ msgstr "Document parent"
+
+#~ msgid "The document this component belongs to. Must already exist."
+#~ msgstr "Le document auquel ce composant appartient. Doit déjà exister."
+
+#~ msgid "Default type"
+#~ msgstr "Type par défaut"
+
+#~ msgid ""
+#~ "Type applied by default to all created resources. Can be changed per item "
+#~ "later."
+#~ msgstr ""
+#~ "Type appliqué par défaut à toutes les ressources créées. Modifiable par "
+#~ "item ensuite."
+
+# --- Step 4 (Summary) --------------------------------------------------------
+#~ msgid "resource created"
+#~ msgstr "ressource créée"
+
+#~ msgid "resources created"
+#~ msgstr "ressources créées"
+
+#~ msgid "Resource type"
+#~ msgstr "Type de ressource"
+
+#~ msgid "resources"
+#~ msgstr "ressources"
+
+#~ msgid "Project"
+#~ msgstr "Projet"
 
 #~ msgid "Iconographic descriptors"
 #~ msgstr "Descripteurs iconographiques"

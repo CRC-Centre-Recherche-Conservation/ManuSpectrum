@@ -79,14 +79,27 @@ from manuspectrum.utils.http import get_user_agent
 
 logger = logging.getLogger(__name__)
 
-BIBLISSIMA_WIKIBASE = "https://data.biblissima.fr/w/api.php"
-BIBLISSIMA_IIIF_MANIFEST = "https://portail.biblissima.fr/iiif/manifest"
+# Mapping / graph / node-id constants live in a dedicated package so this
+# file stays focused on request handling and tile creation logic. Star
+# import is intentional — the names are referenced unprefixed throughout
+# the module and across the tests.
+from manuspectrum.constants.biblissima import *  # noqa: F401,F403,E402
 
-REQUEST_TIMEOUT = 10
-# The Biblissima IIIF manifest and portal HTML endpoints can be slow when
-# aggregating descriptor-based manifests or when the portal is under load.
-IIIF_REQUEST_TIMEOUT = 45
-PORTAL_REQUEST_TIMEOUT = 30
+# Runtime/network configuration is loaded from Django settings (tunable
+# per environment via settings_local.py). Module-level aliases preserve
+# the unprefixed names that the rest of the file (and the tests) already
+# reference, so no call site has to read ``settings.BIBLISSIMA_*``.
+from django.conf import settings  # noqa: E402
+
+BIBLISSIMA_WIKIBASE = settings.BIBLISSIMA_WIKIBASE_URL
+BIBLISSIMA_IIIF_MANIFEST = settings.BIBLISSIMA_IIIF_MANIFEST_URL
+BIBLISSIMA_PORTAL = settings.BIBLISSIMA_PORTAL_URL
+BIBLISSIMA_PORTAL_EN = settings.BIBLISSIMA_PORTAL_EN_URL
+REQUEST_TIMEOUT = settings.BIBLISSIMA_REQUEST_TIMEOUT
+IIIF_REQUEST_TIMEOUT = settings.BIBLISSIMA_IIIF_REQUEST_TIMEOUT
+PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
+_BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
+_BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
 
 
 def _build_biblissima_session():
@@ -133,14 +146,9 @@ def _build_biblissima_session():
 
 # Module-level semaphore bounds how many concurrent HTTP calls to Biblissima
 # can run across the whole Django process, regardless of how many users hit
-# the proxy at the same time. Sized to stay a good API citizen.
-_BIBLISSIMA_CONCURRENCY_LIMIT = 12
+# the proxy at the same time. Sized via _BIBLISSIMA_CONCURRENCY_LIMIT in
+# biblissima_constants to stay a good API citizen.
 _biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
-
-# Cache keys and TTLs for Biblissima data in the Django cache backend.
-_BIBLISSIMA_CACHE_TTL = 24 * 60 * 60  # 24 hours
-_BIBLISSIMA_ENTITY_CACHE_KEY = "biblissima:wikibase:entity:{qid}"
-_BIBLISSIMA_MANUSCRIPT_CACHE_KEY = "biblissima:wikibase:manuscript:{ark_hash}"
 
 # Lightweight counters for observing upstream health via /api/biblissima/stats.
 _biblissima_stats = {
@@ -252,225 +260,6 @@ def _biblissima_upstream_error(exc, context):
     )
 
 
-# Wikibase property IDs
-P2 = "P2"  # nature de l'élément
-P129 = "P129"  # identifiant Portail Biblissima
-P194 = "P194"  # collection (institution)
-P195 = "P195"  # cote (shelfmark)
-P196 = "P196"  # manifeste IIIF
-P197 = "P197"  # numérisation URL
-P270 = "P270"  # identifiant Mandragore
-P354 = "P354"  # auteur
-P201 = "P201"  # localisation (place)
-P169 = "P169"  # partie de (parent institution)
-P123 = "P123"  # identifiant Geonames
-
-# Arches graph UUIDs
-DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
-COMPONENT_GRAPH_ID = "d47595b4-f8a6-419c-8f33-b388206280c4"
-PROJECT_GRAPH_ID = "87a4319d-3ca5-43f6-88cc-a7379fba67f6"
-PLACE_GRAPH_ID = "3f2b036a-b65d-474d-b692-0b21903655c5"
-PERSON_GRAPH_ID = "5bf45c85-84cd-4a76-b64a-3ffe86eea1b8"
-GROUP_GRAPH_ID = "4f447dca-dbb3-48d0-bc90-3f2935db8b8c"
-
-# --- Document nodegroups & nodes ---
-DOC_NAME_NG = "3e132cfd-7038-11ef-8753-0575b5bada34"
-DOC_NAME_LABEL = "3e132d00-7038-11ef-8753-0575b5bada34"
-DOC_NAME_LANGUAGE = "3e132cff-7038-11ef-8753-0575b5bada34"
-DOC_NAME_TYPE = "3e132d01-7038-11ef-8753-0575b5bada34"
-
-DOC_IDENTIFIER_NG = "413fd755-7038-11ef-8753-0575b5bada34"
-DOC_IDENTIFIER_VALUE = "413fd757-7038-11ef-8753-0575b5bada34"
-DOC_IDENTIFIER_SOURCE = "413fd758-7038-11ef-8753-0575b5bada34"
-DOC_IDENTIFIER_TYPE = "413fd759-7038-11ef-8753-0575b5bada34"
-
-DOC_TYPE_NG = "9d757c50-7041-11ef-8753-0575b5bada34"
-DOC_TYPE_NODE = "9d757c50-7041-11ef-8753-0575b5bada34"
-
-DOC_STATEMENT_NG = "44a2e1a3-7038-11ef-8753-0575b5bada34"
-DOC_STATEMENT_CONTENT = "44a2e1a7-7038-11ef-8753-0575b5bada34"
-DOC_STATEMENT_LANGUAGE = "44a2e1aa-7038-11ef-8753-0575b5bada34"
-DOC_STATEMENT_SOURCE = "44a2e1ad-7038-11ef-8753-0575b5bada34"
-DOC_STATEMENT_TYPE = "44a2e1ac-7038-11ef-8753-0575b5bada34"
-
-DOC_FACSIMILES_NG = "76cb5191-e4e4-4fd4-8d1d-f040292290b4"
-DOC_FACSIMILES_NODE = "76cb5191-e4e4-4fd4-8d1d-f040292290b4"
-
-DOC_LOCATION_NG = "a53152c8-703e-11ef-8753-0575b5bada34"
-DOC_LOCATION_NODE = "a53152c8-703e-11ef-8753-0575b5bada34"
-DOC_LOCATION_LITERAL = "c764ad5c-d1b6-11ef-8532-495867ec2258"
-
-DOC_OWNER_NG = "ce94a73c-703e-11ef-8753-0575b5bada34"
-DOC_OWNER_NODE = "ce94a73c-703e-11ef-8753-0575b5bada34"
-
-DOC_PRODUCTION_NG = "fb5d903b-7052-11ef-8753-0575b5bada34"
-DOC_PROD_ACTORS = "fb5d904d-7052-11ef-8753-0575b5bada34"
-DOC_PROD_MOTIVATED = "fb5d904a-7052-11ef-8753-0575b5bada34"
-DOC_PROD_PLACE = "fb5d904f-7052-11ef-8753-0575b5bada34"
-DOC_PROD_INFLUENCES = "fb5d9045-7052-11ef-8753-0575b5bada34"
-DOC_PROD_DATE_START = "fb5d9050-7052-11ef-8753-0575b5bada34"
-DOC_PROD_DATE_END = "fb5d904c-7052-11ef-8753-0575b5bada34"
-DOC_PROD_TIME_TYPE = "fb5d9042-7052-11ef-8753-0575b5bada34"
-DOC_PROD_CULTURAL = "5b462970-edfe-11ef-9a8f-89acc4447d22"
-DOC_PROD_TECHNIQUES = "2577f662-d1b0-11ef-8532-495867ec2258"
-
-DOC_PERIOD_NG = "ee5666f5-edf3-11ef-9a8f-89acc4447d22"
-DOC_PERIOD_ABSOLUTE = "ee5666fc-edf3-11ef-9a8f-89acc4447d22"
-DOC_PERIOD_PRODUCTION = "ee5666f5-edf3-11ef-9a8f-89acc4447d22"
-
-DOC_DIMENSION_NG = "dd725542-7039-11ef-8753-0575b5bada34"
-DOC_DIMENSION_TYPE = "66351560-703d-11ef-8753-0575b5bada34"
-DOC_DIMENSION_UNIT = "f0f2f252-7039-11ef-8753-0575b5bada34"
-DOC_DIMENSION_VALUE = "1dc76d80-703a-11ef-8753-0575b5bada34"
-
-DOC_COMPOSED_NG = "e3bfe85e-703b-11ef-8753-0575b5bada34"
-DOC_COMPOSED_TYPE = "7153adc2-704f-11ef-8753-0575b5bada34"
-DOC_COMPOSED_UNIT = "7153adc3-704f-11ef-8753-0575b5bada34"
-DOC_COMPOSED_VALUE = "7153adc1-704f-11ef-8753-0575b5bada34"
-
-DOC_PART_OF_NG = "e4166b5c-d1b1-11ef-8532-495867ec2258"
-DOC_PART_OF_NODE = "e4166b5c-d1b1-11ef-8532-495867ec2258"
-
-# Project studied objects
-PROJECT_STUDIED_OBJECTS_NG = "a8fb3c9e-bbc4-11ef-bd5f-ed806b645d76"
-PROJECT_STUDIED_OBJECTS_NODE = "a8fb3c9e-bbc4-11ef-bd5f-ed806b645d76"
-
-# --- Component nodegroups & nodes ---
-COMP_TYPE_NG = "0474f0de-711e-11ef-be19-21cc18cdd2a8"
-COMP_TYPE_NODE = "0474f0de-711e-11ef-be19-21cc18cdd2a8"
-
-COMP_PARENT_DOC_NG = "26524186-710d-11ef-be19-21cc18cdd2a8"
-COMP_PARENT_DOC_NODE = "e0bd205a-711b-11ef-be19-21cc18cdd2a8"
-
-COMP_ICONOGRAPHIC_NG = "56018940-ee09-11ef-9a8f-89acc4447d22"
-COMP_ICONOGRAPHIC_NODE = "56018940-ee09-11ef-9a8f-89acc4447d22"
-
-COMP_NAME_NG = "96e53203-710b-11ef-be19-21cc18cdd2a8"
-COMP_NAME_LABEL = "96e53206-710b-11ef-be19-21cc18cdd2a8"
-COMP_NAME_LANGUAGE = "96e53205-710b-11ef-be19-21cc18cdd2a8"
-COMP_NAME_TYPE = "96e53207-710b-11ef-be19-21cc18cdd2a8"
-
-COMP_CONTEXT_NG = "96ef1746-711e-11ef-be19-21cc18cdd2a8"
-COMP_CONTEXT_NODE = "96ef1746-711e-11ef-be19-21cc18cdd2a8"
-
-COMP_IDENTIFIER_NG = "a9c93cbb-710b-11ef-be19-21cc18cdd2a8"
-COMP_IDENTIFIER_VALUE = "a9c93cbd-710b-11ef-be19-21cc18cdd2a8"
-COMP_IDENTIFIER_SOURCE = "a9c93cbe-710b-11ef-be19-21cc18cdd2a8"
-COMP_IDENTIFIER_TYPE = "a9c93cbf-710b-11ef-be19-21cc18cdd2a8"
-
-COMP_STATEMENT_NG = "b6dfa2e1-710b-11ef-be19-21cc18cdd2a8"
-COMP_STATEMENT_CONTENT = "b6dfa2e5-710b-11ef-be19-21cc18cdd2a8"
-COMP_STATEMENT_LANGUAGE = "b6dfa2e8-710b-11ef-be19-21cc18cdd2a8"
-COMP_STATEMENT_SOURCE = "b6dfa2eb-710b-11ef-be19-21cc18cdd2a8"
-COMP_STATEMENT_TYPE = "b6dfa2ea-710b-11ef-be19-21cc18cdd2a8"
-
-COMP_PRODUCTION_NG = "c31205b9-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_ACTORS = "c31205cb-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_MOTIVATED = "c31205c8-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_PLACE = "c31205cd-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_INFLUENCES = "c31205c3-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_DATE_START = "c31205ce-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_DATE_END = "c31205ca-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_TIME_TYPE = "c31205c0-71b4-11ef-bb52-6361ac5a97ee"
-
-COMP_PERIOD_NG = "e67686af-edf2-11ef-9a8f-89acc4447d22"
-COMP_PERIOD_ABSOLUTE = "e67686b6-edf2-11ef-9a8f-89acc4447d22"
-COMP_PERIOD_PRODUCTION = "e67686af-edf2-11ef-9a8f-89acc4447d22"
-
-COMP_LOCATION_DOC_NG = "fa5cc926-e889-11ef-9bfc-0debd0685137"
-COMP_LOCATION_DOC_NODE = "fa5cc926-e889-11ef-9bfc-0debd0685137"
-COMP_LOCATION_APPELLATION = "f0dcdbf0-e88b-11ef-9bfc-0debd0685137"
-
-# --- Place nodegroups & nodes ---
-PLACE_NAME_NG = "e4513853-7024-11ef-8753-0575b5bada34"
-PLACE_NAME_LABEL = "e4513856-7024-11ef-8753-0575b5bada34"
-PLACE_NAME_LANGUAGE = "e4513855-7024-11ef-8753-0575b5bada34"
-PLACE_NAME_TYPE = "e4513857-7024-11ef-8753-0575b5bada34"
-
-PLACE_IDENTIFIER_NG = "e7bf9151-7024-11ef-8753-0575b5bada34"
-PLACE_IDENTIFIER_VALUE = "e7bf9153-7024-11ef-8753-0575b5bada34"
-PLACE_IDENTIFIER_SOURCE = "e7bf9154-7024-11ef-8753-0575b5bada34"
-PLACE_IDENTIFIER_TYPE = "e7bf9155-7024-11ef-8753-0575b5bada34"
-
-# --- Group nodegroups & nodes ---
-GROUP_NAME_NG = "e69cbd41-7018-11ef-8753-0575b5bada34"
-GROUP_NAME_LABEL = "e69cbd44-7018-11ef-8753-0575b5bada34"
-GROUP_NAME_LANGUAGE = "e69cbd43-7018-11ef-8753-0575b5bada34"
-GROUP_NAME_TYPE = "e69cbd45-7018-11ef-8753-0575b5bada34"
-
-GROUP_IDENTIFIER_NG = "eda9eee7-7018-11ef-8753-0575b5bada34"
-GROUP_IDENTIFIER_VALUE = "eda9eee9-7018-11ef-8753-0575b5bada34"
-GROUP_IDENTIFIER_SOURCE = "eda9eeea-7018-11ef-8753-0575b5bada34"
-GROUP_IDENTIFIER_TYPE = "eda9eeeb-7018-11ef-8753-0575b5bada34"
-
-GROUP_MEMBER_OF_NG = "86e02cce-7019-11ef-8753-0575b5bada34"
-GROUP_MEMBER_OF_NODE = "86e02cce-7019-11ef-8753-0575b5bada34"
-
-GROUP_LOCATION_NG = "636b1b3e-ae2e-11ef-8dd2-3b6c98a10134"
-GROUP_LOCATION_NODE = "636b1b3e-ae2e-11ef-8dd2-3b6c98a10134"
-
-# --- Person nodegroups & nodes ---
-PERSON_NAME_NG = "8e97f1a7-701c-11ef-8753-0575b5bada34"
-PERSON_NAME_LABEL = "8e97f1aa-701c-11ef-8753-0575b5bada34"
-PERSON_NAME_LANGUAGE = "8e97f1a9-701c-11ef-8753-0575b5bada34"
-PERSON_NAME_TYPE = "8e97f1ab-701c-11ef-8753-0575b5bada34"
-
-PERSON_IDENTIFIER_NG = "943a2c65-701c-11ef-8753-0575b5bada34"
-PERSON_IDENTIFIER_VALUE = "943a2c67-701c-11ef-8753-0575b5bada34"
-PERSON_IDENTIFIER_SOURCE = "943a2c68-701c-11ef-8753-0575b5bada34"
-PERSON_IDENTIFIER_TYPE = "943a2c69-701c-11ef-8753-0575b5bada34"
-
-# Dependency nodegroup lookup by graph ID
-DEP_NAME_CONFIG = {
-    PLACE_GRAPH_ID: {
-        "ng": PLACE_NAME_NG,
-        "label": PLACE_NAME_LABEL,
-        "language": PLACE_NAME_LANGUAGE,
-        "type": PLACE_NAME_TYPE,
-    },
-    GROUP_GRAPH_ID: {
-        "ng": GROUP_NAME_NG,
-        "label": GROUP_NAME_LABEL,
-        "language": GROUP_NAME_LANGUAGE,
-        "type": GROUP_NAME_TYPE,
-    },
-    PERSON_GRAPH_ID: {
-        "ng": PERSON_NAME_NG,
-        "label": PERSON_NAME_LABEL,
-        "language": PERSON_NAME_LANGUAGE,
-        "type": PERSON_NAME_TYPE,
-    },
-}
-
-# --- Concept defaults ---
-CONCEPT_ALTERNATE_TITLES = "7cca3482-44b5-42ea-a1d7-120cd732b350"
-CONCEPT_FRENCH = "a1d82c77-ebd6-4215-ab85-2c0b6a68a0e8"
-CONCEPT_PREFERRED_TERMS = "5f400d39-3b6b-4b8a-939b-4e49787c7444"
-CONCEPT_PERSISTENT_ID = "5b292232-52ac-4e71-ba6c-fe4dd6ff02fa"
-CONCEPT_RECORD_ID = "e10752d3-d8fa-47cb-92f9-dd7277dfc97a"
-CONCEPT_SOURCE_BIBLISSIMA = "39124989-dfb1-4e2a-9d1a-4bff0827ed71"
-CONCEPT_SOURCE_MANDRAGORE = "3b78627a-c751-43df-b427-73e1dd11ec38"
-CONCEPT_DESCRIPTION = "9a51d30b-48e8-4f94-9344-cd2bb1d4b33a"
-CONCEPT_IDENTIFICATION = (
-    "d2a8104a-312a-4f1d-acb7-3ecb1335e2fc"  # Statement type for "Texte" (which work)
-)
-CONCEPT_INSCRIPTIONS = (
-    "9076a3e5-06f5-4ed7-91e4-985914c7178b"  # Statement type for "Rubrique"
-)
-CONCEPT_MANUSCRIT = "56c61151-3bc5-45b4-957e-3cccde26abe7"
-CONCEPT_DECOR = "c19f3196-d1e9-4f08-9917-4d627e61e153"
-CONCEPT_SHELF_MARKS = "2cbf15b4-aa04-4b5b-bf4a-2594bbeb72ca"
-CONCEPT_MEDIEVAL = "f8101404-1570-35cf-ac70-1a18a84072ca"
-
-# Century mapping: "13e siècle" → concept UUID
-# CENTURY_MAPPING + _CENTURY_RE + parse_century now live in
-# ``manuspectrum.utils.dates`` (imported above) so other connectors and
-# importers can share the same vocabulary → valueid mapping.
-
-RELATIONSHIP_CONCEPT = "ac41d9be-79db-4256-b368-2f4559cfbe55"
-
-_ARK_RE = re.compile(r"ark:/43093/(\w+)")
-
 
 def _parse_html_fragment(text):
     """Parse an HTML fragment with lxml, tolerant of mixed text/markup.
@@ -554,10 +343,17 @@ def _extract_entity_props(qid, raw_entity):
 
     labels = raw_entity.get("labels", {})
     label = labels.get("fr", {}).get("value") or labels.get("en", {}).get("value") or ""
+    descriptions = raw_entity.get("descriptions", {})
+    description = (
+        descriptions.get("fr", {}).get("value")
+        or descriptions.get("en", {}).get("value")
+        or ""
+    )
 
     return {
-        "qid": qid,
+        "biblissimaQid": qid,
         "label": label,
+        "description": description,
         "portalHash": _get_string(P129),
         "manifestUrl": _get_string(P196),
         "digitizationUrl": _get_string(P197),
@@ -565,6 +361,14 @@ def _extract_entity_props(qid, raw_entity):
         "collection": _get_entity_id(P194),
         "author": _get_entity_id(P354),
         "mandragoreId": _get_string(P270),
+        "aemId": _get_string(P198),
+        # P2 = "nature de l'élément" (manuscrit / imprimé / etc.). The QID is
+        # extracted here; the human-readable label is filled in later by
+        # _enrich_canvases (batch fetch) or by BiblissimaEntityView (single
+        # synchronous fetch). Left as None at this stage so callers know the
+        # field needs resolution before being used as a mapping key.
+        "documentNatureQid": _get_entity_id(P2),
+        "documentNatureLabel": None,
     }
 
 
@@ -1068,6 +872,10 @@ class BiblissimaEntityView(View):
         if entity is None:
             return JsonResponse({"error": "Entity not found"}, status=404)
 
+        # Resolve P2 nature label and pre-compute Document Type valueid
+        # (helper is idempotent and used by SearchManuscriptsView too).
+        _attach_document_type(entity)
+
         # If author is a QID, resolve its label
         if entity.get("author"):
             author_entity = _get_wikibase_entity(entity["author"])
@@ -1242,9 +1050,39 @@ class BiblissimaSearchManuscriptsView(View):
                 e["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
                 e["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
 
+            # Document Type — resolve P2 nature → label → Arches valueid
+            # (idempotent; cached lookup on _get_wikibase_entity).
+            _attach_document_type(e)
+
             results.append(e)
 
         return JsonResponse({"total": len(results), "results": results})
+
+
+# Canvas labels from Biblissima IIIF descriptor manifests look like
+# "Lettre ornée (Paris, Arsenal, 12 f.3)". The text inside parens carries
+# the full manuscript context (institution + shelfmark) — much more
+# distinctive than the bare ``manuscript`` field which is often just the
+# shelfmark fragment ("12"). Extracting it gives the manuscript-resolution
+# query a fighting chance against generic shelfmarks.
+_CANVAS_MS_CONTEXT_RE = re.compile(r"\(([^)]+)\)")
+_CANVAS_FOLIO_TAIL_RE = re.compile(r"\s+ff?\.\S+\s*$")
+
+
+def _extract_ms_search_query(canvas):
+    """Build a Wikibase-friendly search string for a canvas's parent
+    manuscript. Tries the ``( …institution, shelfmark f.X )`` parenthetical
+    in the canvas label first (strips the trailing folio), falls back to
+    the raw ``manuscript`` field which works for distinctive shelfmarks
+    like "Anglais 32" but fails on generic numerics like "12" / "579".
+    """
+    label = canvas.get("label") or ""
+    m = _CANVAS_MS_CONTEXT_RE.search(label)
+    if m:
+        ctx = _CANVAS_FOLIO_TAIL_RE.sub("", m.group(1).strip())
+        if ctx:
+            return ctx
+    return canvas.get("manuscript", "") or ""
 
 
 def _enrich_canvases(canvases, session=None):
@@ -1268,7 +1106,11 @@ def _enrich_canvases(canvases, session=None):
         session = _build_biblissima_session()
 
     try:
-        # Phase 1: collect unique manuscripts (ark_hash -> display name)
+        # Phase 1: collect unique manuscripts. The "name" we keep here is the
+        # query string used to look up the manuscript in Wikibase later — we
+        # extract the institution+shelfmark context from the canvas label
+        # (e.g. "Paris, Arsenal, 12") rather than the bare ``manuscript``
+        # field which is often just the shelfmark fragment.
         unique_manuscripts = {}
         for canvas in canvases:
             ms_ark = canvas.get("manuscriptArk")
@@ -1276,7 +1118,7 @@ def _enrich_canvases(canvases, session=None):
                 continue
             ark_hash = ms_ark.replace("ark:/43093/", "")
             if ark_hash and ark_hash not in unique_manuscripts:
-                unique_manuscripts[ark_hash] = canvas.get("manuscript", "")
+                unique_manuscripts[ark_hash] = _extract_ms_search_query(canvas)
 
         resolved_manuscripts = {}
         to_resolve = {}
@@ -1293,7 +1135,16 @@ def _enrich_canvases(canvases, session=None):
                 to_resolve[ark_hash] = ms_name
                 _incr_stat("cache_misses", 1)
 
-        # Phase 2b: parallel wbsearchentities for uncached manuscripts
+        # Phase 2b: parallel CirrusSearch fulltext lookup for uncached
+        # manuscripts. We use ``action=query&list=search`` rather than
+        # ``wbsearchentities`` because the latter only matches against
+        # labels/aliases as a prefix and silently returns garbage for the
+        # bare-shelfmark labels that the IIIF manifest provides ("12",
+        # "579"). The richer ``ms_name`` extracted from the canvas label
+        # (e.g. "Paris, Arsenal, 12") is distinctive enough that fulltext
+        # search returns the correct entity in the top results, and the
+        # Phase 2d ``portalHash == ark_hash`` filter rejects any false
+        # positive — so reconciliation is done without scraping.
         def _search_candidates(item):
             ark_hash, ms_name = item
             if not ms_name:
@@ -1303,18 +1154,26 @@ def _enrich_canvases(canvases, session=None):
                     session,
                     BIBLISSIMA_WIKIBASE,
                     params={
-                        "action": "wbsearchentities",
-                        "search": ms_name,
-                        "language": "fr",
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": ms_name,
+                        "srnamespace": 120,
                         "format": "json",
-                        "limit": 5,
+                        "srlimit": 5,
                     },
                     timeout=REQUEST_TIMEOUT,
                 )
                 resp.raise_for_status()
-                return ark_hash, [it["id"] for it in resp.json().get("search", [])]
+                hits = resp.json().get("query", {}).get("search", [])
+                qids = []
+                for hit in hits:
+                    title = hit.get("title", "")
+                    qid = title.split(":")[-1] if ":" in title else title
+                    if qid:
+                        qids.append(qid)
+                return ark_hash, qids
             except Exception:
-                logger.warning("wbsearchentities failed for %s", ms_name)
+                logger.warning("CirrusSearch failed for %s", ms_name)
                 return ark_hash, []
 
         candidates_by_ark_hash = {}
@@ -1334,8 +1193,10 @@ def _enrich_canvases(canvases, session=None):
             all_candidate_qids, session=session
         )
 
-        # Phase 2d: match each manuscript to its QID via portalHash
+        # Phase 2d: match each manuscript to its QID via portalHash, and
+        # collect both author and nature (P2) QIDs for the batch fetch.
         author_qids = set()
+        nature_qids = set()
         for ark_hash, candidate_qids in candidates_by_ark_hash.items():
             ms_data = {}
             for qid in candidate_qids:
@@ -1344,25 +1205,45 @@ def _enrich_canvases(canvases, session=None):
                     ms_data = dict(entity)
                     if ms_data.get("author"):
                         author_qids.add(ms_data["author"])
+                    if ms_data.get("documentNatureQid"):
+                        nature_qids.add(ms_data["documentNatureQid"])
                     break
             resolved_manuscripts[ark_hash] = ms_data
 
-        # Phase 2e: batch-fetch all author entities in one go
-        authors_by_qid = (
-            _batch_get_wikibase_entities(list(author_qids), session=session)
-            if author_qids
+        # Phase 2e: batch-fetch authors and natures together (single round-trip).
+        # Cached natures (which is most of them — Biblissima only uses ~5
+        # distinct nature concepts) hit the Django cache and don't go to
+        # Biblissima at all.
+        secondary_qids = list(author_qids | nature_qids)
+        secondaries_by_qid = (
+            _batch_get_wikibase_entities(secondary_qids, session=session)
+            if secondary_qids
             else {}
         )
 
-        # Phase 2f: attach author labels and persist newly-resolved manuscripts
+        # Phase 2f: attach author and nature labels, pre-resolve the Arches
+        # Document-Type valueid once per manuscript, and persist newly-resolved
+        # manuscripts to cache so subsequent enrichments are zero-cost. Doing
+        # the type resolution here (vs. per-canvas in phase 3) avoids calling
+        # the resolver N times for an N-page manuscript with identical nature
+        # label across canvases.
         for ark_hash in to_resolve:
             ms_data = resolved_manuscripts.get(ark_hash, {})
             if ms_data:
                 author_qid = ms_data.get("author")
-                if author_qid and author_qid in authors_by_qid:
-                    author = authors_by_qid[author_qid]
+                if author_qid and author_qid in secondaries_by_qid:
+                    author = secondaries_by_qid[author_qid]
                     ms_data["authorLabel"] = author.get("label", "")
                     ms_data["authorQid"] = author_qid
+                nature_qid = ms_data.get("documentNatureQid")
+                if nature_qid and nature_qid in secondaries_by_qid:
+                    nature = secondaries_by_qid[nature_qid]
+                    ms_data["documentNatureLabel"] = nature.get("label", "") or None
+                type_valueid, type_is_fallback = _resolve_biblissima_document_type(
+                    ms_data.get("documentNatureLabel")
+                )
+                ms_data["documentTypeValueId"] = type_valueid
+                ms_data["documentTypeIsFallback"] = type_is_fallback
             cache.set(
                 _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
                 ms_data,
@@ -1398,10 +1279,17 @@ def _enrich_canvases(canvases, session=None):
                 continue
             ark_hash = ms_ark.replace("ark:/43093/", "")
             ms_data = resolved_manuscripts.get(ark_hash) or {}
+            # Prefer the full Wikibase entity label (e.g. "Paris. Bibliothèque
+            # de l'Arsenal, 12") over the raw IIIF metadata value, which is
+            # often just the shelfmark fragment ("12") for Arsenal/BnF
+            # manifests where Biblissima only inlines the shelfmark text in
+            # the <a>Manuscrit</a> link.
+            if ms_data.get("label"):
+                canvas["manuscript"] = ms_data["label"]
             canvas["manifestUrl"] = ms_data.get("manifestUrl")
             canvas["authorLabel"] = ms_data.get("authorLabel")
             canvas["authorQid"] = ms_data.get("authorQid")
-            canvas["biblissimaQid"] = ms_data.get("qid")
+            canvas["biblissimaQid"] = ms_data.get("biblissimaQid")
             canvas["shelfmark"] = ms_data.get("shelfmark")
             canvas["mandragoreId"] = ms_data.get("mandragoreId")
             # Institution / location chain from the collection resolution.
@@ -1414,6 +1302,20 @@ def _enrich_canvases(canvases, session=None):
             canvas["geonamesId"] = coll.get("geonamesId", "")
             canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
             canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
+            # Document Type — pre-resolved once in phase 2f for fresh manuscripts;
+            # for cache-hit manuscripts that pre-date this change we resolve here
+            # as a one-time fallback. Falls back to MANUSCRIT with
+            # is_fallback=True if the nature label is missing or unknown.
+            canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
+            if "documentTypeValueId" in ms_data:
+                canvas["documentTypeValueId"] = ms_data["documentTypeValueId"]
+                canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
+            else:
+                type_valueid, type_is_fallback = _resolve_biblissima_document_type(
+                    ms_data.get("documentNatureLabel")
+                )
+                canvas["documentTypeValueId"] = type_valueid
+                canvas["documentTypeIsFallback"] = type_is_fallback
     finally:
         if owned_session:
             session.close()
@@ -1659,17 +1561,28 @@ class BiblissimaCheckDuplicatesView(View):
                 except Exception:
                     logger.warning("Tile identifier search failed for item %d", idx)
 
-            # Strategy 2: ES search by shelfmark (nested strings.string field)
-            if shelfmark:
-                self._es_string_search(
-                    se, graph_id, shelfmark, "shelfmark", seen_ids, suggestions
-                )
+            # Strategies 2 and 3 are skipped only for Components. Components
+            # share the parent manuscript's shelfmark, and their displayname
+            # embeds that shelfmark too — so an ES match on either field
+            # returns sibling-illumination false positives (e.g. "Aggée et
+            # Dieu" f.328v matching "Abdias prophétisant" f.323v just because
+            # both belong to BnF Latin 40). For Components, only the ARK
+            # ifdata identifier (strategy 1) is unique per illumination.
+            # Documents AND non-graph dependencies (Place / Person / Group,
+            # resolved separately via the dependency-resolution flow) all
+            # need label-based ES matching.
+            if graph_id != COMPONENT_GRAPH_ID:
+                # Strategy 2: ES search by shelfmark (nested strings.string field)
+                if shelfmark:
+                    self._es_string_search(
+                        se, graph_id, shelfmark, "shelfmark", seen_ids, suggestions
+                    )
 
-            # Strategy 3: ES search by label/displayname
-            if label and len(suggestions) < 3:
-                self._es_string_search(
-                    se, graph_id, label, "displayname", seen_ids, suggestions
-                )
+                # Strategy 3: ES search by label/displayname
+                if label and len(suggestions) < 3:
+                    self._es_string_search(
+                        se, graph_id, label, "displayname", seen_ids, suggestions
+                    )
 
             results.append(
                 {
@@ -1767,58 +1680,46 @@ class BiblissimaCheckDuplicatesView(View):
             logger.debug("ES %s search no results for: %s", match_type, search_term)
 
 
-BIBLISSIMA_PORTAL = "https://portail.biblissima.fr/fr/ark:/43093"
-BIBLISSIMA_PORTAL_EN = "https://portail.biblissima.fr/en/ark:/43093"
+
+def _resolve_biblissima_document_type(nature_label):
+    """Map Biblissima 'nature de l'élément' label → Arches Document Type valueid.
+
+    Returns (valueid, is_fallback). is_fallback=True signals the UI to flag
+    the value as "needs review" (same convention as Component types).
+    """
+    if nature_label:
+        # Exact-match (vs. startswith for Components): nature labels are canonical
+        # and have no variant suffixes. Switch to startswith if that ever changes.
+        normalized = nature_label.strip().lower()
+        if normalized in BIBLISSIMA_DOCUMENT_NATURE_MAP:
+            return BIBLISSIMA_DOCUMENT_NATURE_MAP[normalized], False
+        logger.warning(
+            "Unknown Biblissima document nature: %r — falling back",
+            nature_label,
+        )
+    return DOCUMENT_NATURE_DEFAULT, True
 
 
-# Map Biblissima illumination type/typologie/descriptor strings to Arches Type of Component valueids.
-# Keys are lowercase. Matching is done with startswith() to handle variants like "initiale ornée (1)".
-BIBLISSIMA_TYPE_MAPPING = {
-    "initiale ornée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale filigranée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale historiée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale animée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale zoomorphe": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale anthropomorphe": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale de couleur": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale": "31158e76-817a-447d-a40c-3963731296a8",
-    "lettrine": "31158e76-817a-447d-a40c-3963731296a8",
-    "lettre ornée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",  # decorated letter
-    "lettre cadelée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
-    "lettre or": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
-    "miniature": "63bc98e3-57de-48fc-a656-8d6f9a9acf40",  # miniature
-    "page décorée": "4063b4aa-c50b-4101-947c-d8094eed6e25",  # Decoration
-    "décor": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "bordure": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "bandeau": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "encadrement": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "frontispice": "0805a584-1395-48df-8e84-4ae4b25cdeae",  # frontispiece
-    "vignette": "29167061-2645-4d86-8f30-9206c1f83297",  # vignette
-    "photographie": "85e458af-0292-4ecb-84b9-5715071d45e1",  # photography
-    "filigrane": "c3168cc7-23d3-4ddb-9eac-38383b852f5a",  # watermark
-    "planche": "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a",  # board
-    "enluminure": "3ecd8040-7c4b-4b1d-88f7-379297358f66",  # illumination (default)
-}
+def _attach_document_type(entity, session=None):
+    """Resolve P2 nature label and attach Document Type valueid in place.
 
-# Default fallback when no type mapping matches
-BIBLISSIMA_TYPE_DEFAULT = "3ecd8040-7c4b-4b1d-88f7-379297358f66"  # illumination
-
-# Human-readable labels for each target valueid. Used by the import workflow
-# so the per-item type badge can show a real concept name (e.g. "Enluminure")
-# instead of a generic "default" string. Labels are in French to match the
-# underlying concept collection.
-BIBLISSIMA_TYPE_VALUEID_LABELS = {
-    "31158e76-817a-447d-a40c-3963731296a8": "Lettrine",
-    "2f5df709-4f32-40b4-8858-d0d54ba25d61": "Lettre ornée",
-    "63bc98e3-57de-48fc-a656-8d6f9a9acf40": "Miniature",
-    "4063b4aa-c50b-4101-947c-d8094eed6e25": "Décor",
-    "0805a584-1395-48df-8e84-4ae4b25cdeae": "Frontispice",
-    "29167061-2645-4d86-8f30-9206c1f83297": "Vignette",
-    "85e458af-0292-4ecb-84b9-5715071d45e1": "Photographie",
-    "c3168cc7-23d3-4ddb-9eac-38383b852f5a": "Filigrane",
-    "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a": "Planche",
-    "3ecd8040-7c4b-4b1d-88f7-379297358f66": "Enluminure",
-}
+    Idempotent: safe to call on an entity that already has the fields. Used
+    by both BiblissimaEntityView and BiblissimaSearchManuscriptsView so the
+    two flows return the same payload shape to the frontend. The label
+    lookup is a single cached call (24h TTL on _get_wikibase_entity).
+    """
+    if entity is None:
+        return
+    nature_qid = entity.get("documentNatureQid")
+    nature_label = entity.get("documentNatureLabel")
+    if nature_qid and not nature_label:
+        nature_entity = _get_wikibase_entity(nature_qid, session=session)
+        if nature_entity:
+            nature_label = nature_entity.get("label") or None
+            entity["documentNatureLabel"] = nature_label
+    type_valueid, type_is_fallback = _resolve_biblissima_document_type(nature_label)
+    entity["documentTypeValueId"] = type_valueid
+    entity["documentTypeIsFallback"] = type_is_fallback
 
 
 def _biblissima_type_label(valueid):
@@ -2739,8 +2640,15 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Identifiers
-        ark_id = bbma_data.get("arkId")
+        # Identifiers — canvas-derived payloads already carry ``arkId``;
+        # entity-derived payloads only carry ``portalHash``, so derive the
+        # ARK from it when needed. (``biblissimaQid`` is now exposed by
+        # both shapes via _extract_entity_props.)
+        ark_id = bbma_data.get("arkId") or (
+            f"ark:/43093/{bbma_data['portalHash']}"
+            if bbma_data.get("portalHash")
+            else None
+        )
         if ark_id:
             self._create_tile(
                 DOC_IDENTIFIER_NG,
@@ -2768,6 +2676,21 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
+        aem_id = bbma_data.get("aemId")
+        if aem_id:
+            self._create_tile(
+                DOC_IDENTIFIER_NG,
+                resource_id,
+                {
+                    DOC_IDENTIFIER_VALUE: i18n(
+                        f"https://archivesetmanuscrits.bnf.fr/ark:/12148/cc{aem_id}"
+                    ),
+                    DOC_IDENTIFIER_TYPE: clist([CONCEPT_PERSISTENT_ID]),
+                    DOC_IDENTIFIER_SOURCE: clist([CONCEPT_SOURCE_BNF]),
+                },
+                transaction_id,
+            )
+
         mandragore_id = bbma_data.get("mandragoreId")
         if mandragore_id:
             self._create_tile(
@@ -2781,15 +2704,20 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Statement (description)
-        legend = bbma_data.get("legend") or bbma_data.get("label", "")
+        # Statement (description) — only create the tile if Biblissima has
+        # an actual description text. The label is the manuscript title and
+        # belongs in the Name tile, not as a fallback description.
+        # ``legend`` is set by the Component-side enrichment (illumination
+        # legend, not relevant for Documents); ``description`` comes from
+        # the Wikibase entity's ``descriptions.fr/en.value``.
+        description = bbma_data.get("description") or bbma_data.get("legend") or ""
         portal_url = bbma_data.get("portalUrl", "")
-        if legend:
+        if description:
             self._create_tile(
                 DOC_STATEMENT_NG,
                 resource_id,
                 {
-                    DOC_STATEMENT_CONTENT: i18n(legend),
+                    DOC_STATEMENT_CONTENT: i18n(description),
                     DOC_STATEMENT_TYPE: clist([CONCEPT_DESCRIPTION]),
                     DOC_STATEMENT_LANGUAGE: clist([CONCEPT_FRENCH]),
                     DOC_STATEMENT_SOURCE: (
@@ -3240,6 +3168,13 @@ class BiblissimaCreateResourceView(View):
 
         if existing:
             current_data = existing.data.get(PROJECT_STUDIED_OBJECTS_NODE, []) or []
+            target_id = str(resource_id)
+            # Idempotence: skip if this resource is already in the project's
+            # studied_objects. Prevents duplicate entries when a Document
+            # parent that was already linked is re-linked from a new
+            # workflow run (cf. Q6 of the design).
+            if any(ref.get("resourceId") == target_id for ref in current_data):
+                return
             current_data.append(new_ref)
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
             existing.save()
@@ -3377,3 +3312,44 @@ class BiblissimaStatsView(View):
             else None
         )
         return JsonResponse(stats)
+
+
+class BiblissimaLinkToProjectView(View):
+    """Idempotently link an existing resource to a Project's studied objects.
+
+    Used by the step-3 parent-resolver (parentResolver.js) for Documents that
+    were matched in Arches or manually picked, where the create-resource path
+    is not invoked. Created Documents are linked through their dependencies
+    payload directly. The dedup happens inside _link_to_project (cf. Task 1.7).
+    """
+
+    def post(self, request):
+        import json
+
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+        resource_id = body.get("resourceId")
+        project_id = body.get("projectId")
+        if not resource_id or not project_id:
+            return JsonResponse(
+                {"error": "resourceId and projectId are required"},
+                status=400,
+            )
+
+        try:
+            uuid.UUID(str(resource_id))
+            uuid.UUID(str(project_id))
+        except (ValueError, AttributeError):
+            return JsonResponse({"error": "Invalid UUID"}, status=400)
+
+        # Reuse the helper on BiblissimaCreateResourceView so the dedup logic
+        # stays in a single place. transaction_id is None for ad-hoc links.
+        BiblissimaCreateResourceView()._link_to_project(
+            resource_id,
+            project_id,
+            transaction_id=None,
+        )
+        return JsonResponse({"ok": True})

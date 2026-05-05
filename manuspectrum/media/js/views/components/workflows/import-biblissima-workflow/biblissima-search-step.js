@@ -485,7 +485,7 @@ const viewModel = function(params) {
     this.manuscriptQuery = ko.observable('');
 
     this._entityToItem = (d) => ({
-        canvasId: d.qid,
+        canvasId: d.biblissimaQid,
         arkId: d.portalHash ? `ark:/43093/${d.portalHash}` : null,
         label: d.label || '',
         thumbnail: null,
@@ -499,7 +499,7 @@ const viewModel = function(params) {
         manifestUrl: d.manifestUrl || '',
         authorLabel: d.authorLabel || '',
         authorQid: d.authorQid || '',
-        biblissimaQid: d.qid || '',
+        biblissimaQid: d.biblissimaQid || '',
         shelfmark: d.shelfmark || '',
         mandragoreId: d.mandragoreId || '',
         collectionLabel: d.collectionLabel || '',
@@ -571,7 +571,7 @@ const viewModel = function(params) {
         manifestUrl: entityData.manifestUrl || '',
         authorLabel: entityData.authorLabel || '',
         authorQid: entityData.authorQid || '',
-        biblissimaQid: entityData.qid || '',
+        biblissimaQid: entityData.biblissimaQid || '',
         shelfmark: entityData.shelfmark || '',
         mandragoreId: entityData.mandragoreId || '',
         collectionLabel: entityData.collectionLabel || '',
