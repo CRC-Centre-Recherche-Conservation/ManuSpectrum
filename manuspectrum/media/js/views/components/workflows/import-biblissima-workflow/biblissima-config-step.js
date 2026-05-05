@@ -90,7 +90,10 @@ const viewModel = function(params) {
         if (params.value()) {
             const cached = ko.unwrap(params.value);
             if (cached.resourceType) self.resourceType(cached.resourceType);
-            if (cached.projectId) self.projectId(cached.projectId);
+            if (cached.projectId) {
+                self.projectId(cached.projectId);
+                self.projectPicker.value(cached.projectId);
+            }
             if (cached.projectName) self.projectName(cached.projectName);
         }
     };
