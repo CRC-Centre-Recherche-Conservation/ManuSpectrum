@@ -1375,7 +1375,12 @@ def _fetch_biblissima_canvases(desc_hashes, session):
         url = f"{BIBLISSIMA_IIIF_MANIFEST}/ark:/43093/{desc_hashes[0]}"
         resp = _bib_request(session, url, headers=headers, timeout=IIIF_REQUEST_TIMEOUT)
     else:
-        descriptor_parts = ",".join(f"AND|{h}" for h in desc_hashes)
+        # The ?descriptors= query param expects bare hashes (no "desc" prefix),
+        # unlike the /ark:/43093/desc... path form. Strip the prefix added by
+        # _normalize_descriptors before joining with the AND| operator.
+        descriptor_parts = ",".join(
+            f"AND|{h[4:] if h.startswith('desc') else h}" for h in desc_hashes
+        )
         resp = _bib_request(
             session,
             BIBLISSIMA_IIIF_MANIFEST,
