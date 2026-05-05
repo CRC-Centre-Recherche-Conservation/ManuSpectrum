@@ -1308,28 +1308,41 @@ def _enrich_canvases(canvases, session=None):
                 to_resolve[ark_hash] = ms_name
                 _incr_stat("cache_misses", 1)
 
-        # Phase 2b: parallel wbsearchentities for uncached manuscripts
+        # Phase 2b: resolve QID by exact portalHash (P129) lookup. Using
+        # CirrusSearch's ``haswbstatement`` is exact — the previous
+        # ``wbsearchentities`` path searched by manuscript label, which
+        # silently failed on generic labels like "579" by returning
+        # unrelated candidates. ARK hashes are unique per manuscript on
+        # Biblissima, so this returns at most one QID per call.
         def _search_candidates(item):
-            ark_hash, ms_name = item
-            if not ms_name:
+            ark_hash, _ms_name = item
+            if not ark_hash:
                 return ark_hash, []
             try:
                 resp = _bib_request(
                     session,
                     BIBLISSIMA_WIKIBASE,
                     params={
-                        "action": "wbsearchentities",
-                        "search": ms_name,
-                        "language": "fr",
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": f"haswbstatement:{P129}={ark_hash}",
+                        "srnamespace": 120,
                         "format": "json",
-                        "limit": 5,
+                        "srlimit": 1,
                     },
                     timeout=REQUEST_TIMEOUT,
                 )
                 resp.raise_for_status()
-                return ark_hash, [it["id"] for it in resp.json().get("search", [])]
+                hits = resp.json().get("query", {}).get("search", [])
+                qids = []
+                for hit in hits:
+                    title = hit.get("title", "")
+                    qid = title.split(":")[-1] if ":" in title else title
+                    if qid:
+                        qids.append(qid)
+                return ark_hash, qids
             except Exception:
-                logger.warning("wbsearchentities failed for %s", ms_name)
+                logger.warning("haswbstatement lookup failed for %s", ark_hash)
                 return ark_hash, []
 
         candidates_by_ark_hash = {}
