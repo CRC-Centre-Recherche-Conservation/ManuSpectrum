@@ -1920,3 +1920,23 @@ msgstr ""
 #: views/renderer_config.py:62
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr ""
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Edit selection"
+msgstr ""
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Create parent"
+msgstr ""
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Create resource"
+msgstr ""
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Link to this resource"
+msgstr ""
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "parents"
+msgstr ""

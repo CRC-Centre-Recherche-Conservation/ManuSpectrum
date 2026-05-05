@@ -670,8 +670,21 @@ $bbma-danger-bg: #fdf0f0;
     align-items: center;
     gap: 10px;
     margin-bottom: 12px;
-    padding-bottom: 10px;
+    padding: 10px 0;
     border-bottom: 1px solid $bbma-border;
+
+    // P3: keep the primary action ("Create all" / "Finish") visible while
+    // scrolling long item lists. Only the first section sticks — nested
+    // section headers (parent panel, related resources) scroll normally.
+    .biblissima-create-step > .biblissima-create-section:first-of-type > & {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: #fff;
+        margin-top: -8px;
+        padding-top: 14px;
+        box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+    }
 
     > .fa {
         color: $bbma-accent;
@@ -698,49 +711,91 @@ $bbma-danger-bg: #fdf0f0;
     flex-shrink: 0;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 10px;
 }
 
-// Dep progress pill (inline next to Create All button)
+// Adaptive progress pill — fusionne l'indicateur de progression et l'explication
+// du bouton "Create all" désactivé. Une seule pill, 1 ou 2 segments selon ce
+// qui bloque (parents pas tous résolus / deps pas toutes liées / résolution).
 .bbma-deps-progress {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 4px 10px;
-    background: $bbma-bg;
-    border: 1px solid $bbma-border;
-    border-radius: 14px;
+    gap: 10px;
+    padding: 6px 12px;
+    background: $bbma-accent-light;
+    border: 1px solid lighten($bbma-accent, 22%);
+    border-radius: 16px;
     white-space: nowrap;
+    color: $bbma-accent-dark;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+
+    > .fa { font-size: 10px; }
+}
+
+.bbma-deps-progress-spinner {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    .fa { color: $bbma-accent; }
+}
+
+.bbma-deps-progress-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    > .fa {
+        font-size: 11px;
+        color: $bbma-accent;
+        flex-shrink: 0;
+    }
+}
+
+.bbma-deps-progress-sep {
+    color: lighten($bbma-accent, 15%);
+    font-weight: 700;
+    user-select: none;
 }
 
 .bbma-deps-progress-bar {
-    width: 36px;
-    height: 4px;
-    background: darken($bbma-bg, 6%);
-    border-radius: 2px;
+    width: 56px;
+    height: 6px;
+    background: lighten($bbma-accent, 30%);
+    border-radius: 3px;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .bbma-deps-progress-fill {
+    display: block;
     height: 100%;
     background: $bbma-accent;
-    border-radius: 2px;
+    border-radius: 3px;
     transition: width 0.3s ease;
 }
 
 .bbma-deps-progress-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: $bbma-muted;
+    color: $bbma-accent-dark;
     letter-spacing: 0.2px;
-
-    .fa { font-size: 9px; margin-right: 1px; }
 }
 
 // Muted button state when waiting for deps
 .bbma-btn-waiting {
-    opacity: 0.5;
+    opacity: 0.7;
     cursor: not-allowed;
+}
+
+// Wrapper holding the pill + "Create all" button as a flex pair
+.bbma-create-all-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .bbma-section-hint {
@@ -759,18 +814,23 @@ $bbma-danger-bg: #fdf0f0;
 }
 
 // Dependency cards
+//
+// WCAG 1.4.1 — état NON exprimé par couleur seule :
+//   chaque carte porte un BADGE inline (.bbma-dep-badge) avec icône FA
+//   distinctive (fa-check / fa-plus / fa-question-circle / fa-exclamation-circle
+//   / fa-times / fa-circle-o). Le badge utilise le même langage visuel que
+//   la "progress pill" du header (même radius, même structure) — l'utilisateur
+//   lit chaque badge comme la contribution per-card au total "X/Y linked".
 .bbma-dep-card {
+    position: relative;
     border: 1px solid $bbma-border;
     border-radius: 4px;
     margin-bottom: 8px;
     background: #fff;
     transition: border-color 0.15s, background 0.15s;
+    min-height: 80px; // P3: stabilité du rythme vertical
 
-    &.bbma-dep-card-linked {
-        border-color: lighten($bbma-success, 25%);
-        background: $bbma-success-bg;
-    }
-
+    &.bbma-dep-card-linked,
     &.bbma-dep-card-created {
         border-color: lighten($bbma-success, 25%);
         background: $bbma-success-bg;
@@ -820,40 +880,65 @@ $bbma-danger-bg: #fdf0f0;
     white-space: nowrap;
 }
 
-// Status badges in header
+// Status badges in header — mêmes proportions que .bbma-deps-progress
+// (radius 16px, padding 6/12, border 1px) pour signifier visuellement :
+// "ce badge est la contribution per-card au total affiché en haut".
 .bbma-dep-badge {
-    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
     font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 10px;
+    padding: 3px 10px;
+    border-radius: 16px;
+    border: 1px solid transparent;
     flex-shrink: 0;
     white-space: nowrap;
+    letter-spacing: 0.2px;
 
-    .fa { margin-right: 2px; font-size: 9px; }
+    .fa { font-size: 10px; }
 }
 
-.bbma-dep-badge-linked {
-    background: $bbma-success-bg;
-    color: $bbma-success;
-}
-
+// Linked et Created partagent le bleu-accent (état "compté dans X/Y linked")
+// pour matcher la progress pill du header. L'icône FA distingue les deux :
+//   fa-check  (Linked)  vs  fa-plus (Created)
+.bbma-dep-badge-linked,
 .bbma-dep-badge-created {
-    background: $bbma-success-bg;
-    color: $bbma-success;
+    background: $bbma-accent-light;
+    border-color: lighten($bbma-accent, 25%);
+    color: $bbma-accent-dark;
 }
 
 .bbma-dep-badge-pending {
     background: #fef3cd;
+    border-color: #f2d88a;
     color: #856404;
 }
 
 .bbma-dep-badge-suggestions {
     background: #fff3cd;
+    border-color: #e0c56e;
     color: #856404;
 }
 
 .bbma-dep-card-body {
     padding: 10px 12px;
+
+    // P3: cohérence d'espacement entre sous-zones empilées
+    > * + * {
+        margin-top: 8px;
+    }
+}
+
+// P3: hauteur de base pour rendre la pile prévisible
+.bbma-dep-search-area,
+.bbma-dep-create-area,
+.bbma-dep-suggestions {
+    min-height: 48px;
+}
+
+.bbma-dep-match-found {
+    min-height: 40px;
 }
 
 // Linked / Created state

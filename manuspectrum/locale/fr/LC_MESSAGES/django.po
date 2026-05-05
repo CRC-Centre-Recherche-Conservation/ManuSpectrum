@@ -1445,7 +1445,7 @@ msgstr ""
 
 #: templates/views/components/plugins/init-workflow.htm:63
 msgid "Link"
-msgstr ""
+msgstr "Lier"
 
 #: templates/views/components/plugins/init-workflow.htm:79
 msgid "Go to Workflow"
@@ -1795,10 +1795,8 @@ msgid "To confirm"
 msgstr "Aucune config"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:441
-#, fuzzy
-#| msgid "Manifest description"
 msgid "Matches found"
-msgstr "Description du manifeste"
+msgstr "Correspondances trouvées"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:449
 msgid "Searching..."
@@ -2077,6 +2075,26 @@ msgstr "<h1>Les rendus n'existent pas</h1>"
 #: views/renderer_config.py:62
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Edit selection"
+msgstr "Modifier la sélection"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Create parent"
+msgstr "Créer le parent"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Create resource"
+msgstr "Créer la ressource"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "Link to this resource"
+msgstr "Lier à cette ressource"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm
+msgid "parents"
+msgstr "parents"
 
 #~ msgid "Search for a parent document..."
 #~ msgstr "Rechercher un document parent..."
