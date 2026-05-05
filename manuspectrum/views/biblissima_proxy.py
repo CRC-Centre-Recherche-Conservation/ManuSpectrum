@@ -79,14 +79,27 @@ from manuspectrum.utils.http import get_user_agent
 
 logger = logging.getLogger(__name__)
 
-BIBLISSIMA_WIKIBASE = "https://data.biblissima.fr/w/api.php"
-BIBLISSIMA_IIIF_MANIFEST = "https://portail.biblissima.fr/iiif/manifest"
+# Mapping / graph / node-id constants live in a dedicated package so this
+# file stays focused on request handling and tile creation logic. Star
+# import is intentional — the names are referenced unprefixed throughout
+# the module and across the tests.
+from manuspectrum.constants.biblissima import *  # noqa: F401,F403,E402
 
-REQUEST_TIMEOUT = 10
-# The Biblissima IIIF manifest and portal HTML endpoints can be slow when
-# aggregating descriptor-based manifests or when the portal is under load.
-IIIF_REQUEST_TIMEOUT = 45
-PORTAL_REQUEST_TIMEOUT = 30
+# Runtime/network configuration is loaded from Django settings (tunable
+# per environment via settings_local.py). Module-level aliases preserve
+# the unprefixed names that the rest of the file (and the tests) already
+# reference, so no call site has to read ``settings.BIBLISSIMA_*``.
+from django.conf import settings  # noqa: E402
+
+BIBLISSIMA_WIKIBASE = settings.BIBLISSIMA_WIKIBASE_URL
+BIBLISSIMA_IIIF_MANIFEST = settings.BIBLISSIMA_IIIF_MANIFEST_URL
+BIBLISSIMA_PORTAL = settings.BIBLISSIMA_PORTAL_URL
+BIBLISSIMA_PORTAL_EN = settings.BIBLISSIMA_PORTAL_EN_URL
+REQUEST_TIMEOUT = settings.BIBLISSIMA_REQUEST_TIMEOUT
+IIIF_REQUEST_TIMEOUT = settings.BIBLISSIMA_IIIF_REQUEST_TIMEOUT
+PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
+_BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
+_BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
 
 
 def _build_biblissima_session():
@@ -133,14 +146,9 @@ def _build_biblissima_session():
 
 # Module-level semaphore bounds how many concurrent HTTP calls to Biblissima
 # can run across the whole Django process, regardless of how many users hit
-# the proxy at the same time. Sized to stay a good API citizen.
-_BIBLISSIMA_CONCURRENCY_LIMIT = 12
+# the proxy at the same time. Sized via _BIBLISSIMA_CONCURRENCY_LIMIT in
+# biblissima_constants to stay a good API citizen.
 _biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
-
-# Cache keys and TTLs for Biblissima data in the Django cache backend.
-_BIBLISSIMA_CACHE_TTL = 24 * 60 * 60  # 24 hours
-_BIBLISSIMA_ENTITY_CACHE_KEY = "biblissima:wikibase:entity:{qid}"
-_BIBLISSIMA_MANUSCRIPT_CACHE_KEY = "biblissima:wikibase:manuscript:{ark_hash}"
 
 # Lightweight counters for observing upstream health via /api/biblissima/stats.
 _biblissima_stats = {
@@ -251,227 +259,6 @@ def _biblissima_upstream_error(exc, context):
         status=502,
     )
 
-
-# Wikibase property IDs
-P2 = "P2"  # nature de l'élément
-P129 = "P129"  # identifiant Portail Biblissima
-P194 = "P194"  # collection (institution)
-P195 = "P195"  # cote (shelfmark)
-P196 = "P196"  # manifeste IIIF
-P197 = "P197"  # numérisation URL
-P198 = "P198"  # identifiant BnF Archives et Manuscrits (AeM)
-P270 = "P270"  # identifiant Mandragore
-P354 = "P354"  # auteur
-P201 = "P201"  # localisation (place)
-P169 = "P169"  # partie de (parent institution)
-P123 = "P123"  # identifiant Geonames
-
-# Arches graph UUIDs
-DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
-COMPONENT_GRAPH_ID = "d47595b4-f8a6-419c-8f33-b388206280c4"
-PROJECT_GRAPH_ID = "87a4319d-3ca5-43f6-88cc-a7379fba67f6"
-PLACE_GRAPH_ID = "3f2b036a-b65d-474d-b692-0b21903655c5"
-PERSON_GRAPH_ID = "5bf45c85-84cd-4a76-b64a-3ffe86eea1b8"
-GROUP_GRAPH_ID = "4f447dca-dbb3-48d0-bc90-3f2935db8b8c"
-
-# --- Document nodegroups & nodes ---
-DOC_NAME_NG = "3e132cfd-7038-11ef-8753-0575b5bada34"
-DOC_NAME_LABEL = "3e132d00-7038-11ef-8753-0575b5bada34"
-DOC_NAME_LANGUAGE = "3e132cff-7038-11ef-8753-0575b5bada34"
-DOC_NAME_TYPE = "3e132d01-7038-11ef-8753-0575b5bada34"
-
-DOC_IDENTIFIER_NG = "413fd755-7038-11ef-8753-0575b5bada34"
-DOC_IDENTIFIER_VALUE = "413fd757-7038-11ef-8753-0575b5bada34"
-DOC_IDENTIFIER_SOURCE = "413fd758-7038-11ef-8753-0575b5bada34"
-DOC_IDENTIFIER_TYPE = "413fd759-7038-11ef-8753-0575b5bada34"
-
-DOC_TYPE_NG = "9d757c50-7041-11ef-8753-0575b5bada34"
-DOC_TYPE_NODE = "9d757c50-7041-11ef-8753-0575b5bada34"
-
-DOC_STATEMENT_NG = "44a2e1a3-7038-11ef-8753-0575b5bada34"
-DOC_STATEMENT_CONTENT = "44a2e1a7-7038-11ef-8753-0575b5bada34"
-DOC_STATEMENT_LANGUAGE = "44a2e1aa-7038-11ef-8753-0575b5bada34"
-DOC_STATEMENT_SOURCE = "44a2e1ad-7038-11ef-8753-0575b5bada34"
-DOC_STATEMENT_TYPE = "44a2e1ac-7038-11ef-8753-0575b5bada34"
-
-DOC_FACSIMILES_NG = "76cb5191-e4e4-4fd4-8d1d-f040292290b4"
-DOC_FACSIMILES_NODE = "76cb5191-e4e4-4fd4-8d1d-f040292290b4"
-
-DOC_LOCATION_NG = "a53152c8-703e-11ef-8753-0575b5bada34"
-DOC_LOCATION_NODE = "a53152c8-703e-11ef-8753-0575b5bada34"
-DOC_LOCATION_LITERAL = "c764ad5c-d1b6-11ef-8532-495867ec2258"
-
-DOC_OWNER_NG = "ce94a73c-703e-11ef-8753-0575b5bada34"
-DOC_OWNER_NODE = "ce94a73c-703e-11ef-8753-0575b5bada34"
-
-DOC_PRODUCTION_NG = "fb5d903b-7052-11ef-8753-0575b5bada34"
-DOC_PROD_ACTORS = "fb5d904d-7052-11ef-8753-0575b5bada34"
-DOC_PROD_MOTIVATED = "fb5d904a-7052-11ef-8753-0575b5bada34"
-DOC_PROD_PLACE = "fb5d904f-7052-11ef-8753-0575b5bada34"
-DOC_PROD_INFLUENCES = "fb5d9045-7052-11ef-8753-0575b5bada34"
-DOC_PROD_DATE_START = "fb5d9050-7052-11ef-8753-0575b5bada34"
-DOC_PROD_DATE_END = "fb5d904c-7052-11ef-8753-0575b5bada34"
-DOC_PROD_TIME_TYPE = "fb5d9042-7052-11ef-8753-0575b5bada34"
-DOC_PROD_CULTURAL = "5b462970-edfe-11ef-9a8f-89acc4447d22"
-DOC_PROD_TECHNIQUES = "2577f662-d1b0-11ef-8532-495867ec2258"
-
-DOC_PERIOD_NG = "ee5666f5-edf3-11ef-9a8f-89acc4447d22"
-DOC_PERIOD_ABSOLUTE = "ee5666fc-edf3-11ef-9a8f-89acc4447d22"
-DOC_PERIOD_PRODUCTION = "ee5666f5-edf3-11ef-9a8f-89acc4447d22"
-
-DOC_DIMENSION_NG = "dd725542-7039-11ef-8753-0575b5bada34"
-DOC_DIMENSION_TYPE = "66351560-703d-11ef-8753-0575b5bada34"
-DOC_DIMENSION_UNIT = "f0f2f252-7039-11ef-8753-0575b5bada34"
-DOC_DIMENSION_VALUE = "1dc76d80-703a-11ef-8753-0575b5bada34"
-
-DOC_COMPOSED_NG = "e3bfe85e-703b-11ef-8753-0575b5bada34"
-DOC_COMPOSED_TYPE = "7153adc2-704f-11ef-8753-0575b5bada34"
-DOC_COMPOSED_UNIT = "7153adc3-704f-11ef-8753-0575b5bada34"
-DOC_COMPOSED_VALUE = "7153adc1-704f-11ef-8753-0575b5bada34"
-
-DOC_PART_OF_NG = "e4166b5c-d1b1-11ef-8532-495867ec2258"
-DOC_PART_OF_NODE = "e4166b5c-d1b1-11ef-8532-495867ec2258"
-
-# Project studied objects
-PROJECT_STUDIED_OBJECTS_NG = "a8fb3c9e-bbc4-11ef-bd5f-ed806b645d76"
-PROJECT_STUDIED_OBJECTS_NODE = "a8fb3c9e-bbc4-11ef-bd5f-ed806b645d76"
-
-# --- Component nodegroups & nodes ---
-COMP_TYPE_NG = "0474f0de-711e-11ef-be19-21cc18cdd2a8"
-COMP_TYPE_NODE = "0474f0de-711e-11ef-be19-21cc18cdd2a8"
-
-COMP_PARENT_DOC_NG = "26524186-710d-11ef-be19-21cc18cdd2a8"
-COMP_PARENT_DOC_NODE = "e0bd205a-711b-11ef-be19-21cc18cdd2a8"
-
-COMP_ICONOGRAPHIC_NG = "56018940-ee09-11ef-9a8f-89acc4447d22"
-COMP_ICONOGRAPHIC_NODE = "56018940-ee09-11ef-9a8f-89acc4447d22"
-
-COMP_NAME_NG = "96e53203-710b-11ef-be19-21cc18cdd2a8"
-COMP_NAME_LABEL = "96e53206-710b-11ef-be19-21cc18cdd2a8"
-COMP_NAME_LANGUAGE = "96e53205-710b-11ef-be19-21cc18cdd2a8"
-COMP_NAME_TYPE = "96e53207-710b-11ef-be19-21cc18cdd2a8"
-
-COMP_CONTEXT_NG = "96ef1746-711e-11ef-be19-21cc18cdd2a8"
-COMP_CONTEXT_NODE = "96ef1746-711e-11ef-be19-21cc18cdd2a8"
-
-COMP_IDENTIFIER_NG = "a9c93cbb-710b-11ef-be19-21cc18cdd2a8"
-COMP_IDENTIFIER_VALUE = "a9c93cbd-710b-11ef-be19-21cc18cdd2a8"
-COMP_IDENTIFIER_SOURCE = "a9c93cbe-710b-11ef-be19-21cc18cdd2a8"
-COMP_IDENTIFIER_TYPE = "a9c93cbf-710b-11ef-be19-21cc18cdd2a8"
-
-COMP_STATEMENT_NG = "b6dfa2e1-710b-11ef-be19-21cc18cdd2a8"
-COMP_STATEMENT_CONTENT = "b6dfa2e5-710b-11ef-be19-21cc18cdd2a8"
-COMP_STATEMENT_LANGUAGE = "b6dfa2e8-710b-11ef-be19-21cc18cdd2a8"
-COMP_STATEMENT_SOURCE = "b6dfa2eb-710b-11ef-be19-21cc18cdd2a8"
-COMP_STATEMENT_TYPE = "b6dfa2ea-710b-11ef-be19-21cc18cdd2a8"
-
-COMP_PRODUCTION_NG = "c31205b9-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_ACTORS = "c31205cb-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_MOTIVATED = "c31205c8-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_PLACE = "c31205cd-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_INFLUENCES = "c31205c3-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_DATE_START = "c31205ce-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_DATE_END = "c31205ca-71b4-11ef-bb52-6361ac5a97ee"
-COMP_PROD_TIME_TYPE = "c31205c0-71b4-11ef-bb52-6361ac5a97ee"
-
-COMP_PERIOD_NG = "e67686af-edf2-11ef-9a8f-89acc4447d22"
-COMP_PERIOD_ABSOLUTE = "e67686b6-edf2-11ef-9a8f-89acc4447d22"
-COMP_PERIOD_PRODUCTION = "e67686af-edf2-11ef-9a8f-89acc4447d22"
-
-COMP_LOCATION_DOC_NG = "fa5cc926-e889-11ef-9bfc-0debd0685137"
-COMP_LOCATION_DOC_NODE = "fa5cc926-e889-11ef-9bfc-0debd0685137"
-COMP_LOCATION_APPELLATION = "f0dcdbf0-e88b-11ef-9bfc-0debd0685137"
-
-# --- Place nodegroups & nodes ---
-PLACE_NAME_NG = "e4513853-7024-11ef-8753-0575b5bada34"
-PLACE_NAME_LABEL = "e4513856-7024-11ef-8753-0575b5bada34"
-PLACE_NAME_LANGUAGE = "e4513855-7024-11ef-8753-0575b5bada34"
-PLACE_NAME_TYPE = "e4513857-7024-11ef-8753-0575b5bada34"
-
-PLACE_IDENTIFIER_NG = "e7bf9151-7024-11ef-8753-0575b5bada34"
-PLACE_IDENTIFIER_VALUE = "e7bf9153-7024-11ef-8753-0575b5bada34"
-PLACE_IDENTIFIER_SOURCE = "e7bf9154-7024-11ef-8753-0575b5bada34"
-PLACE_IDENTIFIER_TYPE = "e7bf9155-7024-11ef-8753-0575b5bada34"
-
-# --- Group nodegroups & nodes ---
-GROUP_NAME_NG = "e69cbd41-7018-11ef-8753-0575b5bada34"
-GROUP_NAME_LABEL = "e69cbd44-7018-11ef-8753-0575b5bada34"
-GROUP_NAME_LANGUAGE = "e69cbd43-7018-11ef-8753-0575b5bada34"
-GROUP_NAME_TYPE = "e69cbd45-7018-11ef-8753-0575b5bada34"
-
-GROUP_IDENTIFIER_NG = "eda9eee7-7018-11ef-8753-0575b5bada34"
-GROUP_IDENTIFIER_VALUE = "eda9eee9-7018-11ef-8753-0575b5bada34"
-GROUP_IDENTIFIER_SOURCE = "eda9eeea-7018-11ef-8753-0575b5bada34"
-GROUP_IDENTIFIER_TYPE = "eda9eeeb-7018-11ef-8753-0575b5bada34"
-
-GROUP_MEMBER_OF_NG = "86e02cce-7019-11ef-8753-0575b5bada34"
-GROUP_MEMBER_OF_NODE = "86e02cce-7019-11ef-8753-0575b5bada34"
-
-GROUP_LOCATION_NG = "636b1b3e-ae2e-11ef-8dd2-3b6c98a10134"
-GROUP_LOCATION_NODE = "636b1b3e-ae2e-11ef-8dd2-3b6c98a10134"
-
-# --- Person nodegroups & nodes ---
-PERSON_NAME_NG = "8e97f1a7-701c-11ef-8753-0575b5bada34"
-PERSON_NAME_LABEL = "8e97f1aa-701c-11ef-8753-0575b5bada34"
-PERSON_NAME_LANGUAGE = "8e97f1a9-701c-11ef-8753-0575b5bada34"
-PERSON_NAME_TYPE = "8e97f1ab-701c-11ef-8753-0575b5bada34"
-
-PERSON_IDENTIFIER_NG = "943a2c65-701c-11ef-8753-0575b5bada34"
-PERSON_IDENTIFIER_VALUE = "943a2c67-701c-11ef-8753-0575b5bada34"
-PERSON_IDENTIFIER_SOURCE = "943a2c68-701c-11ef-8753-0575b5bada34"
-PERSON_IDENTIFIER_TYPE = "943a2c69-701c-11ef-8753-0575b5bada34"
-
-# Dependency nodegroup lookup by graph ID
-DEP_NAME_CONFIG = {
-    PLACE_GRAPH_ID: {
-        "ng": PLACE_NAME_NG,
-        "label": PLACE_NAME_LABEL,
-        "language": PLACE_NAME_LANGUAGE,
-        "type": PLACE_NAME_TYPE,
-    },
-    GROUP_GRAPH_ID: {
-        "ng": GROUP_NAME_NG,
-        "label": GROUP_NAME_LABEL,
-        "language": GROUP_NAME_LANGUAGE,
-        "type": GROUP_NAME_TYPE,
-    },
-    PERSON_GRAPH_ID: {
-        "ng": PERSON_NAME_NG,
-        "label": PERSON_NAME_LABEL,
-        "language": PERSON_NAME_LANGUAGE,
-        "type": PERSON_NAME_TYPE,
-    },
-}
-
-# --- Concept defaults ---
-CONCEPT_ALTERNATE_TITLES = "7cca3482-44b5-42ea-a1d7-120cd732b350"
-CONCEPT_FRENCH = "a1d82c77-ebd6-4215-ab85-2c0b6a68a0e8"
-CONCEPT_PREFERRED_TERMS = "5f400d39-3b6b-4b8a-939b-4e49787c7444"
-CONCEPT_PERSISTENT_ID = "5b292232-52ac-4e71-ba6c-fe4dd6ff02fa"
-CONCEPT_RECORD_ID = "e10752d3-d8fa-47cb-92f9-dd7277dfc97a"
-CONCEPT_SOURCE_BIBLISSIMA = "39124989-dfb1-4e2a-9d1a-4bff0827ed71"
-CONCEPT_SOURCE_MANDRAGORE = "3b78627a-c751-43df-b427-73e1dd11ec38"
-CONCEPT_SOURCE_BNF = "bd1fa4c5-c7e7-45d2-b58c-e5f54a1da34d"
-CONCEPT_DESCRIPTION = "9a51d30b-48e8-4f94-9344-cd2bb1d4b33a"
-CONCEPT_IDENTIFICATION = (
-    "d2a8104a-312a-4f1d-acb7-3ecb1335e2fc"  # Statement type for "Texte" (which work)
-)
-CONCEPT_INSCRIPTIONS = (
-    "9076a3e5-06f5-4ed7-91e4-985914c7178b"  # Statement type for "Rubrique"
-)
-CONCEPT_MANUSCRIT = "56c61151-3bc5-45b4-957e-3cccde26abe7"
-CONCEPT_DECOR = "c19f3196-d1e9-4f08-9917-4d627e61e153"
-CONCEPT_SHELF_MARKS = "2cbf15b4-aa04-4b5b-bf4a-2594bbeb72ca"
-CONCEPT_MEDIEVAL = "f8101404-1570-35cf-ac70-1a18a84072ca"
-
-# Century mapping: "13e siècle" → concept UUID
-# CENTURY_MAPPING + _CENTURY_RE + parse_century now live in
-# ``manuspectrum.utils.dates`` (imported above) so other connectors and
-# importers can share the same vocabulary → valueid mapping.
-
-RELATIONSHIP_CONCEPT = "ac41d9be-79db-4256-b368-2f4559cfbe55"
-
-_ARK_RE = re.compile(r"ark:/43093/(\w+)")
 
 
 def _parse_html_fragment(text):
@@ -1892,91 +1679,6 @@ class BiblissimaCheckDuplicatesView(View):
         except Exception:
             logger.debug("ES %s search no results for: %s", match_type, search_term)
 
-
-BIBLISSIMA_PORTAL = "https://portail.biblissima.fr/fr/ark:/43093"
-BIBLISSIMA_PORTAL_EN = "https://portail.biblissima.fr/en/ark:/43093"
-
-
-# Map Biblissima illumination type/typologie/descriptor strings to Arches Type of Component valueids.
-# Keys are lowercase. Matching is done with startswith() to handle variants like "initiale ornée (1)".
-BIBLISSIMA_TYPE_MAPPING = {
-    "initiale ornée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale filigranée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale historiée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale animée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale zoomorphe": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale anthropomorphe": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale de couleur": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale": "31158e76-817a-447d-a40c-3963731296a8",
-    "lettrine": "31158e76-817a-447d-a40c-3963731296a8",
-    "lettre ornée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",  # decorated letter
-    "lettre cadelée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
-    "lettre or": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
-    "miniature": "63bc98e3-57de-48fc-a656-8d6f9a9acf40",  # miniature
-    "page décorée": "4063b4aa-c50b-4101-947c-d8094eed6e25",  # Decoration
-    "décor": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "bordure": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "bandeau": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "encadrement": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "frontispice": "0805a584-1395-48df-8e84-4ae4b25cdeae",  # frontispiece
-    "vignette": "29167061-2645-4d86-8f30-9206c1f83297",  # vignette
-    "photographie": "85e458af-0292-4ecb-84b9-5715071d45e1",  # photography
-    "filigrane": "c3168cc7-23d3-4ddb-9eac-38383b852f5a",  # watermark
-    "planche": "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a",  # board
-    "enluminure": "3ecd8040-7c4b-4b1d-88f7-379297358f66",  # illumination (default)
-}
-
-# Default fallback when no type mapping matches
-BIBLISSIMA_TYPE_DEFAULT = "3ecd8040-7c4b-4b1d-88f7-379297358f66"  # illumination
-
-# Human-readable labels for each target valueid. Used by the import workflow
-# so the per-item type badge can show a real concept name (e.g. "Enluminure")
-# instead of a generic "default" string. Labels are in French to match the
-# underlying concept collection.
-BIBLISSIMA_TYPE_VALUEID_LABELS = {
-    "31158e76-817a-447d-a40c-3963731296a8": "Lettrine",
-    "2f5df709-4f32-40b4-8858-d0d54ba25d61": "Lettre ornée",
-    "63bc98e3-57de-48fc-a656-8d6f9a9acf40": "Miniature",
-    "4063b4aa-c50b-4101-947c-d8094eed6e25": "Décor",
-    "0805a584-1395-48df-8e84-4ae4b25cdeae": "Frontispice",
-    "29167061-2645-4d86-8f30-9206c1f83297": "Vignette",
-    "85e458af-0292-4ecb-84b9-5715071d45e1": "Photographie",
-    "c3168cc7-23d3-4ddb-9eac-38383b852f5a": "Filigrane",
-    "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a": "Planche",
-    "3ecd8040-7c4b-4b1d-88f7-379297358f66": "Enluminure",
-}
-
-
-# ----------------------------------------------------------------------------
-# Document Type mapping — Biblissima 'nature de l'élément' (P2 label) →
-# Arches Document Type valueid. Sample of 1500 random Biblissima items shows
-# ~96% are some flavour of 'manuscrit' and ~7.5% are 'imprimé'; the remainder
-# is <1% (estampe, …) for which AGORHA has no direct equivalent — those fall
-# through to the default and the UI shows a "needs review" badge so the
-# analyst can correct the type inline.
-# Mapping is keyed by lowercase canonical label, not QID, for two reasons:
-#   • robust if Biblissima reorganises entities under different QIDs
-#   • mirrors _resolve_biblissima_type (Component) which also keys on labels
-# ----------------------------------------------------------------------------
-VALUEID_MANUSCRIT = "30931466-b4e0-4527-ac93-b7290e80084c"
-VALUEID_TEXTE_IMPRIME = "feff36de-e9d0-4723-b00b-142dc19df8ed"
-
-BIBLISSIMA_DOCUMENT_NATURE_MAP = {
-    "manuscrit": VALUEID_MANUSCRIT,
-    "manuscrits en plusieurs volumes": VALUEID_MANUSCRIT,
-    "unité codicologique": VALUEID_MANUSCRIT,
-    "imprimé": VALUEID_TEXTE_IMPRIME,
-    "texte imprimé": VALUEID_TEXTE_IMPRIME,
-}
-
-DOCUMENT_NATURE_DEFAULT = VALUEID_MANUSCRIT  # 96% Biblissima is manuscrit
-
-# Human-readable labels for the resolved valueids — used by the badge UI
-# (mirrors BIBLISSIMA_TYPE_VALUEID_LABELS for Components).
-BIBLISSIMA_DOCUMENT_TYPE_VALUEID_LABELS = {
-    VALUEID_MANUSCRIT: "Manuscrit",
-    VALUEID_TEXTE_IMPRIME: "Texte imprimé",
-}
 
 
 def _resolve_biblissima_document_type(nature_label):
