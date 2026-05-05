@@ -963,7 +963,16 @@ const viewModel = function(params) {
         toAdd.forEach((item) => self.cart.push(item));
     };
 
-    this.clearCart = () => self.cart.removeAll();
+    this.clearCart = () => {
+        self.cart.removeAll();
+        // Also persist the empty cart so a hard reload doesn't re-hydrate
+        // the old selectedItems from workflow_history.componentdata.
+        const current = ko.unwrap(params.value) || {};
+        params.value({
+            ...current,
+            selectedItems: [],
+        });
+    };
 
     this.submit = () => {
         if (self.cart().length === 0) return;
