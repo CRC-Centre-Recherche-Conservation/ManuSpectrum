@@ -96,7 +96,7 @@
                     <div class="d-flex gap-6">
                         <input type="text" class="form-control input-sm" style="flex: 1;"
                                data-bind="textInput: directIdentifier,
-                                          attr: { placeholder: isDocument ? 'Q35658' : 'Q35658 or ark:/43093/mdata6ca4e39f...' },
+                                          attr: { placeholder: isComponent ? 'Q63633 or ark:/43093/ifdata...' : 'Q63633 or https://data.biblissima.fr/entity/Q63633' },
                                           event: {keypress: function(d, e) { if (e.keyCode === 13) { addByIdentifier(); } return true; }}">
                         <button class="btn btn-sm btn-default"
                                 data-bind="click: addByIdentifier, disable: !directIdentifier() || addingDirect()">

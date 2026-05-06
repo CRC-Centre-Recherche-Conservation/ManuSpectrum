@@ -338,148 +338,148 @@ const viewModel = function(params) {
     this.dateTo.subscribe(() => self.currentPage(1));
     this.textFilter.subscribe(() => self.currentPage(1));
 
-    // Direct identifier input (QID or ARK)
+    // Direct identifier input. Two accepted shapes:
+    //   - QID (manuscript): bare Q-prefixed id, or pasted entity/Item URL.
+    //   - ifdata ARK (single illumination, Component mode only): direct
+    //     add via the dedicated portal scrape endpoint. Illuminations
+    //     have no Wikibase entity, so QID is not a substitute here.
+    // mdata ARKs (manuscript hashes) are intentionally rejected: there's
+    // no hash→QID resolver wired in, and the prior fallback through
+    // /suggest only matched labels and silently bailed.
     this.directIdentifier = ko.observable('');
     this.addingDirect = ko.observable(false);
 
-    this.addByIdentifier = async () => {
-        const id = self.directIdentifier().trim();
-        if (!id) return;
+    const _QID_RE = /Q\d+/i;
+    const _IFDATA_RE = /ifdata\w+/i;
+    const _normalizeQid = (input) => {
+        if (!input) return null;
+        const m = String(input).trim().match(_QID_RE);
+        return m ? m[0].toUpperCase() : null;
+    };
 
+    this._addIlluminationByArk = async (raw) => {
+        const m = String(raw).match(_IFDATA_RE);
+        if (!m) return;
+        const hash = m[0];
+
+        self.searchError(null);
         self.addingDirect(true);
         try {
-            // Handle ifdata ARK (illumination) — add directly as component item
-            if (id.includes('ifdata')) {
-                const hash = id.replace('ark:/43093/', '').replace(/.*ifdata/, 'ifdata');
-                const resp = await fetch(`/api/biblissima/illumination/${hash}`);
-                if (resp.ok) {
-                    const detail = await resp.json();
-                    const item = {
-                        canvasId: detail.ifdataHash,
-                        arkId: detail.arkId,
-                        label: detail.label || '',
-                        thumbnail: detail.thumbnail || null,
-                        manuscript: detail.manuscript || '',
-                        folio: detail.folio || '',
-                        legend: detail.label || '',
-                        date: detail.date || '',
-                        location: detail.location || '',
-                        descriptors: detail.descriptors || [],
-                        portalUrl: detail.portalUrl || '',
-                        manifestUrl: detail.manifestUrl || '',
-                        imageUrl: detail.imageUrl || '',
-                        biblissimaQid: '',
-                        shelfmark: '',
-                        collectionLabel: '',
-                        locationLabel: '',
-                        locationQid: '',
-                        geonamesId: '',
-                        parentInstitutionLabel: '',
-                        parentInstitutionQid: '',
-                        authorLabel: '',
-                        authorQid: '',
-                        mandragoreId: '',
-                        digitizationUrl: '',
-                        hasImage: !!detail.imageUrl,
-                        typeValueId: detail.typeValueId || '',
-                        typeLabel: detail.typeLabel || '',
-                        ifdataHash: detail.ifdataHash,
-                        mandragoreArk: detail.mandragoreArk || '',
-                    };
-                    const exists = self.cart().some((c) => self._sameItem(c, item));
-                    if (!exists && !self.cartIsFull()) self.cart.push(item);
-                    self.directIdentifier('');
-                }
-                self.addingDirect(false);
+            const resp = await fetch(`/api/biblissima/illumination/${hash}`);
+            if (!resp.ok) {
+                self.searchError(
+                    arches.translations.biblissimaIdentifierNotFound ||
+                        'No Biblissima entity matches this identifier'
+                );
                 return;
             }
+            const detail = await resp.json();
+            const item = {
+                canvasId: detail.ifdataHash,
+                arkId: detail.arkId,
+                label: detail.label || '',
+                thumbnail: detail.thumbnail || null,
+                manuscript: detail.manuscript || '',
+                folio: detail.folio || '',
+                legend: detail.label || '',
+                date: detail.date || '',
+                location: detail.location || '',
+                descriptors: detail.descriptors || [],
+                portalUrl: detail.portalUrl || '',
+                manifestUrl: detail.manifestUrl || '',
+                imageUrl: detail.imageUrl || '',
+                // Manuscript-level fields populated server-side by
+                // _enrich_canvases. Needed by the step 3 parent-resolver
+                // (biblissimaQid + manuscriptArk) and by the dependency
+                // panel (location / institution / author).
+                manuscriptArk: detail.manuscriptArk || '',
+                biblissimaQid: detail.biblissimaQid || '',
+                shelfmark: detail.shelfmark || '',
+                collectionLabel: detail.collectionLabel || '',
+                collectionQid: detail.collectionQid || '',
+                locationLabel: detail.locationLabel || '',
+                locationQid: detail.locationQid || '',
+                geonamesId: detail.geonamesId || '',
+                parentInstitutionLabel: detail.parentInstitutionLabel || '',
+                parentInstitutionQid: detail.parentInstitutionQid || '',
+                authorLabel: detail.authorLabel || '',
+                authorQid: detail.authorQid || '',
+                mandragoreId: detail.mandragoreId || '',
+                digitizationUrl: detail.digitizationUrl || '',
+                hasImage: !!detail.imageUrl,
+                typeValueId: detail.typeValueId || '',
+                typeLabel: detail.typeLabel || '',
+                ifdataHash: detail.ifdataHash,
+                mandragoreArk: detail.mandragoreArk || '',
+            };
+            const exists = self.cart().some((c) => self._sameItem(c, item));
+            if (!exists && !self.cartIsFull()) self.cart.push(item);
+            self.directIdentifier('');
+        } catch (err) {
+            console.error('Failed to add illumination by ARK:', err);
+            self.searchError(
+                arches.translations.biblissimaNetworkError ||
+                    'Network error while querying Biblissima'
+            );
+        } finally {
+            self.addingDirect(false);
+        }
+    };
 
-            // Handle QID or mdata ARK
-            let qid = id;
-            if (id.startsWith('ark:') || id.startsWith('mdata')) {
-                // It's a manuscript ARK — in Component mode, load its illuminations
-                const hash = id.replace('ark:/43093/', '');
-                if (self.isComponent) {
-                    self.selectedManuscriptHash(hash);
-                    self.componentSearchMode('manuscript');
-                    self.currentPage(1);
-                    // Fetch all illuminations for this manuscript
-                    const illumResp = await fetch(`/api/biblissima/manuscript-illuminations?portalHash=${hash}`);
-                    const illumData = await illumResp.json();
-                    if (illumData.results?.length > 0) {
-                        self.searchResults(illumData.results.map((item) => ({
-                            canvasId: item.ifdataHash,
-                            arkId: item.arkId,
-                            label: item.label,
-                            thumbnail: null,
-                            manuscript: '',
-                            folio: item.folio,
-                            legend: item.descriptor,
-                            date: '',
-                            location: '',
-                            descriptors: [item.descriptor],
-                            portalUrl: item.portalUrl,
-                            manifestUrl: '',
-                            biblissimaQid: '',
-                            shelfmark: '',
-                            collectionLabel: '',
-                            locationLabel: '',
-                            locationQid: '',
-                            geonamesId: '',
-                            parentInstitutionLabel: '',
-                            parentInstitutionQid: '',
-                            authorLabel: '',
-                            authorQid: '',
-                            mandragoreId: '',
-                            digitizationUrl: '',
-                            hasImage: item.hasImage,
-                            typeValueId: item.typeValueId || '',
-                            typeLabel: item.typeLabel || '',
-                            ifdataHash: item.ifdataHash,
-                        })));
-                        self.hasSearched(true);
-                    }
-                    self.directIdentifier('');
-                    self.addingDirect(false);
-                    return;
-                }
-                // In Document mode, try to find the QID
-                const resp = await fetch(`/api/biblissima/suggest?q=${encodeURIComponent(hash)}&limit=5`);
-                const data = await resp.json();
-                if (data.results?.length > 0) {
-                    qid = data.results[0].id;
-                } else {
-                    self.addingDirect(false);
-                    return;
-                }
-            }
+    this.addByIdentifier = async () => {
+        const raw = self.directIdentifier().trim();
+        if (!raw) return;
 
-            // Fetch entity details (for QID)
+        if (self.isComponent && _IFDATA_RE.test(raw)) {
+            await self._addIlluminationByArk(raw);
+            return;
+        }
+
+        const qid = _normalizeQid(raw);
+        if (!qid) {
+            self.searchError(
+                arches.translations.biblissimaIdentifierInvalid ||
+                    'Paste a Biblissima QID (e.g. Q63633)'
+            );
+            return;
+        }
+
+        self.searchError(null);
+        self.addingDirect(true);
+        try {
             const resp = await fetch(`/api/biblissima/entity/${qid}`);
             if (!resp.ok) {
-                self.addingDirect(false);
+                self.searchError(
+                    arches.translations.biblissimaIdentifierNotFound ||
+                        'No Biblissima entity matches this identifier'
+                );
                 return;
             }
             const d = await resp.json();
 
-            // In Component mode: if this is a manuscript, load its illuminations
-            if (self.isComponent && d.portalHash && d.portalHash.startsWith('mdata')) {
-                self.manuscriptForComponent(d.label || qid);
-                self.searchManuscriptIlluminations();
+            // Component mode delegates to the manuscript-illuminations flow
+            // so we get the same paginated streaming + entity enrichment as
+            // the autocomplete path.
+            if (self.isComponent && d.portalHash) {
+                self.manuscriptForComponent(qid);
+                await self.searchManuscriptIlluminations();
                 self.directIdentifier('');
-                self.addingDirect(false);
                 return;
             }
 
-            // In Document mode: add as document
             const item = self._entityToItem(d);
             const exists = self.cart().some((c) => self._sameItem(c, item));
             if (!exists && !self.cartIsFull()) self.cart.push(item);
             self.directIdentifier('');
         } catch (err) {
             console.error('Failed to add by identifier:', err);
+            self.searchError(
+                arches.translations.biblissimaNetworkError ||
+                    'Network error while querying Biblissima'
+            );
+        } finally {
+            self.addingDirect(false);
         }
-        self.addingDirect(false);
     };
 
     // =====================

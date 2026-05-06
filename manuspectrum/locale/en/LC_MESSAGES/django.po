@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-06 03:43-0500\n"
+"POT-Creation-Date: 2026-05-06 04:28-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -770,69 +770,77 @@ msgstr ""
 "size or unselect some"
 
 #: templates/javascript.htm:66
+msgid "Paste a Biblissima QID (e.g. Q63633)"
+msgstr "Paste a Biblissima QID (e.g. Q63633)"
+
+#: templates/javascript.htm:67
+msgid "No Biblissima entity matches this identifier"
+msgstr "No Biblissima entity matches this identifier"
+
+#: templates/javascript.htm:68
 msgid "default"
 msgstr "default"
 
-#: templates/javascript.htm:67
+#: templates/javascript.htm:69
 msgid "type"
 msgstr "type"
 
-#: templates/javascript.htm:68 templates/javascript.htm:70
+#: templates/javascript.htm:70 templates/javascript.htm:72
 msgid "Manuscript"
 msgstr "Manuscript"
 
-#: templates/javascript.htm:69
+#: templates/javascript.htm:71
 msgid "Custom type"
 msgstr "Custom type"
 
-#: templates/javascript.htm:71
+#: templates/javascript.htm:73
 msgid "Illumination"
 msgstr ""
 
-#: templates/javascript.htm:72
+#: templates/javascript.htm:74
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:328
 msgid "Detected parent Documents"
 msgstr "Detected parent Documents"
 
-#: templates/javascript.htm:73
+#: templates/javascript.htm:75
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:38
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:341
 msgid "Resolving parent manuscripts…"
 msgstr "Resolving parent manuscripts…"
 
-#: templates/javascript.htm:74
+#: templates/javascript.htm:76
 msgid "Use this"
 msgstr "Use this"
 
-#: templates/javascript.htm:75
+#: templates/javascript.htm:77
 msgid "Unlink"
 msgstr "Unlink"
 
-#: templates/javascript.htm:76
+#: templates/javascript.htm:78
 msgid "Create new parent Document"
 msgstr "Create new parent Document"
 
-#: templates/javascript.htm:77
+#: templates/javascript.htm:79
 msgid "Creating…"
 msgstr "Creating…"
 
-#: templates/javascript.htm:78
+#: templates/javascript.htm:80
 msgid "Add Biblissima ARK as alt-name on existing"
 msgstr "Add Biblissima ARK as alt-name on existing"
 
-#: templates/javascript.htm:79
+#: templates/javascript.htm:81
 msgid "Items with no identified manuscript"
 msgstr "Items with no identified manuscript"
 
-#: templates/javascript.htm:80
+#: templates/javascript.htm:82
 msgid "Pick a Document manually…"
 msgstr "Pick a Document manually…"
 
-#: templates/javascript.htm:81
+#: templates/javascript.htm:83
 msgid "Pick a Document (required)…"
 msgstr "Pick a Document (required)…"
 
-#: templates/javascript.htm:82
+#: templates/javascript.htm:84
 msgid "Cannot create parent — no Biblissima QID"
 msgstr "Cannot create parent — no Biblissima QID"
 
@@ -1801,10 +1809,6 @@ msgstr ""
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:95
 msgid "Add by Biblissima identifier"
-msgstr ""
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:98
-msgid "Q35658 or ark:/43093/mdata6ca4e39f..."
 msgstr ""
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:129

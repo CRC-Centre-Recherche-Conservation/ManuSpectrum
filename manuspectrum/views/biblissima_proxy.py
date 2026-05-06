@@ -2303,6 +2303,22 @@ class BiblissimaIlluminationDetailView(View):
                 if canvas_info:
                     result.update(canvas_info)
 
+            # Manuscript-level enrichment (biblissimaQid, shelfmark,
+            # collection / location / parent institution chain). Without
+            # it, items added via this single-illumination path land in
+            # step 3 with no parent QID and the parent-resolver falls
+            # back to the orphan bucket. Mirrors the descriptor-search
+            # path which calls _enrich_canvases on its page slice.
+            if result.get("manuscriptArk"):
+                manifest_before = result.get("manifestUrl")
+                _enrich_canvases([result], session=session)
+                # _enrich_canvases overwrites ``manifestUrl`` with the
+                # Wikibase claim, which can be empty when the entity
+                # lookup fails. Keep the value scraped from the portal
+                # in that case so downstream consumers still resolve.
+                if not result.get("manifestUrl") and manifest_before:
+                    result["manifestUrl"] = manifest_before
+
             return JsonResponse(result)
         finally:
             session.close()
