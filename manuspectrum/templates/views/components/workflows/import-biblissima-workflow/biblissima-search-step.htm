@@ -95,8 +95,8 @@
                     <label>{% trans "Add by Biblissima identifier" %}</label>
                     <div class="d-flex gap-6">
                         <input type="text" class="form-control input-sm" style="flex: 1;"
-                               placeholder="{% trans 'Q35658 or ark:/43093/mdata6ca4e39f...' %}"
                                data-bind="textInput: directIdentifier,
+                                          attr: { placeholder: isDocument ? 'Q35658' : 'Q35658 or ark:/43093/mdata6ca4e39f...' },
                                           event: {keypress: function(d, e) { if (e.keyCode === 13) { addByIdentifier(); } return true; }}">
                         <button class="btn btn-sm btn-default"
                                 data-bind="click: addByIdentifier, disable: !directIdentifier() || addingDirect()">
