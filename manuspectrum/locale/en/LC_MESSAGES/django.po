@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-06 04:28-0500\n"
+"POT-Creation-Date: 2026-05-06 05:00-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1892,42 +1892,58 @@ msgstr ""
 msgid "Errors"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:57
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:60
+msgid "Resources are saved as Draft."
+msgstr "Resources are saved as Draft."
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:61
+msgid ""
+"Open each one to verify the data, fill in anything that couldn't be fetched "
+"from Biblissima, then click <strong>Make Active</strong> on the resource "
+"page to publish it. Drafts stay editable; only Active resources are surfaced "
+"across the rest of the application."
+msgstr ""
+"Open each one to verify the data, fill in anything that couldn't be fetched "
+"from Biblissima, then click <strong>Make Active</strong> on the resource "
+"page to publish it. Drafts stay editable; only Active resources are surfaced "
+"across the rest of the application."
+
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:76
 msgid "Created resources"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:104
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:159
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:123
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:178
 msgid "Show"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:106
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:161
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:125
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:180
 msgid "more"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:110
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:165
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:129
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:184
 msgid "Collapse"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:121
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:140
 msgid "Linked to existing resources"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:179
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:198
 msgid "skipped"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:186
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:205
 msgid "errors"
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:188
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:207
 msgid "See step 3 for details."
 msgstr ""
 
-#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:199
+#: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:218
 msgid "Open project"
 msgstr ""
 

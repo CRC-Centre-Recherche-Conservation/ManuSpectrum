@@ -50,6 +50,25 @@
             </div>
         </dl>
 
+        <!-- Draft state notice — newly created resources land in the
+             Arches "Draft" lifecycle state and need to be reviewed +
+             flipped to "Active" before they're considered published. -->
+        <!-- ko if: hasCreated -->
+        <aside class="bbma-summary-draft-notice" role="note">
+            <i class="fa fa-info-circle bbma-summary-draft-notice-icon" aria-hidden="true"></i>
+            <div class="bbma-summary-draft-notice-text">
+                <strong>{% trans "Resources are saved as Draft." %}</strong>
+                {% blocktrans trimmed %}
+                Open each one to verify the data, fill in anything that
+                couldn't be fetched from Biblissima, then click
+                <strong>Make Active</strong> on the resource page to publish it.
+                Drafts stay editable; only Active resources are surfaced
+                across the rest of the application.
+                {% endblocktrans %}
+            </div>
+        </aside>
+        <!-- /ko -->
+
         <!-- Created resources list -->
         <!-- ko if: hasCreated -->
         <section class="bbma-summary-section">

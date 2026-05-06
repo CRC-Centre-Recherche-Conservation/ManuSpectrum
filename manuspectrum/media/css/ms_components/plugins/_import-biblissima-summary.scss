@@ -475,6 +475,40 @@ $bbma-danger:       #a23535;
     animation: bbma-summary-fade 0.5s ease-out 0.32s both;
 }
 
+// Draft-state info notice — sits between the metrics ribbon and the
+// Created list. Informational tone (accent blue), distinct from the
+// bottom warn-yellow issues notice so the two roles never clash.
+.bbma-summary-draft-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 0 28px;
+    padding: 12px 14px;
+    background: $bbma-accent-light;
+    border-left: 2px solid $bbma-accent;
+    border-radius: 0 3px 3px 0;
+    color: $bbma-ink;
+    font-size: 12.5px;
+    line-height: 1.55;
+    animation: bbma-summary-fade 0.5s ease-out 0.28s both;
+
+    strong { font-weight: 600; }
+}
+
+.bbma-summary-draft-notice-icon {
+    color: $bbma-accent;
+    margin-top: 2px;
+    flex-shrink: 0;
+    font-size: 13px;
+}
+
+.bbma-summary-draft-notice-text {
+    flex: 1 1 auto;
+    min-width: 0;
+
+    > strong { display: block; margin-bottom: 2px; }
+}
+
 .bbma-summary-notice-icon {
     color: $bbma-warn;
     margin-top: 2px;
