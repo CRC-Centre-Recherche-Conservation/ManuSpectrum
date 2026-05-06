@@ -198,6 +198,17 @@ const viewModel = function(params) {
         ).length
     );
 
+    // Dep progress counts — declared before the _progress* visibility flags
+    // because ko.computed evaluates its body immediately, and _progressShowDeps
+    // reads totalDepsCount() during that initial evaluation.
+    this.resolvedDepsCount = ko.computed(() =>
+        self.dependencies().filter((d) => {
+            const action = d.action();
+            return action === 'use_existing' || action === 'created';
+        }).length
+    );
+    this.totalDepsCount = ko.computed(() => self.dependencies().length);
+
     // Visibility flags for the adaptive progress pill — kept here so the
     // template can stay legible (3 segments + 2 separators).
     this._progressShowParent = ko.computed(
@@ -293,15 +304,6 @@ const viewModel = function(params) {
         }
         return self._orphanPickers[key];
     };
-
-    // Dep progress counts (for progress indicator)
-    this.resolvedDepsCount = ko.computed(() =>
-        self.dependencies().filter((d) => {
-            const action = d.action();
-            return action === 'use_existing' || action === 'created';
-        }).length
-    );
-    this.totalDepsCount = ko.computed(() => self.dependencies().length);
 
     // Return the Place dep key for an item, mode-aware:
     //   - Document → `locationLabel` = current location of the manuscript
