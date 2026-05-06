@@ -177,6 +177,9 @@ const viewModel = function(params) {
     this.cartMax = self.isDocument ? 10 : 25;
     this.cartIsFull = ko.computed(() => self.cart().length >= self.cartMax);
     this.cartLimitLabel = arches.translations.biblissimaCartLimitReached || 'Cart limit reached';
+    this.cartAddAllTooManyLabel =
+        arches.translations.biblissimaCartAddAllTooMany ||
+        'Too many results on this page for the remaining cart slots — reduce the page size or unselect some';
 
     // =====================
     // SHARED: filters panel (collapsible)
@@ -955,12 +958,34 @@ const viewModel = function(params) {
         if (self.currentPage() > 1) self.currentPage(self.currentPage() - 1);
     };
 
-    this.addAllVisible = () => {
-        const toAdd = self.pagedResults().filter(
+    // "Add all visible" is all-or-nothing: only enabled when every visible
+    // item that isn't already in the cart fits within the remaining cap.
+    // If the page would overflow the cap we keep the user in control —
+    // they reduce the page size or unselect items rather than us silently
+    // truncating the page (which would hide which items got dropped).
+    this._addableFromVisible = ko.computed(() =>
+        self.pagedResults().filter(
             (item) => !self.cart().some((c) => self._sameItem(c, item))
-        );
-        if (self.cart().length + toAdd.length > self.cartMax) return;
-        toAdd.forEach((item) => self.cart.push(item));
+        )
+    );
+    this.canAddAllVisible = ko.computed(() => {
+        const addable = self._addableFromVisible().length;
+        if (addable === 0) return false;
+        return self.cart().length + addable <= self.cartMax;
+    });
+    this.addAllVisibleTooltip = ko.computed(() => {
+        if (self.cartIsFull()) return self.cartLimitLabel;
+        const addable = self._addableFromVisible().length;
+        if (addable === 0) return '';
+        if (self.cart().length + addable > self.cartMax) {
+            return self.cartAddAllTooManyLabel;
+        }
+        return '';
+    });
+
+    this.addAllVisible = () => {
+        if (!self.canAddAllVisible()) return;
+        self._addableFromVisible().forEach((item) => self.cart.push(item));
     };
 
     this.clearCart = () => self.cart.removeAll();
