@@ -16,12 +16,15 @@ $bbma-warning-bg: #fef9ec;
 $bbma-danger-bg: #fdf0f0;
 
 // Step wrapper overrides
+// Arches' .tabbed-workflow-step-body has `height: 100%; overflow-y: auto`,
+// so any inner content taller than the viewport scrolls the whole step body
+// (browser-level scrollbar around the columns). Forcing the wrapper to fill
+// exactly its parent and hide its own overflow keeps the scroll inside our
+// own columns (.biblissima-results-column / .biblissima-cart-body).
 .biblissima-search-step-wrapper,
 .biblissima-create-step-wrapper {
-    .workflow-step-body {
-        padding: 0;
-        height: 100%;
-    }
+    height: 100%;
+    overflow: hidden;
 }
 
 // ============================================
@@ -74,10 +77,6 @@ $bbma-danger-bg: #fdf0f0;
     display: flex;
     flex-direction: column;
     gap: 20px;
-}
-
-.bbma-config-field {
-    // each field block
 }
 
 .bbma-config-label {
@@ -387,14 +386,18 @@ $bbma-danger-bg: #fdf0f0;
 .biblissima-search-body {
     display: flex;
     flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 
-// Results column
+// Results column — owns its own vertical scroll, independent of the cart column
 .biblissima-results-column {
     flex: 1;
+    min-width: 0;
+    min-height: 0;
     overflow-y: auto;
     border-right: 1px solid $bbma-border;
+    position: relative;
 }
 
 // Empty states
@@ -532,6 +535,11 @@ $bbma-danger-bg: #fdf0f0;
     padding: 10px;
     border-top: 1px solid $bbma-border;
     background: $bbma-bg-warm;
+    // Pin to the bottom of the results-column scroll viewport so it stays
+    // visible just above the tabbed-workflow-footer while results scroll.
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
 }
 
 .bbma-page-indicator {
@@ -540,10 +548,12 @@ $bbma-danger-bg: #fdf0f0;
     font-weight: 500;
 }
 
-// Cart column
+// Cart column — owns its own vertical scroll (in .biblissima-cart-body),
+// independent of the results column.
 .biblissima-cart-column {
     width: 300px;
     flex-shrink: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     background: $bbma-bg-warm;
