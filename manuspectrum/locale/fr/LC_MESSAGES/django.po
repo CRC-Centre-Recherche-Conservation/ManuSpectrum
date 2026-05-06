@@ -767,6 +767,10 @@ msgstr "Associer à un projet (optionnel)..."
 msgid "Pending"
 msgstr "En attente"
 
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:95
+msgid "matches to review"
+msgstr "correspondances à trancher"
+
 #: templates/javascript.htm:49
 msgid "Creating..."
 msgstr "Création..."

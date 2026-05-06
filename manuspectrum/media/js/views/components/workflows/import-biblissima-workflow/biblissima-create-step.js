@@ -184,24 +184,56 @@ const viewModel = function(params) {
         })
     );
 
+    // Pending items that still carry an unresolved duplicate suggestion —
+    // the user must either dismiss it ("Not a match, create new") or
+    // accept it ("Link to this resource") before Create All can fire.
+    // Same resolution-gate philosophy as deps and parent Documents:
+    // Create All only runs when every per-item decision is closed.
+    this.unresolvedSuggestionsCount = ko.computed(() =>
+        self.items().filter(
+            (i) =>
+                i.status() === 'pending'
+                && i.showSuggestions()
+                && i.suggestions().length > 0
+        ).length
+    );
+
+    // Visibility flags for the adaptive progress pill — kept here so the
+    // template can stay legible (3 segments + 2 separators).
+    this._progressShowParent = ko.computed(
+        () => self.isComponent && !self.parentResolver.allResolved()
+    );
+    this._progressShowDeps = ko.computed(
+        () => self.totalDepsCount() > 0 && !self.allDepsResolved()
+    );
+    this._progressShowSuggestions = ko.computed(
+        () => self.unresolvedSuggestionsCount() > 0
+    );
+
     // Gate the global "Create All" button on parent-resolution AND
-    // dep-resolution AND no pending enrichment AND at least one pending item.
+    // dep-resolution AND duplicate-suggestion resolution AND no pending
+    // enrichment AND at least one pending item.
     this.canCreateAll = ko.computed(() => {
         if (self.isComponent) {
             if (self.parentResolver.resolving()) return false;
             if (!self.parentResolver.allResolved()) return false;
         }
         if (!self.allDepsResolved()) return false;
+        if (self.unresolvedSuggestionsCount() > 0) return false;
         if (self.items().some((i) => i.enrichStatus && i.enrichStatus() === 'pending')) {
             return false;
         }
         return self.items().some((i) => i.status() === 'pending');
     });
 
-    // Gate the per-item Create button on the item being pending AND, for
-    // Component, having a resolved parent Document.
+    // Gate the per-item Create button on the item being pending AND its
+    // own duplicate suggestion (if any) resolved AND, for Component,
+    // having a resolved parent Document.
     this.canCreateItem = (item) => {
         if (item.status() !== 'pending') return false;
+        if (item.showSuggestions() && item.suggestions().length > 0) {
+            return false;
+        }
         if (!self.isComponent) return self.itemDepsResolved(item);
         return self.itemDepsResolved(item)
             && !!self.parentResolver.parentIdFor(item);
@@ -309,6 +341,11 @@ const viewModel = function(params) {
     // Unresolved dep names for a specific item (for tooltip)
     this.unresolvedDepsLabel = (item) => {
         const unresolved = [];
+        // Pending duplicate suggestion blocks the Create button until the
+        // user either accepts or dismisses it.
+        if (item.showSuggestions() && item.suggestions().length > 0) {
+            unresolved.push('Possible match to review');
+        }
         // In Component mode, the per-item Create button also requires the
         // parent Document to be resolved in the parent-resolver panel above.
         // Surface that requirement explicitly so the tooltip isn't empty when

@@ -42,7 +42,7 @@
                         <!-- ko ifnot: isComponent && parentResolver.resolving() -->
 
                         <!-- Parent segment (Component mode only, while parents unresolved) -->
-                        <!-- ko if: isComponent && !parentResolver.allResolved() -->
+                        <!-- ko if: _progressShowParent -->
                         <span class="bbma-deps-progress-seg">
                             <i class="fa fa-sitemap"></i>
                             <span class="bbma-deps-progress-bar">
@@ -57,13 +57,13 @@
                         </span>
                         <!-- /ko -->
 
-                        <!-- Separator only when both segments are visible -->
-                        <!-- ko if: isComponent && !parentResolver.allResolved() && totalDepsCount() > 0 && !allDepsResolved() -->
+                        <!-- Separator between parent and deps segments -->
+                        <!-- ko if: _progressShowParent() && _progressShowDeps() -->
                         <span class="bbma-deps-progress-sep" aria-hidden="true">·</span>
                         <!-- /ko -->
 
                         <!-- Deps segment (always relevant when deps exist & not all linked) -->
-                        <!-- ko if: totalDepsCount() > 0 && !allDepsResolved() -->
+                        <!-- ko if: _progressShowDeps -->
                         <span class="bbma-deps-progress-seg">
                             <i class="fa fa-link"></i>
                             <span class="bbma-deps-progress-bar">
@@ -74,6 +74,25 @@
                             <span class="bbma-deps-progress-label">
                                 <span data-bind="text: resolvedDepsCount()"></span>/<span data-bind="text: totalDepsCount()"></span>
                                 {% trans "linked" %}
+                            </span>
+                        </span>
+                        <!-- /ko -->
+
+                        <!-- Separator before the suggestions segment if any
+                             previous segment is visible -->
+                        <!-- ko if: _progressShowSuggestions() && (_progressShowParent() || _progressShowDeps()) -->
+                        <span class="bbma-deps-progress-sep" aria-hidden="true">·</span>
+                        <!-- /ko -->
+
+                        <!-- Unresolved-suggestions segment: pending items
+                             that still carry a possible-duplicate match the
+                             user hasn't confirmed or dismissed yet. -->
+                        <!-- ko if: _progressShowSuggestions -->
+                        <span class="bbma-deps-progress-seg">
+                            <i class="fa fa-search"></i>
+                            <span class="bbma-deps-progress-label">
+                                <span data-bind="text: unresolvedSuggestionsCount"></span>
+                                {% trans "matches to review" %}
                             </span>
                         </span>
                         <!-- /ko -->

@@ -686,6 +686,10 @@ msgstr ""
 msgid "Pending"
 msgstr ""
 
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:95
+msgid "matches to review"
+msgstr "matches to review"
+
 #: templates/javascript.htm:49
 msgid "Creating..."
 msgstr ""
