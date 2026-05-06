@@ -98,19 +98,38 @@ const viewModel = function(params) {
         }
     };
 
-    this.submit = () => {
+    // Workflow step interface
+    this.complete = params.form?.complete || ko.observable(false);
+    this.savedData = params.form?.savedData || ko.observable({});
+
+    // Auto-persist on every change to params.value AND to the workflow
+    // history (BDD). Replaces the old explicit "Continue" submit button —
+    // the workflow's "Next Step" advances once canProceed is true.
+    let _persistTimer = null;
+    const _persist = () => {
         const data = {
             resourceType: self.resourceType(),
             projectId: self.projectId(),
             projectName: self.projectName(),
         };
         params.value(data);
-        self.complete(true);
+        if (params.form?.setToWorkflowHistory) {
+            params.form.setToWorkflowHistory('value', data);
+            params.form.savedData?.(data);
+        }
     };
+    const _schedulePersist = () => {
+        if (_persistTimer) clearTimeout(_persistTimer);
+        _persistTimer = setTimeout(() => {
+            _persistTimer = null;
+            _persist();
+        }, 300);
+    };
+    self.resourceType.subscribe(_schedulePersist);
+    self.projectId.subscribe(_schedulePersist);
+    self.projectName.subscribe(_schedulePersist);
 
-    // Workflow step interface
-    this.complete = params.form?.complete || ko.observable(false);
-    this.savedData = params.form?.savedData || ko.observable({});
+    ko.computed(() => self.complete(!!self.canProceed()));
 
     this.initialize();
 };

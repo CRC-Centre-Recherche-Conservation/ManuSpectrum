@@ -963,25 +963,42 @@ const viewModel = function(params) {
         toAdd.forEach((item) => self.cart.push(item));
     };
 
-    this.clearCart = () => {
-        self.cart.removeAll();
-        // Also persist the empty cart so a hard reload doesn't re-hydrate
-        // the old selectedItems from workflow_history.componentdata.
-        const current = ko.unwrap(params.value) || {};
-        params.value({
-            ...current,
-            selectedItems: [],
-        });
-    };
+    this.clearCart = () => self.cart.removeAll();
 
-    this.submit = () => {
-        if (self.cart().length === 0) return;
-        params.value({
+    // Auto-persistence: every cart/descriptor mutation flows to params.value
+    // AND directly to workflow_history.componentdata. Bypasses the framework's
+    // NonTileBasedComponent.save (which would force complete=true) so we keep
+    // full control over complete = "user is allowed to advance".
+    //
+    // Debounced because addAllVisible() pushes up to N items via forEach,
+    // firing N subscriber calls — we coalesce into one BDD write.
+    let _persistTimer = null;
+    const _persist = () => {
+        const value = {
             selectedItems: ko.toJS(self.cart()),
             descriptors: ko.toJS(self.selectedDescriptors()),
-        });
-        self.complete(true);
+        };
+        params.value(value);
+        if (params.form?.setToWorkflowHistory) {
+            params.form.setToWorkflowHistory('value', value);
+            // Mark as saved so the framework hides "Save and Continue" and
+            // shows "Next Step" instead.
+            params.form.savedData?.(value);
+        }
     };
+    const _schedulePersist = () => {
+        if (_persistTimer) clearTimeout(_persistTimer);
+        _persistTimer = setTimeout(() => {
+            _persistTimer = null;
+            _persist();
+        }, 300);
+    };
+    self.cart.subscribe(_schedulePersist);
+    self.selectedDescriptors.subscribe(_schedulePersist);
+
+    // The workflow's "Next Step" button is disabled when required && !complete.
+    // Cart must hold ≥ 1 item to advance to step 3.
+    ko.computed(() => self.complete(self.cart().length > 0));
 
     this.dirty = ko.computed(() => self.cart().length > 0);
 
