@@ -260,7 +260,6 @@ def _biblissima_upstream_error(exc, context):
     )
 
 
-
 def _parse_html_fragment(text):
     """Parse an HTML fragment with lxml, tolerant of mixed text/markup.
 
@@ -1706,7 +1705,6 @@ class BiblissimaCheckDuplicatesView(View):
                     )
         except Exception:
             logger.debug("ES %s search no results for: %s", match_type, search_term)
-
 
 
 def _resolve_biblissima_document_type(nature_label):

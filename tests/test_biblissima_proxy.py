@@ -1585,9 +1585,7 @@ class EnrichCanvasesDocumentNatureTests(TestCase):
         # (action=query, list=search) — return a single matching item.
         bib_resp = MagicMock()
         bib_resp.raise_for_status = MagicMock()
-        bib_resp.json.return_value = {
-            "query": {"search": [{"title": "Item:Q123"}]}
-        }
+        bib_resp.json.return_value = {"query": {"search": [{"title": "Item:Q123"}]}}
         mock_bib.return_value = bib_resp
 
         # _batch_get_wikibase_entities is called twice:
