@@ -10,8 +10,10 @@ Usage:
 import uuid
 from unittest.mock import MagicMock, Mock, patch, call
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 import requests
+
+from manuspectrum.utils.http import UnsafeURLError
 
 
 class ManifestTestData:
@@ -538,87 +540,28 @@ class TestManifestValidation(TestCase):
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0]["type"], "ERROR")
 
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_url_with_valid_v3_manifest(self, mock_get):
-        """Validating a URL that returns a valid v3 manifest should succeed."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_response.raise_for_status = MagicMock()
+    def test_validate_external_url_is_format_only(self):
+        """validate() of an external URL is a pure FORMAT check — no network.
 
-        mock_get.return_value = mock_response
-
+        IIIF compliance + reachability are checked in pre_tile_save (the
+        side-effecting lifecycle hook), so validate() must not fetch.
+        """
         errors = self.datatype.validate("https://example.org/iiif/book1/manifest")
         self.assertEqual(errors, [])
 
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_url_with_valid_v2_manifest(self, mock_get):
-        """Validating a URL that returns a valid v2 manifest should succeed."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V2
-        mock_response.raise_for_status = MagicMock()
+    def test_validate_external_url_bad_format_errors(self):
+        """A malformed URL is rejected by the cheap format gate."""
+        errors = self.datatype.validate("not a url")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("Invalid URL format", str(errors[0]["message"]))
 
-        mock_get.return_value = mock_response
-
-        errors = self.datatype.validate("http://example.org/iiif/book1/manifest")
-        self.assertEqual(errors, [])
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_does_not_create_manifest(self, mock_get):
-        """Validating a URL should NOT create an IIIFManifest record (creation is in pre_tile_save)."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_response.raise_for_status = MagicMock()
-
-        mock_get.return_value = mock_response
-
+    def test_validate_does_not_create_manifest(self):
+        """validate() must NOT create an IIIFManifest (creation is in pre_tile_save)."""
         with patch(
             "manuspectrum.datatypes.manifest.IIIFManifest"
         ) as mock_manifest_model:
             self.datatype.validate("https://example.org/iiif/book1/manifest")
             mock_manifest_model.objects.create.assert_not_called()
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_url_timeout(self, mock_get):
-        """Validating a URL that times out should return an error."""
-        mock_get.side_effect = requests.Timeout()
-
-        errors = self.datatype.validate("https://example.org/iiif/book1/manifest")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("Timeout", str(errors[0]["message"]))
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_url_connection_error(self, mock_get):
-        """Validating a URL with connection error should return an error."""
-        mock_get.side_effect = requests.ConnectionError()
-
-        errors = self.datatype.validate("https://example.org/iiif/book1/manifest")
-        self.assertEqual(len(errors), 1)
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_url_invalid_manifest_no_context(self, mock_get):
-        """Validating a URL that returns manifest without @context should error."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.INVALID_NO_CONTEXT
-        mock_response.raise_for_status = MagicMock()
-
-        mock_get.return_value = mock_response
-
-        errors = self.datatype.validate("https://example.org/iiif/invalid/manifest")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("Invalid IIIF manifest", str(errors[0]["message"]))
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_url_wrong_type_v2(self, mock_get):
-        """Validating a URL that returns v2 Collection should error."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.INVALID_WRONG_TYPE_V2
-        mock_response.raise_for_status = MagicMock()
-
-        mock_get.return_value = mock_response
-
-        errors = self.datatype.validate("http://example.org/collection")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("Invalid IIIF manifest", str(errors[0]["message"]))
 
     def test_validate_dict_without_id_or_url_returns_error(self):
         """Validating a dict without manifest_id or manifest_url should error."""
@@ -635,15 +578,8 @@ class TestManifestValidation(TestCase):
         errors = self.datatype.validate({"manifest_id": test_uuid})
         self.assertEqual(errors, [])
 
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_dict_with_manifest_url(self, mock_get):
-        """Validating a dict with manifest_url should fetch and validate."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_response.raise_for_status = MagicMock()
-
-        mock_get.return_value = mock_response
-
+    def test_validate_dict_with_manifest_url(self):
+        """Validating a dict with a well-formed manifest_url passes (format only)."""
         errors = self.datatype.validate(
             {"manifest_url": "https://example.org/iiif/book1/manifest"}
         )
@@ -691,22 +627,6 @@ class TestManifestValidation(TestCase):
         )
         self.assertEqual(len(errors), 1)
         self.assertIn("not found", errors[0]["message"].lower())
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_external_url_sends_headers(self, mock_get):
-        """External URL validation should send proper headers."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_response.raise_for_status = MagicMock()
-
-        mock_get.return_value = mock_response
-
-        url = "https://example.org/iiif/book1/manifest"
-        errors = self.datatype.validate(url)
-        self.assertEqual(errors, [])
-        call_kwargs = mock_get.call_args
-        self.assertIn("headers", call_kwargs[1])
-        self.assertIn("User-Agent", call_kwargs[1]["headers"])
 
 
 class TestTransformValueForTile(TestCase):
@@ -777,12 +697,13 @@ class TestGetDisplayValue(TestCase):
         node = MagicMock()
         node.nodeid = uuid.uuid4()
         tile = MagicMock()
-        tile.data = {str(node.nodeid): "https://example.org/iiif/book1/manifest"}
+        # Absolute URL on OUR canonical host (localhost) → collapsed to path.
+        tile.data = {str(node.nodeid): "http://localhost:8000/iiif/book1/manifest"}
 
         result = self.datatype.get_display_value(tile, node)
         self.assertIn("Book 1", result)
         self.assertIn("/iiif/book1/manifest", result)
-        # Verify lookup uses relative path extracted from full URL
+        # Verify lookup uses the relative path extracted from a canonical-host URL
         mock_manifest_model.objects.get.assert_called_once_with(
             url="/iiif/book1/manifest"
         )
@@ -879,81 +800,92 @@ class TestClean(TestCase):
         self.assertEqual(tile.data[nodeid], test_uuid)
 
 
-class TestURLRegex(TestCase):
-    """Tests for URL regex validation."""
+class TestURLFormatGate(TestCase):
+    """The cheap, network-free URL FORMAT gate (URLValidator).
+
+    Host / private-IP / SSRF policy is NOT here — it lives in
+    manuspectrum.utils.http.assert_url_is_safe (see tests/test_http.py).
+    """
 
     def setUp(self):
         with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes.manifest import ManifestDataType
+            from manuspectrum.datatypes import manifest
 
-            self.ManifestDataType = ManifestDataType
+            self.manifest = manifest
 
-    def test_valid_https_url(self):
-        """HTTPS URLs should match strict regex."""
-        self.assertIsNotNone(
-            self.ManifestDataType._URL_REGEX_STRICT.match(
-                "https://example.org/iiif/book1/manifest"
-            )
+    def _ok(self, url):
+        from django.core.exceptions import ValidationError
+
+        try:
+            self.manifest._validate_url_format(url)
+            return True
+        except ValidationError:
+            return False
+
+    def test_accepts_valid_https(self):
+        self.assertTrue(self._ok("https://example.org/iiif/book1/manifest"))
+
+    def test_accepts_localhost(self):
+        # Permissive about hosts on purpose; host policy is the guard's job.
+        self.assertTrue(self._ok("http://localhost:8000/manifest/abc"))
+
+    def test_rejects_non_url(self):
+        self.assertFalse(self._ok("iiif/book1/manifest"))
+
+    def test_rejects_non_http_scheme(self):
+        self.assertFalse(self._ok("ftp://example.org/x"))
+
+    def test_rejects_trailing_garbage(self):
+        # URLValidator is anchored, unlike the old start-anchored .match().
+        self.assertFalse(self._ok("https://example.org/x with space"))
+
+
+class TestLocalManifestMatch(TestCase):
+    """Host-aware detection of local /manifest/{uuid} references."""
+
+    UUID = "ceaf19e3-e1c5-4638-af81-b79562d33787"
+
+    def setUp(self):
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes import manifest
+
+            self.manifest = manifest
+
+    def test_relative_path_is_local(self):
+        self.assertEqual(
+            self.manifest._match_local_manifest(f"/manifest/{self.UUID}"), self.UUID
         )
 
-    def test_unvalid_https_url(self):
-        """Invalid HTTPS URLs should not match strict regex."""
+    @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+    def test_canonical_host_is_local(self):
+        self.assertEqual(
+            self.manifest._match_local_manifest(
+                f"https://manuspectrum.example/manifest/{self.UUID}"
+            ),
+            self.UUID,
+        )
+
+    @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+    def test_foreign_host_is_not_local(self):
         self.assertIsNone(
-            self.ManifestDataType._URL_REGEX_STRICT.match("iiif/book1/manifest")
+            self.manifest._match_local_manifest(f"http://evil.com/manifest/{self.UUID}")
         )
 
-    def test_strict_rejects_localhost(self):
-        """Strict regex should NOT match localhost URLs."""
+    @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+    def test_userinfo_trick_does_not_bypass(self):
+        # urlparse().hostname == 'evil.com', not the userinfo 'manuspectrum.example'.
         self.assertIsNone(
-            self.ManifestDataType._URL_REGEX_STRICT.match(
-                "http://localhost:8000/manifest/abc"
+            self.manifest._match_local_manifest(
+                f"http://manuspectrum.example@evil.com/manifest/{self.UUID}"
             )
         )
 
-    def test_dev_matches_localhost(self):
-        """Dev regex should match localhost URLs."""
-        self.assertIsNotNone(
-            self.ManifestDataType._URL_REGEX_DEV.match(
-                "http://localhost:8000/manifest/abc"
-            )
+    def test_non_manifest_url_is_none(self):
+        self.assertIsNone(
+            self.manifest._match_local_manifest("https://example.org/iiif/manifest")
         )
-
-    def test_dev_matches_localhost_no_port(self):
-        """Dev regex should match localhost without port."""
-        self.assertIsNotNone(
-            self.ManifestDataType._URL_REGEX_DEV.match("http://localhost/manifest/abc")
-        )
-
-    def test_dev_matches_ip_address(self):
-        """Dev regex should match IP address URLs."""
-        self.assertIsNotNone(
-            self.ManifestDataType._URL_REGEX_DEV.match(
-                "http://127.0.0.1:8000/manifest/abc"
-            )
-        )
-
-    def test_dev_also_matches_domain(self):
-        """Dev regex should also match regular domain URLs."""
-        self.assertIsNotNone(
-            self.ManifestDataType._URL_REGEX_DEV.match(
-                "https://example.org/iiif/book1/manifest"
-            )
-        )
-
-    @patch("manuspectrum.datatypes.manifest.django_settings")
-    def test_get_url_regex_debug_true(self, mock_settings):
-        """_get_url_regex should return dev regex when DEBUG=True."""
-        mock_settings.DEBUG = True
-        regex = self.ManifestDataType._get_url_regex()
-        self.assertIs(regex, self.ManifestDataType._URL_REGEX_DEV)
-
-    @patch("manuspectrum.datatypes.manifest.django_settings")
-    def test_get_url_regex_debug_false(self, mock_settings):
-        """_get_url_regex should return strict regex when DEBUG=False."""
-        mock_settings.DEBUG = False
-        regex = self.ManifestDataType._get_url_regex()
-        self.assertIs(regex, self.ManifestDataType._URL_REGEX_STRICT)
 
 
 class TestGetPrefLabel(TestCase):
@@ -1072,11 +1004,13 @@ class TestToRelativePath(TestCase):
         )
         self.assertEqual(result, "/manifest/abc-123")
 
-    def test_https_url_returns_path(self):
+    def test_foreign_host_url_unchanged(self):
+        # A non-canonical host is NOT collapsed to a relative path; it stays
+        # absolute so it is treated as external.
         result = self.ManifestDataType._to_relative_path(
             "https://example.org/iiif/book1/manifest"
         )
-        self.assertEqual(result, "/iiif/book1/manifest")
+        self.assertEqual(result, "https://example.org/iiif/book1/manifest")
 
     def test_relative_path_unchanged(self):
         result = self.ManifestDataType._to_relative_path("/manifest/abc-123")
@@ -1137,10 +1071,10 @@ class TestPreTileSave(TestCase):
         # Value should be untouched — pre_tile_save only handles strings
         self.assertEqual(tile.data[nodeid], original_value)
 
-    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_pre_tile_save_imports_external_manifest_as_local(
-        self, mock_manifest_model, mock_get
+        self, mock_manifest_model, mock_fetch
     ):
         """pre_tile_save should import external manifest and store local path."""
         nodeid = str(uuid.uuid4())
@@ -1150,7 +1084,7 @@ class TestPreTileSave(TestCase):
         mock_response = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_response.raise_for_status = MagicMock()
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         # Both lookups fail (new external manifest)
         mock_filter_none = MagicMock()
@@ -1169,13 +1103,15 @@ class TestPreTileSave(TestCase):
         mock_manifest_model.objects.create.assert_called_once()
         create_kwargs = mock_manifest_model.objects.create.call_args[1]
         self.assertEqual(create_kwargs["label"], "Book 1")
-        # tile.data should now be the local path
-        self.assertEqual(tile.data[nodeid], f"/manifest/{created_globalid}")
+        # tile.data should point at the globalid that was actually persisted:
+        # pre_tile_save generates the uuid and uses it for both create() and
+        # the rewritten tile value.
+        self.assertEqual(tile.data[nodeid], f"/manifest/{create_kwargs['globalid']}")
 
-    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_pre_tile_save_reuses_already_imported_external(
-        self, mock_manifest_model, mock_get
+        self, mock_manifest_model, mock_fetch
     ):
         """pre_tile_save should reuse existing record for already-imported external URL."""
         nodeid = str(uuid.uuid4())
@@ -1202,7 +1138,7 @@ class TestPreTileSave(TestCase):
         self.datatype.pre_tile_save(tile, nodeid)
 
         # Should NOT fetch or create (reuses existing)
-        mock_get.assert_not_called()
+        mock_fetch.assert_not_called()
         mock_manifest_model.objects.create.assert_not_called()
         # tile.data should be the local path from globalid
         self.assertEqual(tile.data[nodeid], f"/manifest/{existing_globalid}")
@@ -1252,28 +1188,14 @@ class TestSSRF_RedirectBlocked(TestCase):
 
             self.datatype = ManifestDataType()
 
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_disables_redirects(self, mock_get):
-        """validate() must call requests.get with allow_redirects=False."""
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_get.return_value = mock_response
-
-        self.datatype.validate("https://evil.com/ssrf-redirect")
-
-        mock_get.assert_called_once()
-        call_kwargs = mock_get.call_args[1]
-        self.assertIn("allow_redirects", call_kwargs)
-        self.assertFalse(
-            call_kwargs["allow_redirects"],
-            "PROTECTION: validate() must disable redirects to prevent SSRF",
-        )
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_disables_redirects(self, mock_manifest_model, mock_get):
-        """pre_tile_save() must call requests.get with allow_redirects=False."""
+    def test_pre_tile_save_uses_resilient_fetch(self, mock_manifest_model, mock_fetch):
+        """pre_tile_save() fetches external manifests via the resilient helper.
+
+        allow_redirects=False (the redirect-SSRF guard) is enforced inside
+        fetch_iiif_manifest — asserted in tests/test_http.py.
+        """
         nodeid = str(uuid.uuid4())
         tile = MagicMock()
         tile.data = {nodeid: "https://evil.com/ssrf-redirect"}
@@ -1285,17 +1207,11 @@ class TestSSRF_RedirectBlocked(TestCase):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         self.datatype.pre_tile_save(tile, nodeid)
 
-        mock_get.assert_called_once()
-        call_kwargs = mock_get.call_args[1]
-        self.assertIn("allow_redirects", call_kwargs)
-        self.assertFalse(
-            call_kwargs["allow_redirects"],
-            "PROTECTION: pre_tile_save() must disable redirects to prevent SSRF",
-        )
+        mock_fetch.assert_called_once_with("https://evil.com/ssrf-redirect")
 
 
 class TestSSRF_PreTileSaveURLValidation(TestCase):
@@ -1310,18 +1226,17 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
 
             self.datatype = ManifestDataType()
 
-    @patch("manuspectrum.datatypes.manifest.django_settings")
-    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @override_settings(DEBUG=False)
+    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_strict_regex_matches_private_ip(
-        self, mock_manifest_model, mock_get, mock_settings
+    def test_pre_tile_save_blocks_private_ip_in_prod(
+        self, mock_manifest_model, mock_fetch
     ):
-        """Strict regex matches IPs like 192.168.1.1 (dots in char class).
+        """In production the SSRF guard blocks private IPs (e.g. 192.168.1.1).
 
-        The regex alone does not block private IPs — but allow_redirects=False
-        prevents redirect-based SSRF through these IPs.
+        The strict regex matches dotted IPs, but assert_url_is_safe() resolves
+        the host and rejects the non-public address before any fetch happens.
         """
-        mock_settings.DEBUG = False
         nodeid = str(uuid.uuid4())
         tile = MagicMock()
         tile.data = {nodeid: "http://192.168.1.1/admin"}
@@ -1330,30 +1245,23 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_filter_none.first.return_value = None
         mock_manifest_model.objects.filter.return_value = mock_filter_none
 
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {}
-        mock_get.return_value = mock_response
+        # SSRF guard rejects the private IP → pre_tile_save raises (rollback),
+        # and no outbound request is made.
+        with self.assertRaises(UnsafeURLError):
+            self.datatype.pre_tile_save(tile, nodeid)
+        mock_fetch.assert_not_called()
 
-        self.datatype.pre_tile_save(tile, nodeid)
-
-        # Strict regex matches IPs — request is made but without redirects
-        mock_get.assert_called_once()
-        call_kwargs = mock_get.call_args[1]
-        self.assertFalse(call_kwargs["allow_redirects"])
-
-    @patch("manuspectrum.datatypes.manifest.django_settings")
-    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @override_settings(DEBUG=False)
+    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_strict_regex_matches_cloud_metadata(
-        self, mock_manifest_model, mock_get, mock_settings
+    def test_pre_tile_save_blocks_cloud_metadata_in_prod(
+        self, mock_manifest_model, mock_fetch
     ):
-        """Strict regex matches 169.254.169.254 (dots in char class).
+        """In production the SSRF guard blocks the cloud-metadata endpoint.
 
-        The regex alone does not block cloud metadata — but allow_redirects=False
-        prevents redirect-based SSRF. Full IP blocking requires url_validator.
+        169.254.169.254 passes the strict regex (dots in char class) but is a
+        link-local address, so assert_url_is_safe() rejects it before fetching.
         """
-        mock_settings.DEBUG = False
         nodeid = str(uuid.uuid4())
         tile = MagicMock()
         tile.data = {nodeid: "http://169.254.169.254/latest/meta-data/"}
@@ -1362,25 +1270,18 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_filter_none.first.return_value = None
         mock_manifest_model.objects.filter.return_value = mock_filter_none
 
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {}
-        mock_get.return_value = mock_response
+        # SSRF guard rejects the metadata IP → pre_tile_save raises, no fetch.
+        with self.assertRaises(UnsafeURLError):
+            self.datatype.pre_tile_save(tile, nodeid)
+        mock_fetch.assert_not_called()
 
-        self.datatype.pre_tile_save(tile, nodeid)
-
-        mock_get.assert_called_once()
-        call_kwargs = mock_get.call_args[1]
-        self.assertFalse(call_kwargs["allow_redirects"])
-
-    @patch("manuspectrum.datatypes.manifest.django_settings")
-    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @override_settings(DEBUG=False)
+    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_pre_tile_save_blocks_localhost_in_prod(
-        self, mock_manifest_model, mock_get, mock_settings
+        self, mock_manifest_model, mock_fetch
     ):
         """pre_tile_save() must reject localhost URLs in production."""
-        mock_settings.DEBUG = False
         nodeid = str(uuid.uuid4())
         tile = MagicMock()
         tile.data = {nodeid: "http://localhost:6379/"}
@@ -1389,14 +1290,15 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_filter_none.first.return_value = None
         mock_manifest_model.objects.filter.return_value = mock_filter_none
 
-        self.datatype.pre_tile_save(tile, nodeid)
+        # In prod, localhost resolves to a loopback address → SSRF guard raises.
+        with self.assertRaises(UnsafeURLError):
+            self.datatype.pre_tile_save(tile, nodeid)
+        mock_fetch.assert_not_called()
 
-        mock_get.assert_not_called()
-
-    @patch("manuspectrum.datatypes.manifest.requests.get")
+    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_pre_tile_save_allows_valid_external_url(
-        self, mock_manifest_model, mock_get
+        self, mock_manifest_model, mock_fetch
     ):
         """pre_tile_save() must still allow valid external URLs."""
         nodeid = str(uuid.uuid4())
@@ -1410,123 +1312,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_get.return_value = mock_response
+        mock_fetch.return_value = mock_response
 
         self.datatype.pre_tile_save(tile, nodeid)
 
-        mock_get.assert_called_once()
-
-
-class TestSSRF_DevModePrivateIPs(TestCase):
-    """Prove that DEBUG=True allows private IPs through the regex in validate().
-
-    When DEBUG=True, _URL_REGEX_DEV matches any IP address including
-    internal networks, cloud metadata, and loopback.
-    """
-
-    def setUp(self):
-        with patch("arches.app.models.models.Widget") as mock_widget:
-            mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes.manifest import ManifestDataType
-
-            self.ManifestDataType = ManifestDataType
-            self.datatype = ManifestDataType()
-
-    def test_dev_regex_allows_aws_metadata_ip(self):
-        """DEV regex matches cloud metadata IP 169.254.169.254."""
-        match = self.ManifestDataType._URL_REGEX_DEV.match(
-            "http://169.254.169.254/latest/meta-data/"
-        )
-        self.assertIsNotNone(
-            match,
-            "SSRF CONFIRMED: dev regex allows cloud metadata endpoint",
-        )
-
-    def test_dev_regex_allows_internal_network(self):
-        """DEV regex matches internal 10.x network."""
-        match = self.ManifestDataType._URL_REGEX_DEV.match(
-            "http://10.0.0.1:8080/internal-api"
-        )
-        self.assertIsNotNone(
-            match,
-            "SSRF CONFIRMED: dev regex allows internal network IPs",
-        )
-
-    def test_dev_regex_allows_docker_network(self):
-        """DEV regex matches Docker bridge network 172.17.x."""
-        match = self.ManifestDataType._URL_REGEX_DEV.match("http://172.17.0.2:5432/")
-        self.assertIsNotNone(
-            match,
-            "SSRF CONFIRMED: dev regex allows Docker internal IPs",
-        )
-
-    @patch("manuspectrum.datatypes.manifest.django_settings")
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_fetches_metadata_in_debug_mode(self, mock_get, mock_settings):
-        """SSRF: validate() in DEBUG mode fetches cloud metadata directly."""
-        mock_settings.DEBUG = True
-
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {}
-        mock_get.return_value = mock_response
-
-        self.datatype.validate("http://169.254.169.254/latest/meta-data/")
-
-        mock_get.assert_called_once()
-        actual_url = mock_get.call_args[0][0]
-        self.assertIn(
-            "169.254.169.254",
-            actual_url,
-            "SSRF CONFIRMED: validate in DEBUG mode directly fetches "
-            "cloud metadata — no IP blocking",
-        )
-
-
-class TestSSRF_StrictRegexBypassViaRedirect(TestCase):
-    """Prove the strict regex can be bypassed via redirect chains.
-
-    Even in production (DEBUG=False), an attacker can:
-    1. Provide https://evil.com/redirect (passes strict regex)
-    2. evil.com returns 302 → http://169.254.169.254/...
-    3. requests.get() follows the redirect
-    """
-
-    def setUp(self):
-        with patch("arches.app.models.models.Widget") as mock_widget:
-            mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes.manifest import ManifestDataType
-
-            self.ManifestDataType = ManifestDataType
-            self.datatype = ManifestDataType()
-
-    def test_strict_regex_accepts_attacker_domain(self):
-        """Attacker-controlled domain passes the strict regex."""
-        match = self.ManifestDataType._URL_REGEX_STRICT.match(
-            "https://evil.com/redirect-to-metadata"
-        )
-        self.assertIsNotNone(
-            match,
-            "Attacker domain passes strict regex — redirect SSRF is possible",
-        )
-
-    @patch("manuspectrum.datatypes.manifest.django_settings")
-    @patch("manuspectrum.datatypes.manifest.requests.get")
-    def test_validate_strict_mode_blocks_redirects(self, mock_get, mock_settings):
-        """In production (strict regex), redirects are disabled."""
-        mock_settings.DEBUG = False
-
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = ManifestTestData.VALID_V3
-        mock_get.return_value = mock_response
-
-        self.datatype.validate("https://evil.com/redirect-to-metadata")
-
-        mock_get.assert_called_once()
-        call_kwargs = mock_get.call_args[1]
-        self.assertIn("allow_redirects", call_kwargs)
-        self.assertFalse(
-            call_kwargs["allow_redirects"],
-            "PROTECTION: strict mode must block redirects to prevent SSRF bounce",
-        )
+        mock_fetch.assert_called_once()

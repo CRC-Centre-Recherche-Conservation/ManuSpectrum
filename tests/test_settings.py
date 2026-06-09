@@ -76,3 +76,6 @@ TEST_RUNNER = "arches.test.runner.ArchesTestRunner"
 SILENCED_SYSTEM_CHECKS.append(
     "arches.W001",  # Cache backend does not support rate-limiting
 )
+
+# Disable manifest fetch rate-limiting in tests (no real time.sleep).
+MANIFEST_FETCH_RATE_LIMITS = {}
