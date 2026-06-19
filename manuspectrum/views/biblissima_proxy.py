@@ -53,6 +53,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from functools import lru_cache
 from html import unescape
 
 import requests
@@ -67,6 +68,7 @@ from django.views import View
 from django.views.decorators.cache import cache_page, never_cache
 
 from arches.app.models.models import ResourceInstance
+from arches.app.models.models import TileModel
 from arches.app.models.models import Value  # used in _concept_valueid
 from arches.app.models.tile import Tile
 
@@ -2424,6 +2426,7 @@ class BiblissimaCreateResourceView(View):
 
         try:
             with transaction.atomic():
+                self._tile_buffer = []
                 resource_instance = ResourceInstance(graph_id=graph_id)
                 resource_instance.save()
                 resource_id = resource_instance.resourceinstanceid
@@ -2465,7 +2468,13 @@ class BiblissimaCreateResourceView(View):
                         },
                     )
 
-            resource = Resource.objects.get(resourceinstanceid=resource_id)
+                resource = Resource.objects.select_related("graph__publication").get(
+                    pk=resource_id
+                )
+                self._flush_tile_buffer(
+                    resource, user=None, default_transaction_id=None
+                )
+
             resource.index()
         except Exception:
             logger.exception("Failed to create %s dependency", resource_type)
@@ -2495,11 +2504,19 @@ class BiblissimaCreateResourceView(View):
         Wrapped in a DB transaction — if anything fails, everything rolls back.
         Elasticsearch indexing is deferred until after all DB writes succeed,
         so a rollback leaves no orphan documents in ES.
+
+        Tiles are buffered and flushed via two bulk INSERTs (tiles +
+        edit_log) plus a single ``save_descriptors`` UPDATE on the
+        resource. The standard ``Tile.save()`` path would otherwise
+        reload the published graph, run the function-runner, and
+        re-save descriptors **per tile** — measured at ~387 SQL queries
+        for a single Component create against ~30-50 with this path.
         """
         from django.db import transaction
         from arches.app.models.resource import Resource
 
         with transaction.atomic():
+            self._tile_buffer = []
             created_deps = {"places": {}, "persons": {}, "groups": {}}
             resource_instance = ResourceInstance(graph_id=graph_id)
             resource_instance.save()
@@ -2524,14 +2541,27 @@ class BiblissimaCreateResourceView(View):
                     created_deps,
                 )
 
-            # Link to project if specified
+            resource = Resource.objects.select_related("graph__publication").get(
+                pk=resource_id
+            )
+            self._flush_tile_buffer(resource, user, transaction_id)
+
+            # Linking to a project writes a tile on a *different* resource
+            # (the project) and must refresh the project's descriptors.
+            # Run it after the buffer flush so it goes through the
+            # standard Tile.save() path on its own resource.
             project_id = dependencies.get("project")
             if project_id:
                 self._link_to_project(resource_id, project_id, transaction_id)
 
-        # DB transaction succeeded — now index into Elasticsearch
+        # DB transaction succeeded — index into Elasticsearch synchronously.
+        # We tried Celery dispatch (transaction.on_commit + .delay()) but
+        # any worker started before manuspectrum.tasks existed would not
+        # know the task name and silently drop the message, leaving
+        # resources unindexed. Sync indexing adds ~100-200 ms to the
+        # response but keeps the search index consistent without any
+        # operational dependency.
         try:
-            resource = Resource.objects.get(resourceinstanceid=resource_id)
             resource.index()
         except Exception:
             logger.warning(
@@ -2548,15 +2578,31 @@ class BiblissimaCreateResourceView(View):
         transaction_id=None,
         parenttile=None,
     ):
-        """Create a single tile without ES indexing (deferred to after commit).
+        """Stage a tile in ``self._tile_buffer`` for bulk insert.
 
-        ``parenttile`` must be set when the nodegroup has a
-        ``parentnodegroup`` in the graph — without it, Arches can't
-        reconstruct the tile hierarchy and the card UI won't display
-        the child data under the right parent. Query the NodeGroup model
-        to find which nodegroups are nested.
+        Returns the in-memory ``TileModel`` so it can be referenced
+        as ``parenttile`` of subsequent tiles — the UUID is generated
+        eagerly here, before any DB write, so child tiles created
+        later in the same flow can point at this one's pk.
+
+        ``TileModel`` (the underlying ORM model) is used instead of
+        ``Tile`` (the proxy) because ``Tile.__init__`` calls
+        ``load_serialized_graph()``, which lazy-fetches the
+        resourceinstance + graph + graphs_x_published_graphs +
+        published_graphs (4 SELECTs **per tile instantiation**). With
+        ~28 tiles per resource that adds ~112 SQL queries per create
+        for no benefit, since bulk_create skips ``Tile.save()`` and
+        therefore never needs ``serialized_graph``.
+
+        The buffer is initialized in ``_create_resource`` /
+        ``_create_dependency_resource`` and flushed via
+        ``_flush_tile_buffer`` before the enclosing transaction
+        commits. ``parenttile`` must still be set whenever the
+        nodegroup has a ``parentnodegroup`` in the graph — otherwise
+        Arches can't reconstruct the tile hierarchy and the card UI
+        shows empty sub-cards.
         """
-        tile = Tile(
+        tile = TileModel(
             tileid=uuid.uuid4(),
             nodegroup_id=nodegroup_id,
             resourceinstance_id=resource_id,
@@ -2565,10 +2611,194 @@ class BiblissimaCreateResourceView(View):
         )
         if parenttile is not None:
             tile.parenttile = parenttile
-        if transaction_id:
-            tile.transaction_id = transaction_id
-        tile.save(index=False)
+        # Plain attribute; bulk_create ignores it. _flush_tile_buffer
+        # reads it when building the matching EditLog row so each tile
+        # keeps its caller-supplied transactionid.
+        tile._mspectrum_transaction_id = transaction_id
+        self._tile_buffer.append(tile)
         return tile
+
+    def _flush_tile_buffer(self, resource, user, default_transaction_id):
+        """Persist ``self._tile_buffer`` in two bulk INSERTs and refresh
+        descriptors once.
+
+        Replaces the per-tile ``Tile.save()`` chain that would otherwise:
+
+        - reload the published graph (3 SELECTs × N tiles),
+        - run the function-runner (1 SELECT × N tiles),
+        - call ``resource.save_descriptors()`` (1 UPDATE × N tiles),
+        - write one ``edit_log`` row per tile.
+
+        After this method, ``self._tile_buffer`` is reset to an empty
+        list — any further ``_create_tile`` call inside the same
+        request would silently buffer tiles that never get flushed,
+        which is a bug; callers must not invoke ``_create_tile`` after
+        the flush.
+        """
+        from arches.app.datatypes.datatypes import DataTypeFactory
+        from arches.app.models.models import EditLog
+        from arches.app.models.tile import TileValidationError
+        from django.utils import timezone
+        from types import SimpleNamespace
+
+        tiles = self._tile_buffer
+        self._tile_buffer = []
+        if not tiles:
+            return
+
+        # Reuse the published graph that ``select_related`` already
+        # fetched on ``resource`` (see _create_resource): one in-memory
+        # dict shared by validate, pre_tile_save, and post_tile_save
+        # for the whole batch. Using ``resource.get_serialized_graph()``
+        # avoids the extra ``Node.objects.filter(graph_id=...)`` SQL
+        # round-trip a fresh ``Node`` queryset would cost.
+        factory = DataTypeFactory()
+        serialized_graph = resource.get_serialized_graph() or {}
+        nodes_by_id = {str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])}
+
+        # ``Tile.save()`` runs three groups of side effects we have to
+        # replay around the bulk_create — see the table in
+        # ``_flush_tile_buffer``'s docstring for the full breakdown.
+        # Two concrete use-cases in this project today:
+        #   - ManifestDataType.pre_tile_save imports the IIIF manifest
+        #     into the iiif_manifests table and rewrites the URL to
+        #     /manifest/{globalid}; without it Mirador can't serve
+        #     external manifests through Cantaloupe.
+        #   - ResourceInstanceDataType.post_tile_save calls the SQL
+        #     function ``__arches_create_resource_x_resource_relationships``
+        #     to populate ``resource_x_resource``; without it links
+        #     like parentDocument / productionPlace exist in
+        #     ``tiles.tiledata`` but not in the R2R join table.
+        # BaseDataType implements both as no-ops, so calling them for
+        # every (tile, nodeid) pair is safe regardless of datatype.
+        def _hook_tiles(method_name):
+            for tile in tiles:
+                for nodeid in list(tile.data.keys()):
+                    node = nodes_by_id.get(str(nodeid))
+                    if node is None:
+                        continue
+                    datatype = factory.get_instance(node["datatype"])
+                    method = getattr(datatype, method_name)
+                    if method_name == "post_tile_save":
+                        method(tile, nodeid, request=None)
+                    else:
+                        method(tile, nodeid)
+
+        # Tier 2 safety net: run datatype.validate(value) on every
+        # (tile, node) before any DB write. It mirrors what
+        # ``Tile.validate`` does at arches/app/models/tile.py:357 —
+        # most datatypes do CPU-only checks (regex, type, format) so
+        # the SQL cost is ~zero, while still catching malformed
+        # payloads from Biblissima (bad UUIDs, unexpected concept
+        # values, …) before they corrupt the DB. ``strict=False`` so
+        # we don't pay the per-ref existence check on
+        # resource-instance datatypes.
+        #
+        # Concept/concept-list nodes are the exception: arches
+        # ConceptDataType.validate does one UNCACHED Value.objects.get(pk=…)
+        # per value (concept_types.py), which is ~the whole SQL cost of this
+        # path on a Document. We pre-confirm existence with ONE batched
+        # Value.objects.filter(valueid__in=…) and SKIP the per-value validate
+        # only when every concept value is confirmed; anything malformed or
+        # missing falls back to the authoritative arches validate, so error
+        # messages and behaviour are unchanged.
+        valid_concept_ids = set()
+        concept_ids = set()
+        for tile in tiles:
+            for nodeid, value in tile.data.items():
+                node = nodes_by_id.get(str(nodeid))
+                if node is None or value is None:
+                    continue
+                if node["datatype"] in ("concept", "concept-list"):
+                    for v in value if isinstance(value, list) else [value]:
+                        if isinstance(v, str) and v.strip():
+                            concept_ids.add(v.strip())
+        if concept_ids:
+            well_formed = set()
+            for cid in concept_ids:
+                try:
+                    uuid.UUID(cid)
+                    well_formed.add(cid)
+                except (ValueError, TypeError):
+                    pass  # malformed → falls back to arches validate below
+            if well_formed:
+                valid_concept_ids = {
+                    str(v)
+                    for v in Value.objects.filter(valueid__in=well_formed).values_list(
+                        "valueid", flat=True
+                    )
+                }
+
+        for tile in tiles:
+            for nodeid, value in tile.data.items():
+                node = nodes_by_id.get(str(nodeid))
+                if node is None:
+                    continue
+                if (
+                    node["datatype"] in ("concept", "concept-list")
+                    and value is not None
+                ):
+                    vals = value if isinstance(value, list) else [value]
+                    if vals and all(
+                        isinstance(v, str) and v.strip() in valid_concept_ids
+                        for v in vals
+                    ):
+                        continue  # all concept values exist (batched) — net satisfied
+                    # else: fall through to the authoritative arches validate
+                datatype = factory.get_instance(node["datatype"])
+                node_ns = SimpleNamespace(**node)
+                errors = datatype.validate(
+                    value, node=node_ns, strict=False, request=None
+                )
+                for err in errors or []:
+                    if err.get("type") == "ERROR":
+                        raise TileValidationError(err.get("message", ""))
+
+        _hook_tiles("pre_tile_save")
+        TileModel.objects.bulk_create(tiles)
+        _hook_tiles("post_tile_save")
+
+        # MultiDescriptor (the only function attached to Biblissima
+        # graphs) reads tiles via TileModel.objects.filter(...) — so
+        # it sees the rows just inserted. save_descriptors also calls
+        # super().save() on the resource, which is the single UPDATE
+        # replacing the N updates the per-tile path would emit.
+        resource.save_descriptors()
+        displayname = resource.displayname()
+
+        user_id = (
+            str(user.id) if user is not None and getattr(user, "id", None) else None
+        )
+        user_username = getattr(user, "username", "") or ""
+        user_firstname = getattr(user, "first_name", "") or ""
+        user_lastname = getattr(user, "last_name", "") or ""
+        user_email = getattr(user, "email", "") or ""
+
+        now = timezone.now()
+        fallback_tx = default_transaction_id or uuid.uuid4()
+        edits = [
+            EditLog(
+                transactionid=getattr(t, "_mspectrum_transaction_id", None)
+                or fallback_tx,
+                resourcedisplayname=displayname,
+                resourceclassid=str(resource.graph_id),
+                resourceinstanceid=str(t.resourceinstance_id),
+                nodegroupid=str(t.nodegroup_id),
+                tileinstanceid=str(t.tileid),
+                edittype="tile create",
+                newvalue=t.data,
+                oldvalue={},
+                timestamp=now,
+                userid=user_id,
+                user_username=user_username,
+                user_firstname=user_firstname,
+                user_lastname=user_lastname,
+                user_email=user_email,
+                note="resource creation",
+            )
+            for t in tiles
+        ]
+        EditLog.objects.bulk_create(edits)
 
     @staticmethod
     def _i18n_string(value, lang=None):
@@ -2605,10 +2835,17 @@ class BiblissimaCreateResourceView(View):
         return {lang: {"value": str(value), "direction": "ltr"}}
 
     @staticmethod
+    @lru_cache(maxsize=None)
     def _concept_valueid(concept_id):
         """Get the prefLabel valueid for a concept ID.
 
         Prefers English, falls back to any language.
+
+        Cached for the lifetime of the worker process: concept→valueid is
+        immutable at runtime (a server restart is required to pick up new
+        Value rows from a package reload), and the keyspace is bounded by
+        the number of concepts referenced from this view (~30, all listed
+        in ``constants/biblissima.py``).
         """
         try:
             # Try English first
@@ -3221,12 +3458,22 @@ class BiblissimaCreateResourceView(View):
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
             existing.save()
         else:
-            self._create_tile(
-                PROJECT_STUDIED_OBJECTS_NG,
-                project_id,
-                {PROJECT_STUDIED_OBJECTS_NODE: [new_ref]},
-                transaction_id,
+            # Direct Tile.save() — this writes one tile on the *project*
+            # (a different resource than the one being created), and
+            # Arches' save() refreshes the project's descriptors.
+            # Going through self._create_tile would buffer it against
+            # the wrong resource and skip the project-side descriptor
+            # refresh.
+            tile = Tile(
+                tileid=uuid.uuid4(),
+                nodegroup_id=PROJECT_STUDIED_OBJECTS_NG,
+                resourceinstance_id=project_id,
+                data={PROJECT_STUDIED_OBJECTS_NODE: [new_ref]},
+                sortorder=0,
             )
+            if transaction_id:
+                tile.transaction_id = transaction_id
+            tile.save(index=False)
 
     def _resource_instance_ref(self, resource_id):
         """Build a resource-instance reference for a single resource."""
