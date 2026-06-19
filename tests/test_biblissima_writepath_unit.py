@@ -916,3 +916,357 @@ class NestedTileFKOrderingTests(TestCase):
                 f"parent tile (idx={parent_idx}) must come BEFORE child tile "
                 f"(idx={child_idx}) in buffer; nodegroup={tile.nodegroup_id}",
             )
+
+
+# ---------------------------------------------------------------------------
+# Task 1.4 — Buffer isolation + EditLog row construction (incl. user=None)
+# + single-tx_id invariant
+# ---------------------------------------------------------------------------
+#
+# DESIGN NOTES
+#
+# Buffer isolation:
+#   _create_resource (line 2519) and _create_dependency_resource (line 2429)
+#   both start with ``self._tile_buffer = []``.  _flush_tile_buffer (line
+#   2659-2660) does ``tiles = self._tile_buffer; self._tile_buffer = []``
+#   before any processing, so stale tiles from a prior (possibly failed)
+#   request can never leak into a new one.
+#
+# EditLog construction / single-tx_id invariant:
+#   fallback_tx = default_transaction_id or uuid.uuid4()
+#   Each EditLog row uses:
+#       transactionid = getattr(t, "_mspectrum_transaction_id", None) or fallback_tx
+#   Because ``_create_tile`` initialises ``t._mspectrum_transaction_id =
+#   transaction_id`` (passed explicitly) and the normal bulk path passes
+#   transaction_id=None, all tiles built by the standard builders have
+#   _mspectrum_transaction_id=None.  With ``None or fallback_tx`` every row
+#   unconditionally uses ``fallback_tx = default_transaction_id`` when one is
+#   supplied — the single-tx_id invariant is therefore a characterization of
+#   current behaviour: no code change is required.
+
+
+class BufferIsolationTests(TestCase):
+    """The tile buffer must be reset to [] at entry of _create_resource /
+    _create_dependency_resource and after _flush_tile_buffer, so stale tiles
+    from a prior (possibly failed) request never leak into a new one.
+
+    These tests verify the reset semantics directly on _flush_tile_buffer
+    (because _create_resource/_create_dependency_resource need a real DB and
+    cannot be called without a live graph), and indirectly via a direct call
+    to _flush_tile_buffer with a pre-filled buffer.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch(PATCH_EDITLOG)
+    @patch(PATCH_TILEMODEL)
+    @patch(PATCH_VALUE)
+    @patch(PATCH_FACTORY)
+    def test_flush_resets_buffer_to_empty(
+        self, MockFactory, MockValue, MockTileModel, MockEditLog
+    ):
+        """After _flush_tile_buffer returns, self._tile_buffer must be []."""
+        MockValue.objects.filter.return_value.values_list.return_value = []
+        concept_dt = _concept_dt_mock()
+        other_dt = _other_dt_mock()
+        _patch_factory(MockFactory, concept_dt, other_dt)
+        MockTileModel.objects.bulk_create.return_value = []
+        MockEditLog.objects.bulk_create.return_value = []
+
+        tile = _make_tile(data={TEXT_NODE_ID: {"en": "hello"}})
+        view = _make_view_with_tiles([tile])
+        resource = _make_resource()
+
+        self.assertEqual(len(view._tile_buffer), 1, "pre-condition: buffer has 1 tile")
+        view._flush_tile_buffer(resource, user=None, default_transaction_id=None)
+        self.assertEqual(
+            view._tile_buffer,
+            [],
+            "_tile_buffer must be [] after _flush_tile_buffer",
+        )
+
+    @patch(PATCH_EDITLOG)
+    @patch(PATCH_TILEMODEL)
+    @patch(PATCH_VALUE)
+    @patch(PATCH_FACTORY)
+    def test_flush_resets_buffer_before_validation(
+        self, MockFactory, MockValue, MockTileModel, MockEditLog
+    ):
+        """Even when _flush_tile_buffer raises (e.g. TileValidationError),
+        the buffer is already reset at the very start of the method, so
+        a subsequent call on the same view sees an empty buffer."""
+        from arches.app.models.tile import TileValidationError
+
+        MockValue.objects.filter.return_value.values_list.return_value = []
+
+        concept_dt = _concept_dt_mock()
+        concept_dt.validate.return_value = [{"type": "ERROR", "message": "bad"}]
+        other_dt = _other_dt_mock()
+        _patch_factory(MockFactory, concept_dt, other_dt)
+        MockTileModel.objects.bulk_create.return_value = []
+        MockEditLog.objects.bulk_create.return_value = []
+
+        # Seed garbage from a prior "request"
+        stale_tile = _make_tile(data={CONCEPT_NODE_ID: ABSENT_CONCEPT_UUID})
+        view = _make_view_with_tiles([stale_tile])
+        resource = _make_resource()
+
+        with self.assertRaises(TileValidationError):
+            view._flush_tile_buffer(resource, user=None, default_transaction_id=None)
+
+        # After the exception, the buffer must still be empty — stale tiles
+        # cannot survive into a future call.
+        self.assertEqual(
+            view._tile_buffer,
+            [],
+            "_tile_buffer must be [] even after _flush_tile_buffer raises",
+        )
+
+    def test_create_resource_resets_buffer_documented_contract(self):
+        """Characterization: the source of _create_resource at line 2519
+        performs ``self._tile_buffer = []`` before any tile building.
+
+        This test verifies the contract by reading the source directly —
+        checking the reset is present before we can run ORM-heavy paths.
+        """
+        import inspect
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        src = inspect.getsource(BiblissimaCreateResourceView._create_resource)
+        # The very first statement inside ``with transaction.atomic():``
+        # must be the buffer reset.
+        self.assertIn(
+            "self._tile_buffer = []",
+            src,
+            "_create_resource must reset self._tile_buffer = [] at entry",
+        )
+
+    def test_create_dependency_resource_resets_buffer_documented_contract(self):
+        """Characterization: the source of _create_dependency_resource at
+        line 2429 performs ``self._tile_buffer = []`` before any tile
+        building."""
+        import inspect
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        src = inspect.getsource(
+            BiblissimaCreateResourceView._create_dependency_resource
+        )
+        self.assertIn(
+            "self._tile_buffer = []",
+            src,
+            "_create_dependency_resource must reset self._tile_buffer = [] at entry",
+        )
+
+
+# ---------------------------------------------------------------------------
+# UUIDs and tiles for EditLog tests
+# ---------------------------------------------------------------------------
+
+EDITLOG_TX_ID = "cccccccc-1111-1111-1111-cccccccccccc"
+EDITLOG_TILE_ID_A = "dddddddd-2222-2222-2222-dddddddddddd"
+EDITLOG_TILE_ID_B = "eeeeeeee-3333-3333-3333-eeeeeeeeeeee"
+EDITLOG_TILE_ID_C = "ffffffff-4444-4444-4444-ffffffffffff"
+
+
+def _make_tile_for_editlog(tile_id, mspectrum_tx=None):
+    """Return a tile-like object with no per-tile _mspectrum_transaction_id
+    (simulating tiles created via the standard builder path)."""
+    tile = SimpleNamespace(
+        tileid=uuid.UUID(tile_id),
+        nodegroup_id=NODEGROUP_ID,
+        resourceinstance_id=RESOURCE_ID,
+        data={TEXT_NODE_ID: {"en": "value"}},
+        parenttile=None,
+        _mspectrum_transaction_id=mspectrum_tx,  # None on the normal path
+    )
+    return tile
+
+
+class EditLogConstructionTests(TestCase):
+    """_flush_tile_buffer must build one EditLog row per tile with:
+    - edittype == "tile create"
+    - note == "resource creation"
+    - userid is None when user=None
+    - user_username, user_firstname, user_lastname, user_email all == ""
+    - every row's transactionid equals the passed default_transaction_id
+      (single-tx_id invariant).
+
+    Characterization note: current behaviour already satisfies the invariant
+    because _create_tile sets _mspectrum_transaction_id=None by default and
+    ``None or fallback_tx`` unconditionally uses fallback_tx, which is
+    default_transaction_id when one is supplied.  No fix was needed.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _run_flush(self, tiles, user, tx_id):
+        """Helper: run _flush_tile_buffer with patches and return the
+        list passed to EditLog.objects.bulk_create.
+
+        EditLog is patched so that ``EditLog(**kwargs)`` returns a
+        ``SimpleNamespace(**kwargs)`` — this lets us assert on the fields
+        actually passed to the constructor (transactionid, edittype, etc.)
+        rather than getting opaque MagicMock objects back.
+        """
+        captured = {}
+
+        with patch(PATCH_FACTORY) as MockFactory, \
+             patch(PATCH_VALUE) as MockValue, \
+             patch(PATCH_TILEMODEL) as MockTileModel, \
+             patch(PATCH_EDITLOG) as MockEditLog:
+
+            MockValue.objects.filter.return_value.values_list.return_value = []
+            concept_dt = _concept_dt_mock()
+            other_dt = _other_dt_mock()
+            _patch_factory(MockFactory, concept_dt, other_dt)
+            MockTileModel.objects.bulk_create.return_value = []
+
+            # Make EditLog(**kwargs) return a SimpleNamespace so field
+            # access on the returned objects works correctly.
+            MockEditLog.side_effect = lambda **kwargs: SimpleNamespace(**kwargs)
+
+            def capture_edits(edits):
+                captured["edits"] = list(edits)
+                return []
+
+            MockEditLog.objects.bulk_create.side_effect = capture_edits
+
+            view = _make_view_with_tiles(tiles)
+            resource = _make_resource()
+            view._flush_tile_buffer(resource, user=user, default_transaction_id=tx_id)
+
+        return captured.get("edits", [])
+
+    def test_one_editlog_row_per_tile(self):
+        """One EditLog row must be created for each tile in the buffer."""
+        tiles = [
+            _make_tile_for_editlog(EDITLOG_TILE_ID_A),
+            _make_tile_for_editlog(EDITLOG_TILE_ID_B),
+            _make_tile_for_editlog(EDITLOG_TILE_ID_C),
+        ]
+        edits = self._run_flush(tiles, user=None, tx_id=EDITLOG_TX_ID)
+        self.assertEqual(
+            len(edits), 3, f"expected 3 EditLog rows, got {len(edits)}"
+        )
+
+    def test_edittype_is_tile_create(self):
+        """Every EditLog row must have edittype == 'tile create'."""
+        tiles = [
+            _make_tile_for_editlog(EDITLOG_TILE_ID_A),
+            _make_tile_for_editlog(EDITLOG_TILE_ID_B),
+        ]
+        edits = self._run_flush(tiles, user=None, tx_id=EDITLOG_TX_ID)
+        for row in edits:
+            self.assertEqual(
+                row.edittype,
+                "tile create",
+                f"expected edittype='tile create', got {row.edittype!r}",
+            )
+
+    def test_note_is_resource_creation(self):
+        """Every EditLog row must have note == 'resource creation'."""
+        tiles = [_make_tile_for_editlog(EDITLOG_TILE_ID_A)]
+        edits = self._run_flush(tiles, user=None, tx_id=EDITLOG_TX_ID)
+        for row in edits:
+            self.assertEqual(
+                row.note,
+                "resource creation",
+                f"expected note='resource creation', got {row.note!r}",
+            )
+
+    def test_user_none_yields_null_userid_and_empty_user_fields(self):
+        """When user=None, userid must be None and all user string fields ""."""
+        tiles = [_make_tile_for_editlog(EDITLOG_TILE_ID_A)]
+        edits = self._run_flush(tiles, user=None, tx_id=EDITLOG_TX_ID)
+        self.assertEqual(len(edits), 1)
+        row = edits[0]
+        self.assertIsNone(row.userid, f"userid must be None when user=None, got {row.userid!r}")
+        self.assertEqual(row.user_username, "", f"user_username must be '' when user=None")
+        self.assertEqual(row.user_firstname, "", f"user_firstname must be '' when user=None")
+        self.assertEqual(row.user_lastname, "", f"user_lastname must be '' when user=None")
+        self.assertEqual(row.user_email, "", f"user_email must be '' when user=None")
+
+    def test_single_tx_id_invariant_all_rows_use_default_tx(self):
+        """CHARACTERIZATION: when a default_transaction_id is provided and
+        tiles have _mspectrum_transaction_id=None (the normal builder path),
+        every EditLog row must carry that exact transactionid.
+
+        The invariant is maintained by:
+            fallback_tx = default_transaction_id or uuid.uuid4()
+            transactionid = getattr(t, "_mspectrum_transaction_id", None) or fallback_tx
+        Since _mspectrum_transaction_id is None → None or fallback_tx →
+        fallback_tx = default_transaction_id for every tile.
+
+        This is a characterization test; no code change was required.
+        """
+        tiles = [
+            _make_tile_for_editlog(EDITLOG_TILE_ID_A),  # _mspectrum_transaction_id=None
+            _make_tile_for_editlog(EDITLOG_TILE_ID_B),  # _mspectrum_transaction_id=None
+            _make_tile_for_editlog(EDITLOG_TILE_ID_C),  # _mspectrum_transaction_id=None
+        ]
+        edits = self._run_flush(tiles, user=None, tx_id=EDITLOG_TX_ID)
+        self.assertEqual(len(edits), 3)
+        tx_ids = {str(row.transactionid) for row in edits}
+        self.assertEqual(
+            tx_ids,
+            {EDITLOG_TX_ID},
+            f"all rows must share transactionid={EDITLOG_TX_ID!r}, got {tx_ids}",
+        )
+
+    def test_no_tx_scatter_with_mixed_per_tile_ids(self):
+        """When tiles DO carry a per-tile _mspectrum_transaction_id (explicit
+        override), that tile's tx wins over the default.  This test documents
+        the current override semantics and prevents silent regressions.
+
+        Per-tile override is a P3 / future concern; the primary path always
+        leaves _mspectrum_transaction_id=None, so the default_transaction_id
+        is used for all tiles.
+        """
+        per_tile_tx = "aaaaaaaa-5555-5555-5555-aaaaaaaaaaaa"
+        tiles = [
+            _make_tile_for_editlog(EDITLOG_TILE_ID_A, mspectrum_tx=None),
+            _make_tile_for_editlog(EDITLOG_TILE_ID_B, mspectrum_tx=per_tile_tx),
+        ]
+        edits = self._run_flush(tiles, user=None, tx_id=EDITLOG_TX_ID)
+        self.assertEqual(len(edits), 2)
+
+        tx_by_tile = {str(row.tileinstanceid): str(row.transactionid) for row in edits}
+        # Tile A has no per-tile tx → uses default
+        self.assertEqual(
+            tx_by_tile[EDITLOG_TILE_ID_A],
+            EDITLOG_TX_ID,
+            "tile without per-tile tx must use default_transaction_id",
+        )
+        # Tile B has a per-tile tx → uses its own
+        self.assertEqual(
+            tx_by_tile[EDITLOG_TILE_ID_B],
+            per_tile_tx,
+            "tile with per-tile _mspectrum_transaction_id must use its own tx id",
+        )
+
+    def test_empty_buffer_produces_no_editlog_rows(self):
+        """When the tile buffer is empty, _flush_tile_buffer returns early and
+        EditLog.objects.bulk_create must NOT be called."""
+        with patch(PATCH_FACTORY) as MockFactory, \
+             patch(PATCH_VALUE) as MockValue, \
+             patch(PATCH_TILEMODEL) as MockTileModel, \
+             patch(PATCH_EDITLOG) as MockEditLog:
+
+            MockValue.objects.filter.return_value.values_list.return_value = []
+            _patch_factory(MockFactory, _concept_dt_mock(), _other_dt_mock())
+            MockTileModel.objects.bulk_create.return_value = []
+            MockEditLog.objects.bulk_create.return_value = []
+
+            view = _make_view_with_tiles([])  # empty buffer
+            resource = _make_resource()
+            view._flush_tile_buffer(resource, user=None, default_transaction_id=EDITLOG_TX_ID)
+
+            MockEditLog.objects.bulk_create.assert_not_called()
