@@ -2601,13 +2601,28 @@ class BiblissimaCreateResourceView(View):
         nodegroup has a ``parentnodegroup`` in the graph — otherwise
         Arches can't reconstruct the tile hierarchy and the card UI
         shows empty sub-cards.
+
+        ``sortorder`` is assigned as an incrementing counter per
+        (resource_id, nodegroup_id) pair so that sibling tiles of a
+        cardinality-n card have distinct, stable orderings in the card
+        UI. ``bulk_create`` bypasses ``TileModel.save()``'s
+        ``set_next_sort_order()``, so we must track it here. A single
+        tile gets sortorder=0; two siblings get 0 and 1, etc.
         """
+        # Count how many tiles for this (resource, nodegroup) pair are
+        # already in the buffer so we can assign the next sortorder.
+        sortorder = sum(
+            1
+            for t in self._tile_buffer
+            if t.nodegroup_id == nodegroup_id
+            and str(t.resourceinstance_id) == str(resource_id)
+        )
         tile = TileModel(
             tileid=uuid.uuid4(),
             nodegroup_id=nodegroup_id,
             resourceinstance_id=resource_id,
             data=data,
-            sortorder=0,
+            sortorder=sortorder,
         )
         if parenttile is not None:
             tile.parenttile = parenttile

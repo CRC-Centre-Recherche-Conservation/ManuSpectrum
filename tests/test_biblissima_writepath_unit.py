@@ -548,3 +548,371 @@ class ConceptBatchEdgeCaseTests(TestCase):
             view._flush_tile_buffer(resource, user=None, default_transaction_id=None)
 
         MockTileModel.objects.bulk_create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Task 1.3 — sortorder + nested-tile FK ordering
+# ---------------------------------------------------------------------------
+#
+# AUDIT FINDINGS (as of commit f8bc498, builders in biblissima_proxy.py):
+#
+# _create_document_tiles multi-sibling nodegroups (cardinality-n):
+#   - DOC_NAME_NG:       called 1× always (label) + 1× conditional (shelfmark)
+#     → max 2 siblings; all got sortorder=0 before the fix.
+#   - DOC_IDENTIFIER_NG: called up to 4× (ark, qid, aem, mandragore)
+#     → up to 4 siblings; all got sortorder=0 before the fix.
+#   No nested/parent tiles in _create_document_tiles.
+#
+# _create_component_tiles multi-sibling nodegroups:
+#   - COMP_IDENTIFIER_NG:  called up to 2× (ark + mandragore_ark)
+#   - COMP_STATEMENT_NG:   called up to 2× (text + rubric)
+#   - COMP_ICONOGRAPHIC_NG: called N× (one per descriptorLinks entry)
+#   All got sortorder=0 for every sibling before the fix.
+#
+# Parent-before-child ordering (FK resolution at bulk_create time):
+#   - COMP_PARENT_DOC_NG (item_feature_tile) is created FIRST.
+#   - COMP_PRODUCTION_NG (production_tile, parenttile=item_feature_tile) is
+#     created AFTER item_feature_tile.
+#   - COMP_PERIOD_NG (parenttile=production_tile) is created AFTER
+#     production_tile.
+#   - COMP_LOCATION_DOC_NG (parenttile=item_feature_tile) is created last.
+#   → Parent-before-child ordering is already CORRECT in the builder;
+#     no reorder was needed. Assertion (a) is characterization-only.
+#
+# Fix applied: _create_tile now counts existing tiles for (resource_id,
+# nodegroup_id) in self._tile_buffer and assigns sortorder = that count,
+# giving 0, 1, 2, … for successive siblings.
+
+
+def _make_minimal_document_data(**extra):
+    """Return a minimal bbma_data dict for _create_document_tiles.
+
+    Includes shelfmark (triggers 2nd DOC_NAME_NG tile) and all four
+    identifier fields (triggers 4 DOC_IDENTIFIER_NG tiles) to exercise
+    the maximum number of siblings.
+    """
+    data = {
+        "label": "Test Manuscript",
+        "shelfmark": "Ms. 42",
+        "arkId": "ark:/43093/testark",
+        "biblissimaQid": "Q12345",
+        "aemId": "cc12345",
+        "mandragoreId": "9999",
+    }
+    data.update(extra)
+    return data
+
+
+def _make_minimal_component_data(**extra):
+    """Return a minimal bbma_data dict for _create_component_tiles.
+
+    Includes both identifier fields (ark + mandragore_ark), both statement
+    fields (text + rubric), two descriptorLinks, and canvas data to trigger
+    the Location in Document tile (nested under item_feature).
+    """
+    data = {
+        "label": "Test Illumination",
+        "arkId": "ark:/43093/comptest",
+        "mandragoreArk": "ark:/12148/mm12345",
+        "text": "Text content",
+        "rubric": "Rubric content",
+        "descriptorLinks": [
+            {"uri": "ark:/43093/desc1", "label": "Descriptor one"},
+            {"uri": "ark:/43093/desc2", "label": "Descriptor two"},
+            {"uri": "ark:/43093/desc3", "label": "Descriptor three"},
+        ],
+        "imageServiceUrl": "https://example.com/iiif/image",
+        "manifestUrl": "https://example.com/iiif/manifest",
+        "canvasWidth": "800",
+        "canvasHeight": "1000",
+        "dateStart": "1200",
+        "dateEnd": "1300",
+    }
+    data.update(extra)
+    return data
+
+
+def _make_builder_view():
+    """Return a BiblissimaCreateResourceView with empty _tile_buffer."""
+    from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+    view = BiblissimaCreateResourceView()
+    view._tile_buffer = []
+    return view
+
+
+class SortorderSiblingTests(TestCase):
+    """_create_tile must assign distinct sortorder values for same-nodegroup
+    sibling tiles of a cardinality-n card.
+
+    Before the fix, all siblings received sortorder=0 because bulk_create
+    bypasses TileModel.save()'s set_next_sort_order().  The fix increments
+    a counter per (resource_id, nodegroup_id) inside _create_tile.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_document_name_siblings_have_distinct_sortorder(self):
+        """DOC_NAME_NG gets 2 sibling tiles (label + shelfmark); they must
+        have sortorder 0 and 1 respectively."""
+        from manuspectrum.views.biblissima_proxy import (
+            DOC_NAME_NG,
+            BiblissimaCreateResourceView,
+        )
+
+        view = _make_builder_view()
+        resource_id = str(uuid.uuid4())
+        tx = str(uuid.uuid4())
+
+        view._create_document_tiles(
+            resource_id,
+            tx,
+            _make_minimal_document_data(),
+            deps={},
+            concepts={},
+            created_deps={},
+        )
+
+        name_tiles = [
+            t for t in view._tile_buffer if str(t.nodegroup_id) == DOC_NAME_NG
+        ]
+        self.assertEqual(len(name_tiles), 2, "expected 2 DOC_NAME_NG tiles")
+        sortorders = {t.sortorder for t in name_tiles}
+        self.assertEqual(sortorders, {0, 1}, f"expected {{0, 1}}, got {sortorders}")
+
+    def test_document_identifier_siblings_have_distinct_sortorder(self):
+        """DOC_IDENTIFIER_NG gets up to 4 sibling tiles (ark, qid, aem,
+        mandragore); each must have a unique sortorder."""
+        from manuspectrum.views.biblissima_proxy import DOC_IDENTIFIER_NG
+
+        view = _make_builder_view()
+        resource_id = str(uuid.uuid4())
+        tx = str(uuid.uuid4())
+
+        view._create_document_tiles(
+            resource_id,
+            tx,
+            _make_minimal_document_data(),
+            deps={},
+            concepts={},
+            created_deps={},
+        )
+
+        id_tiles = [
+            t for t in view._tile_buffer if str(t.nodegroup_id) == DOC_IDENTIFIER_NG
+        ]
+        self.assertGreaterEqual(len(id_tiles), 2, "expected ≥2 DOC_IDENTIFIER_NG tiles")
+        sortorders = [t.sortorder for t in id_tiles]
+        self.assertEqual(
+            len(sortorders),
+            len(set(sortorders)),
+            f"duplicate sortorders in DOC_IDENTIFIER_NG siblings: {sortorders}",
+        )
+
+    def test_component_identifier_siblings_have_distinct_sortorder(self):
+        """COMP_IDENTIFIER_NG gets 2 sibling tiles (ark + mandragore_ark);
+        they must have sortorder 0 and 1."""
+        from manuspectrum.views.biblissima_proxy import COMP_IDENTIFIER_NG
+
+        view = _make_builder_view()
+        resource_id = str(uuid.uuid4())
+        tx = str(uuid.uuid4())
+        parent_doc_id = str(uuid.uuid4())
+
+        view._create_component_tiles(
+            resource_id,
+            tx,
+            _make_minimal_component_data(),
+            deps={"parentDocument": parent_doc_id},
+            concepts={},
+            created_deps={},
+        )
+
+        id_tiles = [
+            t for t in view._tile_buffer if str(t.nodegroup_id) == COMP_IDENTIFIER_NG
+        ]
+        self.assertEqual(len(id_tiles), 2, "expected 2 COMP_IDENTIFIER_NG tiles")
+        sortorders = {t.sortorder for t in id_tiles}
+        self.assertEqual(sortorders, {0, 1}, f"expected {{0, 1}}, got {sortorders}")
+
+    def test_component_statement_siblings_have_distinct_sortorder(self):
+        """COMP_STATEMENT_NG gets 2 sibling tiles (text + rubric); they must
+        have distinct sortorders."""
+        from manuspectrum.views.biblissima_proxy import COMP_STATEMENT_NG
+
+        view = _make_builder_view()
+        resource_id = str(uuid.uuid4())
+        tx = str(uuid.uuid4())
+        parent_doc_id = str(uuid.uuid4())
+
+        view._create_component_tiles(
+            resource_id,
+            tx,
+            _make_minimal_component_data(),
+            deps={"parentDocument": parent_doc_id},
+            concepts={},
+            created_deps={},
+        )
+
+        stmt_tiles = [
+            t for t in view._tile_buffer if str(t.nodegroup_id) == COMP_STATEMENT_NG
+        ]
+        self.assertEqual(len(stmt_tiles), 2, "expected 2 COMP_STATEMENT_NG tiles")
+        sortorders = {t.sortorder for t in stmt_tiles}
+        self.assertEqual(
+            len(sortorders), 2, f"duplicate sortorders in COMP_STATEMENT_NG: {sortorders}"
+        )
+
+    def test_component_iconographic_multi_siblings_have_distinct_sortorder(self):
+        """COMP_ICONOGRAPHIC_NG gets N sibling tiles (one per descriptorLink);
+        each must have a unique, incrementing sortorder."""
+        from manuspectrum.views.biblissima_proxy import COMP_ICONOGRAPHIC_NG
+
+        view = _make_builder_view()
+        resource_id = str(uuid.uuid4())
+        tx = str(uuid.uuid4())
+        parent_doc_id = str(uuid.uuid4())
+
+        view._create_component_tiles(
+            resource_id,
+            tx,
+            _make_minimal_component_data(),
+            deps={"parentDocument": parent_doc_id},
+            concepts={},
+            created_deps={},
+        )
+
+        icon_tiles = [
+            t for t in view._tile_buffer if str(t.nodegroup_id) == COMP_ICONOGRAPHIC_NG
+        ]
+        self.assertEqual(len(icon_tiles), 3, "expected 3 COMP_ICONOGRAPHIC_NG tiles")
+        sortorders = [t.sortorder for t in icon_tiles]
+        self.assertEqual(
+            sortorders,
+            list(range(len(icon_tiles))),
+            f"expected [0, 1, 2], got {sortorders}",
+        )
+
+    def test_create_tile_direct_increments_sortorder(self):
+        """Direct unit test of _create_tile: calling it twice with the same
+        nodegroup and resource must yield sortorder 0 then 1."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        view._tile_buffer = []
+        ng = "aaaa0000-0000-0000-0000-000000000000"
+        rid = str(uuid.uuid4())
+
+        t0 = view._create_tile(ng, rid, {})
+        t1 = view._create_tile(ng, rid, {})
+        t2 = view._create_tile(ng, rid, {})
+
+        self.assertEqual(t0.sortorder, 0)
+        self.assertEqual(t1.sortorder, 1)
+        self.assertEqual(t2.sortorder, 2)
+
+    def test_create_tile_different_nodegroups_each_start_at_zero(self):
+        """Different nodegroups on the same resource must each get their own
+        counter starting at 0."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        view._tile_buffer = []
+        ng_a = "aaaa0000-0000-0000-0000-000000000001"
+        ng_b = "bbbb0000-0000-0000-0000-000000000002"
+        rid = str(uuid.uuid4())
+
+        ta0 = view._create_tile(ng_a, rid, {})
+        tb0 = view._create_tile(ng_b, rid, {})
+        ta1 = view._create_tile(ng_a, rid, {})
+        tb1 = view._create_tile(ng_b, rid, {})
+
+        self.assertEqual(ta0.sortorder, 0)
+        self.assertEqual(ta1.sortorder, 1)
+        self.assertEqual(tb0.sortorder, 0)
+        self.assertEqual(tb1.sortorder, 1)
+
+
+class NestedTileFKOrderingTests(TestCase):
+    """Parent tiles must appear BEFORE their children in self._tile_buffer so
+    that PostgreSQL can resolve the FK from child.parenttile_id to a row that
+    already exists (bulk_create inserts rows in buffer order).
+
+    Audit result: the builder already maintains correct parent-before-child
+    ordering, so these are characterization tests — they document the contract
+    and will catch any future reorder of the builder logic.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_document_builder_no_parenttile_used(self):
+        """_create_document_tiles does not use parenttile (flat structure).
+        All tiles must have parenttile=None."""
+        view = _make_builder_view()
+        resource_id = str(uuid.uuid4())
+        tx = str(uuid.uuid4())
+
+        view._create_document_tiles(
+            resource_id,
+            tx,
+            _make_minimal_document_data(),
+            deps={},
+            concepts={},
+            created_deps={},
+        )
+
+        child_tiles = [t for t in view._tile_buffer if getattr(t, "parenttile", None)]
+        self.assertEqual(
+            child_tiles,
+            [],
+            "document builder must not produce any nested (parenttile!=None) tiles",
+        )
+
+    def test_component_builder_parents_before_children(self):
+        """Every child tile in _create_component_tiles must have its parent
+        appearing at an earlier index in self._tile_buffer.
+
+        Chain: COMP_PARENT_DOC_NG (item_feature) → COMP_PRODUCTION_NG
+        → COMP_PERIOD_NG; also COMP_PARENT_DOC_NG → COMP_LOCATION_DOC_NG.
+        """
+        view = _make_builder_view()
+        resource_id = str(uuid.uuid4())
+        tx = str(uuid.uuid4())
+        parent_doc_id = str(uuid.uuid4())
+
+        view._create_component_tiles(
+            resource_id,
+            tx,
+            _make_minimal_component_data(),
+            deps={"parentDocument": parent_doc_id},
+            concepts={},
+            created_deps={},
+        )
+
+        buffer = view._tile_buffer
+        tile_index = {t.tileid: i for i, t in enumerate(buffer)}
+
+        for tile in buffer:
+            parent = getattr(tile, "parenttile", None)
+            if parent is None:
+                continue
+            parent_idx = tile_index.get(parent.tileid)
+            self.assertIsNotNone(
+                parent_idx,
+                f"parent tile {parent.tileid} of {tile.tileid} not found in buffer",
+            )
+            child_idx = tile_index[tile.tileid]
+            self.assertLess(
+                parent_idx,
+                child_idx,
+                f"parent tile (idx={parent_idx}) must come BEFORE child tile "
+                f"(idx={child_idx}) in buffer; nodegroup={tile.nodegroup_id}",
+            )
