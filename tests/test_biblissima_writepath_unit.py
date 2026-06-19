@@ -1270,3 +1270,156 @@ class EditLogConstructionTests(TestCase):
             view._flush_tile_buffer(resource, user=None, default_transaction_id=EDITLOG_TX_ID)
 
             MockEditLog.objects.bulk_create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Task 2.1 — _extract_tile_value and _displayname_from_i18n pure helpers
+# ---------------------------------------------------------------------------
+
+
+class ExtractTileValueTests(TestCase):
+    """Unit tests for BiblissimaCheckDuplicatesView._extract_tile_value.
+
+    Mirrors the inline i18n block at biblissima_proxy.py ~1551-1559:
+    - dict: return first non-empty ``value`` among en → fr → de → es → it
+    - plain string: return str(raw_value).strip() if truthy else ""
+    - falsy / empty dict: return ""
+    """
+
+    @classmethod
+    def _fn(cls, raw_value):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+        return BiblissimaCheckDuplicatesView._extract_tile_value(raw_value)
+
+    # -- dict branch: language priority -----------------------------------------
+
+    def test_dict_picks_en_first(self):
+        raw = {
+            "en": {"value": "English title"},
+            "fr": {"value": "Titre français"},
+        }
+        self.assertEqual(self._fn(raw), "English title")
+
+    def test_dict_falls_to_fr_when_en_absent(self):
+        raw = {
+            "fr": {"value": "Titre français"},
+            "de": {"value": "Deutsches Titel"},
+        }
+        self.assertEqual(self._fn(raw), "Titre français")
+
+    def test_dict_falls_to_de(self):
+        raw = {
+            "de": {"value": "Deutsches Titel"},
+            "es": {"value": "Título español"},
+        }
+        self.assertEqual(self._fn(raw), "Deutsches Titel")
+
+    def test_dict_falls_to_es(self):
+        raw = {"es": {"value": "Título español"}, "it": {"value": "Titolo italiano"}}
+        self.assertEqual(self._fn(raw), "Título español")
+
+    def test_dict_falls_to_it(self):
+        raw = {"it": {"value": "Titolo italiano"}}
+        self.assertEqual(self._fn(raw), "Titolo italiano")
+
+    def test_dict_en_empty_value_falls_to_fr(self):
+        """An en entry whose ``value`` is '' or missing is skipped."""
+        raw = {
+            "en": {"value": ""},
+            "fr": {"value": "Titre français"},
+        }
+        self.assertEqual(self._fn(raw), "Titre français")
+
+    def test_dict_en_missing_value_key_falls_to_fr(self):
+        """An en entry that has no ``value`` key is skipped."""
+        raw = {
+            "en": {},
+            "fr": {"value": "Titre français"},
+        }
+        self.assertEqual(self._fn(raw), "Titre français")
+
+    def test_dict_en_not_a_dict_falls_to_fr(self):
+        """An en entry that is not a dict (e.g. a plain string) is skipped."""
+        raw = {
+            "en": "not-a-dict",
+            "fr": {"value": "Titre français"},
+        }
+        self.assertEqual(self._fn(raw), "Titre français")
+
+    def test_dict_all_empty_returns_empty_string(self):
+        """No language has a usable value → ""."""
+        raw = {
+            "en": {"value": ""},
+            "fr": {},
+            "de": "bad",
+            "es": {"value": ""},
+            "it": {"value": ""},
+        }
+        self.assertEqual(self._fn(raw), "")
+
+    def test_empty_dict_returns_empty_string(self):
+        self.assertEqual(self._fn({}), "")
+
+    def test_dict_strips_whitespace(self):
+        raw = {"en": {"value": "  padded  "}}
+        self.assertEqual(self._fn(raw), "padded")
+
+    # -- plain string / scalar branch -------------------------------------------
+
+    def test_plain_string_returned_stripped(self):
+        self.assertEqual(self._fn("  Hello  "), "Hello")
+
+    def test_plain_string_no_whitespace(self):
+        self.assertEqual(self._fn("Hello"), "Hello")
+
+    def test_empty_string_returns_empty_string(self):
+        self.assertEqual(self._fn(""), "")
+
+    def test_none_returns_empty_string(self):
+        self.assertEqual(self._fn(None), "")
+
+    def test_zero_returns_empty_string(self):
+        """0 is falsy → ""."""
+        self.assertEqual(self._fn(0), "")
+
+    def test_integer_nonzero_returns_str(self):
+        """A truthy non-string scalar is coerced via str()."""
+        self.assertEqual(self._fn(42), "42")
+
+
+class DisplaynameFromI18nTests(TestCase):
+    """Unit tests for BiblissimaCheckDuplicatesView._displayname_from_i18n.
+
+    Mirrors ``str(ri.name) if ri.name else ""`` from _get_resource_name.
+    """
+
+    @classmethod
+    def _fn(cls, name):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+        return BiblissimaCheckDuplicatesView._displayname_from_i18n(name)
+
+    def test_truthy_string_returned_as_str(self):
+        self.assertEqual(self._fn("Some Title"), "Some Title")
+
+    def test_truthy_dict_stringified(self):
+        """A raw I18n dict is passed to str() — the exact repr doesn't matter
+        as long as it's a non-empty string."""
+        d = {"en": {"value": "Title"}}
+        result = self._fn(d)
+        self.assertIsInstance(result, str)
+        self.assertTrue(result, "expected non-empty string for truthy dict")
+
+    def test_none_returns_empty_string(self):
+        self.assertEqual(self._fn(None), "")
+
+    def test_empty_string_returns_empty_string(self):
+        self.assertEqual(self._fn(""), "")
+
+    def test_zero_returns_empty_string(self):
+        """0 is falsy → ""."""
+        self.assertEqual(self._fn(0), "")
+
+    def test_integer_nonzero_returns_str(self):
+        self.assertEqual(self._fn(42), "42")

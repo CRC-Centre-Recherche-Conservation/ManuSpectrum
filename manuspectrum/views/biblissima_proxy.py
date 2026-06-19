@@ -1547,16 +1547,7 @@ class BiblissimaCheckDuplicatesView(View):
                     )
                     for tile in matching_tiles:
                         raw_value = tile.data.get(id_node, "")
-                        # Handle i18n dict format
-                        if isinstance(raw_value, dict):
-                            tile_value = ""
-                            for lang in ("en", "fr", "de", "es", "it"):
-                                v = raw_value.get(lang, {})
-                                if isinstance(v, dict) and v.get("value"):
-                                    tile_value = v["value"].strip()
-                                    break
-                        else:
-                            tile_value = str(raw_value).strip() if raw_value else ""
+                        tile_value = self._extract_tile_value(raw_value)
 
                         if not tile_value:
                             continue
@@ -1622,6 +1613,36 @@ class BiblissimaCheckDuplicatesView(View):
             )
 
         return JsonResponse({"results": results})
+
+    @staticmethod
+    def _extract_tile_value(raw_value):
+        """Return a plain string from a tile node value.
+
+        If *raw_value* is a dict (Arches i18n format), iterate over languages
+        in priority order ``en → fr → de → es → it`` and return the first
+        non-empty ``value`` string found (stripped).  For any other truthy
+        scalar, return ``str(raw_value).strip()``.  Returns ``""`` for falsy
+        inputs or when no language produces a usable value.
+
+        Mirrors the inline i18n block at biblissima_proxy.py ~1551-1559.
+        """
+        if isinstance(raw_value, dict):
+            for lang in ("en", "fr", "de", "es", "it"):
+                v = raw_value.get(lang, {})
+                if isinstance(v, dict) and v.get("value"):
+                    return v["value"].strip()
+            return ""
+        return str(raw_value).strip() if raw_value else ""
+
+    @staticmethod
+    def _displayname_from_i18n(name):
+        """Return ``str(name)`` for a truthy I18n field value, else ``""``.
+
+        Mirrors ``str(ri.name) if ri.name else ""`` from ``_get_resource_name``
+        (~line 1631).  Accepts any value (dict, str, None) that an Arches I18n
+        name field might carry.
+        """
+        return str(name) if name else ""
 
     @staticmethod
     def _get_resource_name(resource_id):
