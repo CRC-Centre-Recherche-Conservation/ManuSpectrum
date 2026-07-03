@@ -12,6 +12,7 @@ from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 from manuspectrum.views.biblissima_proxy import (
     BiblissimaAddAltNameView,
     BiblissimaCheckDuplicatesView,
+    BiblissimaCreateAllView,
     BiblissimaCreateResourceView,
     BiblissimaEntityView,
     BiblissimaIlluminationDetailView,
@@ -132,6 +133,13 @@ urlpatterns.append(
         "api/biblissima/create-resource",
         BiblissimaCreateResourceView.as_view(),
         name="biblissima-create-resource",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/biblissima/create-all",
+        BiblissimaCreateAllView.as_view(),
+        name="biblissima-create-all",
     )
 )
 urlpatterns.append(
