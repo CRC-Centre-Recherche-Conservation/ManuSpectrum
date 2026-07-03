@@ -500,6 +500,15 @@ BIBLISSIMA_CONCURRENCY_LIMIT = 12
 BIBLISSIMA_CACHE_TTL = 24 * 60 * 60
 
 
+# ---------------------------------------------------------------------------
+# Biblissima async ES indexing (Phase 4)
+# ---------------------------------------------------------------------------
+# When True, post-commit ES indexing is dispatched to Celery via
+# ``index_resources_async.delay()``. Falls back to synchronous indexing if
+# the broker is unreachable. Default OFF
+# until a broker is confirmed available and this flag is explicitly
+BIBLISSIMA_ASYNC_INDEXING = False
+
 try:
     from .package_settings import *
 except ImportError:

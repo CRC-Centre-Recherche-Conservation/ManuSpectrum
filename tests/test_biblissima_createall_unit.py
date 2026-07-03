@@ -208,7 +208,13 @@ class CreateAllBase(TestCase):
 class HappyPathTests(CreateAllBase):
     def test_happy_path_all_created(self):
         items = [_item("c0"), _item("c1"), _item("c2")]
-        response, payload = self._post({"resourceType": "Document", "items": items})
+        # captureOnCommitCallbacks(execute=True) fires transaction.on_commit
+        # callbacks immediately so that _defer_indexing's sync fallback runs
+        # inside the test (BIBLISSIMA_ASYNC_INDEXING=False by default in tests).
+        with self.captureOnCommitCallbacks(execute=True):
+            response, payload = self._post(
+                {"resourceType": "Document", "items": items}
+            )
 
         self.assertEqual(response.status_code, 200)
         results = payload["results"]
@@ -233,7 +239,11 @@ class HappyPathTests(CreateAllBase):
         batch_tx = txs.pop()
 
         # Indexed exactly once, post-commit, by that same batch_tx.
-        self.mock_index.assert_called_once_with(str(batch_tx))
+        # _defer_indexing's sync fallback (BIBLISSIMA_ASYNC_INDEXING=False)
+        # passes recalculate_descriptors=True to match the async task's behaviour.
+        self.mock_index.assert_called_once_with(
+            str(batch_tx), recalculate_descriptors=True
+        )
 
     def test_descriptors_and_hooks_run_once_for_survivors(self):
         items = [_item("c0"), _item("c1")]
@@ -537,7 +547,12 @@ class DanglingProjectTests(CreateAllBase):
             _item("c1", dependencies={"project": missing_project}),  # dangling
             _item("c2"),  # no project at all
         ]
-        response, payload = self._post({"resourceType": "Document", "items": items})
+        # captureOnCommitCallbacks fires _defer_indexing's on_commit callback so
+        # mock_index is called within the test (BIBLISSIMA_ASYNC_INDEXING=False).
+        with self.captureOnCommitCallbacks(execute=True):
+            response, payload = self._post(
+                {"resourceType": "Document", "items": items}
+            )
 
         self.assertEqual(response.status_code, 200)
         results = payload["results"]

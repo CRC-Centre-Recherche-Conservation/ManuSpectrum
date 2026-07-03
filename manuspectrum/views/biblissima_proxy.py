@@ -2593,19 +2593,13 @@ class BiblissimaCreateResourceView(View):
             if project_id:
                 self._link_to_project(resource_id, project_id, transaction_id)
 
-        # DB transaction succeeded — index into Elasticsearch synchronously.
-        # We tried Celery dispatch (transaction.on_commit + .delay()) but
-        # any worker started before manuspectrum.tasks existed would not
-        # know the task name and silently drop the message, leaving
-        # resources unindexed. Sync indexing adds ~100-200 ms to the
-        # response but keeps the search index consistent without any
-        # operational dependency.
-        try:
-            resource.index()
-        except Exception:
-            logger.warning(
-                "ES indexing failed for resource %s (DB is committed)", resource_id
-            )
+        # Schedule ES indexing to run after the DB transaction commits.
+        # The on_commit wrapper inside _defer_indexing guarantees that a
+        # rollback never enqueues an indexing job for data that no longer
+        # exists. With BIBLISSIMA_ASYNC_INDEXING=False (the default), this
+        # is behaviourally identical to the previous inline resource.index()
+        # call but runs strictly post-commit.
+        self._defer_indexing(resource_ids=[str(resource_id)])
 
         return resource_id, created_deps
 
@@ -2915,6 +2909,83 @@ class BiblissimaCreateResourceView(View):
         # replacing the N updates the per-tile path would emit.
         resource.save_descriptors()
         self._write_editlog(tiles, resource, user, default_transaction_id)
+
+    def _defer_indexing(self, resource_ids=None, tx_id=None):
+        """Schedule ES indexing to run after the current DB transaction commits.
+
+        Wrapping the work in ``transaction.on_commit`` guarantees that a DB
+        rollback never enqueues an indexing job for data that no longer exists:
+        the callback is discarded when the surrounding ``atomic`` block rolls
+        back.
+
+        Two modes (mutually exclusive; ``tx_id`` takes precedence):
+
+        - **tx_id**: index all resources that share that transaction id via
+          ``index_resources_by_transaction(tx_id, recalculate_descriptors=True)``.
+          Used by ``BiblissimaCreateAllView`` (batch creates).
+        - **resource_ids**: index each resource individually via
+          ``resource.index()``. Used by the unitary ``_create_resource`` path.
+
+        Async / sync dispatch:
+        - ``BIBLISSIMA_ASYNC_INDEXING=True`` → dispatch to Celery via
+          ``index_resources_async.delay(...)``; any broker / kombu
+          ``OperationalError`` silently falls back to synchronous indexing.
+        - ``BIBLISSIMA_ASYNC_INDEXING=False`` (default) → run synchronously
+          inline in the on_commit callback (same behaviour as pre-P4).
+
+        The flag is OFF by default, so this method is a behaviour-identical
+        drop-in for the previous inline ``resource.index()`` calls until a
+        broker is confirmed available and the flag is set in
+        ``settings_local.py``.
+        """
+        from django.db import transaction as db_transaction
+
+        def _do_index():
+            async_on = getattr(settings, "BIBLISSIMA_ASYNC_INDEXING", False)
+            if async_on:
+                try:
+                    from manuspectrum.tasks import index_resources_async  # noqa
+
+                    if tx_id is not None:
+                        index_resources_async.delay(transaction_id=str(tx_id))
+                    else:
+                        index_resources_async.delay(
+                            resource_ids=[str(r) for r in (resource_ids or [])]
+                        )
+                    return  # dispatched successfully
+                except Exception as exc:
+                    # Broker unreachable or task not registered — fall through
+                    # to synchronous indexing so data is never left un-indexed.
+                    logger.warning(
+                        "_defer_indexing: async dispatch failed (%s), "
+                        "falling back to sync indexing",
+                        exc,
+                    )
+
+            # Synchronous fallback (also the default when flag is OFF).
+            try:
+                if tx_id is not None:
+                    from arches.app.utils.index_database import (
+                        index_resources_by_transaction,
+                    )
+
+                    index_resources_by_transaction(
+                        str(tx_id), recalculate_descriptors=True
+                    )
+                elif resource_ids:
+                    from arches.app.models.resource import Resource
+
+                    for rid in resource_ids:
+                        try:
+                            Resource.objects.get(pk=rid).index()
+                        except Exception:
+                            logger.exception(
+                                "_defer_indexing: failed to index resource %s", rid
+                            )
+            except Exception:
+                logger.exception("_defer_indexing: sync indexing failed")
+
+        db_transaction.on_commit(_do_index)
 
     @staticmethod
     def _i18n_string(value, lang=None):
@@ -3890,7 +3961,6 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         from django.db import transaction
         from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
-        from arches.app.utils.index_database import index_resources_by_transaction
 
         try:
             body = json.loads(request.body)
@@ -4069,16 +4139,12 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
             logger.exception("Biblissima batch creation failed")
             return JsonResponse({"error": "Batch creation failed"}, status=500)
 
-        # Outer atomic committed. Index the survivors synchronously by their
-        # shared transaction id (mirrors the unitary path's post-commit index).
-        # P4 will wrap this in a defer_indexing seam.
+        # Schedule ES indexing for the committed batch via the on_commit seam.
+        # With BIBLISSIMA_ASYNC_INDEXING=False (default), this is a
+        # behaviour-identical replacement for the previous inline
+        # index_resources_by_transaction call, but strictly post-commit.
         if survivors:
-            try:
-                index_resources_by_transaction(str(batch_tx))
-            except Exception:
-                logger.warning(
-                    "ES indexing failed for batch %s (DB is committed)", batch_tx
-                )
+            self._defer_indexing(tx_id=batch_tx)
 
         return JsonResponse({"results": results})
 
