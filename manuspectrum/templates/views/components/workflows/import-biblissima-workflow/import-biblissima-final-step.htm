@@ -87,7 +87,7 @@
                         <span class="bbma-summary-row-thumb">
                             <!-- ko if: $data.thumbnail -->
                             <img loading="lazy"
-                                 data-bind="attr: {src: $data.thumbnail, alt: $parent.resourceDisplayLabel($data)}">
+                                 data-bind="attr: {src: $data.thumbnail, alt: $parent.resourceDisplayLabel($data)}, thumbFallback: true">
                             <!-- /ko -->
                             <!-- ko ifnot: $data.thumbnail -->
                             <span class="bbma-summary-row-thumb-fallback" aria-hidden="true">

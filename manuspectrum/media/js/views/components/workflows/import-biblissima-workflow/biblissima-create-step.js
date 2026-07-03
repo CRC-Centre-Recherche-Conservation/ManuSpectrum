@@ -73,6 +73,7 @@
 import ko from 'knockout';
 import arches from 'arches';
 import 'bindings/select2-query';
+import 'bindings/thumb-fallback';
 import ResourceInstanceSelectViewModel from 'viewmodels/resource-instance-select';
 import biblissimaCreateStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm';
 import ParentResolver from './parentResolver';

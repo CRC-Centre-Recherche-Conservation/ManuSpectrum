@@ -292,7 +292,7 @@
 
                     <!-- ko if: thumbnail -->
                     <div class="biblissima-result-thumb">
-                        <img data-bind="attr: {src: thumbnail, alt: label}" loading="lazy">
+                        <img data-bind="attr: {src: thumbnail, alt: label}, thumbFallback: true" loading="lazy">
                     </div>
                     <!-- /ko -->
                     <!-- ko ifnot: thumbnail -->
@@ -396,7 +396,7 @@
                 <div class="biblissima-cart-item">
                     <!-- ko if: thumbnail -->
                     <div class="biblissima-cart-item-thumb">
-                        <img data-bind="attr: {src: thumbnail}" loading="lazy">
+                        <img data-bind="attr: {src: thumbnail}, thumbFallback: true" loading="lazy">
                     </div>
                     <!-- /ko -->
                     <!-- ko ifnot: thumbnail -->

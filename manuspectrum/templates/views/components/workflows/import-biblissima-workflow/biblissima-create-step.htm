@@ -138,7 +138,7 @@
                 <!-- Thumbnail -->
                 <div class="bbma-item-thumb">
                     <!-- ko if: thumbnail -->
-                    <img data-bind="attr: {src: thumbnail}" loading="lazy">
+                    <img data-bind="attr: {src: thumbnail}, thumbFallback: true" loading="lazy">
                     <!-- /ko -->
                     <!-- ko ifnot: thumbnail -->
                     <i class="fa fa-file-text-o"></i>
