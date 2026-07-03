@@ -2672,90 +2672,17 @@ class BiblissimaCreateResourceView(View):
         self._tile_buffer.append(tile)
         return tile
 
-    def _flush_tile_buffer(self, resource, user, default_transaction_id):
-        """Persist ``self._tile_buffer`` in two bulk INSERTs and refresh
-        descriptors once.
+    def _collect_valid_concepts(self, tiles, nodes_by_id):
+        """Batch-confirm concept valueids with a single ``Value.objects.filter``.
 
-        Replaces the per-tile ``Tile.save()`` chain that would otherwise:
+        Scans all concept/concept-list node values across *tiles*, sends
+        only the well-formed UUID strings to the DB in one query, and
+        returns the set of confirmed (existing) valueid strings.
 
-        - reload the published graph (3 SELECTs × N tiles),
-        - run the function-runner (1 SELECT × N tiles),
-        - call ``resource.save_descriptors()`` (1 UPDATE × N tiles),
-        - write one ``edit_log`` row per tile.
-
-        After this method, ``self._tile_buffer`` is reset to an empty
-        list — any further ``_create_tile`` call inside the same
-        request would silently buffer tiles that never get flushed,
-        which is a bug; callers must not invoke ``_create_tile`` after
-        the flush.
+        Malformed (non-UUID) values are excluded from the filter and
+        will fall through to the authoritative arches ``validate()`` call
+        inside ``_validate_tiles``.
         """
-        from arches.app.datatypes.datatypes import DataTypeFactory
-        from arches.app.models.models import EditLog
-        from arches.app.models.tile import TileValidationError
-        from django.utils import timezone
-        from types import SimpleNamespace
-
-        tiles = self._tile_buffer
-        self._tile_buffer = []
-        if not tiles:
-            return
-
-        # Reuse the published graph that ``select_related`` already
-        # fetched on ``resource`` (see _create_resource): one in-memory
-        # dict shared by validate, pre_tile_save, and post_tile_save
-        # for the whole batch. Using ``resource.get_serialized_graph()``
-        # avoids the extra ``Node.objects.filter(graph_id=...)`` SQL
-        # round-trip a fresh ``Node`` queryset would cost.
-        factory = DataTypeFactory()
-        serialized_graph = resource.get_serialized_graph() or {}
-        nodes_by_id = {str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])}
-
-        # ``Tile.save()`` runs three groups of side effects we have to
-        # replay around the bulk_create — see the table in
-        # ``_flush_tile_buffer``'s docstring for the full breakdown.
-        # Two concrete use-cases in this project today:
-        #   - ManifestDataType.pre_tile_save imports the IIIF manifest
-        #     into the iiif_manifests table and rewrites the URL to
-        #     /manifest/{globalid}; without it Mirador can't serve
-        #     external manifests through Cantaloupe.
-        #   - ResourceInstanceDataType.post_tile_save calls the SQL
-        #     function ``__arches_create_resource_x_resource_relationships``
-        #     to populate ``resource_x_resource``; without it links
-        #     like parentDocument / productionPlace exist in
-        #     ``tiles.tiledata`` but not in the R2R join table.
-        # BaseDataType implements both as no-ops, so calling them for
-        # every (tile, nodeid) pair is safe regardless of datatype.
-        def _hook_tiles(method_name):
-            for tile in tiles:
-                for nodeid in list(tile.data.keys()):
-                    node = nodes_by_id.get(str(nodeid))
-                    if node is None:
-                        continue
-                    datatype = factory.get_instance(node["datatype"])
-                    method = getattr(datatype, method_name)
-                    if method_name == "post_tile_save":
-                        method(tile, nodeid, request=None)
-                    else:
-                        method(tile, nodeid)
-
-        # Tier 2 safety net: run datatype.validate(value) on every
-        # (tile, node) before any DB write. It mirrors what
-        # ``Tile.validate`` does at arches/app/models/tile.py:357 —
-        # most datatypes do CPU-only checks (regex, type, format) so
-        # the SQL cost is ~zero, while still catching malformed
-        # payloads from Biblissima (bad UUIDs, unexpected concept
-        # values, …) before they corrupt the DB. ``strict=False`` so
-        # we don't pay the per-ref existence check on
-        # resource-instance datatypes.
-        #
-        # Concept/concept-list nodes are the exception: arches
-        # ConceptDataType.validate does one UNCACHED Value.objects.get(pk=…)
-        # per value (concept_types.py), which is ~the whole SQL cost of this
-        # path on a Document. We pre-confirm existence with ONE batched
-        # Value.objects.filter(valueid__in=…) and SKIP the per-value validate
-        # only when every concept value is confirmed; anything malformed or
-        # missing falls back to the authoritative arches validate, so error
-        # messages and behaviour are unchanged.
         valid_concept_ids = set()
         concept_ids = set()
         for tile in tiles:
@@ -2782,6 +2709,22 @@ class BiblissimaCreateResourceView(View):
                         "valueid", flat=True
                     )
                 }
+        return valid_concept_ids
+
+    def _validate_tiles(self, tiles, nodes_by_id, factory, valid_concept_ids):
+        """Tier-2 validate-net: run ``datatype.validate()`` on every (tile, node).
+
+        Concept/concept-list nodes whose values are ALL confirmed in
+        *valid_concept_ids* (from ``_collect_valid_concepts``) are
+        short-circuited with no further DB call. Anything malformed or
+        absent falls through to the authoritative arches ``validate()``.
+
+        Raises ``TileValidationError`` on any ERROR-level result.
+        ``strict=False`` avoids the per-ref existence check on
+        resource-instance datatypes.
+        """
+        from arches.app.models.tile import TileValidationError
+        from types import SimpleNamespace
 
         for tile in tiles:
             for nodeid, value in tile.data.items():
@@ -2808,16 +2751,44 @@ class BiblissimaCreateResourceView(View):
                     if err.get("type") == "ERROR":
                         raise TileValidationError(err.get("message", ""))
 
-        _hook_tiles("pre_tile_save")
-        TileModel.objects.bulk_create(tiles)
-        _hook_tiles("post_tile_save")
+    def _run_hook(self, tiles, nodes_by_id, factory, method_name):
+        """Replay ``pre_tile_save`` / ``post_tile_save`` for every (tile, node).
 
-        # MultiDescriptor (the only function attached to Biblissima
-        # graphs) reads tiles via TileModel.objects.filter(...) — so
-        # it sees the rows just inserted. save_descriptors also calls
-        # super().save() on the resource, which is the single UPDATE
-        # replacing the N updates the per-tile path would emit.
-        resource.save_descriptors()
+        Mirrors the side effects that ``Tile.save()`` would run around the
+        ``bulk_create``:
+
+        - ``pre_tile_save``: IIIF manifest import rewrites the URL to
+          ``/manifest/{globalid}`` so Mirador can serve external manifests.
+        - ``post_tile_save``: R2R relationship creation via the Arches SQL
+          function that populates ``resource_x_resource``.
+
+        ``method_name`` is intentionally the last argument so that Task 3.4
+        can call ``_run_hook(tiles, nodes_by_id, factory, "pre_tile_save")``
+        with a consistent, reusable signature.
+        """
+        for tile in tiles:
+            for nodeid in list(tile.data.keys()):
+                node = nodes_by_id.get(str(nodeid))
+                if node is None:
+                    continue
+                datatype = factory.get_instance(node["datatype"])
+                method = getattr(datatype, method_name)
+                if method_name == "post_tile_save":
+                    method(tile, nodeid, request=None)
+                else:
+                    method(tile, nodeid)
+
+    def _write_editlog(self, tiles, resource, user, tx_id):
+        """Build one ``EditLog`` row per tile and bulk-insert them.
+
+        ``displayname`` is computed here — after the caller has already called
+        ``resource.save_descriptors()`` — so the name reflects the committed
+        descriptors. ``EditLog`` is imported locally so the patch target
+        stays ``arches.app.models.models.EditLog``.
+        """
+        from arches.app.models.models import EditLog
+        from django.utils import timezone
+
         displayname = resource.displayname()
 
         user_id = (
@@ -2829,7 +2800,7 @@ class BiblissimaCreateResourceView(View):
         user_email = getattr(user, "email", "") or ""
 
         now = timezone.now()
-        fallback_tx = default_transaction_id or uuid.uuid4()
+        fallback_tx = tx_id or uuid.uuid4()
         edits = [
             EditLog(
                 transactionid=getattr(t, "_mspectrum_transaction_id", None)
@@ -2853,6 +2824,59 @@ class BiblissimaCreateResourceView(View):
             for t in tiles
         ]
         EditLog.objects.bulk_create(edits)
+
+    def _flush_tile_buffer(self, resource, user, default_transaction_id):
+        """Persist ``self._tile_buffer`` in two bulk INSERTs and refresh
+        descriptors once.
+
+        Thin orchestrator: captures and resets the buffer, builds the shared
+        ``DataTypeFactory`` and ``nodes_by_id`` lookup, then delegates to the
+        four reusable primitives in order:
+
+        1. ``_collect_valid_concepts`` — batch-confirm concept valueids
+           (ONE ``Value.objects.filter`` for the whole batch).
+        2. ``_validate_tiles`` — Tier-2 validate-net (raises
+           ``TileValidationError`` on any ERROR before any DB write).
+        3. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
+        4. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
+        5. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
+        6. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        7. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+
+        After this method, ``self._tile_buffer`` is reset to an empty
+        list — any further ``_create_tile`` call inside the same
+        request would silently buffer tiles that never get flushed,
+        which is a bug; callers must not invoke ``_create_tile`` after
+        the flush.
+        """
+        from arches.app.datatypes.datatypes import DataTypeFactory
+
+        tiles = self._tile_buffer
+        self._tile_buffer = []
+        if not tiles:
+            return
+
+        # Reuse the published graph that ``select_related`` already
+        # fetched on ``resource`` (see _create_resource): one in-memory
+        # dict shared by validate, pre_tile_save, and post_tile_save
+        # for the whole batch. Using ``resource.get_serialized_graph()``
+        # avoids the extra ``Node.objects.filter(graph_id=...)`` SQL
+        # round-trip a fresh ``Node`` queryset would cost.
+        factory = DataTypeFactory()
+        serialized_graph = resource.get_serialized_graph() or {}
+        nodes_by_id = {str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])}
+
+        valid_concept_ids = self._collect_valid_concepts(tiles, nodes_by_id)
+        self._validate_tiles(tiles, nodes_by_id, factory, valid_concept_ids)
+        self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
+        TileModel.objects.bulk_create(tiles)
+        self._run_hook(tiles, nodes_by_id, factory, "post_tile_save")
+        # MultiDescriptor reads tiles via TileModel.objects.filter(...) —
+        # so it sees the rows just inserted. save_descriptors also calls
+        # super().save() on the resource, which is the single UPDATE
+        # replacing the N updates the per-tile path would emit.
+        resource.save_descriptors()
+        self._write_editlog(tiles, resource, user, default_transaction_id)
 
     @staticmethod
     def _i18n_string(value, lang=None):

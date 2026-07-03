@@ -1773,3 +1773,686 @@ class CheckDuplicatesScalingTests(TestCase):
             f"ResourceInstance.objects.filter must be called exactly once "
             f"(batched name resolution), got {ri_calls}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Task 3.1 — _flush_tile_buffer refactored into 4 reusable primitives
+# ---------------------------------------------------------------------------
+#
+# Groups A–F verify the extraction is behavior-preserving and that the 4
+# primitives are independently callable with the correct signatures.
+#
+# A  OrchestratorDelegationTests — exact call ORDER + argument threading
+# B  CollectValidConceptsTests   — _collect_valid_concepts in isolation
+# C  ValidateTilesTests          — _validate_tiles in isolation
+# D  RunHookTests                — _run_hook in isolation
+# E  WriteEditlogTests           — _write_editlog in isolation
+# F  FlushGoldenSnapshotTests    — behavior-preservation end-to-end
+
+
+# ---------------------------------------------------------------------------
+# A — Orchestrator delegation
+# ---------------------------------------------------------------------------
+
+
+class OrchestratorDelegationTests(TestCase):
+    """_flush_tile_buffer must delegate to the 4 primitives in the exact order
+    specified and thread arguments correctly between them."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch(PATCH_TILEMODEL)
+    @patch(PATCH_FACTORY)
+    def test_delegation_order_and_argument_threading(
+        self, MockFactory, MockTileModel
+    ):
+        """Exact call order: collect → validate → run_hook(pre) →
+        bulk_create → run_hook(post) → save_descriptors → write_editlog.
+        The set returned by _collect_valid_concepts flows into _validate_tiles;
+        the same nodes_by_id and factory go to both _run_hook calls;
+        default_transaction_id is forwarded to _write_editlog as tx_id."""
+        from unittest.mock import MagicMock
+
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        CONCEPT_SET = frozenset({"valid-concept-uuid"})
+        mock_factory_inst = MagicMock(name="factory_inst")
+        MockFactory.return_value = mock_factory_inst
+        MockTileModel.objects.bulk_create.return_value = []
+
+        tile = _make_tile(data={TEXT_NODE_ID: {"en": "hello"}})
+        view = BiblissimaCreateResourceView()
+        view._tile_buffer = [tile]
+        resource = _make_resource()
+        tx_id = EDITLOG_TX_ID
+
+        # Build a shared manager so mock_calls records cross-primitive order
+        mgr = MagicMock(name="mgr")
+        collect_mock = MagicMock(return_value=CONCEPT_SET)
+        validate_mock = MagicMock()
+        run_hook_mock = MagicMock()
+        write_mock = MagicMock()
+        mgr.attach_mock(collect_mock, "collect")
+        mgr.attach_mock(validate_mock, "validate")
+        mgr.attach_mock(run_hook_mock, "run_hook")
+        mgr.attach_mock(write_mock, "write_editlog")
+
+        with patch.object(view, "_collect_valid_concepts", collect_mock), patch.object(
+            view, "_validate_tiles", validate_mock
+        ), patch.object(view, "_run_hook", run_hook_mock), patch.object(
+            view, "_write_editlog", write_mock
+        ):
+            view._flush_tile_buffer(resource, user=None, default_transaction_id=tx_id)
+
+        # 1 — Call order (5 entries: collect, validate, run_hook×2, write_editlog)
+        call_names = [c[0] for c in mgr.mock_calls]
+        self.assertEqual(
+            call_names,
+            ["collect", "validate", "run_hook", "run_hook", "write_editlog"],
+            f"Unexpected call order: {call_names}",
+        )
+
+        # 2 — _collect_valid_concepts receives (tiles, nodes_by_id)
+        collect_args = collect_mock.call_args[0]
+        tiles_arg, nodes_by_id_arg = collect_args[0], collect_args[1]
+        self.assertEqual(tiles_arg, [tile])
+        self.assertIsInstance(nodes_by_id_arg, dict)
+
+        # 3 — The SAME nodes_by_id object flows from collect to validate and hooks
+        validate_args = validate_mock.call_args[0]
+        self.assertIs(validate_args[1], nodes_by_id_arg, "nodes_by_id must be threaded")
+        run_hook_calls = run_hook_mock.call_args_list
+        self.assertIs(run_hook_calls[0][0][1], nodes_by_id_arg, "pre_tile_save nodes_by_id")
+        self.assertIs(run_hook_calls[1][0][1], nodes_by_id_arg, "post_tile_save nodes_by_id")
+
+        # 4 — The factory instance returned by DataTypeFactory() is threaded
+        self.assertIs(validate_args[2], mock_factory_inst, "factory threaded to validate")
+        self.assertIs(run_hook_calls[0][0][2], mock_factory_inst, "factory to pre_tile_save")
+        self.assertIs(run_hook_calls[1][0][2], mock_factory_inst, "factory to post_tile_save")
+
+        # 5 — The CONCEPT_SET returned by collect flows into validate
+        self.assertIs(validate_args[3], CONCEPT_SET, "valid_concept_ids threaded")
+
+        # 6 — _run_hook receives correct method_name as last arg
+        self.assertEqual(run_hook_calls[0][0][3], "pre_tile_save")
+        self.assertEqual(run_hook_calls[1][0][3], "post_tile_save")
+
+        # 7 — _write_editlog receives (tiles, resource, user, default_transaction_id)
+        write_args = write_mock.call_args[0]
+        self.assertEqual(write_args[0], [tile])
+        self.assertIs(write_args[1], resource)
+        self.assertIsNone(write_args[2])  # user=None
+        self.assertEqual(str(write_args[3]), tx_id)
+
+    @patch(PATCH_TILEMODEL)
+    @patch(PATCH_FACTORY)
+    def test_empty_buffer_no_primitive_called(self, MockFactory, MockTileModel):
+        """When the buffer is empty, _flush_tile_buffer returns early and
+        none of the 4 primitives must be called."""
+        from unittest.mock import MagicMock
+
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        view._tile_buffer = []
+        resource = _make_resource()
+
+        collect_mock = MagicMock()
+        validate_mock = MagicMock()
+        run_hook_mock = MagicMock()
+        write_mock = MagicMock()
+
+        with patch.object(view, "_collect_valid_concepts", collect_mock), patch.object(
+            view, "_validate_tiles", validate_mock
+        ), patch.object(view, "_run_hook", run_hook_mock), patch.object(
+            view, "_write_editlog", write_mock
+        ):
+            view._flush_tile_buffer(resource, user=None, default_transaction_id=None)
+
+        collect_mock.assert_not_called()
+        validate_mock.assert_not_called()
+        run_hook_mock.assert_not_called()
+        write_mock.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# B — _collect_valid_concepts in isolation
+# ---------------------------------------------------------------------------
+
+
+class CollectValidConceptsTests(TestCase):
+    """_collect_valid_concepts must issue ONE batched Value.objects.filter for
+    well-formed concept UUIDs and return the confirmed set."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _call(self, tiles, nodes_by_id, mock_value_return=None):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        with patch(PATCH_VALUE) as MockValue:
+            MockValue.objects.filter.return_value.values_list.return_value = (
+                mock_value_return or []
+            )
+            result = view._collect_valid_concepts(tiles, nodes_by_id)
+        return result, MockValue
+
+    def test_returns_confirmed_ids_as_strings(self):
+        """IDs returned by Value.filter must appear in the result set as strings."""
+        tile = _make_tile(data={CONCEPT_NODE_ID: VALID_CONCEPT_UUID})
+        _, MockValue = self._call.__func__(
+            self,
+            [tile],
+            {CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"}},
+            mock_value_return=[VALID_CONCEPT_UUID],
+        )
+        nodes = {CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"}}
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        with patch(PATCH_VALUE) as MockValue:
+            MockValue.objects.filter.return_value.values_list.return_value = [
+                VALID_CONCEPT_UUID
+            ]
+            result = view._collect_valid_concepts([tile], nodes)
+        self.assertIn(VALID_CONCEPT_UUID, result)
+
+    def test_value_filter_called_once(self):
+        """Only ONE Value.objects.filter must be issued for any batch size."""
+        tiles = [
+            _make_tile(data={CONCEPT_NODE_ID: VALID_CONCEPT_UUID}),
+            _make_tile(data={CONCEPT_LIST_NODE_ID: [VALID_CONCEPT_UUID]}),
+        ]
+        nodes = {
+            CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"},
+            CONCEPT_LIST_NODE_ID: {"nodeid": CONCEPT_LIST_NODE_ID, "datatype": "concept-list"},
+        }
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        with patch(PATCH_VALUE) as MockValue:
+            MockValue.objects.filter.return_value.values_list.return_value = [
+                VALID_CONCEPT_UUID
+            ]
+            view._collect_valid_concepts(tiles, nodes)
+        self.assertEqual(
+            MockValue.objects.filter.call_count, 1, "Value.filter must be called once"
+        )
+
+    def test_empty_tiles_returns_empty_set(self):
+        """No tiles → empty result, no DB call."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        with patch(PATCH_VALUE) as MockValue:
+            MockValue.objects.filter.return_value.values_list.return_value = []
+            result = view._collect_valid_concepts([], {})
+        self.assertEqual(result, set())
+        MockValue.objects.filter.assert_not_called()
+
+    def test_malformed_uuid_excluded_from_filter(self):
+        """Malformed (non-UUID) values must NOT be sent to Value.objects.filter."""
+        tile = _make_tile(data={CONCEPT_NODE_ID: "not-a-uuid"})
+        nodes = {CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"}}
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        with patch(PATCH_VALUE) as MockValue:
+            MockValue.objects.filter.return_value.values_list.return_value = []
+            view._collect_valid_concepts([tile], nodes)
+        # well_formed is empty → filter never called
+        MockValue.objects.filter.assert_not_called()
+
+    def test_none_value_skipped(self):
+        """None concept values must not be added to concept_ids (skip guard)."""
+        tile = _make_tile(data={CONCEPT_NODE_ID: None})
+        nodes = {CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"}}
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        with patch(PATCH_VALUE) as MockValue:
+            MockValue.objects.filter.return_value.values_list.return_value = []
+            result = view._collect_valid_concepts([tile], nodes)
+        self.assertEqual(result, set())
+        MockValue.objects.filter.assert_not_called()
+
+    def test_non_concept_node_ignored(self):
+        """Nodes with datatype 'string' must not trigger a Value filter."""
+        tile = _make_tile(data={TEXT_NODE_ID: {"en": "hello"}})
+        nodes = {TEXT_NODE_ID: {"nodeid": TEXT_NODE_ID, "datatype": "string"}}
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        with patch(PATCH_VALUE) as MockValue:
+            MockValue.objects.filter.return_value.values_list.return_value = []
+            result = view._collect_valid_concepts([tile], nodes)
+        self.assertEqual(result, set())
+        MockValue.objects.filter.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# C — _validate_tiles in isolation
+# ---------------------------------------------------------------------------
+
+
+class ValidateTilesTests(TestCase):
+    """_validate_tiles must short-circuit confirmed concepts, fall through for
+    unconfirmed ones, and raise TileValidationError on ERROR."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _nodes(self):
+        return {
+            CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"},
+            TEXT_NODE_ID: {"nodeid": TEXT_NODE_ID, "datatype": "string"},
+        }
+
+    def test_confirmed_concept_skips_validate(self):
+        """A concept value in valid_concept_ids must NOT call datatype.validate."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        concept_dt = _concept_dt_mock()
+        other_dt = _other_dt_mock()
+        factory = MagicMock()
+        factory.get_instance.side_effect = (
+            lambda dt: concept_dt if dt in ("concept", "concept-list") else other_dt
+        )
+        tile = _make_tile(data={CONCEPT_NODE_ID: VALID_CONCEPT_UUID})
+        view = BiblissimaCreateResourceView()
+
+        view._validate_tiles(
+            [tile],
+            self._nodes(),
+            factory,
+            valid_concept_ids={VALID_CONCEPT_UUID},
+        )
+
+        concept_dt.validate.assert_not_called()
+
+    def test_unconfirmed_concept_triggers_validate(self):
+        """A concept value NOT in valid_concept_ids must call datatype.validate."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        concept_dt = _concept_dt_mock()
+        concept_dt.validate.return_value = []
+        other_dt = _other_dt_mock()
+        factory = MagicMock()
+        factory.get_instance.side_effect = (
+            lambda dt: concept_dt if dt in ("concept", "concept-list") else other_dt
+        )
+        tile = _make_tile(data={CONCEPT_NODE_ID: ABSENT_CONCEPT_UUID})
+        view = BiblissimaCreateResourceView()
+
+        view._validate_tiles([tile], self._nodes(), factory, valid_concept_ids=set())
+
+        concept_dt.validate.assert_called_once()
+
+    def test_error_level_raises_tile_validation_error(self):
+        """An ERROR from datatype.validate must raise TileValidationError."""
+        from arches.app.models.tile import TileValidationError
+
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        concept_dt = _concept_dt_mock()
+        concept_dt.validate.return_value = [{"type": "ERROR", "message": "bad value"}]
+        factory = MagicMock()
+        factory.get_instance.return_value = concept_dt
+        tile = _make_tile(data={CONCEPT_NODE_ID: ABSENT_CONCEPT_UUID})
+        view = BiblissimaCreateResourceView()
+
+        with self.assertRaises(TileValidationError):
+            view._validate_tiles(
+                [tile],
+                self._nodes(),
+                factory,
+                valid_concept_ids=set(),
+            )
+
+    def test_warning_level_does_not_raise(self):
+        """A WARNING from datatype.validate must NOT raise."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        concept_dt = _concept_dt_mock()
+        concept_dt.validate.return_value = [{"type": "WARNING", "message": "advisory"}]
+        factory = MagicMock()
+        factory.get_instance.return_value = concept_dt
+        tile = _make_tile(data={CONCEPT_NODE_ID: ABSENT_CONCEPT_UUID})
+        view = BiblissimaCreateResourceView()
+
+        # Must not raise
+        view._validate_tiles(
+            [tile],
+            self._nodes(),
+            factory,
+            valid_concept_ids=set(),
+        )
+
+    def test_unknown_node_skipped(self):
+        """A nodeid not in nodes_by_id must be silently skipped."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        factory = MagicMock()
+        tile = _make_tile(data={"unknown-node-id": "value"})
+        view = BiblissimaCreateResourceView()
+
+        # Must not raise, factory.get_instance must not be called
+        view._validate_tiles([tile], {}, factory, valid_concept_ids=set())
+        factory.get_instance.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# D — _run_hook in isolation
+# ---------------------------------------------------------------------------
+
+
+class RunHookTests(TestCase):
+    """_run_hook must dispatch pre_tile_save (no request) and post_tile_save
+    (request=None) correctly, skipping unknown nodes."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _nodes(self):
+        return {TEXT_NODE_ID: {"nodeid": TEXT_NODE_ID, "datatype": "string"}}
+
+    def test_pre_tile_save_called_without_request(self):
+        """pre_tile_save must be called as method(tile, nodeid) — no request kwarg."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        dt = _other_dt_mock()
+        factory = MagicMock()
+        factory.get_instance.return_value = dt
+        tile = _make_tile(data={TEXT_NODE_ID: {"en": "hi"}})
+        view = BiblissimaCreateResourceView()
+
+        view._run_hook([tile], self._nodes(), factory, "pre_tile_save")
+
+        dt.pre_tile_save.assert_called_once_with(tile, TEXT_NODE_ID)
+
+    def test_post_tile_save_called_with_request_none(self):
+        """post_tile_save must be called as method(tile, nodeid, request=None)."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        dt = _other_dt_mock()
+        factory = MagicMock()
+        factory.get_instance.return_value = dt
+        tile = _make_tile(data={TEXT_NODE_ID: {"en": "hi"}})
+        view = BiblissimaCreateResourceView()
+
+        view._run_hook([tile], self._nodes(), factory, "post_tile_save")
+
+        dt.post_tile_save.assert_called_once_with(tile, TEXT_NODE_ID, request=None)
+
+    def test_unknown_node_skipped(self):
+        """A nodeid not in nodes_by_id must not trigger any datatype call."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        factory = MagicMock()
+        tile = _make_tile(data={"unknown-node-id": "value"})
+        view = BiblissimaCreateResourceView()
+
+        view._run_hook([tile], {}, factory, "pre_tile_save")
+
+        factory.get_instance.assert_not_called()
+
+    def test_multiple_tiles_all_called(self):
+        """All tiles in the batch must have the hook dispatched."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        dt = _other_dt_mock()
+        factory = MagicMock()
+        factory.get_instance.return_value = dt
+        tiles = [
+            _make_tile(data={TEXT_NODE_ID: {"en": "a"}}),
+            _make_tile(data={TEXT_NODE_ID: {"en": "b"}}),
+        ]
+        view = BiblissimaCreateResourceView()
+
+        view._run_hook(tiles, self._nodes(), factory, "pre_tile_save")
+
+        self.assertEqual(dt.pre_tile_save.call_count, 2)
+
+
+# ---------------------------------------------------------------------------
+# E — _write_editlog in isolation
+# ---------------------------------------------------------------------------
+
+
+class WriteEditlogTests(TestCase):
+    """_write_editlog must compute displayname from resource.displayname(),
+    build one row per tile, and bulk-insert them."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _run(self, tiles, user=None, tx_id=None, displayname="Test Resource"):
+        """Call _write_editlog with mocked EditLog; return the list of row objects."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        captured = {}
+        resource = _make_resource()
+        resource.displayname.return_value = displayname
+
+        with patch(PATCH_EDITLOG) as MockEditLog:
+            MockEditLog.side_effect = lambda **kw: SimpleNamespace(**kw)
+
+            def capture(rows):
+                captured["rows"] = list(rows)
+                return []
+
+            MockEditLog.objects.bulk_create.side_effect = capture
+
+            view = BiblissimaCreateResourceView()
+            view._write_editlog(tiles, resource, user, tx_id)
+
+        return captured.get("rows", [])
+
+    def test_one_row_per_tile(self):
+        """One EditLog row must be produced for each tile in the list."""
+        tiles = [
+            _make_tile_for_editlog(EDITLOG_TILE_ID_A),
+            _make_tile_for_editlog(EDITLOG_TILE_ID_B),
+        ]
+        rows = self._run(tiles)
+        self.assertEqual(len(rows), 2)
+
+    def test_displayname_from_resource(self):
+        """resourcedisplayname must equal resource.displayname()."""
+        tile = _make_tile_for_editlog(EDITLOG_TILE_ID_A)
+        rows = self._run([tile], displayname="My Resource Name")
+        self.assertEqual(rows[0].resourcedisplayname, "My Resource Name")
+
+    def test_tx_id_used_as_fallback(self):
+        """When tiles have _mspectrum_transaction_id=None, the tx_id arg must
+        be used for every row (single-tx invariant)."""
+        tiles = [
+            _make_tile_for_editlog(EDITLOG_TILE_ID_A),
+            _make_tile_for_editlog(EDITLOG_TILE_ID_B),
+        ]
+        rows = self._run(tiles, tx_id=EDITLOG_TX_ID)
+        tx_ids = {str(r.transactionid) for r in rows}
+        self.assertEqual(tx_ids, {EDITLOG_TX_ID})
+
+    def test_user_none_yields_null_userid_empty_fields(self):
+        """user=None must produce userid=None and empty user string fields."""
+        tile = _make_tile_for_editlog(EDITLOG_TILE_ID_A)
+        rows = self._run([tile], user=None)
+        row = rows[0]
+        self.assertIsNone(row.userid)
+        self.assertEqual(row.user_username, "")
+        self.assertEqual(row.user_firstname, "")
+        self.assertEqual(row.user_lastname, "")
+        self.assertEqual(row.user_email, "")
+
+    def test_edittype_and_note(self):
+        """edittype must be 'tile create' and note must be 'resource creation'."""
+        tile = _make_tile_for_editlog(EDITLOG_TILE_ID_A)
+        rows = self._run([tile])
+        self.assertEqual(rows[0].edittype, "tile create")
+        self.assertEqual(rows[0].note, "resource creation")
+
+    def test_displayname_called_on_resource(self):
+        """resource.displayname() must be called exactly once (after save_descriptors
+        has been called by the orchestrator)."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        resource = _make_resource()
+        resource.displayname.return_value = "Name"
+        tile = _make_tile_for_editlog(EDITLOG_TILE_ID_A)
+
+        with patch(PATCH_EDITLOG) as MockEditLog:
+            MockEditLog.side_effect = lambda **kw: SimpleNamespace(**kw)
+            MockEditLog.objects.bulk_create.return_value = []
+            view = BiblissimaCreateResourceView()
+            view._write_editlog([tile], resource, None, None)
+
+        resource.displayname.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# F — FlushGoldenSnapshotTests (behavior preservation)
+# ---------------------------------------------------------------------------
+
+
+class FlushGoldenSnapshotTests(TestCase):
+    """End-to-end: _flush_tile_buffer (now a thin orchestrator) must produce
+    the same EditLog rows and call pattern as the pre-refactor monolith."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _run_full_flush(self, tiles, user=None, tx_id=None):
+        """Run _flush_tile_buffer with all ORM mocked; return captured EditLog rows."""
+        captured = {}
+
+        with patch(PATCH_FACTORY) as MockFactory, patch(
+            PATCH_VALUE
+        ) as MockValue, patch(PATCH_TILEMODEL) as MockTileModel, patch(
+            PATCH_EDITLOG
+        ) as MockEditLog:
+
+            MockValue.objects.filter.return_value.values_list.return_value = [
+                VALID_CONCEPT_UUID
+            ]
+            concept_dt = _concept_dt_mock()
+            other_dt = _other_dt_mock()
+            _patch_factory(MockFactory, concept_dt, other_dt)
+            MockTileModel.objects.bulk_create.return_value = []
+
+            MockEditLog.side_effect = lambda **kw: SimpleNamespace(**kw)
+
+            def capture_bulk(rows):
+                captured["rows"] = list(rows)
+                return []
+
+            MockEditLog.objects.bulk_create.side_effect = capture_bulk
+
+            view = _make_view_with_tiles(tiles)
+            resource = _make_resource()
+            view._flush_tile_buffer(resource, user=user, default_transaction_id=tx_id)
+
+        return captured.get("rows", [])
+
+    def test_editlog_rows_match_expected_fields(self):
+        """A buffer with 2 tiles must produce 2 EditLog rows with the correct
+        edittype, note, and transactionid (same output as the pre-refactor path)."""
+        tiles = [
+            _make_tile_for_editlog(EDITLOG_TILE_ID_A),
+            _make_tile_for_editlog(EDITLOG_TILE_ID_B),
+        ]
+        rows = self._run_full_flush(tiles, tx_id=EDITLOG_TX_ID)
+
+        self.assertEqual(len(rows), 2, "expected 2 EditLog rows")
+        for row in rows:
+            self.assertEqual(row.edittype, "tile create")
+            self.assertEqual(row.note, "resource creation")
+            self.assertEqual(str(row.transactionid), EDITLOG_TX_ID)
+
+    def test_empty_buffer_produces_no_editlog_rows(self):
+        """Empty buffer must not call EditLog.bulk_create (early return)."""
+        with patch(PATCH_FACTORY), patch(PATCH_VALUE), patch(
+            PATCH_TILEMODEL
+        ), patch(PATCH_EDITLOG) as MockEditLog:
+            MockEditLog.objects.bulk_create.return_value = []
+            view = _make_view_with_tiles([])
+            resource = _make_resource()
+            view._flush_tile_buffer(
+                resource, user=None, default_transaction_id=EDITLOG_TX_ID
+            )
+            MockEditLog.objects.bulk_create.assert_not_called()
+
+    def test_confirmed_concept_skips_validate_in_full_flush(self):
+        """A confirmed concept value must not call datatype.validate (behavior
+        preservation of the concept-batch short-circuit)."""
+        with patch(PATCH_FACTORY) as MockFactory, patch(
+            PATCH_VALUE
+        ) as MockValue, patch(PATCH_TILEMODEL) as MockTileModel, patch(
+            PATCH_EDITLOG
+        ) as MockEditLog:
+
+            MockValue.objects.filter.return_value.values_list.return_value = [
+                VALID_CONCEPT_UUID
+            ]
+            concept_dt = _concept_dt_mock()
+            other_dt = _other_dt_mock()
+            _patch_factory(MockFactory, concept_dt, other_dt)
+            MockTileModel.objects.bulk_create.return_value = []
+            MockEditLog.objects.bulk_create.return_value = []
+            MockEditLog.side_effect = lambda **kw: SimpleNamespace(**kw)
+
+            tile = _make_tile(data={CONCEPT_NODE_ID: VALID_CONCEPT_UUID})
+            view = _make_view_with_tiles([tile])
+            resource = _make_resource()
+            view._flush_tile_buffer(
+                resource, user=None, default_transaction_id=EDITLOG_TX_ID
+            )
+
+        concept_dt.validate.assert_not_called()
+
+    def test_tile_model_bulk_create_called_once(self):
+        """TileModel.objects.bulk_create must be called exactly once (the single
+        INSERT that replaces the per-tile Tile.save() chain)."""
+        with patch(PATCH_FACTORY) as MockFactory, patch(
+            PATCH_VALUE
+        ) as MockValue, patch(PATCH_TILEMODEL) as MockTileModel, patch(
+            PATCH_EDITLOG
+        ) as MockEditLog:
+
+            MockValue.objects.filter.return_value.values_list.return_value = []
+            _patch_factory(MockFactory, _concept_dt_mock(), _other_dt_mock())
+            MockTileModel.objects.bulk_create.return_value = []
+            MockEditLog.objects.bulk_create.return_value = []
+            MockEditLog.side_effect = lambda **kw: SimpleNamespace(**kw)
+
+            tiles = [
+                _make_tile(data={TEXT_NODE_ID: {"en": "a"}}),
+                _make_tile(data={TEXT_NODE_ID: {"en": "b"}}),
+            ]
+            view = _make_view_with_tiles(tiles)
+            resource = _make_resource()
+            view._flush_tile_buffer(
+                resource, user=None, default_transaction_id=EDITLOG_TX_ID
+            )
+
+        MockTileModel.objects.bulk_create.assert_called_once()
