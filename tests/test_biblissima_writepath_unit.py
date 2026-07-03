@@ -1423,3 +1423,353 @@ class DisplaynameFromI18nTests(TestCase):
 
     def test_integer_nonzero_returns_str(self):
         self.assertEqual(self._fn(42), "42")
+
+
+# ---------------------------------------------------------------------------
+# Tasks 2.2 + 2.3 — CheckDuplicates N×M hoist: parity + scaling tests
+# ---------------------------------------------------------------------------
+#
+# DESIGN: BiblissimaCheckDuplicatesView.post() previously called
+# Tile.objects.filter(...) once PER ITEM inside the items loop (O(N×M) where
+# N=items, M=corpus).  The rewrite hoists the corpus load to ONCE before the
+# loop and resolves all matched resource names in a single batched
+# ResourceInstance.objects.filter(...__in=...) call after the loop.
+#
+# Patch targets
+# -------------
+# Tile and ResourceInstance are imported at module level in biblissima_proxy,
+# so we patch them via the proxy module namespace.
+PATCH_TILE = "manuspectrum.views.biblissima_proxy.Tile"
+PATCH_RESOURCE_INSTANCE = "manuspectrum.views.biblissima_proxy.ResourceInstance"
+
+# Fixed UUIDs for corpus/name data
+_RID_A = "aaaaaaaa-0001-0001-0001-aaaaaaaaaaaa"
+_RID_B = "bbbbbbbb-0002-0002-0002-bbbbbbbbbbbb"
+_RID_C = "cccccccc-0003-0003-0003-cccccccccccc"
+
+# Corpus: two tiles whose values match specific ark tokens.
+# _RID_A's tile value IS the ark token directly; _RID_B's value contains it.
+_CORPUS_ARK_A = "ark:/43093/ifdataA001"
+_CORPUS_ARK_B = "ark:/43093/ifdataB002"
+
+def _make_corpus_tile(tile_value, rid, id_node=None):
+    """Return a minimal tile-like object for the corpus (tile_index building).
+
+    *id_node* must be the same key the view will use to look up the value in
+    tile.data (i.e. DOC_IDENTIFIER_VALUE or COMP_IDENTIFIER_VALUE).  Pass it
+    explicitly from the test so the corpus tiles match the view's lookup key.
+    """
+    key = id_node or "00000000-0000-0000-0000-000000000002"
+    tile = SimpleNamespace(
+        data={key: tile_value},
+        resourceinstance_id=rid,
+    )
+    return tile
+
+
+def _build_mock_tile(corpus_tiles):
+    """Return a patcher context for Tile that yields corpus_tiles on filter()."""
+    # filter() returns an iterable; we patch it as a list so the for-loop works.
+    mock_tile_cls = MagicMock()
+    mock_tile_cls.objects.filter.return_value = corpus_tiles
+    return mock_tile_cls
+
+
+def _build_mock_ri(names_by_rid):
+    """Return a patcher context for ResourceInstance that yields (rid, name) pairs
+    from values_list() on filter(resourceinstanceid__in=...)."""
+    mock_ri_cls = MagicMock()
+    mock_ri_cls.objects.filter.return_value.values_list.return_value = list(
+        names_by_rid.items()
+    )
+    return mock_ri_cls
+
+
+def _post_check_duplicates(items, graph_id, mock_tile_cls, mock_ri_cls):
+    """Drive BiblissimaCheckDuplicatesView.post() with mocked ORM.
+
+    Returns the parsed JSON response dict.
+    """
+    import json as _json
+    from django.test import RequestFactory
+    from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+    rf = RequestFactory()
+    body = _json.dumps({"graphId": graph_id, "items": items})
+    req = rf.post(
+        "/api/biblissima/check-duplicates",
+        data=body,
+        content_type="application/json",
+    )
+    view = BiblissimaCheckDuplicatesView()
+
+    with patch(PATCH_TILE, mock_tile_cls), patch(PATCH_RESOURCE_INSTANCE, mock_ri_cls):
+        # Also stub out ES strategies so they don't hit a real cluster.
+        with patch.object(view, "_es_string_search"):
+            response = view.post(req)
+
+    return _json.loads(response.content)
+
+
+class CheckDuplicatesParityTests(TestCase):
+    """Task 2.2 — parity: the per-item identifier suggestions are IDENTICAL
+    whether the batch has 1 item or 25 items (with overlapping tokens)."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _build_corpus(self):
+        """Return the fixed corpus tiles and names used across parity tests."""
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+
+        corpus_tiles = [
+            _make_corpus_tile(_CORPUS_ARK_A, _RID_A, id_node=DOC_IDENTIFIER_VALUE),
+            _make_corpus_tile(_CORPUS_ARK_B, _RID_B, id_node=DOC_IDENTIFIER_VALUE),
+        ]
+        names_by_rid = {
+            _RID_A: "Manuscript Alpha",
+            _RID_B: "Manuscript Beta",
+        }
+        return corpus_tiles, names_by_rid
+
+    def _item_matching_a(self, suffix=""):
+        """An item whose arkId token matches _RID_A's tile value exactly."""
+        return {
+            "arkId": _CORPUS_ARK_A,
+            "label": f"Label A{suffix}",
+            "shelfmark": "",
+            "biblissimaQid": "",
+            "portalHash": "",
+            "manifestUrl": "",
+        }
+
+    def _item_matching_b(self, suffix=""):
+        """An item whose arkId token matches _RID_B's tile value exactly."""
+        return {
+            "arkId": _CORPUS_ARK_B,
+            "label": f"Label B{suffix}",
+            "shelfmark": "",
+            "biblissimaQid": "",
+            "portalHash": "",
+            "manifestUrl": "",
+        }
+
+    def _item_no_match(self, suffix=""):
+        """An item with no matching tokens."""
+        return {
+            "arkId": "ark:/43093/noMatch999",
+            "label": f"No Match{suffix}",
+            "shelfmark": "",
+            "biblissimaQid": "",
+            "portalHash": "",
+            "manifestUrl": "",
+        }
+
+    def test_single_item_returns_expected_suggestion(self):
+        """A single-item request must yield the expected identifier suggestion."""
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus_tiles, names_by_rid = self._build_corpus()
+        mock_tile = _build_mock_tile(corpus_tiles)
+        mock_ri = _build_mock_ri(names_by_rid)
+
+        data = _post_check_duplicates(
+            items=[self._item_matching_a()],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=mock_tile,
+            mock_ri_cls=mock_ri,
+        )
+
+        self.assertEqual(len(data["results"]), 1)
+        suggestions = data["results"][0]["suggestions"]
+        self.assertEqual(len(suggestions), 1)
+        self.assertEqual(suggestions[0]["resourceId"], _RID_A)
+        self.assertEqual(suggestions[0]["displayname"], "Manuscript Alpha")
+        self.assertEqual(suggestions[0]["matchType"], "identifier")
+        self.assertEqual(suggestions[0]["confidence"], "high")
+
+    def test_parity_1_vs_25_items_same_suggestion_for_first_item(self):
+        """The suggestion list for item[0] must be IDENTICAL whether the batch
+        has 1 item or 25 items (overlapping tokens across items)."""
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus_tiles, names_by_rid = self._build_corpus()
+
+        # --- 1-item batch ---
+        mock_tile_1 = _build_mock_tile(corpus_tiles)
+        mock_ri_1 = _build_mock_ri(names_by_rid)
+        data_1 = _post_check_duplicates(
+            items=[self._item_matching_a()],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=mock_tile_1,
+            mock_ri_cls=mock_ri_1,
+        )
+        sugg_1 = data_1["results"][0]["suggestions"]
+
+        # --- 25-item batch: item[0] is the same; rest alternate A/B/no-match ---
+        items_25 = [self._item_matching_a()]
+        for i in range(1, 25):
+            if i % 3 == 0:
+                items_25.append(self._item_matching_a(suffix=f"_{i}"))
+            elif i % 3 == 1:
+                items_25.append(self._item_matching_b(suffix=f"_{i}"))
+            else:
+                items_25.append(self._item_no_match(suffix=f"_{i}"))
+
+        mock_tile_25 = _build_mock_tile(corpus_tiles)
+        mock_ri_25 = _build_mock_ri(names_by_rid)
+        data_25 = _post_check_duplicates(
+            items=items_25,
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=mock_tile_25,
+            mock_ri_cls=mock_ri_25,
+        )
+        sugg_25 = data_25["results"][0]["suggestions"]
+
+        self.assertEqual(
+            sugg_1,
+            sugg_25,
+            f"Suggestion for item[0] differs between 1-item and 25-item batch:\n"
+            f"  1-item:  {sugg_1}\n"
+            f"  25-item: {sugg_25}",
+        )
+
+    def test_parity_no_match_item_yields_empty_suggestions(self):
+        """An item with no matching token must yield no identifier suggestions."""
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus_tiles, names_by_rid = self._build_corpus()
+        mock_tile = _build_mock_tile(corpus_tiles)
+        mock_ri = _build_mock_ri(names_by_rid)
+
+        data = _post_check_duplicates(
+            items=[self._item_no_match()],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=mock_tile,
+            mock_ri_cls=mock_ri,
+        )
+
+        suggestions = data["results"][0]["suggestions"]
+        identifier_hits = [s for s in suggestions if s["matchType"] == "identifier"]
+        self.assertEqual(
+            identifier_hits,
+            [],
+            f"Expected no identifier suggestions for no-match item; got {identifier_hits}",
+        )
+
+
+class CheckDuplicatesScalingTests(TestCase):
+    """Task 2.3 — scaling: Tile.objects.filter call_count == 1 regardless
+    of the number of items (proves O(1) corpus load)."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _run_and_count(self, n_items, graph_id):
+        """Submit n_items and return (tile_filter_call_count, ri_filter_call_count)."""
+        import json as _json
+        from django.test import RequestFactory
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+
+        corpus_tiles = [
+            _make_corpus_tile(_CORPUS_ARK_A, _RID_A, id_node=DOC_IDENTIFIER_VALUE),
+        ]
+        names_by_rid = {_RID_A: "Alpha"}
+
+        mock_tile_cls = MagicMock()
+        mock_tile_cls.objects.filter.return_value = corpus_tiles
+
+        mock_ri_cls = MagicMock()
+        mock_ri_cls.objects.filter.return_value.values_list.return_value = list(
+            names_by_rid.items()
+        )
+
+        items = [
+            {
+                "arkId": _CORPUS_ARK_A,
+                "label": f"Item {i}",
+                "shelfmark": "",
+                "biblissimaQid": "",
+                "portalHash": "",
+                "manifestUrl": "",
+            }
+            for i in range(n_items)
+        ]
+
+        rf = RequestFactory()
+        body = _json.dumps({"graphId": graph_id, "items": items})
+        req = rf.post(
+            "/api/biblissima/check-duplicates",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaCheckDuplicatesView()
+
+        with patch(PATCH_TILE, mock_tile_cls), patch(
+            PATCH_RESOURCE_INSTANCE, mock_ri_cls
+        ):
+            with patch.object(view, "_es_string_search"):
+                view.post(req)
+
+        return (
+            mock_tile_cls.objects.filter.call_count,
+            mock_ri_cls.objects.filter.call_count,
+        )
+
+    def test_tile_filter_called_once_for_1_item(self):
+        """Tile.objects.filter must be called exactly once for a 1-item request."""
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        tile_calls, _ = self._run_and_count(1, DOCUMENT_GRAPH_ID)
+        self.assertEqual(
+            tile_calls,
+            1,
+            f"Tile.objects.filter must be called once for 1 item, got {tile_calls}",
+        )
+
+    def test_tile_filter_called_once_for_25_items(self):
+        """Tile.objects.filter must be called exactly once for a 25-item request
+        (same as 1 item — proves O(1) in len(items))."""
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        tile_calls, _ = self._run_and_count(25, DOCUMENT_GRAPH_ID)
+        self.assertEqual(
+            tile_calls,
+            1,
+            f"Tile.objects.filter must be called once for 25 items, got {tile_calls}",
+        )
+
+    def test_tile_filter_call_count_equal_for_1_and_25_items(self):
+        """call_count for Tile.objects.filter must be identical (both 1) for
+        1-item and 25-item requests — confirming O(1) scaling."""
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        tile_1, _ = self._run_and_count(1, DOCUMENT_GRAPH_ID)
+        tile_25, _ = self._run_and_count(25, DOCUMENT_GRAPH_ID)
+        self.assertEqual(
+            tile_1,
+            tile_25,
+            f"Tile filter call_count must be equal for 1 vs 25 items "
+            f"(got {tile_1} vs {tile_25})",
+        )
+        self.assertEqual(tile_1, 1, "Expected constant call_count of 1")
+
+    def test_name_batching_single_ri_filter_call(self):
+        """ResourceInstance.objects.filter must be called at most once (batched),
+        not once per match."""
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        _, ri_calls = self._run_and_count(25, DOCUMENT_GRAPH_ID)
+        self.assertEqual(
+            ri_calls,
+            1,
+            f"ResourceInstance.objects.filter must be called exactly once "
+            f"(batched name resolution), got {ri_calls}",
+        )

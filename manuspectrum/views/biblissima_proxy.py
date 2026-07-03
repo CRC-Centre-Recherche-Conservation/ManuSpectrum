@@ -1495,7 +1495,44 @@ class BiblissimaCheckDuplicatesView(View):
         from arches.app.search.search_engine_factory import SearchEngineInstance
 
         se = SearchEngineInstance
+
+        # ---------------------------------------------------------------------------
+        # Strategy 1 — hoist corpus load to O(1) in len(items)
+        #
+        # id_ng / id_node depend only on graph_id, not on any individual item.
+        # Load the entire identifier-tile corpus ONCE before the items loop and
+        # keep it as an in-memory list of (tile_value, rid) pairs.  The per-item
+        # loop then matches search_tokens against this list with no DB call.
+        # ---------------------------------------------------------------------------
+        id_ng = (
+            DOC_IDENTIFIER_NG if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_NG
+        )
+        id_node = (
+            DOC_IDENTIFIER_VALUE
+            if graph_id == DOCUMENT_GRAPH_ID
+            else COMP_IDENTIFIER_VALUE
+        )
+        tile_index = []  # list of (tile_value: str, rid: str)
+        try:
+            for tile in Tile.objects.filter(
+                nodegroup_id=id_ng,
+                resourceinstance__graph_id=graph_id,
+            ):
+                tv = self._extract_tile_value(tile.data.get(id_node, ""))
+                if tv:
+                    tile_index.append((tv, str(tile.resourceinstance_id)))
+        except Exception:
+            logger.warning("Tile identifier corpus load failed for graph %s", graph_id)
+
         results = []
+        # Collect all rids matched by strategy 1 across all items so we can
+        # resolve their displaynames in a single batched query after the loop.
+        matched_rids: set = set()
+        # Per-item list of (rid, tile_value) hits in corpus-iteration order.
+        per_item_id_hits: list = [[] for _ in items]
+        # Parallel state structure: avoids mutating caller-supplied input dicts.
+        # Each slot holds (seen_ids, label, shelfmark, ark_id) for item[idx].
+        item_state: list = [None] * len(items)
 
         for idx, item in enumerate(items):
             ark_id = item.get("arkId", "")
@@ -1503,12 +1540,11 @@ class BiblissimaCheckDuplicatesView(View):
             shelfmark = item.get("shelfmark", "")
             qid = item.get("biblissimaQid", "")
 
-            suggestions = []
-            seen_ids = set()
+            seen_ids: set = set()
 
-            # Strategy 1: Search by identifiers in tiles
-            # Build all possible search tokens from Biblissima data
-            search_tokens = set()
+            # Strategy 1: match search_tokens against the in-memory tile_index.
+            # Build all possible search tokens from Biblissima data.
+            search_tokens: set = set()
             if ark_id:
                 search_tokens.add(ark_id)
                 # Hash without ark: prefix
@@ -1530,56 +1566,48 @@ class BiblissimaCheckDuplicatesView(View):
                 search_tokens.add(manifest_url)
 
             if search_tokens:
-                id_ng = (
-                    DOC_IDENTIFIER_NG
-                    if graph_id == DOCUMENT_GRAPH_ID
-                    else COMP_IDENTIFIER_NG
+                for tile_value, rid in tile_index:
+                    if rid in seen_ids:
+                        continue
+                    if any(
+                        t == tile_value or t in tile_value or tile_value in t
+                        for t in search_tokens
+                    ):
+                        seen_ids.add(rid)
+                        per_item_id_hits[idx].append((rid, tile_value))
+                        matched_rids.add(rid)
+
+            # Stash per-item state in parallel structure (not in the input dict).
+            item_state[idx] = (seen_ids, label, shelfmark, ark_id)
+
+        # ---------------------------------------------------------------------------
+        # Batch-resolve displaynames for all strategy-1 hits in ONE query.
+        # ---------------------------------------------------------------------------
+        name_by_rid: dict = {}
+        if matched_rids:
+            for rid, nm in ResourceInstance.objects.filter(
+                resourceinstanceid__in=matched_rids
+            ).values_list("resourceinstanceid", "name"):
+                name_by_rid[str(rid)] = self._displayname_from_i18n(nm)
+
+        # ---------------------------------------------------------------------------
+        # Assemble final results per item.
+        # ---------------------------------------------------------------------------
+        for idx, item in enumerate(items):
+            suggestions: list = []
+            seen_ids, label, shelfmark, ark_id = item_state[idx]
+
+            # Identifier suggestions (strategy 1) — in corpus-iteration order.
+            for rid, tile_value in per_item_id_hits[idx]:
+                suggestions.append(
+                    {
+                        "resourceId": rid,
+                        "displayname": name_by_rid.get(rid, ""),
+                        "matchType": "identifier",
+                        "matchValue": tile_value,
+                        "confidence": "high",
+                    }
                 )
-                id_node = (
-                    DOC_IDENTIFIER_VALUE
-                    if graph_id == DOCUMENT_GRAPH_ID
-                    else COMP_IDENTIFIER_VALUE
-                )
-                try:
-                    matching_tiles = Tile.objects.filter(
-                        nodegroup_id=id_ng,
-                        resourceinstance__graph_id=graph_id,
-                    )
-                    for tile in matching_tiles:
-                        raw_value = tile.data.get(id_node, "")
-                        tile_value = self._extract_tile_value(raw_value)
-
-                        if not tile_value:
-                            continue
-
-                        # Check if tile value matches any search token
-                        # or if any search token is contained in the tile value
-                        matched = False
-                        for token in search_tokens:
-                            if (
-                                token == tile_value
-                                or token in tile_value
-                                or tile_value in token
-                            ):
-                                matched = True
-                                break
-
-                        if matched:
-                            rid = str(tile.resourceinstance_id)
-                            if rid not in seen_ids:
-                                seen_ids.add(rid)
-                                dn = self._get_resource_name(rid)
-                                suggestions.append(
-                                    {
-                                        "resourceId": rid,
-                                        "displayname": dn,
-                                        "matchType": "identifier",
-                                        "matchValue": tile_value,
-                                        "confidence": "high",
-                                    }
-                                )
-                except Exception:
-                    logger.warning("Tile identifier search failed for item %d", idx)
 
             # Strategies 2 and 3 are skipped only for Components. Components
             # share the parent manuscript's shelfmark, and their displayname
@@ -1638,20 +1666,10 @@ class BiblissimaCheckDuplicatesView(View):
     def _displayname_from_i18n(name):
         """Return ``str(name)`` for a truthy I18n field value, else ``""``.
 
-        Mirrors ``str(ri.name) if ri.name else ""`` from ``_get_resource_name``
-        (~line 1631).  Accepts any value (dict, str, None) that an Arches I18n
-        name field might carry.
+        Accepts any value (dict, str, None) that an Arches I18n name field
+        might carry.  Returns ``""`` for falsy inputs.
         """
         return str(name) if name else ""
-
-    @staticmethod
-    def _get_resource_name(resource_id):
-        """Get the display name for a resource."""
-        try:
-            ri = ResourceInstance.objects.get(resourceinstanceid=resource_id)
-            return str(ri.name) if ri.name else str(ri)
-        except ResourceInstance.DoesNotExist:
-            return ""
 
     @staticmethod
     def _extract_es_displayname(hit):
