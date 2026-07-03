@@ -2825,6 +2825,44 @@ class BiblissimaCreateResourceView(View):
         ]
         EditLog.objects.bulk_create(edits)
 
+    def _batch_save_descriptors(self, resources):
+        """Refresh descriptors for a batch, hoisting the per-graph Node fetch
+        (3N->1 per graph) and the FunctionXGraph load (N->1 per graph) while
+        delegating ALL value logic to the UNMODIFIED per-resource
+        save_descriptors -> MultiDescriptor pipeline (byte-identical output,
+        interlink-safe because each resource is persisted before the next).
+
+        PARTITIONS by graph_id: a Biblissima batch is NOT homogeneous, and a
+        single flat node list applied across graphs silently yields empty
+        descriptors. `resources` MUST already be ordered parents-before-children
+        so a child's resource-instance descriptor renders against a persisted
+        parent, exactly as the unitary path.
+        """
+        from arches.app.models import models
+
+        graph_ids = []
+        for r in resources:
+            gid = str(r.graph_id)
+            if gid not in graph_ids:
+                graph_ids.append(gid)
+
+        node_cache = {}
+        fxg_cache = {}
+        for gid in graph_ids:
+            node_cache[gid] = list(models.Node.objects.filter(graph_id=gid))
+            fxg_cache[gid] = list(
+                models.FunctionXGraph.objects.filter(
+                    graph_id=gid, function__functiontype="primarydescriptors"
+                ).select_related("function")
+            )
+
+        for resource in resources:
+            gid = str(resource.graph_id)
+            resource.descriptor_function = fxg_cache[gid]
+            resource.save_descriptors(
+                context={"_prefetched_graph_nodes": node_cache[gid]}
+            )
+
     def _flush_tile_buffer(self, resource, user, default_transaction_id):
         """Persist ``self._tile_buffer`` in two bulk INSERTs and refresh
         descriptors once.

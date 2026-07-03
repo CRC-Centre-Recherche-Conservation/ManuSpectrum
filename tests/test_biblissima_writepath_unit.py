@@ -2456,3 +2456,223 @@ class FlushGoldenSnapshotTests(TestCase):
             )
 
         MockTileModel.objects.bulk_create.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Task 3.2 — _batch_save_descriptors (partition-by-graph) +
+#            prefetch-aware MultiDescriptor
+# ---------------------------------------------------------------------------
+
+PATCH_NODE = "arches.app.models.models.Node"
+PATCH_FXG = "arches.app.models.models.FunctionXGraph"
+
+
+def _make_mock_resource_for_batch(graph_id):
+    """Return a mock resource suitable for _batch_save_descriptors tests."""
+    r = MagicMock()
+    r.graph_id = graph_id
+    r.descriptor_function = None
+    r.save_descriptors = MagicMock()
+    return r
+
+
+class BatchSaveDescriptorsTests(TestCase):
+    """Task 3.2 — _batch_save_descriptors must hoist Node and FunctionXGraph
+    fetches once per graph and call the UNMODIFIED resource.save_descriptors
+    per resource with a context containing '_prefetched_graph_nodes'."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _get_view(self):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        view._tile_buffer = []
+        return view
+
+    @patch(PATCH_FXG)
+    @patch(PATCH_NODE)
+    def test_nodes_fetched_once_per_graph(self, MockNode, MockFxg):
+        """25 same-graph resources → Node.objects.filter called once AND
+        FunctionXGraph.objects.filter called once (hoist proven)."""
+        gid = "graph-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        resources = [_make_mock_resource_for_batch(gid) for _ in range(25)]
+
+        MockNode.objects.filter.return_value = []
+        MockFxg.objects.filter.return_value.select_related.return_value = []
+
+        view = self._get_view()
+        view._batch_save_descriptors(resources)
+
+        self.assertEqual(
+            MockNode.objects.filter.call_count,
+            1,
+            f"Node.objects.filter must be called once for a same-graph batch; "
+            f"got {MockNode.objects.filter.call_count}",
+        )
+        self.assertEqual(
+            MockFxg.objects.filter.call_count,
+            1,
+            f"FunctionXGraph.objects.filter must be called once; "
+            f"got {MockFxg.objects.filter.call_count}",
+        )
+        # save_descriptors called once per resource
+        for r in resources:
+            r.save_descriptors.assert_called_once()
+
+    @patch(PATCH_FXG)
+    @patch(PATCH_NODE)
+    def test_partitions_by_graph_id(self, MockNode, MockFxg):
+        """Resources across 2 graph_ids → Node.objects.filter called twice;
+        each resource's save_descriptors received the nodes for ITS graph only
+        (no cross-contamination)."""
+        gid_a = "graph-aaaa-0000-0000-0000-aaaaaaaaaaaa"
+        gid_b = "graph-bbbb-0000-0000-0000-bbbbbbbbbbbb"
+
+        node_a = MagicMock(alias="node_alias_a")
+        node_b = MagicMock(alias="node_alias_b")
+        nodes_a = [node_a]
+        nodes_b = [node_b]
+
+        def node_filter_side_effect(**kwargs):
+            return nodes_a if kwargs.get("graph_id") == gid_a else nodes_b
+
+        def fxg_filter_side_effect(**kwargs):
+            m = MagicMock()
+            m.select_related.return_value = []
+            return m
+
+        MockNode.objects.filter.side_effect = node_filter_side_effect
+        MockFxg.objects.filter.side_effect = fxg_filter_side_effect
+
+        r_a1 = _make_mock_resource_for_batch(gid_a)
+        r_a2 = _make_mock_resource_for_batch(gid_a)
+        r_b1 = _make_mock_resource_for_batch(gid_b)
+
+        view = self._get_view()
+        view._batch_save_descriptors([r_a1, r_a2, r_b1])
+
+        self.assertEqual(
+            MockNode.objects.filter.call_count,
+            2,
+            f"Node.objects.filter must be called twice (once per graph); "
+            f"got {MockNode.objects.filter.call_count}",
+        )
+
+        # No cross-contamination: graph-A nodes must appear only in graph-A
+        # resources' context, and graph-B nodes only in graph-B resources.
+        for r in [r_a1, r_a2]:
+            ctx = r.save_descriptors.call_args[1]["context"]
+            batch_nodes = ctx["_prefetched_graph_nodes"]
+            self.assertIn(node_a, batch_nodes, "r_aX must receive node_a")
+            self.assertNotIn(node_b, batch_nodes, "r_aX must NOT receive node_b")
+
+        ctx_b = r_b1.save_descriptors.call_args[1]["context"]
+        batch_nodes_b = ctx_b["_prefetched_graph_nodes"]
+        self.assertIn(node_b, batch_nodes_b, "r_b1 must receive node_b")
+        self.assertNotIn(node_a, batch_nodes_b, "r_b1 must NOT receive node_a")
+
+    @patch(PATCH_FXG)
+    @patch(PATCH_NODE)
+    def test_save_descriptors_called_per_resource(self, MockNode, MockFxg):
+        """The UNMODIFIED resource.save_descriptors is called once per resource
+        with a context kwarg containing '_prefetched_graph_nodes' (proves value
+        logic is NOT re-implemented in the batch helper)."""
+        gid = "graph-cccc-0000-0000-0000-cccccccccccc"
+        resources = [_make_mock_resource_for_batch(gid) for _ in range(3)]
+
+        MockNode.objects.filter.return_value = []
+        MockFxg.objects.filter.return_value.select_related.return_value = []
+
+        view = self._get_view()
+        view._batch_save_descriptors(resources)
+
+        for i, r in enumerate(resources):
+            r.save_descriptors.assert_called_once()
+            call_kwargs = r.save_descriptors.call_args[1]
+            self.assertIn(
+                "context",
+                call_kwargs,
+                f"resource[{i}].save_descriptors must receive 'context' kwarg",
+            )
+            self.assertIn(
+                "_prefetched_graph_nodes",
+                call_kwargs["context"],
+                f"resource[{i}].save_descriptors context must contain "
+                "'_prefetched_graph_nodes'",
+            )
+
+
+class MultiDescriptorPrefetchTests(TestCase):
+    """Task 3.2 — pins the prefetch / fallback contract on
+    MultiDescriptor.get_primary_descriptor_from_nodes.
+
+    When '_prefetched_graph_nodes' is present in context, the ORM query
+    Node.objects.filter must NOT fire (prefetch consumed).
+    When absent, Node.objects.filter MUST fire (byte-identical fallback).
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _make_resource(self):
+        resource = MagicMock()
+        resource.graph = MagicMock()
+        resource.resourceinstanceid = str(uuid.uuid4())
+        resource.descriptors = {}
+        return resource
+
+    @patch(PATCH_NODE)
+    def test_multidescriptor_uses_prefetched_nodes(self, MockNode):
+        """When context['_prefetched_graph_nodes'] is set, MultiDescriptor must
+        NOT call Node.objects.filter — it uses the provided list."""
+        from manuspectrum.functions.multi_descriptor import MultiDescriptor
+
+        prefetched_nodes = [MagicMock(alias="some_alias")]
+
+        func = MultiDescriptor()
+        config = {
+            "nodegroup_id": str(uuid.uuid4()),
+            "string_template": "no-alias-template",  # no <alias> → no tile query
+        }
+        resource = self._make_resource()
+
+        func.get_primary_descriptor_from_nodes(
+            resource,
+            config,
+            context={"_prefetched_graph_nodes": prefetched_nodes},
+            descriptor="name",
+        )
+
+        MockNode.objects.filter.assert_not_called()
+
+    @patch(PATCH_NODE)
+    def test_multidescriptor_fallback_queries_when_no_prefetch(self, MockNode):
+        """When context has no '_prefetched_graph_nodes' (None or missing),
+        MultiDescriptor MUST call Node.objects.filter (byte-identical fallback)."""
+        from manuspectrum.functions.multi_descriptor import MultiDescriptor
+
+        MockNode.objects.filter.return_value = []
+
+        func = MultiDescriptor()
+        config = {
+            "nodegroup_id": str(uuid.uuid4()),
+            "string_template": "no-alias-template",  # no <alias> → no tile query
+        }
+        resource = self._make_resource()
+
+        func.get_primary_descriptor_from_nodes(
+            resource,
+            config,
+            context=None,  # no prefetch → must fall back to DB query
+            descriptor="name",
+        )
+
+        MockNode.objects.filter.assert_called_once()
