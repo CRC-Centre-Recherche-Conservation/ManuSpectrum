@@ -1764,6 +1764,27 @@ $bbma-danger-bg: #fdf0f0;
     }
 }
 
+// Batch-create summary banner (step 3)
+// Wraps Bootstrap-3's .alert + .alert-dismissible; adds spacing for the
+// optional "Retry all failed" button so it doesn't butt against the message.
+.bbma-batch-summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+    // Allow the close button to remain top-right as per BS3 convention.
+
+    &.alert-success {
+        border-color: lighten($bbma-success, 24%);
+    }
+}
+
+.bbma-batch-retry {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
 // Parent-resolver panel (step 3, Component mode) renders as a list of
 // .bbma-dep-card just like the Related-Resources section above —
 // .bbma-deps-list / .bbma-dep-card / .bbma-dep-card-header /

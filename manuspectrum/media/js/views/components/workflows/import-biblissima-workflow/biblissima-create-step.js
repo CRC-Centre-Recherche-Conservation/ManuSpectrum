@@ -142,6 +142,39 @@ const viewModel = function(params) {
     this.items = ko.observableArray();
     this.creatingAll = ko.observable(false);
 
+    // Batch-create summary — null when hidden, {created, failed} when visible.
+    // Cleared on each new createAll run; persists until dismissBatchSummary or retryAllFailed.
+    this.batchSummary = ko.observable(null);
+
+    this.batchSummaryText = ko.computed(() => {
+        const s = self.batchSummary();
+        if (!s) return '';
+        const { created, failed } = s;
+        if (failed === 0) {
+            return (arches.translations.biblissimaBatchSuccess || '{n} resources created')
+                .replace('{n}', created);
+        }
+        return (arches.translations.biblissimaBatchPartial || '{created} created · {failed} failed')
+            .replace('{created}', created)
+            .replace('{failed}', failed);
+    });
+
+    this.dismissBatchSummary = () => {
+        self.batchSummary(null);
+    };
+
+    // Reset all error items to pending, clear the banner, and re-run createAll.
+    this.retryAllFailed = () => {
+        self.items().forEach((i) => {
+            if (i.status() === 'error') {
+                i.status('pending');
+                i.errorMessage('');
+            }
+        });
+        self.batchSummary(null);
+        self.createAll();
+    };
+
     // ParentResolver (Component mode only) — resolves one parent Document
     // per Biblissima manuscript group. See parentResolver.js. We construct
     // it eagerly so the template can bind to its observables, but
@@ -403,6 +436,7 @@ const viewModel = function(params) {
     this.initializeItems = () => {
         const items = (self.searchData.selectedItems || []).map((item) => ({
             ...item,
+            clientId: self._mintClientId(),
             status: ko.observable('pending'),
             resourceId: ko.observable(null),
             errorMessage: ko.observable(''),
@@ -1007,6 +1041,83 @@ const viewModel = function(params) {
     // =============================================
 
     /**
+     * Build the POST body for a single resource-creation request.
+     *
+     * Extracted from `createResource` so `createAll` can reuse the dep-assembly
+     * and payload structure without duplicating logic. Status transitions and
+     * dep-resolution (`_ensureDepsCreated`) remain in the calling method.
+     *
+     * Options (subset of `createResource` options):
+     *   - `asParent`        flip Component→Document mode for this call.
+     *   - `biblissimaData`  override payload body (defaults to `ko.toJS(item)`).
+     *   - `conceptMappings` override (defaults to `{type: item.typeValueId}`).
+     *   - `transactionId`   optional tx id string (defaults to `null`).
+     *
+     * Returns `{resourceType, transactionId, biblissimaData, dependencies, conceptMappings}`.
+     */
+    this._buildCreatePayload = (item, options = {}) => {
+        const asParent = !!options.asParent;
+        const isDocumentLike = asParent || !self.isComponent;
+
+        const deps = {
+            project: self.projectId,
+            parentDocument: (!asParent && self.isComponent)
+                ? self.parentResolver.parentIdFor(item)
+                : null,
+        };
+
+        // Place dep: Document → currentLocation; Component → productionPlace.
+        const locationKey = self._placeKeyForItem(item);
+        const placeDep = self.dependencies().find(
+            (d) => d.type === 'Place' && d.key === locationKey
+        );
+        if (placeDep && placeDep.existingId()) {
+            if (isDocumentLike) {
+                deps.currentLocation = placeDep.existingId();
+            } else {
+                deps.productionPlace = placeDep.existingId();
+            }
+        }
+
+        // Owner Group deps (collection + parent institution, deduplicated).
+        const ownerIds = new Set();
+        const ownerDep = self.dependencies().find(
+            (d) => d.type === 'Group' && d.key === item.collectionLabel
+        );
+        if (ownerDep && ownerDep.existingId()) {
+            ownerIds.add(ownerDep.existingId());
+        }
+        const parentInstDep = self.dependencies().find(
+            (d) => d.type === 'Group' && d.key === item.parentInstitutionLabel
+                && d.key !== item.collectionLabel
+        );
+        if (parentInstDep && parentInstDep.existingId()) {
+            ownerIds.add(parentInstDep.existingId());
+        }
+        if (ownerIds.size > 0) {
+            deps.currentOwner = [...ownerIds];
+        }
+
+        // Person dep (author).
+        const personDep = self.dependencies().find(
+            (d) => d.type === 'Person' && d.key === item.authorLabel
+        );
+        if (personDep && personDep.existingId()) {
+            deps.productionActors = [personDep.existingId()];
+        }
+
+        return {
+            resourceType: asParent ? 'Document' : self.resourceType,
+            transactionId: options.transactionId || null,
+            biblissimaData: options.biblissimaData || ko.toJS(item),
+            dependencies: deps,
+            conceptMappings: options.conceptMappings || {
+                type: ko.unwrap(item.typeValueId),
+            },
+        };
+    };
+
+    /**
      * Create a single Arches resource from a cart item.
      *
      * Two call modes, sharing the same dep-resolution logic so that a
@@ -1054,77 +1165,10 @@ const viewModel = function(params) {
         // item from the parent group in parent mode).
         await self._ensureDepsCreated(item);
 
-        // A parent Document creation behaves like Document mode: Place dep
-        // → currentLocation tile, no parentDocument link, etc.
-        const isDocumentLike = asParent || !self.isComponent;
-
-        const deps = {
-            project: self.projectId,
-            parentDocument: (!asParent && self.isComponent)
-                ? self.parentResolver.parentIdFor(item)
-                : null,
-        };
-
-        // Place dep. For Document → currentLocation tile (where the
-        // manuscript is kept). For Component → productionPlace tile
-        // (where the illumination was made). The backend
-        // `_create_component_tiles` reads `deps.productionPlace`, and
-        // `_create_document_tiles` reads `deps.currentLocation`; we have
-        // to send the right key.
-        const locationKey = self._placeKeyForItem(item);
-        const placeDep = self.dependencies().find(
-            (d) => d.type === 'Place' && d.key === locationKey
-        );
-        if (placeDep && placeDep.existingId()) {
-            if (isDocumentLike) {
-                deps.currentLocation = placeDep.existingId();
-            } else {
-                deps.productionPlace = placeDep.existingId();
-            }
-        }
-
-        // Owner Group deps (collection + parent institution, deduplicated)
-        const ownerIds = new Set();
-        const ownerDep = self.dependencies().find(
-            (d) => d.type === 'Group' && d.key === item.collectionLabel
-        );
-        if (ownerDep && ownerDep.existingId()) {
-            ownerIds.add(ownerDep.existingId());
-        }
-        const parentInstDep = self.dependencies().find(
-            (d) => d.type === 'Group' && d.key === item.parentInstitutionLabel
-                && d.key !== item.collectionLabel
-        );
-        if (parentInstDep && parentInstDep.existingId()) {
-            ownerIds.add(parentInstDep.existingId());
-        }
-        if (ownerIds.size > 0) {
-            deps.currentOwner = [...ownerIds];
-        }
-
-        // Person dep (author)
-        const personDep = self.dependencies().find(
-            (d) => d.type === 'Person' && d.key === item.authorLabel
-        );
-        if (personDep && personDep.existingId()) {
-            deps.productionActors = [personDep.existingId()];
-        }
-
-        // Per-item resolved type (may have been corrected by the user via
-        // the inline concept-select-widget). Document items default to
-        // VALUEID_MANUSCRIT, Component items to the server-resolved valueid.
-        // ko.toJS unwraps all observables on the item (status, typeValueId,
-        // enriched text/rubric/descriptorLinks/...) so the payload is a pure
-        // JSON-serializable snapshot of the current in-memory state.
-        const body = {
-            resourceType: asParent ? 'Document' : self.resourceType,
-            transactionId: null,
-            biblissimaData: options.biblissimaData || ko.toJS(item),
-            dependencies: deps,
-            conceptMappings: options.conceptMappings || {
-                type: ko.unwrap(item.typeValueId),
-            },
-        };
+        // Build the POST body (dep assembly + payload) via the shared helper.
+        // No behavior change to the unitary per-row path — the same logic that
+        // previously lived inline here now lives in _buildCreatePayload.
+        const body = self._buildCreatePayload(item, options);
 
         try {
             const resp = await fetch('/api/biblissima/create-resource', {
@@ -1187,14 +1231,114 @@ const viewModel = function(params) {
 
     this.createAll = async () => {
         self.creatingAll(true);
-        const pendingItems = self.items().filter(
-            (i) => i.status() === 'pending'
-        );
+        self.batchSummary(null);
 
-        for (const item of pendingItems) {
-            await self.createResource(item);
+        const pending = self.items().filter((i) => i.status() === 'pending');
+
+        if (!pending.length) {
+            self.creatingAll(false);
+            return;
         }
-        self.creatingAll(false);
+
+        // Defensive guard: all items in a createAll run must share one resourceType.
+        // This is always true (self.resourceType is fixed per workflow step), but
+        // if somehow mixed types appeared we fall back to safe per-item creation.
+        const types = new Set(pending.map((i) => i.resourceType || self.resourceType));
+        if (types.size > 1) {
+            for (const item of pending) {
+                await self.createResource(item);
+            }
+            const created = pending.filter((i) => i.status() === 'created').length;
+            const failed = pending.filter((i) => i.status() === 'error').length;
+            self.batchSummary({ created, failed });
+            self.creatingAll(false);
+            return;
+        }
+
+        try {
+            // (a) Dep-resolution pass — auto-create any unresolved deps per item.
+            for (const item of pending) {
+                await self._ensureDepsCreated(item);
+            }
+
+            // (b) Mark all pending items as 'creating' before the bulk request.
+            pending.forEach((i) => i.status('creating'));
+
+            // (c) ONE POST to /api/biblissima/create-all for the whole batch.
+            const resp = await fetch('/api/biblissima/create-all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': self.getCSRFToken(),
+                },
+                body: JSON.stringify({
+                    resourceType: self.resourceType,
+                    items: pending.map((i) => ({
+                        clientId: i.clientId,
+                        ...self._buildCreatePayload(i),
+                    })),
+                }),
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP ${resp.status}`);
+            }
+
+            const data = await resp.json();
+            const results = data.results || [];
+
+            // Build clientId → item map for O(1) fan-out.
+            const itemByClientId = {};
+            pending.forEach((i) => { itemByClientId[i.clientId] = i; });
+
+            // (d) Fan results[] back by clientId: status-preserving transitions.
+            results.forEach((r) => {
+                const item = itemByClientId[r.clientId];
+                if (!item) return; // unknown clientId from backend — skip
+                if (r.status === 'created') {
+                    item.resourceId(r.resourceId);
+                    item.status('created');
+                } else {
+                    item.status('error');
+                    item.errorMessage(
+                        r.error
+                        || arches.translations.biblissimaBatchError
+                        || 'Batch creation failed. Please retry.'
+                    );
+                }
+            });
+
+            // (e) Any still-'creating' item not in results → error (missing clientId).
+            pending.forEach((i) => {
+                if (i.status() === 'creating') {
+                    i.status('error');
+                    i.errorMessage(
+                        arches.translations.biblissimaBatchError
+                        || 'Batch creation failed. Please retry.'
+                    );
+                }
+            });
+
+        } catch (err) {
+            // (e) Request-level / !resp.ok failure → flip every still-'creating' to error.
+            console.error('Batch creation failed:', err);
+            pending.forEach((i) => {
+                if (i.status() === 'creating') {
+                    i.status('error');
+                    i.errorMessage(
+                        arches.translations.biblissimaBatchError
+                        || 'Batch creation failed. Please retry.'
+                    );
+                }
+            });
+        } finally {
+            // (f) Summarize outcome and release the spinner.
+            const created = pending.filter((i) => i.status() === 'created').length;
+            const failed = pending.filter((i) => i.status() === 'error').length;
+            self.batchSummary({ created, failed });
+            self.creatingAll(false);
+        }
     };
 
     this.skipItem = (item) => {
@@ -1362,6 +1506,36 @@ const viewModel = function(params) {
     // =============================================
     // Helpers
     // =============================================
+
+    /**
+     * Mint a stable UUID v4 for a cart item at init time. Used as the
+     * `clientId` field so the bulk create-all endpoint can fan results back
+     * to the right KO observable without relying on array position.
+     *
+     * Priority: crypto.randomUUID (modern) → crypto.getRandomValues (v4 build)
+     * → Math.random fallback (test/old env).
+     */
+    this._mintClientId = () => {
+        if (typeof crypto !== 'undefined') {
+            if (typeof crypto.randomUUID === 'function') {
+                return crypto.randomUUID();
+            }
+            if (typeof crypto.getRandomValues === 'function') {
+                const bytes = new Uint8Array(16);
+                crypto.getRandomValues(bytes);
+                bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+                bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+                const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+                return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+            }
+        }
+        // Math.random fallback (poor entropy — only used in test environments
+        // or very old browsers where crypto is unavailable).
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+            const r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+    };
 
     this.getCSRFToken = () => {
         const cookie = document.cookie.split(';').find((c) => c.trim().startsWith('csrftoken='));
