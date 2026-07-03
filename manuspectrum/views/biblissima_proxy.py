@@ -3591,6 +3591,120 @@ class BiblissimaCreateResourceView(View):
                 tile.transaction_id = transaction_id
             tile.save(index=False)
 
+    def _bulk_create_resources(self, graph_id, n, user):
+        """Bulk-create ``n`` ResourceInstance rows for the given graph in one INSERT.
+
+        Returns a list of ``n`` UUID objects (the new resourceinstanceids).
+
+        principaluser is set from the importing user — a deliberate divergence
+        from the current single path (which leaves it NULL); it makes the
+        importer the edit-permission owner.
+
+        Resolves the graph's initial lifecycle state ONCE before constructing
+        the instances, saving an N-query overhead vs. resolving per-row.
+        ``graph_publication_id`` mirrors ``graph.publication_id`` so Arches
+        can correctly gate display / export on the published version without a
+        follow-up query.
+        """
+        from arches.app.models.models import (
+            GraphModel,
+            ResourceInstanceLifecycleState,
+        )
+
+        if n <= 0:
+            return []
+
+        graph = GraphModel.objects.select_related(
+            "publication", "resource_instance_lifecycle"
+        ).get(pk=graph_id)
+
+        # get_initial_...() uses .get() -> raises DoesNotExist (never None), and
+        # graph.resource_instance_lifecycle may itself be None (nullable FK).
+        # Translate both into a clear ValueError instead of a downstream
+        # IntegrityError / raw DoesNotExist.
+        lifecycle = graph.resource_instance_lifecycle
+        try:
+            initial_state = (
+                lifecycle.get_initial_resource_instance_lifecycle_state()
+            )
+        except (AttributeError, ResourceInstanceLifecycleState.DoesNotExist):
+            initial_state = None
+        if initial_state is None:
+            raise ValueError(
+                f"Graph {graph_id} has no initial "
+                "resource_instance_lifecycle_state; cannot bulk-create resources."
+            )
+
+        instances = [
+            ResourceInstance(
+                resourceinstanceid=uuid.uuid4(),
+                graph_id=graph_id,
+                graph_publication_id=graph.publication_id,
+                resource_instance_lifecycle_state=initial_state,
+                principaluser_id=getattr(user, "id", None),
+            )
+            for _ in range(n)
+        ]
+        ResourceInstance.objects.bulk_create(instances)
+        return [inst.resourceinstanceid for inst in instances]
+
+    def _link_to_project_batch(self, created_ids, project_id, tx_id):
+        """Link a batch of newly-created resources to the project's Studied Objects
+        tile in a single locked read-modify-write.
+
+        Uses ``select_for_update()`` so concurrent batch imports cannot race
+        against each other and duplicate entries. Idempotent: resource ids that
+        are already present in the tile are silently skipped. Saves once with
+        ``index=False``; the caller is responsible for reindexing the project
+        tile (typically via the batch transaction's deferred ES pass).
+
+        Direct ``Tile.save()`` path is kept (vs. ``self._create_tile`` +
+        buffer) because the project is a different resource needing its own
+        descriptor refresh, and ``_flush_tile_buffer`` only handles the
+        resource currently being imported.
+        """
+        existing = (
+            Tile.objects.select_for_update()
+            .filter(
+                nodegroup_id=PROJECT_STUDIED_OBJECTS_NG,
+                resourceinstance_id=str(project_id),
+            )
+            .first()
+        )
+
+        new_refs = [
+            {
+                "resourceId": str(rid),
+                "ontologyProperty": "",
+                "inverseOntologyProperty": "",
+                "resourceXresourceId": "",
+            }
+            for rid in created_ids
+        ]
+
+        if existing:
+            current_data = existing.data.get(PROJECT_STUDIED_OBJECTS_NODE, []) or []
+            present_ids = {ref.get("resourceId") for ref in current_data}
+            for ref in new_refs:
+                if ref["resourceId"] not in present_ids:
+                    current_data.append(ref)
+                    present_ids.add(ref["resourceId"])
+            existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
+            if tx_id:
+                existing.transaction_id = tx_id
+            existing.save(index=False)
+        else:
+            tile = Tile(
+                tileid=uuid.uuid4(),
+                nodegroup_id=PROJECT_STUDIED_OBJECTS_NG,
+                resourceinstance_id=str(project_id),
+                data={PROJECT_STUDIED_OBJECTS_NODE: new_refs},
+                sortorder=0,
+            )
+            if tx_id:
+                tile.transaction_id = tx_id
+            tile.save(index=False)
+
     def _resource_instance_ref(self, resource_id):
         """Build a resource-instance reference for a single resource."""
         if isinstance(resource_id, list):
