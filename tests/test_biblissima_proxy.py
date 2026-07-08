@@ -1855,7 +1855,11 @@ class LinkToProjectIdempotenceTests(TestCase):
             existing.data[PROJECT_STUDIED_OBJECTS_NODE][0]["resourceId"],
             rid,
         )
-        existing.save.assert_called_once()
+        # FIX I-3: the project tile must be saved with index=False so the
+        # synchronous ES write never runs inside _create_resource's atomic()
+        # (a transient ES outage would otherwise roll back a good create). The
+        # project is re-indexed post-commit via _create_resource's defer set.
+        existing.save.assert_called_once_with(index=False)
 
 
 class BiblissimaLinkToProjectViewTests(TestCase):

@@ -1768,12 +1768,24 @@ $bbma-danger-bg: #fdf0f0;
 // Wraps Bootstrap-3's .alert + .alert-dismissible; adds spacing for the
 // optional "Retry all failed" button so it doesn't butt against the message.
 .bbma-batch-summary {
+    position: relative;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 10px;
     margin-bottom: 12px;
-    // Allow the close button to remain top-right as per BS3 convention.
+    // Reserve room so the pinned dismiss × never overlaps the summary text.
+    padding-right: 32px;
+
+    // BS3 `.close` relies on `float: right`, which `display: flex` neutralizes
+    // (it would otherwise render the × as the leftmost flex item). Pull it out
+    // of the flex flow and pin it top-right, keeping the BS3 convention.
+    > .close {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        float: none;
+    }
 
     &.alert-success {
         border-color: lighten($bbma-success, 24%);

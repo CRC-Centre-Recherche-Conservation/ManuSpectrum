@@ -1518,7 +1518,14 @@ class BiblissimaCheckDuplicatesView(View):
                 nodegroup_id=id_ng,
                 resourceinstance__graph_id=graph_id,
             ):
-                tv = self._extract_tile_value(tile.data.get(id_node, ""))
+                # Guard PER ROW: one malformed identifier value (e.g. a non-string
+                # that blows up ``.strip()`` inside _extract_tile_value) must skip
+                # just that row, not abort the whole corpus build -> otherwise
+                # strategy-1 dup-detection silently misses every later resource.
+                try:
+                    tv = self._extract_tile_value(tile.data.get(id_node, ""))
+                except Exception:
+                    continue
                 if tv:
                     tile_index.append((tv, str(tile.resourceinstance_id)))
         except Exception:
@@ -2514,7 +2521,9 @@ class BiblissimaCreateResourceView(View):
                     resource, user=None, default_transaction_id=None
                 )
 
-            resource.index()
+            # Route through the defer seam (post-commit; honors
+            # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
+            self._defer_indexing(resource_ids=[str(resource_id)])
         except Exception:
             logger.exception("Failed to create %s dependency", resource_type)
             return JsonResponse(
@@ -2599,7 +2608,14 @@ class BiblissimaCreateResourceView(View):
         # exists. With BIBLISSIMA_ASYNC_INDEXING=False (the default), this
         # is behaviourally identical to the previous inline resource.index()
         # call but runs strictly post-commit.
-        self._defer_indexing(resource_ids=[str(resource_id)])
+        #
+        # When the resource was linked to a project, the project's tile was
+        # written with index=False (I-3), so the project must be re-indexed
+        # here too — otherwise its ES doc's studied_objects stays stale.
+        index_ids = [str(resource_id)]
+        if project_id:
+            index_ids.append(str(project_id))
+        self._defer_indexing(resource_ids=index_ids)
 
         return resource_id, created_deps
 
@@ -2913,10 +2929,14 @@ class BiblissimaCreateResourceView(View):
     def _defer_indexing(self, resource_ids=None, tx_id=None):
         """Schedule ES indexing to run after the current DB transaction commits.
 
-        Wrapping the work in ``transaction.on_commit`` guarantees that a DB
-        rollback never enqueues an indexing job for data that no longer exists:
-        the callback is discarded when the surrounding ``atomic`` block rolls
-        back.
+        The work is wrapped in ``transaction.on_commit``. Note the current call
+        sites all invoke this AFTER their ``atomic()`` block has exited (post-
+        commit): with no atomic block in progress, ``on_commit`` fires the
+        callback immediately. Rollback protection here is therefore structural —
+        a failed create returns before reaching this call, so no indexing job is
+        ever scheduled for rolled-back data. (If this were ever called from
+        inside an ``atomic()`` block, ``on_commit`` would additionally discard
+        the callback on rollback.)
 
         Two modes (mutually exclusive; ``tx_id`` takes precedence):
 
@@ -3643,7 +3663,12 @@ class BiblissimaCreateResourceView(View):
                 return
             current_data.append(new_ref)
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
-            existing.save()
+            # index=False: the project is re-indexed post-commit via the
+            # caller's _defer_indexing set (which includes project_id). Indexing
+            # inline here (default index=True) runs a synchronous ES write inside
+            # _create_resource's atomic() -> a transient ES outage would raise
+            # and roll back the freshly-created resource (500 on a good create).
+            existing.save(index=False)
         else:
             # Direct Tile.save() — this writes one tile on the *project*
             # (a different resource than the one being created), and
@@ -3667,9 +3692,9 @@ class BiblissimaCreateResourceView(View):
 
         Returns a list of ``n`` UUID objects (the new resourceinstanceids).
 
-        principaluser is set from the importing user — a deliberate divergence
-        from the current single path (which leaves it NULL); it makes the
-        importer the edit-permission owner.
+        principaluser is left NULL, matching the unitary ``_create_resource``
+        path (which builds a bare ``ResourceInstance``), so ownership /
+        edit-permission behaviour does not diverge by endpoint.
 
         Resolves the graph's initial lifecycle state ONCE before constructing
         the instances, saving an N-query overhead vs. resolving per-row.
@@ -3710,7 +3735,6 @@ class BiblissimaCreateResourceView(View):
                 graph_id=graph_id,
                 graph_publication_id=graph.publication_id,
                 resource_instance_lifecycle_state=initial_state,
-                principaluser_id=getattr(user, "id", None),
             )
             for _ in range(n)
         ]
@@ -3724,8 +3748,12 @@ class BiblissimaCreateResourceView(View):
         Uses ``select_for_update()`` so concurrent batch imports cannot race
         against each other and duplicate entries. Idempotent: resource ids that
         are already present in the tile are silently skipped. Saves once with
-        ``index=False``; the caller is responsible for reindexing the project
-        tile (typically via the batch transaction's deferred ES pass).
+        ``index=False`` but threads ``transaction_id=tx_id`` into ``Tile.save``
+        so the project's EditLog carries the batch transaction id and the
+        project is re-indexed by the caller's ``index_resources_by_transaction``
+        (``_defer_indexing(tx_id=batch_tx)``) pass. ``Tile.save`` reads the tx
+        only from the kwarg (setting ``tile.transaction_id`` as an attribute is
+        inert), so the kwarg is load-bearing.
 
         Direct ``Tile.save()`` path is kept (vs. ``self._create_tile`` +
         buffer) because the project is a different resource needing its own
@@ -3759,9 +3787,7 @@ class BiblissimaCreateResourceView(View):
                     current_data.append(ref)
                     present_ids.add(ref["resourceId"])
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
-            if tx_id:
-                existing.transaction_id = tx_id
-            existing.save(index=False)
+            existing.save(index=False, transaction_id=tx_id)
         else:
             tile = Tile(
                 tileid=uuid.uuid4(),
@@ -3770,9 +3796,7 @@ class BiblissimaCreateResourceView(View):
                 data={PROJECT_STUDIED_OBJECTS_NODE: new_refs},
                 sortorder=0,
             )
-            if tx_id:
-                tile.transaction_id = tx_id
-            tile.save(index=False)
+            tile.save(index=False, transaction_id=tx_id)
 
     def _resource_instance_ref(self, resource_id):
         """Build a resource-instance reference for a single resource.
@@ -3892,7 +3916,13 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         dependency resource ids that actually exist. A dependency ref not in
         this set is a dangling relationship; the per-item savepoint turns it
         into a clean 'failed' instead of a silently committed R2R row with a
-        NULL to_graphid (strict=False in _validate_tiles does NOT catch it)."""
+        NULL to_graphid (strict=False in _validate_tiles does NOT catch it).
+
+        Caveat: this snapshots existence BEFORE Pass 1, so an intra-batch
+        dependency (a resource created earlier in the same batch referenced by a
+        later item) is NOT resolvable here and would be flagged dangling. This is
+        correct for the current single-graph create-all design, where any cross-
+        resource parent target was created by a prior already-committed call."""
         candidate = set()
         for item in items:
             deps = item.get("dependencies") or {}
@@ -4029,19 +4059,24 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                         with transaction.atomic():
                             # BEFORE creating anything: dangling dep -> failed.
                             self._assert_deps_exist(deps, valid_dep_ids)
-                            # A dangling project id would make _link_to_project_batch
-                            # build a Tile whose FK points at a nonexistent project,
-                            # raising IntegrityError in Pass 2 (-> whole-batch 500).
-                            # Existence-check it here so it is a clean per-item fail.
+                            # A dangling OR malformed project id would make
+                            # _link_to_project_batch build a Tile whose FK points at a
+                            # nonexistent project (dangling) or coerce a non-string
+                            # value with str() (malformed) -> IntegrityError/DataError
+                            # in Pass 2 -> whole-batch 500 losing every survivor.
+                            # Validate it here (mirroring _assert_deps_exist) so a bad
+                            # project is a clean per-item fail, not a batch detonation.
                             proj = deps.get("project")
-                            if (
-                                isinstance(proj, str)
-                                and proj.strip()
-                                and proj.strip() not in valid_dep_ids
-                            ):
-                                raise ValueError(
-                                    f"Project {proj} does not exist; cannot link."
-                                )
+                            if proj:
+                                if not isinstance(proj, str):
+                                    raise ValueError(
+                                        f"Project {proj!r} is not a valid resource "
+                                        "id; cannot link."
+                                    )
+                                if proj.strip() and proj.strip() not in valid_dep_ids:
+                                    raise ValueError(
+                                        f"Project {proj} does not exist; cannot link."
+                                    )
 
                             # Per-item resourceinstance INSIDE the savepoint so
                             # a failure rolls it back (never orphaned).
@@ -4154,7 +4189,6 @@ class BiblissimaAddAltNameView(View):
 
     def post(self, request):
         import json
-        from arches.app.models.resource import Resource
 
         try:
             body = json.loads(request.body)
@@ -4205,8 +4239,9 @@ class BiblissimaAddAltNameView(View):
             )
             tile.save(index=False)
 
-            resource = Resource.objects.get(resourceinstanceid=resource_id)
-            resource.index()
+            # Route through the defer seam (post-commit; honors
+            # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
+            creator._defer_indexing(resource_ids=[str(resource_id)])
         except Exception:
             logger.exception("Failed to add alt name to resource %s", resource_id)
             return JsonResponse({"error": "Failed to add alternative name"}, status=500)

@@ -705,7 +705,11 @@ class SortorderSiblingTests(TestCase):
         id_tiles = [
             t for t in view._tile_buffer if str(t.nodegroup_id) == DOC_IDENTIFIER_NG
         ]
-        self.assertGreaterEqual(len(id_tiles), 2, "expected ≥2 DOC_IDENTIFIER_NG tiles")
+        self.assertEqual(
+            len(id_tiles),
+            4,
+            "expected exactly 4 DOC_IDENTIFIER_NG tiles (ark, qid, aem, mandragore)",
+        )
         sortorders = [t.sortorder for t in id_tiles]
         self.assertEqual(
             len(sortorders),
@@ -1888,6 +1892,12 @@ class OrchestratorDelegationTests(TestCase):
         self.assertIsNone(write_args[2])  # user=None
         self.assertEqual(str(write_args[3]), tx_id)
 
+        # 8 — resource.save_descriptors is invoked exactly once by the
+        # orchestrator (between run_hook(post) and write_editlog per the
+        # documented order); pin it so a regression that drops or duplicates
+        # the per-resource descriptor refresh is caught.
+        resource.save_descriptors.assert_called_once()
+
     @patch(PATCH_TILEMODEL)
     @patch(PATCH_FACTORY)
     def test_empty_buffer_no_primitive_called(self, MockFactory, MockTileModel):
@@ -1948,12 +1958,6 @@ class CollectValidConceptsTests(TestCase):
     def test_returns_confirmed_ids_as_strings(self):
         """IDs returned by Value.filter must appear in the result set as strings."""
         tile = _make_tile(data={CONCEPT_NODE_ID: VALID_CONCEPT_UUID})
-        _, MockValue = self._call.__func__(
-            self,
-            [tile],
-            {CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"}},
-            mock_value_return=[VALID_CONCEPT_UUID],
-        )
         nodes = {CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"}}
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
 

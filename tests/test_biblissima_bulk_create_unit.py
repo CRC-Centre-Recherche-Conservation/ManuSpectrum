@@ -138,23 +138,28 @@ class BulkCreateResourcesTests(TestCase):
             self.assertEqual(c.kwargs.get("graph_publication_id"), pub_id)
 
     # -----------------------------------------------------------------------
-    # A.3 — principaluser_id set from user.id
+    # A.3 — principaluser is NOT set (aligns bulk with the unitary path, M-6)
     # -----------------------------------------------------------------------
     @patch(PATCH_GRAPHMODEL)
     @patch(PATCH_RI)
-    def test_principaluser_set_from_user(self, MockRI, MockGraphModel):
-        """principaluser_id must equal user.id on every instance."""
-        user_id = 42
+    def test_principaluser_not_set(self, MockRI, MockGraphModel):
+        """principaluser_id must NOT be passed, matching the unitary
+        _create_resource path (bare ResourceInstance, principaluser NULL), so
+        edit-permission ownership does not diverge by endpoint."""
         mock_graph, _, _ = _make_mock_graph()
         _setup_graphmodel_mock(MockGraphModel, mock_graph)
         MockRI.objects.bulk_create.return_value = []
 
-        user = MagicMock(id=user_id)
+        user = MagicMock(id=42)
         view = _make_view()
         view._bulk_create_resources(GRAPH_ID, 2, user)
 
         for c in MockRI.call_args_list:
-            self.assertEqual(c.kwargs.get("principaluser_id"), user_id)
+            self.assertNotIn(
+                "principaluser_id",
+                c.kwargs,
+                "principaluser_id must not be passed (aligns with unitary path)",
+            )
 
     # -----------------------------------------------------------------------
     # A.4 — lifecycle resolved ONCE regardless of n
@@ -368,21 +373,24 @@ class LinkToProjectBatchTests(TestCase):
     # -----------------------------------------------------------------------
     @patch(PATCH_TILE)
     def test_saves_once_with_index_false(self, MockTile):
-        """Tile.save(index=False) must be called exactly once."""
+        """Tile.save(index=False, transaction_id=tx_id) must be called once."""
         existing = self._existing_tile()
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
         view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID)
 
-        existing.save.assert_called_once_with(index=False)
+        existing.save.assert_called_once_with(index=False, transaction_id=TX_ID)
 
     # -----------------------------------------------------------------------
-    # B.5 — transaction is tagged
+    # B.5 — transaction id is threaded INTO save (FIX I-1)
     # -----------------------------------------------------------------------
     @patch(PATCH_TILE)
     def test_tags_transaction(self, MockTile):
-        """The tile's transaction_id must be set to tx_id before save."""
+        """FIX I-1: tx_id must be passed as the ``transaction_id`` kwarg of
+        ``Tile.save`` (Arches reads it only from the kwarg — setting it as an
+        inert attribute leaves the project's EditLog with a random tx, so the
+        project is never re-indexed by index_resources_by_transaction)."""
         tx = str(uuid.uuid4())
         existing = self._existing_tile()
         self._setup_tile_query(MockTile, existing)
@@ -390,7 +398,9 @@ class LinkToProjectBatchTests(TestCase):
         view = _make_view()
         view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, tx)
 
-        self.assertEqual(existing.transaction_id, tx)
+        existing.save.assert_called_once_with(index=False, transaction_id=tx)
+        # The inert attribute assignment must be gone (it was the bug).
+        self.assertNotIn("transaction_id", existing.__dict__)
 
     # -----------------------------------------------------------------------
     # B.6 — no existing tile: new Tile is created and saved with index=False
@@ -407,7 +417,7 @@ class LinkToProjectBatchTests(TestCase):
         view._link_to_project_batch([rid], PROJECT_ID, TX_ID)
 
         MockTile.assert_called_once()
-        new_tile_mock.save.assert_called_once_with(index=False)
+        new_tile_mock.save.assert_called_once_with(index=False, transaction_id=TX_ID)
 
     # -----------------------------------------------------------------------
     # B.7 — mixed: pre-existing + new ids, only new appended
@@ -432,32 +442,33 @@ class LinkToProjectBatchTests(TestCase):
     # B.8 — tx_id=None: existing tile NOT tagged, save still called
     # -----------------------------------------------------------------------
     @patch(PATCH_TILE)
-    def test_tx_id_none_does_not_tag_transaction(self, MockTile):
-        """When tx_id=None on an existing tile, transaction_id must NOT be set;
-        save(index=False) must still be called once."""
+    def test_tx_id_none_passes_none_transaction(self, MockTile):
+        """When tx_id=None on an existing tile, save is still called once with
+        ``transaction_id=None`` (Arches then assigns a default uuid), and the
+        inert attribute is never set on the tile."""
         existing = self._existing_tile()
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
         view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, tx_id=None)
 
-        # If `existing.transaction_id = tx_id` were executed, "transaction_id"
-        # would be in existing.__dict__ (MagicMock stores explicit assignments
-        # there). Not being in __dict__ confirms the `if tx_id:` branch was skipped.
+        # The inert `existing.transaction_id = tx_id` assignment is gone, so
+        # "transaction_id" must not appear in the mock's __dict__.
         self.assertNotIn(
             "transaction_id",
             existing.__dict__,
-            msg="transaction_id must not be assigned when tx_id is None",
+            msg="transaction_id must not be assigned as an attribute",
         )
-        existing.save.assert_called_once_with(index=False)
+        existing.save.assert_called_once_with(index=False, transaction_id=None)
 
     # -----------------------------------------------------------------------
     # B.9 — new tile (no existing): tagged with tx_id
     # -----------------------------------------------------------------------
     @patch(PATCH_TILE)
     def test_new_tile_tagged_with_tx_id(self, MockTile):
-        """When no project tile exists, the newly constructed Tile must have
-        transaction_id set to tx_id, and save(index=False) called once."""
+        """When no project tile exists, the newly constructed Tile must be saved
+        with ``transaction_id=tx_id`` as a save kwarg (FIX I-1), not as an inert
+        attribute; save(index=False, ...) called once."""
         self._setup_tile_query(MockTile, None)
         new_tile_mock = MagicMock()
         MockTile.return_value = new_tile_mock
@@ -465,12 +476,9 @@ class LinkToProjectBatchTests(TestCase):
         view = _make_view()
         view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID)
 
-        self.assertEqual(
-            new_tile_mock.transaction_id,
-            TX_ID,
-            msg="new tile must carry the tx_id",
-        )
-        new_tile_mock.save.assert_called_once_with(index=False)
+        new_tile_mock.save.assert_called_once_with(index=False, transaction_id=TX_ID)
+        # The inert attribute assignment must be gone (it was the bug).
+        self.assertNotIn("transaction_id", new_tile_mock.__dict__)
 
     # -----------------------------------------------------------------------
     # B.10 — ref dict has the exact 4-key Arches shape

@@ -575,6 +575,36 @@ class DanglingProjectTests(CreateAllBase):
         # The valid project is linked for its survivor.
         self.mock_link.assert_called_once()
 
+    def test_non_string_project_reported_failed(self):
+        # FIX I-2: a non-string (numeric/array) project value must NOT slip past
+        # the Pass-1 guard into _link_to_project_batch (invalid-UUID query ->
+        # outer rollback -> whole-batch 500 losing survivors). It becomes a
+        # clean per-item 'failed' while the other items are created.
+        items = [
+            _item("c0"),
+            _item("c1", dependencies={"project": 123}),  # non-string project
+            _item("c2"),
+        ]
+        with self.captureOnCommitCallbacks(execute=True):
+            response, payload = self._post(
+                {"resourceType": "Document", "items": items}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        statuses = [r["status"] for r in payload["results"]]
+        self.assertEqual(statuses, ["created", "failed", "created"])
+        self.assertIn("123", payload["results"][1]["error"])
+
+        # Bad-project item never reached _bulk_create_resources; two survivors.
+        self.assertEqual(self.mock_bulk_create.call_count, 2)
+        self.mock_tilemodel.objects.bulk_create.assert_called_once()
+        inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
+        self.assertEqual(len(inserted), 2)
+        # No project link attempted (neither survivor had a valid project).
+        self.mock_link.assert_not_called()
+        # Survivors still indexed — no whole-batch 500.
+        self.mock_index.assert_called_once()
+
 
 # ===========================================================================
 # FIX (Minor) — malformed / non-string dep value -> per-item 'failed'

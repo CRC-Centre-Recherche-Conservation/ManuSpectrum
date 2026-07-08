@@ -302,45 +302,6 @@ class DeferIndexingFlagOnBrokerOkTests(TestCase):
 class StartupAssertionTests(TestCase):
     """_check_async_indexing_config must detect missing task and disable flag."""
 
-    def _run_check(self, async_flag, tasks_registered):
-        """Run ``_check_async_indexing_config`` with controlled settings and a
-        Celery app stub whose ``.tasks`` dict is controlled by *tasks_registered*."""
-        from manuspectrum.apps import ManuspectrumConfig
-
-        config = ManuspectrumConfig.__new__(ManuspectrumConfig)
-
-        # Build a fake Celery app whose .tasks dict is controllable.
-        fake_tasks = {"manuspectrum.index_resources": object()} if tasks_registered else {}
-        fake_celery_app = SimpleNamespace(tasks=fake_tasks)
-
-        with override_settings(BIBLISSIMA_ASYNC_INDEXING=async_flag):
-            with patch(
-                "manuspectrum.apps.settings",
-                BIBLISSIMA_ASYNC_INDEXING=async_flag,
-            ) as mock_settings, patch(
-                "manuspectrum.celery.app", fake_celery_app
-            ):
-                # Patch the import inside _check_async_indexing_config so it
-                # returns our stub rather than requiring a real Celery connection.
-                with patch(
-                    "manuspectrum.apps.ManuspectrumConfig._check_async_indexing_config",
-                    autospec=True,
-                ) as _:
-                    pass  # We call the REAL method below, not the patched one.
-
-                # Actually call the real method under controlled conditions.
-                # We need to patch the import path inside the method body.
-                import manuspectrum.apps as apps_module
-
-                original_check = ManuspectrumConfig._check_async_indexing_config
-                with patch.object(apps_module, "settings", mock_settings):
-                    with patch(
-                        "manuspectrum.celery.app", fake_celery_app, create=True
-                    ):
-                        original_check(config)
-
-            return mock_settings
-
     def test_flag_off_check_is_noop(self):
         """When BIBLISSIMA_ASYNC_INDEXING=False, the check does nothing."""
         import manuspectrum.apps as apps_module
@@ -367,9 +328,7 @@ class StartupAssertionTests(TestCase):
         # Celery app stub without the task registered.
         fake_celery_app = SimpleNamespace(tasks={})
 
-        with patch.object(apps_module, "settings") as mock_settings, \
-             patch("manuspectrum.apps.ManuspectrumConfig._import_celery_app",
-                   return_value=fake_celery_app, create=True):
+        with patch.object(apps_module, "settings") as mock_settings:
             mock_settings.BIBLISSIMA_ASYNC_INDEXING = True
 
             # Patch the import inside _check_async_indexing_config.
