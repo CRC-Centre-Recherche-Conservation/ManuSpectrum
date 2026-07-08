@@ -71,9 +71,13 @@ def _make_mock_graph(
     lifecycle=None,
 ):
     """Return a mock GraphModel instance with a lifecycle that returns initial_state."""
-    mock_state = initial_state if initial_state is not None else MagicMock(name="initial_state")
+    mock_state = (
+        initial_state if initial_state is not None else MagicMock(name="initial_state")
+    )
     mock_lifecycle = lifecycle if lifecycle is not None else MagicMock()
-    mock_lifecycle.get_initial_resource_instance_lifecycle_state.return_value = mock_state
+    mock_lifecycle.get_initial_resource_instance_lifecycle_state.return_value = (
+        mock_state
+    )
 
     mock_graph = MagicMock()
     mock_graph.publication_id = publication_id or str(uuid.uuid4())
@@ -290,6 +294,18 @@ class BulkCreateResourcesTests(TestCase):
 class LinkToProjectBatchTests(TestCase):
     """Group B: unit tests for BiblissimaCreateResourceView._link_to_project_batch."""
 
+    def setUp(self):
+        # _link_to_project_batch now locks the project ResourceInstance row
+        # (select_for_update) before touching the tile, so the project must
+        # resolve to a row. Patch it truthy for the whole group; the
+        # missing-project case has its own test that overrides this.
+        patcher = patch(PATCH_RI)
+        self.mock_ri = patcher.start()
+        self.addCleanup(patcher.stop)
+        (
+            self.mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value
+        ) = MagicMock(name="project_row")
+
     # -----------------------------------------------------------------------
     # Helper: make a mock existing tile
     # -----------------------------------------------------------------------
@@ -312,10 +328,7 @@ class LinkToProjectBatchTests(TestCase):
     def _setup_tile_query(self, MockTile, existing_tile):
         """Wire MockTile.objects.select_for_update().filter().first() → existing_tile."""
         (
-            MockTile.objects
-            .select_for_update.return_value
-            .filter.return_value
-            .first.return_value
+            MockTile.objects.select_for_update.return_value.filter.return_value.first.return_value
         ) = existing_tile
 
     # -----------------------------------------------------------------------
@@ -420,6 +433,24 @@ class LinkToProjectBatchTests(TestCase):
         new_tile_mock.save.assert_called_once_with(index=False, transaction_id=TX_ID)
 
     # -----------------------------------------------------------------------
+    # B.6b — missing project: locked row absent -> skip, no tile write (#15)
+    # -----------------------------------------------------------------------
+    @patch(PATCH_TILE)
+    def test_skips_when_project_missing(self, MockTile):
+        """When the locked project row is absent, no tile is read or written
+        (avoids a dangling-FK INSERT / duplicate first-batch tiles)."""
+        # Override the setUp default: the project row does not exist.
+        (
+            self.mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value
+        ) = None
+
+        view = _make_view()
+        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID)
+
+        MockTile.objects.select_for_update.assert_not_called()
+        MockTile.assert_not_called()
+
+    # -----------------------------------------------------------------------
     # B.7 — mixed: pre-existing + new ids, only new appended
     # -----------------------------------------------------------------------
     @patch(PATCH_TILE)
@@ -435,8 +466,12 @@ class LinkToProjectBatchTests(TestCase):
 
         saved_data = existing.data[PROJECT_STUDIED_OBJECTS_NODE]
         ids_in_tile = [ref["resourceId"] for ref in saved_data]
-        self.assertEqual(ids_in_tile.count(old_id), 1, "old_id must appear exactly once")
-        self.assertEqual(ids_in_tile.count(new_id), 1, "new_id must appear exactly once")
+        self.assertEqual(
+            ids_in_tile.count(old_id), 1, "old_id must appear exactly once"
+        )
+        self.assertEqual(
+            ids_in_tile.count(new_id), 1, "new_id must appear exactly once"
+        )
 
     # -----------------------------------------------------------------------
     # B.8 — tx_id=None: existing tile NOT tagged, save still called

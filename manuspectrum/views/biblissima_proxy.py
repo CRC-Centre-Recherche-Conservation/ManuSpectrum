@@ -3894,6 +3894,20 @@ class BiblissimaCreateResourceView(View):
         descriptor refresh, and ``_flush_tile_buffer`` only handles the
         resource currently being imported.
         """
+        # Lock the project ROW first so concurrent batches serialise even when
+        # the studied-objects tile does not exist yet: a select_for_update on the
+        # absent Tile row locks nothing, so two first-batches would both INSERT a
+        # tile (duplicate tiles / IntegrityError). A missing project means the
+        # link target is gone — skip rather than write a dangling-FK tile.
+        project_row = (
+            ResourceInstance.objects.select_for_update()
+            .filter(pk=str(project_id))
+            .first()
+        )
+        if project_row is None:
+            logger.warning("Project %s does not exist; skipping batch link", project_id)
+            return
+
         existing = (
             Tile.objects.select_for_update()
             .filter(
