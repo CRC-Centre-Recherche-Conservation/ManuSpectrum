@@ -1595,7 +1595,11 @@ class BiblissimaCheckDuplicatesView(View):
             for rid, nm in ResourceInstance.objects.filter(
                 resourceinstanceid__in=matched_rids
             ).values_list("resourceinstanceid", "name"):
-                name_by_rid[str(rid)] = self._displayname_from_i18n(nm)
+                # Fall back to the resource id when the name is empty, so a
+                # duplicate-suggestion row is never blank — the user must be able
+                # to tell WHICH existing resource is the potential duplicate
+                # (finding #9).
+                name_by_rid[str(rid)] = self._displayname_from_i18n(nm) or str(rid)
 
         # ---------------------------------------------------------------------------
         # Assemble final results per item.
@@ -2763,14 +2767,20 @@ class BiblissimaCreateResourceView(View):
         ``set_next_sort_order()``, so we must track it here. A single
         tile gets sortorder=0; two siblings get 0 and 1, etc.
         """
-        # Count how many tiles for this (resource, nodegroup) pair are
-        # already in the buffer so we can assign the next sortorder.
-        sortorder = sum(
-            1
-            for t in self._tile_buffer
-            if t.nodegroup_id == nodegroup_id
-            and str(t.resourceinstance_id) == str(resource_id)
-        )
+        # sortorder = number of prior sibling tiles for this (resource,
+        # nodegroup) pair. Tracked with an incremental per-key counter rather
+        # than rescanning the whole buffer on every call (which is O(T^2) over a
+        # large batch). The counter is reset whenever the buffer is empty — i.e.
+        # exactly where each build path resets ``self._tile_buffer = []`` before
+        # staging a fresh resource's / batch's tiles.
+        if not self._tile_buffer:
+            self._sortorder_by_key = {}
+        counts = getattr(self, "_sortorder_by_key", None)
+        if counts is None:
+            counts = self._sortorder_by_key = {}
+        sort_key = (str(resource_id), str(nodegroup_id))
+        sortorder = counts.get(sort_key, 0)
+        counts[sort_key] = sortorder + 1
         tile = TileModel(
             tileid=uuid.uuid4(),
             nodegroup_id=nodegroup_id,
@@ -3148,35 +3158,41 @@ class BiblissimaCreateResourceView(View):
 
     @staticmethod
     @lru_cache(maxsize=None)
+    def _resolve_concept_valueid(concept_id):
+        """Return the prefLabel valueid for a concept ID (English preferred, any
+        language otherwise). Raises ``LookupError`` when it cannot be resolved,
+        so a (possibly transient) miss is NOT stored by ``lru_cache`` — only real
+        resolutions are memoised for the worker's lifetime.
+
+        concept→valueid is immutable at runtime (a server restart is required to
+        pick up new Value rows from a package reload), and the keyspace is bounded
+        by the ~30 concepts referenced from this view (constants/biblissima.py).
+        """
+        val = (
+            Value.objects.filter(concept_id=concept_id, valuetype="prefLabel")
+            .filter(language__in=["en", "en-US", "en-UK", "English"])
+            .first()
+        )
+        if val is None:
+            val = Value.objects.filter(
+                concept_id=concept_id, valuetype="prefLabel"
+            ).first()
+        if val is None:
+            raise LookupError(concept_id)
+        return str(val.valueid)
+
+    @staticmethod
     def _concept_valueid(concept_id):
-        """Get the prefLabel valueid for a concept ID.
+        """Get the prefLabel valueid for a concept ID, falling back to the raw
+        ``concept_id`` when it cannot be resolved.
 
-        Prefers English, falls back to any language.
-
-        Cached for the lifetime of the worker process: concept→valueid is
-        immutable at runtime (a server restart is required to pick up new
-        Value rows from a package reload), and the keyspace is bounded by
-        the number of concepts referenced from this view (~30, all listed
-        in ``constants/biblissima.py``).
+        The fallback is deliberately NOT cached (see ``_resolve_concept_valueid``):
+        a transient empty/errored first lookup — e.g. before a package reload has
+        finished loading Value rows — must not pin the raw concept_id for the
+        worker's whole lifetime (finding #14).
         """
         try:
-            # Try English first
-            val = (
-                Value.objects.filter(
-                    concept_id=concept_id,
-                    valuetype="prefLabel",
-                )
-                .filter(language__in=["en", "en-US", "en-UK", "English"])
-                .first()
-            )
-            if val:
-                return str(val.valueid)
-            # Fallback to any language
-            val = Value.objects.filter(
-                concept_id=concept_id,
-                valuetype="prefLabel",
-            ).first()
-            return str(val.valueid) if val else concept_id
+            return BiblissimaCreateResourceView._resolve_concept_valueid(concept_id)
         except Exception:
             return concept_id
 

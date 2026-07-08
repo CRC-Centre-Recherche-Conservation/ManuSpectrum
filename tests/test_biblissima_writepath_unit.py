@@ -120,8 +120,8 @@ def _other_dt_mock():
 
 def _patch_factory(mock_factory_cls, concept_dt, other_dt):
     """Wire a MockFactory instance so get_instance dispatches to the right dt."""
-    mock_factory_cls.return_value.get_instance.side_effect = (
-        lambda dt: concept_dt if dt in ("concept", "concept-list") else other_dt
+    mock_factory_cls.return_value.get_instance.side_effect = lambda dt: (
+        concept_dt if dt in ("concept", "concept-list") else other_dt
     )
 
 
@@ -467,8 +467,8 @@ class ConceptBatchEdgeCaseTests(TestCase):
         string_dt = _other_dt_mock()
         concept_dt = _concept_dt_mock()
 
-        MockFactory.return_value.get_instance.side_effect = (
-            lambda dt: string_dt if dt == "string" else concept_dt
+        MockFactory.return_value.get_instance.side_effect = lambda dt: (
+            string_dt if dt == "string" else concept_dt
         )
         MockTileModel.objects.bulk_create.return_value = []
         MockEditLog.objects.bulk_create.return_value = []
@@ -491,7 +491,10 @@ class ConceptBatchEdgeCaseTests(TestCase):
         """Two concept nodes on the same tile, both confirmed → no validate."""
         uuid_a = "66666666-6666-6666-6666-666666666666"
         uuid_b = "77777777-7777-7777-7777-777777777777"
-        MockValue.objects.filter.return_value.values_list.return_value = [uuid_a, uuid_b]
+        MockValue.objects.filter.return_value.values_list.return_value = [
+            uuid_a,
+            uuid_b,
+        ]
 
         concept_dt = _concept_dt_mock()
         other_dt = _other_dt_mock()
@@ -768,7 +771,9 @@ class SortorderSiblingTests(TestCase):
         self.assertEqual(len(stmt_tiles), 2, "expected 2 COMP_STATEMENT_NG tiles")
         sortorders = {t.sortorder for t in stmt_tiles}
         self.assertEqual(
-            len(sortorders), 2, f"duplicate sortorders in COMP_STATEMENT_NG: {sortorders}"
+            len(sortorders),
+            2,
+            f"duplicate sortorders in COMP_STATEMENT_NG: {sortorders}",
         )
 
     def test_component_iconographic_multi_siblings_have_distinct_sortorder(self):
@@ -839,6 +844,69 @@ class SortorderSiblingTests(TestCase):
         self.assertEqual(ta1.sortorder, 1)
         self.assertEqual(tb0.sortorder, 0)
         self.assertEqual(tb1.sortorder, 1)
+
+    def test_two_resources_share_buffer_independent_sortorder(self):
+        """In a shared buffer (the batch path builds many resources without
+        resetting between items) each resource's siblings count independently —
+        the counter is keyed by (resource_id, nodegroup), not global (#13)."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        view._tile_buffer = []
+        ng = "aaaa0000-0000-0000-0000-000000000003"
+        rid_a = str(uuid.uuid4())
+        rid_b = str(uuid.uuid4())
+
+        a0 = view._create_tile(ng, rid_a, {})
+        a1 = view._create_tile(ng, rid_a, {})
+        b0 = view._create_tile(ng, rid_b, {})  # different resource -> restarts
+        b1 = view._create_tile(ng, rid_b, {})
+        a2 = view._create_tile(ng, rid_a, {})
+
+        self.assertEqual([a0.sortorder, a1.sortorder, a2.sortorder], [0, 1, 2])
+        self.assertEqual([b0.sortorder, b1.sortorder], [0, 1])
+
+
+class ConceptValueidCacheTests(TestCase):
+    """Finding #14: an unresolved concept must NOT pin the raw-id fallback in
+    the lru_cache — only real resolutions are memoised."""
+
+    def setUp(self):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        self.View = BiblissimaCreateResourceView
+        self.View._resolve_concept_valueid.cache_clear()
+        self.addCleanup(self.View._resolve_concept_valueid.cache_clear)
+
+    @patch("manuspectrum.views.biblissima_proxy.Value")
+    def test_transient_miss_is_not_cached(self, mock_value):
+        cid = "concept-abc"
+        # First lookup: no Value rows yet (transient/startup) -> fallback to cid.
+        mock_value.objects.filter.return_value.filter.return_value.first.return_value = (
+            None
+        )
+        mock_value.objects.filter.return_value.first.return_value = None
+        self.assertEqual(self.View._concept_valueid(cid), cid)
+
+        # Value rows now exist -> a second call must resolve, proving the miss
+        # was NOT cached as the raw id.
+        mock_value.objects.filter.return_value.filter.return_value.first.return_value = MagicMock(
+            valueid="value-xyz"
+        )
+        self.assertEqual(self.View._concept_valueid(cid), "value-xyz")
+
+    @patch("manuspectrum.views.biblissima_proxy.Value")
+    def test_real_resolution_is_cached(self, mock_value):
+        cid = "concept-def"
+        mock_value.objects.filter.return_value.filter.return_value.first.return_value = MagicMock(
+            valueid="vid-1"
+        )
+        self.assertEqual(self.View._concept_valueid(cid), "vid-1")
+
+        # Second call served from cache -> Value is not queried again.
+        mock_value.reset_mock()
+        self.assertEqual(self.View._concept_valueid(cid), "vid-1")
+        mock_value.objects.filter.assert_not_called()
 
 
 class NestedTileFKOrderingTests(TestCase):
@@ -1122,10 +1190,12 @@ class EditLogConstructionTests(TestCase):
         """
         captured = {}
 
-        with patch(PATCH_FACTORY) as MockFactory, \
-             patch(PATCH_VALUE) as MockValue, \
-             patch(PATCH_TILEMODEL) as MockTileModel, \
-             patch(PATCH_EDITLOG) as MockEditLog:
+        with (
+            patch(PATCH_FACTORY) as MockFactory,
+            patch(PATCH_VALUE) as MockValue,
+            patch(PATCH_TILEMODEL) as MockTileModel,
+            patch(PATCH_EDITLOG) as MockEditLog,
+        ):
 
             MockValue.objects.filter.return_value.values_list.return_value = []
             concept_dt = _concept_dt_mock()
@@ -1157,9 +1227,7 @@ class EditLogConstructionTests(TestCase):
             _make_tile_for_editlog(EDITLOG_TILE_ID_C),
         ]
         edits = self._run_flush(tiles, user=None, tx_id=EDITLOG_TX_ID)
-        self.assertEqual(
-            len(edits), 3, f"expected 3 EditLog rows, got {len(edits)}"
-        )
+        self.assertEqual(len(edits), 3, f"expected 3 EditLog rows, got {len(edits)}")
 
     def test_edittype_is_tile_create(self):
         """Every EditLog row must have edittype == 'tile create'."""
@@ -1192,10 +1260,18 @@ class EditLogConstructionTests(TestCase):
         edits = self._run_flush(tiles, user=None, tx_id=EDITLOG_TX_ID)
         self.assertEqual(len(edits), 1)
         row = edits[0]
-        self.assertIsNone(row.userid, f"userid must be None when user=None, got {row.userid!r}")
-        self.assertEqual(row.user_username, "", f"user_username must be '' when user=None")
-        self.assertEqual(row.user_firstname, "", f"user_firstname must be '' when user=None")
-        self.assertEqual(row.user_lastname, "", f"user_lastname must be '' when user=None")
+        self.assertIsNone(
+            row.userid, f"userid must be None when user=None, got {row.userid!r}"
+        )
+        self.assertEqual(
+            row.user_username, "", f"user_username must be '' when user=None"
+        )
+        self.assertEqual(
+            row.user_firstname, "", f"user_firstname must be '' when user=None"
+        )
+        self.assertEqual(
+            row.user_lastname, "", f"user_lastname must be '' when user=None"
+        )
         self.assertEqual(row.user_email, "", f"user_email must be '' when user=None")
 
     def test_single_tx_id_invariant_all_rows_use_default_tx(self):
@@ -1259,10 +1335,12 @@ class EditLogConstructionTests(TestCase):
     def test_empty_buffer_produces_no_editlog_rows(self):
         """When the tile buffer is empty, _flush_tile_buffer returns early and
         EditLog.objects.bulk_create must NOT be called."""
-        with patch(PATCH_FACTORY) as MockFactory, \
-             patch(PATCH_VALUE) as MockValue, \
-             patch(PATCH_TILEMODEL) as MockTileModel, \
-             patch(PATCH_EDITLOG) as MockEditLog:
+        with (
+            patch(PATCH_FACTORY) as MockFactory,
+            patch(PATCH_VALUE) as MockValue,
+            patch(PATCH_TILEMODEL) as MockTileModel,
+            patch(PATCH_EDITLOG) as MockEditLog,
+        ):
 
             MockValue.objects.filter.return_value.values_list.return_value = []
             _patch_factory(MockFactory, _concept_dt_mock(), _other_dt_mock())
@@ -1271,7 +1349,9 @@ class EditLogConstructionTests(TestCase):
 
             view = _make_view_with_tiles([])  # empty buffer
             resource = _make_resource()
-            view._flush_tile_buffer(resource, user=None, default_transaction_id=EDITLOG_TX_ID)
+            view._flush_tile_buffer(
+                resource, user=None, default_transaction_id=EDITLOG_TX_ID
+            )
 
             MockEditLog.objects.bulk_create.assert_not_called()
 
@@ -1455,6 +1535,7 @@ _RID_C = "cccccccc-0003-0003-0003-cccccccccccc"
 # _RID_A's tile value IS the ark token directly; _RID_B's value contains it.
 _CORPUS_ARK_A = "ark:/43093/ifdataA001"
 _CORPUS_ARK_B = "ark:/43093/ifdataB002"
+
 
 def _make_corpus_tile(tile_value, rid, id_node=None):
     """Return a minimal tile-like object for the corpus (tile_index building).
@@ -1716,8 +1797,9 @@ class CheckDuplicatesScalingTests(TestCase):
         )
         view = BiblissimaCheckDuplicatesView()
 
-        with patch(PATCH_TILE, mock_tile_cls), patch(
-            PATCH_RESOURCE_INSTANCE, mock_ri_cls
+        with (
+            patch(PATCH_TILE, mock_tile_cls),
+            patch(PATCH_RESOURCE_INSTANCE, mock_ri_cls),
         ):
             with patch.object(view, "_es_string_search"):
                 view.post(req)
@@ -1811,9 +1893,7 @@ class OrchestratorDelegationTests(TestCase):
 
     @patch(PATCH_TILEMODEL)
     @patch(PATCH_FACTORY)
-    def test_delegation_order_and_argument_threading(
-        self, MockFactory, MockTileModel
-    ):
+    def test_delegation_order_and_argument_threading(self, MockFactory, MockTileModel):
         """Exact call order: collect → validate → run_hook(pre) →
         bulk_create → run_hook(post) → save_descriptors → write_editlog.
         The set returned by _collect_valid_concepts flows into _validate_tiles;
@@ -1845,10 +1925,11 @@ class OrchestratorDelegationTests(TestCase):
         mgr.attach_mock(run_hook_mock, "run_hook")
         mgr.attach_mock(write_mock, "write_editlog")
 
-        with patch.object(view, "_collect_valid_concepts", collect_mock), patch.object(
-            view, "_validate_tiles", validate_mock
-        ), patch.object(view, "_run_hook", run_hook_mock), patch.object(
-            view, "_write_editlog", write_mock
+        with (
+            patch.object(view, "_collect_valid_concepts", collect_mock),
+            patch.object(view, "_validate_tiles", validate_mock),
+            patch.object(view, "_run_hook", run_hook_mock),
+            patch.object(view, "_write_editlog", write_mock),
         ):
             view._flush_tile_buffer(resource, user=None, default_transaction_id=tx_id)
 
@@ -1870,13 +1951,23 @@ class OrchestratorDelegationTests(TestCase):
         validate_args = validate_mock.call_args[0]
         self.assertIs(validate_args[1], nodes_by_id_arg, "nodes_by_id must be threaded")
         run_hook_calls = run_hook_mock.call_args_list
-        self.assertIs(run_hook_calls[0][0][1], nodes_by_id_arg, "pre_tile_save nodes_by_id")
-        self.assertIs(run_hook_calls[1][0][1], nodes_by_id_arg, "post_tile_save nodes_by_id")
+        self.assertIs(
+            run_hook_calls[0][0][1], nodes_by_id_arg, "pre_tile_save nodes_by_id"
+        )
+        self.assertIs(
+            run_hook_calls[1][0][1], nodes_by_id_arg, "post_tile_save nodes_by_id"
+        )
 
         # 4 — The factory instance returned by DataTypeFactory() is threaded
-        self.assertIs(validate_args[2], mock_factory_inst, "factory threaded to validate")
-        self.assertIs(run_hook_calls[0][0][2], mock_factory_inst, "factory to pre_tile_save")
-        self.assertIs(run_hook_calls[1][0][2], mock_factory_inst, "factory to post_tile_save")
+        self.assertIs(
+            validate_args[2], mock_factory_inst, "factory threaded to validate"
+        )
+        self.assertIs(
+            run_hook_calls[0][0][2], mock_factory_inst, "factory to pre_tile_save"
+        )
+        self.assertIs(
+            run_hook_calls[1][0][2], mock_factory_inst, "factory to post_tile_save"
+        )
 
         # 5 — The CONCEPT_SET returned by collect flows into validate
         self.assertIs(validate_args[3], CONCEPT_SET, "valid_concept_ids threaded")
@@ -1916,10 +2007,11 @@ class OrchestratorDelegationTests(TestCase):
         run_hook_mock = MagicMock()
         write_mock = MagicMock()
 
-        with patch.object(view, "_collect_valid_concepts", collect_mock), patch.object(
-            view, "_validate_tiles", validate_mock
-        ), patch.object(view, "_run_hook", run_hook_mock), patch.object(
-            view, "_write_editlog", write_mock
+        with (
+            patch.object(view, "_collect_valid_concepts", collect_mock),
+            patch.object(view, "_validate_tiles", validate_mock),
+            patch.object(view, "_run_hook", run_hook_mock),
+            patch.object(view, "_write_editlog", write_mock),
         ):
             view._flush_tile_buffer(resource, user=None, default_transaction_id=None)
 
@@ -1977,7 +2069,10 @@ class CollectValidConceptsTests(TestCase):
         ]
         nodes = {
             CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "concept"},
-            CONCEPT_LIST_NODE_ID: {"nodeid": CONCEPT_LIST_NODE_ID, "datatype": "concept-list"},
+            CONCEPT_LIST_NODE_ID: {
+                "nodeid": CONCEPT_LIST_NODE_ID,
+                "datatype": "concept-list",
+            },
         }
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
 
@@ -2070,8 +2165,8 @@ class ValidateTilesTests(TestCase):
         concept_dt = _concept_dt_mock()
         other_dt = _other_dt_mock()
         factory = MagicMock()
-        factory.get_instance.side_effect = (
-            lambda dt: concept_dt if dt in ("concept", "concept-list") else other_dt
+        factory.get_instance.side_effect = lambda dt: (
+            concept_dt if dt in ("concept", "concept-list") else other_dt
         )
         tile = _make_tile(data={CONCEPT_NODE_ID: VALID_CONCEPT_UUID})
         view = BiblissimaCreateResourceView()
@@ -2093,8 +2188,8 @@ class ValidateTilesTests(TestCase):
         concept_dt.validate.return_value = []
         other_dt = _other_dt_mock()
         factory = MagicMock()
-        factory.get_instance.side_effect = (
-            lambda dt: concept_dt if dt in ("concept", "concept-list") else other_dt
+        factory.get_instance.side_effect = lambda dt: (
+            concept_dt if dt in ("concept", "concept-list") else other_dt
         )
         tile = _make_tile(data={CONCEPT_NODE_ID: ABSENT_CONCEPT_UUID})
         view = BiblissimaCreateResourceView()
@@ -2350,11 +2445,12 @@ class FlushGoldenSnapshotTests(TestCase):
         """Run _flush_tile_buffer with all ORM mocked; return captured EditLog rows."""
         captured = {}
 
-        with patch(PATCH_FACTORY) as MockFactory, patch(
-            PATCH_VALUE
-        ) as MockValue, patch(PATCH_TILEMODEL) as MockTileModel, patch(
-            PATCH_EDITLOG
-        ) as MockEditLog:
+        with (
+            patch(PATCH_FACTORY) as MockFactory,
+            patch(PATCH_VALUE) as MockValue,
+            patch(PATCH_TILEMODEL) as MockTileModel,
+            patch(PATCH_EDITLOG) as MockEditLog,
+        ):
 
             MockValue.objects.filter.return_value.values_list.return_value = [
                 VALID_CONCEPT_UUID
@@ -2395,9 +2491,12 @@ class FlushGoldenSnapshotTests(TestCase):
 
     def test_empty_buffer_produces_no_editlog_rows(self):
         """Empty buffer must not call EditLog.bulk_create (early return)."""
-        with patch(PATCH_FACTORY), patch(PATCH_VALUE), patch(
-            PATCH_TILEMODEL
-        ), patch(PATCH_EDITLOG) as MockEditLog:
+        with (
+            patch(PATCH_FACTORY),
+            patch(PATCH_VALUE),
+            patch(PATCH_TILEMODEL),
+            patch(PATCH_EDITLOG) as MockEditLog,
+        ):
             MockEditLog.objects.bulk_create.return_value = []
             view = _make_view_with_tiles([])
             resource = _make_resource()
@@ -2409,11 +2508,12 @@ class FlushGoldenSnapshotTests(TestCase):
     def test_confirmed_concept_skips_validate_in_full_flush(self):
         """A confirmed concept value must not call datatype.validate (behavior
         preservation of the concept-batch short-circuit)."""
-        with patch(PATCH_FACTORY) as MockFactory, patch(
-            PATCH_VALUE
-        ) as MockValue, patch(PATCH_TILEMODEL) as MockTileModel, patch(
-            PATCH_EDITLOG
-        ) as MockEditLog:
+        with (
+            patch(PATCH_FACTORY) as MockFactory,
+            patch(PATCH_VALUE) as MockValue,
+            patch(PATCH_TILEMODEL) as MockTileModel,
+            patch(PATCH_EDITLOG) as MockEditLog,
+        ):
 
             MockValue.objects.filter.return_value.values_list.return_value = [
                 VALID_CONCEPT_UUID
@@ -2437,11 +2537,12 @@ class FlushGoldenSnapshotTests(TestCase):
     def test_tile_model_bulk_create_called_once(self):
         """TileModel.objects.bulk_create must be called exactly once (the single
         INSERT that replaces the per-tile Tile.save() chain)."""
-        with patch(PATCH_FACTORY) as MockFactory, patch(
-            PATCH_VALUE
-        ) as MockValue, patch(PATCH_TILEMODEL) as MockTileModel, patch(
-            PATCH_EDITLOG
-        ) as MockEditLog:
+        with (
+            patch(PATCH_FACTORY) as MockFactory,
+            patch(PATCH_VALUE) as MockValue,
+            patch(PATCH_TILEMODEL) as MockTileModel,
+            patch(PATCH_EDITLOG) as MockEditLog,
+        ):
 
             MockValue.objects.filter.return_value.values_list.return_value = []
             _patch_factory(MockFactory, _concept_dt_mock(), _other_dt_mock())
