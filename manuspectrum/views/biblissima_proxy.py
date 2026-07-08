@@ -2446,6 +2446,12 @@ class BiblissimaCreateResourceView(View):
                 concept_mappings=concept_mappings,
                 user=request.user,
             )
+        except ValueError as exc:
+            # Dangling / malformed dependency (or project) rejected by the
+            # existence guard — a client-data problem, so a clean 400 rather
+            # than an opaque 500.
+            logger.warning("Biblissima create rejected: %s", exc)
+            return JsonResponse({"error": str(exc)}, status=400)
         except Exception:
             logger.exception("Failed to create resource from Biblissima data")
             return JsonResponse({"error": "Resource creation failed"}, status=500)
@@ -2565,6 +2571,29 @@ class BiblissimaCreateResourceView(View):
 
         with transaction.atomic():
             self._tile_buffer = []
+
+            # Dangling-dependency guard (parity with BiblissimaCreateAllView
+            # Pass 1): a dependency — or the project — referencing a
+            # since-deleted resource would otherwise commit a dangling
+            # resource_x_resource row as a successful "created" (strict=False in
+            # _validate_tiles does NOT catch it). Verify existence up front; a
+            # bad ref raises ValueError, surfaced by the caller as a clean 400.
+            valid_dep_ids = self._precollect_valid_dep_ids(
+                [{"dependencies": dependencies}]
+            )
+            self._assert_deps_exist(dependencies, valid_dep_ids)
+            project_id = dependencies.get("project")
+            if project_id:
+                if not isinstance(project_id, str):
+                    raise ValueError(
+                        f"Project {project_id!r} is not a valid resource id; "
+                        "cannot link."
+                    )
+                if project_id.strip() and project_id.strip() not in valid_dep_ids:
+                    raise ValueError(
+                        f"Project {project_id} does not exist; cannot link."
+                    )
+
             created_deps = {"places": {}, "persons": {}, "groups": {}}
             resource_instance = ResourceInstance(graph_id=graph_id)
             resource_instance.save()
@@ -2597,8 +2626,8 @@ class BiblissimaCreateResourceView(View):
             # Linking to a project writes a tile on a *different* resource
             # (the project) and must refresh the project's descriptors.
             # Run it after the buffer flush so it goes through the
-            # standard Tile.save() path on its own resource.
-            project_id = dependencies.get("project")
+            # standard Tile.save() path on its own resource. project_id was
+            # resolved and existence-checked by the guard above.
             if project_id:
                 self._link_to_project(resource_id, project_id, transaction_id)
 
@@ -2618,6 +2647,82 @@ class BiblissimaCreateResourceView(View):
         self._defer_indexing(resource_ids=index_ids)
 
         return resource_id, created_deps
+
+    def _precollect_valid_dep_ids(self, items):
+        """ONE ResourceInstance.objects.filter across the given items: the set
+        of dependency resource ids that actually exist. A dependency ref not in
+        this set is a dangling relationship; the caller turns it into a clean
+        failure instead of a silently committed R2R row with a NULL to_graphid
+        (strict=False in _validate_tiles does NOT catch it).
+
+        Shared by the unitary create path (one item) and BiblissimaCreateAllView
+        (the whole batch). For the batch, this snapshots existence BEFORE Pass 1,
+        so an intra-batch dependency (a resource created earlier in the same
+        batch referenced by a later item) is NOT resolvable here and would be
+        flagged dangling. This is correct for the current single-graph create-all
+        design, where any cross-resource parent target was created by a prior
+        already-committed call."""
+        candidate = set()
+        for item in items:
+            deps = item.get("dependencies") or {}
+            for v in deps.values():
+                for one in v if isinstance(v, list) else [v]:
+                    if isinstance(one, str) and one.strip():
+                        candidate.add(one.strip())
+            # The project id is a dependency too: existence-check it in the same
+            # single query so a dangling project becomes a clean failure (its
+            # FK-to-nonexistent-project Tile would otherwise raise an
+            # IntegrityError at write time).
+            proj = deps.get("project")
+            if isinstance(proj, str) and proj.strip():
+                candidate.add(proj.strip())
+        well_formed = set()
+        for cid in candidate:
+            try:
+                uuid.UUID(cid)
+                well_formed.add(cid)
+            except (ValueError, TypeError):
+                pass
+        if not well_formed:
+            return set()
+        return {
+            str(v)
+            for v in ResourceInstance.objects.filter(
+                resourceinstanceid__in=well_formed
+            ).values_list("resourceinstanceid", flat=True)
+        }
+
+    def _assert_deps_exist(self, deps, valid_dep_ids):
+        """Raise ValueError if any dependency ref is not a confirmed-existing
+        string uuid.
+
+        A malformed ref (a non-string value such as a number, dict, ...) also
+        raises, so it becomes a clean failure instead of a downstream
+        DataError/500 when it is coerced with ``str()`` into a resource_x_resource
+        row. ``None`` and blank strings mean 'no dependency' and are skipped.
+
+        'project' is excluded here; it is existence-checked explicitly by each
+        caller (a Tile FK to a nonexistent project would otherwise raise an
+        IntegrityError at write time)."""
+        for key, v in (deps or {}).items():
+            if key == "project":
+                continue
+            for one in v if isinstance(v, list) else [v]:
+                if one is None:
+                    continue
+                if isinstance(one, str):
+                    if not one.strip():
+                        continue
+                    if one.strip() not in valid_dep_ids:
+                        raise ValueError(
+                            f"Dependency {one} for '{key}' does not exist; "
+                            "cannot link a dangling relationship."
+                        )
+                else:
+                    raise ValueError(
+                        f"Dependency {one!r} for '{key}' is not a valid "
+                        "resource id; cannot link."
+                    )
 
     def _create_tile(
         self,
@@ -3651,9 +3756,7 @@ class BiblissimaCreateResourceView(View):
         # project means the link target is gone — skip rather than raise a
         # dangling-FK IntegrityError when creating the studied-objects tile.
         project_row = (
-            ResourceInstance.objects.select_for_update()
-            .filter(pk=project_id)
-            .first()
+            ResourceInstance.objects.select_for_update().filter(pk=project_id).first()
         )
         if project_row is None:
             logger.warning("Project %s does not exist; skipping link", project_id)
@@ -3930,80 +4033,6 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
     call — the ``_batch_save_descriptors`` partition is a no-op and the survivor
     order is already parent-first.
     """
-
-    def _precollect_valid_dep_ids(self, items):
-        """ONE ResourceInstance.objects.filter across the batch: the set of
-        dependency resource ids that actually exist. A dependency ref not in
-        this set is a dangling relationship; the per-item savepoint turns it
-        into a clean 'failed' instead of a silently committed R2R row with a
-        NULL to_graphid (strict=False in _validate_tiles does NOT catch it).
-
-        Caveat: this snapshots existence BEFORE Pass 1, so an intra-batch
-        dependency (a resource created earlier in the same batch referenced by a
-        later item) is NOT resolvable here and would be flagged dangling. This is
-        correct for the current single-graph create-all design, where any cross-
-        resource parent target was created by a prior already-committed call."""
-        candidate = set()
-        for item in items:
-            deps = item.get("dependencies") or {}
-            for v in deps.values():
-                for one in v if isinstance(v, list) else [v]:
-                    if isinstance(one, str) and one.strip():
-                        candidate.add(one.strip())
-            # The project id is a dependency too: existence-check it in the same
-            # single query so a dangling project becomes a per-item 'failed'
-            # (its FK-to-nonexistent-project Tile would otherwise raise an
-            # IntegrityError in Pass 2 -> whole-batch 500 losing every survivor).
-            proj = deps.get("project")
-            if isinstance(proj, str) and proj.strip():
-                candidate.add(proj.strip())
-        well_formed = set()
-        for cid in candidate:
-            try:
-                uuid.UUID(cid)
-                well_formed.add(cid)
-            except (ValueError, TypeError):
-                pass
-        if not well_formed:
-            return set()
-        return {
-            str(v)
-            for v in ResourceInstance.objects.filter(
-                resourceinstanceid__in=well_formed
-            ).values_list("resourceinstanceid", flat=True)
-        }
-
-    def _assert_deps_exist(self, deps, valid_dep_ids):
-        """Raise ValueError (-> Pass-1 'failed') if any dependency ref is not a
-        confirmed-existing string uuid.
-
-        A malformed ref (a non-string value such as a number, dict, ...) also
-        raises, so it becomes a clean per-item 'failed' instead of a downstream
-        DataError/500 when it is coerced with ``str()`` into a resource_x_resource
-        row. ``None`` and blank strings mean 'no dependency' and are skipped.
-
-        'project' is excluded here; it is existence-checked explicitly in the
-        Pass-1 loop (a Tile FK to a nonexistent project would otherwise raise an
-        IntegrityError in Pass 2 -> whole-batch 500)."""
-        for key, v in (deps or {}).items():
-            if key == "project":
-                continue
-            for one in v if isinstance(v, list) else [v]:
-                if one is None:
-                    continue
-                if isinstance(one, str):
-                    if not one.strip():
-                        continue
-                    if one.strip() not in valid_dep_ids:
-                        raise ValueError(
-                            f"Dependency {one} for '{key}' does not exist; "
-                            "cannot link a dangling relationship."
-                        )
-                else:
-                    raise ValueError(
-                        f"Dependency {one!r} for '{key}' is not a valid "
-                        "resource id; cannot link."
-                    )
 
     def post(self, request):
         import json

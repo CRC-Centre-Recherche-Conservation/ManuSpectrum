@@ -1995,6 +1995,68 @@ class BiblissimaLinkToProjectViewTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
 
+class UnitaryCreateDependencyGuardTests(TestCase):
+    """Finding #7: the unitary create path guards dangling dependencies at
+    parity with BiblissimaCreateAllView. The guard helpers now live on the base
+    class BiblissimaCreateResourceView so both paths share them."""
+
+    DEP = "11111111-1111-1111-1111-111111111111"
+
+    def test_assert_deps_exist_is_on_base_class(self):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        view = BiblissimaCreateResourceView()
+        # A dep absent from the confirmed set is rejected.
+        with self.assertRaises(ValueError):
+            view._assert_deps_exist({"parent": self.DEP}, set())
+        # A confirmed dep passes.
+        view._assert_deps_exist({"parent": self.DEP}, {self.DEP})
+
+    @patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
+    def test_precollect_is_on_base_class(self, mock_ri):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        mock_ri.objects.filter.return_value.values_list.return_value = [self.DEP]
+        view = BiblissimaCreateResourceView()
+        result = view._precollect_valid_dep_ids(
+            [{"dependencies": {"parent": self.DEP}}]
+        )
+        self.assertEqual(result, {self.DEP})
+
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCreateResourceView._create_resource"
+    )
+    def test_post_maps_dependency_valueerror_to_400(self, mock_create):
+        """A dangling-dependency ValueError becomes a clean 400, not a 500."""
+        from django.test import RequestFactory
+        from unittest.mock import MagicMock
+        import json
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        mock_create.side_effect = ValueError(
+            f"Dependency {self.DEP} for 'parent' does not exist; "
+            "cannot link a dangling relationship."
+        )
+        rf = RequestFactory()
+        body = json.dumps(
+            {
+                "resourceType": "Document",
+                "biblissimaData": {"label": "x"},
+                "dependencies": {"parent": self.DEP},
+            }
+        )
+        req = rf.post(
+            "/api/biblissima/create-resource",
+            data=body,
+            content_type="application/json",
+        )
+        req.user = MagicMock()
+        view = BiblissimaCreateResourceView()
+        resp = view.post(req)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("does not exist", json.loads(resp.content)["error"])
+
+
 class CheckDuplicatesComponentScopeTests(TestCase):
     """For Components, strategies 2 and 3 must NOT run.
 
