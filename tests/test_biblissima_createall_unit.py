@@ -132,22 +132,35 @@ class CreateAllBase(TestCase):
         self.mock_resource_cls.return_value.get_serialized_graph.return_value = {
             "nodes": []
         }
-        # Survivor fetch: Resource.objects.select_related(...).get(pk=rid).
-        self.mock_survivor_resource = MagicMock(name="survivor_resource")
+
+        # Survivor fetch in Pass 2:
+        # Resource.objects.select_related(...).filter(pk__in=survivor_rids).
+        # Return a lightweight object per requested id whose ``.pk`` matches, so
+        # the view can build its {str(pk): resource} map and order it.
+        def _resource_filter(*args, **kwargs):
+            return [SimpleNamespace(pk=rid) for rid in (kwargs.get("pk__in") or [])]
+
         (
-            self.mock_resource_cls.objects.select_related.return_value.get.return_value
-        ) = self.mock_survivor_resource
+            self.mock_resource_cls.objects.select_related.return_value.filter.side_effect
+        ) = _resource_filter
 
         # _precollect_valid_dep_ids default: no deps exist unless a test wires it.
         self.mock_ri.objects.filter.return_value.values_list.return_value = []
 
         # Base-class primitive patches (subclass inherits them unshadowed).
+        # _bulk_create_resources is now called ONCE in Pass 2 with the
+        # pre-generated survivor ids (ids=...); it may still be called with a
+        # bare n by other paths, so honour both forms.
         self.created_rids = []
 
-        def _bulk_create(graph_id, n, user):
-            rid = uuid.uuid4()
-            self.created_rids.append(rid)
-            return [rid]
+        def _bulk_create(graph_id, n, user, ids=None):
+            if ids is not None:
+                ids = list(ids)
+                self.created_rids.extend(ids)
+                return ids
+            made = [uuid.uuid4() for _ in range(n)]
+            self.created_rids.extend(made)
+            return made
 
         self.mock_bulk_create = self._start(
             patch.object(
@@ -212,9 +225,7 @@ class HappyPathTests(CreateAllBase):
         # callbacks immediately so that _defer_indexing's sync fallback runs
         # inside the test (BIBLISSIMA_ASYNC_INDEXING=False by default in tests).
         with self.captureOnCommitCallbacks(execute=True):
-            response, payload = self._post(
-                {"resourceType": "Document", "items": items}
-            )
+            response, payload = self._post({"resourceType": "Document", "items": items})
 
         self.assertEqual(response.status_code, 200)
         results = payload["results"]
@@ -303,27 +314,35 @@ class BufferIsolationTests(CreateAllBase):
         )
         self.assertIn("403", results[1]["error"])
 
-        # rid of the failed item (item 1) — it DID get a rid before failing.
-        failed_rid = self.created_rids[1]
+        # Survivors are items 0 and 2; item 1 failed and has no resourceId.
+        survivor_ids = {r["resourceId"] for r in results if r["status"] == "created"}
+        self.assertEqual(len(survivor_ids), 2)
 
-        # Zero residue for the failed item: no tile in the single bulk_create.
+        # Zero residue for the failed item: only the 2 survivor tiles are
+        # inserted, in the single bulk_create.
         self.mock_tilemodel.objects.bulk_create.assert_called_once()
         inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
         self.assertEqual(len(inserted), 2)
-        self.assertNotIn(
-            failed_rid,
-            {t.resourceinstance_id for t in inserted},
-            "failed item's tile must be dropped from the buffer",
+        self.assertEqual(
+            {str(t.resourceinstance_id) for t in inserted},
+            survivor_ids,
+            "only survivor tiles may reach bulk_create",
         )
 
-        # No editlog for the failed item (only the 2 survivors).
+        # ResourceInstance rows created ONLY for survivors (one bulk insert).
+        self.mock_bulk_create.assert_called_once()
+        self.assertEqual(
+            {str(x) for x in self.mock_bulk_create.call_args.kwargs["ids"]},
+            survivor_ids,
+        )
+
+        # No editlog references a non-survivor's tiles (only the 2 survivors).
         self.assertEqual(self.mock_write_editlog.call_count, 2)
         for c in self.mock_write_editlog.call_args_list:
             item_tiles = c.args[0]
-            self.assertNotIn(
-                failed_rid,
-                {t.resourceinstance_id for t in item_tiles},
-                "no editlog may reference the failed item's tiles",
+            self.assertTrue(
+                {str(t.resourceinstance_id) for t in item_tiles} <= survivor_ids,
+                "no editlog may reference a non-survivor's tiles",
             )
 
     def test_savepoint_isolation_parametrized(self):
@@ -354,14 +373,19 @@ class BufferIsolationTests(CreateAllBase):
                 response, payload = self._run_with_failure_on(exc, fail_index=1, n=3)
 
                 self.assertEqual(response.status_code, 200)
-                statuses = [r["status"] for r in payload["results"]]
+                results = payload["results"]
+                statuses = [r["status"] for r in results]
                 self.assertEqual(statuses, ["created", "failed", "created"])
 
-                failed_rid = self.created_rids[1]
+                survivor_ids = {
+                    r["resourceId"] for r in results if r["status"] == "created"
+                }
                 self.mock_tilemodel.objects.bulk_create.assert_called_once()
                 inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
                 self.assertEqual(len(inserted), 2)
-                self.assertNotIn(failed_rid, {t.resourceinstance_id for t in inserted})
+                self.assertEqual(
+                    {str(t.resourceinstance_id) for t in inserted}, survivor_ids
+                )
                 self.assertEqual(self.mock_write_editlog.call_count, 2)
 
 
@@ -393,13 +417,10 @@ class DanglingDependencyTests(CreateAllBase):
         # message names the dangling dep
         self.assertIn(missing_dep, results[1]["error"])
 
-        # Zero residue for the dangling item: it never even created a resource
-        # (assert_deps_exist raised BEFORE _bulk_create_resources).
-        self.assertEqual(
-            self.mock_bulk_create.call_count,
-            2,
-            "dangling item must not reach _bulk_create_resources",
-        )
+        # RIs are created ONLY for survivors (one Pass-2 bulk insert); the
+        # dangling item never becomes a survivor.
+        self.mock_bulk_create.assert_called_once()
+        self.assertEqual(len(self.mock_bulk_create.call_args.kwargs["ids"]), 2)
         # Two survivor tiles only.
         self.mock_tilemodel.objects.bulk_create.assert_called_once()
         inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
@@ -550,9 +571,7 @@ class DanglingProjectTests(CreateAllBase):
         # captureOnCommitCallbacks fires _defer_indexing's on_commit callback so
         # mock_index is called within the test (BIBLISSIMA_ASYNC_INDEXING=False).
         with self.captureOnCommitCallbacks(execute=True):
-            response, payload = self._post(
-                {"resourceType": "Document", "items": items}
-            )
+            response, payload = self._post({"resourceType": "Document", "items": items})
 
         self.assertEqual(response.status_code, 200)
         results = payload["results"]
@@ -562,9 +581,11 @@ class DanglingProjectTests(CreateAllBase):
         # message names the dangling project
         self.assertIn(missing_project, results[1]["error"])
 
-        # Existence-checked BEFORE ri creation: the dangling-project item never
-        # reached _bulk_create_resources -> zero residue, two survivors.
-        self.assertEqual(self.mock_bulk_create.call_count, 2)
+        # Existence-checked BEFORE ri creation: RIs are created ONLY for
+        # survivors (one Pass-2 bulk insert), so the dangling-project item never
+        # gets a resource -> two survivors.
+        self.mock_bulk_create.assert_called_once()
+        self.assertEqual(len(self.mock_bulk_create.call_args.kwargs["ids"]), 2)
         self.mock_tilemodel.objects.bulk_create.assert_called_once()
         inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
         self.assertEqual(len(inserted), 2)
@@ -586,17 +607,17 @@ class DanglingProjectTests(CreateAllBase):
             _item("c2"),
         ]
         with self.captureOnCommitCallbacks(execute=True):
-            response, payload = self._post(
-                {"resourceType": "Document", "items": items}
-            )
+            response, payload = self._post({"resourceType": "Document", "items": items})
 
         self.assertEqual(response.status_code, 200)
         statuses = [r["status"] for r in payload["results"]]
         self.assertEqual(statuses, ["created", "failed", "created"])
         self.assertIn("123", payload["results"][1]["error"])
 
-        # Bad-project item never reached _bulk_create_resources; two survivors.
-        self.assertEqual(self.mock_bulk_create.call_count, 2)
+        # Bad-project item never becomes a survivor; RIs created once for the
+        # two survivors.
+        self.mock_bulk_create.assert_called_once()
+        self.assertEqual(len(self.mock_bulk_create.call_args.kwargs["ids"]), 2)
         self.mock_tilemodel.objects.bulk_create.assert_called_once()
         inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
         self.assertEqual(len(inserted), 2)
@@ -627,8 +648,10 @@ class MalformedDepValueTests(CreateAllBase):
         self.assertEqual(statuses, ["created", "failed", "created"])
         self.assertIn("123", payload["results"][1]["error"])
 
-        # Malformed item never reached _bulk_create_resources; two survivors.
-        self.assertEqual(self.mock_bulk_create.call_count, 2)
+        # Malformed item never becomes a survivor; RIs created once for the
+        # two survivors.
+        self.mock_bulk_create.assert_called_once()
+        self.assertEqual(len(self.mock_bulk_create.call_args.kwargs["ids"]), 2)
         self.mock_tilemodel.objects.bulk_create.assert_called_once()
         inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
         self.assertEqual(len(inserted), 2)

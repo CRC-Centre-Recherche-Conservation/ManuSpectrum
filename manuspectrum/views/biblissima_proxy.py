@@ -3810,10 +3810,15 @@ class BiblissimaCreateResourceView(View):
                 tile.transaction_id = transaction_id
             tile.save(index=False)
 
-    def _bulk_create_resources(self, graph_id, n, user):
+    def _bulk_create_resources(self, graph_id, n, user, ids=None):
         """Bulk-create ``n`` ResourceInstance rows for the given graph in one INSERT.
 
         Returns a list of ``n`` UUID objects (the new resourceinstanceids).
+
+        When ``ids`` is given it is used verbatim as the resourceinstanceids (and
+        ``n`` is ignored) — this lets a caller generate the ids BEFORE the DB
+        write (e.g. to build tiles referencing them outside the transaction) and
+        then insert exactly those rows. Otherwise fresh UUID4s are generated.
 
         principaluser is left NULL, matching the unitary ``_create_resource``
         path (which builds a bare ``ResourceInstance``), so ownership /
@@ -3830,7 +3835,13 @@ class BiblissimaCreateResourceView(View):
             ResourceInstanceLifecycleState,
         )
 
-        if n <= 0:
+        if ids is not None:
+            ids = list(ids)
+        else:
+            if n <= 0:
+                return []
+            ids = [uuid.uuid4() for _ in range(n)]
+        if not ids:
             return []
 
         graph = GraphModel.objects.select_related(
@@ -3854,12 +3865,12 @@ class BiblissimaCreateResourceView(View):
 
         instances = [
             ResourceInstance(
-                resourceinstanceid=uuid.uuid4(),
+                resourceinstanceid=rid,
                 graph_id=graph_id,
                 graph_publication_id=graph.publication_id,
                 resource_instance_lifecycle_state=initial_state,
             )
-            for _ in range(n)
+            for rid in ids
         ]
         ResourceInstance.objects.bulk_create(instances)
         return [inst.resourceinstanceid for inst in instances]
@@ -4089,139 +4100,127 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
 
         self._tile_buffer = []
         results = []
-        # survivors: list of (client_id, rid, resource_obj, item_tiles, project_id)
+        # survivors: list of (client_id, rid, item_tiles, project_id)
         survivors = []
 
-        try:
-            with transaction.atomic():
-                # ---- Pass 1 — per item, nested savepoint -----------------
-                for item in items:
-                    client_id = item.get("clientId")
-                    bbma_data = item.get("biblissimaData", {}) or {}
-                    deps = item.get("dependencies") or {}
-                    concept_mappings = item.get("conceptMappings", {}) or {}
+        # ---- Pass 1 — per item, NO transaction held --------------------------
+        # Build + validate + run pre_tile_save (the per-host throttled, retrying
+        # IIIF manifest fetch) OUTSIDE any DB transaction, so importing many
+        # manifests never holds the batch transaction open for minutes — a worker
+        # or idle-in-transaction timeout mid-fetch would otherwise roll back and
+        # discard every already-succeeded survivor (finding #2). Nothing is
+        # written to the resource tables here: rids are generated but the
+        # ResourceInstance rows are inserted only for survivors in Pass 2, so a
+        # failed item leaves no orphan resource. (An IIIFManifest imported by
+        # pre_tile_save commits independently and is benign/dedupable if its item
+        # later fails.)
+        for item in items:
+            client_id = item.get("clientId")
+            bbma_data = item.get("biblissimaData", {}) or {}
+            deps = item.get("dependencies") or {}
+            concept_mappings = item.get("conceptMappings", {}) or {}
 
-                    start = len(self._tile_buffer)
-                    try:
-                        # try/except AROUND the with: an exception here triggers
-                        # ROLLBACK TO SAVEPOINT for just this item.
-                        with transaction.atomic():
-                            # BEFORE creating anything: dangling dep -> failed.
-                            self._assert_deps_exist(deps, valid_dep_ids)
-                            # A dangling OR malformed project id would make
-                            # _link_to_project_batch build a Tile whose FK points at a
-                            # nonexistent project (dangling) or coerce a non-string
-                            # value with str() (malformed) -> IntegrityError/DataError
-                            # in Pass 2 -> whole-batch 500 losing every survivor.
-                            # Validate it here (mirroring _assert_deps_exist) so a bad
-                            # project is a clean per-item fail, not a batch detonation.
-                            proj = deps.get("project")
-                            if proj:
-                                if not isinstance(proj, str):
-                                    raise ValueError(
-                                        f"Project {proj!r} is not a valid resource "
-                                        "id; cannot link."
-                                    )
-                                if proj.strip() and proj.strip() not in valid_dep_ids:
-                                    raise ValueError(
-                                        f"Project {proj} does not exist; cannot link."
-                                    )
-
-                            # Per-item resourceinstance INSIDE the savepoint so
-                            # a failure rolls it back (never orphaned).
-                            [rid] = self._bulk_create_resources(
-                                graph_id, 1, request.user
-                            )
-
-                            created_deps = {
-                                "places": {},
-                                "persons": {},
-                                "groups": {},
-                            }
-                            builder(
-                                rid,
-                                None,
-                                bbma_data,
-                                deps,
-                                concept_mappings,
-                                created_deps,
-                            )
-                            item_tiles = self._tile_buffer[start:]
-
-                            valid_concepts = self._collect_valid_concepts(
-                                item_tiles, nodes_by_id
-                            )
-                            self._validate_tiles(
-                                item_tiles, nodes_by_id, factory, valid_concepts
-                            )
-                            # pre_tile_save = IIIF manifest fetch; can raise
-                            # requests.HTTPError / UnsafeURLError /
-                            # FailParsingManifestIIIF / TileValidationError.
-                            self._run_hook(
-                                item_tiles, nodes_by_id, factory, "pre_tile_save"
-                            )
-
-                            resource_obj = Resource.objects.select_related(
-                                "graph__publication"
-                            ).get(pk=rid)
-                    except Exception as exc:
-                        # Savepoint rolled back -> drop this item's staged tiles
-                        # so no residue reaches Pass 2, and report it failed.
-                        del self._tile_buffer[start:]
-                        results.append(
-                            {
-                                "clientId": client_id,
-                                "status": "failed",
-                                "error": str(exc),
-                            }
+            start = len(self._tile_buffer)
+            try:
+                # BEFORE building anything: dangling dep -> failed.
+                self._assert_deps_exist(deps, valid_dep_ids)
+                # A dangling OR malformed project id would make
+                # _link_to_project_batch build a Tile whose FK points at a
+                # nonexistent project (dangling) or coerce a non-string value
+                # with str() (malformed) -> IntegrityError/DataError in Pass 2 ->
+                # whole-batch 500 losing every survivor. Validate it here
+                # (mirroring _assert_deps_exist) so a bad project is a clean
+                # per-item fail, not a batch detonation.
+                proj = deps.get("project")
+                if proj:
+                    if not isinstance(proj, str):
+                        raise ValueError(
+                            f"Project {proj!r} is not a valid resource "
+                            "id; cannot link."
                         )
-                        continue
+                    if proj.strip() and proj.strip() not in valid_dep_ids:
+                        raise ValueError(f"Project {proj} does not exist; cannot link.")
 
-                    survivors.append(
-                        (
-                            client_id,
-                            rid,
-                            resource_obj,
-                            item_tiles,
-                            deps.get("project"),
-                        )
-                    )
-                    results.append(
-                        {
-                            "clientId": client_id,
-                            "status": "created",
-                            "resourceId": str(rid),
-                        }
+                # Generate the rid up front (no DB write) so tiles can reference
+                # it; the ResourceInstance row is inserted in Pass 2.
+                rid = uuid.uuid4()
+                created_deps = {"places": {}, "persons": {}, "groups": {}}
+                builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
+                item_tiles = self._tile_buffer[start:]
+
+                valid_concepts = self._collect_valid_concepts(item_tiles, nodes_by_id)
+                self._validate_tiles(item_tiles, nodes_by_id, factory, valid_concepts)
+                # pre_tile_save = IIIF manifest fetch; can raise
+                # requests.HTTPError / UnsafeURLError / FailParsingManifestIIIF /
+                # TileValidationError. Runs here, OUTSIDE the transaction.
+                self._run_hook(item_tiles, nodes_by_id, factory, "pre_tile_save")
+            except Exception as exc:
+                # Drop this item's staged tiles so no residue reaches Pass 2 and
+                # report it failed. No DB rollback needed — nothing was written
+                # to the resource tables for this item.
+                del self._tile_buffer[start:]
+                results.append(
+                    {"clientId": client_id, "status": "failed", "error": str(exc)}
+                )
+                continue
+
+            survivors.append((client_id, rid, item_tiles, deps.get("project")))
+            results.append(
+                {"clientId": client_id, "status": "created", "resourceId": str(rid)}
+            )
+
+        # ---- Pass 2 — survivors only, ONE short transaction (all-or-nothing) --
+        if survivors:
+            try:
+                with transaction.atomic():
+                    survivor_rids = [rid for _cid, rid, _tiles, _proj in survivors]
+                    # Insert ResourceInstance rows for survivors ONLY (no
+                    # orphans), in ONE bulk INSERT, with the rids already
+                    # referenced by the staged tiles.
+                    self._bulk_create_resources(
+                        graph_id, len(survivor_rids), request.user, ids=survivor_rids
                     )
 
-                # ---- Pass 2 — survivors only (all-or-nothing, Hole 1) -----
-                if survivors:
                     TileModel.objects.bulk_create(self._tile_buffer)
                     self._run_hook(
                         self._tile_buffer, nodes_by_id, factory, "post_tile_save"
                     )
 
+                    # Fetch the survivor Resource objects (their rows now exist)
+                    # for the descriptor + editlog writes.
+                    resources_by_id = {
+                        str(r.pk): r
+                        for r in Resource.objects.select_related(
+                            "graph__publication"
+                        ).filter(pk__in=survivor_rids)
+                    }
                     # Single graph per call -> survivor order is already
                     # parent-first (parents come from prior committed calls).
-                    ordered_resources = [s[2] for s in survivors]
+                    ordered_resources = [
+                        resources_by_id[str(rid)] for rid in survivor_rids
+                    ]
                     self._batch_save_descriptors(ordered_resources)
 
-                    for _cid, _rid, resource_obj, item_tiles, _proj in survivors:
+                    for _cid, rid, item_tiles, _proj in survivors:
                         self._write_editlog(
-                            item_tiles, resource_obj, request.user, batch_tx
+                            item_tiles,
+                            resources_by_id[str(rid)],
+                            request.user,
+                            batch_tx,
                         )
 
                     by_project = {}
-                    for _cid, rid, _res, _tiles, project_id in survivors:
+                    for _cid, rid, _tiles, project_id in survivors:
                         if project_id:
                             by_project.setdefault(str(project_id), []).append(rid)
                     for project_id, ids in by_project.items():
                         self._link_to_project_batch(ids, project_id, batch_tx)
-        except Exception:
-            # ANY Pass-2 (or setup-inside-atomic) failure rolls the outer
-            # atomic back -> nothing committed -> unattributed 500 (Hole 1).
-            logger.exception("Biblissima batch creation failed")
-            return JsonResponse({"error": "Batch creation failed"}, status=500)
+            except Exception:
+                # ANY Pass-2 failure rolls this atomic back -> no survivor
+                # committed -> unattributed 500 (Hole 1). Manifests imported in
+                # Pass 1 remain (benign/dedupable).
+                logger.exception("Biblissima batch creation failed")
+                return JsonResponse({"error": "Batch creation failed"}, status=500)
 
         # Schedule ES indexing for the committed batch via the on_commit seam.
         # With BIBLISSIMA_ASYNC_INDEXING=False (default), this is a
