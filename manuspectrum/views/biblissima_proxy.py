@@ -3629,7 +3629,15 @@ class BiblissimaCreateResourceView(View):
             )
 
     def _link_to_project(self, resource_id, project_id, transaction_id):
-        """Add the created resource to the project's Studied Objects."""
+        """Add the created resource to the project's Studied Objects.
+
+        Locks the project's ResourceInstance row (``select_for_update``) for the
+        whole read-modify-write so two concurrent links into the same project
+        cannot lose an update, and cannot both INSERT a first studied-objects
+        tile (a lock on the not-yet-existing Tile row would protect nothing).
+        MUST run inside a transaction — callers wrap it in
+        ``transaction.atomic()``.
+        """
         # Validate project_id is a proper UUID
         try:
             project_uuid = uuid.UUID(str(project_id))
@@ -3638,6 +3646,18 @@ class BiblissimaCreateResourceView(View):
             return
 
         project_id = str(project_uuid)
+
+        # Serialize concurrent linkers on the project row itself. A missing
+        # project means the link target is gone — skip rather than raise a
+        # dangling-FK IntegrityError when creating the studied-objects tile.
+        project_row = (
+            ResourceInstance.objects.select_for_update()
+            .filter(pk=project_id)
+            .first()
+        )
+        if project_row is None:
+            logger.warning("Project %s does not exist; skipping link", project_id)
+            return
 
         # Find existing tile or create new one
         existing = Tile.objects.filter(
@@ -4293,6 +4313,8 @@ class BiblissimaLinkToProjectView(View):
     def post(self, request):
         import json
 
+        from django.db import transaction
+
         try:
             body = json.loads(request.body)
         except (json.JSONDecodeError, ValueError):
@@ -4314,9 +4336,24 @@ class BiblissimaLinkToProjectView(View):
 
         # Reuse the helper on BiblissimaCreateResourceView so the dedup logic
         # stays in a single place. transaction_id is None for ad-hoc links.
-        BiblissimaCreateResourceView()._link_to_project(
-            resource_id,
-            project_id,
-            transaction_id=None,
-        )
+        # _link_to_project takes a select_for_update row lock, so it MUST run
+        # inside a transaction.
+        creator = BiblissimaCreateResourceView()
+        try:
+            with transaction.atomic():
+                creator._link_to_project(
+                    resource_id,
+                    project_id,
+                    transaction_id=None,
+                )
+        except Exception:
+            logger.exception(
+                "Failed to link resource %s to project %s", resource_id, project_id
+            )
+            return JsonResponse({"error": "Link failed"}, status=500)
+
+        # The project tile is written with index=False, so its ES doc must be
+        # refreshed post-commit — otherwise the newly-linked resource never
+        # appears in the project's studied-objects search (finding #6).
+        creator._defer_indexing(resource_ids=[str(project_id)])
         return JsonResponse({"ok": True})

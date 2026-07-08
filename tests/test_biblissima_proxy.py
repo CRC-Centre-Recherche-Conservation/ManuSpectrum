@@ -1799,8 +1799,9 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
 class LinkToProjectIdempotenceTests(TestCase):
     """_link_to_project must not duplicate refs when called twice."""
 
+    @patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
     @patch("manuspectrum.views.biblissima_proxy.Tile")
-    def test_skips_when_resource_already_linked(self, mock_tile):
+    def test_skips_when_resource_already_linked(self, mock_tile, mock_ri):
         from manuspectrum.views.biblissima_proxy import (
             BiblissimaCreateResourceView,
             PROJECT_STUDIED_OBJECTS_NODE,
@@ -1808,6 +1809,11 @@ class LinkToProjectIdempotenceTests(TestCase):
 
         rid = "11111111-1111-1111-1111-111111111111"
         pid = "22222222-2222-2222-2222-222222222222"
+
+        # The project row exists and is locked (select_for_update).
+        mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value = (
+            MagicMock()
+        )
 
         existing = MagicMock()
         existing.data = {
@@ -1833,8 +1839,9 @@ class LinkToProjectIdempotenceTests(TestCase):
         )
         existing.save.assert_not_called()
 
+    @patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
     @patch("manuspectrum.views.biblissima_proxy.Tile")
-    def test_appends_when_resource_not_yet_linked(self, mock_tile):
+    def test_appends_when_resource_not_yet_linked(self, mock_tile, mock_ri):
         from manuspectrum.views.biblissima_proxy import (
             BiblissimaCreateResourceView,
             PROJECT_STUDIED_OBJECTS_NODE,
@@ -1842,6 +1849,11 @@ class LinkToProjectIdempotenceTests(TestCase):
 
         rid = "11111111-1111-1111-1111-111111111111"
         pid = "22222222-2222-2222-2222-222222222222"
+
+        # The project row exists and is locked (select_for_update).
+        mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value = (
+            MagicMock()
+        )
 
         existing = MagicMock()
         existing.data = {PROJECT_STUDIED_OBJECTS_NODE: []}
@@ -1860,6 +1872,27 @@ class LinkToProjectIdempotenceTests(TestCase):
         # (a transient ES outage would otherwise roll back a good create). The
         # project is re-indexed post-commit via _create_resource's defer set.
         existing.save.assert_called_once_with(index=False)
+
+    @patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
+    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    def test_skips_when_project_missing(self, mock_tile, mock_ri):
+        """A gone project (locked row absent) is skipped, not linked with a
+        dangling FK (finding #8 absent-row case)."""
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        rid = "11111111-1111-1111-1111-111111111111"
+        pid = "22222222-2222-2222-2222-222222222222"
+
+        # select_for_update finds no project row.
+        mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value = (
+            None
+        )
+
+        view = BiblissimaCreateResourceView()
+        view._link_to_project(rid, pid, transaction_id=None)
+
+        # No tile read/write happens for a missing project.
+        mock_tile.objects.filter.assert_not_called()
 
 
 class BiblissimaLinkToProjectViewTests(TestCase):
@@ -1887,6 +1920,33 @@ class BiblissimaLinkToProjectViewTests(TestCase):
         resp = view.post(req)
         self.assertEqual(resp.status_code, 200)
         mock_link.assert_called_once()
+
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCreateResourceView._defer_indexing"
+    )
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCreateResourceView._link_to_project"
+    )
+    def test_defers_project_reindex(self, mock_link, mock_defer):
+        """The endpoint must re-index the project post-commit (finding #6)."""
+        from django.test import RequestFactory
+        import json
+        from manuspectrum.views.biblissima_proxy import BiblissimaLinkToProjectView
+
+        pid = "22222222-2222-2222-2222-222222222222"
+        rf = RequestFactory()
+        body = json.dumps(
+            {"resourceId": "11111111-1111-1111-1111-111111111111", "projectId": pid}
+        )
+        req = rf.post(
+            "/api/biblissima/link-to-project",
+            data=body,
+            content_type="application/json",
+        )
+        view = BiblissimaLinkToProjectView()
+        resp = view.post(req)
+        self.assertEqual(resp.status_code, 200)
+        mock_defer.assert_called_once_with(resource_ids=[pid])
 
     def test_rejects_invalid_uuid(self):
         from django.test import RequestFactory
