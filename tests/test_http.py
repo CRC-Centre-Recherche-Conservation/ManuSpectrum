@@ -122,3 +122,51 @@ class FetchIiifManifestTests(SimpleTestCase):
         session = get_iiif_session()
         self.assertIn("User-Agent", session.headers)
         self.assertIn("Accept", session.headers)
+
+
+@override_settings(MANIFEST_FETCH_RATE_LIMITS={"bnf.fr": 3.0, "default": 1.0})
+class RateBucketTests(SimpleTestCase):
+    """Per-host throttle bucketing (finding #10).
+
+    A configured suffix (bnf.fr) shares one bucket + stricter interval; every
+    other host gets its OWN bucket so throttling one host never serialises
+    requests to unrelated hosts.
+    """
+
+    def test_bnf_subdomains_share_one_bucket(self):
+        from manuspectrum.utils.http import _rate_key_and_interval
+
+        self.assertEqual(_rate_key_and_interval("gallica.bnf.fr"), ("bnf.fr", 3.0))
+        self.assertEqual(_rate_key_and_interval("api.bnf.fr"), ("bnf.fr", 3.0))
+
+    def test_unrelated_hosts_get_distinct_buckets(self):
+        from manuspectrum.utils.http import _rate_key_and_interval
+
+        k1, i1 = _rate_key_and_interval("e-codices.unifr.ch")
+        k2, i2 = _rate_key_and_interval("digi.vatlib.it")
+        self.assertEqual((k1, i1), ("e-codices.unifr.ch", 1.0))
+        self.assertEqual((k2, i2), ("digi.vatlib.it", 1.0))
+        # The bug: both would have been keyed "default" and serialised together.
+        self.assertNotEqual(k1, k2)
+
+    def test_empty_host_uses_default_key(self):
+        from manuspectrum.utils.http import _rate_key_and_interval
+
+        self.assertEqual(_rate_key_and_interval(None), ("default", 1.0))
+        self.assertEqual(_rate_key_and_interval(""), ("default", 1.0))
+
+    def test_throttle_uses_per_host_locks(self):
+        import manuspectrum.utils.http as http_mod
+
+        # First call per host records a timestamp but never sleeps (no prior
+        # timestamp -> negative wait), so this does not block the test.
+        http_mod.throttle_for_host("https://e-codices.unifr.ch/a/manifest.json")
+        http_mod.throttle_for_host("https://digi.vatlib.it/b/manifest.json")
+
+        self.assertIn("e-codices.unifr.ch", http_mod._host_rate_locks)
+        self.assertIn("digi.vatlib.it", http_mod._host_rate_locks)
+        # Distinct locks -> a wait on one host cannot block the other.
+        self.assertIsNot(
+            http_mod._host_rate_locks["e-codices.unifr.ch"],
+            http_mod._host_rate_locks["digi.vatlib.it"],
+        )
