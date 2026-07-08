@@ -3157,7 +3157,7 @@ class BiblissimaCreateResourceView(View):
         return {lang: {"value": str(value), "direction": "ltr"}}
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=256)
     def _resolve_concept_valueid(concept_id):
         """Return the prefLabel valueid for a concept ID (English preferred, any
         language otherwise). Raises ``LookupError`` when it cannot be resolved,
