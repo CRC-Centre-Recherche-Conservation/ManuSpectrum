@@ -20,9 +20,13 @@ from unittest import mock
 
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase
 from django.urls import reverse
+from guardian.shortcuts import get_perms
 
+from arches.app.models.models import Plugin
 from manuspectrum.views import biblissima_proxy
 from manuspectrum.views.permissions import EDITOR_GROUPS
 
@@ -270,3 +274,43 @@ class BiblissimaCachePrivacyTests(TestCase):
             # refuse to store and this count would grow.
             self.assertEqual(bib.call_count, upstream_calls)
             self.assertIn("private", r2["Cache-Control"])
+
+
+class SetupBiblissimaPermissionsCommandTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.plugin = Plugin.objects.create(
+            name="Import Biblissima",
+            icon="fa fa-cloud-download",
+            component="views/components/plugins/import-biblissima-workflow",
+            componentname="import-biblissima-workflow",
+            config={"show": False},
+            slug="import-biblissima-workflow",
+        )
+        cls.editor = User.objects.create_user("cmd_editor", password="pw")
+        cls.editor.groups.add(Group.objects.get(name="Resource Editor"))
+
+    def test_grants_view_plugin_to_every_editor_group(self):
+        call_command("setup_biblissima_permissions", verbosity=0)
+        for name in EDITOR_GROUPS:
+            group = Group.objects.get(name=name)
+            self.assertIn(
+                "view_plugin",
+                get_perms(group, self.plugin),
+                f"group {name!r} should have view_plugin on the workflow plugin",
+            )
+        # And it works end-to-end for a member (fresh instance: guardian
+        # caches object perms on the user object)
+        editor = User.objects.get(pk=self.editor.pk)
+        self.assertTrue(editor.has_perm("view_plugin", self.plugin))
+
+    def test_is_idempotent(self):
+        call_command("setup_biblissima_permissions", verbosity=0)
+        call_command("setup_biblissima_permissions", verbosity=0)  # must not raise
+        group = Group.objects.get(name="Resource Editor")
+        self.assertIn("view_plugin", get_perms(group, self.plugin))
+
+    def test_missing_plugin_raises_clean_command_error(self):
+        Plugin.objects.filter(slug="import-biblissima-workflow").delete()
+        with self.assertRaises(CommandError):
+            call_command("setup_biblissima_permissions", verbosity=0)
