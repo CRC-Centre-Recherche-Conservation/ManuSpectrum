@@ -16,10 +16,14 @@ contain those two groups.
 """
 
 import json
+from unittest import mock
 
 from django.contrib.auth.models import Group, User
+from django.core.cache import cache
 from django.test import TestCase
+from django.urls import reverse
 
+from manuspectrum.views import biblissima_proxy
 from manuspectrum.views.permissions import EDITOR_GROUPS
 
 
@@ -101,3 +105,121 @@ class RendererConfigAuthTests(TestCase):
             {"rendererId": "9ec5c8f8-8a3f-4e6f-9dd8-7c1e5f5b0000", "name": "t"}
         )
         self.assertEqual(resp.status_code, 200)
+
+
+class BiblissimaAuthBarrierTests(TestCase):
+    """Anonymous and non-editor requests must get a JSON 403 on all 12 routes."""
+
+    # (http method, url name, reverse kwargs, POST body)
+    ROUTES = [
+        ("get", "biblissima-suggest", None, None),
+        ("get", "biblissima-entity", {"qid": "Q1"}, None),
+        ("get", "biblissima-search", None, None),
+        ("get", "biblissima-search-manuscripts", None, None),
+        ("post", "biblissima-check-duplicates", None, "{}"),
+        ("get", "biblissima-manuscript-illuminations", None, None),
+        ("get", "biblissima-illumination-detail", {"ifdata_hash": "deadbeef"}, None),
+        ("post", "biblissima-create-resource", None, "{}"),
+        ("post", "biblissima-create-all", None, "{}"),
+        ("post", "biblissima-add-alt-name", None, "{}"),
+        ("get", "biblissima-stats", None, None),
+        ("post", "biblissima-link-to-project", None, "{}"),
+    ]
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.outsider = User.objects.create_user("outsider", password="pw")
+        cls.outsider.groups.add(
+            Group.objects.get(name="Guest"),
+            Group.objects.get(name="Resource Exporter"),
+        )
+
+    def setUp(self):
+        # Belt-and-braces: even while the barrier is missing (red phase) or
+        # broken (regression), no test may reach the network.
+        patcher = mock.patch.object(biblissima_proxy, "_bib_request")
+        self.mock_bib = patcher.start()
+        self.mock_bib.return_value.json.return_value = {
+            "search": [],
+            "query": {"search": []},
+            "entities": {},
+        }
+        self.addCleanup(patcher.stop)
+        cache.clear()  # cache_page state must not leak between tests
+
+    def _call(self, method, name, kwargs, body):
+        url = reverse(name, kwargs=kwargs)
+        if method == "get":
+            return self.client.get(url)
+        return self.client.post(url, data=body, content_type="application/json")
+
+    def test_anonymous_gets_json_403_on_every_route(self):
+        for method, name, kwargs, body in self.ROUTES:
+            with self.subTest(route=name):
+                resp = self._call(method, name, kwargs, body)
+                self.assertEqual(resp.status_code, 403)
+                self.assertIn("application/json", resp["Content-Type"])
+                self.assertFalse(resp.json().get("success", True))
+
+    def test_guest_and_exporter_member_gets_403(self):
+        self.client.force_login(self.outsider)
+        for method, name, kwargs, body in [
+            ("get", "biblissima-suggest", None, None),
+            ("post", "biblissima-create-resource", None, "{}"),
+        ]:
+            with self.subTest(route=name):
+                resp = self._call(method, name, kwargs, body)
+                self.assertEqual(resp.status_code, 403)
+
+
+class BiblissimaAuthPassThroughTests(TestCase):
+    """Editors must sail through the barrier and hit normal view logic.
+
+    Every request here is chosen to fail cheaply AFTER auth (400 validation,
+    stats) — no network, no Arches graphs needed.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.editor = User.objects.create_user("editor", password="pw")
+        cls.editor.groups.add(Group.objects.get(name="Resource Editor"))
+        cls.staff_editor = User.objects.create_user(
+            "staff_editor", password="pw", is_staff=True
+        )
+        cls.staff_editor.groups.add(Group.objects.get(name="Resource Editor"))
+
+    def setUp(self):
+        cache.clear()
+
+    def test_editor_reaches_link_to_project_validation(self):
+        self.client.force_login(self.editor)
+        resp = self.client.post(
+            reverse("biblissima-link-to-project"),
+            data="not json",
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)  # auth passed, body rejected
+
+    def test_editor_reaches_create_all_validation_via_inherited_dispatch(self):
+        # BiblissimaCreateAllView is NOT decorated itself: it inherits the
+        # decorated dispatch from BiblissimaCreateResourceView. This test
+        # locks that inheritance (and the anonymous test locks the 403 side).
+        self.client.force_login(self.editor)
+        resp = self.client.post(
+            reverse("biblissima-create-all"),
+            data=json.dumps({"resourceType": "Nope", "items": [{}]}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)  # unsupported resourceType
+
+    def test_editor_without_staff_still_blocked_on_stats(self):
+        self.client.force_login(self.editor)
+        resp = self.client.get(reverse("biblissima-stats"))
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json(), {"error": "Forbidden"})
+
+    def test_staff_editor_gets_stats(self):
+        self.client.force_login(self.staff_editor)
+        resp = self.client.get(reverse("biblissima-stats"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("semaphore_capacity", resp.json())
