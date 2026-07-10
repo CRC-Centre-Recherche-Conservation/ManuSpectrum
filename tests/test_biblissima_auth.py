@@ -223,3 +223,50 @@ class BiblissimaAuthPassThroughTests(TestCase):
         resp = self.client.get(reverse("biblissima-stats"))
         self.assertEqual(resp.status_code, 200)
         self.assertIn("semaphore_capacity", resp.json())
+
+
+class BiblissimaCachePrivacyTests(TestCase):
+    """The cached GET proxies must be private-to-authenticated yet still
+    benefit from Django's server-side page cache."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.editor = User.objects.create_user("cache_editor", password="pw")
+        cls.editor.groups.add(Group.objects.get(name="Resource Editor"))
+
+    def setUp(self):
+        cache.clear()
+
+    def test_suggest_is_private_and_auth_precedes_cache(self):
+        self.client.force_login(self.editor)
+        # q shorter than 2 chars short-circuits before any upstream call
+        url = reverse("biblissima-suggest") + "?q=a"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("private", resp["Cache-Control"])
+        # The response is now in the page cache; an anonymous request for the
+        # SAME URL must still be rejected (dispatch check precedes the cached get)
+        self.client.logout()
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_private_header_does_not_disable_server_side_cache(self):
+        with mock.patch.object(biblissima_proxy, "_bib_request") as bib:
+            bib.return_value.json.return_value = {
+                "search": [],
+                "query": {"search": []},
+                "entities": {},
+            }
+            self.client.force_login(self.editor)
+            url = reverse("biblissima-suggest") + "?q=cache-probe"
+            r1 = self.client.get(url)
+            self.assertEqual(r1.status_code, 200)
+            upstream_calls = bib.call_count
+            self.assertGreater(upstream_calls, 0)  # first hit went upstream
+            r2 = self.client.get(url)
+            self.assertEqual(r2.status_code, 200)
+            # Second hit must be served from the page cache: if private had
+            # been patched INSIDE cache_page, UpdateCacheMiddleware would
+            # refuse to store and this count would grow.
+            self.assertEqual(bib.call_count, upstream_calls)
+            self.assertIn("private", r2["Cache-Control"])

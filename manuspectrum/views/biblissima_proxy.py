@@ -65,7 +65,7 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
-from django.views.decorators.cache import cache_page, never_cache
+from django.views.decorators.cache import cache_control, cache_page, never_cache
 
 from arches.app.models.models import ResourceInstance
 from arches.app.models.models import TileModel
@@ -705,6 +705,10 @@ class BiblissimaSuggestView(View):
         "descriptor": "Q304387",
     }
 
+    # cache_control OUTSIDE cache_page (listed above it): Django's cache
+    # middleware refuses to store responses already marked private, so the
+    # stored copy stays cacheable and only the outgoing response is patched.
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request):
         query = request.GET.get("q", "").strip()
@@ -877,6 +881,7 @@ class BiblissimaSuggestView(View):
 class BiblissimaEntityView(View):
     """Proxy for fetching a single Wikibase entity with extracted properties."""
 
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request, qid):
         entity = _get_wikibase_entity(qid)
@@ -924,6 +929,7 @@ class BiblissimaSearchManuscriptsView(View):
 
     TYPE_FILTERS = BiblissimaSuggestView.TYPE_FILTERS
 
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request):
         query = request.GET.get("q", "").strip()
@@ -1929,6 +1935,7 @@ class BiblissimaManuscriptIlluminationsView(View):
     hash so follow-up page requests skip the (slow) HTML scrape.
     """
 
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(3600))
     def get(self, request):
         portal_hash = request.GET.get("portalHash", "").strip()
@@ -2255,6 +2262,7 @@ class BiblissimaIlluminationDetailView(View):
 
         return page
 
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(3600))
     def get(self, request, ifdata_hash):
         """Fetch the /fr/ and /en/ portal pages in sequence, merge, enrich.
