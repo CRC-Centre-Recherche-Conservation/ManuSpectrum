@@ -1,0 +1,636 @@
+// ============================================
+// Import Biblissima — Step 4 / Summary
+// ============================================
+// Refined dashboard, print-influenced. Stays inside the workflow's
+// $bbma-* palette, sans-serif, blue accent — but pares back the
+// boxed-cell vocabulary in favor of typography, hairlines, and
+// generous negative space. Hero typography for the metric numbers,
+// flush-edge rows separated only by 1px hairlines for the resource
+// list, and a text-link CTA in lieu of a chunky button.
+//
+// NOTE: webpack compiles each *.scss partial in isolation, so the
+// $bbma-* variables defined in `_import-biblissima-workflow.scss` are
+// NOT visible here. Tokens below mirror those values 1:1; keep them
+// in sync if the workflow palette ever changes.
+
+$bbma-ink:          #1a2a3a;
+$bbma-ink-soft:     #45556a;
+$bbma-muted:        #6b7b8d;
+$bbma-mute-soft:    #98a4b3;
+$bbma-border:       #dce1e6;
+$bbma-rule:         #e7ebef;       // hairline divider, lighter than border
+$bbma-bg:           #f5f7f9;
+$bbma-bg-warm:      #fafbfc;
+$bbma-paper:        #ffffff;
+$bbma-accent:       #489EED;
+$bbma-accent-dark:  #2c6faa;
+$bbma-accent-light: #e8f0fb;
+$bbma-success:      #2e7d4f;
+$bbma-success-soft: #eaf4ee;
+$bbma-warn:         #b87a16;
+$bbma-warn-soft:    #fdf6e6;
+$bbma-danger:       #a23535;
+
+// ============================================
+// Outer step canvas — full-bleed, no card chrome
+// ============================================
+// The step takes the full workflow body. Content gets generous
+// internal padding and an internal max-width on the inner article so
+// long lines of text don't sprawl across very wide screens, but the
+// background and the top status rail run edge-to-edge.
+
+.bbma-summary-step {
+    position: relative;
+    background: $bbma-paper;
+    min-height: 100%;
+    padding: 44px 56px 64px;
+    overflow-y: auto;
+    animation: bbma-summary-rise 0.4s ease-out both;
+
+    @media (max-width: 768px) { padding: 32px 28px 56px; }
+    @media (max-width: 480px) { padding: 24px 18px 48px; }
+}
+
+@keyframes bbma-summary-rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+// 2px status rail along the very top of the step — runs full bleed.
+.bbma-summary-rail {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(
+        to right,
+        $bbma-accent 0%,
+        lighten($bbma-accent, 8%) 50%,
+        $bbma-success 100%
+    );
+}
+
+.bbma-summary-step--has-issues .bbma-summary-rail {
+    background: linear-gradient(
+        to right,
+        $bbma-accent 0%,
+        $bbma-warn 100%
+    );
+}
+
+.bbma-summary-card {
+    position: relative;
+    // No card chrome (no border / shadow / radius). Article is just a
+    // semantic, width-constrained content column inside the full-bleed
+    // step canvas — keeps long lines readable on wide screens.
+    width: 100%;
+    max-width: 920px;
+    margin: 0 auto;
+    background: transparent;
+    padding: 0;
+}
+
+// ============================================
+// Hero — title + status pill
+// ============================================
+
+.bbma-summary-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 24px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid $bbma-rule;
+    animation: bbma-summary-fade 0.45s ease-out 0.05s both;
+}
+
+.bbma-summary-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    color: $bbma-ink;
+    line-height: 1.2;
+    letter-spacing: -0.018em;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+// Compact status pill — replaces the chunky 44px circle icon
+.bbma-summary-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px 5px 10px;
+    background: $bbma-success-soft;
+    border: 1px solid rgba($bbma-success, 0.22);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: $bbma-success;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.bbma-summary-pill-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: $bbma-success;
+    box-shadow: 0 0 0 3px rgba($bbma-success, 0.18);
+    flex-shrink: 0;
+}
+
+.bbma-summary-step--has-issues {
+    .bbma-summary-pill {
+        background: $bbma-warn-soft;
+        border-color: rgba($bbma-warn, 0.22);
+        color: $bbma-warn;
+    }
+    .bbma-summary-pill-dot {
+        background: $bbma-warn;
+        box-shadow: 0 0 0 3px rgba($bbma-warn, 0.18);
+    }
+}
+
+// ============================================
+// Metric ribbon — hairline-divided cells, no boxes
+// ============================================
+
+.bbma-summary-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    margin: 0 0 32px;
+    padding: 4px 0 4px;
+    animation: bbma-summary-fade 0.5s ease-out 0.12s both;
+}
+
+.bbma-summary-metric {
+    padding: 4px 16px;
+    text-align: left;
+    position: relative;
+
+    & + & {
+        border-left: 1px solid $bbma-rule;
+    }
+
+    @media (max-width: 540px) {
+        padding: 12px 0;
+        & + & {
+            border-left: none;
+            border-top: 1px solid $bbma-rule;
+        }
+    }
+}
+
+.bbma-summary-metric-value {
+    margin: 0 0 4px;
+    font-size: 30px;
+    font-weight: 300;                       // light weight reads finer
+    line-height: 1;
+    letter-spacing: -0.025em;
+    color: $bbma-ink;
+    font-variant-numeric: tabular-nums lining-nums;
+    transition: color 200ms ease;
+
+    &--text {
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: -0.005em;
+        padding-top: 8px;
+        text-transform: capitalize;
+        color: $bbma-ink-soft;
+    }
+}
+
+.bbma-summary-metric-label {
+    margin: 0;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: $bbma-mute-soft;
+}
+
+.bbma-summary-metric--primary {
+    .bbma-summary-metric-value { color: $bbma-accent-dark; }
+    .bbma-summary-metric-label { color: $bbma-accent-dark; }
+}
+
+.bbma-summary-metric--muted {
+    .bbma-summary-metric-value { color: $bbma-warn; }
+}
+
+.bbma-summary-metric--alert {
+    .bbma-summary-metric-value { color: $bbma-danger; }
+}
+
+// ============================================
+// Sections
+// ============================================
+
+.bbma-summary-section {
+    margin-bottom: 32px;
+    animation: bbma-summary-fade 0.5s ease-out 0.2s both;
+
+    &--secondary { animation-delay: 0.28s; }
+}
+
+.bbma-summary-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+    padding: 0 0 8px;
+    border-bottom: 1px solid $bbma-rule;
+}
+
+.bbma-summary-section-title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: $bbma-ink-soft;
+}
+
+.bbma-summary-section-count {
+    font-size: 11px;
+    font-weight: 500;
+    color: $bbma-mute-soft;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+
+    &::before { content: "·  "; color: $bbma-mute-soft; opacity: 0.7; }
+}
+
+// ============================================
+// Resource rows — flush-edge, hairline-separated
+// ============================================
+
+.bbma-summary-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.bbma-summary-row {
+    margin: 0;
+    border-bottom: 1px solid $bbma-rule;
+
+    &:last-child { border-bottom: none; }
+}
+
+.bbma-summary-row-link {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 4px 12px 0;
+    color: $bbma-ink;
+    text-decoration: none;
+    position: relative;
+    transition: padding 180ms ease, background 180ms ease;
+
+    // Hover edge accent: a subtle 2px bar that grows from 0 to full
+    // height on the left, paired with a faint background tint and a
+    // 2px translate on the body. No borders needed.
+    &::before {
+        content: "";
+        position: absolute;
+        top: 8px;
+        bottom: 8px;
+        left: -10px;
+        width: 2px;
+        background: $bbma-accent;
+        transform: scaleY(0);
+        transform-origin: center;
+        transition: transform 200ms ease;
+    }
+
+    &:hover,
+    &:focus-visible {
+        outline: none;
+        text-decoration: none;
+        color: $bbma-ink;
+        padding-left: 8px;
+
+        &::before { transform: scaleY(1); }
+
+        .bbma-summary-row-label  { color: $bbma-accent-dark; }
+        .bbma-summary-row-arrow  { color: $bbma-accent-dark; transform: translateX(3px); }
+        .bbma-summary-row-thumb  { border-color: $bbma-accent-light; }
+    }
+}
+
+.bbma-summary-row--compact .bbma-summary-row-link {
+    grid-template-columns: auto 1fr auto;
+    padding: 9px 4px 9px 0;
+}
+
+.bbma-summary-row-thumb {
+    width: 44px;
+    height: 44px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: $bbma-bg;
+    border: 1px solid $bbma-rule;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    transition: border-color 180ms ease;
+
+    img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    // Subtle inner edge so thumbnail images don't read flat against
+    // the white sheet — feels handled, not lazy.
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        box-shadow: 0 0 0 1px rgba(20, 30, 40, 0.04) inset;
+        border-radius: 3px;
+        pointer-events: none;
+    }
+}
+
+.bbma-summary-row-thumb-fallback {
+    color: $bbma-mute-soft;
+    font-size: 16px;
+}
+
+.bbma-summary-row-glyph {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: $bbma-accent-light;
+    color: $bbma-accent-dark;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.bbma-summary-row-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bbma-summary-row-label {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: $bbma-ink;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    transition: color 180ms ease;
+    letter-spacing: -0.005em;
+}
+
+.bbma-summary-row-caption {
+    font-size: 11.5px;
+    color: $bbma-muted;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}
+
+.bbma-summary-row-arrow {
+    font-size: 14px;
+    color: $bbma-mute-soft;
+    line-height: 1;
+    padding-right: 6px;
+    transition: transform 180ms ease, color 180ms ease;
+}
+
+// "Show N more" / "Collapse" toggle — text-link styled, sits flush
+// with the list's hairline rhythm. No chunky button.
+.bbma-summary-more {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-top: 1px dashed transparent;
+    color: $bbma-ink-soft;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 160ms ease;
+
+    .fa { font-size: 13px; transition: transform 160ms ease; }
+
+    &:hover,
+    &:focus-visible {
+        outline: none;
+        color: $bbma-accent-dark;
+        .fa { transform: translateY(1px); }
+    }
+    &:focus-visible { color: $bbma-accent-dark; }
+    &:active { color: $bbma-accent; }
+}
+
+// ============================================
+// Issues notice
+// ============================================
+
+.bbma-summary-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 0 28px;
+    padding: 11px 14px;
+    background: $bbma-warn-soft;
+    border-left: 2px solid $bbma-warn;
+    border-radius: 0 3px 3px 0;
+    color: $bbma-ink;
+    font-size: 12.5px;
+    line-height: 1.5;
+    animation: bbma-summary-fade 0.5s ease-out 0.32s both;
+}
+
+// Draft-state info notice — sits between the metrics ribbon and the
+// Created list. Informational tone (accent blue), distinct from the
+// bottom warn-yellow issues notice so the two roles never clash.
+.bbma-summary-draft-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 0 28px;
+    padding: 12px 14px;
+    background: $bbma-accent-light;
+    border-left: 2px solid $bbma-accent;
+    border-radius: 0 3px 3px 0;
+    color: $bbma-ink;
+    font-size: 12.5px;
+    line-height: 1.55;
+    animation: bbma-summary-fade 0.5s ease-out 0.28s both;
+
+    strong { font-weight: 600; }
+}
+
+.bbma-summary-draft-notice-icon {
+    color: $bbma-accent;
+    margin-top: 2px;
+    flex-shrink: 0;
+    font-size: 13px;
+}
+
+.bbma-summary-draft-notice-text {
+    flex: 1 1 auto;
+    min-width: 0;
+
+    > strong { display: block; margin-bottom: 2px; }
+}
+
+.bbma-summary-notice-icon {
+    color: $bbma-warn;
+    margin-top: 2px;
+    flex-shrink: 0;
+    font-size: 13px;
+}
+
+.bbma-summary-notice-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.bbma-summary-notice-sep {
+    color: rgba($bbma-warn, 0.5);
+    margin: 0 4px;
+}
+
+.bbma-summary-notice-aside {
+    display: block;
+    color: $bbma-ink-soft;
+    margin-top: 2px;
+    font-style: italic;
+}
+
+// ============================================
+// Footer CTA — text-link with arrow, no chunky button
+// ============================================
+
+.bbma-summary-footer {
+    margin-top: 36px;
+    padding-top: 18px;
+    border-top: 1px solid $bbma-rule;
+    display: flex;
+    justify-content: flex-end;
+    animation: bbma-summary-fade 0.5s ease-out 0.4s both;
+}
+
+.bbma-summary-cta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 4px 0;
+    color: $bbma-ink-soft;
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 1.3;
+    border-bottom: 1px solid transparent;
+    transition: border-color 180ms ease, color 180ms ease;
+
+    &:hover,
+    &:focus-visible {
+        text-decoration: none;
+        outline: none;
+        color: $bbma-accent-dark;
+        border-bottom-color: $bbma-accent;
+
+        .bbma-summary-cta-arrow { color: $bbma-accent-dark; transform: translateX(4px); }
+    }
+}
+
+.bbma-summary-cta-eyebrow {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: $bbma-mute-soft;
+    transition: color 180ms ease;
+}
+
+.bbma-summary-cta:hover .bbma-summary-cta-eyebrow,
+.bbma-summary-cta:focus-visible .bbma-summary-cta-eyebrow {
+    color: $bbma-accent;
+}
+
+.bbma-summary-cta-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: $bbma-ink;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.005em;
+    transition: color 180ms ease;
+}
+
+.bbma-summary-cta:hover .bbma-summary-cta-name,
+.bbma-summary-cta:focus-visible .bbma-summary-cta-name {
+    color: $bbma-accent-dark;
+}
+
+.bbma-summary-cta-arrow {
+    font-size: 13px;
+    color: $bbma-mute-soft;
+    line-height: 1;
+    transition: transform 180ms ease, color 180ms ease;
+}
+
+// ============================================
+// Reduced motion
+// ============================================
+
+@media (prefers-reduced-motion: reduce) {
+    .bbma-summary-card,
+    .bbma-summary-hero,
+    .bbma-summary-metrics,
+    .bbma-summary-section,
+    .bbma-summary-notice,
+    .bbma-summary-footer {
+        animation: none !important;
+    }
+    .bbma-summary-row-link,
+    .bbma-summary-row-arrow,
+    .bbma-summary-row-thumb,
+    .bbma-summary-cta,
+    .bbma-summary-cta-arrow {
+        transition: none !important;
+    }
+    .bbma-summary-row-link::before { transform: scaleY(1); }
+}
+
+@keyframes bbma-summary-fade {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}

@@ -32,18 +32,6 @@
             </div>
         </div>
 
-        <div class="bbma-config-field" data-bind="visible: isComponent">
-            <label class="bbma-config-label">
-                {% trans "Parent document" %} <span class="bbma-required">*</span>
-            </label>
-            <p class="bbma-config-hint">
-                {% trans "The document this component belongs to. Must already exist." %}
-            </p>
-            <select style="width: 100%;"
-                data-bind="select2Query: { select2Config: parentDocPicker.select2Config }">
-            </select>
-        </div>
-
         <div class="bbma-config-field">
             <label class="bbma-config-label">{% trans "Associate with project" %}</label>
             <p class="bbma-config-hint">
@@ -52,29 +40,6 @@
             <select style="width: 100%;"
                 data-bind="select2Query: { select2Config: projectPicker.select2Config }">
             </select>
-        </div>
-
-        <div class="bbma-config-field">
-            <label class="bbma-config-label">{% trans "Default type" %}</label>
-            <p class="bbma-config-hint">
-                {% trans "Type applied by default to all created resources. Can be changed per item later." %}
-            </p>
-            <div data-bind="component: {
-                name: 'concept-select-widget',
-                params: {
-                    node: {config: {rdmCollection: currentRdmCollection}},
-                    config: {label: '', placeholder: ''},
-                    renderContext: 'workflow',
-                    value: defaultType,
-                }
-            }"></div>
-        </div>
-
-        <div class="bbma-config-actions">
-            <button class="btn btn-primary btn-lg"
-                    data-bind="click: submit, disable: !canProceed()">
-                {% trans "Continue" %} <i class="fa fa-arrow-right"></i>
-            </button>
         </div>
 
     </div>

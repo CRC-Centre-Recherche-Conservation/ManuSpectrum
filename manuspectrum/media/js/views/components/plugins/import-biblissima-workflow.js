@@ -10,7 +10,6 @@ import 'views/components/workflows/import-biblissima-workflow/biblissima-search-
 import 'views/components/workflows/import-biblissima-workflow/biblissima-create-step';
 import 'views/components/workflows/import-biblissima-workflow/import-biblissima-final-step';
 
-const DOCUMENT_GRAPH_ID = '0c8226c1-11a9-4c48-9601-a7a0c6f2df6b';
 const COMPONENT_GRAPH_ID = 'd47595b4-f8a6-419c-8f33-b388206280c4';
 
 const viewModel = function(params) {
@@ -29,7 +28,6 @@ const viewModel = function(params) {
                             uniqueInstanceName: 'config',
                             tilesManaged: 'none',
                             parameters: {
-                                documentGraphId: DOCUMENT_GRAPH_ID,
                                 componentGraphId: COMPONENT_GRAPH_ID,
                             },
                         },

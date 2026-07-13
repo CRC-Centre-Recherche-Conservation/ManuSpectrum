@@ -470,6 +470,45 @@ XY_TEXT_FILE_FORMATS = ["csv", "tsv"]
 
 PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT), "pkg")
 
+
+# ---------------------------------------------------------------------------
+# Biblissima upstream — runtime/network configuration
+# ---------------------------------------------------------------------------
+# URLs, HTTP timeouts and concurrency/cache settings for the Biblissima
+# import workflow. Override in ``settings_local.py`` if needed (e.g. point
+# the URLs at a staging mirror, raise the timeouts in slow networks).
+# Mapping/graph/node-id constants live in ``manuspectrum.constants.biblissima``
+# — those are not runtime-tunable.
+BIBLISSIMA_WIKIBASE_URL = "https://data.biblissima.fr/w/api.php"
+BIBLISSIMA_PORTAL_URL = "https://portail.biblissima.fr/fr/ark:/43093"
+BIBLISSIMA_PORTAL_EN_URL = "https://portail.biblissima.fr/en/ark:/43093"
+BIBLISSIMA_IIIF_MANIFEST_URL = "https://portail.biblissima.fr/iiif/manifest"
+
+BIBLISSIMA_REQUEST_TIMEOUT = 10
+# IIIF aggregator manifests and the portal HTML pages can be slow when
+# aggregating many descriptors or when Biblissima is under load.
+BIBLISSIMA_IIIF_REQUEST_TIMEOUT = 45
+BIBLISSIMA_PORTAL_REQUEST_TIMEOUT = 30
+
+# Maximum concurrent outbound HTTP calls to Biblissima across the whole
+# Django process — keeps us a good API citizen when many users import
+# at once.
+BIBLISSIMA_CONCURRENCY_LIMIT = 12
+
+# 24h Django-cache TTL for resolved Wikibase entities and manuscript
+# enrichment results.
+BIBLISSIMA_CACHE_TTL = 24 * 60 * 60
+
+
+# ---------------------------------------------------------------------------
+# Biblissima async ES indexing (Phase 4)
+# ---------------------------------------------------------------------------
+# When True, post-commit ES indexing is dispatched to Celery via
+# ``index_resources_async.delay()``. Falls back to synchronous indexing if
+# the broker is unreachable. Default OFF
+# until a broker is confirmed available and this flag is explicitly
+BIBLISSIMA_ASYNC_INDEXING = False
+
 try:
     from .package_settings import *
 except ImportError:

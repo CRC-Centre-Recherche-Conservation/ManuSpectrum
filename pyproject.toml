@@ -28,6 +28,7 @@ dependencies = [
     "arches-modular-reports",
     "arches-component-lab",
     #"arches_controlled_lists"
+    "lxml>=5.3.0",
     "orjson>=3.11.4"
 ]
 version = "0.0.1"

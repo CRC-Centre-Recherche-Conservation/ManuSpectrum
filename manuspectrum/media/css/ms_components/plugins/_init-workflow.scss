@@ -1,0 +1,140 @@
+// ============================================
+// Init Workflow — landing page (workflow cards)
+// ============================================
+// Accordion groups of workflow launcher cards rendered by
+// templates/views/components/plugins/init-workflow.htm.
+
+// -- Accordion group --------------------------
+.workflow-accordion {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    overflow: hidden;
+}
+
+.workflow-accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+
+    &:hover {
+        background: #efefef;
+    }
+
+    &.collapsed {
+        border-bottom: none;
+    }
+}
+
+.workflow-accordion-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+
+    i {
+        color: #13a5ac;
+        font-size: 16px;
+    }
+}
+
+.workflow-accordion-badge {
+    background: #13a5ac;
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.workflow-accordion-chevron {
+    color: #666;
+    font-size: 12px;
+    transition: transform 0.3s ease;
+
+    &.open {
+        transform: rotate(180deg);
+    }
+}
+
+.workflow-accordion-content {
+    padding: 20px;
+    background: #fff;
+}
+
+// -- Cards grid -------------------------------
+.workflow-cards-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+// The <a> is stretched to the row height by the flex grid
+// (align-items: stretch); column layout + flex: 1 on the body
+// keeps the colored background covering the whole card.
+.workflow-card {
+    display: flex;
+    flex-direction: column;
+    width: 220px;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+    text-decoration: none;
+
+    // Beat Bootstrap's a:hover/a:focus underline.
+    &:hover,
+    &:focus {
+        text-decoration: none;
+    }
+
+    &:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+}
+
+.workflow-card-body {
+    flex: 1;
+    padding: 20px;
+    text-align: center;
+}
+
+.workflow-card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
+
+    i {
+        font-size: 24px;
+        color: #fff;
+    }
+}
+
+.workflow-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    margin: 0 0 8px 0;
+}
+
+.workflow-card-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.85);
+    margin: 0;
+    line-height: 1.4;
+}

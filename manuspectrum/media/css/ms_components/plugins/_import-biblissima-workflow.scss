@@ -16,12 +16,15 @@ $bbma-warning-bg: #fef9ec;
 $bbma-danger-bg: #fdf0f0;
 
 // Step wrapper overrides
+// Arches' .tabbed-workflow-step-body has `height: 100%; overflow-y: auto`,
+// so any inner content taller than the viewport scrolls the whole step body
+// (browser-level scrollbar around the columns). Forcing the wrapper to fill
+// exactly its parent and hide its own overflow keeps the scroll inside our
+// own columns (.biblissima-results-column / .biblissima-cart-body).
 .biblissima-search-step-wrapper,
 .biblissima-create-step-wrapper {
-    .workflow-step-body {
-        padding: 0;
-        height: 100%;
-    }
+    height: 100%;
+    overflow: hidden;
 }
 
 // ============================================
@@ -74,10 +77,6 @@ $bbma-danger-bg: #fdf0f0;
     display: flex;
     flex-direction: column;
     gap: 20px;
-}
-
-.bbma-config-field {
-    // each field block
 }
 
 .bbma-config-label {
@@ -187,6 +186,18 @@ $bbma-danger-bg: #fdf0f0;
     flex: 1;
 }
 
+// Component search mode tabs
+.bbma-search-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+
+    .btn {
+        font-size: 11px;
+        padding: 3px 8px;
+    }
+}
+
 // Search input with embedded icon
 .bbma-search-input-wrap {
     position: relative;
@@ -233,7 +244,7 @@ $bbma-danger-bg: #fdf0f0;
 
 .bbma-filter-date { flex: 2; min-width: 280px; }
 .bbma-filter-pagesize { flex: 0; min-width: 100px; }
-.bbma-filter-id { flex: 1; min-width: 200px; }
+.bbma-filter-id { flex: 1; min-width: 200px; max-width: 600px; }
 
 .biblissima-filter-group {
     margin-bottom: 8px;
@@ -336,18 +347,57 @@ $bbma-danger-bg: #fdf0f0;
     margin-left: 6px;
 }
 
+// Inline text filter (in the results meta bar)
+.bbma-text-filter {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 1 280px;
+    margin: 0 12px;
+}
+
+.bbma-text-filter-icon {
+    position: absolute;
+    left: 8px;
+    color: $bbma-muted;
+    font-size: 11px;
+    pointer-events: none;
+}
+
+.bbma-text-filter-input {
+    padding-left: 24px;
+    padding-right: 24px;
+    height: 26px;
+    font-size: 12px;
+}
+
+.bbma-text-filter-clear {
+    position: absolute;
+    right: 2px;
+    color: $bbma-muted;
+    padding: 2px 6px;
+
+    &:hover {
+        color: $bbma-ink;
+    }
+}
+
 // Results + Cart body
 .biblissima-search-body {
     display: flex;
     flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 
-// Results column
+// Results column — owns its own vertical scroll, independent of the cart column
 .biblissima-results-column {
     flex: 1;
+    min-width: 0;
+    min-height: 0;
     overflow-y: auto;
     border-right: 1px solid $bbma-border;
+    position: relative;
 }
 
 // Empty states
@@ -485,6 +535,11 @@ $bbma-danger-bg: #fdf0f0;
     padding: 10px;
     border-top: 1px solid $bbma-border;
     background: $bbma-bg-warm;
+    // Pin to the bottom of the results-column scroll viewport so it stays
+    // visible just above the tabbed-workflow-footer while results scroll.
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
 }
 
 .bbma-page-indicator {
@@ -493,10 +548,12 @@ $bbma-danger-bg: #fdf0f0;
     font-weight: 500;
 }
 
-// Cart column
+// Cart column — owns its own vertical scroll (in .biblissima-cart-body),
+// independent of the results column.
 .biblissima-cart-column {
     width: 300px;
     flex-shrink: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     background: $bbma-bg-warm;
@@ -623,8 +680,21 @@ $bbma-danger-bg: #fdf0f0;
     align-items: center;
     gap: 10px;
     margin-bottom: 12px;
-    padding-bottom: 10px;
+    padding: 10px 0;
     border-bottom: 1px solid $bbma-border;
+
+    // P3: keep the primary action ("Create all" / "Finish") visible while
+    // scrolling long item lists. Only the first section sticks — nested
+    // section headers (parent panel, related resources) scroll normally.
+    .biblissima-create-step > .biblissima-create-section:first-of-type > & {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: #fff;
+        margin-top: -8px;
+        padding-top: 14px;
+        box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+    }
 
     > .fa {
         color: $bbma-accent;
@@ -649,6 +719,93 @@ $bbma-danger-bg: #fdf0f0;
 
 .bbma-section-actions {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+// Adaptive progress pill — fusionne l'indicateur de progression et l'explication
+// du bouton "Create all" désactivé. Une seule pill, 1 ou 2 segments selon ce
+// qui bloque (parents pas tous résolus / deps pas toutes liées / résolution).
+.bbma-deps-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    background: $bbma-accent-light;
+    border: 1px solid lighten($bbma-accent, 22%);
+    border-radius: 16px;
+    white-space: nowrap;
+    color: $bbma-accent-dark;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+
+    > .fa { font-size: 10px; }
+}
+
+.bbma-deps-progress-spinner {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    .fa { color: $bbma-accent; }
+}
+
+.bbma-deps-progress-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    > .fa {
+        font-size: 11px;
+        color: $bbma-accent;
+        flex-shrink: 0;
+    }
+}
+
+.bbma-deps-progress-sep {
+    color: lighten($bbma-accent, 15%);
+    font-weight: 700;
+    user-select: none;
+}
+
+.bbma-deps-progress-bar {
+    width: 56px;
+    height: 6px;
+    background: lighten($bbma-accent, 30%);
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.bbma-deps-progress-fill {
+    display: block;
+    height: 100%;
+    background: $bbma-accent;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.bbma-deps-progress-label {
+    color: $bbma-accent-dark;
+    letter-spacing: 0.2px;
+}
+
+// Muted button state when waiting for deps
+.bbma-btn-waiting {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+// Wrapper holding the pill + "Create all" button as a flex pair
+.bbma-create-all-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .bbma-section-hint {
@@ -667,16 +824,36 @@ $bbma-danger-bg: #fdf0f0;
 }
 
 // Dependency cards
+//
+// WCAG 1.4.1 — état NON exprimé par couleur seule :
+//   chaque carte porte un BADGE inline (.bbma-dep-badge) avec icône FA
+//   distinctive (fa-check / fa-plus / fa-question-circle / fa-exclamation-circle
+//   / fa-times / fa-circle-o). Le badge utilise le même langage visuel que
+//   la "progress pill" du header (même radius, même structure) — l'utilisateur
+//   lit chaque badge comme la contribution per-card au total "X/Y linked".
 .bbma-dep-card {
+    position: relative;
     border: 1px solid $bbma-border;
     border-radius: 4px;
     margin-bottom: 8px;
     background: #fff;
     transition: border-color 0.15s, background 0.15s;
+    min-height: 80px; // P3: stabilité du rythme vertical
 
-    &.bbma-dep-card-linked {
+    &.bbma-dep-card-linked,
+    &.bbma-dep-card-created {
         border-color: lighten($bbma-success, 25%);
         background: $bbma-success-bg;
+    }
+
+    &.bbma-dep-card-pending {
+        border-color: #e0a82e;
+        background: $bbma-warning-bg;
+    }
+
+    &.bbma-dep-card-suggestions {
+        border-color: #e0c56e;
+        background: #fffdf5;
     }
 }
 
@@ -706,13 +883,75 @@ $bbma-danger-bg: #fdf0f0;
     font-size: 13px;
     font-weight: 500;
     color: $bbma-ink;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// Status badges in header — mêmes proportions que .bbma-deps-progress
+// (radius 16px, padding 6/12, border 1px) pour signifier visuellement :
+// "ce badge est la contribution per-card au total affiché en haut".
+.bbma-dep-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 16px;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+    white-space: nowrap;
+    letter-spacing: 0.2px;
+
+    .fa { font-size: 10px; }
+}
+
+// Linked et Created partagent le bleu-accent (état "compté dans X/Y linked")
+// pour matcher la progress pill du header. L'icône FA distingue les deux :
+//   fa-check  (Linked)  vs  fa-plus (Created)
+.bbma-dep-badge-linked,
+.bbma-dep-badge-created {
+    background: $bbma-accent-light;
+    border-color: lighten($bbma-accent, 25%);
+    color: $bbma-accent-dark;
+}
+
+.bbma-dep-badge-pending {
+    background: #fef3cd;
+    border-color: #f2d88a;
+    color: #856404;
+}
+
+.bbma-dep-badge-suggestions {
+    background: #fff3cd;
+    border-color: #e0c56e;
+    color: #856404;
 }
 
 .bbma-dep-card-body {
     padding: 10px 12px;
+
+    // P3: cohérence d'espacement entre sous-zones empilées
+    > * + * {
+        margin-top: 8px;
+    }
 }
 
-// Linked state
+// P3: hauteur de base pour rendre la pile prévisible
+.bbma-dep-search-area,
+.bbma-dep-create-area,
+.bbma-dep-suggestions {
+    min-height: 48px;
+}
+
+.bbma-dep-match-found {
+    min-height: 40px;
+}
+
+// Linked / Created state
 .bbma-dep-match-found {
     display: flex;
     align-items: center;
@@ -736,6 +975,114 @@ $bbma-danger-bg: #fdf0f0;
     display: block;
 }
 
+// Pending confirmation (orange state)
+.bbma-dep-confirm-area {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bbma-dep-confirm-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    color: #856404;
+
+    > .fa-question-circle {
+        font-size: 16px;
+        color: #e0a82e;
+        flex-shrink: 0;
+    }
+}
+
+.bbma-dep-confirm-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+// Dep suggestions (inside card)
+.bbma-dep-suggestions {
+    background: #fffbe6;
+    border: 1px solid #f0e6b8;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.bbma-dep-suggestions-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8a6d0b;
+    padding: 6px 10px;
+    border-bottom: 1px solid #f0e6b8;
+
+    .fa { margin-right: 3px; }
+}
+
+.bbma-dep-suggestion-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    border-bottom: 1px solid #f5eece;
+
+    &:last-child { border-bottom: none; }
+    &:hover { background: #fef8d5; }
+}
+
+.bbma-dep-suggestion-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.bbma-dep-suggestion-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: 8px;
+
+    .btn-xs {
+        padding: 2px 8px;
+        height: auto;
+        width: auto;
+        font-size: 11px;
+    }
+}
+
+.bbma-dep-suggestions-footer {
+    padding: 5px 10px;
+    border-top: 1px solid #f0e6b8;
+    background: #fef8d5;
+}
+
+// Create area (no match found)
+.bbma-dep-create-area {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid lighten($bbma-border, 4%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bbma-dep-create-hint {
+    font-size: 11px;
+    color: $bbma-muted;
+    margin: 0;
+    flex: 1;
+
+    .fa { margin-right: 3px; }
+}
+
 // Search area (not yet linked)
 .bbma-dep-search-area {
     .select2-container { width: 100% !important; }
@@ -747,14 +1094,6 @@ $bbma-danger-bg: #fdf0f0;
     color: $bbma-muted;
     margin-bottom: 6px;
     display: block;
-
-    .fa { margin-right: 3px; }
-}
-
-.bbma-dep-auto-create {
-    font-size: 11px;
-    color: lighten($bbma-muted, 8%);
-    margin: 6px 0 0;
 
     .fa { margin-right: 3px; }
 }
@@ -828,6 +1167,98 @@ $bbma-danger-bg: #fdf0f0;
     color: lighten($bbma-muted, 8%);
     font-family: monospace;
     margin-top: 1px;
+}
+
+.bbma-item-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: $bbma-muted;
+    background: $bbma-bg;
+    border: 1px solid $bbma-border;
+    border-radius: 10px;
+    cursor: pointer;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+
+    .fa { font-size: 9px; }
+
+    &:hover {
+        background: $bbma-accent-light;
+        border-color: lighten($bbma-accent, 15%);
+        color: $bbma-accent-dark;
+    }
+}
+
+.bbma-item-type-fallback {
+    background: $bbma-warning-bg;
+    border-color: #f2d88a;
+    color: #b7791f;
+
+    &:hover {
+        background: darken($bbma-warning-bg, 3%);
+        border-color: #e6c260;
+        color: #8a5a12;
+    }
+}
+
+.bbma-item-type-editor {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 6px;
+    background: $bbma-accent-light;
+    border: 1px solid lighten($bbma-accent, 15%);
+    border-radius: 4px;
+}
+
+.bbma-item-type-editor-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.bbma-item-thumb {
+    position: relative;
+}
+
+.bbma-item-enriching {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    color: $bbma-accent;
+    font-size: 10px;
+}
+
+.bbma-review-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    background: $bbma-warning-bg;
+    border: 1px solid #f2d88a;
+    border-radius: 4px;
+    color: #8a5a12;
+    font-size: 13px;
+
+    .fa { color: #b7791f; }
+    span { font-weight: 600; }
 }
 
 .bbma-item-status {
@@ -1006,4 +1437,379 @@ $bbma-danger-bg: #fdf0f0;
     padding: 5px 12px;
     border-top: 1px solid #f0e6b8;
     background: #fef8d5;
+}
+
+// ============================================
+// Loading state (searching = true)
+// "Reading in progress" aesthetic: info banner with pulsing dot +
+// rotating message + elapsed timer, a continuous sweep bar for liveness,
+// and shimmer skeleton cards that preview the result grid shape.
+// ============================================
+
+@keyframes bbma-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.6);
+        opacity: 0.35;
+    }
+}
+
+@keyframes bbma-pulse-ring {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(2.4);
+        opacity: 0;
+    }
+}
+
+@keyframes bbma-sweep {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(400%);
+    }
+}
+
+@keyframes bbma-shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+@keyframes bbma-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.biblissima-loading-state {
+    padding: 16px 14px 20px;
+}
+
+.biblissima-loading-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: linear-gradient(
+        135deg,
+        lighten($bbma-accent-light, 2%) 0%,
+        $bbma-bg-warm 100%
+    );
+    border: 1px solid lighten($bbma-accent, 25%);
+    border-left: 3px solid $bbma-accent;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(26, 42, 58, 0.04);
+}
+
+.biblissima-loading-pulse {
+    position: relative;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    // Outer expanding ring
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid $bbma-accent;
+        animation: bbma-pulse-ring 1.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+    }
+}
+
+.biblissima-pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: $bbma-accent;
+    box-shadow: 0 0 0 2px rgba($bbma-accent, 0.15);
+    animation: bbma-pulse 1.6s ease-in-out infinite;
+}
+
+.biblissima-loading-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.biblissima-loading-message {
+    font-size: 13px;
+    font-weight: 500;
+    color: $bbma-ink;
+    letter-spacing: 0.01em;
+    animation: bbma-fade-in 0.4s ease-out;
+}
+
+.biblissima-loading-hint {
+    margin-top: 3px;
+    font-size: 11px;
+    font-style: italic;
+    color: $bbma-muted;
+    animation: bbma-fade-in 0.4s ease-out;
+}
+
+.biblissima-loading-timer {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    padding-left: 14px;
+    border-left: 1px solid rgba($bbma-accent, 0.25);
+}
+
+.biblissima-timer-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: $bbma-muted;
+    font-weight: 600;
+}
+
+.biblissima-timer-value {
+    font-family: "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", monospace;
+    font-size: 15px;
+    font-weight: 500;
+    color: $bbma-accent-dark;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+// Continuous sweep bar below the banner — the main "alive" signal
+.biblissima-loading-sweep {
+    position: relative;
+    height: 2px;
+    margin: 12px 2px 18px;
+    background: lighten($bbma-border, 4%);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.biblissima-loading-sweep-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 25%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba($bbma-accent, 0.35) 20%,
+        $bbma-accent 50%,
+        rgba($bbma-accent, 0.35) 80%,
+        transparent 100%
+    );
+    animation: bbma-sweep 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+// Skeleton result cards — preview the real result grid while waiting
+.biblissima-skeleton-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.biblissima-skeleton-card {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
+}
+
+.biblissima-skeleton-thumb {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+    border-radius: 2px;
+}
+
+.biblissima-skeleton-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 4px;
+    min-width: 0;
+}
+
+.biblissima-skeleton-line {
+    height: 10px;
+    border-radius: 2px;
+
+    &.skeleton-line-title {
+        width: 72%;
+        height: 13px;
+    }
+
+    &.skeleton-line-meta {
+        width: 88%;
+    }
+
+    &.skeleton-line-meta-short {
+        width: 42%;
+    }
+}
+
+.biblissima-skeleton-chips {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.biblissima-skeleton-chip {
+    display: inline-block;
+    width: 56px;
+    height: 14px;
+    border-radius: 7px;
+}
+
+// Shimmer animation — shared by all skeleton elements
+.shimmer {
+    background: linear-gradient(
+        90deg,
+        rgba($bbma-border, 0.45) 0%,
+        rgba($bbma-border, 0.75) 35%,
+        rgba(255, 255, 255, 0.9) 50%,
+        rgba($bbma-border, 0.75) 65%,
+        rgba($bbma-border, 0.45) 100%
+    );
+    background-size: 200% 100%;
+    animation: bbma-shimmer 1.8s linear infinite;
+}
+
+// Stagger the skeleton cards slightly so the shimmer doesn't feel mechanical
+.biblissima-skeleton-card:nth-child(1) .shimmer { animation-delay: 0s; }
+.biblissima-skeleton-card:nth-child(2) .shimmer { animation-delay: -0.15s; }
+.biblissima-skeleton-card:nth-child(3) .shimmer { animation-delay: -0.30s; }
+.biblissima-skeleton-card:nth-child(4) .shimmer { animation-delay: -0.45s; }
+.biblissima-skeleton-card:nth-child(5) .shimmer { animation-delay: -0.60s; }
+
+// Respect users who prefer reduced motion
+@media (prefers-reduced-motion: reduce) {
+    .biblissima-pulse-dot,
+    .biblissima-loading-pulse::before,
+    .biblissima-loading-sweep-fill,
+    .shimmer {
+        animation: none;
+    }
+
+    .shimmer {
+        background: rgba($bbma-border, 0.6);
+    }
+
+    .biblissima-loading-sweep-fill {
+        width: 100%;
+        background: rgba($bbma-accent, 0.4);
+    }
+}
+
+// Progressive loading progress bar shown while pages 2..N stream in.
+.biblissima-progress-bar {
+    padding: 10px 14px;
+    border-bottom: 1px solid lighten($bbma-border, 4%);
+    background: $bbma-bg-warm;
+
+    .biblissima-progress-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: $bbma-muted;
+        margin-bottom: 6px;
+
+        .fa-spinner {
+            color: $bbma-accent;
+        }
+
+        strong {
+            color: $bbma-ink;
+        }
+
+        small {
+            color: lighten($bbma-muted, 10%);
+            margin-left: 4px;
+        }
+    }
+
+    .progress {
+        height: 6px;
+        margin-bottom: 0;
+        background: lighten($bbma-border, 4%);
+        border-radius: 3px;
+        overflow: hidden;
+
+        .progress-bar {
+            background-color: $bbma-accent;
+            transition: width 0.3s ease;
+        }
+    }
+}
+
+// Batch-create summary banner (step 3)
+// Wraps Bootstrap-3's .alert + .alert-dismissible; adds spacing for the
+// optional "Retry all failed" button so it doesn't butt against the message.
+.bbma-batch-summary {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+    // Reserve room so the pinned dismiss × never overlaps the summary text.
+    padding-right: 32px;
+
+    // BS3 `.close` relies on `float: right`, which `display: flex` neutralizes
+    // (it would otherwise render the × as the leftmost flex item). Pull it out
+    // of the flex flow and pin it top-right, keeping the BS3 convention.
+    > .close {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        float: none;
+    }
+
+    &.alert-success {
+        border-color: lighten($bbma-success, 24%);
+    }
+}
+
+.bbma-batch-retry {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+// Parent-resolver panel (step 3, Component mode) renders as a list of
+// .bbma-dep-card just like the Related-Resources section above —
+// .bbma-deps-list / .bbma-dep-card / .bbma-dep-card-header /
+// .bbma-dep-card-body / .bbma-dep-suggestions / .bbma-dep-search-area /
+// .bbma-dep-create-area / .bbma-dep-match-found cover the layout end-to-
+// end (state-tinted card, type pill, name, status badge, suggestions,
+// manual picker, create branch, resolved chip). Only the alt-name
+// checkbox needs a small breathing-room rule on top of the existing
+// .bbma-dep-search-area scaffolding.
+.bbma-dep-enrich {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: pointer;
 }

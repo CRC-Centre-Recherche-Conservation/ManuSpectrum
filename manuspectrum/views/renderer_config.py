@@ -10,6 +10,7 @@ from django.utils.decorators import method_decorator
 from arches.app.utils.decorators import group_required
 from arches.app.views.api import APIBase
 from manuspectrum.models import RendererConfig
+from manuspectrum.views.permissions import EDITOR_GROUPS
 from arches.app.models import models
 from arches.app.utils.response import JSONResponse
 from django.http import HttpResponseNotFound
@@ -18,16 +19,6 @@ from django.utils.translation import gettext as _
 from arches.app.utils.betterJSONSerializer import JSONSerializer, JSONDeserializer
 
 logger = logging.getLogger(__name__)
-
-EDITOR_GROUPS = (
-    "Resource Editor",
-    "Resource Reviewer",
-    "RDM Administrator",
-    "Application Administrator",
-    "System Administrator",
-    "Graph Editor",
-    "Resource Exporter",
-)
 
 
 class RendererView(APIBase):

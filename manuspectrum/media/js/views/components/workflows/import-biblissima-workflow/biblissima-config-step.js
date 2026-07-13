@@ -1,19 +1,31 @@
+/**
+ * Import Biblissima workflow — step 1 (Configuration).
+ *
+ * Pick the resource type (Document or Component) and an optional Project
+ * to link the imports to. The chosen resourceType is fixed for the rest
+ * of the session: steps 2 and 3 branch on it and don't support
+ * mid-workflow mode switching.
+ *
+ * Output: ``params.value({ resourceType, projectId, projectName })``
+ * consumed by subsequent steps via ``configStepData``.
+ *
+ * Uses Arches' ``ResourceInstanceSelectViewModel`` for the Project picker
+ * so that the user can also create a new resource inline (the
+ * resource-creator panel is wired to ``activeNewResourceInstance``).
+ */
 import ko from 'knockout';
-import arches from 'arches';
+// Side-effect import: arches.js triggers utils/set-csrf-token, which wires the
+// CSRF token into jQuery's ajaxSetup so the ResourceInstanceSelectViewModel
+// pickers below can POST safely. Imported even though no `arches.*` symbol is
+// referenced in this file — sister steps already pull it in, so the side
+// effect runs once on first evaluation, but keep the explicit import here so
+// step 1 stays robust to bundle-load ordering changes.
+import 'arches';
 import 'bindings/select2-query';
 import ResourceInstanceSelectViewModel from 'viewmodels/resource-instance-select';
 import biblissimaConfigStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm';
 
-const DOCUMENT_GRAPH_ID = '0c8226c1-11a9-4c48-9601-a7a0c6f2df6b';
 const PROJECT_GRAPH_ID = '87a4319d-3ca5-43f6-88cc-a7379fba67f6';
-
-// Default type value IDs (prefLabel valueid, not conceptid)
-const VALUEID_MANUSCRIT = '30931466-b4e0-4527-ac93-b7290e80084c';
-const VALUEID_DECOR = '3ff3726d-2a5a-450e-a558-105e065bb60f';
-
-// RDM Collections
-const RDM_DOC_TYPE = '73cf3108-5fef-429b-a92f-24074871aed9';
-const RDM_COMP_TYPE = 'e85080b2-c39b-4e37-b6bc-b57d34092b7b';
 
 /**
  * Create a resource picker using Arches' ResourceInstanceSelectViewModel.
@@ -39,46 +51,26 @@ const viewModel = function(params) {
     const self = this;
 
     this.resourceType = ko.observable('Document');
-    this.parentDocumentId = ko.observable(null);
-    this.parentDocumentName = ko.observable('');
     this.projectId = ko.observable(null);
     this.projectName = ko.observable('');
-    this.defaultType = ko.observable(null);
 
     // Computed
     this.isComponent = ko.computed(() => self.resourceType() === 'Component');
-    this.currentRdmCollection = ko.observable(RDM_DOC_TYPE);
 
     // Resource pickers using Arches' native VM
-    this.parentDocPicker = createResourcePicker([DOCUMENT_GRAPH_ID], true);
     this.projectPicker = createResourcePicker([PROJECT_GRAPH_ID], true);
 
     // Shared graphLookup for the creator panel template
     this.graphLookup = {};
-    Object.assign(this.graphLookup, this.parentDocPicker.graphLookup);
     Object.assign(this.graphLookup, this.projectPicker.graphLookup);
 
     // Track which picker triggered creation (for sharing #resource-creator-panel)
-    this.activeNewResourceInstance = ko.computed(() =>
-        self.projectPicker.newResourceInstance?.() ||
-        self.parentDocPicker.newResourceInstance?.() ||
-        null
+    this.activeNewResourceInstance = ko.computed(
+        () => self.projectPicker.newResourceInstance?.() || null,
     );
 
     // Sync picker values to our observables
     // With onlyManageResourceIds=true, value is a UUID string (not an object)
-    this.parentDocPicker.value.subscribe((val) => {
-        if (val && typeof val === 'string' && val.length > 10) {
-            self.parentDocumentId(val);
-            // Get name from selectedItem
-            const selected = self.parentDocPicker.selectedItem?.();
-            self.parentDocumentName(selected?._source?.displayname || val);
-        } else {
-            self.parentDocumentId(null);
-            self.parentDocumentName('');
-        }
-    });
-
     this.projectPicker.value.subscribe((val) => {
         if (val && typeof val === 'string' && val.length > 10) {
             self.projectId(val);
@@ -90,60 +82,54 @@ const viewModel = function(params) {
         }
     });
 
-    // Reset parent document and update RDM collection when switching type
-    this.resourceType.subscribe((type) => {
-        if (type === 'Document') {
-            self.parentDocumentId(null);
-            self.parentDocumentName('');
-            self.parentDocPicker.value([]);
-            self.defaultType(VALUEID_MANUSCRIT);
-            self.currentRdmCollection(RDM_DOC_TYPE);
-        } else {
-            self.defaultType(VALUEID_DECOR);
-            self.currentRdmCollection(RDM_COMP_TYPE);
-        }
-    });
-
-    // Set initial default type
-    this.defaultType(VALUEID_MANUSCRIT);
-
     // Validation
-    this.canProceed = ko.computed(() => {
-        if (self.isComponent() && !self.parentDocumentId()) {
-            return false;
-        }
-        return true;
-    });
+    this.canProceed = ko.computed(() => true);
 
     // Restore from cached value
     this.initialize = () => {
         if (params.value()) {
             const cached = ko.unwrap(params.value);
             if (cached.resourceType) self.resourceType(cached.resourceType);
-            if (cached.parentDocumentId) self.parentDocumentId(cached.parentDocumentId);
-            if (cached.parentDocumentName) self.parentDocumentName(cached.parentDocumentName);
-            if (cached.projectId) self.projectId(cached.projectId);
+            if (cached.projectId) {
+                self.projectId(cached.projectId);
+                self.projectPicker.value(cached.projectId);
+            }
             if (cached.projectName) self.projectName(cached.projectName);
-            if (cached.defaultType) self.defaultType(cached.defaultType);
         }
-    };
-
-    this.submit = () => {
-        const data = {
-            resourceType: self.resourceType(),
-            parentDocumentId: self.parentDocumentId(),
-            parentDocumentName: self.parentDocumentName(),
-            projectId: self.projectId(),
-            projectName: self.projectName(),
-            defaultType: self.defaultType(),
-        };
-        params.value(data);
-        self.complete(true);
     };
 
     // Workflow step interface
     this.complete = params.form?.complete || ko.observable(false);
     this.savedData = params.form?.savedData || ko.observable({});
+
+    // Auto-persist on every change to params.value AND to the workflow
+    // history (BDD). Replaces the old explicit "Continue" submit button —
+    // the workflow's "Next Step" advances once canProceed is true.
+    let _persistTimer = null;
+    const _persist = () => {
+        const data = {
+            resourceType: self.resourceType(),
+            projectId: self.projectId(),
+            projectName: self.projectName(),
+        };
+        params.value(data);
+        if (params.form?.setToWorkflowHistory) {
+            params.form.setToWorkflowHistory('value', data);
+            params.form.savedData?.(data);
+        }
+    };
+    const _schedulePersist = () => {
+        if (_persistTimer) clearTimeout(_persistTimer);
+        _persistTimer = setTimeout(() => {
+            _persistTimer = null;
+            _persist();
+        }, 300);
+    };
+    self.resourceType.subscribe(_schedulePersist);
+    self.projectId.subscribe(_schedulePersist);
+    self.projectName.subscribe(_schedulePersist);
+
+    ko.computed(() => self.complete(!!self.canProceed()));
 
     this.initialize();
 };

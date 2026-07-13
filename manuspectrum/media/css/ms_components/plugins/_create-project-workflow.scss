@@ -17,16 +17,6 @@
     height: 100%;
 }
 
-// Override Arches core rule that hides .search-selection-controls
-// inside tabbed workflows (arches.scss:602).
-.create-project-add-things-step .search-selection-controls {
-    display: block !important;
-    padding: 10px 20px;
-    border-top: 1px solid #ddd;
-    flex-shrink: 0;
-    background: #fff;
-}
-
 // -- Component root ---------------------------
 .object-search-step {
     display: flex;
@@ -172,6 +162,35 @@
         text-transform: uppercase;
         letter-spacing: 0.4px;
     }
+}
+
+// -- Cart header: title + autosave status + remove all --------
+.ms-cart-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    h5 {
+        flex: 1;
+    }
+}
+
+.ms-autosave-status {
+    white-space: nowrap;
+
+    .fa {
+        margin-right: 2px;
+    }
+}
+
+// link-style inline button (Retry / Remove all) that keeps the
+// header height stable
+.ms-btn-inline {
+    padding: 0;
+    border: 0;
+    font-size: 12px;
+    vertical-align: baseline;
+    white-space: nowrap;
 }
 
 .wf-multi-tile-step-list-body {
