@@ -114,9 +114,7 @@ class IndexResourcesAsyncRidsTests(TestCase):
             mock_cls.DoesNotExist = Resource.DoesNotExist
             mock_cls.objects.get.side_effect = _get
             # Must not raise
-            index_resources_async.apply(
-                kwargs={"resource_ids": [rid_missing, rid_ok]}
-            )
+            index_resources_async.apply(kwargs={"resource_ids": [rid_missing, rid_ok]})
 
         mock_resource_ok.index.assert_called_once()
 
@@ -333,6 +331,7 @@ class StartupAssertionTests(TestCase):
 
             # Patch the import inside _check_async_indexing_config.
             import sys
+
             fake_celery_module = SimpleNamespace(app=fake_celery_app)
 
             original_modules = sys.modules.copy()
@@ -411,6 +410,7 @@ class StartupAssertionTests(TestCase):
             # Restore from original import if cached.
             try:
                 import importlib
+
                 importlib.import_module("manuspectrum.celery")
             except Exception:
                 pass

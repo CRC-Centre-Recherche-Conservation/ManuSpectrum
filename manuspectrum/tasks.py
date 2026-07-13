@@ -47,7 +47,8 @@ def index_resources_async(transaction_id=None, resource_ids=None):
                 resource.index()
             except Resource.DoesNotExist:
                 logger.warning(
-                    "index_resources_async: resource %s not found, skipping", resource_id
+                    "index_resources_async: resource %s not found, skipping",
+                    resource_id,
                 )
             except Exception:
                 logger.exception(
