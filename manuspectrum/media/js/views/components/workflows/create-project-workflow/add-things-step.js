@@ -101,11 +101,20 @@ const viewModel = function(params) {
         return false;
     });
 
-    this.dirty.subscribe((dirty) => {
+    // keep the form dirty while no studied-objects tile exists so the
+    // workflow always goes through submit() (and its empty-selection
+    // guard) instead of silently completing this required step
+    this.mustSave = ko.pureComputed(() => {
+        return self.dirty() || (!self.studiedObjectsTileId() && self.value().length === 0);
+    });
+    this.mustSave.subscribe((mustSave) => {
         if (ko.isObservable(params.form.dirty)) {
-            params.form.dirty(dirty);
+            params.form.dirty(mustSave);
         }
     });
+    if (ko.isObservable(params.form.dirty)) {
+        params.form.dirty(this.mustSave());
+    }
 
     this.value.subscribe((a) => {
         a.forEach((action) => {
@@ -191,7 +200,30 @@ const viewModel = function(params) {
         }));
     };
 
+    const reportSaveError = (message) => {
+        params.pageVm.alert(
+            new params.form.AlertViewModel(
+                'ep-alert-red',
+                arches.translations.issueSavingWorkflowStep,
+                message
+            )
+        );
+        if (ko.isObservable(params.form.error)) {
+            // reset first so setting the same message twice still notifies
+            params.form.error(null);
+            params.form.error(message);
+        }
+    };
+
     this.submit = () => {
+        // the "Studied object" node is required server-side: saving an
+        // empty list is guaranteed to fail with a 400
+        if (self.value().length === 0) {
+            reportSaveError(arches.translations.addThingsNoDocuments);
+            return;
+        }
+
+        params.pageVm.alert("");
         self.complete(false);
         self.saving(true);
 
@@ -220,9 +252,11 @@ const viewModel = function(params) {
         }).then((response) => {
             if (response.ok) {
                 return response.json();
-            } else {
-                throw new Error('Failed to save tile');
             }
+            return response.json().then(
+                (error) => Promise.reject(new Error(error?.message || arches.translations.issueSavingWorkflowStep)),
+                () => Promise.reject(new Error(arches.translations.issueSavingWorkflowStep))
+            );
         }).then((data) => {
             self.studiedObjectsTileId(data.tileid);
             self.startValue(ko.unwrap(self.value).slice());
@@ -235,14 +269,28 @@ const viewModel = function(params) {
             self.complete(true);
         }).catch((err) => {
             console.error(err);
-            const startValue = ko.unwrap(self.startValue);
-            self.value(startValue);
             self.saving(false);
+            reportSaveError(err.message);
         });
     };
 
     params.form.save = self.submit;
     params.form.onSaveSuccess = () => {};
+
+    // the "Continue" button of this template (inherited from arches-for-science)
+    // references next(), which no viewmodel in the component's scope provides;
+    // walk the binding context up to the workflow, whose next() re-checks
+    // that the step is complete before advancing
+    this.next = (data, event) => {
+        const workflow = ko.contextFor(event.target).$parents.find(
+            (parent) => parent && typeof parent.next === 'function' && typeof parent.saveActiveStep === 'function'
+        );
+        if (workflow) {
+            workflow.next();
+        } else {
+            console.warn('add-things-step: workflow viewmodel not found in binding context');
+        }
+    };
 
     this.targetResourceSelectConfig = {
         value: self.selectedTerm,

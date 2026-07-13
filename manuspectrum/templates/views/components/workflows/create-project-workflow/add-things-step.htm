@@ -90,7 +90,7 @@
                 <div class="search-selection-controls">
                     <div class="d-flex justify-content-end">
                         <button class="btn btn-md btn-mint" data-bind="visible: dirty, click: function(){submit()}, text: complete() === true ? $root.translations.save : '{% trans 'Save and Continue' %}'"></button>
-                        <button class="btn btn-md btn-mint" data-bind="visible: !dirty() && complete() === true, click: function(){next()}, text: $root.translations.continue"></button>
+                        <button class="btn btn-md btn-mint" data-bind="visible: !dirty() && complete() === true, click: next, text: $root.translations.continue"></button>
                         <button class="btn btn-md btn-warning" data-bind="visible: dirty, click: function(){resetTile()}" style="margin-left: 8px">{% trans "Reset" %}</button>
                     </div>
                 </div>
