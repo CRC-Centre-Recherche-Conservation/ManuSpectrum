@@ -1,0 +1,61 @@
+{% load i18n %}
+
+<div class="biblissima-config-step">
+
+    <div class="bbma-config-header">
+        <div class="bbma-config-icon">
+            <i class="fa fa-cloud-download"></i>
+        </div>
+        <div>
+            <h3 class="bbma-config-title">{% trans "Import from Biblissima" %}</h3>
+            <p class="bbma-config-subtitle">{% trans "Configure the import before searching the Biblissima portal." %}</p>
+        </div>
+    </div>
+
+    <div class="bbma-config-body">
+
+        <div class="bbma-config-field">
+            <label class="bbma-config-label">{% trans "Resource type to create" %}</label>
+            <div class="bbma-type-switcher">
+                <label class="bbma-type-option" data-bind="css: {'bbma-type-active': resourceType() === 'Document'}">
+                    <input type="radio" name="resourceType" value="Document" data-bind="checked: resourceType">
+                    <i class="fa fa-book"></i>
+                    <span>{% trans "Document" %}</span>
+                    <small>{% trans "Manuscript, book, printed text" %}</small>
+                </label>
+                <label class="bbma-type-option" data-bind="css: {'bbma-type-active': resourceType() === 'Component'}">
+                    <input type="radio" name="resourceType" value="Component" data-bind="checked: resourceType">
+                    <i class="fa fa-puzzle-piece"></i>
+                    <span>{% trans "Component" %}</span>
+                    <small>{% trans "Illumination, lettrine, decoration" %}</small>
+                </label>
+            </div>
+        </div>
+
+        <div class="bbma-config-field">
+            <label class="bbma-config-label">{% trans "Associate with project" %}</label>
+            <p class="bbma-config-hint">
+                {% trans "Optional. Created resources will be added to this project's studied objects." %}
+            </p>
+            <select style="width: 100%;"
+                data-bind="select2Query: { select2Config: projectPicker.select2Config }">
+            </select>
+        </div>
+
+    </div>
+</div>
+
+<!-- Inline resource creator panel (required by ResourceInstanceSelectViewModel) -->
+<!-- ko let: { _graphLookup: graphLookup } -->
+<div class="create-resource-instance-card-component rr-table-pop" id="resource-creator-panel"
+     data-bind="style: {transform: activeNewResourceInstance() ? 'translate(0,0)' : 'translate(100%,0)'}">
+    <!-- ko if: activeNewResourceInstance -->
+    <!-- ko with: activeNewResourceInstance -->
+    <!-- ko component: {
+        name: 'related-instance-creator',
+        params: {...$data, graphName: _graphLookup[graphid]?.name || ''}
+    } --><!-- /ko -->
+    <!-- /ko -->
+    <!-- /ko -->
+</div>
+<!-- /ko -->

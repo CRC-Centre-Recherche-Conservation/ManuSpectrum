@@ -101,11 +101,20 @@ const viewModel = function(params) {
         return false;
     });
 
-    this.dirty.subscribe((dirty) => {
+    // keep the form dirty while no studied-objects tile exists so the
+    // workflow always goes through submit() (and its empty-selection
+    // guard) instead of silently completing this required step
+    this.mustSave = ko.pureComputed(() => {
+        return self.dirty() || (!self.studiedObjectsTileId() && self.value().length === 0);
+    });
+    this.mustSave.subscribe((mustSave) => {
         if (ko.isObservable(params.form.dirty)) {
-            params.form.dirty(dirty);
+            params.form.dirty(mustSave);
         }
     });
+    if (ko.isObservable(params.form.dirty)) {
+        params.form.dirty(this.mustSave());
+    }
 
     this.value.subscribe((a) => {
         a.forEach((action) => {
@@ -159,6 +168,12 @@ const viewModel = function(params) {
             loadExistingStudiedObjects();
             params.form.lockExternalStep("select-project", true);
         }
+
+        // the workflow marks a step complete whenever cached data exists;
+        // an empty cart must never count as complete (documents required)
+        if (!self.value().length) {
+            self.complete(false);
+        }
     };
 
     this.resetTile = () => {
@@ -183,22 +198,43 @@ const viewModel = function(params) {
         }
     };
 
-    const buildResourceInstanceList = () => {
-        return self.value().map((resource) => ({
+    const buildResourceInstanceList = (resources) => {
+        return resources.map((resource) => ({
             resourceId: resource.resourceinstanceid,
             ontologyProperty: "",
             inverseOntologyProperty: ""
         }));
     };
 
-    this.submit = () => {
-        self.complete(false);
-        self.saving(true);
+    const reportSaveError = (message) => {
+        params.pageVm.alert(
+            new params.form.AlertViewModel(
+                'ep-alert-red',
+                arches.translations.issueSavingWorkflowStep,
+                message
+            )
+        );
+        if (ko.isObservable(params.form.error)) {
+            // reset first so setting the same message twice still notifies
+            params.form.error(null);
+            params.form.error(message);
+        }
+    };
 
-        const tileData = {
-            [STUDIED_OBJECTS_NODE_ID]: buildResourceInstanceList()
-        };
+    this.saveState = ko.observable('idle'); // idle | saving | saved | error
+    this.saveErrorMessage = ko.observable('');
 
+    let debounceTimer = null;
+    let savedFadeTimer = null;
+    let saveQueue = Promise.resolve();
+
+    const isInSync = () => {
+        const saved = (self.startValue() || []).map((r) => r.resourceinstanceid);
+        const current = self.value().map((r) => r.resourceinstanceid);
+        return current.length === saved.length && current.every((id) => saved.includes(id));
+    };
+
+    const postTile = (resources) => {
         const tile = {
             tileid: self.studiedObjectsTileId() || "",
             nodegroup_id: STUDIED_OBJECTS_NODEGROUP_ID,
@@ -206,11 +242,13 @@ const viewModel = function(params) {
             resourceinstance_id: self.projectResourceId(),
             sortorder: 0,
             tiles: {},
-            data: tileData,
+            data: {
+                [STUDIED_OBJECTS_NODE_ID]: buildResourceInstanceList(resources)
+            },
             transaction_id: params.form.workflowId
         };
 
-        window.fetch(arches.urls.api_tiles(self.studiedObjectsTileId() || uuid.generate()), {
+        return window.fetch(arches.urls.api_tiles(self.studiedObjectsTileId() || uuid.generate()), {
             method: 'POST',
             credentials: 'include',
             body: JSON.stringify(tile),
@@ -220,28 +258,113 @@ const viewModel = function(params) {
         }).then((response) => {
             if (response.ok) {
                 return response.json();
-            } else {
-                throw new Error('Failed to save tile');
             }
-        }).then((data) => {
-            self.studiedObjectsTileId(data.tileid);
-            self.startValue(ko.unwrap(self.value).slice());
-            self.savedData({
-                value: ko.unwrap(self.value),
-                projectResourceId: ko.unwrap(self.projectResourceId),
-                studiedObjectsTileId: ko.unwrap(self.studiedObjectsTileId),
-            });
-            self.saving(false);
-            self.complete(true);
-        }).catch((err) => {
-            console.error(err);
-            const startValue = ko.unwrap(self.startValue);
-            self.value(startValue);
-            self.saving(false);
+            return response.json().then(
+                (error) => Promise.reject(new Error(error?.message || arches.translations.issueSavingWorkflowStep)),
+                () => Promise.reject(new Error(arches.translations.issueSavingWorkflowStep))
+            );
         });
     };
 
-    params.form.save = self.submit;
+    // saves are serialized: each call appends one sync attempt to the queue,
+    // reads the cart at run time and no-ops when already in sync, so the
+    // trailing state always wins. Resolves true when the cart is persisted
+    // (or legitimately empty), false on save failure.
+    const persist = () => {
+        const run = saveQueue.then(async () => {
+            if (self.value().length === 0) {
+                // an empty cart cannot be saved (required node): keep it a
+                // local state — Next stays blocked through complete(false) —
+                // and keep the tileid so a later save reuses the same tile
+                self.startValue([]);
+                self.savedData({
+                    value: [],
+                    projectResourceId: ko.unwrap(self.projectResourceId),
+                    studiedObjectsTileId: ko.unwrap(self.studiedObjectsTileId),
+                });
+                self.complete(false);
+                self.saveState('idle');
+                return true;
+            }
+
+            if (isInSync()) {
+                if (self.saveState() === 'saving') {
+                    self.saveState('idle');
+                }
+                self.complete(true);
+                return true;
+            }
+
+            self.saveState('saving');
+            const snapshot = self.value().slice();
+            try {
+                const data = await postTile(snapshot);
+                self.studiedObjectsTileId(data.tileid);
+                self.startValue(snapshot);
+                self.savedData({
+                    value: snapshot,
+                    projectResourceId: ko.unwrap(self.projectResourceId),
+                    studiedObjectsTileId: data.tileid,
+                });
+                self.saveErrorMessage('');
+                params.pageVm.alert("");
+                if (isInSync()) {
+                    self.complete(true);
+                    self.saveState('saved');
+                    clearTimeout(savedFadeTimer);
+                    savedFadeTimer = setTimeout(() => {
+                        if (self.saveState() === 'saved') {
+                            self.saveState('idle');
+                        }
+                    }, 2500);
+                }
+                return true;
+            } catch (err) {
+                console.error(err);
+                self.saveErrorMessage(err.message);
+                self.saveState('error');
+                self.complete(false);
+                return false;
+            }
+        });
+        saveQueue = run.then(() => {}, () => {});
+        return run;
+    };
+
+    // auto-save: any cart change gives immediate feedback and persists once
+    // the user pauses (debounced), so Back/Next can never lose a selection
+    this.value.subscribe(() => {
+        if (isInSync()) { return; }
+        self.saveState('saving');
+        self.complete(false);
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(persist, 500);
+    });
+
+    this.retrySave = () => {
+        persist();
+    };
+
+    this.removeAll = () => {
+        self.value.removeAll();
+    };
+
+    // footer Next: flush any pending change before advancing; an empty
+    // cart is rejected with the existing alert
+    params.form.save = () => {
+        if (self.value().length === 0) {
+            reportSaveError(arches.translations.addThingsNoDocuments);
+            return;
+        }
+        self.saving(true);
+        clearTimeout(debounceTimer);
+        persist().then((success) => {
+            self.saving(false);
+            if (!success) {
+                reportSaveError(self.saveErrorMessage() || arches.translations.issueSavingWorkflowStep);
+            }
+        });
+    };
     params.form.onSaveSuccess = () => {};
 
     this.targetResourceSelectConfig = {

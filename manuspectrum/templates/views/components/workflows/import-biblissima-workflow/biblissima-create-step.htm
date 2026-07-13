@@ -1,0 +1,779 @@
+{% load i18n %}
+
+<div class="biblissima-create-step">
+
+    <!-- ko ifnot: loading -->
+
+    <!-- Section A: Items -->
+    <div class="biblissima-create-section">
+        <div class="bbma-section-header">
+            <i class="fa fa-list"></i>
+            <h4>
+                <!-- ko if: resourceType === 'Document' -->
+                {% trans "Documents to create" %}
+                <!-- /ko -->
+                <!-- ko if: resourceType === 'Component' -->
+                {% trans "Components to create" %}
+                <!-- /ko -->
+            </h4>
+            <span class="bbma-section-count">
+                <span data-bind="text: createdCount() + linkedCount()"></span>/<span data-bind="text: totalCount()"></span>
+                <!-- ko if: linkedCount() > 0 -->
+                <small class="text-muted">(<span data-bind="text: linkedCount()"></span> {% trans "linked" %})</small>
+                <!-- /ko -->
+            </span>
+            <div class="bbma-section-actions">
+                <!-- ko ifnot: allDone -->
+                <div class="bbma-create-all-wrapper">
+
+                    <!-- Adaptive progress pill: explains why "Create all" is disabled.
+                         Replaces both the standalone deps pill and the yellow blocker. -->
+                    <!-- ko if: !canCreateAll() && !creatingAll() -->
+                    <div class="bbma-deps-progress" role="status" aria-live="polite">
+
+                        <!-- Resolving state — takes over the whole pill -->
+                        <!-- ko if: isComponent && parentResolver.resolving() -->
+                        <span class="bbma-deps-progress-spinner">
+                            <i class="fa fa-circle-o-notch fa-spin"></i>
+                            {% trans "Resolving parent manuscripts…" %}
+                        </span>
+                        <!-- /ko -->
+
+                        <!-- ko ifnot: isComponent && parentResolver.resolving() -->
+
+                        <!-- Parent segment (Component mode only, while parents unresolved) -->
+                        <!-- ko if: _progressShowParent -->
+                        <span class="bbma-deps-progress-seg">
+                            <i class="fa fa-sitemap"></i>
+                            <span class="bbma-deps-progress-bar">
+                                <span class="bbma-deps-progress-fill"
+                                      data-bind="style: { width: (parentResolver.totalCount() > 0 ? (parentResolver.resolvedCount() / parentResolver.totalCount() * 100) : 0) + '%' }">
+                                </span>
+                            </span>
+                            <span class="bbma-deps-progress-label">
+                                <span data-bind="text: parentResolver.resolvedCount()"></span>/<span data-bind="text: parentResolver.totalCount()"></span>
+                                {% trans "parents" %}
+                            </span>
+                        </span>
+                        <!-- /ko -->
+
+                        <!-- Separator between parent and deps segments -->
+                        <!-- ko if: _progressShowParent() && _progressShowDeps() -->
+                        <span class="bbma-deps-progress-sep" aria-hidden="true">·</span>
+                        <!-- /ko -->
+
+                        <!-- Deps segment (always relevant when deps exist & not all linked) -->
+                        <!-- ko if: _progressShowDeps -->
+                        <span class="bbma-deps-progress-seg">
+                            <i class="fa fa-link"></i>
+                            <span class="bbma-deps-progress-bar">
+                                <span class="bbma-deps-progress-fill"
+                                      data-bind="style: { width: (totalDepsCount() > 0 ? (resolvedDepsCount() / totalDepsCount() * 100) : 0) + '%' }">
+                                </span>
+                            </span>
+                            <span class="bbma-deps-progress-label">
+                                <span data-bind="text: resolvedDepsCount()"></span>/<span data-bind="text: totalDepsCount()"></span>
+                                {% trans "linked" %}
+                            </span>
+                        </span>
+                        <!-- /ko -->
+
+                        <!-- Separator before the suggestions segment if any
+                             previous segment is visible -->
+                        <!-- ko if: _progressShowSuggestions() && (_progressShowParent() || _progressShowDeps()) -->
+                        <span class="bbma-deps-progress-sep" aria-hidden="true">·</span>
+                        <!-- /ko -->
+
+                        <!-- Unresolved-suggestions segment: pending items
+                             that still carry a possible-duplicate match the
+                             user hasn't confirmed or dismissed yet. -->
+                        <!-- ko if: _progressShowSuggestions -->
+                        <span class="bbma-deps-progress-seg">
+                            <i class="fa fa-search"></i>
+                            <span class="bbma-deps-progress-label">
+                                <span data-bind="text: unresolvedSuggestionsCount"></span>
+                                {% trans "matches to review" %}
+                            </span>
+                        </span>
+                        <!-- /ko -->
+
+                        <!-- /ko -->
+                    </div>
+                    <!-- /ko -->
+
+                    <button class="btn btn-primary"
+                            data-bind="click: createAll,
+                                       disable: creatingAll() || !canCreateAll(),
+                                       css: { 'bbma-btn-waiting': !canCreateAll() }">
+                        <!-- ko if: creatingAll -->
+                        <i class="fa fa-spinner fa-spin"></i>
+                        <!-- /ko -->
+                        <!-- ko ifnot: creatingAll -->
+                        <i class="fa fa-magic"></i>
+                        <!-- /ko -->
+                        {% trans "Create all" %}
+                    </button>
+                </div>
+                <!-- /ko -->
+                <!-- ko if: allDone -->
+                <button class="btn btn-mint" data-bind="click: submit">
+                    <i class="fa fa-check"></i> {% trans "Finish" %}
+                </button>
+                <!-- /ko -->
+            </div>
+        </div>
+
+        <!-- Batch-create summary banner — shown after createAll completes. -->
+        <!-- ko if: batchSummary() -->
+        <div class="bbma-batch-summary alert alert-dismissible"
+             data-bind="css: { 'alert-success': batchSummary().failed === 0, 'alert-warning': batchSummary().failed > 0 }"
+             role="alert">
+            <button type="button" class="close" data-bind="click: dismissBatchSummary" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+            <span data-bind="text: batchSummaryText"></span>
+            <!-- ko if: batchSummary().failed > 0 -->
+            <button class="btn btn-xs btn-warning bbma-batch-retry"
+                    data-bind="click: retryAllFailed">
+                <i class="fa fa-refresh"></i>
+                {% trans "Retry all failed" %}
+            </button>
+            <!-- /ko -->
+        </div>
+        <!-- /ko -->
+
+        <!-- Review hint: items still resolved to the generic fallback type -->
+        <!-- ko if: isComponent && fallbackItemsCount() > 0 -->
+        <div class="bbma-review-hint">
+            <i class="fa fa-exclamation-triangle"></i>
+            <span data-bind="text: fallbackItemsCount"></span>
+            {% trans "items have a default type — click the yellow badge to adjust." %}
+        </div>
+        <!-- /ko -->
+
+        <div class="bbma-items-list">
+            <!-- ko foreach: items -->
+            <div class="bbma-item-row" data-bind="css: 'bbma-item-' + $parent.statusClass(status())">
+                <!-- Thumbnail -->
+                <div class="bbma-item-thumb">
+                    <!-- ko if: thumbnail -->
+                    <img data-bind="attr: {src: thumbnail}, thumbFallback: true" loading="lazy">
+                    <!-- /ko -->
+                    <!-- ko ifnot: thumbnail -->
+                    <i class="fa fa-file-text-o"></i>
+                    <!-- /ko -->
+                    <!-- ko if: enrichStatus() === 'loading' -->
+                    <span class="bbma-item-enriching" title="{% trans 'Enriching from Biblissima…' %}">
+                        <i class="fa fa-circle-o-notch fa-spin"></i>
+                    </span>
+                    <!-- /ko -->
+                </div>
+
+                <!-- Info -->
+                <div class="bbma-item-info">
+                    <div class="bbma-item-name" data-bind="text: legend || label"></div>
+                    <div class="bbma-item-details">
+                        <!-- ko if: manuscript -->
+                        <span><i class="fa fa-bookmark-o"></i> <span data-bind="text: manuscript"></span></span>
+                        <!-- /ko -->
+                        <!-- ko if: folio -->
+                        <span>f.<span data-bind="text: folio"></span></span>
+                        <!-- /ko -->
+                        <!-- ko if: date -->
+                        <span data-bind="text: date"></span>
+                        <!-- /ko -->
+                    </div>
+                    <!-- ko if: arkId -->
+                    <div class="bbma-item-ark" data-bind="text: arkId"></div>
+                    <!-- /ko -->
+
+                    <!-- Per-item type: badge → inline editor -->
+                    <!-- ko ifnot: typeEditing -->
+                    <button type="button"
+                            class="bbma-item-type"
+                            data-bind="click: $parent.toggleTypeEditor,
+                                       css: { 'bbma-item-type-fallback': $parent.isTypeFallback($data) },
+                                       attr: { title: '{% trans 'Click to change type' %}' }">
+                        <i class="fa fa-tag"></i>
+                        <span data-bind="text: $parent.typeBadgeLabel($data)"></span>
+                    </button>
+                    <!-- /ko -->
+                    <!-- ko if: typeEditing -->
+                    <div class="bbma-item-type-editor">
+                        <div class="bbma-item-type-editor-field"
+                             data-bind="component: {
+                                name: 'concept-select-widget',
+                                params: {
+                                    node: {config: {rdmCollection: $parent.typeRdmCollection}},
+                                    config: {label: '', placeholder: ''},
+                                    renderContext: 'workflow',
+                                    value: typeValueId,
+                                }
+                             }"></div>
+                        <button type="button" class="btn btn-xs btn-default"
+                                data-bind="click: $parent.closeTypeEditor"
+                                title="{% trans 'Done' %}">
+                            <i class="fa fa-check"></i>
+                        </button>
+                    </div>
+                    <!-- /ko -->
+                </div>
+
+                <!-- Status -->
+                <div class="bbma-item-status">
+                    <span class="bbma-status-badge"
+                          data-bind="text: $parent.statusLabel(status()),
+                                     css: 'bbma-status-' + $parent.statusClass(status())">
+                    </span>
+                    <!-- ko if: status() === 'error' -->
+                    <small class="text-danger" data-bind="text: errorMessage()"></small>
+                    <!-- /ko -->
+                </div>
+
+                <!-- Actions -->
+                <div class="bbma-item-actions">
+                    <!-- ko if: status() === 'pending' -->
+                    <button class="btn btn-xs btn-primary"
+                            data-bind="click: $parent.createResource,
+                                       disable: !$parent.canCreateItem($data),
+                                       attr: { title: $parent.canCreateItem($data) ? '{% trans "Create" %}' : '{% trans "Waiting for:" %}' + '\n' + $parent.unresolvedDepsLabel($data) },
+                                       css: { 'bbma-btn-waiting': !$parent.canCreateItem($data) }">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                    <!-- /ko -->
+
+                    <!-- ko if: status() === 'linked' -->
+                    <button class="btn btn-xs btn-default" data-bind="click: $parent.editResource"
+                            title="{% trans 'View' %}">
+                        <i class="fa fa-eye"></i>
+                    </button>
+                    <button class="btn btn-xs btn-link text-muted" data-bind="click: $parent.unlinkItem"
+                            title="{% trans 'Edit selection' %}">
+                        <i class="fa fa-chain-broken"></i>
+                    </button>
+                    <!-- /ko -->
+
+                    <!-- ko if: status() === 'created' -->
+                    <button class="btn btn-xs btn-default" data-bind="click: $parent.editResource"
+                            title="{% trans 'Edit in Arches' %}">
+                        <i class="fa fa-pencil"></i>
+                    </button>
+                    <!-- /ko -->
+
+                    <!-- ko if: status() === 'error' -->
+                    <button class="btn btn-xs btn-warning" data-bind="click: $parent.createResource"
+                            title="{% trans 'Retry' %}">
+                        <i class="fa fa-refresh"></i>
+                    </button>
+                    <!-- /ko -->
+
+                    <!-- ko if: status() === 'creating' -->
+                    <i class="fa fa-spinner fa-spin bbma-item-spinner"></i>
+                    <!-- /ko -->
+                </div>
+            </div>
+
+            <!-- Linked panel -->
+            <!-- ko if: status() === 'linked' -->
+            <div class="bbma-linked-panel">
+                <div class="bbma-linked-header">
+                    <i class="fa fa-link"></i>
+                    {% trans "Linked to:" %}
+                    <strong data-bind="text: linkedDisplayname()"></strong>
+                </div>
+                <label class="bbma-enrich-checkbox">
+                    <input type="checkbox" data-bind="checked: enrichExisting">
+                    {% trans "Add missing Biblissima data to existing resource" %}
+                </label>
+                <!-- ko if: enrichExisting() -->
+                <div class="bbma-enrich-preview">
+                    <!-- ko if: arkId -->
+                    <span><i class="fa fa-tag"></i> ARK: <code data-bind="text: arkId"></code></span>
+                    <!-- /ko -->
+                    <!-- ko if: biblissimaQid -->
+                    <span><i class="fa fa-tag"></i> QID: <code data-bind="text: biblissimaQid"></code></span>
+                    <!-- /ko -->
+                    <!-- ko if: manifestUrl -->
+                    <span><i class="fa fa-file-image-o"></i> {% trans "IIIF manifest" %}</span>
+                    <!-- /ko -->
+                    <!-- ko if: shelfmark -->
+                    <span><i class="fa fa-bookmark-o"></i> <span data-bind="text: shelfmark"></span></span>
+                    <!-- /ko -->
+                </div>
+                <!-- /ko -->
+            </div>
+            <!-- /ko -->
+
+            <!-- Suggestion panel -->
+            <!-- ko if: showSuggestions() && suggestions().length > 0 -->
+            <div class="bbma-suggestions-panel">
+                <div class="bbma-suggestions-header">
+                    <i class="fa fa-info-circle"></i>
+                    {% trans "Possible matches found in database" %}
+                </div>
+                <!-- ko foreach: suggestions -->
+                <div class="bbma-suggestion-row">
+                    <div class="bbma-suggestion-info">
+                        <span class="bbma-suggestion-name" data-bind="text: displayname"></span>
+                        <span class="bbma-suggestion-match">
+                            <!-- ko if: confidence === 'high' -->
+                            <i class="fa fa-circle text-success"></i>
+                            <!-- /ko -->
+                            <!-- ko if: confidence === 'medium' -->
+                            <i class="fa fa-circle text-warning"></i>
+                            <!-- /ko -->
+                            <!-- ko if: confidence === 'low' -->
+                            <i class="fa fa-circle text-muted"></i>
+                            <!-- /ko -->
+                            <small data-bind="text: matchType"></small>
+                        </span>
+                    </div>
+                    <div class="bbma-suggestion-actions">
+                        <button class="btn btn-xs btn-default"
+                                data-bind="click: function(){ $parents[1].viewSuggestion($data); }"
+                                title="{% trans 'View' %}">
+                            <i class="fa fa-eye"></i>
+                        </button>
+                        <button class="btn btn-xs btn-mint"
+                                data-bind="click: function(){ $parents[1].useExisting($parent, $data); }"
+                                title="{% trans 'Link to this resource' %}">
+                            <i class="fa fa-link"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- /ko -->
+                <div class="bbma-suggestions-footer">
+                    <button class="btn btn-xs btn-default"
+                            data-bind="click: $parent.dismissSuggestions">
+                        <i class="fa fa-times"></i> {% trans "Not a match, create new" %}
+                    </button>
+                </div>
+            </div>
+            <!-- /ko -->
+            <!-- /ko -->
+        </div>
+    </div>
+
+    <!-- ===========================================================
+         Parent-resolver panel — Component mode only.
+         Resolves one parent Document per Biblissima manuscript group
+         (cf. parentResolver.js + design 7.7).
+         =========================================================== -->
+    <!-- ko if: shouldShowParentPanel -->
+    <div class="biblissima-create-section">
+        <div class="bbma-section-header">
+            <i class="fa fa-sitemap"></i>
+            <h4>{% trans "Detected parent Documents" %}</h4>
+            <span class="bbma-section-count">
+                <span data-bind="text: parentResolver.resolvedCount()"></span>/<span data-bind="text: parentResolver.totalCount()"></span>
+            </span>
+        </div>
+
+        <p class="bbma-section-hint">
+            {% trans "Each Biblissima manuscript needs a parent Document. Pick an existing match or create a new one." %}
+        </p>
+
+        <!-- ko if: parentResolver.resolving -->
+        <div class="bbma-section-hint">
+            <i class="fa fa-circle-o-notch fa-spin"></i>
+            {% trans "Resolving parent manuscripts…" %}
+        </div>
+        <!-- /ko -->
+
+        <div class="bbma-deps-list" data-bind="foreach: parentResolver.groups">
+            <div class="bbma-dep-card"
+                 data-bind="css: {
+                    'bbma-dep-card-linked': state() === 'resolved' && resolutionMode() !== 'created',
+                    'bbma-dep-card-created': state() === 'resolved' && resolutionMode() === 'created',
+                    'bbma-dep-card-suggestions': state() !== 'resolved' && suggestions().length > 0,
+                    'bbma-dep-card-pending': state() === 'error'
+                 }">
+                <div class="bbma-dep-card-header">
+                    <span class="bbma-dep-type">{% trans "Document" %}</span>
+                    <span class="bbma-dep-name" data-bind="text: label, attr: { title: label }"></span>
+
+                    <!-- ko if: state() === 'resolved' && resolutionMode() !== 'created' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-linked">
+                        <i class="fa fa-check"></i> {% trans "Linked" %}
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko if: state() === 'resolved' && resolutionMode() === 'created' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-created">
+                        <i class="fa fa-plus"></i> {% trans "Created" %}
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko if: state() !== 'resolved' && suggestions().length > 0 -->
+                    <span class="bbma-dep-badge bbma-dep-badge-suggestions">
+                        <i class="fa fa-exclamation-circle"></i> {% trans "Matches found" %}
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko if: state() === 'error' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-pending">
+                        <i class="fa fa-times"></i> {% trans "Error" %}
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko if: state() !== 'resolved' && state() !== 'error' && suggestions().length === 0 -->
+                    <span class="bbma-dep-badge bbma-dep-badge-pending">
+                        <i class="fa fa-circle-o"></i> {% trans "Pending" %}
+                    </span>
+                    <!-- /ko -->
+                </div>
+
+                <div class="bbma-dep-card-body">
+                    <!-- Manuscript meta line: shelfmark · portalHash · items count -->
+                    <p class="bbma-dep-create-hint">
+                        <!-- ko if: shelfmark -->
+                        <span><i class="fa fa-bookmark-o"></i> <span data-bind="text: shelfmark"></span></span>
+                        <!-- /ko -->
+                        <!-- ko if: portalHash || biblissimaQid -->
+                        <span><i class="fa fa-hashtag"></i> <span data-bind="text: portalHash || biblissimaQid"></span></span>
+                        <!-- /ko -->
+                        <span><i class="fa fa-cubes"></i> <span data-bind="text: items().length"></span> {% trans "items" %}</span>
+                    </p>
+
+                    <!-- Resolved (matched / manual / created) -->
+                    <!-- ko if: state() === 'resolved' -->
+                    <div class="bbma-dep-match-found">
+                        <i class="fa fa-check-circle"></i>
+                        <div class="bbma-dep-match-info">
+                            <!-- ko if: resolutionMode() === 'created' -->
+                            <span class="bbma-dep-match-label">{% trans "New parent Document created:" %}</span>
+                            <!-- /ko -->
+                            <!-- ko ifnot: resolutionMode() === 'created' -->
+                            <span class="bbma-dep-match-label">{% trans "Linked to existing Document:" %}</span>
+                            <!-- /ko -->
+                            <strong data-bind="text: resolvedDisplayname"></strong>
+                        </div>
+                        <button type="button"
+                                class="btn btn-xs btn-link text-muted"
+                                data-bind="click: $component.parentResolver.unlinkParent.bind($component.parentResolver, $data)">
+                            <i class="fa fa-pencil"></i> {% trans "Edit selection" %}
+                        </button>
+                    </div>
+                    <!-- /ko -->
+
+                    <!-- Suggestions list (existing Arches resources that look like a match) -->
+                    <!-- ko if: state() !== 'resolved' && suggestions().length > 0 -->
+                    <div class="bbma-dep-suggestions">
+                        <div class="bbma-dep-suggestions-header">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "Possible matches in your database:" %}
+                        </div>
+                        <!-- ko foreach: suggestions -->
+                        <div class="bbma-dep-suggestion-row">
+                            <div class="bbma-dep-suggestion-info">
+                                <span class="bbma-suggestion-name" data-bind="text: displayname"></span>
+                                <span class="bbma-suggestion-match">
+                                    <!-- ko if: confidence === 'high' -->
+                                    <i class="fa fa-circle text-success"></i>
+                                    <!-- /ko -->
+                                    <!-- ko if: confidence === 'medium' -->
+                                    <i class="fa fa-circle text-warning"></i>
+                                    <!-- /ko -->
+                                    <!-- ko if: confidence === 'low' -->
+                                    <i class="fa fa-circle text-muted"></i>
+                                    <!-- /ko -->
+                                    <small data-bind="text: matchType"></small>
+                                </span>
+                            </div>
+                            <div class="bbma-dep-suggestion-actions">
+                                <button type="button"
+                                        class="btn btn-xs btn-mint"
+                                        data-bind="click: $component.parentResolver.useMatch.bind($component.parentResolver, $parent, $data)">
+                                    <i class="fa fa-link"></i> {% trans "Link" %}
+                                </button>
+                            </div>
+                        </div>
+                        <!-- /ko -->
+                    </div>
+                    <!-- /ko -->
+
+                    <!-- Inline error -->
+                    <!-- ko if: state() === 'error' -->
+                    <p class="bbma-dep-create-hint text-danger">
+                        <i class="fa fa-exclamation-circle"></i>
+                        <span data-bind="text: errorMessage"></span>
+                    </p>
+                    <!-- /ko -->
+
+                    <!-- Manual search picker (always available until resolved) -->
+                    <!-- ko if: state() !== 'resolved' -->
+                    <div class="bbma-dep-search-area">
+                        <label class="bbma-dep-search-label">
+                            <i class="fa fa-search"></i>
+                            {% trans "Or search manually:" %}
+                        </label>
+                        <select data-bind="select2Query: {
+                                    select2Config: $component.manualPickerForGroup($data).select2Config
+                                }"></select>
+                        <label class="checkbox-inline text-muted bbma-dep-enrich">
+                            <input type="checkbox" data-bind="checked: enrichExisting" />
+                            {% trans "Add Biblissima ARK as alt-name on the matched resource" %}
+                        </label>
+                    </div>
+
+                    <!-- Create-new branch -->
+                    <div class="bbma-dep-create-area">
+                        <p class="bbma-dep-create-hint">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "No match found. Create a new parent Document from Biblissima data — required before its components can be imported." %}
+                        </p>
+                        <button type="button"
+                                class="btn btn-xs btn-primary"
+                                data-bind="click: $component.parentResolver.createParent.bind($component.parentResolver, $data),
+                                           disable: creating">
+                            <!-- ko if: creating -->
+                            <i class="fa fa-spinner fa-spin"></i>
+                            <!-- /ko -->
+                            <!-- ko ifnot: creating -->
+                            <i class="fa fa-plus"></i>
+                            <!-- /ko -->
+                            {% trans "Create parent" %}
+                        </button>
+                    </div>
+                    <!-- /ko -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Orphan bucket (Q9 — items without a Biblissima manuscript identifier) -->
+        <!-- ko if: parentResolver.unidentifiedItems().length > 0 -->
+        <p class="bbma-section-hint">
+            <i class="fa fa-exclamation-triangle text-warning"></i>
+            {% trans "Items with no identified manuscript — pick a Document for each." %}
+        </p>
+        <div class="bbma-deps-list" data-bind="foreach: parentResolver.unidentifiedItems">
+            <div class="bbma-dep-card">
+                <div class="bbma-dep-card-header">
+                    <span class="bbma-dep-type">{% trans "Orphan" %}</span>
+                    <span class="bbma-dep-name" data-bind="text: canvasId || arkId || label"></span>
+                    <span class="bbma-dep-badge bbma-dep-badge-pending">
+                        <i class="fa fa-question-circle"></i> {% trans "To assign" %}
+                    </span>
+                </div>
+                <div class="bbma-dep-card-body">
+                    <div class="bbma-dep-search-area">
+                        <label class="bbma-dep-search-label">
+                            <i class="fa fa-search"></i>
+                            {% trans "Or search manually:" %}
+                        </label>
+                        <select data-bind="select2Query: {
+                                    select2Config: $component.orphanPickerForItem($data).select2Config
+                                }"></select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- /ko -->
+    </div>
+    <!-- /ko -->
+
+    <!-- Section B: Related resources (Places, Groups, Persons) -->
+    <!-- ko if: dependencies().length > 0 -->
+    <div class="biblissima-create-section">
+        <div class="bbma-section-header">
+            <i class="fa fa-link"></i>
+            <h4>{% trans "Related resources" %}</h4>
+        </div>
+        <p class="bbma-section-hint">{% trans "The following places, institutions, and persons were found in the Biblissima data. Link them to existing resources or create new ones." %}</p>
+
+        <div class="bbma-deps-list">
+            <!-- ko foreach: dependencies -->
+            <div class="bbma-dep-card" data-bind="css: {
+                'bbma-dep-card-linked': action() === 'use_existing',
+                'bbma-dep-card-created': action() === 'created',
+                'bbma-dep-card-pending': action() === 'pending_confirm',
+                'bbma-dep-card-suggestions': action() === 'has_suggestions'
+            }">
+                <div class="bbma-dep-card-header">
+                    <span class="bbma-dep-type" data-bind="text: type"></span>
+                    <span class="bbma-dep-name" data-bind="text: label()"></span>
+
+                    <!-- Status badge in header -->
+                    <!-- ko if: action() === 'use_existing' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-linked"><i class="fa fa-check"></i> {% trans "Linked" %}</span>
+                    <!-- /ko -->
+                    <!-- ko if: action() === 'created' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-created"><i class="fa fa-plus"></i> {% trans "Created" %}</span>
+                    <!-- /ko -->
+                    <!-- ko if: action() === 'pending_confirm' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-pending"><i class="fa fa-question-circle"></i> {% trans "To confirm" %}</span>
+                    <!-- /ko -->
+                    <!-- ko if: action() === 'has_suggestions' -->
+                    <span class="bbma-dep-badge bbma-dep-badge-suggestions"><i class="fa fa-exclamation-circle"></i> {% trans "Matches found" %}</span>
+                    <!-- /ko -->
+                </div>
+
+                <!-- Searching state -->
+                <!-- ko if: action() === 'search' -->
+                <div class="bbma-dep-card-body">
+                    <i class="fa fa-spinner fa-spin text-muted"></i>
+                    <span class="text-muted">{% trans "Searching..." %}</span>
+                </div>
+                <!-- /ko -->
+
+                <!-- Creating state -->
+                <!-- ko if: action() === 'creating' -->
+                <div class="bbma-dep-card-body">
+                    <i class="fa fa-spinner fa-spin text-muted"></i>
+                    <span class="text-muted">{% trans "Creating resource..." %}</span>
+                </div>
+                <!-- /ko -->
+
+                <!-- Confirmed linked (green) -->
+                <!-- ko if: action() === 'use_existing' && existingId() -->
+                <div class="bbma-dep-card-body">
+                    <div class="bbma-dep-match-found">
+                        <i class="fa fa-check-circle"></i>
+                        <div class="bbma-dep-match-info">
+                            <span class="bbma-dep-match-label">{% trans "Linked to existing resource:" %}</span>
+                            <strong data-bind="text: existingLabel()"></strong>
+                        </div>
+                        <button class="btn btn-xs btn-link text-muted"
+                                data-bind="click: $parent.unlinkDep"
+                                title="{% trans 'Edit selection' %}">
+                            <i class="fa fa-pencil"></i> {% trans "Edit selection" %}
+                        </button>
+                    </div>
+                </div>
+                <!-- /ko -->
+
+                <!-- Created (green) -->
+                <!-- ko if: action() === 'created' && existingId() -->
+                <div class="bbma-dep-card-body">
+                    <div class="bbma-dep-match-found">
+                        <i class="fa fa-check-circle"></i>
+                        <div class="bbma-dep-match-info">
+                            <span class="bbma-dep-match-label">{% trans "New resource created:" %}</span>
+                            <strong data-bind="text: existingLabel()"></strong>
+                        </div>
+                        <a class="btn btn-xs btn-link"
+                           data-bind="attr: { href: '/resource/' + existingId() }"
+                           target="_blank"
+                           title="{% trans 'View' %}">
+                            <i class="fa fa-external-link"></i>
+                        </a>
+                    </div>
+                </div>
+                <!-- /ko -->
+
+                <!-- Pending confirmation (orange) — user selected via Select2 -->
+                <!-- ko if: action() === 'pending_confirm' -->
+                <div class="bbma-dep-card-body">
+                    <div class="bbma-dep-confirm-area">
+                        <div class="bbma-dep-confirm-info">
+                            <i class="fa fa-question-circle"></i>
+                            <span>{% trans "Link to:" %} <strong data-bind="text: existingLabel()"></strong></span>
+                        </div>
+                        <div class="bbma-dep-confirm-actions">
+                            <button class="btn btn-xs btn-success"
+                                    data-bind="click: $parent.confirmDepSelection">
+                                <i class="fa fa-check"></i> {% trans "Confirm" %}
+                            </button>
+                            <button class="btn btn-xs btn-default"
+                                    data-bind="click: $parent.cancelDepSelection">
+                                <i class="fa fa-times"></i> {% trans "Cancel" %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- /ko -->
+
+                <!-- Suggestions found (yellow) -->
+                <!-- ko if: action() === 'has_suggestions' -->
+                <div class="bbma-dep-card-body">
+                    <div class="bbma-dep-suggestions">
+                        <div class="bbma-dep-suggestions-header">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "Possible matches in your database:" %}
+                        </div>
+                        <!-- ko foreach: suggestions -->
+                        <div class="bbma-dep-suggestion-row">
+                            <div class="bbma-dep-suggestion-info">
+                                <span class="bbma-suggestion-name" data-bind="text: displayname"></span>
+                                <span class="bbma-suggestion-match">
+                                    <!-- ko if: confidence === 'high' -->
+                                    <i class="fa fa-circle text-success"></i>
+                                    <!-- /ko -->
+                                    <!-- ko if: confidence === 'medium' -->
+                                    <i class="fa fa-circle text-warning"></i>
+                                    <!-- /ko -->
+                                    <!-- ko if: confidence === 'low' -->
+                                    <i class="fa fa-circle text-muted"></i>
+                                    <!-- /ko -->
+                                    <small data-bind="text: matchType"></small>
+                                </span>
+                            </div>
+                            <div class="bbma-dep-suggestion-actions">
+                                <button class="btn btn-xs btn-default"
+                                        data-bind="click: function(){ $parents[1].viewDepSuggestion($data); }"
+                                        title="{% trans 'View' %}">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                                <button class="btn btn-xs btn-mint"
+                                        data-bind="click: function(){ $parents[1].useExistingDep($parent, $data); }"
+                                        title="{% trans 'Link to this resource' %}">
+                                    <i class="fa fa-link"></i> {% trans "Link" %}
+                                </button>
+                            </div>
+                        </div>
+                        <!-- /ko -->
+                        <div class="bbma-dep-suggestions-footer">
+                            <button class="btn btn-xs btn-default"
+                                    data-bind="click: $parent.dismissDepSuggestions">
+                                <i class="fa fa-times"></i> {% trans "Not a match" %}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Select2 search below suggestions -->
+                    <div class="bbma-dep-search-area">
+                        <label class="bbma-dep-search-label">
+                            <i class="fa fa-search"></i>
+                            {% trans "Or search manually:" %}
+                        </label>
+                        <select style="width: 100%;"
+                                data-bind="select2Query: { select2Config: $parent.buildDepPickerConfig($data) }">
+                        </select>
+                    </div>
+                </div>
+                <!-- /ko -->
+
+                <!-- No match — ready to create or manual search -->
+                <!-- ko if: action() === 'create' -->
+                <div class="bbma-dep-card-body">
+                    <div class="bbma-dep-search-area">
+                        <label class="bbma-dep-search-label">
+                            <i class="fa fa-search"></i>
+                            {% trans "Already in your database?" %}
+                        </label>
+                        <select style="width: 100%;"
+                                data-bind="select2Query: { select2Config: $parent.buildDepPickerConfig($data) }">
+                        </select>
+                    </div>
+                    <div class="bbma-dep-create-area">
+                        <p class="bbma-dep-create-hint">
+                            <i class="fa fa-info-circle"></i>
+                            {% trans "No match found. You can create a new resource or it will be created automatically when you create the documents." %}
+                        </p>
+                        <button class="btn btn-xs btn-primary"
+                                data-bind="click: $parent.createDependency, disable: creating()">
+                            <!-- ko if: creating() -->
+                            <i class="fa fa-spinner fa-spin"></i>
+                            <!-- /ko -->
+                            <!-- ko ifnot: creating() -->
+                            <i class="fa fa-plus"></i>
+                            <!-- /ko -->
+                            {% trans "Create resource" %}
+                        </button>
+                    </div>
+                </div>
+                <!-- /ko -->
+            </div>
+            <!-- /ko -->
+        </div>
+    </div>
+    <!-- /ko -->
+
+    <!-- /ko -->
+</div>

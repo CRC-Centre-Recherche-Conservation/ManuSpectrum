@@ -40,8 +40,34 @@ function generateConfig(): Promise<UserConfig> {
             alias[`@/${archesApplicationName}`] = path.join(archesApplicationPath, 'src', archesApplicationName);
         }
 
+        // Virtual-module plugin: resolves webpack-specific import aliases
+        // (bindings/, viewmodels/, templates/) that are not in node_modules.
+        // The empty stub is sufficient because vi.mock() in spec files
+        // replaces these modules before any code runs.
+        const webpackCompatStubs = {
+            name: 'webpack-compat-stubs',
+            resolveId(source: string) {
+                if (
+                    source.startsWith('bindings/') ||
+                    source.startsWith('viewmodels/') ||
+                    (source.startsWith('templates/') && source.endsWith('.htm'))
+                ) {
+                    return '\0' + source;
+                }
+            },
+            load(id: string) {
+                if (
+                    id.startsWith('\0bindings/') ||
+                    id.startsWith('\0viewmodels/') ||
+                    (id.startsWith('\0templates/') && id.endsWith('.htm'))
+                ) {
+                    return 'export default {};';
+                }
+            },
+        };
+
         resolve({
-            plugins: [vue() as any],
+            plugins: [vue() as any, webpackCompatStubs],
             test: {
                 alias: alias,
                 coverage: {

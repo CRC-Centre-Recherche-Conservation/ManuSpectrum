@@ -146,8 +146,17 @@ def _rate_limits():
 def _rate_key_and_interval(host):
     """Return (bucket_key, min_interval_seconds) for a hostname.
 
-    A host matches a suffix when it equals it or ends with ".<suffix>", so
-    gallica.bnf.fr and any *.bnf.fr subdomain share the single "bnf.fr" bucket.
+    A host matches a configured suffix when it equals it or ends with
+    ".<suffix>", so gallica.bnf.fr and any *.bnf.fr subdomain share the single
+    "bnf.fr" bucket (and its stricter interval).
+
+    Any other host is bucketed under ITS OWN hostname with the "default"
+    interval — NOT a shared "default" bucket — so throttling one host never
+    serialises requests to unrelated hosts (a bulk import spanning e-codices,
+    DigiVatLib, Bodleian… runs each host's throttle independently instead of
+    globally at one-request-per-second). The per-host bucket dicts grow by
+    distinct host, which is naturally bounded by the handful of IIIF providers
+    a batch touches.
     """
     host = (host or "").lower()
     limits = _rate_limits()
@@ -156,7 +165,7 @@ def _rate_key_and_interval(host):
             continue
         if host == suffix or host.endswith("." + suffix):
             return suffix, interval
-    return "default", limits.get("default", 0)
+    return host or "default", limits.get("default", 0)
 
 
 def throttle_for_host(url):
