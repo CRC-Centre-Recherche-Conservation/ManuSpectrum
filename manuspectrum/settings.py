@@ -489,6 +489,13 @@ BIBLISSIMA_REQUEST_TIMEOUT = 10
 # aggregating many descriptors or when Biblissima is under load.
 BIBLISSIMA_IIIF_REQUEST_TIMEOUT = 45
 BIBLISSIMA_PORTAL_REQUEST_TIMEOUT = 30
+# Short, SEPARATE connect timeout for optional/best-effort IIIF manifest
+# fetches (canvas dimensions + thumbnail). The read timeout above stays
+# generous for large-but-reachable manifests, but a DEAD IIIF host must fail
+# in seconds — otherwise the illumination-detail request blocks for minutes
+# (a 45 s connect timeout x connect retries once held a gunicorn worker for
+# ~138 s when api.irht.cnrs.fr was unreachable).
+BIBLISSIMA_IIIF_CONNECT_TIMEOUT = 5
 
 # Maximum concurrent outbound HTTP calls to Biblissima across the whole
 # Django process — keeps us a good API citizen when many users import

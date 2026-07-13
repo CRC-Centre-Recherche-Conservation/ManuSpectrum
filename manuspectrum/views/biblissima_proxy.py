@@ -101,12 +101,13 @@ BIBLISSIMA_PORTAL = settings.BIBLISSIMA_PORTAL_URL
 BIBLISSIMA_PORTAL_EN = settings.BIBLISSIMA_PORTAL_EN_URL
 REQUEST_TIMEOUT = settings.BIBLISSIMA_REQUEST_TIMEOUT
 IIIF_REQUEST_TIMEOUT = settings.BIBLISSIMA_IIIF_REQUEST_TIMEOUT
+IIIF_CONNECT_TIMEOUT = settings.BIBLISSIMA_IIIF_CONNECT_TIMEOUT
 PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
 _BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
 _BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
 
 
-def _build_biblissima_session():
+def _build_biblissima_session(retry=None):
     """Requests session with retry/backoff on transient upstream failures.
 
     The Retry adapter honors Retry-After headers by default
@@ -120,6 +121,10 @@ def _build_biblissima_session():
     scrape field map (``"Type :"``, ``"Lieu de fabrication :"``, …) only
     matches French labels. Whatever locale the end-user's browser runs in
     is irrelevant, only what *this server* sends to Biblissima counts.
+
+    *retry* lets callers override the default retry policy — used by the
+    best-effort session (see ``_get_besteffort_session``) which disables
+    retries so optional enrichment fetches fail fast.
     """
     session = requests.Session()
     session.headers.update(
@@ -128,20 +133,52 @@ def _build_biblissima_session():
             "Accept-Language": "fr-FR,fr;q=0.9",
         }
     )
-    retry = Retry(
-        total=3,
-        connect=2,
-        read=2,
-        status=3,
-        backoff_factor=1.5,
-        status_forcelist=(429, 502, 503, 504),
-        allowed_methods=frozenset(["GET", "HEAD"]),
-        raise_on_status=False,
-    )
+    if retry is None:
+        retry = Retry(
+            total=3,
+            connect=2,
+            read=2,
+            status=3,
+            backoff_factor=1.5,
+            status_forcelist=(429, 502, 503, 504),
+            allowed_methods=frozenset(["GET", "HEAD"]),
+            raise_on_status=False,
+        )
     adapter = HTTPAdapter(max_retries=retry)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
+
+
+# Dedicated session for OPTIONAL, best-effort enrichment fetches (IIIF
+# manifests -> canvas dimensions + thumbnail). These MUST fail fast: a dead
+# IIIF host must never hold a gunicorn worker + concurrency slot for minutes.
+# Unlike the shared session it does NOT retry (``total=0``); paired with the
+# short ``IIIF_CONNECT_TIMEOUT`` connect timeout, an unreachable host errors in
+# seconds instead of ~138 s (which was 3 connect retries x a 45 s timeout).
+# The data is optional, so the caller degrades to ``{}`` on failure.
+_besteffort_session = None
+_besteffort_session_lock = threading.Lock()
+
+
+def _get_besteffort_session():
+    """Lazily build and cache the no-retry best-effort session (thread-safe)."""
+    global _besteffort_session
+    if _besteffort_session is None:
+        with _besteffort_session_lock:
+            if _besteffort_session is None:
+                _besteffort_session = _build_biblissima_session(
+                    retry=Retry(
+                        total=0,
+                        connect=0,
+                        read=0,
+                        redirect=0,
+                        status=0,
+                        backoff_factor=0,
+                        raise_on_status=False,
+                    )
+                )
+    return _besteffort_session
 
 
 # ---------------------------------------------------------------------------
@@ -2009,7 +2046,7 @@ class BiblissimaManuscriptIlluminationsView(View):
         )
 
 
-def _fetch_canvas_dimensions(manifest_url, folio, session):
+def _fetch_canvas_dimensions(manifest_url, folio, session=None):
     """Fetch a source IIIF manifest and return the target canvas info.
 
     Canvas matching is done by **folio** — Biblissima portal pages expose
@@ -2045,12 +2082,17 @@ def _fetch_canvas_dimensions(manifest_url, folio, session):
     if cached is not None:
         return cached
 
+    # Optional data: use the no-retry best-effort session and a SHORT connect
+    # timeout so an unreachable IIIF host fails in ~IIIF_CONNECT_TIMEOUT s
+    # rather than blocking this request for minutes. The read timeout stays
+    # generous for large-but-reachable manifests. A caller may still pass an
+    # explicit session (e.g. in tests) to override.
     try:
         resp = _bib_request(
-            session,
+            session or _get_besteffort_session(),
             manifest_url,
             headers={"Accept": "application/ld+json, application/json"},
-            timeout=IIIF_REQUEST_TIMEOUT,
+            timeout=(IIIF_CONNECT_TIMEOUT, IIIF_REQUEST_TIMEOUT),
         )
         resp.raise_for_status()
         manifest = resp.json()
@@ -2372,9 +2414,11 @@ class BiblissimaIlluminationDetailView(View):
                     result["centuryConcept"] = centuries
 
             # Canvas dimensions + thumbnail via one cached manifest fetch.
+            # Uses its own no-retry best-effort session (fast-fail on a dead
+            # IIIF host) — the shared ``session`` is intentionally not passed.
             if result.get("manifestUrl"):
                 canvas_info = _fetch_canvas_dimensions(
-                    result["manifestUrl"], result.get("folio", ""), session
+                    result["manifestUrl"], result.get("folio", "")
                 )
                 if canvas_info:
                     result.update(canvas_info)

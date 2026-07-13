@@ -907,6 +907,51 @@ class FetchCanvasDimensionsTests(TestCase):
         self.assertEqual(result, {})
 
 
+class FetchCanvasDimensionsTimeoutTests(TestCase):
+    """Regression (Silk 2026-07-13): the OPTIONAL manifest fetch must FAIL FAST
+    on a dead IIIF host. A 45 s connect timeout x connect retries once blocked
+    the illumination endpoint for ~138 s, leaving Component cart items stuck on
+    enrichStatus='loading' (permanently un-creatable). The fetch must use the
+    dedicated no-retry best-effort session and a short (connect, read) timeout
+    tuple, while the shared session keeps its retry policy for Wikibase calls."""
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_uses_besteffort_session_and_bounded_timeout(self):
+        captured = {}
+
+        def fake(session, url, **kwargs):
+            captured["session"] = session
+            captured["timeout"] = kwargs.get("timeout")
+            return _make_response(json_data={"sequences": [{"canvases": []}]})
+
+        with patch.object(bp, "_bib_request", side_effect=fake):
+            bp._fetch_canvas_dimensions("https://dead.example/m.json", "1r")
+
+        # A bounded (connect, read) tuple with a SHORT connect timeout — so an
+        # unreachable host errors in ~IIIF_CONNECT_TIMEOUT s, not minutes.
+        self.assertEqual(
+            captured["timeout"],
+            (bp.IIIF_CONNECT_TIMEOUT, bp.IIIF_REQUEST_TIMEOUT),
+        )
+        self.assertLessEqual(bp.IIIF_CONNECT_TIMEOUT, 10)
+        # With no explicit session, the dedicated best-effort session is used.
+        self.assertIs(captured["session"], bp._get_besteffort_session())
+
+    def test_besteffort_session_does_not_retry(self):
+        retries = bp._get_besteffort_session().get_adapter("https://x/").max_retries
+        self.assertEqual(retries.total, 0)
+        self.assertEqual(retries.connect, 0)
+
+    def test_shared_session_keeps_retry_policy(self):
+        retries = bp._build_biblissima_session().get_adapter("https://x/").max_retries
+        self.assertEqual(retries.connect, 2)
+
+
 # ---------------------------------------------------------------------------
 # Error mapper — _biblissima_upstream_error
 # ---------------------------------------------------------------------------

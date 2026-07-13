@@ -93,6 +93,13 @@ const RDM_COMP_TYPE = 'e85080b2-c39b-4e37-b6bc-b57d34092b7b';
 // Must stay in sync with BIBLISSIMA_TYPE_DEFAULT in views/biblissima_proxy.py.
 const COMPONENT_FALLBACK_TYPE_VALUEID = '3ecd8040-7c4b-4b1d-88f7-379297358f66';
 
+// Client-side backstop timeout for the per-item enrichment fetch. The backend
+// now fails fast on a dead IIIF host (~5 s), so this only fires in pathological
+// cases (backend itself stalls). On timeout the fetch is aborted and the item
+// flips to 'error' — which UNBLOCKS its Create button — instead of spinning on
+// 'loading' forever (an unbounded fetch once left items stuck for minutes).
+const ENRICH_FETCH_TIMEOUT_MS = 60000;
+
 // Label lookup for known Component type valueids — mirrors
 // BIBLISSIMA_TYPE_VALUEID_LABELS in views/biblissima_proxy.py. Used when the
 // user picks a new valueid via the inline editor so the badge can update
@@ -377,6 +384,19 @@ const viewModel = function(params) {
     // Unresolved dep names for a specific item (for tooltip)
     this.unresolvedDepsLabel = (item) => {
         const unresolved = [];
+        // Mirror the enrichStatus guard in itemDepsResolved: a Component still
+        // enriching blocks its own Create button. Surfacing it here keeps the
+        // tooltip from being EMPTY while the item spins on 'loading' (which
+        // otherwise reads as a broken, unexplained "Waiting for:" state).
+        if (self.isComponent) {
+            const es = item.enrichStatus();
+            if (es === 'pending' || es === 'loading') {
+                unresolved.push(
+                    arches.translations.biblissimaLoadingEnriching
+                        || 'Enriching manuscript metadata…'
+                );
+            }
+        }
         // Pending duplicate suggestion blocks the Create button until the
         // user either accepts or dismisses it.
         if (item.showSuggestions() && item.suggestions().length > 0) {
@@ -613,9 +633,18 @@ const viewModel = function(params) {
                 const idx = cursor++;
                 const item = targets[idx];
                 item.enrichStatus('loading');
+                // Bound the fetch: without a timeout a stalled upstream leaves
+                // the item on 'loading' forever, permanently disabling its
+                // Create button (itemDepsResolved blocks on 'loading').
+                const controller = new AbortController();
+                const timer = setTimeout(
+                    () => controller.abort(),
+                    ENRICH_FETCH_TIMEOUT_MS
+                );
                 try {
                     const resp = await fetch(
-                        `/api/biblissima/illumination/${item.ifdataHash}`
+                        `/api/biblissima/illumination/${item.ifdataHash}`,
+                        { signal: controller.signal }
                     );
                     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                     const data = await resp.json();
@@ -626,7 +655,11 @@ const viewModel = function(params) {
                         `Biblissima enrichment failed for ${item.ifdataHash}`,
                         err
                     );
+                    // 'error' (unlike 'loading') does NOT block Create — the
+                    // item stays creatable with whatever data we already have.
                     item.enrichStatus('error');
+                } finally {
+                    clearTimeout(timer);
                 }
             }
         };

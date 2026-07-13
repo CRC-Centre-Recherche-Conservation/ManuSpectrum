@@ -86,6 +86,7 @@ vi.mock('arches', () => ({
             biblissimaDuplicate: 'Duplicate',
             biblissimaLinked: 'Linked',
             biblissimaSearchExisting: 'Search existing resource...',
+            biblissimaLoadingEnriching: 'Enriching manuscript metadata…',
         },
         urls: {
             search_results: '/search/results',
@@ -101,17 +102,24 @@ vi.mock(
     'templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm',
     () => ({ default: '<div></div>' })
 );
-vi.mock('./parentResolver', () => ({
-    default: vi.fn().mockImplementation(() => ({
-        totalCount: () => 0,
-        unidentifiedItems: () => [],
-        resolving: () => false,
-        allResolved: () => true,
-        resolvedCount: () => 0,
-        parentIdFor: () => null,
-        resolveAll: vi.fn().mockResolvedValue(undefined),
-    })),
-}));
+vi.mock('./parentResolver', () => {
+    // Use a real class: `new ParentResolver(...)` in Component mode must yield
+    // an instance carrying the methods the init calls (resolveAll, allResolved,
+    // parentIdFor, …). A `vi.fn().mockImplementation(() => ({...}))` does NOT
+    // reliably expose those on the constructed instance.
+    class ParentResolverMock {
+        constructor() {
+            this.totalCount = () => 0;
+            this.unidentifiedItems = () => [];
+            this.resolving = () => false;
+            this.allResolved = () => true;
+            this.resolvedCount = () => 0;
+            this.parentIdFor = () => null;
+            this.resolveAll = vi.fn().mockResolvedValue(undefined);
+        }
+    }
+    return { default: ParentResolverMock };
+});
 
 // Import AFTER all mocks are in place.
 import viewModel from './biblissima-create-step.js';
@@ -119,9 +127,9 @@ import viewModel from './biblissima-create-step.js';
 // ---- Helpers ---------------------------------------------------------------
 
 /** Minimal params to instantiate the viewModel without real workflow context. */
-const makeParams = (items = []) => ({
+const makeParams = (items = [], resourceType = 'Document') => ({
     form: null, // triggers ko.observable(false) fallback for `complete`
-    configStepData: { resourceType: 'Document', projectId: 'proj-123' },
+    configStepData: { resourceType, projectId: 'proj-123' },
     searchStepData: { selectedItems: items },
     value: vi.fn(),
 });
@@ -150,7 +158,7 @@ const makeRawItem = (overrides = {}) => ({
  * background async init (resolveDependencies + checkDuplicates) so that
  * subsequent test fetch stubs intercept only what the test cares about.
  */
-const makeViewModel = async (items = []) => {
+const makeViewModel = async (items = [], resourceType = 'Document') => {
     // Generic stub for the background init calls (check-duplicates etc.)
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
         Promise.resolve({
@@ -158,7 +166,7 @@ const makeViewModel = async (items = []) => {
             json: () => Promise.resolve({ results: [], resourceId: null }),
         })
     ));
-    const vm = new viewModel(makeParams(items));
+    const vm = new viewModel(makeParams(items, resourceType));
     // Drain the async init queue (resolveDependencies awaits a fetch promise).
     await new Promise((resolve) => setTimeout(resolve, 0));
     return vm;
@@ -524,6 +532,56 @@ describe('biblissima-create-step', () => {
             vm.retryAllFailed();
 
             expect(spy).toHaveBeenCalledOnce();
+        });
+    });
+
+    // =========================================================================
+    // Stuck-loading regression: a Component item still enriching must block its
+    // Create button AND explain WHY in the tooltip (not an empty "Waiting for:")
+    // even when its parent Document and related-resource deps are all resolved.
+    // Root cause was a dead IIIF host leaving enrichStatus stuck on 'loading';
+    // unresolvedDepsLabel didn't mirror itemDepsResolved's enrichStatus guard.
+    // =========================================================================
+
+    describe('unresolvedDepsLabel — enrichStatus guard', () => {
+        const makeComponentItem = (enrichState) => ({
+            status: () => 'pending',
+            enrichStatus: () => enrichState,
+            showSuggestions: () => false,
+            suggestions: () => [],
+            location: '',
+            locationLabel: '',
+            collectionLabel: '',
+            parentInstitutionLabel: '',
+            authorLabel: '',
+            manuscript: 'Abbeville. Bibliothèque municipale, FA 16 D 281',
+            shelfmark: 'FA 16 D 281',
+            portalHash: '',
+            biblissimaQid: 'Q203781',
+        });
+
+        it('surfaces "Enriching…" (never an empty tooltip) while a Component item is still loading, even with parent + deps resolved', async () => {
+            const vm = await makeViewModel([], 'Component');
+            vm.dependencies([]); // no related-resource deps
+            vm.parentResolver.parentIdFor = () => 'parent-xyz'; // parent resolved
+            const item = makeComponentItem('loading');
+
+            // Blocked...
+            expect(vm.canCreateItem(item)).toBe(false);
+            // ...and the tooltip explains WHY (not empty).
+            const label = vm.unresolvedDepsLabel(item);
+            expect(label).not.toBe('');
+            expect(label).toContain('Enriching');
+        });
+
+        it('is empty and the item is creatable once enrichment is done and everything else resolved', async () => {
+            const vm = await makeViewModel([], 'Component');
+            vm.dependencies([]);
+            vm.parentResolver.parentIdFor = () => 'parent-xyz';
+            const item = makeComponentItem('done');
+
+            expect(vm.unresolvedDepsLabel(item)).toBe('');
+            expect(vm.canCreateItem(item)).toBe(true);
         });
     });
 });
