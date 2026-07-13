@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-13 07:10-0500\n"
+"POT-Creation-Date: 2026-07-13 07:11-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -1616,17 +1616,30 @@ msgstr "Documents"
 msgid "Selected Documents"
 msgstr "Documents sélectionnés"
 
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:67
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:65
+msgid "Saving…"
+msgstr "Enregistrement…"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:68
+msgid "Saved"
+msgstr "Enregistré"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:72
+msgid "Save failed."
+msgstr "Échec de l'enregistrement."
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
+msgid "Retry"
+msgstr "Réessayer"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:78
+msgid "Remove all"
+msgstr "Tout retirer"
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:84
 msgid "You have not added any Documents to this Project"
 msgstr "Vous n'avez ajouté aucun document à ce projet"
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:92
-msgid "Save and Continue"
-msgstr "Enregistrer et continuer"
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:94
-msgid "Reset"
-msgstr "Réinitialiser"
 
 #: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm:2
 msgid "No documents associated"
@@ -1765,10 +1778,6 @@ msgstr "Modifier la sélection"
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:258
 msgid "Edit in Arches"
 msgstr "Éditer dans Arches"
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
-msgid "Retry"
-msgstr "Réessayer"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:281
 msgid "Linked to:"
@@ -2154,6 +2163,12 @@ msgstr "<h1>Les rendus n'existent pas</h1>"
 #: views/renderer_config.py:53
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
+
+#~ msgid "Save and Continue"
+#~ msgstr "Enregistrer et continuer"
+
+#~ msgid "Reset"
+#~ msgstr "Réinitialiser"
 
 #, fuzzy
 #~| msgid "An error occurred while creating the manifest."

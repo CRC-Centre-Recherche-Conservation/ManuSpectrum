@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-13 07:10-0500\n"
+"POT-Creation-Date: 2026-07-13 07:11-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1501,16 +1501,29 @@ msgstr ""
 msgid "Selected Documents"
 msgstr ""
 
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:67
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:65
+msgid "Saving…"
+msgstr ""
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:68
+msgid "Saved"
+msgstr ""
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:72
+msgid "Save failed."
+msgstr ""
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
+msgid "Retry"
+msgstr ""
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:78
+msgid "Remove all"
+msgstr ""
+
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:84
 msgid "You have not added any Documents to this Project"
-msgstr ""
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:92
-msgid "Save and Continue"
-msgstr ""
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:94
-msgid "Reset"
 msgstr ""
 
 #: templates/views/components/workflows/create-project-workflow/create-project-final-step.htm:2
@@ -1645,10 +1658,6 @@ msgstr ""
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:258
 msgid "Edit in Arches"
-msgstr ""
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
-msgid "Retry"
 msgstr ""
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:281

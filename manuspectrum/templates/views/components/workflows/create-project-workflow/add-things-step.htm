@@ -58,11 +58,28 @@
             </div>
 
             <div class="wf-multi-tile-step-list">
-                <div class="wf-multi-tile-step-list-header">
+                <div class="wf-multi-tile-step-list-header ms-cart-header">
                     <h5>{% trans "Selected Documents" %}</h5>
+                    <span class="ms-autosave-status small" role="status" aria-live="polite">
+                        <!-- ko if: saveState() === 'saving' -->
+                        <span class="text-muted"><i class="fa fa-spinner fa-spin" aria-hidden="true"></i> {% trans "Saving…" %}</span>
+                        <!-- /ko -->
+                        <!-- ko if: saveState() === 'saved' -->
+                        <span class="text-success"><i class="fa fa-check" aria-hidden="true"></i> {% trans "Saved" %}</span>
+                        <!-- /ko -->
+                        <!-- ko if: saveState() === 'error' -->
+                        <span class="text-danger" role="alert">
+                            <i class="fa fa-exclamation-triangle" aria-hidden="true"></i> {% trans "Save failed." %}
+                            <button type="button" class="btn btn-xs btn-link ms-btn-inline" data-bind="click: retrySave">{% trans "Retry" %}</button>
+                        </span>
+                        <!-- /ko -->
+                    </span>
+                    <button type="button" class="btn btn-xs btn-link ms-btn-inline" data-bind="visible: selectedResources().length > 0, click: removeAll">
+                        <i class="fa fa-times-circle" aria-hidden="true"></i> {% trans "Remove all" %}
+                    </button>
                 </div>
                 <div class="wf-multi-tile-step-list-body">
-                    <!-- ko if: selectedResources().length === 0 && !dirty() -->
+                    <!-- ko if: selectedResources().length === 0 -->
                     <div class="wf-multi-tile-step-list-empty">
                         <p>{% trans "You have not added any Documents to this Project" %}</p>
                     </div>
@@ -86,15 +103,6 @@
                     </div>
                     <!-- /ko -->
                 </div>
-                <!-- ko if: selectedResources().length > 0 || dirty() -->
-                <div class="search-selection-controls">
-                    <div class="d-flex justify-content-end">
-                        <button class="btn btn-md btn-mint" data-bind="visible: dirty, click: function(){submit()}, text: complete() === true ? $root.translations.save : '{% trans 'Save and Continue' %}'"></button>
-                        <button class="btn btn-md btn-mint" data-bind="visible: !dirty() && complete() === true, click: next, text: $root.translations.continue"></button>
-                        <button class="btn btn-md btn-warning" data-bind="visible: dirty, click: function(){resetTile()}" style="margin-left: 8px">{% trans "Reset" %}</button>
-                    </div>
-                </div>
-                <!--/ko -->
             </div>
         </div>
     </div>
