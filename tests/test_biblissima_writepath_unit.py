@@ -1521,9 +1521,11 @@ class DisplaynameFromI18nTests(TestCase):
 #
 # Patch targets
 # -------------
-# Tile and ResourceInstance are imported at module level in biblissima_proxy,
-# so we patch them via the proxy module namespace.
-PATCH_TILE = "manuspectrum.views.biblissima_proxy.Tile"
+# TileModel and ResourceInstance are imported at module level in
+# biblissima_proxy, so we patch them via the proxy module namespace. The
+# identifier corpus is loaded through ``TileModel`` (NOT the arches proxy
+# ``Tile``) so that ``.values_list(...)`` returns plain tuples without firing
+# ``load_serialized_graph()`` per row — see ``_make_corpus_tile``.
 PATCH_RESOURCE_INSTANCE = "manuspectrum.views.biblissima_proxy.ResourceInstance"
 
 # Fixed UUIDs for corpus/name data
@@ -1538,25 +1540,30 @@ _CORPUS_ARK_B = "ark:/43093/ifdataB002"
 
 
 def _make_corpus_tile(tile_value, rid, id_node=None):
-    """Return a minimal tile-like object for the corpus (tile_index building).
+    """Return a ``(data, resourceinstance_id)`` corpus row (tile_index building).
 
-    *id_node* must be the same key the view will use to look up the value in
-    tile.data (i.e. DOC_IDENTIFIER_VALUE or COMP_IDENTIFIER_VALUE).  Pass it
-    explicitly from the test so the corpus tiles match the view's lookup key.
+    The view loads the identifier corpus via
+    ``TileModel.objects.filter(...).values_list("data", "resourceinstance_id")``,
+    so a corpus row is a plain ``(data_dict, rid)`` tuple — NOT a model
+    instance. This mirrors the fix that stopped the corpus load from
+    instantiating the arches proxy ``Tile`` (whose ``__init__`` fires 4 queries
+    per row: an N+1 that scaled with the corpus size).
+
+    *id_node* must be the same key the view uses to look up the value in
+    ``data`` (i.e. DOC_IDENTIFIER_VALUE or COMP_IDENTIFIER_VALUE).  Pass it
+    explicitly from the test so the corpus rows match the view's lookup key.
     """
     key = id_node or "00000000-0000-0000-0000-000000000002"
-    tile = SimpleNamespace(
-        data={key: tile_value},
-        resourceinstance_id=rid,
-    )
-    return tile
+    return ({key: tile_value}, rid)
 
 
 def _build_mock_tile(corpus_tiles):
-    """Return a patcher context for Tile that yields corpus_tiles on filter()."""
-    # filter() returns an iterable; we patch it as a list so the for-loop works.
+    """Return a mock TileModel whose filter(...).values_list(...) yields corpus_tiles."""
+    # The view calls TileModel.objects.filter(...).values_list("data",
+    # "resourceinstance_id"); the terminal values_list() is what the for-loop
+    # iterates, so that is where the corpus tuples must live.
     mock_tile_cls = MagicMock()
-    mock_tile_cls.objects.filter.return_value = corpus_tiles
+    mock_tile_cls.objects.filter.return_value.values_list.return_value = corpus_tiles
     return mock_tile_cls
 
 
@@ -1588,7 +1595,10 @@ def _post_check_duplicates(items, graph_id, mock_tile_cls, mock_ri_cls):
     )
     view = BiblissimaCheckDuplicatesView()
 
-    with patch(PATCH_TILE, mock_tile_cls), patch(PATCH_RESOURCE_INSTANCE, mock_ri_cls):
+    with (
+        patch(PATCH_TILEMODEL, mock_tile_cls),
+        patch(PATCH_RESOURCE_INSTANCE, mock_ri_cls),
+    ):
         # Also stub out ES strategies so they don't hit a real cluster.
         with patch.object(view, "_es_string_search"):
             response = view.post(req)
@@ -1747,7 +1757,7 @@ class CheckDuplicatesParityTests(TestCase):
 
 
 class CheckDuplicatesScalingTests(TestCase):
-    """Task 2.3 — scaling: Tile.objects.filter call_count == 1 regardless
+    """Task 2.3 — scaling: TileModel.objects.filter call_count == 1 regardless
     of the number of items (proves O(1) corpus load)."""
 
     def setUp(self):
@@ -1769,7 +1779,9 @@ class CheckDuplicatesScalingTests(TestCase):
         names_by_rid = {_RID_A: "Alpha"}
 
         mock_tile_cls = MagicMock()
-        mock_tile_cls.objects.filter.return_value = corpus_tiles
+        mock_tile_cls.objects.filter.return_value.values_list.return_value = (
+            corpus_tiles
+        )
 
         mock_ri_cls = MagicMock()
         mock_ri_cls.objects.filter.return_value.values_list.return_value = list(
@@ -1798,7 +1810,7 @@ class CheckDuplicatesScalingTests(TestCase):
         view = BiblissimaCheckDuplicatesView()
 
         with (
-            patch(PATCH_TILE, mock_tile_cls),
+            patch(PATCH_TILEMODEL, mock_tile_cls),
             patch(PATCH_RESOURCE_INSTANCE, mock_ri_cls),
         ):
             with patch.object(view, "_es_string_search"):
@@ -1859,6 +1871,56 @@ class CheckDuplicatesScalingTests(TestCase):
             f"ResourceInstance.objects.filter must be called exactly once "
             f"(batched name resolution), got {ri_calls}",
         )
+
+    def test_corpus_loads_via_values_list_never_proxy_tile(self):
+        """Regression (Silk profiling 2026-07-13): the identifier corpus MUST
+        load through ``TileModel.objects.filter(...).values_list(
+        "data", "resourceinstance_id")`` — one query, no model instantiation.
+
+        Iterating the arches proxy ``Tile`` instead re-triggers
+        ``load_serialized_graph()`` in ``Tile.__init__`` for every row, firing 4
+        queries per corpus tile (resource_instance + graph + published_graph):
+        an N+1 that scaled with the corpus size (64/66 queries in the worst
+        profiled call). This guards against a revert to the proxy."""
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+
+        corpus = [
+            _make_corpus_tile(_CORPUS_ARK_A, _RID_A, id_node=DOC_IDENTIFIER_VALUE)
+        ]
+        mock_tilemodel = _build_mock_tile(corpus)
+        mock_ri = _build_mock_ri({_RID_A: "Alpha"})
+
+        # The proxy Tile must NOT be touched by the corpus load. Patch it with a
+        # sentinel and assert it is never queried nor instantiated.
+        mock_proxy_tile = MagicMock()
+        item = {
+            "arkId": _CORPUS_ARK_A,
+            "label": "Alpha",
+            "shelfmark": "",
+            "biblissimaQid": "",
+            "portalHash": "",
+            "manifestUrl": "",
+        }
+        with patch("manuspectrum.views.biblissima_proxy.Tile", mock_proxy_tile):
+            data = _post_check_duplicates(
+                items=[item],
+                graph_id=DOCUMENT_GRAPH_ID,
+                mock_tile_cls=mock_tilemodel,
+                mock_ri_cls=mock_ri,
+            )
+
+        # Corpus loaded via values_list("data", "resourceinstance_id").
+        mock_tilemodel.objects.filter.return_value.values_list.assert_called_once_with(
+            "data", "resourceinstance_id"
+        )
+        # Proxy Tile never queried nor instantiated for the corpus.
+        mock_proxy_tile.objects.filter.assert_not_called()
+        mock_proxy_tile.assert_not_called()
+        # The fix did not break matching: the tuple corpus still yields the hit.
+        suggestions = data["results"][0]["suggestions"]
+        self.assertEqual(suggestions[0]["resourceId"], _RID_A)
+        self.assertEqual(suggestions[0]["matchType"], "identifier")
 
 
 # ---------------------------------------------------------------------------

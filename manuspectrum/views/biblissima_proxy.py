@@ -1527,20 +1527,29 @@ class BiblissimaCheckDuplicatesView(View):
         )
         tile_index = []  # list of (tile_value: str, rid: str)
         try:
-            for tile in Tile.objects.filter(
+            # Use ``TileModel`` + ``.values_list`` (NOT the arches proxy ``Tile``):
+            # the proxy's ``__init__`` unconditionally calls
+            # ``load_serialized_graph()``, which fires 4 queries
+            # (resource_instance + graph + published_graph) for EVERY tile it
+            # instantiates. Iterating the proxy over the whole identifier corpus
+            # therefore costs ``4 x len(corpus)`` queries on EVERY check-duplicates
+            # call — an N+1 that scales with the corpus size (Silk: 64/66 queries).
+            # We only need ``data`` + ``resourceinstance_id``, so ``.values_list``
+            # loads the entire corpus in ONE query with no model instantiation.
+            for data, rid in TileModel.objects.filter(
                 nodegroup_id=id_ng,
                 resourceinstance__graph_id=graph_id,
-            ):
+            ).values_list("data", "resourceinstance_id"):
                 # Guard PER ROW: one malformed identifier value (e.g. a non-string
                 # that blows up ``.strip()`` inside _extract_tile_value) must skip
                 # just that row, not abort the whole corpus build -> otherwise
                 # strategy-1 dup-detection silently misses every later resource.
                 try:
-                    tv = self._extract_tile_value(tile.data.get(id_node, ""))
+                    tv = self._extract_tile_value((data or {}).get(id_node, ""))
                 except Exception:
                     continue
                 if tv:
-                    tile_index.append((tv, str(tile.resourceinstance_id)))
+                    tile_index.append((tv, str(rid)))
         except Exception:
             logger.warning("Tile identifier corpus load failed for graph %s", graph_id)
 

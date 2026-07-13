@@ -2078,8 +2078,10 @@ class CheckDuplicatesComponentScopeTests(TestCase):
     @patch(
         "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
     )
-    @patch("manuspectrum.views.biblissima_proxy.Tile")
-    def test_component_skips_shelfmark_and_label_strategies(self, mock_tile, mock_es):
+    @patch("manuspectrum.views.biblissima_proxy.TileModel")
+    def test_component_skips_shelfmark_and_label_strategies(
+        self, mock_tilemodel, mock_es
+    ):
         from django.test import RequestFactory
         import json
         from manuspectrum.views.biblissima_proxy import (
@@ -2087,8 +2089,9 @@ class CheckDuplicatesComponentScopeTests(TestCase):
             COMPONENT_GRAPH_ID,
         )
 
-        # No tile-identifier matches — strategy 1 yields nothing here.
-        mock_tile.objects.filter.return_value = []
+        # No tile-identifier matches — strategy 1 yields an empty corpus. The
+        # corpus loads via TileModel.objects.filter(...).values_list(...).
+        mock_tilemodel.objects.filter.return_value.values_list.return_value = []
 
         rf = RequestFactory()
         body = json.dumps(
@@ -2119,9 +2122,9 @@ class CheckDuplicatesComponentScopeTests(TestCase):
     @patch(
         "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
     )
-    @patch("manuspectrum.views.biblissima_proxy.Tile")
+    @patch("manuspectrum.views.biblissima_proxy.TileModel")
     def test_document_still_runs_shelfmark_and_label_strategies(
-        self, mock_tile, mock_es
+        self, mock_tilemodel, mock_es
     ):
         from django.test import RequestFactory
         import json
@@ -2130,7 +2133,7 @@ class CheckDuplicatesComponentScopeTests(TestCase):
             DOCUMENT_GRAPH_ID,
         )
 
-        mock_tile.objects.filter.return_value = []
+        mock_tilemodel.objects.filter.return_value.values_list.return_value = []
 
         rf = RequestFactory()
         body = json.dumps(
@@ -2165,8 +2168,8 @@ class CheckDuplicatesComponentScopeTests(TestCase):
     @patch(
         "manuspectrum.views.biblissima_proxy.BiblissimaCheckDuplicatesView._es_string_search"
     )
-    @patch("manuspectrum.views.biblissima_proxy.Tile")
-    def test_other_graphs_also_run_label_strategy(self, mock_tile, mock_es):
+    @patch("manuspectrum.views.biblissima_proxy.TileModel")
+    def test_other_graphs_also_run_label_strategy(self, mock_tilemodel, mock_es):
         """Place / Person / Group dep resolution depends on strategy 3 to find
         existing resources by displayname (e.g. 'Paris (France)'). The skip
         guard must target Components only."""
@@ -2174,7 +2177,7 @@ class CheckDuplicatesComponentScopeTests(TestCase):
         import json
         from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
 
-        mock_tile.objects.filter.return_value = []
+        mock_tilemodel.objects.filter.return_value.values_list.return_value = []
         place_graph_id = "3f2b036a-b65d-474d-b692-0b21903655c5"  # Place graph
 
         rf = RequestFactory()
