@@ -53,6 +53,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from functools import lru_cache
 from html import unescape
 
 import requests
@@ -64,11 +65,13 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
-from django.views.decorators.cache import cache_page, never_cache
+from django.views.decorators.cache import cache_control, cache_page, never_cache
 
 from arches.app.models.models import ResourceInstance
+from arches.app.models.models import TileModel
 from arches.app.models.models import Value  # used in _concept_valueid
 from arches.app.models.tile import Tile
+from arches.app.utils.decorators import group_required
 
 from manuspectrum.utils.dates import (
     CENTURY_MAPPING,
@@ -76,6 +79,7 @@ from manuspectrum.utils.dates import (
     parse_historical_date,
 )
 from manuspectrum.utils.http import get_user_agent
+from manuspectrum.views.permissions import EDITOR_GROUPS
 
 logger = logging.getLogger(__name__)
 
@@ -687,6 +691,7 @@ def _parse_iiif_canvases(manifest_json):
     return results
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaSuggestView(View):
     """Proxy for Biblissima Wikibase entity search (autocomplete).
 
@@ -700,6 +705,10 @@ class BiblissimaSuggestView(View):
         "descriptor": "Q304387",
     }
 
+    # cache_control OUTSIDE cache_page (listed above it): Django's cache
+    # middleware refuses to store responses already marked private, so the
+    # stored copy stays cacheable and only the outgoing response is patched.
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request):
         query = request.GET.get("q", "").strip()
@@ -868,9 +877,11 @@ class BiblissimaSuggestView(View):
         return JsonResponse({"results": results})
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaEntityView(View):
     """Proxy for fetching a single Wikibase entity with extracted properties."""
 
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request, qid):
         entity = _get_wikibase_entity(qid)
@@ -904,6 +915,7 @@ class BiblissimaEntityView(View):
         return JsonResponse(entity)
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaSearchManuscriptsView(View):
     """Search manuscripts on Biblissima with full batch enrichment.
 
@@ -917,6 +929,7 @@ class BiblissimaSearchManuscriptsView(View):
 
     TYPE_FILTERS = BiblissimaSuggestView.TYPE_FILTERS
 
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request):
         query = request.GET.get("q", "").strip()
@@ -1400,6 +1413,7 @@ _DEFAULT_SEARCH_PAGE_SIZE = 50
 _MAX_SEARCH_PAGE_SIZE = 200
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaSearchView(View):
     """Search Biblissima via IIIF manifest by iconographic descriptors.
 
@@ -1469,6 +1483,7 @@ class BiblissimaSearchView(View):
         )
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaCheckDuplicatesView(View):
     """Find potential duplicate resources in Arches using flexible matching.
 
@@ -1493,7 +1508,51 @@ class BiblissimaCheckDuplicatesView(View):
         from arches.app.search.search_engine_factory import SearchEngineInstance
 
         se = SearchEngineInstance
+
+        # ---------------------------------------------------------------------------
+        # Strategy 1 — hoist corpus load to O(1) in len(items)
+        #
+        # id_ng / id_node depend only on graph_id, not on any individual item.
+        # Load the entire identifier-tile corpus ONCE before the items loop and
+        # keep it as an in-memory list of (tile_value, rid) pairs.  The per-item
+        # loop then matches search_tokens against this list with no DB call.
+        # ---------------------------------------------------------------------------
+        id_ng = (
+            DOC_IDENTIFIER_NG if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_NG
+        )
+        id_node = (
+            DOC_IDENTIFIER_VALUE
+            if graph_id == DOCUMENT_GRAPH_ID
+            else COMP_IDENTIFIER_VALUE
+        )
+        tile_index = []  # list of (tile_value: str, rid: str)
+        try:
+            for tile in Tile.objects.filter(
+                nodegroup_id=id_ng,
+                resourceinstance__graph_id=graph_id,
+            ):
+                # Guard PER ROW: one malformed identifier value (e.g. a non-string
+                # that blows up ``.strip()`` inside _extract_tile_value) must skip
+                # just that row, not abort the whole corpus build -> otherwise
+                # strategy-1 dup-detection silently misses every later resource.
+                try:
+                    tv = self._extract_tile_value(tile.data.get(id_node, ""))
+                except Exception:
+                    continue
+                if tv:
+                    tile_index.append((tv, str(tile.resourceinstance_id)))
+        except Exception:
+            logger.warning("Tile identifier corpus load failed for graph %s", graph_id)
+
         results = []
+        # Collect all rids matched by strategy 1 across all items so we can
+        # resolve their displaynames in a single batched query after the loop.
+        matched_rids: set = set()
+        # Per-item list of (rid, tile_value) hits in corpus-iteration order.
+        per_item_id_hits: list = [[] for _ in items]
+        # Parallel state structure: avoids mutating caller-supplied input dicts.
+        # Each slot holds (seen_ids, label, shelfmark, ark_id) for item[idx].
+        item_state: list = [None] * len(items)
 
         for idx, item in enumerate(items):
             ark_id = item.get("arkId", "")
@@ -1501,12 +1560,11 @@ class BiblissimaCheckDuplicatesView(View):
             shelfmark = item.get("shelfmark", "")
             qid = item.get("biblissimaQid", "")
 
-            suggestions = []
-            seen_ids = set()
+            seen_ids: set = set()
 
-            # Strategy 1: Search by identifiers in tiles
-            # Build all possible search tokens from Biblissima data
-            search_tokens = set()
+            # Strategy 1: match search_tokens against the in-memory tile_index.
+            # Build all possible search tokens from Biblissima data.
+            search_tokens: set = set()
             if ark_id:
                 search_tokens.add(ark_id)
                 # Hash without ark: prefix
@@ -1528,65 +1586,52 @@ class BiblissimaCheckDuplicatesView(View):
                 search_tokens.add(manifest_url)
 
             if search_tokens:
-                id_ng = (
-                    DOC_IDENTIFIER_NG
-                    if graph_id == DOCUMENT_GRAPH_ID
-                    else COMP_IDENTIFIER_NG
+                for tile_value, rid in tile_index:
+                    if rid in seen_ids:
+                        continue
+                    if any(
+                        t == tile_value or t in tile_value or tile_value in t
+                        for t in search_tokens
+                    ):
+                        seen_ids.add(rid)
+                        per_item_id_hits[idx].append((rid, tile_value))
+                        matched_rids.add(rid)
+
+            # Stash per-item state in parallel structure (not in the input dict).
+            item_state[idx] = (seen_ids, label, shelfmark, ark_id)
+
+        # ---------------------------------------------------------------------------
+        # Batch-resolve displaynames for all strategy-1 hits in ONE query.
+        # ---------------------------------------------------------------------------
+        name_by_rid: dict = {}
+        if matched_rids:
+            for rid, nm in ResourceInstance.objects.filter(
+                resourceinstanceid__in=matched_rids
+            ).values_list("resourceinstanceid", "name"):
+                # Fall back to the resource id when the name is empty, so a
+                # duplicate-suggestion row is never blank — the user must be able
+                # to tell WHICH existing resource is the potential duplicate
+                # (finding #9).
+                name_by_rid[str(rid)] = self._displayname_from_i18n(nm) or str(rid)
+
+        # ---------------------------------------------------------------------------
+        # Assemble final results per item.
+        # ---------------------------------------------------------------------------
+        for idx, item in enumerate(items):
+            suggestions: list = []
+            seen_ids, label, shelfmark, ark_id = item_state[idx]
+
+            # Identifier suggestions (strategy 1) — in corpus-iteration order.
+            for rid, tile_value in per_item_id_hits[idx]:
+                suggestions.append(
+                    {
+                        "resourceId": rid,
+                        "displayname": name_by_rid.get(rid, ""),
+                        "matchType": "identifier",
+                        "matchValue": tile_value,
+                        "confidence": "high",
+                    }
                 )
-                id_node = (
-                    DOC_IDENTIFIER_VALUE
-                    if graph_id == DOCUMENT_GRAPH_ID
-                    else COMP_IDENTIFIER_VALUE
-                )
-                try:
-                    matching_tiles = Tile.objects.filter(
-                        nodegroup_id=id_ng,
-                        resourceinstance__graph_id=graph_id,
-                    )
-                    for tile in matching_tiles:
-                        raw_value = tile.data.get(id_node, "")
-                        # Handle i18n dict format
-                        if isinstance(raw_value, dict):
-                            tile_value = ""
-                            for lang in ("en", "fr", "de", "es", "it"):
-                                v = raw_value.get(lang, {})
-                                if isinstance(v, dict) and v.get("value"):
-                                    tile_value = v["value"].strip()
-                                    break
-                        else:
-                            tile_value = str(raw_value).strip() if raw_value else ""
-
-                        if not tile_value:
-                            continue
-
-                        # Check if tile value matches any search token
-                        # or if any search token is contained in the tile value
-                        matched = False
-                        for token in search_tokens:
-                            if (
-                                token == tile_value
-                                or token in tile_value
-                                or tile_value in token
-                            ):
-                                matched = True
-                                break
-
-                        if matched:
-                            rid = str(tile.resourceinstance_id)
-                            if rid not in seen_ids:
-                                seen_ids.add(rid)
-                                dn = self._get_resource_name(rid)
-                                suggestions.append(
-                                    {
-                                        "resourceId": rid,
-                                        "displayname": dn,
-                                        "matchType": "identifier",
-                                        "matchValue": tile_value,
-                                        "confidence": "high",
-                                    }
-                                )
-                except Exception:
-                    logger.warning("Tile identifier search failed for item %d", idx)
 
             # Strategies 2 and 3 are skipped only for Components. Components
             # share the parent manuscript's shelfmark, and their displayname
@@ -1622,13 +1667,33 @@ class BiblissimaCheckDuplicatesView(View):
         return JsonResponse({"results": results})
 
     @staticmethod
-    def _get_resource_name(resource_id):
-        """Get the display name for a resource."""
-        try:
-            ri = ResourceInstance.objects.get(resourceinstanceid=resource_id)
-            return str(ri.name) if ri.name else str(ri)
-        except ResourceInstance.DoesNotExist:
+    def _extract_tile_value(raw_value):
+        """Return a plain string from a tile node value.
+
+        If *raw_value* is a dict (Arches i18n format), iterate over languages
+        in priority order ``en → fr → de → es → it`` and return the first
+        non-empty ``value`` string found (stripped).  For any other truthy
+        scalar, return ``str(raw_value).strip()``.  Returns ``""`` for falsy
+        inputs or when no language produces a usable value.
+
+        Mirrors the inline i18n block at biblissima_proxy.py ~1551-1559.
+        """
+        if isinstance(raw_value, dict):
+            for lang in ("en", "fr", "de", "es", "it"):
+                v = raw_value.get(lang, {})
+                if isinstance(v, dict) and v.get("value"):
+                    return v["value"].strip()
             return ""
+        return str(raw_value).strip() if raw_value else ""
+
+    @staticmethod
+    def _displayname_from_i18n(name):
+        """Return ``str(name)`` for a truthy I18n field value, else ``""``.
+
+        Accepts any value (dict, str, None) that an Arches I18n name field
+        might carry.  Returns ``""`` for falsy inputs.
+        """
+        return str(name) if name else ""
 
     @staticmethod
     def _extract_es_displayname(hit):
@@ -1860,6 +1925,7 @@ _DEFAULT_ILLUMINATIONS_PAGE_SIZE = 20
 _MAX_ILLUMINATIONS_PAGE_SIZE = 200
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaManuscriptIlluminationsView(View):
     """Scrape Biblissima portal page for a manuscript to list its illuminations.
 
@@ -1869,6 +1935,7 @@ class BiblissimaManuscriptIlluminationsView(View):
     hash so follow-up page requests skip the (slow) HTML scrape.
     """
 
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(3600))
     def get(self, request):
         portal_hash = request.GET.get("portalHash", "").strip()
@@ -2053,6 +2120,7 @@ def _iiif_thumbnail_from_service(service_id, width=200):
     return f"{service_id.rstrip('/')}/full/{width},/0/default.jpg"
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaIlluminationDetailView(View):
     """Scrape a single illumination page from the Biblissima portal.
 
@@ -2194,6 +2262,7 @@ class BiblissimaIlluminationDetailView(View):
 
         return page
 
+    @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(3600))
     def get(self, request, ifdata_hash):
         """Fetch the /fr/ and /en/ portal pages in sequence, merge, enrich.
@@ -2322,6 +2391,7 @@ class BiblissimaIlluminationDetailView(View):
             session.close()
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaCreateResourceView(View):
     """Create one Arches resource per POST — the only write-path view.
 
@@ -2398,6 +2468,12 @@ class BiblissimaCreateResourceView(View):
                 concept_mappings=concept_mappings,
                 user=request.user,
             )
+        except ValueError as exc:
+            # Dangling / malformed dependency (or project) rejected by the
+            # existence guard — a client-data problem, so a clean 400 rather
+            # than an opaque 500.
+            logger.warning("Biblissima create rejected: %s", exc)
+            return JsonResponse({"error": str(exc)}, status=400)
         except Exception:
             logger.exception("Failed to create resource from Biblissima data")
             return JsonResponse({"error": "Resource creation failed"}, status=500)
@@ -2424,6 +2500,7 @@ class BiblissimaCreateResourceView(View):
 
         try:
             with transaction.atomic():
+                self._tile_buffer = []
                 resource_instance = ResourceInstance(graph_id=graph_id)
                 resource_instance.save()
                 resource_id = resource_instance.resourceinstanceid
@@ -2465,8 +2542,16 @@ class BiblissimaCreateResourceView(View):
                         },
                     )
 
-            resource = Resource.objects.get(resourceinstanceid=resource_id)
-            resource.index()
+                resource = Resource.objects.select_related("graph__publication").get(
+                    pk=resource_id
+                )
+                self._flush_tile_buffer(
+                    resource, user=None, default_transaction_id=None
+                )
+
+            # Route through the defer seam (post-commit; honors
+            # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
+            self._defer_indexing(resource_ids=[str(resource_id)])
         except Exception:
             logger.exception("Failed to create %s dependency", resource_type)
             return JsonResponse(
@@ -2495,11 +2580,42 @@ class BiblissimaCreateResourceView(View):
         Wrapped in a DB transaction — if anything fails, everything rolls back.
         Elasticsearch indexing is deferred until after all DB writes succeed,
         so a rollback leaves no orphan documents in ES.
+
+        Tiles are buffered and flushed via two bulk INSERTs (tiles +
+        edit_log) plus a single ``save_descriptors`` UPDATE on the
+        resource. The standard ``Tile.save()`` path would otherwise
+        reload the published graph, run the function-runner, and
+        re-save descriptors **per tile** — measured at ~387 SQL queries
+        for a single Component create against ~30-50 with this path.
         """
         from django.db import transaction
         from arches.app.models.resource import Resource
 
         with transaction.atomic():
+            self._tile_buffer = []
+
+            # Dangling-dependency guard (parity with BiblissimaCreateAllView
+            # Pass 1): a dependency — or the project — referencing a
+            # since-deleted resource would otherwise commit a dangling
+            # resource_x_resource row as a successful "created" (strict=False in
+            # _validate_tiles does NOT catch it). Verify existence up front; a
+            # bad ref raises ValueError, surfaced by the caller as a clean 400.
+            valid_dep_ids = self._precollect_valid_dep_ids(
+                [{"dependencies": dependencies}]
+            )
+            self._assert_deps_exist(dependencies, valid_dep_ids)
+            project_id = dependencies.get("project")
+            if project_id:
+                if not isinstance(project_id, str):
+                    raise ValueError(
+                        f"Project {project_id!r} is not a valid resource id; "
+                        "cannot link."
+                    )
+                if project_id.strip() and project_id.strip() not in valid_dep_ids:
+                    raise ValueError(
+                        f"Project {project_id} does not exist; cannot link."
+                    )
+
             created_deps = {"places": {}, "persons": {}, "groups": {}}
             resource_instance = ResourceInstance(graph_id=graph_id)
             resource_instance.save()
@@ -2524,21 +2640,111 @@ class BiblissimaCreateResourceView(View):
                     created_deps,
                 )
 
-            # Link to project if specified
-            project_id = dependencies.get("project")
+            resource = Resource.objects.select_related("graph__publication").get(
+                pk=resource_id
+            )
+            self._flush_tile_buffer(resource, user, transaction_id)
+
+            # Linking to a project writes a tile on a *different* resource
+            # (the project) and must refresh the project's descriptors.
+            # Run it after the buffer flush so it goes through the
+            # standard Tile.save() path on its own resource. project_id was
+            # resolved and existence-checked by the guard above.
             if project_id:
                 self._link_to_project(resource_id, project_id, transaction_id)
 
-        # DB transaction succeeded — now index into Elasticsearch
-        try:
-            resource = Resource.objects.get(resourceinstanceid=resource_id)
-            resource.index()
-        except Exception:
-            logger.warning(
-                "ES indexing failed for resource %s (DB is committed)", resource_id
-            )
+        # Schedule ES indexing to run after the DB transaction commits.
+        # The on_commit wrapper inside _defer_indexing guarantees that a
+        # rollback never enqueues an indexing job for data that no longer
+        # exists. With BIBLISSIMA_ASYNC_INDEXING=False (the default), this
+        # is behaviourally identical to the previous inline resource.index()
+        # call but runs strictly post-commit.
+        #
+        # When the resource was linked to a project, the project's tile was
+        # written with index=False (I-3), so the project must be re-indexed
+        # here too — otherwise its ES doc's studied_objects stays stale.
+        index_ids = [str(resource_id)]
+        if project_id:
+            index_ids.append(str(project_id))
+        self._defer_indexing(resource_ids=index_ids)
 
         return resource_id, created_deps
+
+    def _precollect_valid_dep_ids(self, items):
+        """ONE ResourceInstance.objects.filter across the given items: the set
+        of dependency resource ids that actually exist. A dependency ref not in
+        this set is a dangling relationship; the caller turns it into a clean
+        failure instead of a silently committed R2R row with a NULL to_graphid
+        (strict=False in _validate_tiles does NOT catch it).
+
+        Shared by the unitary create path (one item) and BiblissimaCreateAllView
+        (the whole batch). For the batch, this snapshots existence BEFORE Pass 1,
+        so an intra-batch dependency (a resource created earlier in the same
+        batch referenced by a later item) is NOT resolvable here and would be
+        flagged dangling. This is correct for the current single-graph create-all
+        design, where any cross-resource parent target was created by a prior
+        already-committed call."""
+        candidate = set()
+        for item in items:
+            deps = item.get("dependencies") or {}
+            for v in deps.values():
+                for one in v if isinstance(v, list) else [v]:
+                    if isinstance(one, str) and one.strip():
+                        candidate.add(one.strip())
+            # The project id is a dependency too: existence-check it in the same
+            # single query so a dangling project becomes a clean failure (its
+            # FK-to-nonexistent-project Tile would otherwise raise an
+            # IntegrityError at write time).
+            proj = deps.get("project")
+            if isinstance(proj, str) and proj.strip():
+                candidate.add(proj.strip())
+        well_formed = set()
+        for cid in candidate:
+            try:
+                uuid.UUID(cid)
+                well_formed.add(cid)
+            except (ValueError, TypeError):
+                pass
+        if not well_formed:
+            return set()
+        return {
+            str(v)
+            for v in ResourceInstance.objects.filter(
+                resourceinstanceid__in=well_formed
+            ).values_list("resourceinstanceid", flat=True)
+        }
+
+    def _assert_deps_exist(self, deps, valid_dep_ids):
+        """Raise ValueError if any dependency ref is not a confirmed-existing
+        string uuid.
+
+        A malformed ref (a non-string value such as a number, dict, ...) also
+        raises, so it becomes a clean failure instead of a downstream
+        DataError/500 when it is coerced with ``str()`` into a resource_x_resource
+        row. ``None`` and blank strings mean 'no dependency' and are skipped.
+
+        'project' is excluded here; it is existence-checked explicitly by each
+        caller (a Tile FK to a nonexistent project would otherwise raise an
+        IntegrityError at write time)."""
+        for key, v in (deps or {}).items():
+            if key == "project":
+                continue
+            for one in v if isinstance(v, list) else [v]:
+                if one is None:
+                    continue
+                if isinstance(one, str):
+                    if not one.strip():
+                        continue
+                    if one.strip() not in valid_dep_ids:
+                        raise ValueError(
+                            f"Dependency {one} for '{key}' does not exist; "
+                            "cannot link a dangling relationship."
+                        )
+                else:
+                    raise ValueError(
+                        f"Dependency {one!r} for '{key}' is not a valid "
+                        "resource id; cannot link."
+                    )
 
     def _create_tile(
         self,
@@ -2548,27 +2754,391 @@ class BiblissimaCreateResourceView(View):
         transaction_id=None,
         parenttile=None,
     ):
-        """Create a single tile without ES indexing (deferred to after commit).
+        """Stage a tile in ``self._tile_buffer`` for bulk insert.
 
-        ``parenttile`` must be set when the nodegroup has a
-        ``parentnodegroup`` in the graph — without it, Arches can't
-        reconstruct the tile hierarchy and the card UI won't display
-        the child data under the right parent. Query the NodeGroup model
-        to find which nodegroups are nested.
+        Returns the in-memory ``TileModel`` so it can be referenced
+        as ``parenttile`` of subsequent tiles — the UUID is generated
+        eagerly here, before any DB write, so child tiles created
+        later in the same flow can point at this one's pk.
+
+        ``TileModel`` (the underlying ORM model) is used instead of
+        ``Tile`` (the proxy) because ``Tile.__init__`` calls
+        ``load_serialized_graph()``, which lazy-fetches the
+        resourceinstance + graph + graphs_x_published_graphs +
+        published_graphs (4 SELECTs **per tile instantiation**). With
+        ~28 tiles per resource that adds ~112 SQL queries per create
+        for no benefit, since bulk_create skips ``Tile.save()`` and
+        therefore never needs ``serialized_graph``.
+
+        The buffer is initialized in ``_create_resource`` /
+        ``_create_dependency_resource`` and flushed via
+        ``_flush_tile_buffer`` before the enclosing transaction
+        commits. ``parenttile`` must still be set whenever the
+        nodegroup has a ``parentnodegroup`` in the graph — otherwise
+        Arches can't reconstruct the tile hierarchy and the card UI
+        shows empty sub-cards.
+
+        ``sortorder`` is assigned as an incrementing counter per
+        (resource_id, nodegroup_id) pair so that sibling tiles of a
+        cardinality-n card have distinct, stable orderings in the card
+        UI. ``bulk_create`` bypasses ``TileModel.save()``'s
+        ``set_next_sort_order()``, so we must track it here. A single
+        tile gets sortorder=0; two siblings get 0 and 1, etc.
         """
-        tile = Tile(
+        # sortorder = number of prior sibling tiles for this (resource,
+        # nodegroup) pair. Tracked with an incremental per-key counter rather
+        # than rescanning the whole buffer on every call (which is O(T^2) over a
+        # large batch). The counter is reset whenever the buffer is empty — i.e.
+        # exactly where each build path resets ``self._tile_buffer = []`` before
+        # staging a fresh resource's / batch's tiles.
+        if not self._tile_buffer:
+            self._sortorder_by_key = {}
+        counts = getattr(self, "_sortorder_by_key", None)
+        if counts is None:
+            counts = self._sortorder_by_key = {}
+        sort_key = (str(resource_id), str(nodegroup_id))
+        sortorder = counts.get(sort_key, 0)
+        counts[sort_key] = sortorder + 1
+        tile = TileModel(
             tileid=uuid.uuid4(),
             nodegroup_id=nodegroup_id,
             resourceinstance_id=resource_id,
             data=data,
-            sortorder=0,
+            sortorder=sortorder,
         )
         if parenttile is not None:
             tile.parenttile = parenttile
-        if transaction_id:
-            tile.transaction_id = transaction_id
-        tile.save(index=False)
+        # Plain attribute; bulk_create ignores it. _flush_tile_buffer
+        # reads it when building the matching EditLog row so each tile
+        # keeps its caller-supplied transactionid.
+        tile._mspectrum_transaction_id = transaction_id
+        self._tile_buffer.append(tile)
         return tile
+
+    def _collect_valid_concepts(self, tiles, nodes_by_id):
+        """Batch-confirm concept valueids with a single ``Value.objects.filter``.
+
+        Scans all concept/concept-list node values across *tiles*, sends
+        only the well-formed UUID strings to the DB in one query, and
+        returns the set of confirmed (existing) valueid strings.
+
+        Malformed (non-UUID) values are excluded from the filter and
+        will fall through to the authoritative arches ``validate()`` call
+        inside ``_validate_tiles``.
+        """
+        valid_concept_ids = set()
+        concept_ids = set()
+        for tile in tiles:
+            for nodeid, value in tile.data.items():
+                node = nodes_by_id.get(str(nodeid))
+                if node is None or value is None:
+                    continue
+                if node["datatype"] in ("concept", "concept-list"):
+                    for v in value if isinstance(value, list) else [value]:
+                        if isinstance(v, str) and v.strip():
+                            concept_ids.add(v.strip())
+        if concept_ids:
+            well_formed = set()
+            for cid in concept_ids:
+                try:
+                    uuid.UUID(cid)
+                    well_formed.add(cid)
+                except (ValueError, TypeError):
+                    pass  # malformed → falls back to arches validate below
+            if well_formed:
+                valid_concept_ids = {
+                    str(v)
+                    for v in Value.objects.filter(valueid__in=well_formed).values_list(
+                        "valueid", flat=True
+                    )
+                }
+        return valid_concept_ids
+
+    def _validate_tiles(self, tiles, nodes_by_id, factory, valid_concept_ids):
+        """Tier-2 validate-net: run ``datatype.validate()`` on every (tile, node).
+
+        Concept/concept-list nodes whose values are ALL confirmed in
+        *valid_concept_ids* (from ``_collect_valid_concepts``) are
+        short-circuited with no further DB call. Anything malformed or
+        absent falls through to the authoritative arches ``validate()``.
+
+        Raises ``TileValidationError`` on any ERROR-level result.
+        ``strict=False`` avoids the per-ref existence check on
+        resource-instance datatypes.
+        """
+        from arches.app.models.tile import TileValidationError
+        from types import SimpleNamespace
+
+        for tile in tiles:
+            for nodeid, value in tile.data.items():
+                node = nodes_by_id.get(str(nodeid))
+                if node is None:
+                    continue
+                if (
+                    node["datatype"] in ("concept", "concept-list")
+                    and value is not None
+                ):
+                    vals = value if isinstance(value, list) else [value]
+                    if vals and all(
+                        isinstance(v, str) and v.strip() in valid_concept_ids
+                        for v in vals
+                    ):
+                        continue  # all concept values exist (batched) — net satisfied
+                    # else: fall through to the authoritative arches validate
+                datatype = factory.get_instance(node["datatype"])
+                node_ns = SimpleNamespace(**node)
+                errors = datatype.validate(
+                    value, node=node_ns, strict=False, request=None
+                )
+                for err in errors or []:
+                    if err.get("type") == "ERROR":
+                        raise TileValidationError(err.get("message", ""))
+
+    def _run_hook(self, tiles, nodes_by_id, factory, method_name):
+        """Replay ``pre_tile_save`` / ``post_tile_save`` for every (tile, node).
+
+        Mirrors the side effects that ``Tile.save()`` would run around the
+        ``bulk_create``:
+
+        - ``pre_tile_save``: IIIF manifest import rewrites the URL to
+          ``/manifest/{globalid}`` so Mirador can serve external manifests.
+        - ``post_tile_save``: R2R relationship creation via the Arches SQL
+          function that populates ``resource_x_resource``.
+
+        ``method_name`` is intentionally the last argument so that Task 3.4
+        can call ``_run_hook(tiles, nodes_by_id, factory, "pre_tile_save")``
+        with a consistent, reusable signature.
+        """
+        for tile in tiles:
+            for nodeid in list(tile.data.keys()):
+                node = nodes_by_id.get(str(nodeid))
+                if node is None:
+                    continue
+                datatype = factory.get_instance(node["datatype"])
+                method = getattr(datatype, method_name)
+                if method_name == "post_tile_save":
+                    method(tile, nodeid, request=None)
+                else:
+                    method(tile, nodeid)
+
+    def _write_editlog(self, tiles, resource, user, tx_id):
+        """Build one ``EditLog`` row per tile and bulk-insert them.
+
+        ``displayname`` is computed here — after the caller has already called
+        ``resource.save_descriptors()`` — so the name reflects the committed
+        descriptors. ``EditLog`` is imported locally so the patch target
+        stays ``arches.app.models.models.EditLog``.
+        """
+        from arches.app.models.models import EditLog
+        from django.utils import timezone
+
+        displayname = resource.displayname()
+
+        user_id = (
+            str(user.id) if user is not None and getattr(user, "id", None) else None
+        )
+        user_username = getattr(user, "username", "") or ""
+        user_firstname = getattr(user, "first_name", "") or ""
+        user_lastname = getattr(user, "last_name", "") or ""
+        user_email = getattr(user, "email", "") or ""
+
+        now = timezone.now()
+        fallback_tx = tx_id or uuid.uuid4()
+        edits = [
+            EditLog(
+                transactionid=getattr(t, "_mspectrum_transaction_id", None)
+                or fallback_tx,
+                resourcedisplayname=displayname,
+                resourceclassid=str(resource.graph_id),
+                resourceinstanceid=str(t.resourceinstance_id),
+                nodegroupid=str(t.nodegroup_id),
+                tileinstanceid=str(t.tileid),
+                edittype="tile create",
+                newvalue=t.data,
+                oldvalue={},
+                timestamp=now,
+                userid=user_id,
+                user_username=user_username,
+                user_firstname=user_firstname,
+                user_lastname=user_lastname,
+                user_email=user_email,
+                note="resource creation",
+            )
+            for t in tiles
+        ]
+        EditLog.objects.bulk_create(edits)
+
+    def _batch_save_descriptors(self, resources):
+        """Refresh descriptors for a batch, hoisting the per-graph Node fetch
+        (3N->1 per graph) and the FunctionXGraph load (N->1 per graph) while
+        delegating ALL value logic to the UNMODIFIED per-resource
+        save_descriptors -> MultiDescriptor pipeline (byte-identical output,
+        interlink-safe because each resource is persisted before the next).
+
+        PARTITIONS by graph_id: a Biblissima batch is NOT homogeneous, and a
+        single flat node list applied across graphs silently yields empty
+        descriptors. `resources` MUST already be ordered parents-before-children
+        so a child's resource-instance descriptor renders against a persisted
+        parent, exactly as the unitary path.
+        """
+        from arches.app.models import models
+
+        graph_ids = []
+        for r in resources:
+            gid = str(r.graph_id)
+            if gid not in graph_ids:
+                graph_ids.append(gid)
+
+        node_cache = {}
+        fxg_cache = {}
+        for gid in graph_ids:
+            node_cache[gid] = list(models.Node.objects.filter(graph_id=gid))
+            fxg_cache[gid] = list(
+                models.FunctionXGraph.objects.filter(
+                    graph_id=gid, function__functiontype="primarydescriptors"
+                ).select_related("function")
+            )
+
+        for resource in resources:
+            gid = str(resource.graph_id)
+            resource.descriptor_function = fxg_cache[gid]
+            resource.save_descriptors(
+                context={"_prefetched_graph_nodes": node_cache[gid]}
+            )
+
+    def _flush_tile_buffer(self, resource, user, default_transaction_id):
+        """Persist ``self._tile_buffer`` in two bulk INSERTs and refresh
+        descriptors once.
+
+        Thin orchestrator: captures and resets the buffer, builds the shared
+        ``DataTypeFactory`` and ``nodes_by_id`` lookup, then delegates to the
+        four reusable primitives in order:
+
+        1. ``_collect_valid_concepts`` — batch-confirm concept valueids
+           (ONE ``Value.objects.filter`` for the whole batch).
+        2. ``_validate_tiles`` — Tier-2 validate-net (raises
+           ``TileValidationError`` on any ERROR before any DB write).
+        3. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
+        4. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
+        5. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
+        6. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        7. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+
+        After this method, ``self._tile_buffer`` is reset to an empty
+        list — any further ``_create_tile`` call inside the same
+        request would silently buffer tiles that never get flushed,
+        which is a bug; callers must not invoke ``_create_tile`` after
+        the flush.
+        """
+        from arches.app.datatypes.datatypes import DataTypeFactory
+
+        tiles = self._tile_buffer
+        self._tile_buffer = []
+        if not tiles:
+            return
+
+        # Reuse the published graph that ``select_related`` already
+        # fetched on ``resource`` (see _create_resource): one in-memory
+        # dict shared by validate, pre_tile_save, and post_tile_save
+        # for the whole batch. Using ``resource.get_serialized_graph()``
+        # avoids the extra ``Node.objects.filter(graph_id=...)`` SQL
+        # round-trip a fresh ``Node`` queryset would cost.
+        factory = DataTypeFactory()
+        serialized_graph = resource.get_serialized_graph() or {}
+        nodes_by_id = {str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])}
+
+        valid_concept_ids = self._collect_valid_concepts(tiles, nodes_by_id)
+        self._validate_tiles(tiles, nodes_by_id, factory, valid_concept_ids)
+        self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
+        TileModel.objects.bulk_create(tiles)
+        self._run_hook(tiles, nodes_by_id, factory, "post_tile_save")
+        # MultiDescriptor reads tiles via TileModel.objects.filter(...) —
+        # so it sees the rows just inserted. save_descriptors also calls
+        # super().save() on the resource, which is the single UPDATE
+        # replacing the N updates the per-tile path would emit.
+        resource.save_descriptors()
+        self._write_editlog(tiles, resource, user, default_transaction_id)
+
+    def _defer_indexing(self, resource_ids=None, tx_id=None):
+        """Schedule ES indexing to run after the current DB transaction commits.
+
+        The work is wrapped in ``transaction.on_commit``. Note the current call
+        sites all invoke this AFTER their ``atomic()`` block has exited (post-
+        commit): with no atomic block in progress, ``on_commit`` fires the
+        callback immediately. Rollback protection here is therefore structural —
+        a failed create returns before reaching this call, so no indexing job is
+        ever scheduled for rolled-back data. (If this were ever called from
+        inside an ``atomic()`` block, ``on_commit`` would additionally discard
+        the callback on rollback.)
+
+        Two modes (mutually exclusive; ``tx_id`` takes precedence):
+
+        - **tx_id**: index all resources that share that transaction id via
+          ``index_resources_by_transaction(tx_id, recalculate_descriptors=True)``.
+          Used by ``BiblissimaCreateAllView`` (batch creates).
+        - **resource_ids**: index each resource individually via
+          ``resource.index()``. Used by the unitary ``_create_resource`` path.
+
+        Async / sync dispatch:
+        - ``BIBLISSIMA_ASYNC_INDEXING=True`` → dispatch to Celery via
+          ``index_resources_async.delay(...)``; any broker / kombu
+          ``OperationalError`` silently falls back to synchronous indexing.
+        - ``BIBLISSIMA_ASYNC_INDEXING=False`` (default) → run synchronously
+          inline in the on_commit callback (same behaviour as pre-P4).
+
+        The flag is OFF by default, so this method is a behaviour-identical
+        drop-in for the previous inline ``resource.index()`` calls until a
+        broker is confirmed available and the flag is set in
+        ``settings_local.py``.
+        """
+        from django.db import transaction as db_transaction
+
+        def _do_index():
+            async_on = getattr(settings, "BIBLISSIMA_ASYNC_INDEXING", False)
+            if async_on:
+                try:
+                    from manuspectrum.tasks import index_resources_async  # noqa
+
+                    if tx_id is not None:
+                        index_resources_async.delay(transaction_id=str(tx_id))
+                    else:
+                        index_resources_async.delay(
+                            resource_ids=[str(r) for r in (resource_ids or [])]
+                        )
+                    return  # dispatched successfully
+                except Exception as exc:
+                    # Broker unreachable or task not registered — fall through
+                    # to synchronous indexing so data is never left un-indexed.
+                    logger.warning(
+                        "_defer_indexing: async dispatch failed (%s), "
+                        "falling back to sync indexing",
+                        exc,
+                    )
+
+            # Synchronous fallback (also the default when flag is OFF).
+            try:
+                if tx_id is not None:
+                    from arches.app.utils.index_database import (
+                        index_resources_by_transaction,
+                    )
+
+                    index_resources_by_transaction(
+                        str(tx_id), recalculate_descriptors=True
+                    )
+                elif resource_ids:
+                    from arches.app.models.resource import Resource
+
+                    for rid in resource_ids:
+                        try:
+                            Resource.objects.get(pk=rid).index()
+                        except Exception:
+                            logger.exception(
+                                "_defer_indexing: failed to index resource %s", rid
+                            )
+            except Exception:
+                logger.exception("_defer_indexing: sync indexing failed")
+
+        db_transaction.on_commit(_do_index)
 
     @staticmethod
     def _i18n_string(value, lang=None):
@@ -2605,29 +3175,42 @@ class BiblissimaCreateResourceView(View):
         return {lang: {"value": str(value), "direction": "ltr"}}
 
     @staticmethod
-    def _concept_valueid(concept_id):
-        """Get the prefLabel valueid for a concept ID.
+    @lru_cache(maxsize=256)
+    def _resolve_concept_valueid(concept_id):
+        """Return the prefLabel valueid for a concept ID (English preferred, any
+        language otherwise). Raises ``LookupError`` when it cannot be resolved,
+        so a (possibly transient) miss is NOT stored by ``lru_cache`` — only real
+        resolutions are memoised for the worker's lifetime.
 
-        Prefers English, falls back to any language.
+        concept→valueid is immutable at runtime (a server restart is required to
+        pick up new Value rows from a package reload), and the keyspace is bounded
+        by the ~30 concepts referenced from this view (constants/biblissima.py).
+        """
+        val = (
+            Value.objects.filter(concept_id=concept_id, valuetype="prefLabel")
+            .filter(language__in=["en", "en-US", "en-UK", "English"])
+            .first()
+        )
+        if val is None:
+            val = Value.objects.filter(
+                concept_id=concept_id, valuetype="prefLabel"
+            ).first()
+        if val is None:
+            raise LookupError(concept_id)
+        return str(val.valueid)
+
+    @staticmethod
+    def _concept_valueid(concept_id):
+        """Get the prefLabel valueid for a concept ID, falling back to the raw
+        ``concept_id`` when it cannot be resolved.
+
+        The fallback is deliberately NOT cached (see ``_resolve_concept_valueid``):
+        a transient empty/errored first lookup — e.g. before a package reload has
+        finished loading Value rows — must not pin the raw concept_id for the
+        worker's whole lifetime (finding #14).
         """
         try:
-            # Try English first
-            val = (
-                Value.objects.filter(
-                    concept_id=concept_id,
-                    valuetype="prefLabel",
-                )
-                .filter(language__in=["en", "en-US", "en-UK", "English"])
-                .first()
-            )
-            if val:
-                return str(val.valueid)
-            # Fallback to any language
-            val = Value.objects.filter(
-                concept_id=concept_id,
-                valuetype="prefLabel",
-            ).first()
-            return str(val.valueid) if val else concept_id
+            return BiblissimaCreateResourceView._resolve_concept_valueid(concept_id)
         except Exception:
             return concept_id
 
@@ -3185,7 +3768,15 @@ class BiblissimaCreateResourceView(View):
             )
 
     def _link_to_project(self, resource_id, project_id, transaction_id):
-        """Add the created resource to the project's Studied Objects."""
+        """Add the created resource to the project's Studied Objects.
+
+        Locks the project's ResourceInstance row (``select_for_update``) for the
+        whole read-modify-write so two concurrent links into the same project
+        cannot lose an update, and cannot both INSERT a first studied-objects
+        tile (a lock on the not-yet-existing Tile row would protect nothing).
+        MUST run inside a transaction — callers wrap it in
+        ``transaction.atomic()``.
+        """
         # Validate project_id is a proper UUID
         try:
             project_uuid = uuid.UUID(str(project_id))
@@ -3194,6 +3785,16 @@ class BiblissimaCreateResourceView(View):
             return
 
         project_id = str(project_uuid)
+
+        # Serialize concurrent linkers on the project row itself. A missing
+        # project means the link target is gone — skip rather than raise a
+        # dangling-FK IntegrityError when creating the studied-objects tile.
+        project_row = (
+            ResourceInstance.objects.select_for_update().filter(pk=project_id).first()
+        )
+        if project_row is None:
+            logger.warning("Project %s does not exist; skipping link", project_id)
+            return
 
         # Find existing tile or create new one
         existing = Tile.objects.filter(
@@ -3219,24 +3820,183 @@ class BiblissimaCreateResourceView(View):
                 return
             current_data.append(new_ref)
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
-            existing.save()
+            # index=False: the project is re-indexed post-commit via the
+            # caller's _defer_indexing set (which includes project_id). Indexing
+            # inline here (default index=True) runs a synchronous ES write inside
+            # _create_resource's atomic() -> a transient ES outage would raise
+            # and roll back the freshly-created resource (500 on a good create).
+            existing.save(index=False)
         else:
-            self._create_tile(
-                PROJECT_STUDIED_OBJECTS_NG,
-                project_id,
-                {PROJECT_STUDIED_OBJECTS_NODE: [new_ref]},
-                transaction_id,
+            # Direct Tile.save() — this writes one tile on the *project*
+            # (a different resource than the one being created), and
+            # Arches' save() refreshes the project's descriptors.
+            # Going through self._create_tile would buffer it against
+            # the wrong resource and skip the project-side descriptor
+            # refresh.
+            tile = Tile(
+                tileid=uuid.uuid4(),
+                nodegroup_id=PROJECT_STUDIED_OBJECTS_NG,
+                resourceinstance_id=project_id,
+                data={PROJECT_STUDIED_OBJECTS_NODE: [new_ref]},
+                sortorder=0,
+            )
+            if transaction_id:
+                tile.transaction_id = transaction_id
+            tile.save(index=False)
+
+    def _bulk_create_resources(self, graph_id, n, user, ids=None):
+        """Bulk-create ``n`` ResourceInstance rows for the given graph in one INSERT.
+
+        Returns a list of ``n`` UUID objects (the new resourceinstanceids).
+
+        When ``ids`` is given it is used verbatim as the resourceinstanceids (and
+        ``n`` is ignored) — this lets a caller generate the ids BEFORE the DB
+        write (e.g. to build tiles referencing them outside the transaction) and
+        then insert exactly those rows. Otherwise fresh UUID4s are generated.
+
+        principaluser is left NULL, matching the unitary ``_create_resource``
+        path (which builds a bare ``ResourceInstance``), so ownership /
+        edit-permission behaviour does not diverge by endpoint.
+
+        Resolves the graph's initial lifecycle state ONCE before constructing
+        the instances, saving an N-query overhead vs. resolving per-row.
+        ``graph_publication_id`` mirrors ``graph.publication_id`` so Arches
+        can correctly gate display / export on the published version without a
+        follow-up query.
+        """
+        from arches.app.models.models import (
+            GraphModel,
+            ResourceInstanceLifecycleState,
+        )
+
+        if ids is not None:
+            ids = list(ids)
+        else:
+            if n <= 0:
+                return []
+            ids = [uuid.uuid4() for _ in range(n)]
+        if not ids:
+            return []
+
+        graph = GraphModel.objects.select_related(
+            "publication", "resource_instance_lifecycle"
+        ).get(pk=graph_id)
+
+        # get_initial_...() uses .get() -> raises DoesNotExist (never None), and
+        # graph.resource_instance_lifecycle may itself be None (nullable FK).
+        # Translate both into a clear ValueError instead of a downstream
+        # IntegrityError / raw DoesNotExist.
+        lifecycle = graph.resource_instance_lifecycle
+        try:
+            initial_state = lifecycle.get_initial_resource_instance_lifecycle_state()
+        except (AttributeError, ResourceInstanceLifecycleState.DoesNotExist):
+            initial_state = None
+        if initial_state is None:
+            raise ValueError(
+                f"Graph {graph_id} has no initial "
+                "resource_instance_lifecycle_state; cannot bulk-create resources."
             )
 
+        instances = [
+            ResourceInstance(
+                resourceinstanceid=rid,
+                graph_id=graph_id,
+                graph_publication_id=graph.publication_id,
+                resource_instance_lifecycle_state=initial_state,
+            )
+            for rid in ids
+        ]
+        ResourceInstance.objects.bulk_create(instances)
+        return [inst.resourceinstanceid for inst in instances]
+
+    def _link_to_project_batch(self, created_ids, project_id, tx_id):
+        """Link a batch of newly-created resources to the project's Studied Objects
+        tile in a single locked read-modify-write.
+
+        Uses ``select_for_update()`` so concurrent batch imports cannot race
+        against each other and duplicate entries. Idempotent: resource ids that
+        are already present in the tile are silently skipped. Saves once with
+        ``index=False`` but threads ``transaction_id=tx_id`` into ``Tile.save``
+        so the project's EditLog carries the batch transaction id and the
+        project is re-indexed by the caller's ``index_resources_by_transaction``
+        (``_defer_indexing(tx_id=batch_tx)``) pass. ``Tile.save`` reads the tx
+        only from the kwarg (setting ``tile.transaction_id`` as an attribute is
+        inert), so the kwarg is load-bearing.
+
+        Direct ``Tile.save()`` path is kept (vs. ``self._create_tile`` +
+        buffer) because the project is a different resource needing its own
+        descriptor refresh, and ``_flush_tile_buffer`` only handles the
+        resource currently being imported.
+        """
+        # Lock the project ROW first so concurrent batches serialise even when
+        # the studied-objects tile does not exist yet: a select_for_update on the
+        # absent Tile row locks nothing, so two first-batches would both INSERT a
+        # tile (duplicate tiles / IntegrityError). A missing project means the
+        # link target is gone — skip rather than write a dangling-FK tile.
+        project_row = (
+            ResourceInstance.objects.select_for_update()
+            .filter(pk=str(project_id))
+            .first()
+        )
+        if project_row is None:
+            logger.warning("Project %s does not exist; skipping batch link", project_id)
+            return
+
+        existing = (
+            Tile.objects.select_for_update()
+            .filter(
+                nodegroup_id=PROJECT_STUDIED_OBJECTS_NG,
+                resourceinstance_id=str(project_id),
+            )
+            .first()
+        )
+
+        new_refs = [
+            {
+                "resourceId": str(rid),
+                "ontologyProperty": "",
+                "inverseOntologyProperty": "",
+                "resourceXresourceId": "",
+            }
+            for rid in created_ids
+        ]
+
+        if existing:
+            current_data = existing.data.get(PROJECT_STUDIED_OBJECTS_NODE, []) or []
+            present_ids = {ref.get("resourceId") for ref in current_data}
+            for ref in new_refs:
+                if ref["resourceId"] not in present_ids:
+                    current_data.append(ref)
+                    present_ids.add(ref["resourceId"])
+            existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
+            existing.save(index=False, transaction_id=tx_id)
+        else:
+            tile = Tile(
+                tileid=uuid.uuid4(),
+                nodegroup_id=PROJECT_STUDIED_OBJECTS_NG,
+                resourceinstance_id=str(project_id),
+                data={PROJECT_STUDIED_OBJECTS_NODE: new_refs},
+                sortorder=0,
+            )
+            tile.save(index=False, transaction_id=tx_id)
+
     def _resource_instance_ref(self, resource_id):
-        """Build a resource-instance reference for a single resource."""
+        """Build a resource-instance reference for a single resource.
+
+        The id is coerced to ``str`` and ``.strip()``-ed so the persisted
+        ``resourceId`` is exactly the canonical form that the create-all
+        existence guard verifies (a whitespace-padded UUID must not pass the
+        guard and then store a different string)."""
         if isinstance(resource_id, list):
             resource_id = resource_id[0] if resource_id else None
         if not resource_id:
             return None
+        resource_id = str(resource_id).strip()
+        if not resource_id:
+            return None
         return [
             {
-                "resourceId": str(resource_id),
+                "resourceId": resource_id,
                 "ontologyProperty": "",
                 "inverseOntologyProperty": "",
                 "resourceXresourceId": "",
@@ -3244,27 +4004,292 @@ class BiblissimaCreateResourceView(View):
         ]
 
     def _resource_instance_list(self, resource_ids):
-        """Build a resource-instance-list reference."""
+        """Build a resource-instance-list reference.
+
+        Each id is coerced to ``str`` and ``.strip()``-ed (skipping any value
+        that is falsy after stripping) so persisted refs match the canonical
+        form verified by the create-all existence guard."""
         if isinstance(resource_ids, str):
             resource_ids = [resource_ids]
         return [
             {
-                "resourceId": str(rid),
+                "resourceId": str(rid).strip(),
                 "ontologyProperty": "",
                 "inverseOntologyProperty": "",
                 "resourceXresourceId": "",
             }
             for rid in resource_ids
-            if rid
+            if rid and str(rid).strip()
         ]
 
 
+# NOT decorated with group_required: inherits the decorated dispatch from
+# BiblissimaCreateResourceView. Re-decorating would run the group check (and
+# its user.groups query) twice per request. Locked by
+# tests.test_biblissima_auth.BiblissimaAuthPassThroughTests.
+class BiblissimaCreateAllView(BiblissimaCreateResourceView):
+    """Best-effort bulk create of many resources of ONE type in a single POST.
+
+    Contract::
+
+        POST /api/biblissima/create-all
+        {
+            "resourceType": "Document" | "Component",
+            "items": [
+                {"clientId", "biblissimaData", "dependencies", "conceptMappings"},
+                ...
+            ]
+        }
+        -> {"results": [
+               {"clientId", "status": "created", "resourceId"},
+               {"clientId", "status": "failed",  "error"},
+               ...
+        ]}
+
+    Integration task (Phase 3.4). Inherits ALL write-path primitives from
+    :class:`BiblissimaCreateResourceView` (``_collect_valid_concepts``,
+    ``_validate_tiles``, ``_run_hook``, ``_write_editlog``, the tile builders,
+    ``_batch_save_descriptors``, ``_bulk_create_resources``,
+    ``_link_to_project_batch``) — nothing is redefined, so a patch on the base
+    class is observed here.
+
+    Two-pass, best-effort algorithm
+    -------------------------------
+    Everything runs inside ONE outer ``transaction.atomic()``; ES indexing is
+    strictly AFTER it commits (``ATOMIC_REQUESTS=False`` in this project, so the
+    post-``with`` reindex is genuinely post-commit and a rollback leaves no
+    orphan ES docs).
+
+    * **Pass 1 — per item, in a nested ``atomic()`` SAVEPOINT.** The per-item
+      ``try/except`` is placed AROUND the ``with`` block, so an exception
+      triggers ``ROLLBACK TO SAVEPOINT`` for just that item and the loop
+      continues. A dependency-existence pre-pass (``_assert_deps_exist``) runs
+      *before* the resourceinstance is created, so a dangling relationship
+      becomes a clean ``"failed"`` instead of a silently committed
+      ``resource_x_resource`` row with a NULL ``to_graphid``. On failure the
+      item's staged tiles are dropped from the shared buffer
+      (``del self._tile_buffer[start:]``) so no residue reaches Pass 2.
+
+    * **Pass 2 — survivors only, still inside the outer atomic.** One
+      ``TileModel.bulk_create`` of all survivor tiles, one
+      ``post_tile_save`` replay, one ``_batch_save_descriptors``, one
+      ``_write_editlog`` per survivor under a single ``batch_tx``, then a
+      grouped ``_link_to_project_batch`` per distinct project.
+
+    Contract holes closed
+    ---------------------
+    * **Hole 1 — Pass 2 is documented all-or-nothing.** Any Pass-2 exception
+      rolls the whole outer atomic back and returns HTTP 500
+      ``{"error": "Batch creation failed"}`` with no per-survivor attribution.
+      Because Hole 2 removes the only *data-driven* Pass-2 failure mode
+      (dangling R2R), a remaining Pass-2 exception is genuine infrastructure
+      failure where an unattributed 500 is acceptable. Per-survivor Pass-2
+      savepoints are a deferred hardening.
+    * **Hole 2 — dangling resource-instance deps.** ``_validate_tiles`` runs
+      ``strict=False`` and would let a stale dep UUID commit as ``"created"``.
+      The batched ``_precollect_valid_dep_ids`` + per-item ``_assert_deps_exist``
+      turn a missing dep into a Pass-1 ``"failed"``.
+
+    Single-graph note: create-all handles exactly ONE ``resourceType``/graph per
+    call, so ``nodes_by_id`` and the serialized graph are hoisted ONCE, and any
+    ``parentDocument`` target was created by a prior (already-committed) unitary
+    call — the ``_batch_save_descriptors`` partition is a no-op and the survivor
+    order is already parent-first.
+    """
+
+    def post(self, request):
+        import json
+
+        from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
+        from arches.app.models.resource import Resource
+
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON body"}, status=400)
+
+        resource_type = body.get("resourceType")
+        items = body.get("items") or []
+
+        if not isinstance(items, list):
+            return JsonResponse({"error": "'items' must be a list"}, status=400)
+
+        if resource_type not in ("Document", "Component"):
+            return JsonResponse(
+                {"error": f"Unsupported resourceType for batch: {resource_type}"},
+                status=400,
+            )
+        graph_id = self.GRAPH_IDS[resource_type]
+
+        if not items:
+            return JsonResponse({"results": []})
+
+        # ---- Setup once (shared by the whole batch) ----------------------
+        # Read-only pre-pass. A malformed payload (e.g. a non-dict item) must not
+        # surface as a raw 500 with a traceback, so guard it into a clean 400.
+        batch_tx = uuid.uuid4()
+        try:
+            valid_dep_ids = self._precollect_valid_dep_ids(items)
+            factory = DataTypeFactory()
+
+            # Hoist the serialized-graph -> nodes_by_id ONCE: all items share one
+            # graph. Mirror how _flush_tile_buffer derives nodes_by_id (via a
+            # Resource bound to the graph), so validate / hooks reuse one dict.
+            serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
+            nodes_by_id = {
+                str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])
+            }
+        except Exception:
+            logger.exception("Biblissima batch pre-pass failed")
+            return JsonResponse({"error": "Invalid batch payload"}, status=400)
+
+        builder = (
+            self._create_document_tiles
+            if resource_type == "Document"
+            else self._create_component_tiles
+        )
+
+        self._tile_buffer = []
+        results = []
+        # survivors: list of (client_id, rid, item_tiles, project_id)
+        survivors = []
+
+        # ---- Pass 1 — per item, NO transaction held --------------------------
+        # Build + validate + run pre_tile_save (the per-host throttled, retrying
+        # IIIF manifest fetch) OUTSIDE any DB transaction, so importing many
+        # manifests never holds the batch transaction open for minutes — a worker
+        # or idle-in-transaction timeout mid-fetch would otherwise roll back and
+        # discard every already-succeeded survivor (finding #2). Nothing is
+        # written to the resource tables here: rids are generated but the
+        # ResourceInstance rows are inserted only for survivors in Pass 2, so a
+        # failed item leaves no orphan resource. (An IIIFManifest imported by
+        # pre_tile_save commits independently and is benign/dedupable if its item
+        # later fails.)
+        for item in items:
+            client_id = item.get("clientId")
+            bbma_data = item.get("biblissimaData", {}) or {}
+            deps = item.get("dependencies") or {}
+            concept_mappings = item.get("conceptMappings", {}) or {}
+
+            start = len(self._tile_buffer)
+            try:
+                # BEFORE building anything: dangling dep -> failed.
+                self._assert_deps_exist(deps, valid_dep_ids)
+                # A dangling OR malformed project id would make
+                # _link_to_project_batch build a Tile whose FK points at a
+                # nonexistent project (dangling) or coerce a non-string value
+                # with str() (malformed) -> IntegrityError/DataError in Pass 2 ->
+                # whole-batch 500 losing every survivor. Validate it here
+                # (mirroring _assert_deps_exist) so a bad project is a clean
+                # per-item fail, not a batch detonation.
+                proj = deps.get("project")
+                if proj:
+                    if not isinstance(proj, str):
+                        raise ValueError(
+                            f"Project {proj!r} is not a valid resource "
+                            "id; cannot link."
+                        )
+                    if proj.strip() and proj.strip() not in valid_dep_ids:
+                        raise ValueError(f"Project {proj} does not exist; cannot link.")
+
+                # Generate the rid up front (no DB write) so tiles can reference
+                # it; the ResourceInstance row is inserted in Pass 2.
+                rid = uuid.uuid4()
+                created_deps = {"places": {}, "persons": {}, "groups": {}}
+                builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
+                item_tiles = self._tile_buffer[start:]
+
+                valid_concepts = self._collect_valid_concepts(item_tiles, nodes_by_id)
+                self._validate_tiles(item_tiles, nodes_by_id, factory, valid_concepts)
+                # pre_tile_save = IIIF manifest fetch; can raise
+                # requests.HTTPError / UnsafeURLError / FailParsingManifestIIIF /
+                # TileValidationError. Runs here, OUTSIDE the transaction.
+                self._run_hook(item_tiles, nodes_by_id, factory, "pre_tile_save")
+            except Exception as exc:
+                # Drop this item's staged tiles so no residue reaches Pass 2 and
+                # report it failed. No DB rollback needed — nothing was written
+                # to the resource tables for this item.
+                del self._tile_buffer[start:]
+                results.append(
+                    {"clientId": client_id, "status": "failed", "error": str(exc)}
+                )
+                continue
+
+            survivors.append((client_id, rid, item_tiles, deps.get("project")))
+            results.append(
+                {"clientId": client_id, "status": "created", "resourceId": str(rid)}
+            )
+
+        # ---- Pass 2 — survivors only, ONE short transaction (all-or-nothing) --
+        if survivors:
+            try:
+                with transaction.atomic():
+                    survivor_rids = [rid for _cid, rid, _tiles, _proj in survivors]
+                    # Insert ResourceInstance rows for survivors ONLY (no
+                    # orphans), in ONE bulk INSERT, with the rids already
+                    # referenced by the staged tiles.
+                    self._bulk_create_resources(
+                        graph_id, len(survivor_rids), request.user, ids=survivor_rids
+                    )
+
+                    TileModel.objects.bulk_create(self._tile_buffer)
+                    self._run_hook(
+                        self._tile_buffer, nodes_by_id, factory, "post_tile_save"
+                    )
+
+                    # Fetch the survivor Resource objects (their rows now exist)
+                    # for the descriptor + editlog writes.
+                    resources_by_id = {
+                        str(r.pk): r
+                        for r in Resource.objects.select_related(
+                            "graph__publication"
+                        ).filter(pk__in=survivor_rids)
+                    }
+                    # Single graph per call -> survivor order is already
+                    # parent-first (parents come from prior committed calls).
+                    ordered_resources = [
+                        resources_by_id[str(rid)] for rid in survivor_rids
+                    ]
+                    self._batch_save_descriptors(ordered_resources)
+
+                    for _cid, rid, item_tiles, _proj in survivors:
+                        self._write_editlog(
+                            item_tiles,
+                            resources_by_id[str(rid)],
+                            request.user,
+                            batch_tx,
+                        )
+
+                    by_project = {}
+                    for _cid, rid, _tiles, project_id in survivors:
+                        if project_id:
+                            by_project.setdefault(str(project_id), []).append(rid)
+                    for project_id, ids in by_project.items():
+                        self._link_to_project_batch(ids, project_id, batch_tx)
+            except Exception:
+                # ANY Pass-2 failure rolls this atomic back -> no survivor
+                # committed -> unattributed 500 (Hole 1). Manifests imported in
+                # Pass 1 remain (benign/dedupable).
+                logger.exception("Biblissima batch creation failed")
+                return JsonResponse({"error": "Batch creation failed"}, status=500)
+
+        # Schedule ES indexing for the committed batch via the on_commit seam.
+        # With BIBLISSIMA_ASYNC_INDEXING=False (default), this is a
+        # behaviour-identical replacement for the previous inline
+        # index_resources_by_transaction call, but strictly post-commit.
+        if survivors:
+            self._defer_indexing(tx_id=batch_tx)
+
+        return JsonResponse({"results": results})
+
+
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaAddAltNameView(View):
     """Add a Biblissima label as alternative name to an existing resource."""
 
     def post(self, request):
         import json
-        from arches.app.models.resource import Resource
 
         try:
             body = json.loads(request.body)
@@ -3315,8 +4340,9 @@ class BiblissimaAddAltNameView(View):
             )
             tile.save(index=False)
 
-            resource = Resource.objects.get(resourceinstanceid=resource_id)
-            resource.index()
+            # Route through the defer seam (post-commit; honors
+            # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
+            creator._defer_indexing(resource_ids=[str(resource_id)])
         except Exception:
             logger.exception("Failed to add alt name to resource %s", resource_id)
             return JsonResponse({"error": "Failed to add alternative name"}, status=500)
@@ -3324,6 +4350,7 @@ class BiblissimaAddAltNameView(View):
         return JsonResponse({"status": "added", "message": "Alternative name added"})
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaStatsView(View):
     """Debug/admin tool exposing outbound Biblissima traffic counters.
 
@@ -3356,6 +4383,7 @@ class BiblissimaStatsView(View):
         return JsonResponse(stats)
 
 
+@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaLinkToProjectView(View):
     """Idempotently link an existing resource to a Project's studied objects.
 
@@ -3367,6 +4395,8 @@ class BiblissimaLinkToProjectView(View):
 
     def post(self, request):
         import json
+
+        from django.db import transaction
 
         try:
             body = json.loads(request.body)
@@ -3389,9 +4419,24 @@ class BiblissimaLinkToProjectView(View):
 
         # Reuse the helper on BiblissimaCreateResourceView so the dedup logic
         # stays in a single place. transaction_id is None for ad-hoc links.
-        BiblissimaCreateResourceView()._link_to_project(
-            resource_id,
-            project_id,
-            transaction_id=None,
-        )
+        # _link_to_project takes a select_for_update row lock, so it MUST run
+        # inside a transaction.
+        creator = BiblissimaCreateResourceView()
+        try:
+            with transaction.atomic():
+                creator._link_to_project(
+                    resource_id,
+                    project_id,
+                    transaction_id=None,
+                )
+        except Exception:
+            logger.exception(
+                "Failed to link resource %s to project %s", resource_id, project_id
+            )
+            return JsonResponse({"error": "Link failed"}, status=500)
+
+        # The project tile is written with index=False, so its ES doc must be
+        # refreshed post-commit — otherwise the newly-linked resource never
+        # appears in the project's studied-objects search (finding #6).
+        creator._defer_indexing(resource_ids=[str(project_id)])
         return JsonResponse({"ok": True})

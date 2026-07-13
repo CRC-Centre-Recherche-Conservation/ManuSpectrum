@@ -61,8 +61,14 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
             if matches:
                 node_aliases = matches
 
+            prefetched = (context or {}).get("_prefetched_graph_nodes")
+            graph_nodes = (
+                prefetched
+                if prefetched is not None
+                else models.Node.objects.filter(graph=resource.graph)
+            )
             nodes_by_alias = {}
-            for node in models.Node.objects.filter(graph=resource.graph):
+            for node in graph_nodes:
                 if node.alias in node_aliases:
                     nodes_by_alias[node.alias] = node
 

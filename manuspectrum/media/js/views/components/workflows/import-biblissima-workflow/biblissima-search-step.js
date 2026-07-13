@@ -29,6 +29,7 @@
 import ko from 'knockout';
 import arches from 'arches';
 import 'bindings/select2-query';
+import 'bindings/thumb-fallback';
 import noUiSlider from 'nouislider';
 import biblissimaSearchStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm';
 

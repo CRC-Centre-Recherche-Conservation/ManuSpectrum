@@ -123,6 +123,25 @@
             </div>
         </div>
 
+        <!-- Batch-create summary banner — shown after createAll completes. -->
+        <!-- ko if: batchSummary() -->
+        <div class="bbma-batch-summary alert alert-dismissible"
+             data-bind="css: { 'alert-success': batchSummary().failed === 0, 'alert-warning': batchSummary().failed > 0 }"
+             role="alert">
+            <button type="button" class="close" data-bind="click: dismissBatchSummary" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+            <span data-bind="text: batchSummaryText"></span>
+            <!-- ko if: batchSummary().failed > 0 -->
+            <button class="btn btn-xs btn-warning bbma-batch-retry"
+                    data-bind="click: retryAllFailed">
+                <i class="fa fa-refresh"></i>
+                {% trans "Retry all failed" %}
+            </button>
+            <!-- /ko -->
+        </div>
+        <!-- /ko -->
+
         <!-- Review hint: items still resolved to the generic fallback type -->
         <!-- ko if: isComponent && fallbackItemsCount() > 0 -->
         <div class="bbma-review-hint">
@@ -138,7 +157,7 @@
                 <!-- Thumbnail -->
                 <div class="bbma-item-thumb">
                     <!-- ko if: thumbnail -->
-                    <img data-bind="attr: {src: thumbnail}" loading="lazy">
+                    <img data-bind="attr: {src: thumbnail}, thumbFallback: true" loading="lazy">
                     <!-- /ko -->
                     <!-- ko ifnot: thumbnail -->
                     <i class="fa fa-file-text-o"></i>

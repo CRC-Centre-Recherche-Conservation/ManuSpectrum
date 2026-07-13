@@ -16,6 +16,7 @@
  */
 import ko from 'knockout';
 import arches from 'arches';
+import 'bindings/thumb-fallback';
 import importBiblissimaFinalStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm';
 
 const viewModel = function(params) {
