@@ -298,8 +298,11 @@ class ManifestDataType(BaseDataType):
         return value
 
     def get_display_value(self, tile, node, **kwargs):
-        if tile.data and str(node.nodeid) in tile.data:
-            value = tile.data[str(node.nodeid)]
+        # Search export passes tiles as plain dicts (ES _source), not Tile
+        # instances — get_tile_data() handles both shapes.
+        data = self.get_tile_data(tile)
+        if data and str(node.nodeid) in data:
+            value = data[str(node.nodeid)]
             if not value:
                 return None
             try:

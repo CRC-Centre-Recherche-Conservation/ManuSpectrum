@@ -760,6 +760,35 @@ class TestGetDisplayValue(TestCase):
         result = self.datatype.get_display_value(tile, node)
         self.assertIsNone(result)
 
+    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    def test_get_display_value_with_dict_tile(self, mock_manifest_model):
+        """Search export passes tiles as dicts (ES _source), not Tile objects."""
+        mock_manifest = MagicMock()
+        mock_manifest.label = "Book 1"
+        mock_manifest.url = "/iiif/book1/manifest"
+        mock_manifest_model.objects.get.return_value = mock_manifest
+        mock_manifest_model.DoesNotExist = Exception
+
+        node = MagicMock()
+        node.nodeid = uuid.uuid4()
+        tile = {
+            "data": {str(node.nodeid): "/iiif/book1/manifest"},
+            "provisionaledits": None,
+        }
+
+        result = self.datatype.get_display_value(tile, node)
+        self.assertIn("Book 1", result)
+        self.assertIn("/iiif/book1/manifest", result)
+
+    def test_get_display_value_dict_tile_missing_node_returns_none(self):
+        """Dict tile without the node in its data should return None."""
+        node = MagicMock()
+        node.nodeid = uuid.uuid4()
+        tile = {"data": {"other_node": "value"}, "provisionaledits": None}
+
+        result = self.datatype.get_display_value(tile, node)
+        self.assertIsNone(result)
+
 
 class TestClean(TestCase):
     """Tests for the clean method."""
