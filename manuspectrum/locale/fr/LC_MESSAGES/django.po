@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-17 04:50-0500\n"
+"POT-Creation-Date: 2026-07-17 09:29-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -266,50 +266,50 @@ msgid "And many more"
 msgstr "Et bien d'autres"
 
 #: templates/index.htm:418
-msgid "XRF mapping of a manuscript"
-msgstr "Cartographie XRF d'un manuscrit"
+msgid "Manuscript under analysis with a macro-XRF scanner"
+msgstr "Manuscrit en cours d'analyse sous scanner macro-XRF"
 
 #: templates/index.htm:420
-msgid "XRF mapping of an illuminated manuscript"
-msgstr "Cartographie XRF d'un manuscrit enluminé"
+msgid "Macro-XRF scanning of a manuscript"
+msgstr "Balayage macro-XRF d'un manuscrit"
 
 #: templates/index.htm:421
 msgid ""
-"Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
+"In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 msgstr ""
-"Analyse élémentaire par fluorescence X — Distribution spatiale des pigments"
+"Acquisition in situ de cartographies élémentaires par balayage de "
+"fluorescence X (macro-XRF)"
 
 #: templates/index.htm:425
-msgid "Raman spectrum on a pigment sample"
-msgstr "Spectre Raman sur un échantillon de pigment"
+msgid "FORS analysis of a manuscript"
+msgstr "Analyse FORS d'un manuscrit"
 
 #: templates/index.htm:427
-msgid "Raman spectroscopy on a medieval pigment"
-msgstr "Spectroscopie Raman sur un pigment médiéval"
+msgid "Fiber optic reflectance spectroscopy (FORS)"
+msgstr "Spectroscopie de réflectance par fibre optique (FORS)"
 
 #: templates/index.htm:428
 msgid ""
-"Molecular identification of azurite and malachite pigments on a 15th-century "
-"illumination"
+"Non-invasive characterization of pigments by fiber optic reflectance "
+"spectroscopy"
 msgstr ""
-"Identification moléculaire des pigments d'azurite et de malachite sur une "
-"enluminure du XVe siècle"
+"Caractérisation non invasive des pigments par spectroscopie de réflectance "
+"par fibre optique"
 
 #: templates/index.htm:432
-msgid "Multispectral imaging of a manuscript page"
-msgstr "Imagerie multispectrale d'une page de manuscrit"
+msgid "UV hyperspectral imaging of a manuscript"
+msgstr "Imagerie hyperspectrale UV d'un manuscrit"
 
 #: templates/index.htm:434
-msgid "Multispectral imaging — Revealing hidden texts"
-msgstr "Imagerie multispectrale — Révéler les textes cachés"
+msgid "UV hyperspectral imaging"
+msgstr "Imagerie hyperspectrale UV"
 
 #: templates/index.htm:435
 msgid ""
-"UV and infrared reflectography combined to reveal underdrawings and erased "
-"inscriptions"
+"Ultraviolet hyperspectral imaging to reveal details invisible to the naked eye"
 msgstr ""
-"Réflectographie UV et infrarouge combinées pour révéler les dessins sous-"
-"jacents et les inscriptions effacées"
+"Imagerie hyperspectrale ultraviolette pour révéler des détails invisibles à "
+"l'œil nu"
 
 #: templates/index.htm:442
 msgid "Previous"
@@ -427,20 +427,24 @@ msgstr ""
 "patrimoine culturel écrit."
 
 #: templates/index.htm:545
-msgid "XRF Mapping — Element A"
-msgstr "Cartographie XRF — Élément A"
+msgid "Macro-XRF map — Calcium (Ca)"
+msgstr "Cartographie macro-XRF — Calcium (Ca)"
 
 #: templates/index.htm:546
-msgid "XRF Mapping — Element B"
-msgstr "Cartographie XRF — Élément B"
+msgid "Macro-XRF map — Mercury (Hg)"
+msgstr "Cartographie macro-XRF — Mercure (Hg)"
 
 #: templates/index.htm:549
-msgid "XRF Mapping"
-msgstr "Cartographie XRF"
+msgid "Macro-XRF mapping"
+msgstr "Cartographie macro-XRF"
 
 #: templates/index.htm:550
-msgid "Spatial distribution of chemical elements on an illuminated manuscript"
-msgstr "Distribution spatiale des éléments chimiques sur un manuscrit enluminé"
+msgid ""
+"Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
+"Avranches, BM, Ms. 86, f. 32v"
+msgstr ""
+"Répartition du mercure (Hg) et du calcium (Ca) sur une lettre ornée — "
+"Avranches, BM, Ms. 86, f. 32v"
 
 #: templates/index.htm:555
 msgid "Manuscript analysis"
@@ -2250,6 +2254,50 @@ msgstr "<h1>Les rendus n'existent pas</h1>"
 #: views/renderer_config.py:53
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
+
+#~ msgid "XRF mapping of an illuminated manuscript"
+#~ msgstr "Cartographie XRF d'un manuscrit enluminé"
+
+#~ msgid ""
+#~ "Elemental analysis by X-ray fluorescence — Spatial distribution of "
+#~ "pigments"
+#~ msgstr ""
+#~ "Analyse élémentaire par fluorescence X — Distribution spatiale des "
+#~ "pigments"
+
+#~ msgid "Raman spectrum on a pigment sample"
+#~ msgstr "Spectre Raman sur un échantillon de pigment"
+
+#~ msgid "Raman spectroscopy on a medieval pigment"
+#~ msgstr "Spectroscopie Raman sur un pigment médiéval"
+
+#~ msgid ""
+#~ "Molecular identification of azurite and malachite pigments on a 15th-"
+#~ "century illumination"
+#~ msgstr ""
+#~ "Identification moléculaire des pigments d'azurite et de malachite sur une "
+#~ "enluminure du XVe siècle"
+
+#~ msgid "Multispectral imaging — Revealing hidden texts"
+#~ msgstr "Imagerie multispectrale — Révéler les textes cachés"
+
+#~ msgid ""
+#~ "UV and infrared reflectography combined to reveal underdrawings and "
+#~ "erased inscriptions"
+#~ msgstr ""
+#~ "Réflectographie UV et infrarouge combinées pour révéler les dessins sous-"
+#~ "jacents et les inscriptions effacées"
+
+#~ msgid "XRF Mapping — Element A"
+#~ msgstr "Cartographie XRF — Élément A"
+
+#~ msgid "XRF Mapping — Element B"
+#~ msgstr "Cartographie XRF — Élément B"
+
+#~ msgid ""
+#~ "Spatial distribution of chemical elements on an illuminated manuscript"
+#~ msgstr ""
+#~ "Distribution spatiale des éléments chimiques sur un manuscrit enluminé"
 
 #~ msgid "Save and Continue"
 #~ msgstr "Enregistrer et continuer"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-17 04:50-0500\n"
+"POT-Creation-Date: 2026-07-17 09:29-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -226,44 +226,43 @@ msgid "And many more"
 msgstr ""
 
 #: templates/index.htm:418
-msgid "XRF mapping of a manuscript"
+msgid "Manuscript under analysis with a macro-XRF scanner"
 msgstr ""
 
 #: templates/index.htm:420
-msgid "XRF mapping of an illuminated manuscript"
+msgid "Macro-XRF scanning of a manuscript"
 msgstr ""
 
 #: templates/index.htm:421
 msgid ""
-"Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
+"In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 msgstr ""
 
 #: templates/index.htm:425
-msgid "Raman spectrum on a pigment sample"
+msgid "FORS analysis of a manuscript"
 msgstr ""
 
 #: templates/index.htm:427
-msgid "Raman spectroscopy on a medieval pigment"
+msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgstr ""
 
 #: templates/index.htm:428
 msgid ""
-"Molecular identification of azurite and malachite pigments on a 15th-century "
-"illumination"
+"Non-invasive characterization of pigments by fiber optic reflectance "
+"spectroscopy"
 msgstr ""
 
 #: templates/index.htm:432
-msgid "Multispectral imaging of a manuscript page"
+msgid "UV hyperspectral imaging of a manuscript"
 msgstr ""
 
 #: templates/index.htm:434
-msgid "Multispectral imaging — Revealing hidden texts"
+msgid "UV hyperspectral imaging"
 msgstr ""
 
 #: templates/index.htm:435
 msgid ""
-"UV and infrared reflectography combined to reveal underdrawings and erased "
-"inscriptions"
+"Ultraviolet hyperspectral imaging to reveal details invisible to the naked eye"
 msgstr ""
 
 #: templates/index.htm:442
@@ -361,19 +360,21 @@ msgid ""
 msgstr ""
 
 #: templates/index.htm:545
-msgid "XRF Mapping — Element A"
+msgid "Macro-XRF map — Calcium (Ca)"
 msgstr ""
 
 #: templates/index.htm:546
-msgid "XRF Mapping — Element B"
+msgid "Macro-XRF map — Mercury (Hg)"
 msgstr ""
 
 #: templates/index.htm:549
-msgid "XRF Mapping"
+msgid "Macro-XRF mapping"
 msgstr ""
 
 #: templates/index.htm:550
-msgid "Spatial distribution of chemical elements on an illuminated manuscript"
+msgid ""
+"Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
+"Avranches, BM, Ms. 86, f. 32v"
 msgstr ""
 
 #: templates/index.htm:555
