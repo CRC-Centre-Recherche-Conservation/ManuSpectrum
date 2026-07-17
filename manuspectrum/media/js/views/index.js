@@ -1,35 +1,15 @@
 import ko from 'knockout';
 import arches from 'arches';
 import 'views/components/language-switcher';
+import initMsNav from 'utils/ms-nav';
 
 $(function () {
     'use strict';
 
-    var $header = $('#ms-header');
-    var $hamburger = $('#ms-hamburger');
-    var $mobileNav = $('#ms-mobile-nav');
-
     // ================================================================
-    // HEADER — Glass-like scroll behavior
+    // SHARED NAV — header scroll, mobile drawer, About dropdown
     // ================================================================
-    $(window).on('scroll', function () {
-        $header.toggleClass('scrolled', window.scrollY > 80);
-    }).trigger('scroll');
-
-    // ================================================================
-    // MOBILE NAV
-    // ================================================================
-    $hamburger.on('click', function () {
-        $hamburger.toggleClass('active');
-        $mobileNav.toggleClass('open');
-        $('body').css('overflow', $mobileNav.hasClass('open') ? 'hidden' : '');
-    });
-
-    $mobileNav.on('click', 'a', function () {
-        $hamburger.removeClass('active');
-        $mobileNav.removeClass('open');
-        $('body').css('overflow', '');
-    });
+    initMsNav();
 
     // ================================================================
     // SCROLL REVEAL (IntersectionObserver)

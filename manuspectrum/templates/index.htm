@@ -111,82 +111,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- ============================================================
          HEADER
          ============================================================ -->
-    <header class="ms-header" id="ms-header">
-        <div class="ms-header-inner">
-            <a href="{% url 'home' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Home' %}">
-                <div class="ms-header-logo-mark"></div>
-                <span class="ms-header-logo-text">ManuSpectrum</span>
-            </a>
-
-            <nav class="ms-nav" aria-label="{% trans 'Main Navigation' %}">
-                <ul class="ms-nav-links">
-                    <li><a href="#project">{% trans "The Project" %}</a></li>
-                    <li><a href="#explore">{% trans "Explore" %}</a></li>
-                    <li><a href="#analyses">{% trans "Analyses" %}</a></li>
-                    <li><a href="#search">{% trans "Search" %}</a></li>
-                    {% if user|can_create_resource_instance and user.username != 'anonymous' %}
-                    <li><a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a></li>
-                    {% endif %}
-                </ul>
-
-                <div class="ms-nav-divider"></div>
-
-                <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-nav-github" aria-label="GitHub" title="{% trans 'Source code on GitHub' %}">
-                    <i class="fa-brands fa-github"></i>
-                </a>
-
-                <div class="ms-nav-divider"></div>
-
-                <div class="ms-nav-auth">
-                    {% if user.username == 'anonymous' %}
-                        <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
-                    {% else %}
-                        <a href="{% url 'user_profile_manager' %}" aria-label="{% trans 'User Profile' %}">
-                            {% blocktrans with name=user.first_name|default:user.username %}Welcome, {{ name }}{% endblocktrans %}
-                        </a>
-                        <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
-                    {% endif %}
-                </div>
-
-                {% if show_language_swtich %}
-                {% csrf_token %}
-                    {% get_current_language as LANGUAGE_CODE %}
-                    <div class="lang-switch" data-bind='component: {
-                        name: "views/components/language-switcher",
-                        params: { current_language: "{{LANGUAGE_CODE}}" }
-                    }'></div>
-                {% endif %}
-            </nav>
-
-            <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Open Menu' %}">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-    </header>
-
-    <!-- Mobile Navigation -->
-    <div class="ms-mobile-nav" id="ms-mobile-nav">
-        <a href="#project" class="ms-mobile-nav-link">{% trans "The Project" %}</a>
-        <a href="#explore" class="ms-mobile-nav-link">{% trans "Explore" %}</a>
-        <a href="#analyses" class="ms-mobile-nav-link">{% trans "Analyses" %}</a>
-        <a href="#search" class="ms-mobile-nav-link">{% trans "Search" %}</a>
-        {% if user|can_create_resource_instance and user.username != 'anonymous' %}
-            <a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a>
-        {% endif %}
-        <div class="spectral-line"></div>
-        {% if user.username == 'anonymous' %}
-            <a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
-        {% else %}
-            <a href="{% url 'user_profile_manager' %}">{{ user.first_name|default:user.username }}</a>
-            <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
-        {% endif %}
-        <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-mobile-nav-github">
-            <i class="fa-brands fa-github"></i>
-        </a>
-    </div>
-
+    {% include 'includes/ms_header.htm' %}
 
     <main>
     <!-- ============================================================
@@ -682,69 +607,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- ============================================================
          FOOTER
          ============================================================ -->
-    <footer class="ms-footer">
-        <div class="ms-container">
-            <div class="spectral-line"></div>
-
-            <div class="ms-footer-inner">
-                <div class="ms-footer-brand">
-                    <div class="ms-footer-brand-name">ManuSpectrum</div>
-                    <p class="ms-footer-brand-desc">
-                        {% trans "Interoperable database for physicochemical analysis of written cultural heritage materials. A Biblissima+ cluster project." %}
-                    </p>
-                </div>
-
-                <div class="ms-footer-links">
-                    <div class="ms-footer-col">
-                        <h4>{% trans "Platform" %}</h4>
-                        <ul>
-                            <li><a href="{% url 'search_home' %}">{% trans "Search" %}</a></li>
-                            {% if user.username == 'anonymous' %}
-                                <li><a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a></li>
-                            {% else %}
-                                <li><a href="{% url 'user_profile_manager' %}">{% trans "My Profile" %}</a></li>
-                            {% endif %}
-                        </ul>
-                    </div>
-                    <div class="ms-footer-col">
-                        <h4>{% trans "Resources" %}</h4>
-                        <ul>
-                            <li><a href="https://biblissima.fr" target="_blank" rel="noopener">Biblissima+</a></li>
-                            <li><a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches Project</a></li>
-                            <li><a href="https://iiif.io" target="_blank" rel="noopener">IIIF</a></li>
-                        </ul>
-                    </div>
-                    <div class="ms-footer-col">
-                        <h4>{% trans "Standards" %}</h4>
-                        <ul>
-                            <li><a href="https://www.cidoc-crm.org" target="_blank" rel="noopener">CIDOC-CRM</a></li>
-                            <li><a href="https://www.getty.edu/research/tools/vocabularies/aat/" target="_blank" rel="noopener">AAT Getty</a></li>
-                            <li><a href="https://thesaurus.inha.fr/thesaurus/" target="_blank" rel="noopener">AGORHA</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <p class="ms-footer-anr">
-                {% trans "This work has benefited from state aid managed by the Agence Nationale de la Recherche under the Investissements d'avenir programme, reference ANR-21-ESRE-0005 (Biblissima+)." %}
-            </p>
-
-            <div class="ms-footer-bottom">
-                <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "All rights reserved" %}</p>
-                <div class="ms-footer-opensource">
-                    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener">
-                        <i class="fa-brands fa-github"></i> {% trans "Source code" %}
-                    </a>
-                    <span class="ms-footer-separator">·</span>
-                    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/LICENSE" target="_blank" rel="noopener">
-                        {% trans "GPL-3.0 License" %}
-                    </a>
-                    <span class="ms-footer-separator">·</span>
-                    <span class="ms-footer-arches">{% blocktrans %}Powered by <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>{% endblocktrans %}</span>
-                </div>
-            </div>
-        </div>
-    </footer>
+    {% include 'includes/ms_footer.htm' %}
 
 
     <!-- ============================================================

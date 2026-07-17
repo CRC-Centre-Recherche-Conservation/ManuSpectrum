@@ -1,0 +1,98 @@
+{% load i18n static template_tags %}
+<header class="ms-header" id="ms-header">
+    <div class="ms-header-inner">
+        <a href="{% url 'home' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Home' %}">
+            <div class="ms-header-logo-mark"></div>
+            <span class="ms-header-logo-text">ManuSpectrum</span>
+        </a>
+
+        <nav class="ms-nav" aria-label="{% trans 'Main Navigation' %}">
+            <ul class="ms-nav-links">
+                <li><a href="{% url 'home' %}#project">{% trans "The Project" %}</a></li>
+                <li><a href="{% url 'home' %}#explore">{% trans "Explore" %}</a></li>
+                <li><a href="{% url 'home' %}#analyses">{% trans "Analyses" %}</a></li>
+                <li><a href="{% url 'home' %}#search">{% trans "Search" %}</a></li>
+
+                <li class="ms-nav-dropdown" id="ms-about-dropdown">
+                    <button type="button" class="ms-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="ms-about-menu">
+                        {% trans "About" %} <i class="fa-solid fa-chevron-down ms-nav-caret" aria-hidden="true"></i>
+                    </button>
+                    <div class="ms-nav-dropdown-menu" id="ms-about-menu" role="menu">
+                        <a role="menuitem" href="{% url 'about-model' %}">
+                            <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+                            <span><strong>{% trans "Conceptual Model" %}</strong><em>{% trans "The data model behind ManuSpectrum" %}</em></span>
+                        </a>
+                        <a role="menuitem" href="{% url 'about-explorer' %}">
+                            <i class="fa-solid fa-circle-nodes" aria-hidden="true"></i>
+                            <span><strong>{% trans "Graph Explorer" %}</strong><em>{% trans "Explore models and relationships interactively" %}</em></span>
+                        </a>
+                        <a role="menuitem" href="{% url 'about-team' %}">
+                            <i class="fa-solid fa-users" aria-hidden="true"></i>
+                            <span><strong>{% trans "About & Team" %}</strong><em>{% trans "The project and the people behind it" %}</em></span>
+                        </a>
+                        <a role="menuitem" href="{% url 'about-contact' %}">
+                            <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                            <span><strong>{% trans "Contact" %}</strong><em>{% trans "Submit a project or ask a question" %}</em></span>
+                        </a>
+                    </div>
+                </li>
+
+                {% if user|can_create_resource_instance and user.username != 'anonymous' %}
+                <li><a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a></li>
+                {% endif %}
+            </ul>
+
+            <div class="ms-nav-divider"></div>
+            <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-nav-github" aria-label="GitHub" title="{% trans 'Source code on GitHub' %}">
+                <i class="fa-brands fa-github"></i>
+            </a>
+            <div class="ms-nav-divider"></div>
+
+            <div class="ms-nav-auth">
+                {% if user.username == 'anonymous' %}
+                    <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
+                {% else %}
+                    <a href="{% url 'user_profile_manager' %}" aria-label="{% trans 'User Profile' %}">{% blocktrans with name=user.first_name|default:user.username %}Welcome, {{ name }}{% endblocktrans %}</a>
+                    <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
+                {% endif %}
+            </div>
+
+            {% if show_language_swtich %}
+            {% csrf_token %}
+                {% get_current_language as LANGUAGE_CODE %}
+                <div class="lang-switch" data-bind='component: { name: "views/components/language-switcher", params: { current_language: "{{LANGUAGE_CODE}}" } }'></div>
+            {% endif %}
+        </nav>
+
+        <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Open Menu' %}"><span></span><span></span><span></span></button>
+    </div>
+</header>
+
+<div class="ms-mobile-nav" id="ms-mobile-nav">
+    <a href="{% url 'home' %}#project" class="ms-mobile-nav-link">{% trans "The Project" %}</a>
+    <a href="{% url 'home' %}#explore" class="ms-mobile-nav-link">{% trans "Explore" %}</a>
+    <a href="{% url 'home' %}#analyses" class="ms-mobile-nav-link">{% trans "Analyses" %}</a>
+    <a href="{% url 'home' %}#search" class="ms-mobile-nav-link">{% trans "Search" %}</a>
+
+    <button type="button" class="ms-mobile-nav-group-toggle" aria-expanded="false" aria-controls="ms-mobile-about">
+        {% trans "About" %} <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+    </button>
+    <div class="ms-mobile-nav-group" id="ms-mobile-about">
+        <a href="{% url 'about-model' %}" class="ms-mobile-nav-sublink">{% trans "Conceptual Model" %}</a>
+        <a href="{% url 'about-explorer' %}" class="ms-mobile-nav-sublink">{% trans "Graph Explorer" %}</a>
+        <a href="{% url 'about-team' %}" class="ms-mobile-nav-sublink">{% trans "About & Team" %}</a>
+        <a href="{% url 'about-contact' %}" class="ms-mobile-nav-sublink">{% trans "Contact" %}</a>
+    </div>
+
+    {% if user|can_create_resource_instance and user.username != 'anonymous' %}
+        <a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a>
+    {% endif %}
+    <div class="spectral-line"></div>
+    {% if user.username == 'anonymous' %}
+        <a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
+    {% else %}
+        <a href="{% url 'user_profile_manager' %}">{{ user.first_name|default:user.username }}</a>
+        <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
+    {% endif %}
+    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-mobile-nav-github"><i class="fa-brands fa-github"></i></a>
+</div>

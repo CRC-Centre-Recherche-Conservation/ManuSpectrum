@@ -7,3 +7,52 @@
 //   Task 5 → contact page
 //   Task 6 → conceptual-model page
 //   Task 7 → team page
+
+// ── Base page shell (About pages reuse homepage header/footer styles which live
+//    in css/homepage; these rules cover the standalone page body + the new dropdown)
+.ms-page { margin: 0; background: $ms-paper; color: $ms-ink; font-family: $ms-font-sans; }
+#ms-main { min-height: 60vh; }
+
+.ms-page-hero {
+    @include ms-container;
+    padding-top: 140px; padding-bottom: 48px;
+    &__eyebrow { font-family: $ms-font-mono; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: $ms-blue; }
+    &__title { font-family: $ms-font-serif; font-weight: 400; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.08; margin: 12px 0 16px; }
+    &__lead { max-width: 720px; color: $ms-ink-soft; font-size: 1.1rem; line-height: 1.6; }
+    &__accent { height: 3px; width: 120px; border-radius: 2px; margin-top: 24px; @include ms-spectral-gradient(); }
+}
+
+// ── About dropdown (desktop)
+.ms-nav-dropdown { position: relative; }
+.ms-nav-dropdown-toggle {
+    background: none; border: 0; cursor: pointer; font: inherit; color: inherit;
+    display: inline-flex; align-items: center; gap: 6px; padding: 0;
+    .ms-nav-caret { font-size: 0.7em; transition: transform 0.2s ease; }
+}
+.ms-nav-dropdown.open .ms-nav-caret { transform: rotate(180deg); }
+.ms-nav-dropdown-menu {
+    position: absolute; top: calc(100% + 14px); left: 50%; transform: translateX(-50%) translateY(-6px);
+    min-width: 320px; padding: 8px;
+    background: $ms-glass; backdrop-filter: blur(14px);
+    border: 1px solid $ms-line; border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(26, 26, 46, 0.16);
+    opacity: 0; visibility: hidden; transition: opacity 0.18s ease, transform 0.18s ease; z-index: 60;
+    &::before { content: ''; position: absolute; inset: -3px 0 auto; height: 3px; border-radius: 3px 3px 0 0; @include ms-spectral-gradient(); }
+    a { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; text-decoration: none; color: $ms-ink;
+        i { margin-top: 3px; color: $ms-blue; width: 18px; text-align: center; }
+        strong { display: block; font-weight: 600; font-size: 0.95rem; }
+        em { display: block; font-style: normal; font-size: 0.8rem; color: $ms-ink-soft; margin-top: 2px; }
+        &:hover, &:focus { background: rgba(59, 130, 246, 0.08); outline: none; } }
+}
+.ms-nav-dropdown.open .ms-nav-dropdown-menu { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+
+// ── About group (mobile)
+.ms-mobile-nav-group-toggle {
+    background: none; border: 0; font: inherit; color: inherit; width: 100%; text-align: left;
+    display: flex; justify-content: space-between; align-items: center; padding: 12px 0; cursor: pointer;
+    i { transition: transform 0.2s ease; }
+    &[aria-expanded="true"] i { transform: rotate(180deg); }
+}
+.ms-mobile-nav-group { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; padding-left: 14px;
+    &.open { max-height: 320px; }
+    .ms-mobile-nav-sublink { display: block; padding: 8px 0; color: $ms-ink-soft; text-decoration: none; } }
