@@ -4,18 +4,23 @@
  * WidgetViewModel/bindings make the widget viewmodel itself untestable).
  */
 
-const ENTITY_URI_BASE = 'https://data.biblissima.fr/entity/';
-const PORTAL_BASE = 'https://portail.biblissima.fr/';
-
 /**
  * Map a /api/biblissima/suggest entry to the url-datatype tile value.
  * Storage policy (spec §3.1): label EN when Biblissima has one, else FR;
  * portal ARK when P129 exists, else entity URI. Tolerates the pre-upgrade
  * cached payload shape (enriched fields absent).
+ *
+ * `entityUriBase` is the Django-settings-sourced Biblissima entity base
+ * (no trailing slash), passed in by the widget. The backend always sends
+ * `entity_uri` now, so the `entityUriBase` fallback branch is a rare
+ * defensive path; when `entityUriBase` is missing it must NOT produce
+ * "undefined/Q1" — hence the guard.
  */
-export function mapSuggestItemToValue(item) {
+export function mapSuggestItemToValue(item, entityUriBase) {
     const label = (item.label_en || item.label || item.text || '').trim();
-    const url = (item.portal_url || item.entity_uri || (ENTITY_URI_BASE + item.id)).trim();
+    const url = (
+        item.portal_url || item.entity_uri || (entityUriBase ? `${entityUriBase}/${item.id}` : '')
+    ).trim();
     return { url: url, url_label: label };
 }
 
@@ -48,10 +53,25 @@ export function renderSuggestItem(item, enBadgePrefix) {
     return container;
 }
 
-/** True when the URL belongs to the Biblissima referential (portal or entity). */
-export function isReferentialUrl(url) {
-    if (!url) {
-        return false;
-    }
-    return url.indexOf(PORTAL_BASE) === 0 || url.indexOf(ENTITY_URI_BASE) === 0;
+/**
+ * True when the URL belongs to the Biblissima referential (portal or
+ * entity). `portalBase`/`entityUriBase` are the Django-settings-sourced
+ * values passed in by the widget; a missing base must not throw and must
+ * not match.
+ */
+export function isReferentialUrl(url, portalBase, entityUriBase) {
+    return Boolean(url) && (
+        (!!portalBase && url.indexOf(portalBase) === 0) ||
+        (!!entityUriBase && url.indexOf(entityUriBase) === 0)
+    );
+}
+
+/**
+ * True when the URL is a persistent Biblissima portal ARK specifically
+ * (not merely the entity-URI fallback). `portalBase` is the
+ * Django-settings-sourced value passed in by the widget; a missing base
+ * must not throw and must not match.
+ */
+export function isPortalArk(url, portalBase) {
+    return Boolean(url) && !!portalBase && url.indexOf(portalBase) === 0;
 }
