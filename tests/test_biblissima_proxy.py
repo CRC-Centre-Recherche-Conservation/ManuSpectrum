@@ -2506,6 +2506,42 @@ class BiblissimaSuggestViewTests(TestCase):
             response = self._get(q="xx", type="descriptor")
         self.assertIsNone(json.loads(response.content)["results"][0]["portal_url"])
 
+    # Manuscript entities encode P129 as `mdata<40 hex>` (not `desc…`); other
+    # entity kinds use the prefixes enumerated at _normalize_descriptors.
+    MDATA_HASH = "mdata3f5d37989294a508fee54c87d05bb12605dc5b7e"
+
+    def test_manuscript_p129_mdata_hash_resolves_portal_ark(self):
+        # Regression: a desc-only P129 regex dropped every manuscript hit to
+        # the entity-URI fallback and rendered the misleading "no persistent
+        # portal ARK" badge, even though a persistent ARK does exist.
+        search_resp = _make_response(
+            json_data={
+                "search": [{"id": "Q352422", "label": "Latin 9926", "description": ""}]
+            }
+        )
+        batch_resp = _make_response(
+            json_data={
+                "entities": {
+                    "Q352422": {
+                        "labels": {"fr": {"value": "Latin 9926"}},
+                        "claims": {
+                            "P2": [_claim_item("Q32810")],
+                            "P129": [_claim_str(self.MDATA_HASH)],
+                        },
+                    }
+                }
+            }
+        )
+        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        with patch.object(
+            bp, "_bib_request", side_effect=[search_resp, batch_resp, fulltext_resp]
+        ):
+            response = self._get(q="latin", type="manuscript")
+        [entry] = json.loads(response.content)["results"]
+        self.assertEqual(
+            entry["portal_url"], bp.BIBLISSIMA_PORTAL + "/" + self.MDATA_HASH
+        )
+
     def test_malformed_upstream_payloads_do_not_500(self):
         search_resp = _make_response(json_data={})  # no "search" key
         fulltext_resp = _make_response(json_data={"query": {}})  # no "search"

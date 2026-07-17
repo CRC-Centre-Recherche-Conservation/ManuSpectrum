@@ -758,7 +758,13 @@ def _suggest_result(qid, item, entity, lang):
     portal_url = None
     for claim in (entity or {}).get("claims", {}).get(P129, []):
         value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
-        if isinstance(value, str) and re.fullmatch(r"desc[0-9a-f]{40}", value.strip()):
+        # P129 encodes the persistent portal-ARK hash; the prefix varies by
+        # entity kind (desc for iconographic descriptors, mdata for
+        # manuscripts, etc. — same vocabulary as _normalize_descriptors).
+        if isinstance(value, str) and re.fullmatch(
+            r"(?:desc|mdata|ifdata|pdata|oedata|cdata|ldata)[0-9a-f]{40}",
+            value.strip(),
+        ):
             portal_url = f"{BIBLISSIMA_PORTAL}/{value.strip()}"
             break
     return {
