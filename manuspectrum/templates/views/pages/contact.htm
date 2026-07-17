@@ -1,3 +1,64 @@
-{% extends 'ms_base.htm' %}{% load i18n %}
+{% extends 'ms_base.htm' %}
+{% load i18n manuspectrum_settings %}
+{% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "Contact" %} — ManuSpectrum{% endblock %}
-{% block content %}<section class="ms-page-hero"><div class="ms-page-hero__title">{% trans "Contact" %}</div></section>{% endblock %}
+{% block page_description %}{% trans "Contact the ManuSpectrum team to submit a project, request access, or ask a question." %}{% endblock %}
+{% block css_bundle %}{% endblock %}
+
+{% block content %}
+<section class="ms-page-hero">
+    <div class="ms-page-hero__eyebrow">{% trans "Contact" %}</div>
+    <h1 class="ms-page-hero__title">{% trans "Submit a project or reach the team" %}</h1>
+    <p class="ms-page-hero__lead">
+        {% trans "Account creation is not open: access is granted individually. To propose a project, request an account, or ask a question, send us a message below." %}
+    </p>
+    <div class="ms-page-hero__accent"></div>
+</section>
+
+<section class="ms-contact">
+    <div class="ms-contact__grid">
+        <form class="ms-contact-form" id="ms-contact-form" data-contact-email="{% contact_email %}" novalidate>
+            <div class="ms-contact-field">
+                <label for="cf-name">{% trans "Your name" %}</label>
+                <input type="text" id="cf-name" name="name" class="form-control" required>
+            </div>
+            <div class="ms-contact-field">
+                <label for="cf-email">{% trans "Your email" %}</label>
+                <input type="email" id="cf-email" name="email" class="form-control" required>
+            </div>
+            <div class="ms-contact-field">
+                <label for="cf-type">{% trans "Reason" %}</label>
+                <select id="cf-type" name="type" class="form-control">
+                    <option value="project">{% trans "Submit a project" %}</option>
+                    <option value="access">{% trans "Request an account / access" %}</option>
+                    <option value="question">{% trans "Question" %}</option>
+                    <option value="other">{% trans "Other" %}</option>
+                </select>
+            </div>
+            <div class="ms-contact-field">
+                <label for="cf-message">{% trans "Message" %}</label>
+                <textarea id="cf-message" name="message" class="form-control" rows="6" required></textarea>
+            </div>
+            <p class="ms-contact-error" id="ms-contact-error" role="alert" hidden></p>
+            <button type="submit" class="ms-btn ms-btn-primary" id="ms-contact-submit">
+                <i class="fa-solid fa-paper-plane"></i> {% trans "Open my email app" %}
+            </button>
+            <p class="ms-contact-note" id="ms-contact-note" hidden>
+                {% trans "A contact address is not configured yet. Please check back soon." %}
+            </p>
+        </form>
+
+        <aside class="ms-contact-aside">
+            <h2>{% trans "Who we are" %}</h2>
+            <p>{% trans "ManuSpectrum is developed within Cluster 2 of the ANR Biblissima+ programme, at the Centre de Recherche sur la Conservation (CRC)." %}</p>
+            <ul class="ms-contact-links">
+                <li><a href="{% url 'about-team' %}"><i class="fa-solid fa-users"></i> {% trans "Meet the team" %}</a></li>
+                <li><a href="https://projet.biblissima.fr/fr/projet/clusters-biblissima/cluster-2" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {% trans "Biblissima+ — Cluster 2" %}</a></li>
+                <li><a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener"><i class="fa-brands fa-github"></i> {% trans "Source code" %}</a></li>
+            </ul>
+        </aside>
+    </div>
+</section>
+{% endblock %}
+
+{% block js_bundle %}{% render_bundle 'views/pages/contact' %}{% endblock %}

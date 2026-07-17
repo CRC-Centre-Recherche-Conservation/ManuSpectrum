@@ -33,3 +33,16 @@ class AboutRoutingTests(TestCase):
         self.assertEqual(self.client.get(reverse("home")).status_code, 200)
         for name in ("about-model", "about-explorer", "about-team", "about-contact"):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+
+
+class ContactPageTests(TestCase):
+    @override_settings(CONTACT_EMAIL="team@manuspectrum.fr")
+    def test_contact_email_rendered_in_form_dataset(self):
+        resp = self.client.get(reverse("about-contact"))
+        self.assertContains(resp, 'data-contact-email="team@manuspectrum.fr"')
+
+    @override_settings(CONTACT_EMAIL="", DEFAULT_FROM_EMAIL="")
+    def test_contact_page_ok_without_address(self):
+        resp = self.client.get(reverse("about-contact"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'data-contact-email=""')

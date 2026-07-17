@@ -56,3 +56,21 @@
 .ms-mobile-nav-group { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; padding-left: 14px;
     &.open { max-height: 320px; }
     .ms-mobile-nav-sublink { display: block; padding: 8px 0; color: $ms-ink-soft; text-decoration: none; } }
+
+// ── Contact page
+.ms-contact { @include ms-container; padding: 24px 24px 96px; }
+.ms-contact__grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 40px; align-items: start; }
+.ms-contact-form { display: flex; flex-direction: column; gap: 18px;
+    background: #fff; border: 1px solid $ms-line; border-radius: 18px; padding: 28px; box-shadow: 0 12px 40px rgba(26,26,46,0.06); }
+.ms-contact-field { display: flex; flex-direction: column; gap: 6px;
+    label { font-weight: 600; font-size: 0.9rem; }
+    .form-control { border-radius: 10px; } }
+.ms-contact-error { color: $ms-red; font-size: 0.9rem; margin: 0; }
+.ms-contact-note { color: $ms-ink-soft; font-size: 0.9rem; }
+.ms-contact-aside { padding: 8px 4px;
+    h2 { font-family: $ms-font-serif; font-weight: 500; }
+    .ms-contact-links { list-style: none; padding: 0; margin: 18px 0 0; display: flex; flex-direction: column; gap: 12px;
+        a { color: $ms-ink; text-decoration: none; display: inline-flex; gap: 10px; align-items: center;
+            i { color: $ms-blue; } &:hover { color: $ms-blue; } } }
+}
+@media (max-width: 800px) { .ms-contact__grid { grid-template-columns: 1fr; } }

@@ -97,6 +97,15 @@
     biblissima-portal-url='{% biblissima_portal_url as biblissimaPortalUrl %} "{{ biblissimaPortalUrl|escapejs }}"'
     biblissima-entity-uri-base='{% biblissima_entity_uri_base as biblissimaEntityUriBase %} "{{ biblissimaEntityUriBase|escapejs }}"'
     biblissima-ark-naan='{% biblissima_ark_naan as biblissimaArkNaan %} "{{ biblissimaArkNaan|escapejs }}"'
+    ms-contact-fill='{% trans "Please fill in all fields with a valid email." as msContactFill %} "{{ msContactFill|escapejs }}"'
+    ms-contact-no-address='{% trans "A contact address is not configured yet. Please check back soon." as msContactNoAddress %} "{{ msContactNoAddress|escapejs }}"'
+    ms-contact-subj-project='{% trans "Project submission" as csp %}"{{ csp|escapejs }}"'
+    ms-contact-subj-access='{% trans "Access request" as csa %}"{{ csa|escapejs }}"'
+    ms-contact-subj-question='{% trans "Question" as csq %}"{{ csq|escapejs }}"'
+    ms-contact-subj-other='{% trans "Message" as cso %}"{{ cso|escapejs }}"'
+    ms-contact-lbl-name='{% trans "Name" as cln %}"{{ cln|escapejs }}"'
+    ms-contact-lbl-email='{% trans "Email" as cle %}"{{ cle|escapejs }}"'
+    ms-contact-lbl-reason='{% trans "Reason" as clr %}"{{ clr|escapejs }}"'
 ></div>
 {% endblock arches_translations %}
 
