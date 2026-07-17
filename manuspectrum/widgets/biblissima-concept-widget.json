@@ -1,0 +1,11 @@
+{
+    "name": "biblissima-concept-widget",
+    "component": "views/components/widgets/biblissima-concept-widget",
+    "defaultconfig": {
+        "entityType": "descriptor",
+        "placeholder": "",
+        "link_color": "#0055a0"
+    },
+    "helptext": null,
+    "datatype": "url"
+}

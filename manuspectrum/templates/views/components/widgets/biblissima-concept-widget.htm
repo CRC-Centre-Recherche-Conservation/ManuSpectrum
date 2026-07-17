@@ -1,0 +1,105 @@
+{% extends "views/components/widgets/base.htm" %}
+{% load i18n %}
+
+{% block form %}
+<div class="row widget-wrapper biblissima-concept-widget" data-bind="class: nodeCssClasses">
+    <div class="form-group">
+        <span class="control-label widget-input-label" data-bind="text: label"></span>
+        <!-- ko if: node -->
+        <i data-bind="css: {'ion-asterisk widget-label-required': node.isrequired}"></i>
+        <!-- /ko -->
+
+        <!-- ko ifnot: manualMode -->
+        <div class="col-xs-12">
+            <select class="form-control input-lg widget-input"
+                    data-bind="select2Query: { select2Config: conceptSelectConfig },
+                               attr: { 'data-label': label }, disable: disabled">
+                <!-- ko if: url -->
+                <option selected data-bind="attr: { value: url }, text: url_label() || url()"></option>
+                <!-- /ko -->
+            </select>
+        </div>
+        <!-- /ko -->
+
+        <!-- ko if: manualMode -->
+        <div class="col-xs-12">
+            <label class="control-label widget-input-label">{% trans "Label" %}</label>
+            <input type="text" class="form-control input-lg widget-input"
+                   data-bind="textInput: url_label, disable: disabled">
+        </div>
+        <div class="col-xs-12">
+            <label class="control-label widget-input-label">{% trans "URL" %}</label>
+            <input type="text" class="form-control input-lg widget-input"
+                   data-bind="textInput: url, disable: disabled">
+        </div>
+        <!-- /ko -->
+
+        <div class="col-xs-12">
+            <a href="#" role="button" class="biblissima-manual-toggle"
+               data-bind="click: toggleManualMode">
+                <i class="fa fa-pencil" aria-hidden="true"></i>
+                <!-- ko ifnot: manualMode --><span>{% trans "Manual entry" %}</span><!-- /ko -->
+                <!-- ko if: manualMode --><span>{% trans "Back to Biblissima search" %}</span><!-- /ko -->
+            </a>
+        </div>
+
+        <div class="col-xs-12">
+            <small class="help-block biblissima-concept-help" aria-live="polite">
+                <i class="fa fa-info-circle" aria-hidden="true"></i>
+                {% trans "This field searches the Biblissima authority list (French terminology). The saved term is English when available, otherwise French; the link points to the Biblissima portal record." %}
+            </small>
+        </div>
+
+        <!-- ko if: url -->
+        <div class="col-xs-12">
+            <a target="_blank" data-bind="attr: { href: url }, style: { color: link_color }">
+                <span data-bind="text: urlPreviewText()"></span>
+            </a>
+            <!-- ko if: isPortalArk --><span class="label label-info" title="{% trans "Persistent Biblissima portal ARK" %}">Biblissima</span><!-- /ko -->
+            <!-- ko if: isEntityFallback --><span class="label label-warning" title="{% trans "Biblissima entity URI — no persistent portal ARK" %}">{% trans "Biblissima (entity)" %}</span><!-- /ko -->
+            <!-- ko ifnot: isReferential --><span class="label label-default">{% trans "Manual entry" %}</span><!-- /ko -->
+        </div>
+        <!-- /ko -->
+    </div>
+</div>
+{% endblock form %}
+
+{% block config_form %}
+<div class="control-label">{% trans "Entity type" %}</div>
+<div class="col-xs-12 crud-widget-container">
+    <select class="form-control input-md widget-input" data-bind="value: entityType">
+        <option value="descriptor">{% trans "Iconographic descriptor" %}</option>
+        <option value="manuscript">{% trans "Manuscript" %}</option>
+    </select>
+</div>
+<div class="control-label">{% trans "Placeholder" %}</div>
+<div class="col-xs-12 crud-widget-container">
+    <input type="text" class="form-control input-md widget-input" data-bind="textInput: placeholder">
+</div>
+<div class="control-label">{% trans "Link color" %}</div>
+<div class="col-xs-12 crud-widget-container">
+    <input type="text" class="form-control input-md widget-input" data-bind="textInput: link_color">
+</div>
+{% endblock config_form %}
+
+{% block report %}
+<dt data-bind="text: label, class: nodeCssClasses"></dt>
+<dd data-bind="class: nodeCssClasses">
+    <!-- ko if: url -->
+    <a data-bind="attr: { href: url }, style: { color: link_color }">
+        <span data-bind="text: urlPreviewText()"></span>
+    </a>
+    <!-- ko if: isPortalArk --><span class="label label-info" title="{% trans "Persistent Biblissima portal ARK" %}">Biblissima</span><!-- /ko -->
+    <!-- ko if: isEntityFallback --><span class="label label-warning" title="{% trans "Biblissima entity URI — no persistent portal ARK" %}">{% trans "Biblissima (entity)" %}</span><!-- /ko -->
+    <!-- ko ifnot: isReferential --><span class="label label-default">{% trans "Manual entry" %}</span><!-- /ko -->
+    <!-- /ko -->
+</dd>
+{% endblock report %}
+
+{% block display_value %}
+<!-- ko if: url -->
+<a data-bind="attr: { href: url }, style: { color: link_color }, class: nodeCssClasses">
+    <span data-bind="text: urlPreviewText()"></span>
+</a>
+<!-- /ko -->
+{% endblock display_value %}
