@@ -95,6 +95,11 @@ export default function ParentResolver(params) {
     // truth for the create-resource payload shape.
     const createResource = params.createResource; // (item, options) => Promise<resourceId>
 
+    // Django-settings-sourced ARK NAAN (javascript.htm →
+    // arches.translations.biblissimaArkNaan). See biblissima-concept-widget.js
+    // for the same pattern applied to the portal/entity URL bases.
+    const arkNaan = arches.translations.biblissimaArkNaan;
+
     self.groups = ko.observableArray([]);
     self.unidentifiedItems = ko.observableArray([]);
     self.orphanAssignments = {}; // canvasId → resourceId
@@ -161,7 +166,7 @@ export default function ParentResolver(params) {
             let portalHash = item.portalHash || null;
             if (!portalHash && item.manuscriptArk) {
                 portalHash = String(item.manuscriptArk).replace(
-                    /^ark:\/43093\//,
+                    new RegExp(`^${arkNaan}/`),
                     "",
                 );
                 // Hydrate the cart item so parentIdFor() finds it later via
@@ -295,7 +300,7 @@ export default function ParentResolver(params) {
                                 items: [
                                     {
                                         arkId: group.portalHash
-                                            ? `ark:/43093/${group.portalHash}`
+                                            ? `${arkNaan}/${group.portalHash}`
                                             : null,
                                         portalHash: group.portalHash || "",
                                         biblissimaQid:
@@ -453,7 +458,7 @@ export default function ParentResolver(params) {
                     resourceId: group.resolvedResourceId(),
                     graphId: DOCUMENT_GRAPH_ID,
                     label: group.portalHash
-                        ? `ark:/43093/${group.portalHash}`
+                        ? `${arkNaan}/${group.portalHash}`
                         : group.biblissimaQid || group.label,
                 }),
             });

@@ -480,8 +480,9 @@ PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT), "pkg")
 # Mapping/graph/node-id constants live in ``manuspectrum.constants.biblissima``
 # — those are not runtime-tunable.
 BIBLISSIMA_WIKIBASE_URL = "https://data.biblissima.fr/w/api.php"
-BIBLISSIMA_PORTAL_URL = "https://portail.biblissima.fr/fr/ark:/43093"
-BIBLISSIMA_PORTAL_EN_URL = "https://portail.biblissima.fr/en/ark:/43093"
+BIBLISSIMA_ARK_NAAN = "ark:/43093"
+BIBLISSIMA_PORTAL_URL = f"https://portail.biblissima.fr/fr/{BIBLISSIMA_ARK_NAAN}"
+BIBLISSIMA_PORTAL_EN_URL = f"https://portail.biblissima.fr/en/{BIBLISSIMA_ARK_NAAN}"
 BIBLISSIMA_IIIF_MANIFEST_URL = "https://portail.biblissima.fr/iiif/manifest"
 BIBLISSIMA_ENTITY_URI_BASE = "https://data.biblissima.fr/entity"
 

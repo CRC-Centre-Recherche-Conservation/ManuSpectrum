@@ -12,3 +12,8 @@ def biblissima_portal_url():
 @register.simple_tag
 def biblissima_entity_uri_base():
     return settings.BIBLISSIMA_ENTITY_URI_BASE
+
+
+@register.simple_tag
+def biblissima_ark_naan():
+    return settings.BIBLISSIMA_ARK_NAAN

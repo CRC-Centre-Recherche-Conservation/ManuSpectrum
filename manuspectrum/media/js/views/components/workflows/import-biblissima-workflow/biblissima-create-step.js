@@ -121,6 +121,11 @@ const BIBLISSIMA_TYPE_LABELS = {
 const viewModel = function(params) {
     const self = this;
 
+    // Django-settings-sourced ARK NAAN (javascript.htm →
+    // arches.translations.biblissimaArkNaan). See biblissima-concept-widget.js
+    // for the same pattern applied to the portal/entity URL bases.
+    const arkNaan = arches.translations.biblissimaArkNaan;
+
     // Workflow step interface
     this.complete = params.form?.complete || ko.observable(false);
     this.saving = ko.observable(false);
@@ -736,7 +741,7 @@ const viewModel = function(params) {
             label: i.label || i.legend || '',
             shelfmark: i.shelfmark || '',
             biblissimaQid: i.biblissimaQid || '',
-            portalHash: (i.arkId || '').replace('ark:/43093/', ''),
+            portalHash: (i.arkId || '').replace(`${arkNaan}/`, ''),
             manifestUrl: i.manifestUrl || '',
         }));
 
