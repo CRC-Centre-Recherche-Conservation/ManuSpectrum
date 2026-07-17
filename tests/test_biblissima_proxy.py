@@ -31,7 +31,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 
 from manuspectrum.views import biblissima_proxy as bp
 
@@ -2251,3 +2251,215 @@ class CheckDuplicatesComponentScopeTests(TestCase):
         # Strategy 3 (displayname) must have fired for the Place graph.
         match_types = [call.args[3] for call in mock_es.call_args_list]
         self.assertIn("displayname", match_types)
+
+
+# ---------------------------------------------------------------------------
+# BiblissimaSuggestView — functional tests (auth is covered by
+# test_biblissima_auth; calling view.get() directly bypasses the
+# group_required decorator, which sits on dispatch).
+# ---------------------------------------------------------------------------
+
+
+def _claim_item(qid):
+    return {"mainsnak": {"datavalue": {"value": {"entity-type": "item", "id": qid}}}}
+
+
+def _claim_str(value):
+    return {"mainsnak": {"datavalue": {"value": value}}}
+
+
+class BiblissimaSuggestViewTests(TestCase):
+    maxDiff = None
+
+    def setUp(self):
+        cache.clear()
+        self.factory = RequestFactory()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _get(self, **params):
+        request = self.factory.get("/api/biblissima/suggest", params)
+        return bp.BiblissimaSuggestView().get(request)
+
+    def test_limit_garbage_does_not_500(self):
+        with patch.object(
+            bp,
+            "_bib_request",
+            side_effect=requests.exceptions.Timeout(),
+        ):
+            response = self._get(q="dr", limit="abc")
+        self.assertEqual(response.status_code, 200)
+
+    def test_limit_is_clamped_to_15(self):
+        # 17 × 3 > 50 would silently break wbsearchentities (MediaWiki cap,
+        # error reported as JSON in HTTP 200). Clamped: 15 × 3 = 45 ≤ 50.
+        search_resp = _make_response(json_data={"search": []})
+        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        with patch.object(
+            bp, "_bib_request", side_effect=[search_resp, fulltext_resp]
+        ) as mocked:
+            self._get(q="dragon", type="descriptor", limit="50")
+        first_call_params = mocked.call_args_list[0].kwargs["params"]
+        self.assertEqual(first_call_params["limit"], 45)
+
+    DESC_HASH = "desc46a049ef1a1cfed3c4a9c932503ea8497b6ae21f"
+
+    def _descriptor_flow(self, entity_labels, item_label="dragon", lang=None):
+        """3-call happy path: wbsearchentities → type batch → empty fulltext."""
+        search_resp = _make_response(
+            json_data={
+                "search": [
+                    {"id": "Q291430", "label": item_label, "description": "descripteur"}
+                ]
+            }
+        )
+        batch_resp = _make_response(
+            json_data={
+                "entities": {
+                    "Q291430": {
+                        "labels": entity_labels,
+                        "claims": {
+                            "P2": [_claim_item("Q304387")],
+                            "P129": [_claim_str(self.DESC_HASH)],
+                        },
+                    }
+                }
+            }
+        )
+        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        params = {"q": "dragon", "type": "descriptor"}
+        if lang:
+            params["lang"] = lang
+        with patch.object(
+            bp,
+            "_bib_request",
+            side_effect=[search_resp, batch_resp, fulltext_resp],
+        ) as mocked:
+            response = self._get(**params)
+        return json.loads(response.content), mocked
+
+    def test_descriptor_results_carry_enriched_fields(self):
+        payload, _ = self._descriptor_flow({"fr": {"value": "dragon"}})
+        [entry] = payload["results"]
+        self.assertEqual(entry["id"], "Q291430")
+        self.assertEqual(entry["label"], "dragon")
+        self.assertIsNone(entry["label_en"])
+        self.assertEqual(
+            entry["portal_url"], bp.BIBLISSIMA_PORTAL + "/" + self.DESC_HASH
+        )
+        self.assertEqual(
+            entry["entity_uri"], "https://data.biblissima.fr/entity/Q291430"
+        )
+
+    def test_label_en_returned_when_present(self):
+        payload, _ = self._descriptor_flow(
+            {"fr": {"value": "dragon"}, "en": {"value": "Dragon"}}
+        )
+        self.assertEqual(payload["results"][0]["label_en"], "Dragon")
+
+    def test_languages_param_deduplicated_with_lang(self):
+        _, mocked = self._descriptor_flow({"fr": {"value": "dragon"}}, lang="de")
+        batch_params = mocked.call_args_list[1].kwargs["params"]
+        self.assertEqual(batch_params["languages"], "de|en|fr")
+        self.assertEqual(batch_params["props"], "claims|labels")
+
+    def test_portal_url_none_when_p129_missing(self):
+        search_resp = _make_response(
+            json_data={"search": [{"id": "Q1", "label": "x", "description": ""}]}
+        )
+        batch_resp = _make_response(
+            json_data={
+                "entities": {
+                    "Q1": {
+                        "labels": {"fr": {"value": "x"}},
+                        "claims": {"P2": [_claim_item("Q304387")]},
+                    }
+                }
+            }
+        )
+        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        with patch.object(
+            bp, "_bib_request", side_effect=[search_resp, batch_resp, fulltext_resp]
+        ):
+            response = self._get(q="xx", type="descriptor")
+        self.assertIsNone(json.loads(response.content)["results"][0]["portal_url"])
+
+    def test_untyped_query_keeps_prefix_fields_null_without_extra_batch(self):
+        search_resp = _make_response(
+            json_data={
+                "search": [{"id": "Q291430", "label": "dragon", "description": ""}]
+            }
+        )
+        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        with patch.object(
+            bp, "_bib_request", side_effect=[search_resp, fulltext_resp]
+        ) as mocked:
+            response = self._get(q="dragon")
+        payload = json.loads(response.content)
+        [entry] = payload["results"]
+        self.assertIsNone(entry["label_en"])
+        self.assertIsNone(entry["portal_url"])
+        self.assertEqual(
+            entry["entity_uri"], "https://data.biblissima.fr/entity/Q291430"
+        )
+        self.assertEqual(mocked.call_count, 2)  # no added batch call
+
+    def test_french_only_item_survives_english_search(self):
+        # Bug fix: today `if label:` drops items without a label in the
+        # requested language (~97 % of the referential for lang=en).
+        search_resp = _make_response(json_data={"search": []})
+        cirrus_resp = _make_response(
+            json_data={"query": {"search": [{"title": "Item:Q295435"}]}}
+        )
+        batch_resp = _make_response(
+            json_data={
+                "entities": {
+                    "Q295435": {
+                        "labels": {"fr": {"value": "Marie (sainte) -- Annonciation"}},
+                        "descriptions": {},
+                        "claims": {},
+                    }
+                }
+            }
+        )
+        with patch.object(
+            bp, "_bib_request", side_effect=[search_resp, cirrus_resp, batch_resp]
+        ):
+            response = self._get(q="annonciation", type="descriptor", lang="en")
+        payload = json.loads(response.content)
+        [entry] = payload["results"]
+        self.assertEqual(entry["label"], "Marie (sainte) -- Annonciation")
+        self.assertIsNone(entry["label_en"])
+
+    def test_blank_p129_value_yields_null_portal_url(self):
+        search_resp = _make_response(
+            json_data={"search": [{"id": "Q1", "label": "x", "description": ""}]}
+        )
+        batch_resp = _make_response(
+            json_data={
+                "entities": {
+                    "Q1": {
+                        "labels": {"fr": {"value": "x"}},
+                        "claims": {
+                            "P2": [_claim_item("Q304387")],
+                            "P129": [_claim_str("   ")],
+                        },
+                    }
+                }
+            }
+        )
+        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        with patch.object(
+            bp, "_bib_request", side_effect=[search_resp, batch_resp, fulltext_resp]
+        ):
+            response = self._get(q="xx", type="descriptor")
+        self.assertIsNone(json.loads(response.content)["results"][0]["portal_url"])
+
+    def test_malformed_upstream_payloads_do_not_500(self):
+        search_resp = _make_response(json_data={})  # no "search" key
+        fulltext_resp = _make_response(json_data={"query": {}})  # no "search"
+        with patch.object(bp, "_bib_request", side_effect=[search_resp, fulltext_resp]):
+            response = self._get(q="épée", type="descriptor")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content)["results"], [])

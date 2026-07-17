@@ -483,6 +483,7 @@ BIBLISSIMA_WIKIBASE_URL = "https://data.biblissima.fr/w/api.php"
 BIBLISSIMA_PORTAL_URL = "https://portail.biblissima.fr/fr/ark:/43093"
 BIBLISSIMA_PORTAL_EN_URL = "https://portail.biblissima.fr/en/ark:/43093"
 BIBLISSIMA_IIIF_MANIFEST_URL = "https://portail.biblissima.fr/iiif/manifest"
+BIBLISSIMA_ENTITY_URI_BASE = "https://data.biblissima.fr/entity"
 
 BIBLISSIMA_REQUEST_TIMEOUT = 10
 # IIIF aggregator manifests and the portal HTML pages can be slow when

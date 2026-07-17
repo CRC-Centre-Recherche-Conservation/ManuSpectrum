@@ -99,6 +99,7 @@ BIBLISSIMA_WIKIBASE = settings.BIBLISSIMA_WIKIBASE_URL
 BIBLISSIMA_IIIF_MANIFEST = settings.BIBLISSIMA_IIIF_MANIFEST_URL
 BIBLISSIMA_PORTAL = settings.BIBLISSIMA_PORTAL_URL
 BIBLISSIMA_PORTAL_EN = settings.BIBLISSIMA_PORTAL_EN_URL
+BIBLISSIMA_ENTITY_URI_BASE = settings.BIBLISSIMA_ENTITY_URI_BASE
 REQUEST_TIMEOUT = settings.BIBLISSIMA_REQUEST_TIMEOUT
 IIIF_REQUEST_TIMEOUT = settings.BIBLISSIMA_IIIF_REQUEST_TIMEOUT
 IIIF_CONNECT_TIMEOUT = settings.BIBLISSIMA_IIIF_CONNECT_TIMEOUT
@@ -728,6 +729,47 @@ def _parse_iiif_canvases(manifest_json):
     return results
 
 
+def _label_from(lang_map, lang):
+    """First non-empty value over the ``lang → en → fr`` fallback chain.
+
+    ``lang_map`` is a wbgetentities ``labels``/``descriptions`` dict:
+    ``{"fr": {"language": "fr", "value": "dragon"}, …}``.
+    """
+    for code in dict.fromkeys((lang, "en", "fr")):
+        value = (lang_map or {}).get(code, {}).get("value")
+        if value:
+            return value
+    return ""
+
+
+def _suggest_result(qid, item, entity, lang):
+    """Assemble one /api/biblissima/suggest payload entry.
+
+    ``item`` is a wbsearchentities hit (None on the fulltext path);
+    ``entity`` the matching wbgetentities entity (None when no batch ran,
+    e.g. prefix path without type filter — enriched fields stay null).
+    """
+    labels = (entity or {}).get("labels", {})
+    label = (item or {}).get("label") or _label_from(labels, lang)
+    description = (item or {}).get("description") or _label_from(
+        (entity or {}).get("descriptions", {}), lang
+    )
+    portal_url = None
+    for claim in (entity or {}).get("claims", {}).get(P129, []):
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if isinstance(value, str) and value.strip():
+            portal_url = f"{BIBLISSIMA_PORTAL}/{value.strip()}"
+            break
+    return {
+        "id": qid,
+        "label": label,
+        "description": description,
+        "label_en": labels.get("en", {}).get("value") or None,
+        "portal_url": portal_url,
+        "entity_uri": f"{BIBLISSIMA_ENTITY_URI_BASE}/{qid}",
+    }
+
+
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaSuggestView(View):
     """Proxy for Biblissima Wikibase entity search (autocomplete).
@@ -753,9 +795,19 @@ class BiblissimaSuggestView(View):
             return JsonResponse({"results": []})
 
         lang = request.GET.get("lang", "fr")
-        limit = int(request.GET.get("limit", 10))
+        try:
+            limit = int(request.GET.get("limit", 10))
+        except (TypeError, ValueError):
+            limit = 10
+        # MediaWiki caps wbsearchentities at 50 ids for non-bots and reports
+        # overflow as JSON inside HTTP 200 — fetch_limit = 3 × limit must
+        # stay under that or the prefix path silently returns nothing.
+        limit = max(1, min(limit, 15))
         type_filter = request.GET.get("type", "")  # "manuscript" or "descriptor"
         type_qid = self.TYPE_FILTERS.get(type_filter, "")
+        # wbgetentities only returns the requested languages — ask for the
+        # exact fallback chain lang → en → fr.
+        langs_param = "|".join(dict.fromkeys((lang, "en", "fr")))
         seen_ids = set()
         results = []
 
@@ -782,7 +834,8 @@ class BiblissimaSuggestView(View):
             prefix_items = resp.json().get("search", [])
 
             if type_qid and prefix_items:
-                # Batch fetch P2 claims to filter by type
+                # Batch fetch claims (P2 type filter + P129 portal hash) and
+                # labels (EN/FR fallback chain) in the single existing call.
                 batch_ids = [item["id"] for item in prefix_items]
                 type_resp = _bib_request(
                     session,
@@ -791,13 +844,14 @@ class BiblissimaSuggestView(View):
                         "action": "wbgetentities",
                         "ids": "|".join(batch_ids),
                         "format": "json",
-                        "props": "claims",
+                        "props": "claims|labels",
+                        "languages": langs_param,
                     },
                     timeout=REQUEST_TIMEOUT,
                 )
                 type_resp.raise_for_status()
                 entities = type_resp.json().get("entities", {})
-                valid_ids = set()
+                matching = {}
                 for qid, entity in entities.items():
                     for claim in entity.get("claims", {}).get(P2, []):
                         val = (
@@ -806,32 +860,22 @@ class BiblissimaSuggestView(View):
                             .get("value", {})
                         )
                         if isinstance(val, dict) and val.get("id") == type_qid:
-                            valid_ids.add(qid)
+                            matching[qid] = entity
                             break
 
                 for item in prefix_items:
-                    if item["id"] in valid_ids and item["id"] not in seen_ids:
-                        seen_ids.add(item["id"])
-                        results.append(
-                            {
-                                "id": item["id"],
-                                "label": item.get("label", ""),
-                                "description": item.get("description", ""),
-                            }
-                        )
-                        if len(results) >= limit:
-                            break
+                    qid = item["id"]
+                    if qid not in matching or qid in seen_ids:
+                        continue
+                    seen_ids.add(qid)
+                    results.append(_suggest_result(qid, item, matching[qid], lang))
+                    if len(results) >= limit:
+                        break
             else:
                 for item in prefix_items:
                     if item["id"] not in seen_ids:
                         seen_ids.add(item["id"])
-                        results.append(
-                            {
-                                "id": item["id"],
-                                "label": item.get("label", ""),
-                                "description": item.get("description", ""),
-                            }
-                        )
+                        results.append(_suggest_result(item["id"], item, None, lang))
         except Exception:
             logger.warning("wbsearchentities failed for query=%s", query)
 
@@ -873,8 +917,8 @@ class BiblissimaSuggestView(View):
                             "action": "wbgetentities",
                             "ids": "|".join(qids_to_fetch[: limit - len(results)]),
                             "format": "json",
-                            "languages": f"{lang}|en",
-                            "props": "labels|descriptions",
+                            "languages": langs_param,
+                            "props": "labels|descriptions|claims",
                         },
                         timeout=REQUEST_TIMEOUT,
                     )
@@ -883,24 +927,14 @@ class BiblissimaSuggestView(View):
                     for qid in qids_to_fetch:
                         if len(results) >= limit:
                             break
-                        entity = entities.get(qid, {})
-                        labels = entity.get("labels", {})
-                        label = (
-                            labels.get(lang, {}).get("value")
-                            or labels.get("en", {}).get("value")
-                            or ""
-                        )
-                        descs = entity.get("descriptions", {})
-                        desc = (
-                            descs.get(lang, {}).get("value")
-                            or descs.get("en", {}).get("value")
-                            or ""
-                        )
-                        if label:
-                            seen_ids.add(qid)
-                            results.append(
-                                {"id": qid, "label": label, "description": desc}
-                            )
+                        entity = entities.get(qid)
+                        if not entity:
+                            continue
+                        entry = _suggest_result(qid, None, entity, lang)
+                        if not entry["label"]:
+                            continue
+                        seen_ids.add(qid)
+                        results.append(entry)
             except Exception as exc:
                 logger.warning(
                     "[biblissima.suggest] Wikibase CirrusSearch fulltext search "
