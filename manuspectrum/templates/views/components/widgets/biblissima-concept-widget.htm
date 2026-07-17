@@ -52,7 +52,7 @@
 
         <!-- ko if: url -->
         <div class="col-xs-12">
-            <a target="_blank" data-bind="attr: { href: url }, style: { color: link_color }">
+            <a target="_blank" rel="noopener noreferrer" data-bind="attr: { href: url }, style: { color: link_color }">
                 <span data-bind="text: urlPreviewText()"></span>
             </a>
             <!-- ko if: isPortalArk --><span class="label label-info" title="{% trans "Persistent Biblissima portal ARK" %}">Biblissima</span><!-- /ko -->
