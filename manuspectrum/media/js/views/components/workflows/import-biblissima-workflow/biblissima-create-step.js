@@ -1461,7 +1461,7 @@ const viewModel = function(params) {
             ajax: {
                 url: arches.urls.search_results,
                 dataType: 'json',
-                quietMillis: 250,
+                delay: 250,
                 data: (requestParams) => {
                     const params = {
                         'paging-filter': 1,
@@ -1495,7 +1495,6 @@ const viewModel = function(params) {
             },
             templateResult: (item) => item.text || '',
             templateSelection: (item) => item.text || '',
-            escapeMarkup: (m) => m,
         };
     };
 

@@ -26,6 +26,7 @@
  * No DB writes anywhere in this step. All fetches are read-only proxy
  * calls (`/api/biblissima/search*`, `/entity/`, `/suggest`, …).
  */
+import $ from 'jquery';
 import ko from 'knockout';
 import arches from 'arches';
 import 'bindings/select2-query';
@@ -536,7 +537,7 @@ const viewModel = function(params) {
         ajax: {
             url: '/api/biblissima/suggest',
             dataType: 'json',
-            quietMillis: 300,
+            delay: 300,
             data: (requestParams) => ({ q: requestParams.term || '', type: 'manuscript', limit: 15 }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
@@ -547,7 +548,6 @@ const viewModel = function(params) {
         },
         templateResult: (item) => item.text || '',
         templateSelection: (item) => item.text || '',
-        escapeMarkup: (m) => m,
     };
 
     // When a manuscript is selected from autocomplete, load its illuminations
@@ -765,7 +765,7 @@ const viewModel = function(params) {
         ajax: {
             url: '/api/biblissima/suggest',
             dataType: 'json',
-            quietMillis: 300,
+            delay: 300,
             data: (requestParams) => ({ q: requestParams.term || '', type: 'descriptor' }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
@@ -777,14 +777,15 @@ const viewModel = function(params) {
         },
         templateResult: (item) => {
             if (!item.id) return item.text;
-            let html = `<strong>${item.text}</strong>`;
+            const $result = $('<div>');
+            $result.append($('<strong>').text(item.text));
             if (item.description) {
-                html += `<br><small class="text-muted">${item.description}</small>`;
+                $result.append($('<br>'));
+                $result.append($('<small>').addClass('text-muted').text(item.description));
             }
-            return html;
+            return $result;
         },
         templateSelection: (item) => item.text,
-        escapeMarkup: (m) => m,
     };
 
     this.searchComponents = async () => {
