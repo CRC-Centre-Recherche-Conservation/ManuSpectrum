@@ -26,6 +26,7 @@
  * No DB writes anywhere in this step. All fetches are read-only proxy
  * calls (`/api/biblissima/search*`, `/entity/`, `/suggest`, …).
  */
+import $ from 'jquery';
 import ko from 'knockout';
 import arches from 'arches';
 import 'bindings/select2-query';
@@ -49,6 +50,11 @@ ko.bindingHandlers.sliderInit = {
 
 const viewModel = function(params) {
     const self = this;
+
+    // Django-settings-sourced ARK NAAN (javascript.htm →
+    // arches.translations.biblissimaArkNaan). See biblissima-concept-widget.js
+    // for the same pattern applied to the portal/entity URL bases.
+    const arkNaan = arches.translations.biblissimaArkNaan;
 
     // Workflow step interface
     this.complete = params.form?.complete || ko.observable(false);
@@ -490,7 +496,7 @@ const viewModel = function(params) {
 
     this._entityToItem = (d) => ({
         canvasId: d.biblissimaQid,
-        arkId: d.portalHash ? `ark:/43093/${d.portalHash}` : null,
+        arkId: d.portalHash ? `${arkNaan}/${d.portalHash}` : null,
         label: d.label || '',
         thumbnail: null,
         manuscript: d.shelfmark || d.label || '',
@@ -499,7 +505,15 @@ const viewModel = function(params) {
         date: d.date || '',
         location: d.locationLabel || '',
         descriptors: [],
-        portalUrl: d.portalHash ? `https://portail.biblissima.fr/ark:/43093/${d.portalHash}` : '',
+        // NOTE: intentionally kept at the (locale-less) legacy base rather
+        // than unified to `arches.translations.biblissimaPortalUrl` (which
+        // would add `/fr/`) — this value flows into biblissimaData.portalUrl
+        // → BiblissimaCreateResourceView._create_document_tiles(), where it
+        // is persisted verbatim as DOC_STATEMENT_SOURCE.url whenever the
+        // item has a legend/description. Changing the URL shape here would
+        // silently change stored data on future Document creations; needs
+        // explicit sign-off before touching (see task-T report).
+        portalUrl: d.portalHash ? `https://portail.biblissima.fr/${arkNaan}/${d.portalHash}` : '',
         manifestUrl: d.manifestUrl || '',
         authorLabel: d.authorLabel || '',
         authorQid: d.authorQid || '',
@@ -536,7 +550,7 @@ const viewModel = function(params) {
         ajax: {
             url: '/api/biblissima/suggest',
             dataType: 'json',
-            quietMillis: 300,
+            delay: 300,
             data: (requestParams) => ({ q: requestParams.term || '', type: 'manuscript', limit: 15 }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
@@ -547,7 +561,6 @@ const viewModel = function(params) {
         },
         templateResult: (item) => item.text || '',
         templateSelection: (item) => item.text || '',
-        escapeMarkup: (m) => m,
     };
 
     // When a manuscript is selected from autocomplete, load its illuminations
@@ -765,7 +778,7 @@ const viewModel = function(params) {
         ajax: {
             url: '/api/biblissima/suggest',
             dataType: 'json',
-            quietMillis: 300,
+            delay: 300,
             data: (requestParams) => ({ q: requestParams.term || '', type: 'descriptor' }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
@@ -777,14 +790,15 @@ const viewModel = function(params) {
         },
         templateResult: (item) => {
             if (!item.id) return item.text;
-            let html = `<strong>${item.text}</strong>`;
+            const $result = $('<div>');
+            $result.append($('<strong>').text(item.text));
             if (item.description) {
-                html += `<br><small class="text-muted">${item.description}</small>`;
+                $result.append($('<br>'));
+                $result.append($('<small>').addClass('text-muted').text(item.description));
             }
-            return html;
+            return $result;
         },
         templateSelection: (item) => item.text,
-        escapeMarkup: (m) => m,
     };
 
     this.searchComponents = async () => {

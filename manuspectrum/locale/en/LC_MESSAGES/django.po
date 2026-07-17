@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-13 07:11-0500\n"
+"POT-Creation-Date: 2026-07-17 04:50-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -514,175 +514,175 @@ msgid ""
 "rel=\"noopener\">Arches</a>"
 msgstr ""
 
-#: templates/javascript.htm:11
+#: templates/javascript.htm:12
 #: templates/views/components/workflows/create-project-workflow/project-name-step.htm:8
 msgid "Project Name"
 msgstr ""
 
-#: templates/javascript.htm:12
+#: templates/javascript.htm:13
 msgid "Project Statement"
 msgstr ""
 
-#: templates/javascript.htm:13
+#: templates/javascript.htm:14
 msgid "Project Start"
 msgstr ""
 
-#: templates/javascript.htm:14
+#: templates/javascript.htm:15
 msgid "Project Team"
 msgstr ""
 
-#: templates/javascript.htm:15
+#: templates/javascript.htm:16
 msgid "Project Timespan"
 msgstr ""
 
-#: templates/javascript.htm:16
+#: templates/javascript.htm:17
 msgid "Add Objects"
 msgstr ""
 
-#: templates/javascript.htm:17
+#: templates/javascript.htm:18
 msgid "Summary"
 msgstr ""
 
-#: templates/javascript.htm:18
+#: templates/javascript.htm:19
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:49
 msgid "Type"
 msgstr ""
 
-#: templates/javascript.htm:19
+#: templates/javascript.htm:20
 msgid "Search for a document..."
 msgstr ""
 
-#: templates/javascript.htm:20
+#: templates/javascript.htm:21
 msgid "Add at least one document to the project before continuing."
 msgstr ""
 
-#: templates/javascript.htm:21
+#: templates/javascript.htm:22
 msgid "Select a primary description identifier card"
 msgstr ""
 
-#: templates/javascript.htm:22
+#: templates/javascript.htm:23
 msgid "There was an issue saving the workflow step."
 msgstr ""
 
-#: templates/javascript.htm:23
+#: templates/javascript.htm:24
 msgid "Cleaning up..."
 msgstr ""
 
-#: templates/javascript.htm:24
+#: templates/javascript.htm:25
 msgid "Data"
 msgstr ""
 
-#: templates/javascript.htm:25
+#: templates/javascript.htm:26
 #: templates/views/components/plugins/importer-configuration.htm:117
 msgid "X Axis"
 msgstr ""
 
-#: templates/javascript.htm:26
+#: templates/javascript.htm:27
 #: templates/views/components/plugins/importer-configuration.htm:135
 msgid "Y Axis"
 msgstr ""
 
-#: templates/javascript.htm:27
+#: templates/javascript.htm:28
 msgid "Select a Transformation"
 msgstr ""
 
-#: templates/javascript.htm:28
+#: templates/javascript.htm:29
 msgid "Select an Importer"
 msgstr ""
 
-#: templates/javascript.htm:29
+#: templates/javascript.htm:30
 msgid "Importer in Use"
 msgstr ""
 
-#: templates/javascript.htm:30
+#: templates/javascript.htm:31
 msgid ""
 "This importer is in use - it should be replaced in all files where it is "
 "used before deleting."
 msgstr ""
 
-#: templates/javascript.htm:31
+#: templates/javascript.htm:32
 msgid "An error occurred while creating the manifest."
 msgstr ""
 
-#: templates/javascript.htm:32
+#: templates/javascript.htm:33
 msgid "Material"
 msgstr ""
 
-#: templates/javascript.htm:33
+#: templates/javascript.htm:34
 msgid "Layer"
 msgstr ""
 
-#: templates/javascript.htm:34
+#: templates/javascript.htm:35
 msgid "Range"
 msgstr ""
 
-#: templates/javascript.htm:35
+#: templates/javascript.htm:36
 msgid "Lapis lazuli"
 msgstr ""
 
-#: templates/javascript.htm:36
+#: templates/javascript.htm:37
 msgid "Vermilion (HgS)"
 msgstr ""
 
-#: templates/javascript.htm:37
+#: templates/javascript.htm:38
 msgid "Gold leaf"
 msgstr ""
 
-#: templates/javascript.htm:38
+#: templates/javascript.htm:39
 msgid "Iron gall ink"
 msgstr ""
 
-#: templates/javascript.htm:39
+#: templates/javascript.htm:40
 msgid "Pigment"
 msgstr ""
 
-#: templates/javascript.htm:40
+#: templates/javascript.htm:41
 msgid "Paint"
 msgstr ""
 
-#: templates/javascript.htm:41
+#: templates/javascript.htm:42
 msgid "Gilding"
 msgstr ""
 
-#: templates/javascript.htm:42
+#: templates/javascript.htm:43
 msgid "Text"
 msgstr ""
 
-#: templates/javascript.htm:43
+#: templates/javascript.htm:44
 #: templates/views/components/plugins/file-configuration.htm:18
 msgid "Configuration"
 msgstr ""
 
-#: templates/javascript.htm:44
+#: templates/javascript.htm:45
 msgid "Biblissima Search"
 msgstr ""
 
-#: templates/javascript.htm:45
+#: templates/javascript.htm:46
 msgid "Creation & Validation"
 msgstr ""
 
-#: templates/javascript.htm:46
+#: templates/javascript.htm:47
 msgid "Search iconographic descriptors..."
 msgstr ""
 
-#: templates/javascript.htm:47
+#: templates/javascript.htm:48
 msgid "All dates"
 msgstr ""
 
-#: templates/javascript.htm:48
+#: templates/javascript.htm:49
 msgid "Associate with a project (optional)..."
 msgstr ""
 
-#: templates/javascript.htm:49
+#: templates/javascript.htm:50
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:417
 msgid "Pending"
 msgstr ""
 
-#: templates/javascript.htm:50
+#: templates/javascript.htm:51
 msgid "Creating..."
 msgstr ""
 
-#: templates/javascript.htm:51
+#: templates/javascript.htm:52
 #: templates/views/components/plugins/init-workflow.htm:52
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:402
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:597
@@ -690,70 +690,70 @@ msgstr ""
 msgid "Created"
 msgstr ""
 
-#: templates/javascript.htm:52
+#: templates/javascript.htm:53
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:412
 msgid "Error"
 msgstr ""
 
-#: templates/javascript.htm:53
+#: templates/javascript.htm:54
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:37
 msgid "Skipped"
 msgstr ""
 
-#: templates/javascript.htm:54
+#: templates/javascript.htm:55
 msgid "Duplicate"
 msgstr ""
 
-#: templates/javascript.htm:55
+#: templates/javascript.htm:56
 msgid "Create new resource"
 msgstr ""
 
-#: templates/javascript.htm:56
+#: templates/javascript.htm:57
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:397
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:594
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:31
 msgid "Linked"
 msgstr ""
 
-#: templates/javascript.htm:57
+#: templates/javascript.htm:58
 msgid "Search existing resource..."
 msgstr ""
 
-#: templates/javascript.htm:58
+#: templates/javascript.htm:59
 msgid "The Biblissima search failed. Please try again in a moment."
 msgstr "The Biblissima search failed. Please try again in a moment."
 
-#: templates/javascript.htm:59
+#: templates/javascript.htm:60
 msgid ""
 "Network error while querying Biblissima. Check your connection and try again."
 msgstr ""
 "Network error while querying Biblissima. Check your connection and try again."
 
-#: templates/javascript.htm:60
+#: templates/javascript.htm:61
 msgid "Connecting to Biblissima…"
 msgstr "Connecting to Biblissima…"
 
-#: templates/javascript.htm:61
+#: templates/javascript.htm:62
 msgid "Fetching manuscripts from the archive…"
 msgstr "Fetching manuscripts from the archive…"
 
-#: templates/javascript.htm:62
+#: templates/javascript.htm:63
 msgid "Enriching manuscript metadata…"
 msgstr "Enriching manuscript metadata…"
 
-#: templates/javascript.htm:63
+#: templates/javascript.htm:64
 msgid "Matching records…"
 msgstr "Matching records…"
 
-#: templates/javascript.htm:64
+#: templates/javascript.htm:65
 msgid "Still working — large searches may take up to 2 minutes"
 msgstr "Still working — large searches may take up to 2 minutes"
 
-#: templates/javascript.htm:65
+#: templates/javascript.htm:66
 msgid "Cart limit reached"
 msgstr "Cart limit reached"
 
-#: templates/javascript.htm:66
+#: templates/javascript.htm:67
 msgid ""
 "Too many results on this page for the remaining cart slots — reduce the page "
 "size or unselect some"
@@ -761,99 +761,124 @@ msgstr ""
 "Too many results on this page for the remaining cart slots — reduce the page "
 "size or unselect some"
 
-#: templates/javascript.htm:67
+#: templates/javascript.htm:68
 msgid "Paste a Biblissima QID (e.g. Q63633)"
 msgstr "Paste a Biblissima QID (e.g. Q63633)"
 
-#: templates/javascript.htm:68
+#: templates/javascript.htm:69
 msgid "No Biblissima entity matches this identifier"
 msgstr "No Biblissima entity matches this identifier"
 
-#: templates/javascript.htm:69
+#: templates/javascript.htm:70
 msgid "default"
 msgstr "default"
 
-#: templates/javascript.htm:70
+#: templates/javascript.htm:71
 msgid "type"
 msgstr "type"
 
-#: templates/javascript.htm:71 templates/javascript.htm:73
+#: templates/javascript.htm:72 templates/javascript.htm:74
+#: templates/views/components/widgets/biblissima-concept-widget.htm:72
 msgid "Manuscript"
 msgstr "Manuscript"
 
-#: templates/javascript.htm:72
+#: templates/javascript.htm:73
 msgid "Custom type"
 msgstr "Custom type"
 
-#: templates/javascript.htm:74
+#: templates/javascript.htm:75
 msgid "Illumination"
 msgstr ""
 
-#: templates/javascript.htm:75
+#: templates/javascript.htm:76
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:366
 msgid "Detected parent Documents"
 msgstr "Detected parent Documents"
 
-#: templates/javascript.htm:76
+#: templates/javascript.htm:77
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:38
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:379
 msgid "Resolving parent manuscripts…"
 msgstr "Resolving parent manuscripts…"
 
-#: templates/javascript.htm:77
+#: templates/javascript.htm:78
 msgid "Use this"
 msgstr "Use this"
 
-#: templates/javascript.htm:78
+#: templates/javascript.htm:79
 msgid "Unlink"
 msgstr "Unlink"
 
-#: templates/javascript.htm:79
+#: templates/javascript.htm:80
 msgid "Create new parent Document"
 msgstr "Create new parent Document"
 
-#: templates/javascript.htm:80
+#: templates/javascript.htm:81
 msgid "Creating…"
 msgstr "Creating…"
 
-#: templates/javascript.htm:81
+#: templates/javascript.htm:82
 msgid "Add Biblissima ARK as alt-name on existing"
 msgstr "Add Biblissima ARK as alt-name on existing"
 
-#: templates/javascript.htm:82
+#: templates/javascript.htm:83
 msgid "Items with no identified manuscript"
 msgstr "Items with no identified manuscript"
 
-#: templates/javascript.htm:83
+#: templates/javascript.htm:84
 msgid "Pick a Document manually…"
 msgstr "Pick a Document manually…"
 
-#: templates/javascript.htm:84
+#: templates/javascript.htm:85
 msgid "Pick a Document (required)…"
 msgstr "Pick a Document (required)…"
 
-#: templates/javascript.htm:85
+#: templates/javascript.htm:86
 msgid "Cannot create parent — no Biblissima QID"
 msgstr "Cannot create parent — no Biblissima QID"
 
-#: templates/javascript.htm:86
+#: templates/javascript.htm:87
 #, python-brace-format
 msgid "{n} resources created"
 msgstr "{n} resources created"
 
-#: templates/javascript.htm:87
+#: templates/javascript.htm:88
 #, python-brace-format
 msgid "{created} created · {failed} failed"
 msgstr "{created} created · {failed} failed"
 
-#: templates/javascript.htm:88
+#: templates/javascript.htm:89
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:139
 msgid "Retry all failed"
 msgstr "Retry all failed"
 
-#: templates/javascript.htm:89
+#: templates/javascript.htm:90
 msgid "Batch creation failed. Please retry."
 msgstr "Batch creation failed. Please retry."
+
+#: templates/javascript.htm:91
+msgid "Search using French terms (e.g. dragon, vierge)..."
+msgstr ""
+
+#: templates/javascript.htm:92
+msgid "Searching Biblissima..."
+msgstr ""
+
+#: templates/javascript.htm:93
+msgid "No results. Try French keywords or check the Biblissima portal."
+msgstr ""
+
+#: templates/javascript.htm:94
+msgid "Biblissima is temporarily unavailable - you can use manual entry."
+msgstr ""
+
+#: templates/javascript.htm:95
+msgid "Type at least 2 characters..."
+msgstr ""
+
+#: templates/javascript.htm:96
+msgid "EN: "
+msgstr ""
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -1388,6 +1413,62 @@ msgstr ""
 
 #: templates/views/components/resource-instance-creator.htm:226
 msgid "New Document"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:26
+msgid "Label"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:31
+msgid "URL"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:41
+#: templates/views/components/widgets/biblissima-concept-widget.htm:60
+#: templates/views/components/widgets/biblissima-concept-widget.htm:94
+msgid "Manual entry"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:42
+msgid "Back to Biblissima search"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:49
+msgid ""
+"This field searches the Biblissima authority list (French terminology). The "
+"saved term is English when available, otherwise French; the link points to "
+"the Biblissima portal record."
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:58
+#: templates/views/components/widgets/biblissima-concept-widget.htm:92
+msgid "Persistent Biblissima portal ARK"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:59
+#: templates/views/components/widgets/biblissima-concept-widget.htm:93
+msgid "Biblissima entity URI — no persistent portal ARK"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:59
+#: templates/views/components/widgets/biblissima-concept-widget.htm:93
+msgid "Biblissima (entity)"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:68
+msgid "Entity type"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:71
+msgid "Iconographic descriptor"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:75
+msgid "Placeholder"
+msgstr ""
+
+#: templates/views/components/widgets/biblissima-concept-widget.htm:79
+msgid "Link color"
 msgstr ""
 
 #: templates/views/components/widgets/file-xy.htm:17
@@ -1972,19 +2053,19 @@ msgid "Open project"
 msgstr ""
 
 # Biblissima search & workflow — added in the progressive-loading refactor
-#: views/biblissima_proxy.py:218
+#: views/biblissima_proxy.py:257
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 
-#: views/biblissima_proxy.py:229
+#: views/biblissima_proxy.py:268
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 
-#: views/biblissima_proxy.py:242
+#: views/biblissima_proxy.py:281
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -1993,11 +2074,11 @@ msgstr ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
 "moment."
 
-#: views/biblissima_proxy.py:253
+#: views/biblissima_proxy.py:292
 msgid "Invalid response from the Biblissima portal."
 msgstr "Invalid response from the Biblissima portal."
 
-#: views/biblissima_proxy.py:261
+#: views/biblissima_proxy.py:300
 msgid "Unknown error while querying Biblissima."
 msgstr "Unknown error while querying Biblissima."
 
