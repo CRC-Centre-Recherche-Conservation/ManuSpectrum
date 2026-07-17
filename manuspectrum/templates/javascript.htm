@@ -3,6 +3,7 @@
 {% load static %}
 {% load l10n %}
 {% load i18n %}
+{% load biblissima_settings %}
 
 {% block arches_translations %}
 {{ block.super }}
@@ -87,6 +88,14 @@
     biblissima-batch-partial='{% trans "{created} created · {failed} failed" as biblissimaBatchPartial %} "{{ biblissimaBatchPartial|escapejs }}"'
     biblissima-retry-all='{% trans "Retry all failed" as biblissimaRetryAll %} "{{ biblissimaRetryAll|escapejs }}"'
     biblissima-batch-error='{% trans "Batch creation failed. Please retry." as biblissimaBatchError %} "{{ biblissimaBatchError|escapejs }}"'
+    biblissima-concept-placeholder='{% trans "Search using French terms (e.g. dragon, vierge)..." as biblissimaConceptPlaceholder %} "{{ biblissimaConceptPlaceholder|escapejs }}"'
+    biblissima-concept-searching='{% trans "Searching Biblissima..." as biblissimaConceptSearching %} "{{ biblissimaConceptSearching|escapejs }}"'
+    biblissima-concept-no-results='{% trans "No results. Try French keywords or check the Biblissima portal." as biblissimaConceptNoResults %} "{{ biblissimaConceptNoResults|escapejs }}"'
+    biblissima-concept-unavailable='{% trans "Biblissima is temporarily unavailable - you can use manual entry." as biblissimaConceptUnavailable %} "{{ biblissimaConceptUnavailable|escapejs }}"'
+    biblissima-concept-input-too-short='{% trans "Type at least 2 characters..." as biblissimaConceptInputTooShort %} "{{ biblissimaConceptInputTooShort|escapejs }}"'
+    biblissima-concept-en-badge='{% trans "EN: " as biblissimaConceptEnBadge %} "{{ biblissimaConceptEnBadge|escapejs }}"'
+    biblissima-portal-url='{% biblissima_portal_url as biblissimaPortalUrl %} "{{ biblissimaPortalUrl|escapejs }}"'
+    biblissima-entity-uri-base='{% biblissima_entity_uri_base as biblissimaEntityUriBase %} "{{ biblissimaEntityUriBase|escapejs }}"'
 ></div>
 {% endblock arches_translations %}
 
