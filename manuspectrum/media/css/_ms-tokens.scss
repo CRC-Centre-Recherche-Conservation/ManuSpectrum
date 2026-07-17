@@ -1,0 +1,41 @@
+// Shared design tokens for ManuSpectrum public pages (Prismatic Luminescence).
+// Variables + mixins ONLY — no rule output (compiles standalone safely).
+
+$ms-ink:        #1a1a2e;
+$ms-ink-soft:   #4a4a63;
+$ms-paper:      #faf9f7;
+$ms-paper-2:    #f2f0ec;
+$ms-line:       rgba(26, 26, 46, 0.10);
+$ms-glass:      rgba(250, 249, 247, 0.72);
+
+$ms-red:    #dc3545;
+$ms-orange: #e67e22;
+$ms-yellow: #f0b429;
+$ms-green:  #10b981;
+$ms-blue:   #3b82f6;
+$ms-purple: #8b5cf6;
+$ms-spectral: ($ms-red, $ms-orange, $ms-yellow, $ms-green, $ms-blue, $ms-purple);
+
+$ms-font-serif: 'Cormorant Garamond', Georgia, serif;
+$ms-font-sans:  'Sora', system-ui, -apple-system, sans-serif;
+$ms-font-mono:  'JetBrains Mono', 'Sora', monospace;
+
+$ms-maxw: 1200px;
+
+@mixin ms-spectral-gradient($angle: 90deg) {
+    background: linear-gradient($angle, $ms-red, $ms-orange, $ms-yellow, $ms-green, $ms-blue, $ms-purple);
+}
+
+@mixin ms-container {
+    max-width: $ms-maxw;
+    margin: 0 auto;
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
+@mixin ms-reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+    &.is-visible { opacity: 1; transform: none; }
+}

@@ -325,6 +325,12 @@ EMAIL_HOST_USER = "xxxx@xxx.com"
 
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+# Public contact inbox for the About > Contact form (mailto link).
+# Leave empty until a dedicated address exists; overridable in settings_local.py.
+# Falls back to DEFAULT_FROM_EMAIL (set once SMTP is configured) via the
+# {% contact_email %} template tag, so no address is ever hardcoded in templates/JS.
+CONTACT_EMAIL = ""
+
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_RESULT_BACKEND = (

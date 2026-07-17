@@ -1,0 +1,9 @@
+// css/pages bundle — shared shell + About dropdown + content pages.
+// Loaded by ms_base.htm (all About pages). Homepage keeps its own css/homepage bundle.
+@import 'ms-tokens';
+
+// Section blocks are appended by later tasks:
+//   Task 3 → shared shell + About dropdown
+//   Task 5 → contact page
+//   Task 6 → conceptual-model page
+//   Task 7 → team page
