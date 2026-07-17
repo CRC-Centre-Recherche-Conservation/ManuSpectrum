@@ -758,7 +758,7 @@ def _suggest_result(qid, item, entity, lang):
     portal_url = None
     for claim in (entity or {}).get("claims", {}).get(P129, []):
         value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
-        if isinstance(value, str) and value.strip():
+        if isinstance(value, str) and re.fullmatch(r"desc[0-9a-f]{40}", value.strip()):
             portal_url = f"{BIBLISSIMA_PORTAL}/{value.strip()}"
             break
     return {
@@ -2316,8 +2316,14 @@ class BiblissimaIlluminationDetailView(View):
         for a in tree.xpath(
             './/section[@id="presentation"]' '//a[contains(@href, "/ark:/43093/desc")]'
         ):
-            uri = (a.get("href") or "").strip()
-            if not uri or uri in seen_uris:
+            # Canonicalize: the portal HTML is not a stable contract —
+            # rebuild the ARK from the hash so widget-written and
+            # import-written URLs stay byte-identical.
+            match = re.search(r"(desc[0-9a-f]{40})", a.get("href") or "")
+            if not match:
+                continue
+            uri = f"{BIBLISSIMA_PORTAL}/{match.group(1)}"
+            if uri in seen_uris:
                 continue
             seen_uris.add(uri)
             label = " ".join(a.text_content().split()).strip()

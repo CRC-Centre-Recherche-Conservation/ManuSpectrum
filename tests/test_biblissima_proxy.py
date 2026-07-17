@@ -1389,6 +1389,32 @@ class IlluminationPortalPageFixtureTests(TestCase):
         )
 
 
+class ParsePageDescriptorCanonicalizationTests(TestCase):
+    HASH_A = "desc" + "a" * 40
+    HASH_B = "desc" + "b" * 40
+
+    def _parse(self, body):
+        html = f"<html><body><h1>Titre</h1>{body}</body></html>"
+        return bp.BiblissimaIlluminationDetailView()._parse_page(html)
+
+    def test_hrefs_are_canonicalized_and_deduplicated(self):
+        body = (
+            '<section id="presentation">'
+            f'<a href="/en/ark:/43093/{self.HASH_A}?tab=1">prophète</a>'
+            f'<a href="https://portail.biblissima.fr/fr/ark:/43093/{self.HASH_A}">prophète</a>'
+            f'<a href="https://portail.biblissima.fr/fr/ark:/43093/{self.HASH_B}">ville</a>'
+            "</section>"
+        )
+        page = self._parse(body)
+        self.assertEqual(
+            page["descriptorLinks"],
+            [
+                {"label": "prophète", "uri": f"{bp.BIBLISSIMA_PORTAL}/{self.HASH_A}"},
+                {"label": "ville", "uri": f"{bp.BIBLISSIMA_PORTAL}/{self.HASH_B}"},
+            ],
+        )
+
+
 class ResolveBiblissimaDocumentTypeTests(TestCase):
     def test_returns_manuscrit_valueid_for_canonical_label(self):
         from manuspectrum.views.biblissima_proxy import (
@@ -2444,6 +2470,30 @@ class BiblissimaSuggestViewTests(TestCase):
                         "claims": {
                             "P2": [_claim_item("Q304387")],
                             "P129": [_claim_str("   ")],
+                        },
+                    }
+                }
+            }
+        )
+        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        with patch.object(
+            bp, "_bib_request", side_effect=[search_resp, batch_resp, fulltext_resp]
+        ):
+            response = self._get(q="xx", type="descriptor")
+        self.assertIsNone(json.loads(response.content)["results"][0]["portal_url"])
+
+    def test_malformed_p129_value_yields_null_portal_url(self):
+        search_resp = _make_response(
+            json_data={"search": [{"id": "Q1", "label": "x", "description": ""}]}
+        )
+        batch_resp = _make_response(
+            json_data={
+                "entities": {
+                    "Q1": {
+                        "labels": {"fr": {"value": "x"}},
+                        "claims": {
+                            "P2": [_claim_item("Q304387")],
+                            "P129": [_claim_str("Q12345")],
                         },
                     }
                 }
