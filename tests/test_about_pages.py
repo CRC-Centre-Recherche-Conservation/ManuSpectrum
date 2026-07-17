@@ -1,5 +1,6 @@
 from django.template import Context, Template
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
 
 
 class ContactEmailTagTests(SimpleTestCase):
@@ -20,3 +21,15 @@ class ContactEmailTagTests(SimpleTestCase):
     @override_settings(CONTACT_EMAIL="", DEFAULT_FROM_EMAIL="")
     def test_empty_when_unset(self):
         self.assertEqual(self.render(), "")
+
+
+class AboutRoutingTests(TestCase):
+    def test_pages_reachable_anonymously(self):
+        for name in ("about-model", "about-team", "about-contact"):
+            resp = self.client.get(reverse(name))
+            self.assertEqual(resp.status_code, 200, f"{name} should be public")
+
+    def test_homepage_and_pages_render(self):
+        self.assertEqual(self.client.get(reverse("home")).status_code, 200)
+        for name in ("about-model", "about-explorer", "about-team", "about-contact"):
+            self.assertEqual(self.client.get(reverse(name)).status_code, 200)

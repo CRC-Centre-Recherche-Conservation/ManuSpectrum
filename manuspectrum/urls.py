@@ -164,6 +164,15 @@ urlpatterns.append(
     )
 )
 
+### Manuspectrum URL — public About pages (TemplateView already imported at top of urls.py)
+for _slug, _name, _tpl in [
+    ("about/model", "about-model", "views/pages/conceptual-model.htm"),
+    ("about/explorer", "about-explorer", "views/pages/graph-explorer.htm"),
+    ("about/team", "about-team", "views/pages/team.htm"),
+    ("about/contact", "about-contact", "views/pages/contact.htm"),
+]:
+    urlpatterns.append(path(_slug, TemplateView.as_view(template_name=_tpl), name=_name))
+
 
 ### Manuspectrum URL - IIIF Annotations
 
