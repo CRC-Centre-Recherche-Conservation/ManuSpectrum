@@ -108,6 +108,16 @@ describe('isReferentialUrl', () => {
         expect(isReferentialUrl(ARK, undefined, undefined)).toBe(false);
         expect(isReferentialUrl(ARK, null, ENTITY_BASE)).toBe(false);
     });
+
+    it('rejects a prefix match that is not on a path boundary', () => {
+        // Production bases carry no trailing slash; a URL that shares the
+        // base literal but runs on without "/" is a different resource.
+        const portalBase = 'https://portail.biblissima.fr/fr/ark:/43093';
+        const entityBase = 'https://data.biblissima.fr/entity';
+        expect(isReferentialUrl(entityBase + '/Q1', portalBase, entityBase)).toBe(true);
+        expect(isReferentialUrl(entityBase + 'blob', portalBase, entityBase)).toBe(false);
+        expect(isReferentialUrl(portalBase + 'attacker/foo', portalBase, entityBase)).toBe(false);
+    });
 });
 
 describe('isPortalArk', () => {
@@ -127,5 +137,12 @@ describe('isPortalArk', () => {
         expect(isPortalArk(ARK)).toBe(false);
         expect(isPortalArk(ARK, undefined)).toBe(false);
         expect(isPortalArk(ARK, null)).toBe(false);
+    });
+
+    it('rejects a prefix match that is not on a path boundary', () => {
+        const base = 'https://portail.biblissima.fr/fr/ark:/43093';
+        expect(isPortalArk(base + '/mdata' + 'a'.repeat(40), base)).toBe(true);
+        expect(isPortalArk(base, base)).toBe(true); // exact match
+        expect(isPortalArk(base + 'attacker/foo', base)).toBe(false);
     });
 });

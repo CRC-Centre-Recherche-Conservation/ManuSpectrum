@@ -54,6 +54,23 @@ export function renderSuggestItem(item, enBadgePrefix) {
 }
 
 /**
+ * True when `url` starts with `base` on a path boundary — it is `base`
+ * itself, or the next character after `base` is '/'. Rejects a bare-prefix
+ * false positive like `…/ark:/43093attacker/foo` matching `…/ark:/43093`.
+ * When `base` already ends with '/', the slash is the boundary, so any URL
+ * below it matches. A falsy base never matches (and never throws).
+ */
+function startsWithBase(url, base) {
+    return (
+        !!base &&
+        url.indexOf(base) === 0 &&
+        (base.charAt(base.length - 1) === '/' ||
+            url.length === base.length ||
+            url.charAt(base.length) === '/')
+    );
+}
+
+/**
  * True when the URL belongs to the Biblissima referential (portal or
  * entity). `portalBase`/`entityUriBase` are the Django-settings-sourced
  * values passed in by the widget; a missing base must not throw and must
@@ -61,8 +78,7 @@ export function renderSuggestItem(item, enBadgePrefix) {
  */
 export function isReferentialUrl(url, portalBase, entityUriBase) {
     return Boolean(url) && (
-        (!!portalBase && url.indexOf(portalBase) === 0) ||
-        (!!entityUriBase && url.indexOf(entityUriBase) === 0)
+        startsWithBase(url, portalBase) || startsWithBase(url, entityUriBase)
     );
 }
 
@@ -73,5 +89,5 @@ export function isReferentialUrl(url, portalBase, entityUriBase) {
  * must not throw and must not match.
  */
 export function isPortalArk(url, portalBase) {
-    return Boolean(url) && !!portalBase && url.indexOf(portalBase) === 0;
+    return Boolean(url) && startsWithBase(url, portalBase);
 }
