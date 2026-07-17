@@ -2463,3 +2463,17 @@ class BiblissimaSuggestViewTests(TestCase):
             response = self._get(q="épée", type="descriptor")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.content)["results"], [])
+
+    def test_double_upstream_failure_sets_degraded_and_is_not_cached(self):
+        with patch.object(
+            bp, "_bib_request", side_effect=requests.exceptions.Timeout()
+        ):
+            response = self._get(q="dragon", type="descriptor")
+        payload = json.loads(response.content)
+        self.assertTrue(payload["degraded"])
+        self.assertEqual(payload["results"], [])
+        self.assertIn("max-age=0", response["Cache-Control"])
+
+    def test_successful_response_is_not_degraded(self):
+        payload, _ = self._descriptor_flow({"fr": {"value": "dragon"}})
+        self.assertFalse(payload["degraded"])

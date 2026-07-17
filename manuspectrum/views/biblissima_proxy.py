@@ -62,6 +62,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from django.core.cache import cache
 from django.http import JsonResponse
+from django.utils.cache import patch_cache_control
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
@@ -792,7 +793,7 @@ class BiblissimaSuggestView(View):
     def get(self, request):
         query = request.GET.get("q", "").strip()
         if len(query) < 2:
-            return JsonResponse({"results": []})
+            return JsonResponse({"results": [], "degraded": False})
 
         lang = request.GET.get("lang", "fr")
         try:
@@ -812,6 +813,9 @@ class BiblissimaSuggestView(View):
         results = []
 
         session = _build_biblissima_session()
+
+        prefix_failed = False
+        fulltext_failed = False
 
         # 1. Prefix match (fast, good for exact starts)
         # wbsearchentities doesn't support type filtering, so we fetch more
@@ -877,6 +881,7 @@ class BiblissimaSuggestView(View):
                         seen_ids.add(item["id"])
                         results.append(_suggest_result(item["id"], item, None, lang))
         except Exception:
+            prefix_failed = True
             logger.warning("wbsearchentities failed for query=%s", query)
 
         # 2. Full-text search (flexible word order, partial matches)
@@ -936,6 +941,7 @@ class BiblissimaSuggestView(View):
                         seen_ids.add(qid)
                         results.append(entry)
             except Exception as exc:
+                fulltext_failed = True
                 logger.warning(
                     "[biblissima.suggest] Wikibase CirrusSearch fulltext search "
                     "failed for query=%r: %s (results truncated to wbsearchentities prefix matches)",
@@ -945,7 +951,13 @@ class BiblissimaSuggestView(View):
                 )
 
         session.close()
-        return JsonResponse({"results": results})
+        degraded = prefix_failed and fulltext_failed
+        response = JsonResponse({"results": results, "degraded": degraded})
+        if degraded:
+            # cache_page skips responses whose max-age is 0 — a Biblissima
+            # outage must not poison the 30-minute cache with empty results.
+            patch_cache_control(response, max_age=0)
+        return response
 
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
