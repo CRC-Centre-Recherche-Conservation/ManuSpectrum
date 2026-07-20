@@ -334,3 +334,136 @@ class ModelGraphViewTests(TestCase):
         resp = self.client.get(reverse("model-graph"))
         self.assertEqual(resp.status_code, 500)
         self.assertIn("error", resp.json())
+
+
+# --- Task 5 (feat/homepage_v2 audit): cache versioning, headers, drafts ------
+
+from django.test import override_settings
+
+from manuspectrum.views.model_graph import PAYLOAD_VERSION
+from manuspectrum.views.model_graph_service import draft_state_ids
+
+
+class DraftStateIdsTests(SimpleTestCase):
+    def test_initial_state_of_multi_state_lifecycle_is_draft(self):
+        states = [
+            {
+                "id": "d",
+                "is_initial_state": True,
+                "resource_instance_lifecycle_id": "L1",
+            },
+            {
+                "id": "a",
+                "is_initial_state": False,
+                "resource_instance_lifecycle_id": "L1",
+            },
+            {
+                "id": "r",
+                "is_initial_state": False,
+                "resource_instance_lifecycle_id": "L1",
+            },
+        ]
+        self.assertEqual(draft_state_ids(states), {"d"})
+
+    def test_single_state_lifecycle_publishes_immediately(self):
+        # The sole state of a one-state lifecycle is initial AND active: not a draft.
+        states = [
+            {
+                "id": "only",
+                "is_initial_state": True,
+                "resource_instance_lifecycle_id": "L2",
+            },
+        ]
+        self.assertEqual(draft_state_ids(states), set())
+
+    def test_mixed_lifecycles(self):
+        states = [
+            {
+                "id": "d1",
+                "is_initial_state": True,
+                "resource_instance_lifecycle_id": "L1",
+            },
+            {
+                "id": "a1",
+                "is_initial_state": False,
+                "resource_instance_lifecycle_id": "L1",
+            },
+            {
+                "id": "only",
+                "is_initial_state": True,
+                "resource_instance_lifecycle_id": "L2",
+            },
+        ]
+        self.assertEqual(draft_state_ids(states), {"d1"})
+
+
+class ModelGraphCachingTests(TestCase):
+    """Versioned key, ETag/304, gzip — behaviours added by the audit fixes."""
+
+    PAYLOAD = {"stats": {"models": 12}, "models": [{"pad": "x" * 40}] * 30}
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
+    @mock.patch("manuspectrum.views.model_graph.build_model_graph")
+    def test_etag_carries_language_and_version(self, m_build, _fp):
+        m_build.return_value = self.PAYLOAD
+        resp = self.client.get(reverse("model-graph"))
+        self.assertIn("fp1", resp["ETag"])
+        self.assertIn(f"v{PAYLOAD_VERSION}", resp["ETag"])
+        self.assertIn("en", resp["ETag"])
+        self.assertIn("max-age", resp["Cache-Control"])
+        self.assertIn("Cookie", resp["Vary"])
+
+    @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
+    @mock.patch("manuspectrum.views.model_graph.build_model_graph")
+    def test_if_none_match_returns_304_without_rebuilding(self, m_build, _fp):
+        m_build.return_value = self.PAYLOAD
+        etag = self.client.get(reverse("model-graph"))["ETag"]
+        resp = self.client.get(reverse("model-graph"), HTTP_IF_NONE_MATCH=etag)
+        self.assertEqual(resp.status_code, 304)
+        self.assertEqual(m_build.call_count, 1)
+
+    @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
+    @mock.patch("manuspectrum.views.model_graph.build_model_graph")
+    def test_weak_if_none_match_matches_too(self, m_build, _fp):
+        # GZipMiddleware weakens ETags (W/"…"), so browsers echo the weak form.
+        m_build.return_value = self.PAYLOAD
+        etag = self.client.get(reverse("model-graph"))["ETag"]
+        resp = self.client.get(reverse("model-graph"), HTTP_IF_NONE_MATCH=f"W/{etag}")
+        self.assertEqual(resp.status_code, 304)
+
+    @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
+    @mock.patch("manuspectrum.views.model_graph.build_model_graph")
+    def test_stale_etag_gets_fresh_payload(self, m_build, _fp):
+        m_build.return_value = self.PAYLOAD
+        resp = self.client.get(
+            reverse("model-graph"), HTTP_IF_NONE_MATCH='"old-fingerprint:en:v1"'
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
+    @mock.patch("manuspectrum.views.model_graph.build_model_graph")
+    def test_response_is_gzipped_when_accepted(self, m_build, _fp):
+        m_build.return_value = self.PAYLOAD
+        resp = self.client.get(reverse("model-graph"), HTTP_ACCEPT_ENCODING="gzip")
+        self.assertEqual(resp.get("Content-Encoding"), "gzip")
+
+    @override_settings(USE_I18N=True, LANGUAGES=[("en", "English"), ("fr", "French")])
+    @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
+    @mock.patch("manuspectrum.views.model_graph.build_model_graph")
+    def test_language_isolation_of_cache_and_etag(self, m_build, _fp):
+        m_build.return_value = self.PAYLOAD
+        etag_en = self.client.get(reverse("model-graph"))["ETag"]
+
+        self.client.cookies["django_language"] = "fr"
+        resp_fr = self.client.get(reverse("model-graph"))
+        self.assertNotEqual(etag_en, resp_fr["ETag"])
+        self.assertIn(":fr:", resp_fr["ETag"])
+        # One build per language: the fr request must not reuse the en cache.
+        self.assertEqual(m_build.call_count, 2)
+        m_build.assert_any_call("fr")

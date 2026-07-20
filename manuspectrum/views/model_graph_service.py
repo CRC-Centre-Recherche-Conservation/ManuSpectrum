@@ -205,6 +205,31 @@ def trim_node_config(datatype, config):
     return out
 
 
+def draft_state_ids(lifecycle_states):
+    """IDs of the lifecycle states that mean "not published yet".
+
+    A state is a draft gate when it is the *initial* state of a lifecycle that
+    has more than one state; single-state lifecycles publish immediately, so
+    their initial state is NOT a draft. Flag-based on purpose: state names are
+    I18n_String and matching "Draft" would break under localisation.
+
+    ``lifecycle_states`` is an iterable of dicts with keys ``id``,
+    ``is_initial_state`` and ``resource_instance_lifecycle_id`` (the shape of
+    a ``.values()`` query), so the rule stays unit-testable without the ORM.
+    """
+    states = list(lifecycle_states)
+    per_lifecycle = {}
+    for s in states:
+        lc = s["resource_instance_lifecycle_id"]
+        per_lifecycle[lc] = per_lifecycle.get(lc, 0) + 1
+    return {
+        s["id"]
+        for s in states
+        if s["is_initial_state"]
+        and per_lifecycle[s["resource_instance_lifecycle_id"]] > 1
+    }
+
+
 def _excluded_graph_ids():
     """Graph ids to always drop from the explorer payload.
 
@@ -233,6 +258,7 @@ def build_model_graph(language="en"):
         NodeGroup,
         Edge,
         ResourceInstance,
+        ResourceInstanceLifecycleState,
     )
 
     excluded = _excluded_graph_ids()
@@ -251,15 +277,29 @@ def build_model_graph(language="en"):
         graph_ids = [g.graphid for g in graphs]
         id_str = {str(g.graphid) for g in graphs}
 
-        # Live instance counts per graph (cheap COUNT … GROUP BY).
-        counts = {}
+        # Live instance counts per graph (cheap COUNT … GROUP BY). Grouping by
+        # lifecycle state too lets us split published vs draft in Python with
+        # the SAME single query — the public "records" figures must not count
+        # resources still behind the draft gate (WAVE 5: 147 shown, 19 drafts).
+        drafts = draft_state_ids(
+            ResourceInstanceLifecycleState.objects.values(
+                "id", "is_initial_state", "resource_instance_lifecycle_id"
+            )
+        )
+        counts, draft_counts = {}, {}
         for row in (
             ResourceInstance.objects.filter(graph_id__in=graph_ids)
-            .values("graph_id")
+            .values("graph_id", "resource_instance_lifecycle_state_id")
             .order_by()
             .annotate(n=Count("resourceinstanceid"))
         ):
-            counts[str(row["graph_id"])] = row["n"]
+            gid = str(row["graph_id"])
+            bucket = (
+                draft_counts
+                if row["resource_instance_lifecycle_state_id"] in drafts
+                else counts
+            )
+            bucket[gid] = bucket.get(gid, 0) + row["n"]
 
         # Edge lookups, both keyed by the RANGE node (an Arches graph is a tree,
         # so every non-root node is the range of exactly one edge):
@@ -445,6 +485,9 @@ def build_model_graph(language="en"):
             # --- derived figures, added so the About pages stop hardcoding them.
             "total_nodes": sum(len(m["structure"]["nodes"]) for m in models),
             "records": sum(int(m["instances"] or 0) for m in models),
+            # Resources still behind the draft gate — kept out of "records" so
+            # the public figures only claim published data.
+            "records_draft": sum(draft_counts.values()),
             "empty_models": sum(1 for m in models if not m["instances"]),
             "thesaurus_nodes": thesaurus_nodes,
             "thesaurus_pct": (
