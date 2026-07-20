@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-17 09:29-0500\n"
+"POT-Creation-Date: 2026-07-20 04:37-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -40,11 +40,11 @@ msgstr ""
 msgid "Undefined"
 msgstr ""
 
-#: settings.py:403
+#: settings.py:409
 msgid "Hi"
 msgstr ""
 
-#: settings.py:440
+#: settings.py:446
 msgid "English"
 msgstr ""
 
@@ -63,6 +63,162 @@ msgstr ""
 #: templates/help/create-project-workflow-help.htm:5
 msgid "New Project Workflow"
 msgstr ""
+
+#: templates/includes/ms_footer.htm:10
+msgid ""
+"Interoperable database for physicochemical analysis of written cultural "
+"heritage materials. A Biblissima+ cluster project."
+msgstr ""
+"Base de données interopérable pour l'analyse physico-chimique des matériaux "
+"du patrimoine culturel écrit. Un projet du cluster Biblissima+."
+
+#: templates/includes/ms_footer.htm:16
+msgid "Platform"
+msgstr "Plateforme"
+
+#: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:14
+#: templates/includes/ms_header.htm:75 templates/index.htm:528
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:49
+msgid "Search"
+msgstr "Rechercher"
+
+#: templates/includes/ms_footer.htm:20 templates/includes/ms_header.htm:53
+#: templates/includes/ms_header.htm:92
+msgid "Sign In"
+msgstr "Se connecter"
+
+#: templates/includes/ms_footer.htm:22
+msgid "My Profile"
+msgstr "Mon profil"
+
+#: templates/includes/ms_footer.htm:27
+msgid "Resources"
+msgstr "Ressources"
+
+#: templates/includes/ms_footer.htm:35
+msgid "Standards"
+msgstr "Standards"
+
+#: templates/includes/ms_footer.htm:46
+msgid ""
+"This work has benefited from state aid managed by the Agence Nationale de la"
+" Recherche under the Investissements d'avenir programme, reference "
+"ANR-21-ESRE-0005 (Biblissima+)."
+msgstr ""
+"Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale de "
+"la Recherche au titre du programme d'Investissements d'avenir portant la "
+"référence ANR-21-ESRE-0005 (Biblissima+)."
+
+#: templates/includes/ms_footer.htm:50
+msgid "All rights reserved"
+msgstr "Tous droits réservés"
+
+#: templates/includes/ms_footer.htm:53 templates/views/pages/contact.htm:57
+msgid "Source code"
+msgstr "Code source"
+
+#: templates/includes/ms_footer.htm:57
+msgid "GPL-3.0 License"
+msgstr "Licence GPL-3.0"
+
+#: templates/includes/ms_footer.htm:60
+msgid ""
+"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
+"rel=\"noopener\">Arches</a>"
+msgstr ""
+"Propulsé par <a href=\"https://www.archesproject.org\" target=\"_blank\" "
+"rel=\"noopener\">Arches</a>"
+
+#: templates/includes/ms_header.htm:4
+msgid "ManuSpectrum — Home"
+msgstr "ManuSpectrum — Accueil"
+
+#: templates/includes/ms_header.htm:9
+msgid "Main Navigation"
+msgstr "Navigation principale"
+
+#: templates/includes/ms_header.htm:11 templates/includes/ms_header.htm:72
+#: templates/index.htm:255
+msgid "The Project"
+msgstr "Le Projet"
+
+#: templates/includes/ms_header.htm:12 templates/includes/ms_header.htm:73
+#: templates/index.htm:398
+msgid "Explore"
+msgstr "Explorer"
+
+#: templates/includes/ms_header.htm:13 templates/includes/ms_header.htm:74
+#: templates/index.htm:464
+msgid "Analyses"
+msgstr "Analyses"
+
+#: templates/includes/ms_header.htm:18 templates/includes/ms_header.htm:78
+msgid "About"
+msgstr "À propos"
+
+#: templates/includes/ms_header.htm:23 templates/includes/ms_header.htm:81
+#: templates/views/pages/conceptual-model.htm:4
+#: templates/views/pages/conceptual-model.htm:9
+msgid "Conceptual Model"
+msgstr "Modèle conceptuel"
+
+#: templates/includes/ms_header.htm:23
+msgid "The data model behind ManuSpectrum"
+msgstr "Le modèle de données qui sous-tend ManuSpectrum"
+
+#: templates/includes/ms_header.htm:27 templates/includes/ms_header.htm:82
+#: templates/views/pages/graph-explorer.htm:4
+#: templates/views/pages/graph-explorer.htm:9
+msgid "Graph Explorer"
+msgstr "Explorateur de graphe"
+
+#: templates/includes/ms_header.htm:27
+msgid "Explore models and relationships interactively"
+msgstr "Explorer les modèles et leurs relations de façon interactive"
+
+#: templates/includes/ms_header.htm:31 templates/includes/ms_header.htm:83
+#: templates/views/pages/team.htm:4 templates/views/pages/team.htm:9
+msgid "About & Team"
+msgstr "À propos & équipe"
+
+#: templates/includes/ms_header.htm:31
+msgid "The project and the people behind it"
+msgstr "Le projet et les personnes qui le portent"
+
+#: templates/includes/ms_header.htm:35 templates/includes/ms_header.htm:84
+#: templates/views/pages/contact.htm:4 templates/views/pages/contact.htm:10
+msgid "Contact"
+msgstr "Contact"
+
+#: templates/includes/ms_header.htm:35
+msgid "Submit a project or ask a question"
+msgstr "Soumettre un projet ou poser une question"
+
+#: templates/includes/ms_header.htm:41 templates/includes/ms_header.htm:88
+msgid "Management"
+msgstr "Gestion"
+
+#: templates/includes/ms_header.htm:46
+msgid "Source code on GitHub"
+msgstr "Code source sur GitHub"
+
+#: templates/includes/ms_header.htm:55
+msgid "User Profile"
+msgstr "Profil utilisateur"
+
+#: templates/includes/ms_header.htm:55
+#, fuzzy, python-format
+#| msgid "Welcome,"
+msgid "Welcome, %(name)s"
+msgstr "Bienvenue,"
+
+#: templates/includes/ms_header.htm:56 templates/includes/ms_header.htm:95
+msgid "Sign Out"
+msgstr "Déconnexion"
+
+#: templates/includes/ms_header.htm:67
+msgid "Open Menu"
+msgstr "Ouvrir le menu"
 
 # ============================================================
 # Homepage — index.htm
@@ -87,63 +243,7 @@ msgstr ""
 "spectroscopie, XRF, Raman, FTIR, FORS, manuscrits, patrimoine culturel, "
 "IIIF, CIDOC-CRM, Biblissima, analyse physico-chimique, science du patrimoine"
 
-#: templates/index.htm:116
-msgid "ManuSpectrum — Home"
-msgstr "ManuSpectrum — Accueil"
-
-#: templates/index.htm:121
-msgid "Main Navigation"
-msgstr "Navigation principale"
-
-#: templates/index.htm:123 templates/index.htm:171 templates/index.htm:330
-msgid "The Project"
-msgstr "Le Projet"
-
-#: templates/index.htm:124 templates/index.htm:172 templates/index.htm:470
-msgid "Explore"
-msgstr "Explorer"
-
-#: templates/index.htm:125 templates/index.htm:173 templates/index.htm:536
-msgid "Analyses"
-msgstr "Analyses"
-
-#: templates/index.htm:126 templates/index.htm:174 templates/index.htm:600
-#: templates/index.htm:698
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:49
-msgid "Search"
-msgstr "Rechercher"
-
-#: templates/index.htm:128 templates/index.htm:176
-msgid "Management"
-msgstr "Gestion"
-
-#: templates/index.htm:134
-msgid "Source code on GitHub"
-msgstr "Code source sur GitHub"
-
-#: templates/index.htm:142 templates/index.htm:180 templates/index.htm:700
-msgid "Sign In"
-msgstr "Se connecter"
-
-#: templates/index.htm:144
-msgid "User Profile"
-msgstr "Profil utilisateur"
-
-#: templates/index.htm:145
-#, fuzzy, python-format
-#| msgid "Welcome,"
-msgid "Welcome, %(name)s"
-msgstr "Bienvenue,"
-
-#: templates/index.htm:147 templates/index.htm:183
-msgid "Sign Out"
-msgstr "Déconnexion"
-
-#: templates/index.htm:161
-msgid "Open Menu"
-msgstr "Ouvrir le menu"
-
-#: templates/index.htm:298
+#: templates/index.htm:223
 #, fuzzy
 #| msgid ""
 #| "Interoperable database for physicochemical analysis of written cultural "
@@ -155,7 +255,7 @@ msgstr ""
 "Base de données interopérable pour l'analyse physico-chimique des matériaux "
 "du patrimoine culturel écrit. Un projet du cluster Biblissima+."
 
-#: templates/index.htm:302
+#: templates/index.htm:227
 msgid ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
@@ -163,27 +263,27 @@ msgstr ""
 "Explorer, visualiser et partager les données d'analyse des matériaux du "
 "patrimoine culturel écrit au sein de l'écosystème Biblissima+."
 
-#: templates/index.htm:307 templates/index.htm:601
+#: templates/index.htm:232 templates/index.htm:529
 msgid "Explore the database"
 msgstr "Explorer la base de données"
 
-#: templates/index.htm:310
+#: templates/index.htm:235
 msgid "Learn more"
 msgstr "En savoir plus"
 
-#: templates/index.htm:317
+#: templates/index.htm:242
 msgid "scroll"
 msgstr "défiler"
 
-#: templates/index.htm:331
+#: templates/index.htm:256
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Penser et modéliser les matériaux du patrimoine culturel écrit"
 
-#: templates/index.htm:337
+#: templates/index.htm:262
 msgid "ManuSpectrum was developed within Cluster 2 — \\"
 msgstr "ManuSpectrum a été développé dans le cadre du Cluster 2 — \\"
 
-#: templates/index.htm:340
+#: templates/index.htm:265
 msgid ""
 "Through structuring and standardizing data according to shared models, the "
 "project provides reliable, easy-to-use tools accessible to non-specialists. "
@@ -192,17 +292,17 @@ msgid ""
 "from different disciplines."
 msgstr ""
 "Par une structuration et une normalisation des données respectant des "
-"modèles communs, le projet fournit des outils fiables, simples d'utilisation "
-"et accessibles à des non-spécialistes. Construit sur Arches, une plateforme "
-"open source de gestion de données patrimoniales, ManuSpectrum facilite "
+"modèles communs, le projet fournit des outils fiables, simples d'utilisation"
+" et accessibles à des non-spécialistes. Construit sur Arches, une plateforme"
+" open source de gestion de données patrimoniales, ManuSpectrum facilite "
 "l'accès aux données et la collaboration entre chercheurs de différentes "
 "disciplines."
 
-#: templates/index.htm:343
+#: templates/index.htm:268
 msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
-"object, its context, the analyses, and their interpretations, using thesauri "
-"and authority databases to contextualize information on heterogeneous "
+"object, its context, the analyses, and their interpretations, using thesauri"
+" and authority databases to contextualize information on heterogeneous "
 "documents."
 msgstr ""
 "Le modèle se concentre sur l'identification du composant comme axe pivot "
@@ -210,14 +310,14 @@ msgstr ""
 "utilisant des thésaurus et des bases d'autorité pour contextualiser les "
 "informations sur des documents hétérogènes."
 
-#: templates/index.htm:351
+#: templates/index.htm:276 templates/views/pages/contact.htm:56
 msgid "Biblissima+ — Cluster 2"
 msgstr "Biblissima+ — Cluster 2"
 
-#: templates/index.htm:353
+#: templates/index.htm:278
 msgid ""
-"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
-"written cultures. Within Cluster 2, the objective is to archive, share and "
+"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient"
+" written cultures. Within Cluster 2, the objective is to archive, share and "
 "enable searching of materials analysis data from the community, ensuring "
 "interoperability with the Biblissima portal and written cultural heritage "
 "standards."
@@ -229,66 +329,66 @@ msgstr ""
 "interopérabilité avec le portail Biblissima et les standards du patrimoine "
 "culturel écrit."
 
-#: templates/index.htm:370 templates/index.htm:548
+#: templates/index.htm:295 templates/index.htm:476
 msgid "X-ray Fluorescence"
 msgstr "Fluorescence X"
 
-#: templates/index.htm:375
+#: templates/index.htm:300
 msgid "X-ray Micro-Fluorescence"
 msgstr "Microfluorescence X"
 
-#: templates/index.htm:380
+#: templates/index.htm:305
 msgid "Fiber Optic Reflectance"
 msgstr "Réflectance par fibre optique"
 
-#: templates/index.htm:385
+#: templates/index.htm:310
 msgid "Raman Spectroscopy"
 msgstr "Spectroscopie Raman"
 
-#: templates/index.htm:390
+#: templates/index.htm:315
 msgid "IR Spectroscopy"
 msgstr "Spectroscopie IR"
 
-#: templates/index.htm:395
+#: templates/index.htm:320
 msgid "Hyperspectral Imaging"
 msgstr "Imagerie hyperspectrale"
 
-#: templates/index.htm:400 templates/index.htm:571
+#: templates/index.htm:325 templates/index.htm:499
 msgid "Multispectral Imaging"
 msgstr "Imagerie multispectrale"
 
-#: templates/index.htm:405
+#: templates/index.htm:330
 msgid "Proteomics (MALDI-TOF)"
 msgstr "Protéomique (MALDI-TOF)"
 
-#: templates/index.htm:410
+#: templates/index.htm:335
 msgid "And many more"
 msgstr "Et bien d'autres"
 
-#: templates/index.htm:418
+#: templates/index.htm:343
 msgid "Manuscript under analysis with a macro-XRF scanner"
 msgstr "Manuscrit en cours d'analyse sous scanner macro-XRF"
 
-#: templates/index.htm:420
+#: templates/index.htm:345
 msgid "Macro-XRF scanning of a manuscript"
 msgstr "Balayage macro-XRF d'un manuscrit"
 
-#: templates/index.htm:421
+#: templates/index.htm:346
 msgid ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 msgstr ""
 "Acquisition in situ de cartographies élémentaires par balayage de "
 "fluorescence X (macro-XRF)"
 
-#: templates/index.htm:425
+#: templates/index.htm:351
 msgid "FORS analysis of a manuscript"
 msgstr "Analyse FORS d'un manuscrit"
 
-#: templates/index.htm:427
+#: templates/index.htm:353
 msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgstr "Spectroscopie de réflectance par fibre optique (FORS)"
 
-#: templates/index.htm:428
+#: templates/index.htm:354
 msgid ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
@@ -296,34 +396,35 @@ msgstr ""
 "Caractérisation non invasive des pigments par spectroscopie de réflectance "
 "par fibre optique"
 
-#: templates/index.htm:432
+#: templates/index.htm:359
 msgid "UV hyperspectral imaging of a manuscript"
 msgstr "Imagerie hyperspectrale UV d'un manuscrit"
 
-#: templates/index.htm:434
+#: templates/index.htm:361
 msgid "UV hyperspectral imaging"
 msgstr "Imagerie hyperspectrale UV"
 
-#: templates/index.htm:435
+#: templates/index.htm:362
 msgid ""
-"Ultraviolet hyperspectral imaging to reveal details invisible to the naked eye"
+"Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
+"eye"
 msgstr ""
 "Imagerie hyperspectrale ultraviolette pour révéler des détails invisibles à "
 "l'œil nu"
 
-#: templates/index.htm:442
+#: templates/index.htm:370
 msgid "Previous"
 msgstr "Précédent"
 
-#: templates/index.htm:445
+#: templates/index.htm:373
 msgid "Next"
 msgstr "Suivant"
 
-#: templates/index.htm:471
+#: templates/index.htm:399
 msgid "What you can discover"
 msgstr "Ce que vous pouvez découvrir"
 
-#: templates/index.htm:473
+#: templates/index.htm:401
 msgid ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
@@ -332,24 +433,24 @@ msgstr ""
 "documents historiques, en corrélant les données avec leur contexte de "
 "patrimoine culturel écrit."
 
-#: templates/index.htm:480
+#: templates/index.htm:408
 msgid "Spectra and analysis data"
 msgstr "Spectres et données d'analyse"
 
-#: templates/index.htm:481
+#: templates/index.htm:409
 msgid ""
-"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
-"analysis results directly on the platform."
+"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other"
+" analysis results directly on the platform."
 msgstr ""
 "Visualisez et comparez les spectres de référence. Explorez les résultats "
 "d'analyses XRF, FTIR, Raman et d'autres techniques directement dans la "
 "plateforme."
 
-#: templates/index.htm:492
+#: templates/index.htm:420
 msgid "IIIF Annotations"
 msgstr "Annotations IIIF"
 
-#: templates/index.htm:493
+#: templates/index.htm:421
 msgid ""
 "Analysis data is exposed as IIIF annotations, making it accessible from any "
 "compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
@@ -358,15 +459,15 @@ msgid ""
 msgstr ""
 "Les données d'analyse sont exposées sous forme d'annotations IIIF, les "
 "rendant accessibles depuis tout visualiseur compatible. Le plugin mirador-"
-"xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser "
-"les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
+"xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser"
+" les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
 "directement superposées aux images haute résolution des manuscrits."
 
-#: templates/index.htm:504
+#: templates/index.htm:432
 msgid "Interoperability and Standards"
 msgstr "Interopérabilité et standards"
 
-#: templates/index.htm:505
+#: templates/index.htm:433
 msgid ""
 "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
 "ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
@@ -378,45 +479,45 @@ msgstr ""
 "garantissant leur interopérabilité avec les systèmes patrimoniaux "
 "internationaux et le portail Biblissima."
 
-#: templates/index.htm:509
+#: templates/index.htm:437
 msgid "AGORHA thesaurus"
 msgstr "Thésaurus AGORHA"
 
-#: templates/index.htm:516
+#: templates/index.htm:444
 msgid "Material Characterization"
 msgstr "Caractérisation matérielle"
 
-#: templates/index.htm:517
+#: templates/index.htm:445
 msgid ""
 "Explore the layers, materials, and chemical elements identified on written "
 "cultural heritage documents, with different levels of reliability and "
 "characterization."
 msgstr ""
 "Explorez les couches, matériaux et éléments chimiques identifiés sur les "
-"documents du patrimoine culturel écrit, avec différents niveaux de fiabilité "
-"et de caractérisation."
+"documents du patrimoine culturel écrit, avec différents niveaux de fiabilité"
+" et de caractérisation."
 
-#: templates/index.htm:519
+#: templates/index.htm:447
 msgid "Pigments"
 msgstr "Pigments"
 
-#: templates/index.htm:520
+#: templates/index.htm:448
 msgid "Layers"
 msgstr "Couches"
 
-#: templates/index.htm:521
+#: templates/index.htm:449
 msgid "Binders"
 msgstr "Liants"
 
-#: templates/index.htm:522
+#: templates/index.htm:450
 msgid "Substrates"
 msgstr "Supports"
 
-#: templates/index.htm:537
+#: templates/index.htm:465
 msgid "Visualize physicochemical analyses"
 msgstr "Visualiser les analyses physico-chimiques"
 
-#: templates/index.htm:539
+#: templates/index.htm:467
 msgid ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to manuscripts and written cultural heritage "
@@ -426,19 +527,19 @@ msgstr ""
 "différentes techniques d'analyse appliquées aux manuscrits et objets du "
 "patrimoine culturel écrit."
 
-#: templates/index.htm:545
+#: templates/index.htm:473
 msgid "Macro-XRF map — Calcium (Ca)"
 msgstr "Cartographie macro-XRF — Calcium (Ca)"
 
-#: templates/index.htm:546
+#: templates/index.htm:474
 msgid "Macro-XRF map — Mercury (Hg)"
 msgstr "Cartographie macro-XRF — Mercure (Hg)"
 
-#: templates/index.htm:549
+#: templates/index.htm:477
 msgid "Macro-XRF mapping"
 msgstr "Cartographie macro-XRF"
 
-#: templates/index.htm:550
+#: templates/index.htm:478
 msgid ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
@@ -446,153 +547,99 @@ msgstr ""
 "Répartition du mercure (Hg) et du calcium (Ca) sur une lettre ornée — "
 "Avranches, BM, Ms. 86, f. 32v"
 
-#: templates/index.htm:555
+#: templates/index.htm:483
 msgid "Manuscript analysis"
 msgstr "Analyse sur manuscrit"
 
-#: templates/index.htm:557 templates/index.htm:558 templates/index.htm:559
-#: templates/index.htm:560
+#: templates/index.htm:485 templates/index.htm:486 templates/index.htm:487
+#: templates/index.htm:488
 msgid "Analysis point"
 msgstr "Point d'analyse"
 
-#: templates/index.htm:564
+#: templates/index.htm:492
 msgid "Spectroscopy"
 msgstr "Spectroscopie"
 
-#: templates/index.htm:565
+#: templates/index.htm:493
 msgid "Point Analysis"
 msgstr "Analyse ponctuelle"
 
-#: templates/index.htm:566
+#: templates/index.htm:494
 msgid "Click on analysis points to explore spectral data"
 msgstr "Cliquez sur les points d'analyse pour explorer les données spectrales"
 
-#: templates/index.htm:581
+#: templates/index.htm:509
 msgid "Imaging"
 msgstr "Imagerie"
 
-#: templates/index.htm:582
+#: templates/index.htm:510
 msgid "Multispectral"
 msgstr "Multispectral"
 
-#: templates/index.htm:583
+#: templates/index.htm:511
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Balayage de bandes spectrales et composites fausses couleurs via IIIF"
 
-#: templates/index.htm:603
+#: templates/index.htm:531
 msgid ""
-"Search by material, analysis technique, written cultural heritage object, or "
-"chemical element. Advanced filters available in the search interface."
+"Search by material, analysis technique, written cultural heritage object, or"
+" chemical element. Advanced filters available in the search interface."
 msgstr ""
 "Recherchez par matériau, technique d'analyse, objet du patrimoine culturel "
 "écrit ou élément chimique. Filtres avancés disponibles dans l'interface de "
 "recherche."
 
-#: templates/index.htm:616
+#: templates/index.htm:544
 msgid "Search materials, techniques, objects..."
 msgstr "Rechercher des matériaux, techniques, objets..."
 
-#: templates/index.htm:623
+#: templates/index.htm:551
 msgid "Vermilion"
 msgstr "Vermillon"
 
-#: templates/index.htm:624
+#: templates/index.htm:552
 msgid "manuscript"
 msgstr "manuscrit"
 
-#: templates/index.htm:624
+#: templates/index.htm:552
 msgid "Manuscripts"
 msgstr "Manuscrits"
 
-#: templates/index.htm:625
+#: templates/index.htm:553
 msgid "XRF"
 msgstr "XRF"
 
-#: templates/index.htm:626
+#: templates/index.htm:554
 msgid "parchment"
 msgstr "parchemin"
 
-#: templates/index.htm:626
+#: templates/index.htm:554
 msgid "Parchment"
 msgstr "Parchemin"
 
-#: templates/index.htm:627
+#: templates/index.htm:555
 msgid "illumination"
 msgstr "enluminure"
 
-#: templates/index.htm:627
+#: templates/index.htm:555
 msgid "Illuminations"
 msgstr "Enluminures"
 
-#: templates/index.htm:628
+#: templates/index.htm:556
 msgid "Raman"
 msgstr "Raman"
 
-#: templates/index.htm:633
+#: templates/index.htm:561
 msgid "Access advanced search"
 msgstr "Accéder à la recherche avancée"
 
-#: templates/index.htm:646
+#: templates/index.htm:574
 msgid "Our Partners"
 msgstr "Nos Partenaires"
 
-#: templates/index.htm:650
+#: templates/index.htm:578
 msgid "Ministry of Culture"
 msgstr "Ministère de la Culture"
-
-#: templates/index.htm:690
-msgid ""
-"Interoperable database for physicochemical analysis of written cultural "
-"heritage materials. A Biblissima+ cluster project."
-msgstr ""
-"Base de données interopérable pour l'analyse physico-chimique des matériaux "
-"du patrimoine culturel écrit. Un projet du cluster Biblissima+."
-
-#: templates/index.htm:696
-msgid "Platform"
-msgstr "Plateforme"
-
-#: templates/index.htm:702
-msgid "My Profile"
-msgstr "Mon profil"
-
-#: templates/index.htm:707
-msgid "Resources"
-msgstr "Ressources"
-
-#: templates/index.htm:715
-msgid "Standards"
-msgstr "Standards"
-
-#: templates/index.htm:726
-msgid ""
-"This work has benefited from state aid managed by the Agence Nationale de la "
-"Recherche under the Investissements d'avenir programme, reference ANR-21-"
-"ESRE-0005 (Biblissima+)."
-msgstr ""
-"Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale de "
-"la Recherche au titre du programme d'Investissements d'avenir portant la "
-"référence ANR-21-ESRE-0005 (Biblissima+)."
-
-#: templates/index.htm:730
-msgid "All rights reserved"
-msgstr "Tous droits réservés"
-
-#: templates/index.htm:733
-msgid "Source code"
-msgstr "Code source"
-
-#: templates/index.htm:737
-msgid "GPL-3.0 License"
-msgstr "Licence GPL-3.0"
-
-#: templates/index.htm:740
-msgid ""
-"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
-"rel=\"noopener\">Arches</a>"
-msgstr ""
-"Propulsé par <a href=\"https://www.archesproject.org\" target=\"_blank\" "
-"rel=\"noopener\">Arches</a>"
 
 #: templates/javascript.htm:12
 #: templates/views/components/workflows/create-project-workflow/project-name-step.htm:8
@@ -680,8 +727,8 @@ msgid ""
 "This importer is in use - it should be replaced in all files where it is "
 "used before deleting."
 msgstr ""
-"Cet importateur est en cours d'utilisation — il doit être remplacé dans tous "
-"les fichiers où il est utilisé avant de le supprimer."
+"Cet importateur est en cours d'utilisation — il doit être remplacé dans tous"
+" les fichiers où il est utilisé avant de le supprimer."
 
 #: templates/javascript.htm:32
 msgid "An error occurred while creating the manifest."
@@ -810,7 +857,8 @@ msgstr "La recherche Biblissima a échoué. Veuillez réessayer dans un instant.
 
 #: templates/javascript.htm:60
 msgid ""
-"Network error while querying Biblissima. Check your connection and try again."
+"Network error while querying Biblissima. Check your connection and try "
+"again."
 msgstr ""
 "Erreur réseau lors de la requête Biblissima. Vérifiez votre connexion et "
 "réessayez."
@@ -842,8 +890,8 @@ msgstr "Limite du panier atteinte"
 
 #: templates/javascript.htm:67
 msgid ""
-"Too many results on this page for the remaining cart slots — reduce the page "
-"size or unselect some"
+"Too many results on this page for the remaining cart slots — reduce the page"
+" size or unselect some"
 msgstr ""
 "Trop de résultats sur cette page pour les places restantes du panier — "
 "réduisez la taille de page ou désélectionnez des éléments"
@@ -924,7 +972,8 @@ msgstr "Choisir un Document (obligatoire)…"
 msgid "Cannot create parent — no Biblissima QID"
 msgstr "Impossible de créer le parent — pas de QID Biblissima"
 
-# --- Step 4 (Summary) --------------------------------------------------------
+# --- Step 4 (Summary)
+# --------------------------------------------------------
 #: templates/javascript.htm:87
 #, python-brace-format
 msgid "{n} resources created"
@@ -955,7 +1004,8 @@ msgstr "Interrogation de Biblissima..."
 #: templates/javascript.htm:93
 msgid "No results. Try French keywords or check the Biblissima portal."
 msgstr ""
-"Aucun résultat. Essayez un terme français ou consultez le portail Biblissima."
+"Aucun résultat. Essayez un terme français ou consultez le portail "
+"Biblissima."
 
 #: templates/javascript.htm:94
 msgid "Biblissima is temporarily unavailable - you can use manual entry."
@@ -970,6 +1020,102 @@ msgstr "Saisissez au moins 2 caractères..."
 #: templates/javascript.htm:96
 msgid "EN: "
 msgstr "EN : "
+
+#: templates/javascript.htm:100
+msgid "Please fill in all fields with a valid email."
+msgstr ""
+"Veuillez remplir tous les champs et indiquer une adresse e-mail valide."
+
+#: templates/javascript.htm:101 templates/views/pages/contact.htm:47
+msgid "A contact address is not configured yet. Please check back soon."
+msgstr ""
+"Aucune adresse de contact n'est configurée pour le moment. Merci de revenir "
+"bientôt."
+
+#: templates/javascript.htm:102
+msgid "Project submission"
+msgstr "Soumission de projet"
+
+#: templates/javascript.htm:103
+msgid "Access request"
+msgstr "Demande d'accès"
+
+#: templates/javascript.htm:104 templates/views/pages/contact.htm:34
+msgid "Question"
+msgstr "Question"
+
+#: templates/javascript.htm:105 templates/views/pages/contact.htm:39
+msgid "Message"
+msgstr "Message"
+
+#: templates/javascript.htm:106
+#: templates/views/components/plugins/file-configuration.htm:17
+msgid "Name"
+msgstr "Nom"
+
+#: templates/javascript.htm:107
+msgid "Email"
+msgstr "E-mail"
+
+#: templates/javascript.htm:108 templates/views/pages/contact.htm:30
+msgid "Reason"
+msgstr "Motif"
+
+#: templates/javascript.htm:109
+msgid "Fields"
+msgstr "Champs"
+
+#: templates/javascript.htm:110
+msgid "Relations"
+msgstr "Relations"
+
+#: templates/javascript.htm:111
+msgid "records"
+msgstr "enregistrements"
+
+#: templates/javascript.htm:112 templates/views/pages/conceptual-model.htm:54
+msgid "field groups"
+msgstr "groupes de champs"
+
+#: templates/javascript.htm:113
+msgid "required"
+msgstr "requis"
+
+#: templates/javascript.htm:114
+msgid "→ target · ← source"
+msgstr "→ cible · ← source"
+
+#: templates/javascript.htm:115
+msgid "No relations"
+msgstr "Aucune relation"
+
+#: templates/javascript.htm:116
+msgid "models"
+msgstr "modèles"
+
+#: templates/javascript.htm:117
+msgid "relations"
+msgstr "relations"
+
+#: templates/javascript.htm:118
+msgid "fields"
+msgstr "champs"
+
+#: templates/javascript.htm:119
+msgid "datatypes"
+msgstr "types de données"
+
+#: templates/javascript.htm:120
+msgid "Fields by datatype"
+msgstr "Champs par type de données"
+
+#: templates/ms_base.htm:11
+msgid ""
+"ManuSpectrum — interoperable database for physicochemical analysis of "
+"written cultural heritage."
+msgstr ""
+"ManuSpectrum — base de données interopérable pour l'analyse physico-chimique"
+" du patrimoine culturel écrit."
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -1189,10 +1335,6 @@ msgstr "Fichiers de données"
 msgid "Additional Files"
 msgstr "Fichiers supplémentaires"
 
-#: templates/views/components/plugins/file-configuration.htm:17
-msgid "Name"
-msgstr "Nom"
-
 #: templates/views/components/plugins/file-configuration.htm:54
 msgid "files"
 msgstr "fichiers"
@@ -1348,14 +1490,15 @@ msgid "e.g. 500"
 msgstr "ex. 500"
 
 #: templates/views/components/plugins/importer-configuration.htm:73
+#: templates/views/pages/conceptual-model.htm:45
 msgid "Transformations"
 msgstr "Transformations"
 
 #: templates/views/components/plugins/importer-configuration.htm:74
 #, fuzzy
 #| msgid ""
-#| "If your file has multiple Y columns, they are displayed as separate "
-#| "series. Use \"mean\" to average them into a single series instead."
+#| "If your file has multiple Y columns, they are displayed as separate series. "
+#| "Use \"mean\" to average them into a single series instead."
 msgid ""
 "If your file has multiple Y columns, they are displayed as separate series. "
 "Use \\"
@@ -1384,6 +1527,7 @@ msgid "Pipe"
 msgstr "Pipe"
 
 #: templates/views/components/plugins/importer-configuration.htm:101
+#: templates/views/pages/contact.htm:35
 msgid "Other"
 msgstr "Autre"
 
@@ -1943,8 +2087,8 @@ msgstr "Ajouter l'ARK Biblissima comme nom alternatif"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:519
 msgid ""
-"No match found. Create a new parent Document from Biblissima data — required "
-"before its components can be imported."
+"No match found. Create a new parent Document from Biblissima data — required"
+" before its components can be imported."
 msgstr ""
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:531
@@ -1972,16 +2116,16 @@ msgstr "Ressources liées"
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:578
 #, fuzzy
 #| msgid ""
-#| "The following places, institutions, and persons were found in the "
-#| "Biblissima data. If they already exist in your database, select them "
-#| "below. Otherwise they will be created automatically."
+#| "The following places, institutions, and persons were found in the Biblissima"
+#| " data. If they already exist in your database, select them below. Otherwise "
+#| "they will be created automatically."
 msgid ""
-"The following places, institutions, and persons were found in the Biblissima "
-"data. Link them to existing resources or create new ones."
+"The following places, institutions, and persons were found in the Biblissima"
+" data. Link them to existing resources or create new ones."
 msgstr ""
 "Les lieux, institutions et personnes suivants ont été trouvés dans les "
-"données Biblissima. S'ils existent déjà dans votre base, sélectionnez-les ci-"
-"dessous. Sinon ils seront créés automatiquement."
+"données Biblissima. S'ils existent déjà dans votre base, sélectionnez-les "
+"ci-dessous. Sinon ils seront créés automatiquement."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:600
 #, fuzzy
@@ -2094,8 +2238,8 @@ msgstr "Ajouter tous les visibles"
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:185
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
 msgstr ""
-"Biblissima peut être lent sur les recherches larges. Vous pouvez laisser cet "
-"onglet ouvert."
+"Biblissima peut être lent sur les recherches larges. Vous pouvez laisser cet"
+" onglet ouvert."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:190
 msgid "Elapsed"
@@ -2103,13 +2247,15 @@ msgstr "Écoulé"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:233
 msgid ""
-"Search by shelfmark, title, or institution to find manuscripts on Biblissima."
+"Search by shelfmark, title, or institution to find manuscripts on "
+"Biblissima."
 msgstr ""
 "Recherchez par cote, titre ou institution pour trouver des manuscrits sur "
 "Biblissima."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:236
-msgid "Select iconographic descriptors and click Search to find illuminations."
+msgid ""
+"Select iconographic descriptors and click Search to find illuminations."
 msgstr ""
 "Sélectionnez des descripteurs iconographiques et cliquez Rechercher pour "
 "trouver des enluminures."
@@ -2168,8 +2314,8 @@ msgstr "Les ressources sont enregistrées en Brouillon."
 msgid ""
 "Open each one to verify the data, fill in anything that couldn't be fetched "
 "from Biblissima, then click <strong>Make Active</strong> on the resource "
-"page to publish it. Drafts stay editable; only Active resources are surfaced "
-"across the rest of the application."
+"page to publish it. Drafts stay editable; only Active resources are surfaced"
+" across the rest of the application."
 msgstr ""
 "Ouvrez chacune pour vérifier les données, complétez ce qui n'a pas pu être "
 "récupéré depuis Biblissima, puis cliquez sur <strong>Make Active</strong> "
@@ -2216,6 +2362,399 @@ msgstr "Voir l'étape 3 pour les détails."
 msgid "Open project"
 msgstr "Ouvrir le projet"
 
+#: templates/views/pages/conceptual-model.htm:5
+msgid ""
+"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description"
+" of manuscripts, analyses and inferred knowledge."
+msgstr ""
+"Le modèle de données ManuSpectrum : une description événementielle CIDOC-CRM"
+" / CRMsci des manuscrits, des analyses et des connaissances inférées."
+
+#: templates/views/pages/conceptual-model.htm:10
+msgid "A model for scientific manuscript description"
+msgstr "Un modèle pour la description scientifique des manuscrits"
+
+#: templates/views/pages/conceptual-model.htm:12
+msgid ""
+"The object, the analyses applied to it, and the knowledge inferred from them"
+" — formalised with a shared ontology (CIDOC-CRM + CRMsci) for interoperable,"
+" reusable data within the Biblissima+ ecosystem. The approach is event-"
+"centric: it tracks production, sampling, analysis, characterization, "
+"alteration and modification, and keeps observed facts distinct from "
+"inferences while preserving source attribution."
+msgstr ""
+"L'objet, les analyses qui lui sont appliquées et les connaissances qui en "
+"sont inférées — formalisés au moyen d'une ontologie commune (CIDOC-CRM + "
+"CRMsci) pour des données interopérables et réutilisables au sein de "
+"l'écosystème Biblissima+. L'approche est événementielle : elle suit la "
+"production, l'échantillonnage, l'analyse, la caractérisation, l'altération "
+"et la modification, et distingue les faits observés des inférences tout en "
+"conservant l'attribution des sources."
+
+#: templates/views/pages/conceptual-model.htm:18
+msgid "01 · Three levels of abstraction"
+msgstr "01 · Trois niveaux d'abstraction"
+
+#: templates/views/pages/conceptual-model.htm:22
+msgid "Ontology"
+msgstr "Ontologie"
+
+#: templates/views/pages/conceptual-model.htm:23
+msgid ""
+"Semantic foundation: CIDOC-CRM v7.1.2 (ISO 21127) and its CRMsci extension "
+"for scientific observation."
+msgstr ""
+"Fondement sémantique : CIDOC-CRM v7.1.2 (ISO 21127) et son extension CRMsci "
+"pour l'observation scientifique."
+
+#: templates/views/pages/conceptual-model.htm:27
+msgid "Models"
+msgstr "Modèles"
+
+#: templates/views/pages/conceptual-model.htm:28
+msgid ""
+"12 autonomous resource models, interconnected by 84 typed relationships."
+msgstr ""
+"12 modèles de ressources autonomes, interconnectés par 84 relations typées."
+
+#: templates/views/pages/conceptual-model.htm:32
+msgid "Vocabularies"
+msgstr "Vocabulaires"
+
+#: templates/views/pages/conceptual-model.htm:33
+msgid ""
+"Controlled values referencing normalized thesauri: Getty AAT, Pactols, "
+"AGORHA, LOTERRE."
+msgstr ""
+"Valeurs contrôlées référençant des thésaurus normalisés : Getty AAT, "
+"Pactols, AGORHA, LOTERRE."
+
+#: templates/views/pages/conceptual-model.htm:39
+msgid "02 · The resource map"
+msgstr "02 · La carte des ressources"
+
+#: templates/views/pages/conceptual-model.htm:40
+msgid "Four groupings, linked by many-to-many relationships:"
+msgstr ""
+"Quatre regroupements, reliés par des relations plusieurs-à-plusieurs :"
+
+#: templates/views/pages/conceptual-model.htm:42
+msgid "Studied object"
+msgstr "Objet étudié"
+
+#: templates/views/pages/conceptual-model.htm:42
+msgid "Manuscript → Component · Sample"
+msgstr "Manuscrit → Composant · Échantillon"
+
+#: templates/views/pages/conceptual-model.htm:43
+msgid "Observation · CRMsci"
+msgstr "Observation · CRMsci"
+
+#: templates/views/pages/conceptual-model.htm:43
+msgid "Analysis → Characterization"
+msgstr "Analyse → Caractérisation"
+
+#: templates/views/pages/conceptual-model.htm:44
+msgid "Shared context"
+msgstr "Contexte commun"
+
+#: templates/views/pages/conceptual-model.htm:44
+msgid "Actor · Place · Project · Instrument"
+msgstr "Acteur · Lieu · Projet · Instrument"
+
+#: templates/views/pages/conceptual-model.htm:45
+msgid "Alteration · Modification"
+msgstr "Altération · Modification"
+
+#: templates/views/pages/conceptual-model.htm:47
+msgid "Explore the model interactively"
+msgstr "Explorer le modèle de façon interactive"
+
+#: templates/views/pages/conceptual-model.htm:51
+msgid "03 · Granularity"
+msgstr "03 · Granularité"
+
+#: templates/views/pages/conceptual-model.htm:53
+msgid "resource models"
+msgstr "modèles de ressources"
+
+#: templates/views/pages/conceptual-model.htm:55
+msgid "nodes (452 data)"
+msgstr "nœuds (dont 452 de données)"
+
+#: templates/views/pages/conceptual-model.htm:56
+msgid "CIDOC / CRMsci classes"
+msgstr "classes CIDOC / CRMsci"
+
+#: templates/views/pages/conceptual-model.htm:57
+msgid "properties"
+msgstr "propriétés"
+
+#: templates/views/pages/conceptual-model.htm:58
+msgid "inter-model relationships"
+msgstr "relations inter-modèles"
+
+#: templates/views/pages/conceptual-model.htm:59
+msgid "thesauri (~20,000 concepts)"
+msgstr "thésaurus (~20 000 concepts)"
+
+#: templates/views/pages/conceptual-model.htm:60
+msgid "controlled lists"
+msgstr "listes contrôlées"
+
+#: templates/views/pages/conceptual-model.htm:65
+msgid "04 · The thought schema"
+msgstr "04 · Le schéma de pensée"
+
+#: templates/views/pages/conceptual-model.htm:66
+msgid ""
+"An event-based trajectory rather than a static object-attribute schema:"
+msgstr ""
+"Une trajectoire événementielle plutôt qu'un schéma statique objet-attribut :"
+
+#: templates/views/pages/conceptual-model.htm:68
+msgid "Production"
+msgstr "Production"
+
+#: templates/views/pages/conceptual-model.htm:69
+msgid "Sampling"
+msgstr "Échantillonnage"
+
+#: templates/views/pages/conceptual-model.htm:70
+msgid "Analysis"
+msgstr "Analyse"
+
+#: templates/views/pages/conceptual-model.htm:71
+msgid "Characterization"
+msgstr "Caractérisation"
+
+#: templates/views/pages/conceptual-model.htm:72
+msgid "Transformation"
+msgstr "Transformation"
+
+#: templates/views/pages/conceptual-model.htm:77
+msgid "05 · Thesauri mobilised"
+msgstr "05 · Thésaurus mobilisés"
+
+#: templates/views/pages/contact.htm:5
+msgid ""
+"Contact the ManuSpectrum team to submit a project, request access, or ask a "
+"question."
+msgstr ""
+"Contactez l'équipe ManuSpectrum pour soumettre un projet, demander un accès "
+"ou poser une question."
+
+#: templates/views/pages/contact.htm:11
+msgid "Submit a project or reach the team"
+msgstr "Soumettre un projet ou contacter l'équipe"
+
+#: templates/views/pages/contact.htm:13
+msgid ""
+"Account creation is not open: access is granted individually. To propose a "
+"project, request an account, or ask a question, send us a message below."
+msgstr ""
+"La création de compte n'est pas ouverte : l'accès est accordé "
+"individuellement. Pour proposer un projet, demander un compte ou poser une "
+"question, envoyez-nous un message ci-dessous."
+
+#: templates/views/pages/contact.htm:22
+msgid "Your name"
+msgstr "Votre nom"
+
+#: templates/views/pages/contact.htm:26
+msgid "Your email"
+msgstr "Votre e-mail"
+
+#: templates/views/pages/contact.htm:32
+msgid "Submit a project"
+msgstr "Soumettre un projet"
+
+#: templates/views/pages/contact.htm:33
+msgid "Request an account / access"
+msgstr "Demander un compte / un accès"
+
+#: templates/views/pages/contact.htm:44
+msgid "Open my email app"
+msgstr "Ouvrir mon application e-mail"
+
+#: templates/views/pages/contact.htm:52
+msgid "Who we are"
+msgstr "Qui sommes-nous"
+
+#: templates/views/pages/contact.htm:53
+msgid ""
+"ManuSpectrum is developed within Cluster 2 of the ANR Biblissima+ programme,"
+" at the Centre de Recherche sur la Conservation (CRC)."
+msgstr ""
+"ManuSpectrum est développé au sein du Cluster 2 du programme ANR "
+"Biblissima+, au Centre de Recherche sur la Conservation (CRC)."
+
+#: templates/views/pages/contact.htm:55
+msgid "Meet the team"
+msgstr "Rencontrer l'équipe"
+
+#: templates/views/pages/graph-explorer.htm:5
+msgid ""
+"Explore the ManuSpectrum data model as an interactive graph: 12 resource "
+"models, their fields, datatypes and relationships."
+msgstr ""
+"Explorez le modèle de données de ManuSpectrum sous forme de graphe "
+"interactif : 12 modèles de ressources, leurs champs, types de données et "
+"relations."
+
+#: templates/views/pages/graph-explorer.htm:10
+msgid "The model as a living graph"
+msgstr "Le modèle comme un graphe vivant"
+
+#: templates/views/pages/graph-explorer.htm:11
+msgid ""
+"Drag the nodes, follow the relationships, and click any model to inspect its"
+" fields, datatypes and CIDOC-CRM classes."
+msgstr ""
+"Déplacez les nœuds, suivez les relations, et cliquez sur un modèle pour "
+"examiner ses champs, ses types de données et ses classes CIDOC-CRM."
+
+#: templates/views/pages/graph-explorer.htm:18
+msgid "Entities"
+msgstr "Entités"
+
+#: templates/views/pages/graph-explorer.htm:19
+msgid "Datatypes"
+msgstr "Types de données"
+
+#: templates/views/pages/graph-explorer.htm:24
+msgid "Find a model…"
+msgstr "Rechercher un modèle…"
+
+#: templates/views/pages/graph-explorer.htm:24
+msgid "Find a model"
+msgstr "Rechercher un modèle"
+
+#: templates/views/pages/graph-explorer.htm:30
+msgid "Loading the model…"
+msgstr "Chargement du modèle…"
+
+#: templates/views/pages/graph-explorer.htm:31
+msgid "Interactive model graph"
+msgstr "Graphe interactif du modèle"
+
+#: templates/views/pages/graph-explorer.htm:32
+msgid "The model could not be loaded."
+msgstr "Le modèle n'a pas pu être chargé."
+
+#: templates/views/pages/graph-explorer.htm:37
+msgid "Model details"
+msgstr "Détails du modèle"
+
+#: templates/views/pages/graph-explorer.htm:38
+msgid "Close"
+msgstr "Fermer"
+
+#: templates/views/pages/graph-explorer.htm:46
+msgid "List view (accessible)"
+msgstr "Vue liste (accessible)"
+
+#: templates/views/pages/team.htm:5
+msgid ""
+"About the ManuSpectrum project and the team behind it, within Biblissima+ "
+"Cluster 2."
+msgstr ""
+"À propos du projet ManuSpectrum et de l'équipe qui le porte, au sein du "
+"Cluster 2 de Biblissima+."
+
+#: templates/views/pages/team.htm:10
+msgid "The project & the people"
+msgstr "Le projet & les personnes"
+
+#: templates/views/pages/team.htm:12
+msgid ""
+"ManuSpectrum is developed within Cluster 2 — “Consideration and "
+"searchability of materials-analysis data” — of the ANR Biblissima+ "
+"programme, at the Centre de Recherche sur la Conservation (CRC), in "
+"partnership with Huma-Num. It archives, standardises and makes searchable "
+"the physicochemical analysis of manuscripts and written heritage, so that "
+"non-specialists can reuse reliable, interoperable data."
+msgstr ""
+"ManuSpectrum est développé au sein du Cluster 2 — « Prise en compte et "
+"cherchabilité des données d'analyse des matériaux » — du programme ANR "
+"Biblissima+, au Centre de Recherche sur la Conservation (CRC), en "
+"partenariat avec Huma-Num. Il archive, normalise et rend cherchables les "
+"analyses physico-chimiques des manuscrits et du patrimoine écrit, afin que "
+"des non-spécialistes puissent réutiliser des données fiables et "
+"interopérables."
+
+#: templates/views/pages/team.htm:15
+msgid "Read more"
+msgstr "En savoir plus"
+
+#: templates/views/pages/team.htm:16
+msgid ""
+"Built on Arches, ManuSpectrum places the material component at the pivot "
+"between the object, its context, the analyses and their interpretations, "
+"using shared ontologies (CIDOC-CRM, CRMsci) and reference thesauri to keep "
+"heterogeneous documents comparable and interoperable with the Biblissima "
+"portal."
+msgstr ""
+"Construit sur Arches, ManuSpectrum place le composant matériel comme axe "
+"pivot entre l'objet, son contexte, les analyses et leurs interprétations, en"
+" s'appuyant sur des ontologies communes (CIDOC-CRM, CRMsci) et des thésaurus"
+" de référence pour garder des documents hétérogènes comparables et "
+"interopérables avec le portail Biblissima."
+
+#: templates/views/pages/team.htm:22
+msgid "The team"
+msgstr "L'équipe"
+
+#: templates/views/pages/team.htm:33
+msgid "Maîtresse de conférences, physical chemistry"
+msgstr "Maîtresse de conférences, chimie physique"
+
+#: templates/views/pages/team.htm:35
+msgid ""
+"Physico-chemist at the Centre de Recherche sur la Conservation, specialising"
+" in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
+"written cultural heritage. Referent for Biblissima+ Cluster 2."
+msgstr ""
+"Physico-chimiste au Centre de Recherche sur la Conservation, spécialisée "
+"dans l'analyse non invasive (spectroscopie, imagerie hyper/multispectrale) "
+"du patrimoine culturel écrit. Référente pour le Cluster 2 de Biblissima+."
+
+#: templates/views/pages/team.htm:36 templates/views/pages/team.htm:51
+#: templates/views/pages/team.htm:65
+msgid "Profile"
+msgstr "Profil"
+
+#: templates/views/pages/team.htm:48
+msgid "Research engineer, head of the Images service"
+msgstr "Ingénieur de recherche, responsable du service Images"
+
+#: templates/views/pages/team.htm:50
+msgid ""
+"Imaging specialist leading the Images service of the IRHT digital pole; "
+"digitisation and IIIF publication of medieval manuscripts (Bibliothèque "
+"virtuelle des manuscrits médiévaux)."
+msgstr ""
+"Spécialiste de l'image à la tête du service Images du pôle numérique de "
+"l'IRHT ; numérisation et publication IIIF de manuscrits médiévaux "
+"(Bibliothèque virtuelle des manuscrits médiévaux)."
+
+#: templates/views/pages/team.htm:62
+msgid "Study engineer / web developer"
+msgstr "Ingénieur d'études / développeur web"
+
+#: templates/views/pages/team.htm:64
+msgid ""
+"Web developer of ManuSpectrum, building the Arches / Django platform, its "
+"IIIF services and interoperability with the Biblissima ecosystem."
+msgstr ""
+"Développeur web de ManuSpectrum, en charge de la plateforme Arches / Django,"
+" de ses services IIIF et de l'interopérabilité avec l'écosystème Biblissima."
+
+#: templates/views/pages/team.htm:68
+msgid "Biographies compiled from public institutional sources."
+msgstr ""
+"Biographies compilées à partir de sources institutionnelles publiques."
+
 #: views/biblissima_proxy.py:257
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
@@ -2259,11 +2798,9 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #~ msgstr "Cartographie XRF d'un manuscrit enluminé"
 
 #~ msgid ""
-#~ "Elemental analysis by X-ray fluorescence — Spatial distribution of "
-#~ "pigments"
+#~ "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments"
 #~ msgstr ""
-#~ "Analyse élémentaire par fluorescence X — Distribution spatiale des "
-#~ "pigments"
+#~ "Analyse élémentaire par fluorescence X — Distribution spatiale des pigments"
 
 #~ msgid "Raman spectrum on a pigment sample"
 #~ msgstr "Spectre Raman sur un échantillon de pigment"
@@ -2272,8 +2809,8 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #~ msgstr "Spectroscopie Raman sur un pigment médiéval"
 
 #~ msgid ""
-#~ "Molecular identification of azurite and malachite pigments on a 15th-"
-#~ "century illumination"
+#~ "Molecular identification of azurite and malachite pigments on a 15th-century"
+#~ " illumination"
 #~ msgstr ""
 #~ "Identification moléculaire des pigments d'azurite et de malachite sur une "
 #~ "enluminure du XVe siècle"
@@ -2282,8 +2819,8 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #~ msgstr "Imagerie multispectrale — Révéler les textes cachés"
 
 #~ msgid ""
-#~ "UV and infrared reflectography combined to reveal underdrawings and "
-#~ "erased inscriptions"
+#~ "UV and infrared reflectography combined to reveal underdrawings and erased "
+#~ "inscriptions"
 #~ msgstr ""
 #~ "Réflectographie UV et infrarouge combinées pour révéler les dessins sous-"
 #~ "jacents et les inscriptions effacées"
@@ -2294,8 +2831,7 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #~ msgid "XRF Mapping — Element B"
 #~ msgstr "Cartographie XRF — Élément B"
 
-#~ msgid ""
-#~ "Spatial distribution of chemical elements on an illuminated manuscript"
+#~ msgid "Spatial distribution of chemical elements on an illuminated manuscript"
 #~ msgstr ""
 #~ "Distribution spatiale des éléments chimiques sur un manuscrit enluminé"
 
@@ -2306,7 +2842,6 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #~ msgstr "Réinitialiser"
 
 #, fuzzy
-#~| msgid "An error occurred while creating the manifest."
 #~ msgid "Timeout while fetching manifest"
 #~ msgstr "Une erreur est survenue lors de la création du manifeste."
 
@@ -2330,7 +2865,6 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #~ msgstr "Modifier"
 
 #, fuzzy
-#~| msgid "Create new"
 #~ msgid "Create now"
 #~ msgstr "Créer nouvelle"
 
@@ -2346,21 +2880,15 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #~ msgid "The document this component belongs to. Must already exist."
 #~ msgstr "Le document auquel ce composant appartient. Doit déjà exister."
 
-#~ msgid "Default type"
-#~ msgstr "Type par défaut"
-
 #~ msgid ""
 #~ "Type applied by default to all created resources. Can be changed per item "
 #~ "later."
 #~ msgstr ""
-#~ "Type appliqué par défaut à toutes les ressources créées. Modifiable par "
-#~ "item ensuite."
+#~ "Type appliqué par défaut à toutes les ressources créées. Modifiable par item"
+#~ " ensuite."
 
 #~ msgid "Resource type"
 #~ msgstr "Type de ressource"
-
-#~ msgid "resources"
-#~ msgstr "ressources"
 
 #~ msgid "Project"
 #~ msgstr "Projet"
@@ -2380,9 +2908,6 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #~ msgstr ""
 #~ "Ressources qui seront liées aux items créés. Choisissez d'utiliser une "
 #~ "ressource existante ou d'en créer une nouvelle."
-
-#~ msgid "Action"
-#~ msgstr "Action"
 
 #~ msgid "Use existing"
 #~ msgstr "Utiliser existante"
@@ -2419,9 +2944,6 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 
 #~ msgid "IIIF manifest available"
 #~ msgstr "Manifeste IIIF disponible"
-
-#~ msgid "Filter by date"
-#~ msgstr "Filtrer par date"
 
 #~ msgid "created"
 #~ msgstr "créés"
@@ -2473,20 +2995,6 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 
 #~ msgid "of written cultural heritage"
 #~ msgstr "du patrimoine culturel écrit"
-
-#~ msgid ""
-#~ "ManuSpectrum was developed within Cluster 2 — \"Consideration and "
-#~ "searchability of materials analysis data\" — of the ANR Biblissima+ "
-#~ "programme. This cluster aims to ensure the long-term archiving and reuse "
-#~ "of physicochemical analysis data for manuscripts, inscriptions, seals and "
-#~ "other heritage objects, in partnership with Huma-Num."
-#~ msgstr ""
-#~ "ManuSpectrum a été développé dans le cadre du Cluster 2 — « Prise en "
-#~ "compte et cherchabilité des données d'analyse des matériaux » — du "
-#~ "programme ANR Biblissima+. Ce cluster vise à archiver de manière pérenne "
-#~ "et à permettre la réutilisation des données d'analyse physico-chimique "
-#~ "des manuscrits, inscriptions, sceaux et autres objets patrimoniaux, en "
-#~ "partenariat avec Huma-Num."
 
 #~ msgid "Analysis points and material characterization"
 #~ msgstr "Points d'analyse et caractérisation des matériaux"
