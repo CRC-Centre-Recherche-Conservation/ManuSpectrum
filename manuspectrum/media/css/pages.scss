@@ -653,7 +653,17 @@ select.ms-contact-input { appearance: none; background-image: none; cursor: poin
 // Edges. A tree drawn as orthogonal elbows cannot self-cross, so these need no
 // z-order management and no hit-testing beyond the tooltip.
 .ms-ge-st-edge { stroke: rgba($ms-ink, 0.28); stroke-width: 1.2; }
-.ms-ge-st-prop { font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink-soft;
+
+// Belt-and-braces to the gutter geometry in graph-explorer.js: SVG text has no
+// box, so any connector routed behind a label shows through the gaps between the
+// glyphs and reads as a strike-through. `paint-order` lets each run of text lay
+// down a 3px halo in the stage's base colour FIRST and then paint the glyphs over
+// it, which knocks a clean channel out of anything passing underneath. The stage
+// is #fff under two 5%-alpha radial tints, so #fff is the right halo.
+@mixin ms-ge-st-halo { paint-order: stroke fill; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
+
+.ms-ge-st-prop { @include ms-ge-st-halo;
+    font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink-soft;
     // P1/P2 are ~40% of all edges and carry almost no discriminating information.
     // Dimmed, NOT removed — and the legend says why, so it does not read as
     // "disabled".
@@ -667,13 +677,19 @@ select.ms-contact-input { appearance: none; background-image: none; cursor: poin
     .ms-ge-st-ring { fill: none; stroke: rgba($ms-ink, 0.45); stroke-width: 1.4; }
     .ms-ge-st-capsule { stroke-width: 2; }
     .ms-ge-st-rootlabel { font-family: $ms-font-sans; font-size: 12.5px; font-weight: 600; fill: $ms-ink; }
-    .ms-ge-st-label { font-family: $ms-font-sans; font-size: 12px; fill: $ms-ink-soft;
+    .ms-ge-st-label { @include ms-ge-st-halo;
+        font-family: $ms-font-sans; font-size: 12px; fill: $ms-ink-soft;
         // Required is weight + glyph, never colour alone.
         &.is-required { font-weight: 600; fill: $ms-ink; } }
+    // The star is a tspan INSIDE .ms-ge-st-label, so it inherits the halo; it only
+    // needs its own fill back.
     .ms-ge-st-req { fill: $ms-red-text; font-weight: 700; }
-    .ms-ge-st-cidoc { font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink-soft; }
-    .ms-ge-st-badge { font-family: $ms-font-mono; font-size: 9.5px; fill: $ms-ink-soft; }
-    .ms-ge-st-target-label { font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink; }
+    .ms-ge-st-cidoc { @include ms-ge-st-halo;
+        font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink-soft; }
+    .ms-ge-st-badge { @include ms-ge-st-halo;
+        font-family: $ms-font-mono; font-size: 9.5px; fill: $ms-ink-soft; }
+    .ms-ge-st-target-label { @include ms-ge-st-halo;
+        font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink; }
     .ms-ge-st-target { cursor: pointer;
         &:hover .ms-ge-st-target-cap { stroke-width: 2; } }
     &:hover .ms-ge-st-disc { stroke: $ms-ink; stroke-width: 2.5; }

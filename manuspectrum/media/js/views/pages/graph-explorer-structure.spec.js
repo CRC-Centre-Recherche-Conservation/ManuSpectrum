@@ -9,8 +9,15 @@
 // must never be deleted.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { columnX } from 'utils/tree-layout';
 
 vi.mock('utils/ms-nav', () => ({ default: () => {} }));
+
+// Mirrors of the drawing constants the geometry assertions below reason about.
+const GUTTER = 26;
+const NG_R = 8;
+const LABEL_GAP = 14;
+const parseD = (p) => p.getAttribute('d').match(/-?[\d.]+/g).map(Number);
 
 // A deliberately hostile payload: the model, field, CIDOC class and property
 // names all carry markup. Nothing below may end up as live DOM.
@@ -245,6 +252,71 @@ describe('Structure view', () => {
         expect(edges.length).toBeGreaterThan(0);
         // orthogonal elbow: move, horizontal, vertical, horizontal
         expect(edges[0].getAttribute('d')).toMatch(/^M [\d.]+ [\d.]+ H [\d.]+ V [\d.]+ H [\d.]+$/);
+    });
+
+    // ── Regression: the elbow must not be drawn through its own parent ──────
+    // "Birth" is an open branch with exactly ONE child, so tree-layout centres it
+    // on that child and the connector's two endpoints share a y. The elbow then
+    // degenerates to a single horizontal line, and while it departed from
+    // `parent.x + LABEL_GAP` — the first glyph of the parent's label — that line
+    // was drawn the full width of the label and rendered it struck through.
+    it('departs a connector from the column gutter, never from the parent label', () => {
+        showStructure();
+        document.getElementById('ms-ge-struct-expand').click();
+        const flat = [...svg().querySelectorAll('.ms-ge-st-edge')]
+            .map(parseD)
+            .filter(([, y1, , y2]) => y1 === y2);
+        expect(flat.length).toBeGreaterThan(0); // the degenerate case is present
+        flat.forEach(([x1, , bend, , x3]) => {
+            const childX = x3 + 10; // the run stops LEAF_R + 3 short of the disc
+            const depth = [1, 2, 3, 4, 5, 6, 7].find((d) => columnX(d) === childX);
+            const parentX = columnX(depth - 1);
+            // The vertical run always lands in the gutter at the end of the
+            // parent's column. Under the bug the bend was `parentX + 28`, i.e.
+            // 28px into the parent's own label.
+            expect(bend).toBeGreaterThanOrEqual(childX - GUTTER);
+            // The departure is a stub from the end of the parent's label, so it
+            // is never the label's first glyph — which is where the bug put it.
+            expect(x1).toBeGreaterThan(parentX + LABEL_GAP);
+            expect(x1).toBeLessThanOrEqual(bend);
+        });
+    });
+
+    // Regression: the frame was `maxX + 320`, a guess at label + CIDOC line +
+    // badges + capsule. A long name carrying a `→ Target` capsule overran it and
+    // the capsule was truncated at the SVG's right edge.
+    it('sizes the frame so the rightmost target capsule is inside it', () => {
+        showStructure();
+        document.getElementById('ms-ge-struct-expand').click();
+        const tx = (n) => parseFloat(/translate\(([-\d.]+)/.exec(n.getAttribute('transform'))[1]);
+        const caps = [...svg().querySelectorAll('.ms-ge-st-target')];
+        expect(caps.length).toBeGreaterThan(0);
+        const rightmost = Math.max(
+            ...caps.map(
+                (c) => tx(c.parentNode) + tx(c) + +c.querySelector('rect').getAttribute('width'),
+            ),
+        );
+        expect(+svg().getAttribute('width')).toBeGreaterThanOrEqual(rightmost);
+        expect(svg().getAttribute('viewBox')).toBe(
+            `0 0 ${svg().getAttribute('width')} ${svg().getAttribute('height')}`,
+        );
+    });
+
+    // Regression: the chip was start-anchored at `bend + 4`, so any code longer
+    // than three glyphs ran out over the disc it was labelling.
+    it('keeps the property chip in the gutter, clear of the node it labels', () => {
+        showStructure();
+        document.getElementById('ms-ge-struct-expand').click();
+        const chips = [...svg().querySelectorAll('.ms-ge-st-prop')];
+        expect(chips.length).toBeGreaterThan(0);
+        chips.forEach((c) => {
+            // end-anchored, so `x` is the chip's RIGHT edge and it grows leftwards
+            expect(c.getAttribute('text-anchor')).toBe('end');
+            const childX = [1, 2, 3, 4, 5, 6, 7]
+                .map((d) => columnX(d))
+                .find((x) => x > +c.getAttribute('x'));
+            expect(+c.getAttribute('x')).toBeLessThanOrEqual(childX - NG_R);
+        });
     });
 
     it('renders the model root as a capsule, not a disc', () => {

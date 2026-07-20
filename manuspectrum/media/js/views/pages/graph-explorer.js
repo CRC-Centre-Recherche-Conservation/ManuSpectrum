@@ -3,7 +3,7 @@ import initMsNav from 'utils/ms-nav';
 import { createForceGraph } from 'utils/force-graph';
 // The Structure view uses THIS, never createForceGraph — see the header comment
 // on tree-layout.js for why a solved layout is mandatory there.
-import { layoutTree, ROW_PITCH } from 'utils/tree-layout';
+import { layoutTree, ROW_PITCH, columnX } from 'utils/tree-layout';
 import {
     groupColor,
     datatypeColor,
@@ -1096,10 +1096,27 @@ class EgoView {
 // which is a genuinely dense (68%) 12-node graph with no hierarchy to exploit.
 // ---------------------------------------------------------------------------
 
-const ELBOW = 28; // horizontal run before the edge turns; the property chip sits here
+// The vertical run of every elbow lives in the empty strip at the right-hand end
+// of the PARENT's column, GUTTER px before the child column starts. It used to
+// leave from `parent.x + LABEL_GAP` — i.e. exactly where the parent's own label
+// text begins — so a branch whose subtree is vertically centred on it (y2 === y1)
+// degenerated into one horizontal line drawn the full width of that label, and
+// rendered it struck through. Departing from the gutter makes the crossing
+// geometrically impossible instead of merely unlikely.
+const GUTTER = 26;
 const LEAF_R = 7;
 const NG_R = 8;
 const LABEL_GAP = 14;
+// Frame padding added to the measured content box (see sizeFrame).
+const FRAME_PAD_X = 28;
+const FRAME_PAD_Y = 24;
+// Advance-width estimates for the three type ramps used in the SVG. They only
+// have to be a FLOOR for the frame: getBBox() refines the real number wherever
+// it is available, and the taper/label geometry is unaffected by them.
+const EM_LABEL = 6.6; // .ms-ge-st-label      12px sans
+const EM_ROOT = 7.6; // .ms-ge-st-rootlabel  12.5px sans 600
+const EM_MONO = 6.0; // .ms-ge-st-cidoc      10px mono
+const EM_BADGE = 5.7; // .ms-ge-st-badge      9.5px mono
 // P2 has type (124x) and P1 is identified by (91x) are ~40% of all edges and carry
 // almost no discriminating information. Dimming them is what lets P98i was born /
 // P132 spatiotemporally overlaps with actually stand out. The legend says so.
@@ -1108,6 +1125,25 @@ const DIM_PROPS = new Set(['P1', 'P2']);
 // is the borderline case); above it, only the root + its level-1 groups.
 const AUTO_EXPAND_MAX = 30;
 const SVG_BREAKPOINT = 768; // below this the SVG is not drawn and the outline IS the view
+
+// Width of the column a node at `depth` occupies, derived from tree-layout's own
+// ramp rather than hardcoded, so the taper (210 → 130) stays the single source of
+// truth for both the layout and the edges drawn over it.
+const colWidth = (depth) => columnX(depth + 1) - columnX(depth);
+
+// Right-hand edge of a row's own NAME mark — the root's capsule, or the label
+// text plus its required glyph. An edge must not depart to the left of this, or
+// it is drawn through the very label it belongs to.
+function labelEnd(row) {
+    const name = String((row.node || {}).name || '');
+    if (row.depth === 0) return row.x - 10 + Math.max(90, name.length * EM_ROOT + 26);
+    return row.x + LABEL_GAP + name.length * EM_LABEL + (row.node.required ? 10 : 0);
+}
+
+// Right-hand edge of everything a row draws (label, CIDOC line, badge, target
+// capsules). nodeMark records the real number as it appends; the fallback is the
+// bare disc, so a row that was never drawn cannot widen the frame.
+const contentRight = (row) => (Number.isFinite(row.right) ? row.right : row.x + NG_R);
 
 class StructureView {
     constructor(data, index, reduce) {
@@ -1367,13 +1403,6 @@ class StructureView {
             svg.setAttribute('height', '0');
             return;
         }
-        const maxX = rows.reduce((m, r) => Math.max(m, r.x), 0);
-        const w = maxX + 320;
-        const h = Math.max(slots, 1) * ROW_PITCH + 40;
-        svg.setAttribute('width', String(w));
-        svg.setAttribute('height', String(h));
-        svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-
         const gEdges = svgEl('g', { class: 'ms-ge-st-edges' });
         const gNodes = svgEl('g', { class: 'ms-ge-st-nodes' });
         svg.appendChild(gEdges);
@@ -1395,11 +1424,20 @@ class StructureView {
                 anchor = chain.map((a) => byRow.get(a.id)).find(Boolean) || null;
             }
             if (anchor && row.depth > 0) {
-                const x1 = anchor.x + LABEL_GAP;
                 const y1 = anchor.y + pad;
                 const x2 = row.x;
                 const y2 = row.y + pad;
-                const bend = x1 + ELBOW;
+                // The vertical run goes in the gutter at the end of the parent's
+                // column, but never inside the child's outermost ring; and where a
+                // long parent label overruns the gutter it is pushed further right
+                // still, so the run clears the text it used to be drawn through.
+                const bend = Math.min(
+                    Math.max(anchor.x + colWidth(anchor.depth) - GUTTER, labelEnd(anchor) + 6),
+                    x2 - NG_R - 12,
+                );
+                // Depart just past the parent's label, so the horizontal segment is
+                // the stub between label and gutter rather than the label itself.
+                const x1 = Math.min(labelEnd(anchor) + 6, bend);
                 const path = svgEl('path', {
                     class: 'ms-ge-st-edge',
                     fill: 'none',
@@ -1412,10 +1450,15 @@ class StructureView {
 
                 const code = row.via.length ? row.via.join('·') : n.property_code;
                 if (code) {
+                    // End-anchored against the child's disc so the chip grows
+                    // leftwards INTO the gutter. Start-anchoring it at the bend
+                    // (the old `bend + 4`) let any code longer than three glyphs
+                    // run out over the disc it was labelling.
                     const chip = svgEl('text', {
                         class: `ms-ge-st-prop${DIM_PROPS.has(code) ? ' is-common' : ''}`,
-                        x: String(bend + 4),
+                        x: String(x2 - NG_R - 10),
                         y: String(y2 - 4),
+                        'text-anchor': 'end',
                     });
                     chip.textContent = code; // textContent — payload-safe
                     const ct = svgEl('title', {});
@@ -1427,6 +1470,42 @@ class StructureView {
 
             gNodes.appendChild(this.nodeMark(row, family, pad));
         });
+
+        this.sizeFrame(svg, rows, slots, pad);
+    }
+
+    // Size the frame from what was actually DRAWN. The old `maxX + 320` was a
+    // guess at "label + CIDOC line + badges + target capsule", and a long name
+    // carrying a `→ Target` capsule overran it, so the SVG was narrower than its
+    // own content and the capsule was truncated at the right edge.
+    //
+    // getBBox() is the exact answer, but it is a layout call: jsdom does not
+    // implement it, and an SVG in a `hidden` pane reports an empty box. So the
+    // analytic extent — computed from the same metrics the marks were placed
+    // with — is kept as a floor, and the measurement only ever widens it. Both
+    // terms are pure functions of the payload, so the frame stays reproducible.
+    sizeFrame(svg, rows, slots, pad) {
+        let w = rows.reduce((m, r) => Math.max(m, contentRight(r)), 0) + FRAME_PAD_X;
+        let h = Math.max(slots, 1) * ROW_PITCH + pad + FRAME_PAD_Y;
+
+        if (typeof svg.getBBox === 'function') {
+            let box = null;
+            try {
+                box = svg.getBBox();
+            } catch {
+                box = null; // detached or display:none — keep the analytic floor
+            }
+            if (box && Number.isFinite(box.width) && box.width > 0) {
+                w = Math.max(w, box.x + box.width + FRAME_PAD_X);
+                h = Math.max(h, box.y + box.height + FRAME_PAD_Y);
+            }
+        }
+
+        w = Math.ceil(w);
+        h = Math.ceil(h);
+        svg.setAttribute('width', String(w));
+        svg.setAttribute('height', String(h));
+        svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
     }
 
     nodeMark(row, family, pad) {
@@ -1443,12 +1522,17 @@ class StructureView {
             tabindex: '-1',
         });
 
+        // Running right-hand extent of this row, in absolute coordinates. sizeFrame
+        // uses it as the floor for the SVG width so nothing can be clipped.
+        let right = row.x + NG_R;
+
         if (isRoot) {
             // The model root is a capsule, not a disc — it is a different KIND of
             // thing from a field. Tint + 2px family border + ink text: a solid
             // family fill behind white measured 3.68:1 and fails 4.5:1.
             const label = String(n.name || '');
-            const wCap = Math.max(90, label.length * 7.6 + 26);
+            const wCap = Math.max(90, label.length * EM_ROOT + 26);
+            right = Math.max(right, row.x - 10 + wCap);
             g.appendChild(
                 svgEl('rect', {
                     class: 'ms-ge-st-capsule',
@@ -1499,6 +1583,7 @@ class StructureView {
                 label.appendChild(star);
             }
             g.appendChild(label);
+            right = Math.max(right, labelEnd(row));
 
             // CIDOC class as a second line: on by default only where it is the
             // modelling (groups, structural branches). On leaves it is almost
@@ -1512,14 +1597,16 @@ class StructureView {
                 });
                 sub.textContent = n.cidoc;
                 g.appendChild(sub);
+                right = Math.max(right, row.x + LABEL_GAP + String(n.cidoc).length * EM_MONO);
             }
 
             // Collapsed branches say how much they are hiding.
             if (row.expandable && !row.open) {
                 const d = this.descendants(n.id);
+                const bx = LABEL_GAP + String(n.name || '').length * EM_LABEL + 14;
                 const badge = svgEl('text', {
                     class: 'ms-ge-st-badge',
-                    x: String(LABEL_GAP + String(n.name || '').length * 6.6 + 14),
+                    x: String(bx),
                     y: '4',
                 });
                 badge.textContent = d.groups
@@ -1529,13 +1616,15 @@ class StructureView {
                       })
                     : tv('msGeStructFields', '{n} fields', { n: d.fields });
                 g.appendChild(badge);
+                right = Math.max(right, row.x + bx + badge.textContent.length * EM_BADGE);
             }
 
             // The money feature: an outbound relation shows the model it points at,
             // tinted in THAT model's family colour, and clicking jumps there.
             this.targetModels(n).forEach((tm, i) => {
                 const tw = Math.max(58, String(tm.name).length * 6.4 + 20);
-                const tx = LABEL_GAP + String(n.name || '').length * 6.6 + 22 + i * (tw + 8);
+                const tx = LABEL_GAP + String(n.name || '').length * EM_LABEL + 22 + i * (tw + 8);
+                right = Math.max(right, row.x + tx + tw);
                 const tg = svgEl('g', {
                     class: 'ms-ge-st-target',
                     'data-target': tm.id,
@@ -1563,6 +1652,8 @@ class StructureView {
                 g.appendChild(tg);
             });
         }
+
+        row.right = right;
 
         g.addEventListener('click', (e) => {
             const cap = e.target.closest && e.target.closest('.ms-ge-st-target');
