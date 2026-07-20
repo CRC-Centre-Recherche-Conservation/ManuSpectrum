@@ -1,3 +1,52 @@
-{% extends 'ms_base.htm' %}{% load i18n %}
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "Graph Explorer" %} — ManuSpectrum{% endblock %}
-{% block content %}<section class="ms-page-hero"><div class="ms-page-hero__title">{% trans "Graph Explorer" %}</div></section>{% endblock %}
+{% block page_description %}{% trans "Explore the ManuSpectrum data model as an interactive graph: 12 resource models, their fields, datatypes and relationships." %}{% endblock %}
+
+{% block content %}
+<section class="ms-page-hero reveal">
+    <div class="ms-page-hero__eyebrow">{% trans "Graph Explorer" %}</div>
+    <h1 class="ms-page-hero__title">{% trans "The model as a living graph" %}</h1>
+    <p class="ms-page-hero__lead">{% trans "Drag the nodes, follow the relationships, and click any model to inspect its fields, datatypes and CIDOC-CRM classes." %}</p>
+    <div class="ms-ge-stats" id="ms-ge-stats" aria-live="polite"></div>
+</section>
+
+<section class="ms-ge">
+    <div class="ms-ge-toolbar">
+        <div class="ms-ge-views" role="tablist">
+            <button class="ms-ge-view is-active" data-view="entities" role="tab" aria-selected="true">{% trans "Entities" %}</button>
+            <button class="ms-ge-view" data-view="datatypes" role="tab" aria-selected="false">{% trans "Datatypes" %}</button>
+        </div>
+        <div class="ms-ge-filters" id="ms-ge-filters"></div>
+        <div class="ms-ge-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="search" id="ms-ge-search" placeholder="{% trans 'Find a model…' %}" aria-label="{% trans 'Find a model' %}">
+        </div>
+    </div>
+
+    <div class="ms-ge-stage">
+        <div class="ms-ge-canvas" id="ms-ge-canvas" data-api="{% url 'model-graph' %}" tabindex="-1">
+            <div class="ms-ge-loading" id="ms-ge-loading">{% trans "Loading the model…" %}</div>
+            <svg id="ms-ge-svg" role="group" aria-label="{% trans 'Interactive model graph' %}"></svg>
+            <div class="ms-ge-error" id="ms-ge-error" hidden>{% trans "The model could not be loaded." %}</div>
+        </div>
+
+        <div class="ms-ge-plotly" id="ms-ge-plotly" hidden></div>
+
+        <aside class="ms-ge-drawer" id="ms-ge-drawer" hidden aria-label="{% trans 'Model details' %}">
+            <button class="ms-ge-drawer-close" id="ms-ge-drawer-close" aria-label="{% trans 'Close' %}"><i class="fa-solid fa-xmark"></i></button>
+            <div class="ms-ge-drawer-body" id="ms-ge-drawer-body"></div>
+        </aside>
+    </div>
+
+    <ul class="ms-ge-legend" id="ms-ge-legend"></ul>
+
+    <details class="ms-ge-a11y">
+        <summary>{% trans "List view (accessible)" %}</summary>
+        <div id="ms-ge-list"></div>
+    </details>
+</section>
+{% endblock %}
+
+{% block js_bundle %}{% render_bundle 'views/pages/graph-explorer' %}{% endblock %}

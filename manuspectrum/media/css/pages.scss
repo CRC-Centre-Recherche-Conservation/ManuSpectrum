@@ -141,3 +141,64 @@
     .ms-member-fallback { display: flex; } }
 .ms-team-verify { text-align: center; margin-top: 28px; }
 @media (max-width: 900px) { .ms-team-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; } }
+
+// ── Graph Explorer
+.ms-ge { @include ms-container; padding: 8px 24px 96px; }
+.ms-ge-stats { display: flex; gap: 26px; margin-top: 20px;
+    .ms-ge-stat { span { font-family: $ms-font-serif; font-size: 2rem; color: $ms-ink; display: block; }
+        em { font-style: normal; font-size: 0.78rem; color: $ms-ink-soft; font-family: $ms-font-mono; text-transform: uppercase; letter-spacing: 0.08em; } } }
+.ms-ge-toolbar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; margin: 20px 0 12px; }
+.ms-ge-views { display: inline-flex; border: 1px solid $ms-line; border-radius: 999px; overflow: hidden;
+    .ms-ge-view { background: #fff; border: 0; padding: 8px 18px; cursor: pointer; font: inherit; color: $ms-ink-soft;
+        &.is-active { background: $ms-ink; color: #fff; } } }
+.ms-ge-filters { display: flex; flex-wrap: wrap; gap: 8px;
+    .ms-ge-filter { border: 1px solid var(--c); color: var(--c); background: transparent; border-radius: 999px; padding: 5px 12px; font-size: 0.78rem; cursor: pointer; opacity: 0.4;
+        &.is-on { opacity: 1; background: color-mix(in srgb, var(--c) 12%, #fff); } } }
+.ms-ge-search { display: inline-flex; align-items: center; gap: 8px; border: 1px solid $ms-line; border-radius: 999px; padding: 6px 14px; background: #fff;
+    i { color: $ms-ink-soft; } input { border: 0; outline: 0; font: inherit; background: transparent; } }
+.ms-ge-stage { position: relative; display: grid; grid-template-columns: 1fr; min-height: 560px; border: 1px solid $ms-line; border-radius: 20px; background:
+    radial-gradient(circle at 30% 20%, rgba($ms-blue, 0.05), transparent 60%),
+    radial-gradient(circle at 80% 80%, rgba($ms-purple, 0.05), transparent 55%), #fff; overflow: hidden; }
+.ms-ge-canvas, .ms-ge-plotly { grid-area: 1 / 1; min-height: 560px; }
+#ms-ge-svg { width: 100%; height: 560px; display: block; cursor: grab; }
+.ms-ge-loading, .ms-ge-error { position: absolute; inset: 0; display: grid; place-items: center; color: $ms-ink-soft; font-family: $ms-font-mono; }
+.ms-ge-edge { stroke: rgba($ms-ink, 0.18); stroke-width: 1.4; transition: stroke 0.2s, opacity 0.2s;
+    &.is-active { stroke: $ms-blue; stroke-width: 2.2; } &.is-dim { opacity: 0.06; } }
+.ms-ge-node { cursor: pointer; transition: opacity 0.2s;
+    circle { transition: transform 0.15s; stroke: #fff; stroke-width: 2; }
+    &:hover circle, &:focus circle { filter: drop-shadow(0 4px 12px rgba($ms-ink, 0.25)); }
+    &.is-dim { opacity: 0.2; }
+    .ms-ge-node-label { font-family: $ms-font-sans; font-size: 12px; fill: $ms-ink; font-weight: 500; pointer-events: none; } }
+.ms-ge-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 16px; padding: 16px 4px 0; margin: 0;
+    li { display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; color: $ms-ink-soft;
+        i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; } } }
+.ms-ge-a11y { margin-top: 16px; summary { cursor: pointer; color: $ms-blue; } }
+.ms-ge-list-item { padding: 6px 0; border-bottom: 1px solid $ms-line; font-size: 0.9rem; }
+
+// Drawer
+.ms-ge-drawer { position: absolute; top: 0; right: 0; width: min(420px, 92%); height: 100%; background: #fff; border-left: 1px solid $ms-line;
+    box-shadow: -20px 0 50px rgba($ms-ink, 0.12); transform: translateX(100%); transition: transform 0.28s ease; overflow-y: auto; z-index: 5;
+    &.open { transform: none; } }
+.ms-ge-drawer-close { position: absolute; top: 14px; right: 14px; border: 0; background: $ms-paper-2; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; }
+.ms-ge-drawer-body { padding: 28px 24px; }
+.ms-ge-drawer-group { display: inline-block; color: #fff; font-size: 0.72rem; padding: 3px 10px; border-radius: 999px; }
+.ms-ge-drawer-head h3 { font-family: $ms-font-serif; font-weight: 500; margin: 10px 0 8px; }
+.ms-ge-drawer-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.ms-ge-chip { font-family: $ms-font-mono; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; background: $ms-paper-2; color: $ms-ink-soft; }
+.ms-ge-drawer-desc { color: $ms-ink-soft; font-size: 0.9rem; margin-top: 10px; }
+.ms-ge-tabs { display: flex; gap: 6px; margin: 18px 0 12px; border-bottom: 1px solid $ms-line;
+    .ms-ge-tab { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: $ms-ink-soft; border-bottom: 2px solid transparent;
+        &.is-active { color: $ms-ink; border-bottom-color: $ms-blue; } } }
+.ms-ge-ng { margin-bottom: 16px; h5 { font-family: $ms-font-mono; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: $ms-blue; margin: 0 0 6px; } }
+.ms-ge-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed $ms-line;
+    .ms-ge-dt { font-family: $ms-font-mono; font-size: 0.68rem; padding: 2px 7px; border-radius: 5px; color: #fff; background: var(--c); }
+    .ms-ge-field-name { font-weight: 600; font-size: 0.88rem; }
+    .ms-ge-field-cidoc { font-family: $ms-font-mono; font-size: 0.7rem; color: $ms-ink-soft; }
+    .ms-ge-badge { font-size: 0.66rem; color: $ms-red; border: 1px solid currentColor; border-radius: 4px; padding: 1px 5px; } }
+.ms-ge-rel-hint { font-family: $ms-font-mono; font-size: 0.7rem; color: $ms-ink-soft; margin: 0 0 10px; }
+.ms-ge-rel { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 1px solid $ms-line; background: #fff; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer;
+    em { font-style: normal; color: $ms-ink-soft; font-family: $ms-font-mono; font-size: 0.72rem; margin-right: auto; } &:hover { border-color: $ms-blue; } }
+.ms-ge-rel-count { flex: 0 0 auto; font-family: $ms-font-mono; font-size: 0.68rem; color: $ms-ink-soft; background: $ms-paper-2; border-radius: 999px; padding: 1px 7px; }
+@media (max-width: 700px) {
+    .ms-ge-stats { gap: 16px; } .ms-ge-drawer { width: 100%; }
+}
