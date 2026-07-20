@@ -14,7 +14,10 @@ class ManuspectrumConfig(AppConfig):
         if settings.APP_NAME.lower() == self.name:
             from manuspectrum.utils import search_thumbnail_fetchers
 
+        from manuspectrum import checks  # noqa: F401  (registers system checks)
+
         self._check_async_indexing_config()
+        self._check_contact_email_config()
 
     def _check_async_indexing_config(self):
         """Verify Celery task registration when BIBLISSIMA_ASYNC_INDEXING=True.
@@ -49,3 +52,24 @@ class ManuspectrumConfig(AppConfig):
                 exc,
             )
             settings.BIBLISSIMA_ASYNC_INDEXING = False
+
+    def _check_contact_email_config(self):
+        """Surface a placeholder contact address in server logs at startup.
+
+        The system check in ``manuspectrum.checks`` already turns this into a
+        hard Error for management commands (so ``migrate`` refuses to run on a
+        misconfigured prod). Gunicorn/Celery workers never run system checks,
+        so this logs loudly at process startup too — without taking the whole
+        site down over a contact address.
+        """
+        from manuspectrum import checks
+
+        email = checks.effective_contact_email()
+        if not settings.DEBUG and checks.is_placeholder_email(email):
+            logger.error(
+                "Public contact address is still the placeholder %r "
+                "(CONTACT_EMAIL / DEFAULT_FROM_EMAIL). The About > Contact "
+                "page is publishing a dead mailto: link — set a real address "
+                "in settings_local.py.",
+                email,
+            )
