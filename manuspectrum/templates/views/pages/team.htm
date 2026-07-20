@@ -1,3 +1,72 @@
-{% extends 'ms_base.htm' %}{% load i18n %}
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "About & Team" %} — ManuSpectrum{% endblock %}
-{% block content %}<section class="ms-page-hero"><div class="ms-page-hero__title">{% trans "About & Team" %}</div></section>{% endblock %}
+{% block page_description %}{% trans "About the ManuSpectrum project and the team behind it, within Biblissima+ Cluster 2." %}{% endblock %}
+
+{% block content %}
+<section class="ms-page-hero reveal">
+    <div class="ms-page-hero__eyebrow">{% trans "About & Team" %}</div>
+    <h1 class="ms-page-hero__title">{% trans "The project & the people" %}</h1>
+    <p class="ms-page-hero__lead" id="ms-about-lead">
+        {% trans "ManuSpectrum is developed within Cluster 2 — “Consideration and searchability of materials-analysis data” — of the ANR Biblissima+ programme, at the Centre de Recherche sur la Conservation (CRC), in partnership with Huma-Num. It archives, standardises and makes searchable the physicochemical analysis of manuscripts and written heritage, so that non-specialists can reuse reliable, interoperable data." %}
+    </p>
+    <details class="ms-about-more">
+        <summary>{% trans "Read more" %}</summary>
+        <p>{% trans "Built on Arches, ManuSpectrum places the material component at the pivot between the object, its context, the analyses and their interpretations, using shared ontologies (CIDOC-CRM, CRMsci) and reference thesauri to keep heterogeneous documents comparable and interoperable with the Biblissima portal." %}</p>
+    </details>
+    <div class="ms-page-hero__accent"></div>
+</section>
+
+<section class="ms-team reveal">
+    <h2 class="ms-cm-label">{% trans "The team" %}</h2>
+    <div class="ms-team-grid">
+        <!-- Anne Michelin -->
+        <article class="ms-member">
+            <div class="ms-member-photo">
+                <img class="ms-member-img" src="https://crc.mnhn.fr/sites/crc/files/styles/umr_mobile_participant_photo/public/photos/202310/Photo-Anne1.gif?h=c7454933&amp;itok=8RtwdHjz" alt="Anne Michelin" loading="lazy" referrerpolicy="no-referrer">
+                <span class="ms-member-fallback" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z"/></svg>
+                </span>
+            </div>
+            <h3>Anne Michelin</h3>
+            <div class="ms-member-role">{% trans "Maîtresse de conférences, physical chemistry" %}</div>
+            <div class="ms-member-tags"><span>CRC · MNHN</span><span>Biblissima+ · Cluster 2</span></div>
+            <p class="ms-member-bio">{% trans "Physico-chemist at the Centre de Recherche sur la Conservation, specialising in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of written cultural heritage. Referent for Biblissima+ Cluster 2." %}</p>
+            <a class="ms-member-link" href="https://crc.mnhn.fr/fr/annuaire/anne-michelin-9373" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {% trans "Profile" %}</a>
+        </article>
+
+        <!-- Gilles Kagan -->
+        <article class="ms-member">
+            <div class="ms-member-photo">
+                <img class="ms-member-img" src="https://www.irht.cnrs.fr/sites/default/files/styles/avatar_agent/public/image_site/avatars/GillesKagan.jpg?itok=59wvCBiZ" alt="Gilles Kagan" loading="lazy" referrerpolicy="no-referrer">
+                <span class="ms-member-fallback" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z"/></svg>
+                </span>
+            </div>
+            <h3>Gilles Kagan</h3>
+            <div class="ms-member-role">{% trans "Research engineer, head of the Images service" %}</div>
+            <div class="ms-member-tags"><span>IRHT · CNRS</span><span>Biblissima+ · Cluster 2</span></div>
+            <p class="ms-member-bio">{% trans "Imaging specialist leading the Images service of the IRHT digital pole; digitisation and IIIF publication of medieval manuscripts (Bibliothèque virtuelle des manuscrits médiévaux)." %}</p>
+            <a class="ms-member-link" href="https://www.irht.cnrs.fr/fr/annuaire/kagan-gilles" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {% trans "Profile" %}</a>
+        </article>
+
+        <!-- Maxime Humeau (no photo) -->
+        <article class="ms-member">
+            <div class="ms-member-photo is-fallback">
+                <span class="ms-member-fallback" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z"/></svg>
+                </span>
+            </div>
+            <h3>Maxime Humeau</h3>
+            <div class="ms-member-role">{% trans "Study engineer / web developer" %}</div>
+            <div class="ms-member-tags"><span>CRC · MNHN</span><span>Biblissima+ · Cluster 2</span></div>
+            <p class="ms-member-bio">{% trans "Web developer of ManuSpectrum, building the Arches / Django platform, its IIIF services and interoperability with the Biblissima ecosystem." %}</p>
+            <a class="ms-member-link" href="https://crc.mnhn.fr/fr/annuaire/maxime-humeau-9510" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {% trans "Profile" %}</a>
+        </article>
+    </div>
+    <p class="ms-team-verify text-muted"><small>{% trans "Biographies compiled from public institutional sources." %}</small></p>
+</section>
+{% endblock %}
+
+{% block js_bundle %}{% render_bundle 'views/pages/team' %}{% endblock %}

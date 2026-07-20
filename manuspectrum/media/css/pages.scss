@@ -74,3 +74,70 @@
             i { color: $ms-blue; } &:hover { color: $ms-blue; } } }
 }
 @media (max-width: 800px) { .ms-contact__grid { grid-template-columns: 1fr; } }
+
+// ── Conceptual model page
+.reveal { @include ms-reveal; }
+.ms-cm-section { @include ms-container; padding: 40px 24px; }
+.ms-cm-label { font-family: $ms-font-mono; font-size: 12px; font-weight: 400; letter-spacing: 0.16em; text-transform: uppercase; color: $ms-blue; margin: 0 0 20px; }
+.ms-cm-intro { color: $ms-ink-soft; max-width: 680px; }
+.ms-cm-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+    .ms-cm-level { position: relative; background: #fff; border: 1px solid $ms-line; border-radius: 16px; padding: 28px 24px; overflow: hidden;
+        &::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; @include ms-spectral-gradient(180deg); }
+        .ms-cm-level-num { font-family: $ms-font-mono; color: $ms-blue; font-size: 0.8rem; }
+        h3 { font-family: $ms-font-serif; font-weight: 500; margin: 6px 0 10px; }
+        p { color: $ms-ink-soft; font-size: 0.95rem; margin: 0; } } }
+.ms-cm-groups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 8px;
+    .ms-cm-group { border-radius: 14px; padding: 20px; color: #fff;
+        h3 { margin: 0 0 8px; font-size: 1rem; } p { margin: 0; font-size: 0.85rem; opacity: 0.92; font-family: $ms-font-mono; }
+        &[data-group="studied-object"] { background: $ms-blue; }
+        &[data-group="observation"] { background: $ms-green; }
+        &[data-group="context"] { background: $ms-purple; }
+        &[data-group="transformations"] { background: $ms-orange; } } }
+.ms-cm-cta { margin-top: 28px; display: inline-flex; }
+.ms-cm-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
+    .ms-cm-stat { text-align: center; padding: 20px 12px; border: 1px solid $ms-line; border-radius: 14px; background: #fff;
+        .ms-cm-stat-value { display: block; font-family: $ms-font-serif; font-size: 2.4rem; color: $ms-ink; }
+        .ms-cm-stat-label { font-size: 0.8rem; color: $ms-ink-soft; } } }
+.ms-cm-flow { list-style: none; display: flex; flex-wrap: wrap; gap: 12px; padding: 0; counter-reset: step;
+    li { position: relative; flex: 1 1 160px; background: #fff; border: 1px solid $ms-line; border-radius: 12px; padding: 18px; text-align: center; counter-increment: step;
+        &::before { content: counter(step); display: inline-block; font-family: $ms-font-mono; color: $ms-blue; font-size: 0.8rem; }
+        span { display: block; font-weight: 600; margin-top: 4px; }
+        &:not(:last-child)::after { content: '→'; position: absolute; right: -12px; top: 50%; transform: translateY(-50%); color: $ms-line; } } }
+.ms-cm-thesauri { display: flex; flex-wrap: wrap; gap: 12px;
+    a, span { padding: 10px 18px; border-radius: 999px; border: 1px solid $ms-line; background: #fff; font-family: $ms-font-mono; font-size: 0.85rem; text-decoration: none; color: $ms-ink; }
+    a:hover { border-color: $ms-blue; color: $ms-blue; } }
+@media (max-width: 900px) {
+    .ms-cm-levels, .ms-cm-groups, .ms-cm-stats { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+    .ms-cm-levels, .ms-cm-groups, .ms-cm-stats { grid-template-columns: 1fr; }
+}
+
+// ── Team page
+.ms-about-more { margin-top: 16px; max-width: 720px;
+    summary { cursor: pointer; color: $ms-blue; font-weight: 600; }
+    p { color: $ms-ink-soft; margin-top: 12px; } }
+.ms-team { @include ms-container; padding: 24px 24px 96px; }
+.ms-team-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.ms-member { background: #fff; border: 1px solid $ms-line; border-radius: 18px; padding: 28px; text-align: center;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    &:hover { transform: translateY(-4px); box-shadow: 0 18px 44px rgba(26,26,46,0.10); }
+    h3 { font-family: $ms-font-serif; font-weight: 500; margin: 16px 0 4px; }
+    .ms-member-role { color: $ms-ink-soft; font-size: 0.9rem; }
+    .ms-member-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 12px 0;
+        span { font-family: $ms-font-mono; font-size: 0.72rem; padding: 4px 10px; border-radius: 999px; background: $ms-paper-2; color: $ms-ink-soft; } }
+    .ms-member-bio { font-size: 0.92rem; color: $ms-ink-soft; line-height: 1.55; }
+    .ms-member-link { display: inline-flex; gap: 6px; align-items: center; margin-top: 12px; color: $ms-blue; text-decoration: none; font-size: 0.88rem; } }
+.ms-member-photo { width: 120px; height: 120px; margin: 0 auto; border-radius: 50%; overflow: hidden; position: relative;
+    box-shadow: 0 0 0 3px #fff, 0 0 0 5px transparent;
+    &::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; padding: 3px; @include ms-spectral-gradient(135deg);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+    img { width: 100%; height: 100%; object-fit: cover; } }
+.ms-member-fallback { display: none; width: 100%; height: 100%; align-items: center; justify-content: center;
+    background: $ms-paper-2; color: $ms-ink-soft;
+    svg { width: 52%; height: 52%; display: block; } }
+.ms-member-photo.is-fallback {
+    .ms-member-img { display: none; }
+    .ms-member-fallback { display: flex; } }
+.ms-team-verify { text-align: center; margin-top: 28px; }
+@media (max-width: 900px) { .ms-team-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; } }
