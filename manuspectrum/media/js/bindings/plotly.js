@@ -4,7 +4,9 @@
 
 import $ from 'jquery';
 import ko from 'knockout';
-import Plotly from 'plotly.js-dist';
+// cartesian-dist covers every trace this binding renders (scatter/lines);
+// see graph-explorer.js for the bundle-choice rationale.
+import Plotly from 'plotly.js-cartesian-dist';
 
 const plotlyBinding = {
     init(element, valueAccessor) {

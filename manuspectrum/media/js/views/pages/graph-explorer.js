@@ -2764,8 +2764,22 @@ async function showView(view) {
     }
 
     if (view === 'datatypes' && !plotted) {
+        const box = el('ms-ge-plotly');
         plotted = true;
-        await drawPlotly(plotlyData, el('ms-ge-plotly'));
+        try {
+            if (box) box.innerHTML = ''; // clear a previous failure notice
+            await drawPlotly(plotlyData, box);
+        } catch {
+            // Dynamic-import or render failure (offline, bundle missing…).
+            // Reset the latch so reopening the tab retries instead of leaving
+            // the pane empty forever.
+            plotted = false;
+            if (box) {
+                box.innerHTML = `<div class="ms-ge-error">${esc(
+                    t('msGeChartError', 'The chart could not be loaded — reopen this tab to retry.'),
+                )}</div>`;
+            }
+        }
     }
 }
 
@@ -2854,7 +2868,10 @@ function wireSearch() {
 // ---------------------------------------------------------------------------
 
 async function drawPlotly(data, box) {
-    const Plotly = (await import('plotly.js-dist')).default;
+    // cartesian-dist: all 2D scientific traces (bar, scatter, heatmap,
+    // contour, histogram, box/violin) at a third of the full bundle. Swap
+    // back to plotly.js-dist only if 3D/geo traces become needed.
+    const Plotly = (await import('plotly.js-cartesian-dist')).default;
     // State the sort rather than leaving the reader to infer it.
     const dts = (data.datatypes || []).slice().sort((a, b) => (b.count || 0) - (a.count || 0));
     const bar = {
