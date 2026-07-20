@@ -31,6 +31,7 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationPageViewV2,
     IIIFAnnotationViewV2,
 )
+from manuspectrum.views.model_graph import ModelGraphView
 
 urlpatterns = [
     # path("", include("arches_controlled_lists.urls")),
@@ -164,6 +165,12 @@ urlpatterns.append(
     )
 )
 
+### Manuspectrum URL - Public model-graph API (cached, for the Graph Explorer)
+
+urlpatterns.append(
+    path("api/model-graph", ModelGraphView.as_view(), name="model-graph")
+)
+
 ### Manuspectrum URL — public About pages (TemplateView already imported at top of urls.py)
 for _slug, _name, _tpl in [
     ("about/model", "about-model", "views/pages/conceptual-model.htm"),
@@ -171,7 +178,9 @@ for _slug, _name, _tpl in [
     ("about/team", "about-team", "views/pages/team.htm"),
     ("about/contact", "about-contact", "views/pages/contact.htm"),
 ]:
-    urlpatterns.append(path(_slug, TemplateView.as_view(template_name=_tpl), name=_name))
+    urlpatterns.append(
+        path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
+    )
 
 
 ### Manuspectrum URL - IIIF Annotations

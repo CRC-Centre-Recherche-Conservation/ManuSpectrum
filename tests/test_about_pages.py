@@ -46,3 +46,21 @@ class ContactPageTests(TestCase):
         resp = self.client.get(reverse("about-contact"))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'data-contact-email=""')
+
+
+class ConceptualModelPageTests(TestCase):
+    def test_key_sections_present(self):
+        resp = self.client.get(reverse("about-model"))
+        self.assertEqual(resp.status_code, 200)
+        for needle in ("CIDOC-CRM", "CRMsci", "Getty AAT"):
+            self.assertContains(resp, needle)
+        # links to the interactive explorer
+        self.assertContains(resp, reverse("about-explorer"))
+
+
+class TeamPageTests(TestCase):
+    def test_members_present(self):
+        resp = self.client.get(reverse("about-team"))
+        self.assertEqual(resp.status_code, 200)
+        for name in ("Anne Michelin", "Gilles Kagan", "Maxime Humeau"):
+            self.assertContains(resp, name)
