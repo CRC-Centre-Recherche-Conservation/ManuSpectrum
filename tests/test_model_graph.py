@@ -2,8 +2,12 @@ from django.test import SimpleTestCase, TestCase
 
 from manuspectrum.views.model_graph_service import (
     prettify_cidoc,
+    property_code,
     group_for_slug,
     trim_node_config,
+    skip_from_counts,
+    structure_depths,
+    finalize_structure,
     GROUPS,
     DATATYPE_COLORS,
     DATATYPE_LABELS,
@@ -37,6 +41,12 @@ class HelperTests(SimpleTestCase):
     def test_group_for_slug_unknown(self):
         self.assertEqual(group_for_slug("nonexistent-slug"), "other")
 
+    def test_group_for_slug_instrument(self):
+        # The graph's slug was always correct ("instrument"); only its display
+        # name carried the typo, and that was fixed in the database itself
+        # (see .superpowers/sdd/fix_instrument_typo.py) rather than patched here.
+        self.assertEqual(group_for_slug("instrument"), "context")
+
     def test_groups_have_colors(self):
         ids = {g["id"] for g in GROUPS}
         self.assertTrue(
@@ -62,6 +72,152 @@ class HelperTests(SimpleTestCase):
     def test_datatype_colors_are_hex(self):
         for v in DATATYPE_COLORS.values():
             self.assertRegex(v, r"^#[0-9a-fA-F]{6}$")
+
+
+class PropertyCodeTests(SimpleTestCase):
+    """The P-number is precomputed server-side so the client runs no per-edge regex."""
+
+    def test_plain_property(self):
+        self.assertEqual(property_code("P4 has time-span"), "P4")
+
+    def test_inverse_property_keeps_its_letter(self):
+        # P98i / P106i / P67i are all real in this dataset; dropping the trailing
+        # "i" would silently reverse the direction of the relationship.
+        self.assertEqual(property_code("P98i was born"), "P98i")
+        self.assertEqual(property_code("P82a begin of the begin"), "P82a")
+
+    def test_no_property(self):
+        self.assertEqual(property_code(""), "")
+        self.assertEqual(property_code(None), "")
+
+    def test_class_code_is_not_mistaken_for_a_property(self):
+        self.assertEqual(property_code("E67 Birth"), "")
+
+
+class StatsInvariantTests(SimpleTestCase):
+    """`stats.nodes` is 452 and must stay 452 — pinned at the rule that decides it.
+
+    The Structure view needs every graph's top node (a tree needs a root), while
+    the published counts have always excluded it. Those two requirements pull in
+    opposite directions on the same loop, so the rule lives in one named function
+    and is tested from both sides here. Breaking it silently shifts the "452
+    fields" figure printed on /about/model and /about/explorer, and breaks the
+    matrix, table and datatypes views that read `counts`.
+    """
+
+    def test_top_node_is_excluded_from_counts(self):
+        self.assertTrue(skip_from_counts("semantic", True))
+
+    def test_ordinary_semantic_branch_is_counted(self):
+        # A semantic node that is NOT the top node is a real branch in the model
+        # (Birth, Time-Span, Joining) and has always been part of the nodegroup
+        # count, even though it is not a data field.
+        self.assertFalse(skip_from_counts("semantic", False))
+
+    def test_data_nodes_are_never_skipped(self):
+        for dt in ("string", "concept", "resource-instance", "date", "manifest"):
+            self.assertFalse(skip_from_counts(dt, False))
+            # A non-semantic top node cannot occur today, but if one ever did it
+            # would be a real field and must still count.
+            self.assertFalse(skip_from_counts(dt, True))
+
+    def test_falsy_istopnode_variants(self):
+        for falsy in (None, 0, False, ""):
+            self.assertFalse(skip_from_counts("semantic", falsy))
+
+    def test_root_is_skipped_from_counts_but_present_in_the_structure(self):
+        """The two-sided invariant, in one test."""
+        nodes = [
+            {"id": "root", "name": "Person", "datatype": "semantic", "nodegroup": None},
+            {"id": "kid", "name": "Name", "datatype": "string", "nodegroup": "ng"},
+        ]
+        out = finalize_structure(nodes, {"root": None, "kid": "root"}, {})
+        self.assertEqual(out["root"], "root")
+        self.assertEqual({n["id"] for n in out["nodes"]}, {"root", "kid"})
+        # ...and the very same node is kept out of every published count.
+        self.assertTrue(skip_from_counts("semantic", True))
+
+
+class StructureDepthTests(SimpleTestCase):
+    def test_linear_chain(self):
+        depths = structure_depths({"a": None, "b": "a", "c": "b", "d": "c"})
+        self.assertEqual(depths, {"a": 0, "b": 1, "c": 2, "d": 3})
+
+    def test_branching_tree(self):
+        depths = structure_depths({"r": None, "x": "r", "y": "r", "z": "x"})
+        self.assertEqual(depths["x"], 1)
+        self.assertEqual(depths["y"], 1)
+        self.assertEqual(depths["z"], 2)
+
+    def test_parent_outside_the_graph_is_treated_as_a_root(self):
+        # Edges never cross graphs today, but a dangling parent must not produce
+        # a KeyError on a public endpoint.
+        self.assertEqual(structure_depths({"a": "elsewhere"}), {"a": 0})
+
+    def test_cycle_degrades_to_a_flat_drawing_instead_of_hanging(self):
+        # Every model is a verified strict tree, so this should be unreachable —
+        # but a corrupt Edge table must not spin the request forever.
+        depths = structure_depths({"a": "b", "b": "a"})
+        self.assertEqual(set(depths), {"a", "b"})
+        for v in depths.values():
+            self.assertLess(v, 3)
+
+    def test_empty(self):
+        self.assertEqual(structure_depths({}), {})
+
+
+class FinalizeStructureTests(SimpleTestCase):
+    def _nodes(self):
+        return [
+            {"id": "c", "name": "Zeta", "datatype": "string", "nodegroup": "ng1"},
+            {"id": "a", "name": "Root", "datatype": "semantic", "nodegroup": None},
+            {"id": "b", "name": "Alpha", "datatype": "string", "nodegroup": "ng1"},
+        ]
+
+    NG = {"ng1": {"cardinality": "n", "parent_nodegroup": "ng0"}}
+
+    def test_attaches_parent_depth_and_nodegroup_metadata(self):
+        out = finalize_structure(
+            self._nodes(), {"a": None, "b": "a", "c": "b"}, self.NG
+        )
+        by_id = {n["id"]: n for n in out["nodes"]}
+        self.assertEqual(by_id["a"]["depth"], 0)
+        self.assertEqual(by_id["b"]["depth"], 1)
+        self.assertEqual(by_id["c"]["depth"], 2)
+        self.assertEqual(by_id["c"]["parent"], "b")
+        self.assertEqual(by_id["b"]["cardinality"], "n")
+        self.assertEqual(by_id["b"]["parent_nodegroup"], "ng0")
+
+    def test_node_without_a_nodegroup_gets_null_cardinality(self):
+        out = finalize_structure(
+            self._nodes(), {"a": None, "b": "a", "c": "b"}, self.NG
+        )
+        root = next(n for n in out["nodes"] if n["id"] == "a")
+        self.assertIsNone(root["cardinality"])
+        self.assertIsNone(root["parent_nodegroup"])
+
+    def test_root_is_the_parentless_node(self):
+        out = finalize_structure(
+            self._nodes(), {"a": None, "b": "a", "c": "b"}, self.NG
+        )
+        self.assertEqual(out["root"], "a")
+
+    def test_output_order_is_deterministic_not_database_order(self):
+        """A payload people diff and cite must not depend on row order."""
+        parents = {"a": None, "b": "a", "c": "b"}
+        first = finalize_structure(self._nodes(), parents, self.NG)
+        shuffled = list(reversed(self._nodes()))
+        second = finalize_structure(shuffled, parents, self.NG)
+        self.assertEqual(
+            [n["id"] for n in first["nodes"]], [n["id"] for n in second["nodes"]]
+        )
+        # depth, then name — so siblings read alphabetically.
+        self.assertEqual([n["id"] for n in first["nodes"]], ["a", "b", "c"])
+
+    def test_unknown_nodegroup_does_not_raise(self):
+        nodes = [{"id": "a", "name": "A", "datatype": "string", "nodegroup": "missing"}]
+        out = finalize_structure(nodes, {"a": None}, {})
+        self.assertIsNone(out["nodes"][0]["cardinality"])
 
 
 class DatatypeCoverageTests(TestCase):

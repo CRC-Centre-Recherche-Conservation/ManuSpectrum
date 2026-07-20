@@ -22,6 +22,15 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL = 60 * 60 * 24  # 24h backstop; fingerprint busts earlier on republish.
 
+# The fingerprint below only tracks (graphid, publication), so it invalidates
+# automatically when a graph is republished — but NOT when the payload changes for
+# any other reason. Flush the cache by hand in those two cases:
+#   * you edited build_model_graph() so the payload's shape or content changed;
+#   * you corrected graph data in place without republishing (e.g. renaming a
+#     graph directly in the database).
+# Otherwise the old payload is served until the 24h TTL expires.
+#   redis-cli -n 1 --scan --pattern '*ms:model-graph*' | xargs -r redis-cli -n 1 DEL
+
 
 def graph_fingerprint():
     """Cheap fingerprint of all resource graphs' (id, publication). Changes on republish."""

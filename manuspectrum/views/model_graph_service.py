@@ -4,6 +4,8 @@ Pure helpers (DB-free) are unit-tested; build_model_graph() reads the ORM and is
 verified against the dev database. Keep it lean — this feeds a cached endpoint.
 """
 
+import re
+
 from django.conf import settings
 from django.db.models import Count
 from django.utils import translation
@@ -46,7 +48,6 @@ _SLUG_TO_GROUP = {
     "person": "context",
     "place": "context",
     "project": "context",
-    "intrument": "context",
     "instrument": "context",
     "group": "context",
     "alteration": "transformations",
@@ -113,6 +114,75 @@ def prettify_cidoc(uri):
     return tail
 
 
+_P_CODE = re.compile(r"\bP\d+[a-z]?", re.IGNORECASE)
+
+
+def property_code(prettified):
+    """'P98i was born' -> 'P98i'. Precomputed so the client runs no regex per edge."""
+    m = _P_CODE.search(str(prettified or ""))
+    return m.group(0) if m else ""
+
+
+def skip_from_counts(datatype, istopnode):
+    """The ONE rule that keeps `stats.nodes` at 452 and `stats.nodegroups` at 169.
+
+    A graph's top node is a synthetic `semantic` root that models the resource
+    itself, not a field anyone fills in. It is excluded from `ng_map`, from
+    `datatype_hist` and from every published count — but it IS emitted as the
+    root of the `structure` tree, because a tree needs a root. Those two facts
+    must stay independently true; see `tests/test_model_graph.py`.
+    """
+    return datatype == "semantic" and bool(istopnode)
+
+
+def structure_depths(parent_of):
+    """{nodeid: parent|None} -> {nodeid: hops from root}. Memoised, cycle-safe.
+
+    Every ManuSpectrum graph is a verified strict tree (edges == nodes - 1, one
+    root), so the cycle guard should never fire — but a corrupt Edge table must
+    degrade to a flat drawing, never to a hung request.
+    """
+    depths = {}
+
+    def walk(nid, seen):
+        if nid in depths:
+            return depths[nid]
+        parent = parent_of.get(nid)
+        if parent is None or parent not in parent_of or parent in seen:
+            depths[nid] = 0
+        else:
+            depths[nid] = walk(parent, seen | {nid}) + 1
+        return depths[nid]
+
+    for nid in parent_of:
+        walk(nid, frozenset())
+    return depths
+
+
+def finalize_structure(nodes, parent_of, ng_meta):
+    """Attach parent/depth/cardinality to a graph's structure nodes.
+
+    `nodes` are partially-built dicts (id/name/datatype/... already set);
+    `parent_of` maps nodeid -> parent nodeid or None; `ng_meta` maps nodegroupid
+    -> {"cardinality", "parent_nodegroup"}. Pure — unit-tested without the ORM.
+    """
+    depths = structure_depths(parent_of)
+    root = None
+    for nd in nodes:
+        nid = nd["id"]
+        nd["parent"] = parent_of.get(nid)
+        nd["depth"] = depths.get(nid, 0)
+        meta = ng_meta.get(nd.get("nodegroup") or "") or {}
+        nd["cardinality"] = meta.get("cardinality")
+        nd["parent_nodegroup"] = meta.get("parent_nodegroup")
+        if nd["parent"] is None and root is None:
+            root = nid
+    # Deterministic order: a public payload people diff and cite must not depend
+    # on the database's row order.
+    nodes.sort(key=lambda n: (n["depth"], n["name"], n["id"]))
+    return {"root": root, "nodes": nodes}
+
+
 def group_for_slug(slug):
     return _SLUG_TO_GROUP.get((slug or "").lower(), "other")
 
@@ -157,8 +227,10 @@ def _excluded_graph_ids():
 def build_model_graph(language="en"):
     """Introspect resource graphs into the explorer payload (see spec)."""
     from arches.app.models.models import (
+        Concept,
         GraphModel,
         Node,
+        NodeGroup,
         Edge,
         ResourceInstance,
     )
@@ -189,16 +261,44 @@ def build_model_graph(language="en"):
         ):
             counts[str(row["graph_id"])] = row["n"]
 
-        # Edge property lookup: rangenode_id -> ontologyproperty (for relation labels).
-        edge_prop = {}
+        # Edge lookups, both keyed by the RANGE node (an Arches graph is a tree,
+        # so every non-root node is the range of exactly one edge):
+        #   edge_prop   -> the ontology property that links it to its parent
+        #   edge_parent -> the parent nodeid itself
+        # `domainnode_id` costs nothing here — it is already in the row being
+        # fetched, it was simply being discarded. The whole `structure` tree
+        # therefore adds ZERO queries beyond the NodeGroup metadata below.
+        edge_prop, edge_parent = {}, {}
         for e in Edge.objects.filter(graph_id__in=graph_ids).values(
-            "rangenode_id", "ontologyproperty"
+            "rangenode_id", "domainnode_id", "ontologyproperty"
         ):
-            edge_prop[str(e["rangenode_id"])] = e["ontologyproperty"]
+            rid = str(e["rangenode_id"])
+            edge_prop[rid] = e["ontologyproperty"]
+            edge_parent[rid] = str(e["domainnode_id"])
 
         all_nodes = list(Node.objects.filter(graph_id__in=graph_ids))
 
+        # The single new query: cardinality + nesting for every nodegroup in play.
+        # `nodegroups[]` already ships a flat list of groups; what it cannot say is
+        # that Person's 23 groups are really 10 roots in a depth-4 forest.
+        ng_meta = {}
+        ng_ids = {n.nodegroup_id for n in all_nodes if n.nodegroup_id}
+        if ng_ids:
+            for ng in NodeGroup.objects.filter(nodegroupid__in=ng_ids).values(
+                "nodegroupid", "cardinality", "parentnodegroup_id"
+            ):
+                ng_meta[str(ng["nodegroupid"])] = {
+                    "cardinality": ng["cardinality"] or None,
+                    "parent_nodegroup": (
+                        str(ng["parentnodegroup_id"])
+                        if ng["parentnodegroup_id"]
+                        else None
+                    ),
+                }
+
         models, datatype_hist = [], {}
+        cidoc_classes = set()
+        thesaurus_nodes = 0
         relations_by_key = (
             {}
         )  # (gid, tgt, prop) -> relation dict, preserves first-seen order
@@ -206,21 +306,54 @@ def build_model_graph(language="en"):
         for g in graphs:
             gid = str(g.graphid)
             g_nodes = [n for n in all_nodes if str(n.graph_id) == gid]
+            g_node_ids = {str(n.nodeid) for n in g_nodes}
             ng_map = {}  # nodegroupid -> {id,name,cidoc,nodes[]}
             data_nodes = 0
+            struct_nodes, parent_of = [], {}
 
             for n in g_nodes:
-                if n.datatype == "semantic" and n.istopnode:
-                    continue
+                nid = str(n.nodeid)
                 dt = n.datatype
+                cfg = n.config if isinstance(n.config, dict) else dict(n.config or {})
+                node_cfg = trim_node_config(dt, cfg)
+                if n.ontologyclass:
+                    cidoc_classes.add(prettify_cidoc(n.ontologyclass))
+
+                # --- structure tree: EVERY node, top node included -------------
+                # An edge whose domain sits in another graph cannot be a parent
+                # here; treat it as a root so the tree stays well-formed.
+                parent = edge_parent.get(nid)
+                parent_of[nid] = parent if parent in g_node_ids else None
+                prop_uri = edge_prop.get(nid)
+                prop = prettify_cidoc(prop_uri)
+                struct_nodes.append(
+                    {
+                        "id": nid,
+                        "name": str(n.name),
+                        "datatype": dt,
+                        "cidoc": prettify_cidoc(n.ontologyclass),
+                        "cidoc_uri": str(n.ontologyclass or ""),
+                        "required": bool(n.isrequired),
+                        "property": prop,
+                        "property_code": property_code(prop),
+                        "property_uri": str(prop_uri or ""),
+                        "nodegroup": str(n.nodegroup_id) if n.nodegroup_id else None,
+                        "is_collector": bool(n.nodegroup_id)
+                        and nid == str(n.nodegroup_id),
+                        "config": node_cfg,
+                    }
+                )
+
+                # --- published counts: top node deliberately excluded ----------
+                if skip_from_counts(dt, n.istopnode):
+                    continue
                 datatype_hist[dt] = datatype_hist.get(dt, 0) + 1
                 if dt != "semantic":
                     data_nodes += 1
+                if dt in ("concept", "concept-list"):
+                    thesaurus_nodes += 1
                 ngid = str(n.nodegroup_id) if n.nodegroup_id else "ungrouped"
                 bucket = ng_map.setdefault(ngid, {"id": ngid, "name": "", "nodes": []})
-                node_cfg = trim_node_config(
-                    dt, n.config if isinstance(n.config, dict) else dict(n.config or {})
-                )
                 bucket["nodes"].append(
                     {
                         "name": str(n.name),
@@ -228,7 +361,7 @@ def build_model_graph(language="en"):
                         "cidoc": prettify_cidoc(n.ontologyclass),
                         "required": bool(n.isrequired),
                         "is_collector": bool(n.nodegroup_id)
-                        and str(n.nodeid) == str(n.nodegroup_id),
+                        and nid == str(n.nodegroup_id),
                         "config": node_cfg,
                     }
                 )
@@ -273,6 +406,7 @@ def build_model_graph(language="en"):
                     "instances": counts.get(gid, 0),
                     "counts": {"nodegroups": len(ng_map), "nodes": data_nodes},
                     "nodegroups": list(ng_map.values()),
+                    "structure": finalize_structure(struct_nodes, parent_of, ng_meta),
                 }
             )
 
@@ -290,12 +424,40 @@ def build_model_graph(language="en"):
             if dt != "semantic"
         ]
 
+        # Two cheap COUNTs. The pages quote "12 thesauri · ~20,000 concepts";
+        # both drift as the RDM grows, so neither may live in a template.
+        try:
+            concepts = Concept.objects.filter(nodetype_id="Concept").count()
+            thesauri = Concept.objects.filter(nodetype_id="ConceptScheme").count()
+        except Exception:  # noqa: BLE001 — a missing RDM must not 500 the explorer
+            concepts, thesauri = 0, 0
+
+        data_nodes_total = sum(m["counts"]["nodes"] for m in models)
         stats = {
+            # --- PINNED. The matrix/table/datatypes views and the published
+            # figures on /about/model both read these; `nodes` is 452 and must
+            # stay 452 unless the graphs themselves change. See skip_from_counts.
             "models": len(models),
             "nodegroups": sum(m["counts"]["nodegroups"] for m in models),
-            "nodes": sum(m["counts"]["nodes"] for m in models),
+            "nodes": data_nodes_total,
             "relations": len(relations),
             "datatypes": len(datatypes),
+            # --- derived figures, added so the About pages stop hardcoding them.
+            "total_nodes": sum(len(m["structure"]["nodes"]) for m in models),
+            "records": sum(int(m["instances"] or 0) for m in models),
+            "empty_models": sum(1 for m in models if not m["instances"]),
+            "thesaurus_nodes": thesaurus_nodes,
+            "thesaurus_pct": (
+                round(thesaurus_nodes * 100 / data_nodes_total)
+                if data_nodes_total
+                else 0
+            ),
+            "cidoc_classes": len(cidoc_classes),
+            "properties": len(
+                {p for p in edge_prop.values() if p}
+            ),  # distinct CIDOC properties in use
+            "concepts": concepts,
+            "thesauri": thesauri,
         }
 
         return {
