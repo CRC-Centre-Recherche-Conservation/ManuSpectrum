@@ -29,6 +29,13 @@ function generateConfig(): Promise<UserConfig> {
         const alias: { [key: string]: string } = {
             '@/arches': path.join(parsedData['ROOT_DIR'], 'app', 'src', 'arches'),
             'arches': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'arches.js'),
+            // Webpack builds an alias for every file under media/js from its path
+            // relative to that directory (see `javascriptRelativeFilepathToAbsoluteFilepathLookup`
+            // in webpack/webpack.common.js), which is how the KnockoutJS side writes
+            // `import { createForceGraph } from 'utils/force-graph'`. Mirroring the
+            // `utils/` prefix here lets a spec import a page module that uses those
+            // bare specifiers instead of only leaf utilities via relative paths.
+            'utils': path.join(parsedData['APP_ROOT'], 'media', 'js', 'utils'),
         };
 
         for (
