@@ -41,15 +41,25 @@ export default function initMsNav() {
             dd.classList.toggle('open', open);
             toggle.setAttribute('aria-expanded', String(open));
         };
+        const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
         toggle.addEventListener('click', (e) => {
             e.stopPropagation();
-            setOpen(!dd.classList.contains('open'));
+            // On a mouse, moving to the toggle ALWAYS fires `mouseenter` first,
+            // which opens the panel — so a plain toggle here inverted that and the
+            // menu shut again. The effect was that clicking "About" never opened
+            // anything; only hovering did. A mouse click therefore only ever
+            // opens (hover-out, Esc and outside-click still close it).
+            // `detail === 0` marks a keyboard-synthesised click, which gets no
+            // preceding mouseenter and so must keep toggling.
+            const fromKeyboard = e.detail === 0;
+            if (hoverCapable && !fromKeyboard) setOpen(true);
+            else setOpen(!dd.classList.contains('open'));
         });
 
         // Hover-to-open is a pointer affordance only. On touch, the emulated
         // `mouseenter` fires first and opens the panel, then the `click` above
         // toggles it straight back shut — a tap appeared to do nothing.
-        const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
         if (hoverCapable) {
             dd.addEventListener('mouseenter', () => setOpen(true));
             dd.addEventListener('mouseleave', () => {
