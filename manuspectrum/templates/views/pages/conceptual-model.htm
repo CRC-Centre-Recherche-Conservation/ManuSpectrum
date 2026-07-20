@@ -2,32 +2,50 @@
 {% load i18n static %}
 {% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "Conceptual Model" %} — ManuSpectrum{% endblock %}
-{% block page_description %}{% trans "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description of manuscripts, analyses and inferred knowledge." %}{% endblock %}
+{% block page_description %}{% trans "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description of written cultural heritage, the analyses applied to it and the knowledge inferred from them." %}{% endblock %}
 
 {% block content %}
 <section class="ms-page-hero reveal">
     <div class="ms-page-hero__eyebrow">{% trans "Conceptual Model" %}</div>
-    <h1 class="ms-page-hero__title">{% trans "A model for scientific manuscript description" %}</h1>
+    <h1 class="ms-page-hero__title">{% trans "A model for describing written heritage scientifically" %}</h1>
+    {% comment %} WAVE 4d: the old lead was a list of ontology names and process
+       words. It described the implementation, not the reason anyone would
+       trust the data. This one states the actual editorial commitment. {% endcomment %}
     <p class="ms-page-hero__lead">
-        {% trans "The object, the analyses applied to it, and the knowledge inferred from them — formalised with a shared ontology (CIDOC-CRM + CRMsci) for interoperable, reusable data within the Biblissima+ ecosystem. The approach is event-centric: it tracks production, sampling, analysis, characterization, alteration and modification, and keeps observed facts distinct from inferences while preserving source attribution." %}
+        {% blocktrans trimmed %}
+        Most heritage databases record what an object <em>is</em>. ManuSpectrum records what
+        <em>happened to it</em> — and who said so. Every measurement is an event with a date, an
+        instrument and an operator. Every interpretation is stored separately from the observation
+        that supports it. That separation is what lets you re-read someone else's conclusion — and
+        disagree with it.
+        {% endblocktrans %}
     </p>
     <div class="ms-page-hero__accent"></div>
 </section>
 
 <section class="ms-cm-section reveal">
-    <h2 class="ms-cm-label">{% trans "01 · Three levels of abstraction" %}</h2>
+    <p class="ms-section-label">{% trans "01 · Abstraction" %}</p>
+    <h2 class="ms-section-title">{% trans "Three levels of abstraction" %}</h2>
+    {% comment %} WAVE 4g: each level card carries ONE stop of the spectrum
+       (`data-level` drives the colour in pages.scss), so the three cards
+       together compose a single spectral run instead of printing the whole
+       six-colour gradient three times in one row. {% endcomment %}
     <div class="ms-cm-levels">
-        <div class="ms-cm-level">
+        <div class="ms-cm-level" data-level="1">
             <span class="ms-cm-level-num">1</span>
             <h3>{% trans "Ontology" %}</h3>
             <p>{% trans "Semantic foundation: CIDOC-CRM v7.1.2 (ISO 21127) and its CRMsci extension for scientific observation." %}</p>
         </div>
-        <div class="ms-cm-level">
+        <div class="ms-cm-level" data-level="2">
             <span class="ms-cm-level-num">2</span>
             <h3>{% trans "Models" %}</h3>
-            <p>{% trans "12 autonomous resource models, interconnected by 84 typed relationships." %}</p>
+            {% comment %} 4a: this said 84. The live API returns 70. Every figure on this
+               page is now rewritten from /api/model-graph by conceptual-model.js; the
+               numbers left in the markup are TODAY's live values, kept only so the page
+               is still correct without JavaScript. Fix drift in the payload, never here. {% endcomment %}
+            <p id="ms-cm-models-line">{% trans "12 independent models linked by 70 typed CIDOC relationships — so a person recorded once as an analyst is the same record when they reappear as a volume's owner." %}</p>
         </div>
-        <div class="ms-cm-level">
+        <div class="ms-cm-level" data-level="3">
             <span class="ms-cm-level-num">3</span>
             <h3>{% trans "Vocabularies" %}</h3>
             <p>{% trans "Controlled values referencing normalized thesauri: Getty AAT, Pactols, AGORHA, LOTERRE." %}</p>
@@ -35,11 +53,20 @@
     </div>
 </section>
 
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
 <section class="ms-cm-section reveal">
-    <h2 class="ms-cm-label">{% trans "02 · The resource map" %}</h2>
-    <p class="ms-cm-intro">{% trans "Four groupings, linked by many-to-many relationships:" %}</p>
+    <p class="ms-section-label">{% trans "02 · Resource map" %}</p>
+    <h2 class="ms-section-title">{% trans "Twelve models, four families" %}</h2>
+    <p class="ms-cm-intro">
+        {% blocktrans trimmed %}
+        Nothing is described twice. An actor, a place or an instrument is recorded once and
+        referenced everywhere it appears — so the person who ran an XRF scan in 2024 is the same
+        record as the volume's eighteenth-century owner, if they happen to be the same person.
+        {% endblocktrans %}
+    </p>
     <div class="ms-cm-groups">
-        <div class="ms-cm-group" data-group="studied-object"><h3>{% trans "Studied object" %}</h3><p>{% trans "Manuscript → Component · Sample" %}</p></div>
+        <div class="ms-cm-group" data-group="studied-object"><h3>{% trans "Studied object" %}</h3><p>{% trans "Document → Component · Sample" %}</p></div>
         <div class="ms-cm-group" data-group="observation"><h3>{% trans "Observation · CRMsci" %}</h3><p>{% trans "Analysis → Characterization" %}</p></div>
         <div class="ms-cm-group" data-group="context"><h3>{% trans "Shared context" %}</h3><p>{% trans "Actor · Place · Project · Instrument" %}</p></div>
         <div class="ms-cm-group" data-group="transformations"><h3>{% trans "Transformations" %}</h3><p>{% trans "Alteration · Modification" %}</p></div>
@@ -47,34 +74,101 @@
     <a class="ms-btn ms-btn-primary ms-cm-cta" href="{% url 'about-explorer' %}"><i class="fa-solid fa-circle-nodes"></i> {% trans "Explore the model interactively" %}</a>
 </section>
 
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
 <section class="ms-cm-section reveal">
-    <h2 class="ms-cm-label">{% trans "03 · Granularity" %}</h2>
-    <div class="ms-cm-stats">
-        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="12">12</span><span class="ms-cm-stat-label">{% trans "resource models" %}</span></div>
-        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="169">169</span><span class="ms-cm-stat-label">{% trans "field groups" %}</span></div>
-        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="580">580</span><span class="ms-cm-stat-label">{% trans "nodes (452 data)" %}</span></div>
-        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="49">49</span><span class="ms-cm-stat-label">{% trans "CIDOC / CRMsci classes" %}</span></div>
-        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="77">77</span><span class="ms-cm-stat-label">{% trans "properties" %}</span></div>
-        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="84">84</span><span class="ms-cm-stat-label">{% trans "inter-model relationships" %}</span></div>
-        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="12">12</span><span class="ms-cm-stat-label">{% trans "thesauri (~20,000 concepts)" %}</span></div>
-        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="32">32</span><span class="ms-cm-stat-label">{% trans "controlled lists" %}</span></div>
+    <p class="ms-section-label">{% trans "03 · Granularity" %}</p>
+    <h2 class="ms-section-title">{% trans "Granularity of the model" %}</h2>
+    {% comment %} WAVE 4b: the eight tiles here were Arches implementation counts
+       ("169 field groups", "580 nodes") that mean nothing outside Arches, and one
+       of them was wrong (84 relationships). These four are the figures a
+       researcher can actually weigh, led by the thesaurus ratio — the strongest
+       trust signal in the dataset (166 concept-list + 21 concept of 452 data
+       nodes = 41%, measured on /api/model-graph).
+       `data-count` drives the count-up in conceptual-model.js; `data-prefix` /
+       `data-suffix` keep the affixes it used to overwrite. {% endcomment %}
+    <div class="ms-cm-stats" id="ms-cm-stats" data-api="{% url 'model-graph' %}">
+        <div class="ms-cm-stat" data-stat="thesaurus">
+            <span class="ms-cm-stat-value" data-count="41" data-suffix="%">41%</span>
+            <span class="ms-cm-stat-label">{% trans "of fields draw on a published thesaurus, not free text — 187 of 452" %}</span>
+        </div>
+        <div class="ms-cm-stat" data-stat="cidoc">
+            <span class="ms-cm-stat-value" data-count="49">49</span>
+            <span class="ms-cm-stat-label">{% trans "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127" %}</span>
+        </div>
+        <div class="ms-cm-stat" data-stat="relations">
+            <span class="ms-cm-stat-value" data-count="70">70</span>
+            <span class="ms-cm-stat-label">{% trans "typed relationships across 12 interconnected models" %}</span>
+        </div>
+        <div class="ms-cm-stat" data-stat="concepts">
+            <span class="ms-cm-stat-value" data-count="19972" data-prefix="~">~19,972</span>
+            <span class="ms-cm-stat-label">{% trans "concepts from Getty AAT, Pactols, AGORHA and LOTERRE" %}</span>
+        </div>
+    </div>
+    <details class="ms-cm-technical">
+        <summary>{% trans "Technical detail" %}</summary>
+        {% comment %} "32 controlled lists" was dropped rather than republished: the
+           `arches_controlled_lists` app is commented out of INSTALLED_APPS, so nothing
+           in this codebase can verify that figure. An unverifiable number on a page whose
+           whole argument is verifiability costs more than the number is worth. {% endcomment %}
+        <p class="ms-cm-technical-line" id="ms-cm-technical-line">
+            {% trans "169 field groups · 580 nodes (452 of them data) · 77 ontology properties · 12 thesauri." %}
+        </p>
+    </details>
+</section>
+
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
+<section class="ms-cm-section reveal">
+    <p class="ms-section-label">{% trans "04 · Thought schema" %}</p>
+    <h2 class="ms-section-title">{% trans "Two timelines, one pivot" %}</h2>
+    {% comment %} WAVE 4a: this used to render
+       Production → Sampling → Analysis → Characterization → Transformation
+       as ONE numbered chain, which tells a medievalist that manuscripts decay
+       after you analyse them, and silently merges two unrelated timelines.
+       They are two tracks on different axes — centuries vs. an afternoon in a
+       lab — and what joins them is the material Component, the pivot the
+       homepage already claims. {% endcomment %}
+    <p class="ms-cm-intro">{% trans "An event-based trajectory rather than a static object-attribute schema. Two timelines run at different speeds and meet on a single object." %}</p>
+
+    <div class="ms-cm-tracks">
+        <section class="ms-cm-track" data-track="object">
+            <h3 class="ms-cm-track-head">
+                <span class="ms-cm-track-name">{% trans "The object's life" %}</span>
+                <span class="ms-cm-track-axis">{% trans "centuries" %}</span>
+            </h3>
+            <ol class="ms-cm-track-steps">
+                <li><span class="ms-cm-step-name">{% trans "Production" %}</span><span class="ms-cm-step-note">{% trans "made: parchment, ink, binding" %}</span></li>
+                <li><span class="ms-cm-step-name">{% trans "Modification" %}</span><span class="ms-cm-step-note">{% trans "deliberate: rebinding, restoration" %}</span></li>
+                <li><span class="ms-cm-step-name">{% trans "Alteration" %}</span><span class="ms-cm-step-note">{% trans "undergone: corrosion, fading, damp" %}</span></li>
+            </ol>
+        </section>
+
+        <p class="ms-cm-pivot">
+            <span class="ms-cm-pivot-label">{% trans "Pivot" %}</span>
+            <span class="ms-cm-pivot-name">{% trans "Component" %}</span>
+            <span class="ms-cm-pivot-note">{% trans "The material component is what both timelines describe: the thing that was made and altered, and the thing that was sampled and measured." %}</span>
+        </p>
+
+        <section class="ms-cm-track" data-track="research">
+            <h3 class="ms-cm-track-head">
+                <span class="ms-cm-track-name">{% trans "The research act" %}</span>
+                <span class="ms-cm-track-axis">{% trans "days — present day" %}</span>
+            </h3>
+            <ol class="ms-cm-track-steps">
+                <li><span class="ms-cm-step-name">{% trans "Sampling" %}</span><span class="ms-cm-step-note">{% trans "what was examined, and where on the object" %}</span></li>
+                <li><span class="ms-cm-step-name">{% trans "Analysis" %}</span><span class="ms-cm-step-note">{% trans "the measurement: instrument, operator, date" %}</span></li>
+                <li><span class="ms-cm-step-name">{% trans "Characterization" %}</span><span class="ms-cm-step-note">{% trans "the interpretation — stored apart from the measurement" %}</span></li>
+            </ol>
+        </section>
     </div>
 </section>
 
-<section class="ms-cm-section reveal">
-    <h2 class="ms-cm-label">{% trans "04 · The thought schema" %}</h2>
-    <p class="ms-cm-intro">{% trans "An event-based trajectory rather than a static object-attribute schema:" %}</p>
-    <ol class="ms-cm-flow">
-        <li><span>{% trans "Production" %}</span></li>
-        <li><span>{% trans "Sampling" %}</span></li>
-        <li><span>{% trans "Analysis" %}</span></li>
-        <li><span>{% trans "Characterization" %}</span></li>
-        <li><span>{% trans "Transformation" %}</span></li>
-    </ol>
-</section>
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
 
 <section class="ms-cm-section reveal">
-    <h2 class="ms-cm-label">{% trans "05 · Thesauri mobilised" %}</h2>
+    <p class="ms-section-label">{% trans "05 · Vocabularies" %}</p>
+    <h2 class="ms-section-title">{% trans "Thesauri mobilised" %}</h2>
     <div class="ms-cm-thesauri">
         <a href="https://www.getty.edu/research/tools/vocabularies/aat/" target="_blank" rel="noopener">Getty AAT</a>
         <a href="https://pactols.frantiq.fr/" target="_blank" rel="noopener">Frantiq Pactols</a>

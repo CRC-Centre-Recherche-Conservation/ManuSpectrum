@@ -1,5 +1,5 @@
 {% extends 'ms_base.htm' %}
-{% load i18n %}
+{% load i18n static %}
 {% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "About & Team" %} — ManuSpectrum{% endblock %}
 {% block page_description %}{% trans "About the ManuSpectrum project and the team behind it, within Biblissima+ Cluster 2." %}{% endblock %}
@@ -8,23 +8,78 @@
 <section class="ms-page-hero reveal">
     <div class="ms-page-hero__eyebrow">{% trans "About & Team" %}</div>
     <h1 class="ms-page-hero__title">{% trans "The project & the people" %}</h1>
-    <p class="ms-page-hero__lead" id="ms-about-lead">
-        {% trans "ManuSpectrum is developed within Cluster 2 — “Consideration and searchability of materials-analysis data” — of the ANR Biblissima+ programme, at the Centre de Recherche sur la Conservation (CRC), in partnership with Huma-Num. It archives, standardises and makes searchable the physicochemical analysis of manuscripts and written heritage, so that non-specialists can reuse reliable, interoperable data." %}
-    </p>
-    <details class="ms-about-more">
-        <summary>{% trans "Read more" %}</summary>
-        <p>{% trans "Built on Arches, ManuSpectrum places the material component at the pivot between the object, its context, the analyses and their interpretations, using shared ontologies (CIDOC-CRM, CRMsci) and reference thesauri to keep heterogeneous documents comparable and interoperable with the Biblissima portal." %}</p>
-    </details>
     <div class="ms-page-hero__accent"></div>
 </section>
 
+{% comment %} WAVE 4e: the project story used to sit inside a collapsed <details>
+   labelled "Read more". This is the page that establishes institutional
+   credibility, so the statement is now the page, and the funding / affiliation
+   facts a reader is checking for sit beside it instead of being buried in prose. {% endcomment %}
+<section class="ms-about-hero reveal">
+    <div class="ms-about-hero__statement">
+        <p class="ms-about-lead" id="ms-about-lead">
+            {% blocktrans trimmed %}
+            ManuSpectrum archives, standardises and makes searchable the physicochemical analysis of
+            written cultural heritage — manuscripts, printed books, inscriptions and more — so that
+            reliable, interoperable data can be reused by people who did not run the measurements.
+            {% endblocktrans %}
+        </p>
+        <p>
+            {% blocktrans trimmed %}
+            It is developed within Cluster 2 — “Consideration and searchability of materials-analysis
+            data” — of the ANR Biblissima+ programme, at the Centre de Recherche sur la Conservation
+            (CRC), in partnership with Huma-Num.
+            {% endblocktrans %}
+        </p>
+        <p>
+            {% blocktrans trimmed %}
+            Built on Arches, it places the material component at the pivot between the object, its
+            context, the analyses and their interpretations, using shared ontologies (CIDOC-CRM,
+            CRMsci) and reference thesauri to keep heterogeneous documents comparable and
+            interoperable with the Biblissima portal.
+            {% endblocktrans %}
+        </p>
+    </div>
+
+    <aside class="ms-about-facts" aria-labelledby="ms-about-facts-head">
+        <h2 class="ms-about-facts__head" id="ms-about-facts-head">{% trans "At a glance" %}</h2>
+        <dl class="ms-about-facts__list">
+            <div class="ms-about-fact">
+                <dt>{% trans "Funding" %}</dt>
+                <dd><span class="ms-about-fact-code">ANR-21-ESRE-0005</span></dd>
+            </div>
+            <div class="ms-about-fact">
+                <dt>{% trans "Programme" %}</dt>
+                <dd>{% trans "Biblissima+ · Cluster 2" %}</dd>
+            </div>
+            <div class="ms-about-fact">
+                <dt>{% trans "Host laboratory" %}</dt>
+                <dd>{% trans "CRC / MNHN" %}</dd>
+            </div>
+            <div class="ms-about-fact">
+                <dt>{% trans "Licence" %}</dt>
+                <dd><span class="ms-about-fact-code">GPL-3.0</span></dd>
+            </div>
+        </dl>
+    </aside>
+</section>
+
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
 <section class="ms-team reveal">
-    <h2 class="ms-cm-label">{% trans "The team" %}</h2>
+    <p class="ms-section-label">{% trans "The team" %}</p>
+    <h2 class="ms-section-title">{% trans "The people behind ManuSpectrum" %}</h2>
+    {% comment %} WAVE 4e: the portraits used to be hotlinked from crc.mnhn.fr and
+       irht.cnrs.fr. They are now served from our own static files, so they no
+       longer depend on another site's hotlink policy (`referrerpolicy` was, if
+       anything, triggering it). The icon fallback below and the `error` handler
+       in team.js stay as a safety net.
+       WAVE 4g: `data-stop` gives each avatar ONE stop of the spectrum, so the
+       three portraits together compose one spectral run. {% endcomment %}
     <div class="ms-team-grid">
-        <!-- Anne Michelin -->
         <article class="ms-member">
-            <div class="ms-member-photo">
-                <img class="ms-member-img" src="https://crc.mnhn.fr/sites/crc/files/styles/umr_mobile_participant_photo/public/photos/202310/Photo-Anne1.gif?h=c7454933&amp;itok=8RtwdHjz" alt="Anne Michelin" loading="lazy" referrerpolicy="no-referrer">
+            <div class="ms-member-photo" data-stop="1">
+                <img class="ms-member-img" src="{% static 'img/team/team-01.jpg' %}" alt="Anne Michelin" width="400" height="400" loading="lazy">
                 <span class="ms-member-fallback" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z"/></svg>
                 </span>
@@ -35,11 +90,9 @@
             <p class="ms-member-bio">{% trans "Physico-chemist at the Centre de Recherche sur la Conservation, specialising in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of written cultural heritage. Referent for Biblissima+ Cluster 2." %}</p>
             <a class="ms-member-link" href="https://crc.mnhn.fr/fr/annuaire/anne-michelin-9373" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {% trans "Profile" %}</a>
         </article>
-
-        <!-- Gilles Kagan -->
         <article class="ms-member">
-            <div class="ms-member-photo">
-                <img class="ms-member-img" src="https://www.irht.cnrs.fr/sites/default/files/styles/avatar_agent/public/image_site/avatars/GillesKagan.jpg?itok=59wvCBiZ" alt="Gilles Kagan" loading="lazy" referrerpolicy="no-referrer">
+            <div class="ms-member-photo" data-stop="2">
+                <img class="ms-member-img" src="{% static 'img/team/team-02.jpg' %}" alt="Gilles Kagan" width="400" height="400" loading="lazy">
                 <span class="ms-member-fallback" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z"/></svg>
                 </span>
@@ -51,9 +104,8 @@
             <a class="ms-member-link" href="https://www.irht.cnrs.fr/fr/annuaire/kagan-gilles" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {% trans "Profile" %}</a>
         </article>
 
-        <!-- Maxime Humeau (no photo) -->
         <article class="ms-member">
-            <div class="ms-member-photo is-fallback">
+            <div class="ms-member-photo is-fallback" data-stop="3">
                 <span class="ms-member-fallback" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z"/></svg>
                 </span>
@@ -65,7 +117,72 @@
             <a class="ms-member-link" href="https://crc.mnhn.fr/fr/annuaire/maxime-humeau-9510" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {% trans "Profile" %}</a>
         </article>
     </div>
-    <p class="ms-team-verify text-muted"><small>{% trans "Biographies compiled from public institutional sources." %}</small></p>
+</section>
+
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
+{% comment %} WAVE 4e: the researcher's trust checklist — how to cite, who paid
+   for it, what you are allowed to do with it — was missing from the section
+   entirely. It is the first thing a reader who intends to reuse the data looks
+   for, and its absence reads as an unfinished project. {% endcomment %}
+<section class="ms-reuse reveal" aria-labelledby="ms-reuse-head">
+    <p class="ms-section-label">{% trans "Reuse" %}</p>
+    <h2 class="ms-section-title" id="ms-reuse-head">{% trans "Citing, funding and licence" %}</h2>
+    <div class="ms-reuse-grid">
+        <article class="ms-reuse-card">
+            <h3>{% trans "How to cite" %}</h3>
+            <p>{% trans "If you reuse data or the platform in a publication, please cite:" %}</p>
+            <p class="ms-reuse-citation">{% blocktrans trimmed %}Michelin, A., Kagan, G., and Humeau, M. ManuSpectrum: a platform for the physicochemical analysis of written heritage. Centre de Recherche sur la Conservation (CRC), MNHN / Biblissima+.{% endblocktrans %}</p>
+            <p class="ms-reuse-note">{% trans "Individual records carry their own attribution — cite the depositing laboratory alongside the platform." %}</p>
+        </article>
+        <article class="ms-reuse-card">
+            <h3>{% trans "Funding" %}</h3>
+            <p>{% blocktrans trimmed %}ManuSpectrum is funded by the Agence Nationale de la Recherche under the Biblissima+ “Équipement structurant pour la recherche” programme, within Cluster 2.{% endblocktrans %}</p>
+            <p class="ms-reuse-code"><span class="ms-about-fact-code">ANR-21-ESRE-0005</span></p>
+            <p class="ms-reuse-note"><a href="https://projet.biblissima.fr/fr/projet/clusters-biblissima/cluster-2" target="_blank" rel="noopener">{% trans "Biblissima+ — Cluster 2" %} <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a></p>
+        </article>
+        <article class="ms-reuse-card">
+            <h3>{% trans "Licence" %}</h3>
+            <p>{% trans "The platform's source code is published under the GNU General Public License v3. Reading and downloading published data needs no account." %}</p>
+            <p class="ms-reuse-code"><span class="ms-about-fact-code">GPL-3.0</span></p>
+            <p class="ms-reuse-note"><a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener">{% trans "Source code on GitHub" %} <i class="fa-brands fa-github" aria-hidden="true"></i></a></p>
+        </article>
+    </div>
+</section>
+
+{% comment %} WAVE 4e: the same institutional logo band the homepage runs. The
+   styles now live in _ms-chrome.scss (shared by both bundles) rather than being
+   copied, so the band cannot drift between the two pages. {% endcomment %}
+<section class="ms-partners reveal">
+    <div class="ms-container">
+        <div class="ms-partners-label">{% trans "Our Partners" %}</div>
+        <div class="ms-partners-grid">
+            <a class="ms-partner-link ms-partner-link--culture" href="https://www.culture.gouv.fr" target="_blank" rel="noopener" title="Ministère de la Culture">
+                <img src="{% static 'img/landing/logo-ministere-de-la-culture.png' %}" alt="{% trans 'Ministry of Culture' %}" loading="lazy">
+            </a>
+            <a class="ms-partner-link ms-partner-link--cnrs" href="https://www.cnrs.fr" target="_blank" rel="noopener" title="Centre National de la Recherche Scientifique">
+                <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS" loading="lazy">
+            </a>
+            <a class="ms-partner-link ms-partner-link--mnhn" href="https://www.mnhn.fr" target="_blank" rel="noopener" title="Muséum National d'Histoire Naturelle">
+                <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN" loading="lazy">
+            </a>
+            <a class="ms-partner-link ms-partner-link--crc" href="https://crc.mnhn.fr" target="_blank" rel="noopener" title="CRC — Centre de Recherche sur la Conservation">
+                <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC" loading="lazy">
+            </a>
+            <a class="ms-partner-link ms-partner-link--anr" href="https://anr.fr" target="_blank" rel="noopener" title="ANR — Agence Nationale de la Recherche">
+                <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR" loading="lazy">
+            </a>
+            <a class="ms-partner-link ms-partner-link--biblissima" href="https://biblissima.fr" target="_blank" rel="noopener" title="Biblissima+">
+                <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" loading="lazy">
+            </a>
+            <a class="ms-partner-link ms-partner-link--humanum" href="https://www.huma-num.fr" target="_blank" rel="noopener" title="Huma-Num">
+                <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num" loading="lazy">
+            </a>
+            <a class="ms-partner-link ms-partner-link--arches" href="https://www.archesproject.org" target="_blank" rel="noopener" title="Arches">
+                <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches" loading="lazy">
+            </a>
+        </div>
+    </div>
 </section>
 {% endblock %}
 

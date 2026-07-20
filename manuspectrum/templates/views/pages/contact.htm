@@ -3,42 +3,77 @@
 {% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "Contact" %} — ManuSpectrum{% endblock %}
 {% block page_description %}{% trans "Contact the ManuSpectrum team to submit a project, request access, or ask a question." %}{% endblock %}
-{% block css_bundle %}{% endblock %}
 
 {% block content %}
-<section class="ms-page-hero">
+<section class="ms-page-hero reveal">
     <div class="ms-page-hero__eyebrow">{% trans "Contact" %}</div>
     <h1 class="ms-page-hero__title">{% trans "Submit a project or reach the team" %}</h1>
+    {% comment %} WAVE 4d: the old lead opened with "Account creation is not open"
+       — a refusal — and never answered the question most visitors actually
+       arrive with, which is whether they need an account to READ anything. {% endcomment %}
     <p class="ms-page-hero__lead">
-        {% trans "Account creation is not open: access is granted individually. To propose a project, request an account, or ask a question, send us a message below." %}
+        {% blocktrans trimmed %}
+        Reading and downloading published data needs no account. If you want to <em>deposit</em>
+        analysis data, tell us about your project — ManuSpectrum hosts data from partner
+        laboratories and we open accounts case by case, usually within a week.
+        {% endblocktrans %}
     </p>
     <div class="ms-page-hero__accent"></div>
 </section>
 
-<section class="ms-contact">
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
+<section class="ms-contact reveal">
+    <p class="ms-section-label">{% trans "Get in touch" %}</p>
+    <h2 class="ms-section-title">{% trans "Send us a message" %}</h2>
     <div class="ms-contact__grid">
+        {% comment %} WAVE 4f: `novalidate` turns off native validation, and the
+           replacement used to be a single <p role="alert"> at the bottom of the
+           form that never said WHICH field was wrong. Each field now owns an
+           error node wired through aria-describedby + aria-invalid, and
+           contact.js moves focus to the first invalid one. {% endcomment %}
         <form class="ms-contact-form" id="ms-contact-form" data-contact-email="{% contact_email %}" novalidate>
+            <p class="ms-contact-required-hint">
+                <span class="ms-req" aria-hidden="true">*</span> {% trans "Required field" %}
+            </p>
+
             <div class="ms-contact-field">
-                <label for="cf-name">{% trans "Your name" %}</label>
-                <input type="text" id="cf-name" name="name" class="form-control" required>
+                <label for="cf-name">{% trans "Your name" %} <span class="ms-req" aria-hidden="true">*</span></label>
+                <input type="text" id="cf-name" name="name" class="ms-contact-input" required
+                       aria-required="true" aria-describedby="cf-name-err" autocomplete="name">
+                <p class="ms-contact-fielderr" id="cf-name-err" hidden></p>
             </div>
+
             <div class="ms-contact-field">
-                <label for="cf-email">{% trans "Your email" %}</label>
-                <input type="email" id="cf-email" name="email" class="form-control" required>
+                <label for="cf-email">{% trans "Your email" %} <span class="ms-req" aria-hidden="true">*</span></label>
+                <input type="email" id="cf-email" name="email" class="ms-contact-input" required
+                       aria-required="true" aria-describedby="cf-email-err" autocomplete="email">
+                <p class="ms-contact-fielderr" id="cf-email-err" hidden></p>
             </div>
+
             <div class="ms-contact-field">
                 <label for="cf-type">{% trans "Reason" %}</label>
-                <select id="cf-type" name="type" class="form-control">
+                <select id="cf-type" name="type" class="ms-contact-input">
                     <option value="project">{% trans "Submit a project" %}</option>
                     <option value="access">{% trans "Request an account / access" %}</option>
                     <option value="question">{% trans "Question" %}</option>
                     <option value="other">{% trans "Other" %}</option>
                 </select>
             </div>
+
+            {% comment %} WAVE 4f: a mailto: URL is capped at roughly 2000
+               characters by the OS handler, so a long message used to be
+               truncated in silence. maxlength stops it at the door and the
+               counter says how much room is left. {% endcomment %}
             <div class="ms-contact-field">
-                <label for="cf-message">{% trans "Message" %}</label>
-                <textarea id="cf-message" name="message" class="form-control" rows="6" required></textarea>
+                <label for="cf-message">{% trans "Message" %} <span class="ms-req" aria-hidden="true">*</span></label>
+                <textarea id="cf-message" name="message" class="ms-contact-input" rows="6" required
+                          maxlength="1600" aria-required="true"
+                          aria-describedby="cf-message-err ms-contact-count"></textarea>
+                <p class="ms-contact-count" id="ms-contact-count" aria-live="polite"></p>
+                <p class="ms-contact-fielderr" id="cf-message-err" hidden></p>
             </div>
+
             <p class="ms-contact-error" id="ms-contact-error" role="alert" hidden></p>
             <button type="submit" class="ms-btn ms-btn-primary" id="ms-contact-submit">
                 <i class="fa-solid fa-paper-plane"></i> {% trans "Open my email app" %}
@@ -46,13 +81,40 @@
             <p class="ms-contact-note" id="ms-contact-note" hidden>
                 {% trans "A contact address is not configured yet. Please check back soon." %}
             </p>
+
+            {% comment %} WAVE 4f: `window.location.href = 'mailto:…'` does nothing
+               at all on institutional webmail (Outlook Web, Zimbra, Roundcube),
+               which is a large share of this audience — the button appeared to
+               be broken. This panel is revealed after the click so the message
+               can be copied wholesale instead. {% endcomment %}
+            <div class="ms-contact-fallback" id="ms-contact-fallback" hidden>
+                <h3 class="ms-contact-fallback__head">{% trans "Nothing happened?" %}</h3>
+                <p>{% trans "Some webmail clients ignore email links. Copy the address and the message below and send it yourself." %}</p>
+                <div class="ms-contact-copyrow">
+                    <span class="ms-contact-address" id="ms-contact-address">{% contact_email %}</span>
+                    <button type="button" class="ms-contact-copy" id="ms-contact-copy-address"
+                            data-copy-target="ms-contact-address">
+                        <i class="fa-regular fa-copy" aria-hidden="true"></i> {% trans "Copy address" %}
+                    </button>
+                </div>
+                <label class="ms-contact-fallback__label" for="ms-contact-body">{% trans "Your message" %}</label>
+                <textarea class="ms-contact-input ms-contact-body" id="ms-contact-body" rows="8" readonly></textarea>
+                <button type="button" class="ms-contact-copy" id="ms-contact-copy-body"
+                        data-copy-target="ms-contact-body">
+                    <i class="fa-regular fa-copy" aria-hidden="true"></i> {% trans "Copy message" %}
+                </button>
+                <p class="ms-contact-copied" id="ms-contact-copied" role="status"></p>
+            </div>
         </form>
 
+        {% comment %} WAVE 4d/4f: this aside used to restate the team page's lead
+           paragraph almost verbatim. Two copies of the same sentence is one more
+           thing to keep in sync and tells the reader nothing new — link instead. {% endcomment %}
         <aside class="ms-contact-aside">
-            <h2>{% trans "Who we are" %}</h2>
-            <p>{% trans "ManuSpectrum is developed within Cluster 2 of the ANR Biblissima+ programme, at the Centre de Recherche sur la Conservation (CRC)." %}</p>
+            <h3>{% trans "Elsewhere" %}</h3>
             <ul class="ms-contact-links">
-                <li><a href="{% url 'about-team' %}"><i class="fa-solid fa-users"></i> {% trans "Meet the team" %}</a></li>
+                <li><a href="{% url 'about-team' %}"><i class="fa-solid fa-users"></i> {% trans "Who we are, how to cite, funding and licence" %}</a></li>
+                <li><a href="{% url 'about-model' %}"><i class="fa-solid fa-diagram-project"></i> {% trans "The conceptual model" %}</a></li>
                 <li><a href="https://projet.biblissima.fr/fr/projet/clusters-biblissima/cluster-2" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> {% trans "Biblissima+ — Cluster 2" %}</a></li>
                 <li><a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener"><i class="fa-brands fa-github"></i> {% trans "Source code" %}</a></li>
             </ul>

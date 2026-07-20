@@ -17,23 +17,29 @@
                     <button type="button" class="ms-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="ms-about-menu">
                         {% trans "About" %} <i class="fa-solid fa-chevron-down ms-nav-caret" aria-hidden="true"></i>
                     </button>
-                    <div class="ms-nav-dropdown-menu" id="ms-about-menu" role="menu">
-                        <a role="menuitem" href="{% url 'about-model' %}">
-                            <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
-                            <span><strong>{% trans "Conceptual Model" %}</strong><em>{% trans "The data model behind ManuSpectrum" %}</em></span>
-                        </a>
-                        <a role="menuitem" href="{% url 'about-explorer' %}">
-                            <i class="fa-solid fa-circle-nodes" aria-hidden="true"></i>
-                            <span><strong>{% trans "Graph Explorer" %}</strong><em>{% trans "Explore models and relationships interactively" %}</em></span>
-                        </a>
-                        <a role="menuitem" href="{% url 'about-team' %}">
-                            <i class="fa-solid fa-users" aria-hidden="true"></i>
-                            <span><strong>{% trans "About & Team" %}</strong><em>{% trans "The project and the people behind it" %}</em></span>
-                        </a>
-                        <a role="menuitem" href="{% url 'about-contact' %}">
-                            <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
-                            <span><strong>{% trans "Contact" %}</strong><em>{% trans "Submit a project or ask a question" %}</em></span>
-                        </a>
+                    {# Four navigation links in a disclosure panel — NOT an application menu. #}
+                    {# role="menu"/"menuitem" would promise arrow-key-only, application-mode #}
+                    {# semantics that these links neither need nor implement; aria-expanded on #}
+                    {# the toggle is the whole disclosure contract. #}
+                    <div class="ms-nav-dropdown-menu" id="ms-about-menu">
+                        <ul>
+                            <li><a href="{% url 'about-model' %}"{% if request.resolver_match.url_name == 'about-model' %} aria-current="page"{% endif %}>
+                                <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+                                <span><strong>{% trans "Conceptual Model" %}</strong><span class="ms-nav-dropdown-desc">{% trans "The data model behind ManuSpectrum" %}</span></span>
+                            </a></li>
+                            <li><a href="{% url 'about-explorer' %}"{% if request.resolver_match.url_name == 'about-explorer' %} aria-current="page"{% endif %}>
+                                <i class="fa-solid fa-circle-nodes" aria-hidden="true"></i>
+                                <span><strong>{% trans "Graph Explorer" %}</strong><span class="ms-nav-dropdown-desc">{% trans "Explore models and relationships interactively" %}</span></span>
+                            </a></li>
+                            <li><a href="{% url 'about-team' %}"{% if request.resolver_match.url_name == 'about-team' %} aria-current="page"{% endif %}>
+                                <i class="fa-solid fa-users" aria-hidden="true"></i>
+                                <span><strong>{% trans "About & Team" %}</strong><span class="ms-nav-dropdown-desc">{% trans "The project and the people behind it" %}</span></span>
+                            </a></li>
+                            <li><a href="{% url 'about-contact' %}"{% if request.resolver_match.url_name == 'about-contact' %} aria-current="page"{% endif %}>
+                                <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                                <span><strong>{% trans "Contact" %}</strong><span class="ms-nav-dropdown-desc">{% trans "Submit a project or ask a question" %}</span></span>
+                            </a></li>
+                        </ul>
                     </div>
                 </li>
 
@@ -64,7 +70,7 @@
             {% endif %}
         </nav>
 
-        <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Open Menu' %}"><span></span><span></span><span></span></button>
+        <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Open Menu' %}" aria-expanded="false" aria-controls="ms-mobile-nav"><span></span><span></span><span></span></button>
     </div>
 </header>
 
@@ -78,10 +84,10 @@
         {% trans "About" %} <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
     </button>
     <div class="ms-mobile-nav-group" id="ms-mobile-about">
-        <a href="{% url 'about-model' %}" class="ms-mobile-nav-sublink">{% trans "Conceptual Model" %}</a>
-        <a href="{% url 'about-explorer' %}" class="ms-mobile-nav-sublink">{% trans "Graph Explorer" %}</a>
-        <a href="{% url 'about-team' %}" class="ms-mobile-nav-sublink">{% trans "About & Team" %}</a>
-        <a href="{% url 'about-contact' %}" class="ms-mobile-nav-sublink">{% trans "Contact" %}</a>
+        <a href="{% url 'about-model' %}" class="ms-mobile-nav-sublink"{% if request.resolver_match.url_name == 'about-model' %} aria-current="page"{% endif %}>{% trans "Conceptual Model" %}</a>
+        <a href="{% url 'about-explorer' %}" class="ms-mobile-nav-sublink"{% if request.resolver_match.url_name == 'about-explorer' %} aria-current="page"{% endif %}>{% trans "Graph Explorer" %}</a>
+        <a href="{% url 'about-team' %}" class="ms-mobile-nav-sublink"{% if request.resolver_match.url_name == 'about-team' %} aria-current="page"{% endif %}>{% trans "About & Team" %}</a>
+        <a href="{% url 'about-contact' %}" class="ms-mobile-nav-sublink"{% if request.resolver_match.url_name == 'about-contact' %} aria-current="page"{% endif %}>{% trans "Contact" %}</a>
     </div>
 
     {% if user|can_create_resource_instance and user.username != 'anonymous' %}

@@ -12,18 +12,16 @@ export default function initMsNav() {
     const hamburger = document.getElementById('ms-hamburger');
     const mobileNav = document.getElementById('ms-mobile-nav');
     if (hamburger && mobileNav) {
-        hamburger.addEventListener('click', () => {
-            const open = mobileNav.classList.toggle('open');
+        const setDrawer = (open) => {
+            mobileNav.classList.toggle('open', open);
             hamburger.classList.toggle('active', open);
+            // The hamburger is a disclosure button: its expanded state has to be
+            // exposed, otherwise screen readers announce it as a plain button.
+            hamburger.setAttribute('aria-expanded', String(open));
             document.body.style.overflow = open ? 'hidden' : '';
-        });
-        mobileNav.querySelectorAll('a').forEach((a) =>
-            a.addEventListener('click', () => {
-                hamburger.classList.remove('active');
-                mobileNav.classList.remove('open');
-                document.body.style.overflow = '';
-            }),
-        );
+        };
+        hamburger.addEventListener('click', () => setDrawer(!mobileNav.classList.contains('open')));
+        mobileNav.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => setDrawer(false)));
         const mToggle = mobileNav.querySelector('.ms-mobile-nav-group-toggle');
         const mGroup = document.getElementById('ms-mobile-about');
         if (mToggle && mGroup) {
@@ -47,16 +45,35 @@ export default function initMsNav() {
             e.stopPropagation();
             setOpen(!dd.classList.contains('open'));
         });
-        dd.addEventListener('mouseenter', () => setOpen(true));
-        dd.addEventListener('mouseleave', () => setOpen(false));
+
+        // Hover-to-open is a pointer affordance only. On touch, the emulated
+        // `mouseenter` fires first and opens the panel, then the `click` above
+        // toggles it straight back shut — a tap appeared to do nothing.
+        const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        if (hoverCapable) {
+            dd.addEventListener('mouseenter', () => setOpen(true));
+            dd.addEventListener('mouseleave', () => {
+                // Don't yank the panel out from under a keyboard user whose focus
+                // is still inside it just because the pointer drifted away.
+                if (!dd.contains(document.activeElement)) setOpen(false);
+            });
+        }
+
         document.addEventListener('click', (e) => {
             if (!dd.contains(e.target)) setOpen(false);
+        });
+        dd.addEventListener('focusout', () => {
+            // Fires before focus lands; defer so document.activeElement is current.
+            setTimeout(() => {
+                if (!dd.contains(document.activeElement)) setOpen(false);
+            }, 0);
         });
         dd.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') { setOpen(false); toggle.focus(); }
         });
-        // Arrow-key navigation across menu items
-        const items = Array.from(menu.querySelectorAll('[role="menuitem"]'));
+        // Arrow-key navigation across the links (a convenience on top of Tab —
+        // this is a disclosure of plain links, not a role="menu" widget).
+        const items = Array.from(menu.querySelectorAll('a'));
         menu.addEventListener('keydown', (e) => {
             const i = items.indexOf(document.activeElement);
             if (e.key === 'ArrowDown') { e.preventDefault(); (items[i + 1] || items[0]).focus(); }
