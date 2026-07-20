@@ -1145,6 +1145,21 @@ function labelEnd(row) {
 // bare disc, so a row that was never drawn cannot widen the frame.
 const contentRight = (row) => (Number.isFinite(row.right) ? row.right : row.x + NG_R);
 
+
+// "1 fields" is wrong in both languages. gettext plurals are not available on the
+// JS side (arches.translations is a flat string map), so the singular forms are
+// separate keys and chosen here.
+function fieldCount(d) {
+    if (d.groups) {
+        return d.groups === 1
+            ? tv('msGeStructGroupOne', '{n} fields · {m} group', { n: d.fields, m: d.groups })
+            : tv('msGeStructFieldsGroups', '{n} fields · {m} groups', { n: d.fields, m: d.groups });
+    }
+    return d.fields === 1
+        ? tv('msGeStructFieldOne', '{n} field', { n: d.fields })
+        : tv('msGeStructFields', '{n} fields', { n: d.fields });
+}
+
 class StructureView {
     constructor(data, index, reduce) {
         this.data = data;
@@ -1450,13 +1465,16 @@ class StructureView {
 
                 const code = row.via.length ? row.via.join('·') : n.property_code;
                 if (code) {
-                    // End-anchored against the child's disc so the chip grows
-                    // leftwards INTO the gutter. Start-anchoring it at the bend
-                    // (the old `bend + 4`) let any code longer than three glyphs
-                    // run out over the disc it was labelling.
+                    // End-anchored just LEFT of the vertical run. Anchoring it
+                    // against the child's disc instead (x2 - NG_R - 10) made the
+                    // chip grow leftwards straight across the vertical connector,
+                    // so every code sat on the line. Ending it before the bend
+                    // keeps chips in a clean column in the gutter, and start-
+                    // anchoring at the bend is no better — codes longer than three
+                    // glyphs then ran out over the disc they label.
                     const chip = svgEl('text', {
                         class: `ms-ge-st-prop${DIM_PROPS.has(code) ? ' is-common' : ''}`,
-                        x: String(x2 - NG_R - 10),
+                        x: String(bend - 5),
                         y: String(y2 - 4),
                         'text-anchor': 'end',
                     });
@@ -1600,30 +1618,36 @@ class StructureView {
                 right = Math.max(right, row.x + LABEL_GAP + String(n.cidoc).length * EM_MONO);
             }
 
+            // Everything after the label is laid out from ONE running cursor.
+            // It starts at the label's true end — labelEnd() includes the required
+            // "∗", which the badge and the capsules used to omit, so a required
+            // node's badge sat on top of its own star. And because the badge and
+            // the first capsule were previously fixed offsets only 8px apart, any
+            // node carrying both drew them over each other ("Instrument 1 →
+            // Instrument"). Advancing a cursor makes both impossible by construction.
+            let cursor = labelEnd(row) - row.x + 16;
+
             // Collapsed branches say how much they are hiding.
             if (row.expandable && !row.open) {
                 const d = this.descendants(n.id);
-                const bx = LABEL_GAP + String(n.name || '').length * EM_LABEL + 14;
                 const badge = svgEl('text', {
                     class: 'ms-ge-st-badge',
-                    x: String(bx),
+                    x: String(cursor),
                     y: '4',
                 });
-                badge.textContent = d.groups
-                    ? tv('msGeStructFieldsGroups', '{n} fields · {m} groups', {
-                          n: d.fields,
-                          m: d.groups,
-                      })
-                    : tv('msGeStructFields', '{n} fields', { n: d.fields });
+                badge.textContent = fieldCount(d);
                 g.appendChild(badge);
-                right = Math.max(right, row.x + bx + badge.textContent.length * EM_BADGE);
+                const bw = badge.textContent.length * EM_BADGE;
+                right = Math.max(right, row.x + cursor + bw);
+                cursor += bw + 12;
             }
 
             // The money feature: an outbound relation shows the model it points at,
             // tinted in THAT model's family colour, and clicking jumps there.
-            this.targetModels(n).forEach((tm, i) => {
+            this.targetModels(n).forEach((tm) => {
                 const tw = Math.max(58, String(tm.name).length * 6.4 + 20);
-                const tx = LABEL_GAP + String(n.name || '').length * EM_LABEL + 22 + i * (tw + 8);
+                const tx = cursor;
+                cursor += tw + 8;
                 right = Math.max(right, row.x + tx + tw);
                 const tg = svgEl('g', {
                     class: 'ms-ge-st-target',
@@ -1852,12 +1876,7 @@ class StructureView {
                     : '',
                 d
                     ? `<span class="ms-ge-out-count">${esc(
-                          d.groups
-                              ? tv('msGeStructFieldsGroups', '{n} fields · {m} groups', {
-                                    n: d.fields,
-                                    m: d.groups,
-                                })
-                              : tv('msGeStructFields', '{n} fields', { n: d.fields }),
+                          fieldCount(d),
                       )}</span>`
                     : '',
             ].join('');
