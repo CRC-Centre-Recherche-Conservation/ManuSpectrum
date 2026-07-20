@@ -1,3 +1,88 @@
-{% extends 'ms_base.htm' %}{% load i18n %}
+{% extends 'ms_base.htm' %}
+{% load i18n static %}
+{% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "Conceptual Model" %} — ManuSpectrum{% endblock %}
-{% block content %}<section class="ms-page-hero"><div class="ms-page-hero__title">{% trans "Conceptual Model" %}</div></section>{% endblock %}
+{% block page_description %}{% trans "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description of manuscripts, analyses and inferred knowledge." %}{% endblock %}
+
+{% block content %}
+<section class="ms-page-hero reveal">
+    <div class="ms-page-hero__eyebrow">{% trans "Conceptual Model" %}</div>
+    <h1 class="ms-page-hero__title">{% trans "A model for scientific manuscript description" %}</h1>
+    <p class="ms-page-hero__lead">
+        {% trans "The object, the analyses applied to it, and the knowledge inferred from them — formalised with a shared ontology (CIDOC-CRM + CRMsci) for interoperable, reusable data within the Biblissima+ ecosystem. The approach is event-centric: it tracks production, sampling, analysis, characterization, alteration and modification, and keeps observed facts distinct from inferences while preserving source attribution." %}
+    </p>
+    <div class="ms-page-hero__accent"></div>
+</section>
+
+<section class="ms-cm-section reveal">
+    <h2 class="ms-cm-label">{% trans "01 · Three levels of abstraction" %}</h2>
+    <div class="ms-cm-levels">
+        <div class="ms-cm-level">
+            <span class="ms-cm-level-num">1</span>
+            <h3>{% trans "Ontology" %}</h3>
+            <p>{% trans "Semantic foundation: CIDOC-CRM v7.1.2 (ISO 21127) and its CRMsci extension for scientific observation." %}</p>
+        </div>
+        <div class="ms-cm-level">
+            <span class="ms-cm-level-num">2</span>
+            <h3>{% trans "Models" %}</h3>
+            <p>{% trans "12 autonomous resource models, interconnected by 84 typed relationships." %}</p>
+        </div>
+        <div class="ms-cm-level">
+            <span class="ms-cm-level-num">3</span>
+            <h3>{% trans "Vocabularies" %}</h3>
+            <p>{% trans "Controlled values referencing normalized thesauri: Getty AAT, Pactols, AGORHA, LOTERRE." %}</p>
+        </div>
+    </div>
+</section>
+
+<section class="ms-cm-section reveal">
+    <h2 class="ms-cm-label">{% trans "02 · The resource map" %}</h2>
+    <p class="ms-cm-intro">{% trans "Four groupings, linked by many-to-many relationships:" %}</p>
+    <div class="ms-cm-groups">
+        <div class="ms-cm-group" data-group="studied-object"><h3>{% trans "Studied object" %}</h3><p>{% trans "Manuscript → Component · Sample" %}</p></div>
+        <div class="ms-cm-group" data-group="observation"><h3>{% trans "Observation · CRMsci" %}</h3><p>{% trans "Analysis → Characterization" %}</p></div>
+        <div class="ms-cm-group" data-group="context"><h3>{% trans "Shared context" %}</h3><p>{% trans "Actor · Place · Project · Instrument" %}</p></div>
+        <div class="ms-cm-group" data-group="transformations"><h3>{% trans "Transformations" %}</h3><p>{% trans "Alteration · Modification" %}</p></div>
+    </div>
+    <a class="ms-btn ms-btn-primary ms-cm-cta" href="{% url 'about-explorer' %}"><i class="fa-solid fa-circle-nodes"></i> {% trans "Explore the model interactively" %}</a>
+</section>
+
+<section class="ms-cm-section reveal">
+    <h2 class="ms-cm-label">{% trans "03 · Granularity" %}</h2>
+    <div class="ms-cm-stats">
+        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="12">12</span><span class="ms-cm-stat-label">{% trans "resource models" %}</span></div>
+        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="169">169</span><span class="ms-cm-stat-label">{% trans "field groups" %}</span></div>
+        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="580">580</span><span class="ms-cm-stat-label">{% trans "nodes (452 data)" %}</span></div>
+        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="49">49</span><span class="ms-cm-stat-label">{% trans "CIDOC / CRMsci classes" %}</span></div>
+        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="77">77</span><span class="ms-cm-stat-label">{% trans "properties" %}</span></div>
+        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="84">84</span><span class="ms-cm-stat-label">{% trans "inter-model relationships" %}</span></div>
+        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="12">12</span><span class="ms-cm-stat-label">{% trans "thesauri (~20,000 concepts)" %}</span></div>
+        <div class="ms-cm-stat"><span class="ms-cm-stat-value" data-count="32">32</span><span class="ms-cm-stat-label">{% trans "controlled lists" %}</span></div>
+    </div>
+</section>
+
+<section class="ms-cm-section reveal">
+    <h2 class="ms-cm-label">{% trans "04 · The thought schema" %}</h2>
+    <p class="ms-cm-intro">{% trans "An event-based trajectory rather than a static object-attribute schema:" %}</p>
+    <ol class="ms-cm-flow">
+        <li><span>{% trans "Production" %}</span></li>
+        <li><span>{% trans "Sampling" %}</span></li>
+        <li><span>{% trans "Analysis" %}</span></li>
+        <li><span>{% trans "Characterization" %}</span></li>
+        <li><span>{% trans "Transformation" %}</span></li>
+    </ol>
+</section>
+
+<section class="ms-cm-section reveal">
+    <h2 class="ms-cm-label">{% trans "05 · Thesauri mobilised" %}</h2>
+    <div class="ms-cm-thesauri">
+        <a href="https://www.getty.edu/research/tools/vocabularies/aat/" target="_blank" rel="noopener">Getty AAT</a>
+        <a href="https://pactols.frantiq.fr/" target="_blank" rel="noopener">Frantiq Pactols</a>
+        <a href="https://agorha.inha.fr/" target="_blank" rel="noopener">AGORHA</a>
+        <a href="https://www.loterre.fr/" target="_blank" rel="noopener">LOTERRE</a>
+        <span>TAPAC / Frollo</span>
+    </div>
+</section>
+{% endblock %}
+
+{% block js_bundle %}{% render_bundle 'views/pages/conceptual-model' %}{% endblock %}
