@@ -1,5 +1,8 @@
 // css/pages bundle — shared shell + About dropdown + content pages.
 // Loaded by ms_base.htm (all About pages). Homepage keeps its own css/homepage bundle.
+// Shared chrome (header / nav / footer / buttons / :root custom properties) —
+// same partial the css/homepage bundle imports. MUST come before ms-tokens.
+@import 'ms-chrome';
 @import 'ms-tokens';
 
 // Section blocks are appended by later tasks:
@@ -8,104 +11,275 @@
 //   Task 6 → conceptual-model page
 //   Task 7 → team page
 
+// ── C1: `[hidden]` must actually hide.
+// `[hidden]{display:none}` lives in the UA stylesheet, and an AUTHOR `display`
+// declaration beats the UA origin at ANY specificity. `.ms-ge-loading,
+// .ms-ge-error{display:grid}` below therefore kept both overlays permanently
+// stacked over the graph — including on success. A plain author
+// `[hidden]{display:none}` is (0,1,0): it ties `.ms-ge-error` and loses on
+// source order, so `!important` is required, not stylistic.
+// Also hardens .ms-ge-plotly / .ms-ge-drawer / .ms-ge-tabpane, which are
+// likewise toggled through the `hidden` property from JS.
+[hidden] { display: none !important; }
+
 // ── Base page shell (About pages reuse homepage header/footer styles which live
 //    in css/homepage; these rules cover the standalone page body + the new dropdown)
 .ms-page { margin: 0; background: $ms-paper; color: $ms-ink; font-family: $ms-font-sans; }
 #ms-main { min-height: 60vh; }
 
+// C3: emitted by team.htm and by graph-explorer.js's "No relations" empty state,
+// but never defined — Bootstrap is not loaded on these pages.
+.text-muted { color: $ms-ink-soft; }
+
+// ── C7: the homepage's two-part section heading, restored for the About pages.
+// Without it every About <h2> was `.ms-cm-label` (12px mono), so the type ramp
+// went ~54px serif <h1> → 12px mono with nothing in between.
+.ms-section-label {
+    font-family: $ms-font-mono;
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent-text);
+    margin: 0 0 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+
+    &::before { content: ''; width: 32px; height: 1px; background: var(--accent); flex: 0 0 auto; }
+}
+
+.ms-section-title {
+    font-family: $ms-font-serif;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 300;
+    line-height: 1.2;
+    color: $ms-ink;
+    margin: 0 0 1.5rem;
+}
+
+.ms-section-subtitle {
+    font-size: 1rem;
+    color: $ms-ink-soft;
+    max-width: 640px;
+    line-height: 1.7;
+    font-weight: 300;
+}
+
+// C8: the homepage's inter-section separator, so About pages get the same rhythm.
+.spectral-line-thin {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--spectral-1) 10%, var(--spectral-2) 25%, var(--spectral-3) 40%, var(--spectral-4) 55%, var(--spectral-5) 70%, var(--spectral-6) 85%, transparent 100%);
+    opacity: 0.45;
+}
+.ms-section-rule { @include ms-container; }
+
 .ms-page-hero {
     @include ms-container;
     padding-top: 140px; padding-bottom: 48px;
-    &__eyebrow { font-family: $ms-font-mono; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: $ms-blue; }
+    &__eyebrow { font-family: $ms-font-mono; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: $ms-blue-text; }
     &__title { font-family: $ms-font-serif; font-weight: 400; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.08; margin: 12px 0 16px; }
     &__lead { max-width: 720px; color: $ms-ink-soft; font-size: 1.1rem; line-height: 1.6; }
     &__accent { height: 3px; width: 120px; border-radius: 2px; margin-top: 24px; @include ms-spectral-gradient(); }
 }
+@media (max-width: 768px) { .ms-page-hero { padding-top: 108px; padding-bottom: 32px; } }
 
-// ── About dropdown (desktop)
-.ms-nav-dropdown { position: relative; }
-.ms-nav-dropdown-toggle {
-    background: none; border: 0; cursor: pointer; font: inherit; color: inherit;
-    display: inline-flex; align-items: center; gap: 6px; padding: 0;
-    .ms-nav-caret { font-size: 0.7em; transition: transform 0.2s ease; }
-}
-.ms-nav-dropdown.open .ms-nav-caret { transform: rotate(180deg); }
-.ms-nav-dropdown-menu {
-    position: absolute; top: calc(100% + 14px); left: 50%; transform: translateX(-50%) translateY(-6px);
-    min-width: 320px; padding: 8px;
-    background: $ms-glass; backdrop-filter: blur(14px);
-    border: 1px solid $ms-line; border-radius: 14px;
-    box-shadow: 0 18px 50px rgba(26, 26, 46, 0.16);
-    opacity: 0; visibility: hidden; transition: opacity 0.18s ease, transform 0.18s ease; z-index: 60;
-    &::before { content: ''; position: absolute; inset: -3px 0 auto; height: 3px; border-radius: 3px 3px 0 0; @include ms-spectral-gradient(); }
-    a { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; text-decoration: none; color: $ms-ink;
-        i { margin-top: 3px; color: $ms-blue; width: 18px; text-align: center; }
-        strong { display: block; font-weight: 600; font-size: 0.95rem; }
-        em { display: block; font-style: normal; font-size: 0.8rem; color: $ms-ink-soft; margin-top: 2px; }
-        &:hover, &:focus { background: rgba(59, 130, 246, 0.08); outline: none; } }
-}
-.ms-nav-dropdown.open .ms-nav-dropdown-menu { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
-
-// ── About group (mobile)
-.ms-mobile-nav-group-toggle {
-    background: none; border: 0; font: inherit; color: inherit; width: 100%; text-align: left;
-    display: flex; justify-content: space-between; align-items: center; padding: 12px 0; cursor: pointer;
-    i { transition: transform 0.2s ease; }
-    &[aria-expanded="true"] i { transform: rotate(180deg); }
-}
-.ms-mobile-nav-group { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; padding-left: 14px;
-    &.open { max-height: 320px; }
-    .ms-mobile-nav-sublink { display: block; padding: 8px 0; color: $ms-ink-soft; text-decoration: none; } }
+// NOTE: `.ms-nav-dropdown*` / `.ms-mobile-nav-group*` used to live here. They were
+// moved to _ms-chrome.scss because includes/ms_header.htm is shared with index.htm,
+// which loads only the `css/homepage` bundle — the dropdown was unstyled there.
 
 // ── Contact page
-.ms-contact { @include ms-container; padding: 24px 24px 96px; }
+.ms-contact { @include ms-container; @include ms-section-rhythm; }
 .ms-contact__grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 40px; align-items: start; }
 .ms-contact-form { display: flex; flex-direction: column; gap: 18px;
     background: #fff; border: 1px solid $ms-line; border-radius: 18px; padding: 28px; box-shadow: 0 12px 40px rgba(26,26,46,0.06); }
 .ms-contact-field { display: flex; flex-direction: column; gap: 6px;
-    label { font-weight: 600; font-size: 0.9rem; }
-    .form-control { border-radius: 10px; } }
-.ms-contact-error { color: $ms-red; font-size: 0.9rem; margin: 0; }
+    label { font-weight: 600; font-size: 0.9rem; } }
+
+// C2: these fields used Bootstrap 3's `.form-control`, but ms_base.htm loads no
+// Bootstrap — they rendered as ~150px-wide raw browser controls with default
+// chrome. The class is renamed `.ms-contact-input` so it stops implying a
+// framework that is not there.
+.ms-contact-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid $ms-line;
+    border-radius: 10px;
+    background: #fff;
+    font: inherit;
+    color: $ms-ink;
+    transition: border-color 0.2s ease;
+
+    &::placeholder { color: $ms-ink-soft; }
+    &:hover { border-color: rgba(26, 26, 46, 0.22); }
+    // C4: visible focus (WCAG 2.4.7) — 6.37:1 against the white field.
+    &:focus-visible,
+    &:focus { outline: 2px solid $ms-blue-text; outline-offset: 1px; border-color: $ms-blue-text; }
+    &[aria-invalid='true'] { border-color: $ms-red-text; }
+}
+textarea.ms-contact-input { resize: vertical; min-height: 120px; }
+select.ms-contact-input { appearance: none; background-image: none; cursor: pointer; }
+
+.ms-contact-error { color: $ms-red-text; font-size: 0.9rem; margin: 0; }
 .ms-contact-note { color: $ms-ink-soft; font-size: 0.9rem; }
+
+// ── WAVE 4f: visible required markers + per-field errors.
+// `novalidate` is kept (native bubbles are unstyleable and vanish on scroll),
+// so the form has to say which field is wrong on its own. `.ms-req` is
+// aria-hidden in the markup because `aria-required` already carries the fact —
+// the asterisk is there for people reading the page, not for the accessibility
+// tree, where it would otherwise be announced as "star" on every label.
+.ms-req { color: $ms-red-text; font-weight: 700; }
+.ms-contact-required-hint { margin: 0; font-size: 0.8rem; color: $ms-ink-soft; }
+.ms-contact-fielderr { margin: 0; font-size: 0.82rem; color: $ms-red-text; }
+
+// The mailto: URL is capped near 2000 characters by the OS handler, so long
+// messages used to be truncated in silence somewhere in the middle.
+.ms-contact-count { margin: 0; font-size: 0.76rem; font-family: $ms-font-mono; color: $ms-ink-soft; text-align: right;
+    &.is-low { color: $ms-red-text; } }
+
+// The "Nothing happened?" panel. `window.location.href = 'mailto:…'` is a no-op
+// on institutional webmail (Outlook Web, Zimbra, Roundcube) — a large share of
+// this audience — where the submit button simply appeared to be broken.
+.ms-contact-fallback { border: 1px dashed rgba(26, 26, 46, 0.28); border-radius: 14px; padding: 20px; background: $ms-paper;
+    display: flex; flex-direction: column; gap: 10px;
+    &__head { font-family: $ms-font-serif; font-weight: 500; font-size: 1.25rem; margin: 0; }
+    &__label { font-weight: 600; font-size: 0.85rem; }
+    p { color: $ms-ink-soft; font-size: 0.88rem; margin: 0; } }
+.ms-contact-copyrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+// Selectable, not a link: the point is that the reader can highlight it by hand
+// when every automated path has failed them.
+.ms-contact-address { font-family: $ms-font-mono; font-size: 0.9rem; color: $ms-ink; background: #fff;
+    border: 1px solid $ms-line; border-radius: 8px; padding: 6px 12px; user-select: all; word-break: break-all; }
+.ms-contact-copy { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+    border: 1px solid $ms-line; background: #fff; color: $ms-ink; border-radius: 999px;
+    padding: 6px 14px; font: inherit; font-size: 0.82rem; cursor: pointer;
+    &:hover { border-color: $ms-blue-text; color: $ms-blue-text; }
+    &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
+.ms-contact-copied { margin: 0; font-size: 0.8rem; color: $ms-ink-soft;
+    &:empty { display: none; } }
+.ms-contact-body { font-family: $ms-font-mono; font-size: 0.8rem; }
+
+// Off-screen host for the execCommand('copy') fallback textarea. `display:none`
+// would make the selection uncopyable, so it has to stay rendered.
+.ms-visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
 .ms-contact-aside { padding: 8px 4px;
-    h2 { font-family: $ms-font-serif; font-weight: 500; }
+    h3 { font-family: $ms-font-serif; font-weight: 500; font-size: 1.5rem; margin: 0 0 10px; }
+    p { color: $ms-ink-soft; }
     .ms-contact-links { list-style: none; padding: 0; margin: 18px 0 0; display: flex; flex-direction: column; gap: 12px;
-        a { color: $ms-ink; text-decoration: none; display: inline-flex; gap: 10px; align-items: center;
-            i { color: $ms-blue; } &:hover { color: $ms-blue; } } }
+        a { color: $ms-ink; text-decoration: none; display: inline-flex; gap: 10px; align-items: flex-start;
+            i { color: $ms-blue-text; margin-top: 0.3em; }
+            &:hover { color: $ms-blue-text; }
+            &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 3px; border-radius: 4px; } } }
 }
 @media (max-width: 800px) { .ms-contact__grid { grid-template-columns: 1fr; } }
 
 // ── Conceptual model page
 .reveal { @include ms-reveal; }
-.ms-cm-section { @include ms-container; padding: 40px 24px; }
-.ms-cm-label { font-family: $ms-font-mono; font-size: 12px; font-weight: 400; letter-spacing: 0.16em; text-transform: uppercase; color: $ms-blue; margin: 0 0 20px; }
+.ms-cm-section { @include ms-container; @include ms-section-rhythm; }
+// `.ms-cm-label` (12px mono) used to be every About <h2>. C7 replaced it with the
+// `.ms-section-label` + `.ms-section-title` pair on all four pages, so the rule is
+// gone rather than left around to be reused.
 .ms-cm-intro { color: $ms-ink-soft; max-width: 680px; }
+// WAVE 4g: each card used to paint the FULL six-colour gradient on its 4px
+// spine — three complete spectra side by side in one row. The homepage rations
+// the device to four places (logo axis, header mark, two separators), which is
+// what makes it read as a signature rather than as decoration. One stop per
+// card, so the three cards together compose a single spectral run.
 .ms-cm-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
     .ms-cm-level { position: relative; background: #fff; border: 1px solid $ms-line; border-radius: 16px; padding: 28px 24px; overflow: hidden;
-        &::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; @include ms-spectral-gradient(180deg); }
-        .ms-cm-level-num { font-family: $ms-font-mono; color: $ms-blue; font-size: 0.8rem; }
+        &::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: $ms-ink; }
+        &[data-level="1"]::before { background: $ms-red; }
+        &[data-level="2"]::before { background: $ms-yellow; }
+        &[data-level="3"]::before { background: $ms-blue; }
+        .ms-cm-level-num { font-family: $ms-font-mono; color: $ms-blue-text; font-size: 0.8rem; }
         h3 { font-family: $ms-font-serif; font-weight: 500; margin: 6px 0 10px; }
         p { color: $ms-ink-soft; font-size: 0.95rem; margin: 0; } } }
+// C5: white on the decorative group hues measured 2.54–4.23:1. The `-solid` ramp
+// keeps the hue family and clears 4.5:1; the decorative hues stay in the gradient.
 .ms-cm-groups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 8px;
     .ms-cm-group { border-radius: 14px; padding: 20px; color: #fff;
-        h3 { margin: 0 0 8px; font-size: 1rem; } p { margin: 0; font-size: 0.85rem; opacity: 0.92; font-family: $ms-font-mono; }
-        &[data-group="studied-object"] { background: $ms-blue; }
-        &[data-group="observation"] { background: $ms-green; }
-        &[data-group="context"] { background: $ms-purple; }
-        &[data-group="transformations"] { background: $ms-orange; } } }
+        h3 { margin: 0 0 8px; font-size: 1rem; }
+        // WAVE 4g: mono is the project's identifier/code voice (thesaurus chips,
+        // CIDOC properties, grant numbers). Setting it on running prose blurs
+        // that distinction, so this is pinned to sans rather than left to
+        // inherit whatever a future rule decides.
+        p { margin: 0; font-size: 0.85rem; font-family: $ms-font-sans; }
+        &[data-group="studied-object"] { background: $ms-blue-solid; }
+        &[data-group="observation"] { background: $ms-green-solid; }
+        &[data-group="context"] { background: $ms-purple-solid; }
+        &[data-group="transformations"] { background: $ms-orange-solid; } } }
 .ms-cm-cta { margin-top: 28px; display: inline-flex; }
 .ms-cm-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
     .ms-cm-stat { text-align: center; padding: 20px 12px; border: 1px solid $ms-line; border-radius: 14px; background: #fff;
         .ms-cm-stat-value { display: block; font-family: $ms-font-serif; font-size: 2.4rem; color: $ms-ink; }
         .ms-cm-stat-label { font-size: 0.8rem; color: $ms-ink-soft; } } }
-.ms-cm-flow { list-style: none; display: flex; flex-wrap: wrap; gap: 12px; padding: 0; counter-reset: step;
-    li { position: relative; flex: 1 1 160px; background: #fff; border: 1px solid $ms-line; border-radius: 12px; padding: 18px; text-align: center; counter-increment: step;
-        &::before { content: counter(step); display: inline-block; font-family: $ms-font-mono; color: $ms-blue; font-size: 0.8rem; }
-        span { display: block; font-weight: 600; margin-top: 4px; }
-        &:not(:last-child)::after { content: '→'; position: absolute; right: -12px; top: 50%; transform: translateY(-50%); color: $ms-line; } } }
+// WAVE 4b: the eight implementation counts became four meaningful figures, and
+// the Arches internals moved here — still published, no longer leading.
+.ms-cm-technical { margin-top: 22px;
+    summary { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; width: fit-content;
+        font-family: $ms-font-mono; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em; color: $ms-blue-text;
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 3px; border-radius: 4px; } }
+    .ms-cm-technical-line { margin: 10px 0 0; font-family: $ms-font-mono; font-size: 0.8rem; line-height: 1.7; color: $ms-ink-soft; } }
+
+// ── WAVE 4a: the two-track event diagram.
+//
+// `.ms-cm-flow` used to render
+//     Production → Sampling → Analysis → Characterization → Transformation
+// as ONE numbered chain. Read literally, that says a manuscript is altered
+// after somebody analyses it, and it merges two timelines that run at wildly
+// different speeds: the object's life (centuries) and the research act (an
+// afternoon). They are separate tracks, and what joins them is the material
+// Component — the "pivot axis" the homepage already claims.
+//
+// Layout is three stacked rows (object track / pivot / research track) so it
+// degrades to a single readable column on narrow screens without any of the
+// arrow-pointing-at-nothing problems the old wrapped flex row had.
+.ms-cm-tracks { display: grid; gap: 0; margin-top: 8px; }
+
+.ms-cm-track { background: #fff; border: 1px solid $ms-line; border-radius: 16px; padding: 20px 22px; }
+.ms-cm-track-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin: 0 0 14px; font-size: 1rem; font-weight: 600;
+    .ms-cm-track-name { font-family: $ms-font-serif; font-weight: 500; font-size: 1.25rem; }
+    // The axis label is the whole point of splitting the diagram: it names the
+    // timescale each track runs on.
+    .ms-cm-track-axis { font-family: $ms-font-mono; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em;
+        color: $ms-ink-soft; border: 1px solid $ms-line; border-radius: 999px; padding: 2px 10px; font-weight: 400; } }
+
+.ms-cm-track-steps { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0; margin: 0; counter-reset: step;
+    li { position: relative; counter-increment: step; padding: 14px 16px; border-radius: 12px; background: $ms-paper;
+        border: 1px solid $ms-line; border-left: 3px solid var(--track-c, #{$ms-ink});
+        &::before { content: counter(step); display: block; font-family: $ms-font-mono; font-size: 0.7rem; color: $ms-ink-soft; } }
+    .ms-cm-step-name { display: block; font-weight: 600; margin-top: 2px; }
+    .ms-cm-step-note { display: block; margin-top: 4px; font-size: 0.82rem; line-height: 1.45; color: $ms-ink-soft; } }
+
+// One stop of the spectrum per track (4g again): warm for the object's own
+// history, cool for the measurements made on it.
+.ms-cm-track[data-track="object"] { --track-c: #{$ms-orange-solid}; }
+.ms-cm-track[data-track="research"] { --track-c: #{$ms-blue-solid}; }
+
+// The pivot. Both tracks converge on it, so it sits between them with a
+// connector running through — the one place on this page where the full
+// spectral gradient still earns its keep.
+.ms-cm-pivot { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    margin: 0 auto; padding: 26px 24px; max-width: 560px; text-align: center;
+    &::before, &::after { content: ''; position: absolute; left: 50%; width: 2px; height: 22px; transform: translateX(-50%);
+        @include ms-spectral-gradient(180deg); }
+    &::before { top: 0; }
+    &::after { bottom: 0; }
+    .ms-cm-pivot-label { font-family: $ms-font-mono; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.16em; color: var(--accent-text); }
+    .ms-cm-pivot-name { font-family: $ms-font-serif; font-size: 1.6rem; font-weight: 500; color: $ms-ink; }
+    .ms-cm-pivot-note { font-size: 0.88rem; line-height: 1.55; color: $ms-ink-soft; max-width: 46ch; } }
+
+@media (max-width: 700px) {
+    .ms-cm-track-steps { grid-template-columns: 1fr; }
+}
 .ms-cm-thesauri { display: flex; flex-wrap: wrap; gap: 12px;
     a, span { padding: 10px 18px; border-radius: 999px; border: 1px solid $ms-line; background: #fff; font-family: $ms-font-mono; font-size: 0.85rem; text-decoration: none; color: $ms-ink; }
-    a:hover { border-color: $ms-blue; color: $ms-blue; } }
+    a:hover { border-color: $ms-blue-text; color: $ms-blue-text; }
+    a:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
 @media (max-width: 900px) {
     .ms-cm-levels, .ms-cm-groups, .ms-cm-stats { grid-template-columns: 1fr 1fr; }
 }
@@ -114,10 +288,48 @@
 }
 
 // ── Team page
-.ms-about-more { margin-top: 16px; max-width: 720px;
-    summary { cursor: pointer; color: $ms-blue; font-weight: 600; }
-    p { color: $ms-ink-soft; margin-top: 12px; } }
-.ms-team { @include ms-container; padding: 24px 24px 96px; }
+// WAVE 4e: `.ms-about-more` (the collapsed <details> "Read more") is gone. This
+// is the page that establishes institutional credibility — hiding the project
+// statement behind a disclosure was the single most self-defeating thing in the
+// section. The statement is now the two-column hero below.
+.ms-about-hero { @include ms-container; @include ms-section-rhythm;
+    display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 48px; align-items: start;
+    &__statement p { color: $ms-ink-soft; line-height: 1.7; margin: 0 0 1rem;
+        &:last-child { margin-bottom: 0; } }
+    .ms-about-lead { font-size: 1.15rem; color: $ms-ink; line-height: 1.6; } }
+
+// The facts a reader is actually checking for — grant number, programme, host
+// lab, licence — as a scannable panel rather than as sentences to hunt through.
+.ms-about-facts { background: #fff; border: 1px solid $ms-line; border-radius: 18px; padding: 24px 26px;
+    box-shadow: 0 12px 40px rgba(26,26,46,0.05);
+    &__head { font-family: $ms-font-mono; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.16em;
+        color: var(--accent-text); margin: 0 0 16px; font-weight: 500; }
+    &__list { margin: 0; display: flex; flex-direction: column; gap: 14px; }
+    .ms-about-fact { display: flex; flex-direction: column; gap: 3px;
+        dt { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: $ms-ink-soft; }
+        dd { margin: 0; font-weight: 600; color: $ms-ink; } } }
+// Mono means identifier/code — a grant number and an SPDX licence id are exactly that.
+.ms-about-fact-code { font-family: $ms-font-mono; font-size: 0.9em; }
+@media (max-width: 860px) { .ms-about-hero { grid-template-columns: 1fr; gap: 28px; } }
+
+// WAVE 4e: how to cite / funding / licence. This was missing outright, and its
+// absence is the first thing a reader who intends to reuse the data notices.
+.ms-reuse { @include ms-container; @include ms-section-rhythm; }
+.ms-reuse-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+.ms-reuse-card { background: #fff; border: 1px solid $ms-line; border-radius: 16px; padding: 24px;
+    h3 { font-family: $ms-font-serif; font-weight: 500; font-size: 1.35rem; margin: 0 0 12px; }
+    p { color: $ms-ink-soft; font-size: 0.92rem; line-height: 1.6; margin: 0 0 10px;
+        &:last-child { margin-bottom: 0; } }
+    .ms-reuse-citation { color: $ms-ink; background: $ms-paper; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0;
+        padding: 12px 14px; font-size: 0.88rem; }
+    .ms-reuse-code { margin: 0 0 10px; }
+    .ms-reuse-note { font-size: 0.85rem;
+        a { color: $ms-blue-text; display: inline-flex; align-items: center; gap: 6px;
+            &:hover { color: $ms-blue-text; text-decoration: underline; }
+            &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; border-radius: 4px; } } } }
+@media (max-width: 900px) { .ms-reuse-grid { grid-template-columns: 1fr; } }
+
+.ms-team { @include ms-container; @include ms-section-rhythm; }
 .ms-team-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
 .ms-member { background: #fff; border: 1px solid $ms-line; border-radius: 18px; padding: 28px; text-align: center;
     transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -126,12 +338,24 @@
     .ms-member-role { color: $ms-ink-soft; font-size: 0.9rem; }
     .ms-member-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 12px 0;
         span { font-family: $ms-font-mono; font-size: 0.72rem; padding: 4px 10px; border-radius: 999px; background: $ms-paper-2; color: $ms-ink-soft; } }
-    .ms-member-bio { font-size: 0.92rem; color: $ms-ink-soft; line-height: 1.55; }
-    .ms-member-link { display: inline-flex; gap: 6px; align-items: center; margin-top: 12px; color: $ms-blue; text-decoration: none; font-size: 0.88rem; } }
+    // WAVE 4e: the bio was centred like everything else in the card. Centred
+    // body copy gives every line a different left edge, which costs the reader a
+    // re-scan per line — at this ~340px measure that is four or five of them.
+    // Photo / name / role / tags stay centred; only the running prose is ragged-right.
+    .ms-member-bio { font-size: 0.92rem; color: $ms-ink-soft; line-height: 1.55; text-align: left; }
+    .ms-member-link { display: inline-flex; gap: 6px; align-items: center; margin-top: 12px; color: $ms-blue-text; text-decoration: none; font-size: 0.88rem;
+        &:hover { text-decoration: underline; }
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; border-radius: 4px; } } }
+// WAVE 4g: the avatar ring painted the full six-colour gradient on each of the
+// three portraits. Same rationing as `.ms-cm-level`: one stop each, so the row
+// of three composes a single spectral run instead of repeating it three times.
 .ms-member-photo { width: 120px; height: 120px; margin: 0 auto; border-radius: 50%; overflow: hidden; position: relative;
     box-shadow: 0 0 0 3px #fff, 0 0 0 5px transparent;
-    &::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; padding: 3px; @include ms-spectral-gradient(135deg);
+    &::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; padding: 3px; background: var(--stop-c, #{$ms-ink});
         -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+    &[data-stop="1"] { --stop-c: #{$ms-red}; }
+    &[data-stop="2"] { --stop-c: #{$ms-yellow}; }
+    &[data-stop="3"] { --stop-c: #{$ms-blue}; }
     img { width: 100%; height: 100%; object-fit: cover; } }
 .ms-member-fallback { display: none; width: 100%; height: 100%; align-items: center; justify-content: center;
     background: $ms-paper-2; color: $ms-ink-soft;
@@ -139,66 +363,450 @@
 .ms-member-photo.is-fallback {
     .ms-member-img { display: none; }
     .ms-member-fallback { display: flex; } }
-.ms-team-verify { text-align: center; margin-top: 28px; }
+// WAVE 4d: `.ms-team-verify` ("Biographies compiled from public institutional
+// sources.") is gone with its markup — an internal provenance note that read to
+// an outside reader as "we scraped these".
 @media (max-width: 900px) { .ms-team-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; } }
 
 // ── Graph Explorer
-.ms-ge { @include ms-container; padding: 8px 24px 96px; }
-.ms-ge-stats { display: flex; gap: 26px; margin-top: 20px;
-    .ms-ge-stat { span { font-family: $ms-font-serif; font-size: 2rem; color: $ms-ink; display: block; }
-        em { font-style: normal; font-size: 0.78rem; color: $ms-ink-soft; font-family: $ms-font-mono; text-transform: uppercase; letter-spacing: 0.08em; } } }
+.ms-ge { @include ms-container; @include ms-section-rhythm; }
+
+// Visually-hidden, still announced. Used by the matrix/table <caption>s and by
+// the matrix corner cell, which carry the orientation text ("rows are sources").
+.ms-ge-sr {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+// C11: at 375px four stats on one non-wrapping flex row squeeze into overlap.
+// WAVE 3 item 9: now a <dl>. The source order is <dt> (label) then <dd> (value)
+// because that is the correct reading order for assistive technology; the visual
+// order is flipped with column-reverse so the number still leads.
+.ms-ge-stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 20px;
+    .ms-ge-stat { display: flex; flex-direction: column-reverse;
+        dd { font-family: $ms-font-serif; font-size: 2rem; color: $ms-ink; margin: 0; }
+        dt { font-size: 0.78rem; color: $ms-ink-soft; font-family: $ms-font-mono; text-transform: uppercase; letter-spacing: 0.08em; } } }
+// WAVE 4c: "147 records published · 4 models defined and open for deposit",
+// summed from the live payload. Sits directly under the stats so the volume is
+// read at the same time as the schema size, not discovered later by clicking
+// into an empty drawer.
+.ms-ge-volume { margin: 16px 0 0; font-size: 0.95rem; color: $ms-ink-soft;
+    padding-left: 14px; border-left: 3px solid var(--accent);
+    &:empty { display: none; } }
+
 .ms-ge-toolbar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; margin: 20px 0 12px; }
+
+// Row/column ordering for the matrix. "By family" is the default because the
+// four families then form contiguous blocks, and the block structure is the
+// single most useful thing a 68%-dense adjacency matrix has to say.
+.ms-ge-sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 12px;
+    .ms-ge-sorts-label { font-family: $ms-font-mono; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.09em; color: $ms-ink-soft; }
+    .ms-ge-sort-group { display: inline-flex; border: 1px solid $ms-line; border-radius: 999px; overflow: hidden; }
+    .ms-ge-sort { background: #fff; border: 0; padding: 6px 14px; font: inherit; font-size: 0.8rem; color: $ms-ink-soft; cursor: pointer;
+        & + .ms-ge-sort { border-left: 1px solid $ms-line; }
+        &.is-active { background: $ms-ink; color: #fff; }
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: -2px; } } }
 .ms-ge-views { display: inline-flex; border: 1px solid $ms-line; border-radius: 999px; overflow: hidden;
     .ms-ge-view { background: #fff; border: 0; padding: 8px 18px; cursor: pointer; font: inherit; color: $ms-ink-soft;
-        &.is-active { background: $ms-ink; color: #fff; } } }
+        &.is-active { background: $ms-ink; color: #fff; }
+        // C4: `overflow:hidden` on the pill clips a default outline — inset it.
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: -2px; } } }
+// C5/C11: the off state was opacity .4 (~1.6:1) and read as "disabled". .65 plus
+// an explicit filled/hollow dot makes the state legible without relying on alpha.
 .ms-ge-filters { display: flex; flex-wrap: wrap; gap: 8px;
-    .ms-ge-filter { border: 1px solid var(--c); color: var(--c); background: transparent; border-radius: 999px; padding: 5px 12px; font-size: 0.78rem; cursor: pointer; opacity: 0.4;
-        &.is-on { opacity: 1; background: color-mix(in srgb, var(--c) 12%, #fff); } } }
+    .ms-ge-filter { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--c); color: $ms-ink; background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 0.78rem; cursor: pointer; opacity: 0.65;
+        &::before { content: ''; width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; border: 1.5px solid var(--c); }
+        &.is-on { opacity: 1; background: color-mix(in srgb, var(--c) 12%, #fff);
+            &::before { background: var(--c); } }
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } } }
 .ms-ge-search { display: inline-flex; align-items: center; gap: 8px; border: 1px solid $ms-line; border-radius: 999px; padding: 6px 14px; background: #fff;
-    i { color: $ms-ink-soft; } input { border: 0; outline: 0; font: inherit; background: transparent; } }
+    &:focus-within { border-color: $ms-blue-text; outline: 2px solid $ms-blue-text; outline-offset: 1px; }
+    i { color: $ms-ink-soft; } input { border: 0; outline: 0; font: inherit; background: transparent; color: $ms-ink; } }
+// item 7: the search reports how many models it matched, and says so explicitly
+// when it matched none — previously nothing at all happened until blur.
+.ms-ge-search-count { font-family: $ms-font-mono; font-size: 0.72rem; color: $ms-ink-soft; white-space: nowrap;
+    &:empty { display: none; }
+    &.is-none { color: $ms-red-text; } }
+
 .ms-ge-stage { position: relative; display: grid; grid-template-columns: 1fr; min-height: 560px; border: 1px solid $ms-line; border-radius: 20px; background:
     radial-gradient(circle at 30% 20%, rgba($ms-blue, 0.05), transparent 60%),
     radial-gradient(circle at 80% 80%, rgba($ms-purple, 0.05), transparent 55%), #fff; overflow: hidden; }
-.ms-ge-canvas, .ms-ge-plotly { grid-area: 1 / 1; min-height: 560px; }
-#ms-ge-svg { width: 100%; height: 560px; display: block; cursor: grab; }
-.ms-ge-loading, .ms-ge-error { position: absolute; inset: 0; display: grid; place-items: center; color: $ms-ink-soft; font-family: $ms-font-mono; }
-.ms-ge-edge { stroke: rgba($ms-ink, 0.18); stroke-width: 1.4; transition: stroke 0.2s, opacity 0.2s;
-    &.is-active { stroke: $ms-blue; stroke-width: 2.2; } &.is-dim { opacity: 0.06; } }
+// item 6: the drawer is a real grid column, so opening it PUSHES the view
+// instead of covering the node you just clicked.
+.ms-ge-stage.has-drawer { grid-template-columns: minmax(0, 1fr) 380px; }
+.ms-ge-pane { grid-area: 1 / 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.ms-ge-canvas { flex: 1; min-height: 0; display: flex; }
+.ms-ge-figure { margin: 0; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#ms-ge-svg { width: 100%; flex: 1; min-height: 480px; display: block; cursor: grab; }
+// item 9: a real caption, visible to everyone — not a role="group" that says nothing.
+.ms-ge-figcaption { padding: 0 20px 14px; font-size: 0.82rem; line-height: 1.5; color: $ms-ink-soft; }
+.ms-ge-plotly { flex: 1; min-height: 520px; }
+.ms-ge-loading, .ms-ge-error { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; color: $ms-ink-soft; font-family: $ms-font-mono; text-align: center; padding: 0 24px; background: rgba(#fff, 0.86); }
+
+// ── Ego network (the node-link, now a per-model drill-down)
+// item 3: stroke colour is set per-edge from the source family and darkened in
+// JS until it clears 3:1 on white; width encodes r.count. The old flat
+// rgba($ms-ink,.18) measured 1.54:1 and carried no data at all.
+.ms-ge-edge { transition: opacity 0.2s; opacity: 0.75;
+    &.is-active { opacity: 1; } &.is-dim { opacity: 0.08; } }
+.ms-ge-edge-label { font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink-soft; pointer-events: none;
+    // White halo so a label crossing an edge or a disc stays readable.
+    paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round;
+    &.is-full { fill: $ms-ink; font-size: 11px; }
+    &.is-dim { opacity: 0.1; } }
 .ms-ge-node { cursor: pointer; transition: opacity 0.2s;
-    circle { transition: transform 0.15s; stroke: #fff; stroke-width: 2; }
-    &:hover circle, &:focus circle { filter: drop-shadow(0 4px 12px rgba($ms-ink, 0.25)); }
+    .ms-ge-disc { stroke-width: 2; transition: stroke-width 0.15s;
+        // item 3: "no records published yet" is a category, not a small number,
+        // so it reads as a hollow dashed ring rather than as the smallest dot.
+        &.is-empty { stroke-dasharray: 5 4; } }
+    &:hover .ms-ge-disc, &:focus .ms-ge-disc { filter: drop-shadow(0 4px 12px rgba($ms-ink, 0.25)); }
+    &.is-ego .ms-ge-disc { stroke-width: 3.5; }
+    &.is-selected .ms-ge-disc { stroke: $ms-ink; stroke-width: 4; }
     &.is-dim { opacity: 0.2; }
-    .ms-ge-node-label { font-family: $ms-font-sans; font-size: 12px; fill: $ms-ink; font-weight: 500; pointer-events: none; } }
+    // C4: SVG <g> cannot take a useful CSS outline — draw the ring on the disc.
+    &:focus { outline: none; }
+    &:focus-visible { outline: none;
+        .ms-ge-disc { stroke: $ms-ink; stroke-width: 4; paint-order: stroke; } }
+    // item 12: labels sit at r + 16 while collision only reserved the disc.
+    // The JS pads the collision radius; the halo covers the residual overlap.
+    .ms-ge-node-label { font-family: $ms-font-sans; font-size: 12px; fill: $ms-ink; font-weight: 500; pointer-events: none;
+        paint-order: stroke; stroke: #fff; stroke-width: 3.5px; stroke-linejoin: round; } }
+
+// ── item 1: the adjacency matrix
+.ms-ge-matrix { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 18px 20px 0; }
+.ms-ge-matrix-scroll { overflow: auto; flex: 1; min-height: 0; }
+.ms-ge-empty { padding: 40px 0; text-align: center; }
+.ms-ge-mx { border-collapse: collapse; font-size: 0.78rem;
+    .ms-ge-mx-corner { min-width: 132px; }
+    // A family band above the columns, so the block structure is named and not
+    // merely implied by colour.
+    .ms-ge-mx-band { font-family: $ms-font-mono; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em;
+        font-weight: 500; color: $ms-ink-soft; text-align: center; padding: 0 4px 5px; border-bottom: 3px solid var(--c);
+        span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+    .ms-ge-mx-colh { height: 128px; vertical-align: bottom; padding: 6px 0 5px; font-weight: 500; }
+    .ms-ge-mx-rowh { text-align: right; padding: 0 10px 0 4px; font-weight: 500; max-width: 150px; }
+    .ms-ge-mx-headbtn { border: 0; background: none; font: inherit; color: $ms-ink; cursor: pointer; padding: 2px 3px; border-radius: 5px;
+        &:hover { background: $ms-paper-2; color: $ms-blue-text; }
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 1px; } }
+    .ms-ge-mx-colh .ms-ge-mx-headbtn { writing-mode: vertical-rl; transform: rotate(180deg); text-align: left; max-height: 118px; overflow: hidden; }
+    .ms-ge-mx-rowh.is-selected .ms-ge-mx-headbtn,
+    .ms-ge-mx-colh.is-selected .ms-ge-mx-headbtn { background: $ms-ink; color: #fff; }
+    .ms-ge-mx-rowh.is-dim, .ms-ge-mx-colh.is-dim { opacity: 0.28; }
+    .ms-ge-mx-cell { width: 36px; height: 36px; min-width: 36px; padding: 0; text-align: center; vertical-align: middle;
+        border: 1px solid rgba($ms-ink, 0.07); transition: opacity 0.15s;
+        &.is-self { background: repeating-linear-gradient(45deg, rgba($ms-ink, 0.05) 0 3px, transparent 3px 6px); }
+        // Cell fill = the SOURCE family, tinted by how many typed relations it
+        // holds; the digit repeats the count so the channel is not opacity-only.
+        &.is-on { background: var(--c); box-shadow: inset 0 0 0 1px var(--b); cursor: pointer; }
+        &.is-on:hover { box-shadow: inset 0 0 0 2px var(--b); }
+        &.is-dim { opacity: 0.16; }
+        &:focus { outline: 2px solid $ms-blue-text; outline-offset: -2px; }
+        // Family boundaries get a heavier rule than the ordinary cell grid.
+        &.is-boundary { border-left-color: rgba($ms-ink, 0.3); border-left-width: 2px; } }
+    .ms-ge-mx-colh.is-boundary { border-left: 2px solid rgba($ms-ink, 0.3); }
+    tr.is-boundary > * { border-top: 2px solid rgba($ms-ink, 0.3); }
+    .ms-ge-mx-n { font-family: $ms-font-mono; font-size: 0.72rem; color: $ms-ink; } }
+// The persistent hover/focus readout — the CIDOC property was previously only
+// reachable through a native <title>, i.e. never by keyboard (item 3).
+.ms-ge-mx-info { margin: 0; padding: 12px 2px 14px; min-height: 2.6em; font-size: 0.82rem; line-height: 1.4; color: $ms-ink-soft; }
+
+// ── item 8: the table view (a peer of the other views, not a hidden <details>)
+.ms-ge-table-wrap { flex: 1; min-height: 0; overflow: auto; padding: 18px 20px; }
+.ms-ge-tbl { width: 100%; border-collapse: collapse; font-size: 0.84rem;
+    th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid $ms-line; }
+    thead th { position: sticky; top: 0; z-index: 1; background: #fff; border-bottom: 2px solid rgba($ms-ink, 0.2); white-space: nowrap; }
+    tbody th { font-weight: 600; }
+    .is-num { text-align: right; font-family: $ms-font-mono; }
+    tbody tr:hover { background: rgba($ms-blue, 0.04); }
+    tbody tr.is-selected { background: color-mix(in srgb, $ms-blue-text 8%, #fff); }
+    tbody tr.is-dim { opacity: 0.3; }
+    .ms-ge-tbl-sort { border: 0; background: none; font: inherit; font-weight: 600; color: $ms-ink; cursor: pointer; padding: 2px 4px; border-radius: 5px;
+        &.is-active { color: $ms-blue-text; }
+        &:hover { background: $ms-paper-2; }
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 1px; } }
+    .ms-ge-tbl-model { border: 0; background: none; font: inherit; font-weight: 600; color: $ms-ink; cursor: pointer; text-align: left; padding: 0;
+        &:hover { color: $ms-blue-text; text-decoration: underline; }
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
+    .ms-ge-tbl-rels { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px;
+        li { display: flex; align-items: baseline; gap: 6px; }
+        b { font-weight: 600; }
+        em { font-style: normal; font-family: $ms-font-mono; font-size: 0.72rem; color: $ms-ink-soft; } }
+    .ms-ge-tbl-arrow { color: $ms-ink-soft; } }
+
 .ms-ge-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 16px; padding: 16px 4px 0; margin: 0;
     li { display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; color: $ms-ink-soft;
-        i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; } } }
-.ms-ge-a11y { margin-top: 16px; summary { cursor: pointer; color: $ms-blue; } }
-.ms-ge-list-item { padding: 6px 0; border-bottom: 1px solid $ms-line; font-size: 0.9rem; }
+        i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; } }
+    .ms-ge-legend-swatch { border: 1px solid transparent; }
+    // item 3: the size channel now carries `instances`, so it is legended.
+    .ms-ge-legend-size { gap: 6px;
+        .ms-ge-legend-dot { border-radius: 50%; border: 2px solid $ms-ink-soft; background: rgba($ms-ink, 0.08);
+            &.is-small { width: 9px; height: 9px; }
+            &.is-large { width: 17px; height: 17px; margin-right: 4px; }
+            &.is-empty { width: 15px; height: 15px; background: #fff; border-style: dashed; margin-right: 4px; } } } }
 
 // Drawer
-.ms-ge-drawer { position: absolute; top: 0; right: 0; width: min(420px, 92%); height: 100%; background: #fff; border-left: 1px solid $ms-line;
-    box-shadow: -20px 0 50px rgba($ms-ink, 0.12); transform: translateX(100%); transition: transform 0.28s ease; overflow-y: auto; z-index: 5;
+// item 6: this used to be `position:absolute; right:0; width:min(420px,92%)`
+// inside a 560px stage — it landed squarely on top of the node you had just
+// clicked. It is now the stage's second grid column (`.has-drawer`), so the
+// matrix / network / table shrink and the selection stays on screen.
+.ms-ge-drawer { grid-row: 1; grid-column: 2; min-width: 0; background: #fff; border-left: 1px solid $ms-line;
+    box-shadow: -20px 0 50px rgba($ms-ink, 0.06); transform: translateX(100%); transition: transform 0.28s ease; overflow-y: auto; z-index: 5;
+    position: relative;
     &.open { transform: none; } }
-.ms-ge-drawer-close { position: absolute; top: 14px; right: 14px; border: 0; background: $ms-paper-2; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; }
+.ms-ge-drawer-close { position: absolute; top: 14px; right: 14px; border: 0; background: $ms-paper-2; color: $ms-ink; width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+    &:hover { background: #e4e0d8; }
+    &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
 .ms-ge-drawer-body { padding: 28px 24px; }
-.ms-ge-drawer-group { display: inline-block; color: #fff; font-size: 0.72rem; padding: 3px 10px; border-radius: 999px; }
+// C5: this chip carried #fff on the raw group hue (2.54–4.23:1). JS now passes the
+// hue as `--c` instead of `background`, so it can be inverted here like .ms-ge-dt.
+.ms-ge-drawer-group { display: inline-block; font-size: 0.72rem; padding: 3px 10px; border-radius: 999px;
+    background: color-mix(in srgb, var(--c) 14%, #fff); color: $ms-ink; border: 1px solid var(--c); }
 .ms-ge-drawer-head h3 { font-family: $ms-font-serif; font-weight: 500; margin: 10px 0 8px; }
 .ms-ge-drawer-meta { display: flex; flex-wrap: wrap; gap: 6px; }
 .ms-ge-chip { font-family: $ms-font-mono; font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; background: $ms-paper-2; color: $ms-ink-soft; }
 .ms-ge-drawer-desc { color: $ms-ink-soft; font-size: 0.9rem; margin-top: 10px; }
 .ms-ge-tabs { display: flex; gap: 6px; margin: 18px 0 12px; border-bottom: 1px solid $ms-line;
     .ms-ge-tab { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: $ms-ink-soft; border-bottom: 2px solid transparent;
-        &.is-active { color: $ms-ink; border-bottom-color: $ms-blue; } } }
-.ms-ge-ng { margin-bottom: 16px; h5 { font-family: $ms-font-mono; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: $ms-blue; margin: 0 0 6px; } }
+        &.is-active { color: $ms-ink; border-bottom-color: $ms-blue-text; }
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: -2px; } } }
+// item 6: Person carries 62 fields across 23 nodegroups. Flat, that is a scroll
+// rather than a schema — everything past the first three collapses.
+.ms-ge-ng { margin-bottom: 12px; border-bottom: 1px solid $ms-line;
+    summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 6px 0;
+        font-family: $ms-font-mono; font-size: 0.72rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: $ms-blue-text;
+        &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
+    .ms-ge-ng-count { font-family: $ms-font-mono; font-size: 0.68rem; color: $ms-ink-soft; background: $ms-paper-2; border-radius: 999px; padding: 1px 8px; } }
+.ms-ge-fieldtools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px;
+    .ms-ge-fieldfilter { flex: 1 1 150px; min-width: 0; padding: 6px 12px; border: 1px solid $ms-line; border-radius: 999px; font: inherit; font-size: 0.82rem; background: #fff; color: $ms-ink;
+        &:focus-visible, &:focus { outline: 2px solid $ms-blue-text; outline-offset: 1px; border-color: $ms-blue-text; } }
+    .ms-ge-relonly { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: $ms-ink-soft; cursor: pointer;
+        input:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } } }
+.ms-ge-nofields { padding: 14px 0; }
+// WAVE 4c: the empty-model chip no longer says "0 records" — it says "No
+// records published yet — model defined and open for deposit." That is a
+// sentence, not a metric, so it drops the mono metric voice, takes the whole
+// meta row and keeps only the dashed outline that marks it as a state.
+.ms-ge-chip.is-empty { border: 1px dashed rgba($ms-ink, 0.28); background: transparent;
+    flex: 1 0 100%; font-family: $ms-font-sans; font-size: 0.78rem; line-height: 1.45; padding: 6px 10px; }
 .ms-ge-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed $ms-line;
-    .ms-ge-dt { font-family: $ms-font-mono; font-size: 0.68rem; padding: 2px 7px; border-radius: 5px; color: #fff; background: var(--c); }
+    // C5: 14 of 16 datatype chips failed as #fff-on-hue (worst 1.86:1). Inverting
+    // them to a 12% tint + ink text + a full-strength border fixes all 16 at once,
+    // and stops the chips shouting louder than the field names they annotate.
+    .ms-ge-dt { font-family: $ms-font-mono; font-size: 0.68rem; padding: 2px 7px; border-radius: 5px;
+        background: color-mix(in srgb, var(--c) 12%, #fff); color: $ms-ink; border: 1px solid var(--c); }
     .ms-ge-field-name { font-weight: 600; font-size: 0.88rem; }
     .ms-ge-field-cidoc { font-family: $ms-font-mono; font-size: 0.7rem; color: $ms-ink-soft; }
-    .ms-ge-badge { font-size: 0.66rem; color: $ms-red; border: 1px solid currentColor; border-radius: 4px; padding: 1px 5px; } }
+    .ms-ge-badge { font-size: 0.66rem; color: $ms-red-text; border: 1px solid currentColor; border-radius: 4px; padding: 1px 5px; } }
 .ms-ge-rel-hint { font-family: $ms-font-mono; font-size: 0.7rem; color: $ms-ink-soft; margin: 0 0 10px; }
-.ms-ge-rel { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 1px solid $ms-line; background: #fff; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer;
-    em { font-style: normal; color: $ms-ink-soft; font-family: $ms-font-mono; font-size: 0.72rem; margin-right: auto; } &:hover { border-color: $ms-blue; } }
+.ms-ge-rel { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 1px solid $ms-line; background: #fff; color: $ms-ink; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer;
+    em { font-style: normal; color: $ms-ink-soft; font-family: $ms-font-mono; font-size: 0.72rem; margin-right: auto; }
+    &:hover { border-color: $ms-blue-text; }
+    // Opening the drawer from a matrix cell marks the relation that cell stands
+    // for, so the click lands somewhere specific instead of on a list of 20.
+    &.is-hot { border-color: $ms-blue-text; background: color-mix(in srgb, $ms-blue-text 7%, #fff); }
+    &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
 .ms-ge-rel-count { flex: 0 0 auto; font-family: $ms-font-mono; font-size: 0.68rem; color: $ms-ink-soft; background: $ms-paper-2; border-radius: 999px; padding: 1px 7px; }
+
+// ── STRUCTURE view ──────────────────────────────────────────────────────────
+// A single model drawn as the tree it is. The layout is SOLVED (see the header
+// comment in graph-explorer.js), so nothing here animates position — the only
+// transitions are hover/selection affordances.
+
+.ms-ge-struct-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 12px;
+    .ms-ge-struct-pick { font-family: $ms-font-mono; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.09em; color: $ms-ink-soft; margin: 0; }
+    .ms-ge-struct-select { border: 1px solid $ms-line; border-radius: 999px; background: #fff; color: $ms-ink; font: inherit; font-size: 0.82rem; padding: 6px 12px; max-width: 220px;
+        &:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; } }
+    .ms-ge-struct-search { display: inline-flex; align-items: center; gap: 8px; border: 1px solid $ms-line; border-radius: 999px; padding: 6px 14px; background: #fff;
+        i { color: $ms-ink-soft; font-size: 0.8rem; }
+        input { border: 0; outline: 0; font: inherit; font-size: 0.84rem; background: none; color: $ms-ink; min-width: 190px; } }
+    .ms-ge-struct-qcount { font-family: $ms-font-mono; font-size: 0.72rem; color: $ms-ink-soft; white-space: nowrap;
+        &.is-none { color: $ms-red-text; } }
+    .ms-ge-struct-btns { display: inline-flex; border: 1px solid $ms-line; border-radius: 999px; overflow: hidden; }
+    .ms-ge-struct-btn { background: #fff; border: 0; padding: 6px 14px; font: inherit; font-size: 0.8rem; color: $ms-ink-soft; cursor: pointer;
+        & + .ms-ge-struct-btn { border-left: 1px solid $ms-line; }
+        &:hover { color: $ms-ink; background: $ms-paper-2; }
+        &[aria-pressed="true"] { background: $ms-ink; color: #fff; }
+        &:focus-visible { outline: 2px solid $ms-ink; outline-offset: -2px; } }
+    .ms-ge-struct-toggles { display: inline-flex; flex-wrap: wrap; gap: 12px; }
+    .ms-ge-struct-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: $ms-ink-soft; cursor: pointer; margin: 0;
+        input:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; } } }
+
+.ms-ge-struct-explainer { margin: 16px 20px 6px; font-size: 0.86rem; line-height: 1.5; color: $ms-ink-soft; }
+
+.ms-ge-struct-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 20px 10px;
+    .ms-ge-struct-crumb { border: 0; background: none; font: inherit; font-size: 0.8rem; color: $ms-blue-text; cursor: pointer; padding: 3px 6px; border-radius: 5px;
+        &:hover { background: $ms-paper-2; }
+        &.is-current { color: $ms-ink; font-weight: 600; cursor: default; }
+        &:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; } }
+    .ms-ge-struct-sep { color: $ms-ink-soft; font-size: 0.8rem; }
+    .ms-ge-struct-back { border: 1px solid $ms-line; background: #fff; color: $ms-ink; font: inherit; font-size: 0.76rem; border-radius: 999px; padding: 3px 11px; margin-right: 8px; cursor: pointer;
+        &:hover { border-color: $ms-ink; }
+        &:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; } }
+    .ms-ge-struct-note { font-family: $ms-font-mono; font-size: 0.7rem; color: $ms-ink-soft; margin-left: 10px; } }
+
+.ms-ge-struct-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ms-ge-struct-figure { margin: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ms-ge-struct-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 20px; cursor: grab;
+    &.is-panning { cursor: grabbing; user-select: none; } }
+#ms-ge-struct-svg { display: block; }
+
+// Edges. A tree drawn as orthogonal elbows cannot self-cross, so these need no
+// z-order management and no hit-testing beyond the tooltip.
+.ms-ge-st-edge { stroke: rgba($ms-ink, 0.28); stroke-width: 1.2; }
+.ms-ge-st-prop { font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink-soft;
+    // P1/P2 are ~40% of all edges and carry almost no discriminating information.
+    // Dimmed, NOT removed — and the legend says why, so it does not read as
+    // "disabled".
+    &.is-common { opacity: 0.45; } }
+
+.ms-ge-st-node { cursor: pointer;
+    // REQUIRED CONTRAST FIX: `semantic` is #cbd5e1, which is ~1.3:1 on the paper
+    // and fails WCAG 1.4.11 as a graphical object. Every disc therefore carries an
+    // ink stroke, so shape is perceivable and fill is a REDUNDANT channel.
+    .ms-ge-st-disc { stroke: rgba($ms-ink, 0.35); stroke-width: 1.5; }
+    .ms-ge-st-ring { fill: none; stroke: rgba($ms-ink, 0.45); stroke-width: 1.4; }
+    .ms-ge-st-capsule { stroke-width: 2; }
+    .ms-ge-st-rootlabel { font-family: $ms-font-sans; font-size: 12.5px; font-weight: 600; fill: $ms-ink; }
+    .ms-ge-st-label { font-family: $ms-font-sans; font-size: 12px; fill: $ms-ink-soft;
+        // Required is weight + glyph, never colour alone.
+        &.is-required { font-weight: 600; fill: $ms-ink; } }
+    .ms-ge-st-req { fill: $ms-red-text; font-weight: 700; }
+    .ms-ge-st-cidoc { font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink-soft; }
+    .ms-ge-st-badge { font-family: $ms-font-mono; font-size: 9.5px; fill: $ms-ink-soft; }
+    .ms-ge-st-target-label { font-family: $ms-font-mono; font-size: 10px; fill: $ms-ink; }
+    .ms-ge-st-target { cursor: pointer;
+        &:hover .ms-ge-st-target-cap { stroke-width: 2; } }
+    &:hover .ms-ge-st-disc { stroke: $ms-ink; stroke-width: 2.5; }
+    &.is-active .ms-ge-st-disc { stroke: $ms-ink; stroke-width: 3.5; }
+    &.is-active .ms-ge-st-label { fill: $ms-ink; font-weight: 600; }
+    // Search: hits get an ink halo, non-matches drop to 25% — dimmed, never
+    // removed, because removal destroys the spatial memory of where things are.
+    &.is-hit .ms-ge-st-disc { stroke: $ms-ink; stroke-width: 3; }
+    &.is-dim { opacity: 0.25; }
+    &.is-flash .ms-ge-st-disc { stroke: $ms-ink; stroke-width: 4; }
+    &:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; } }
+
+.ms-ge-struct-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 16px; margin: 0; padding: 10px 20px 14px;
+    font-family: $ms-font-mono; font-size: 0.7rem; color: $ms-ink-soft;
+    .ms-ge-struct-legend-dim { opacity: 0.75; } }
+
+// ── The outline: one source of truth, two renderings ────────────────────────
+// At >=768px this is the SVG's accessible equivalent — off-screen but focusable,
+// and revealed the moment it takes focus or the "Outline view" button is pressed,
+// so a keyboard user is never navigating something they cannot see.
+// Below 768px it is the ONLY rendering (see the media query further down).
+.ms-ge-struct-outline { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    &:focus-within { position: static; width: auto; height: auto; overflow: auto; clip-path: none; white-space: normal;
+        max-height: 340px; padding: 0 20px 12px; border-top: 1px solid $ms-line; } }
+.ms-ge-pane.show-outline .ms-ge-struct-outline { position: static; width: auto; height: auto; overflow: auto; clip-path: none; white-space: normal;
+    max-height: 340px; padding: 0 20px 12px; border-top: 1px solid $ms-line; }
+
+.ms-ge-out-tree { list-style: none; margin: 0; padding: 0; font-size: 0.84rem;
+    ul { list-style: none; margin: 0; padding-left: 18px; border-left: 1px dashed $ms-line; }
+    [role="treeitem"] { padding: 1px 0;
+        &:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; border-radius: 4px; }
+        &.is-dim > .ms-ge-out-row { opacity: 0.25; }
+        &.is-hit > .ms-ge-out-row .ms-ge-out-name { box-shadow: inset 0 -2px 0 $ms-ink; }
+        &.is-active > .ms-ge-out-row { background: $ms-paper-2; border-radius: 5px; } }
+    .ms-ge-out-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 3px 6px; cursor: pointer; }
+    .ms-ge-out-name { font-weight: 600; color: $ms-ink; }
+    .ms-ge-out-prop, .ms-ge-out-cidoc, .ms-ge-out-count { font-family: $ms-font-mono; font-size: 0.68rem; color: $ms-ink-soft; }
+    .ms-ge-out-dt { font-family: $ms-font-mono; font-size: 0.66rem; color: $ms-ink-soft; background: $ms-paper-2; border-radius: 4px; padding: 1px 6px; }
+    .ms-ge-out-req { font-size: 0.64rem; color: $ms-red-text; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+    .ms-ge-out-card { font-size: 0.64rem; color: $ms-ink-soft; border: 1px solid $ms-line; border-radius: 4px; padding: 0 4px; } }
+
+// ── Node inspector (the drawer's second job) ────────────────────────────────
+// Risk 4: one drawer, two contents. The eyebrow + serif node name make this
+// unmistakably NOT the model header, which leads with a coloured family chip.
+.ms-ge-drawer-head.is-node { border-left: 3px solid $ms-ink; padding-left: 12px; margin-left: -12px;
+    h3 { font-family: $ms-font-serif; font-weight: 500; margin: 4px 0 10px; } }
+.ms-ge-insp-eyebrow { font-family: $ms-font-mono; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: $ms-ink-soft; }
+.ms-ge-insp-req { color: $ms-red-text; }
+.ms-ge-insp { margin: 18px 0 0;
+    .ms-ge-insp-row { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 8px 0; border-bottom: 1px dashed $ms-line; }
+    dt { flex: 0 0 40%; font-family: $ms-font-mono; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: $ms-ink-soft; font-weight: 400; }
+    dd { flex: 1 1 50%; margin: 0; font-size: 0.85rem; color: $ms-ink; word-break: break-word;
+        a { color: $ms-blue-text; } } }
+.ms-ge-insp-targets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.ms-ge-insp-target, .ms-ge-insp-network { border: 1px solid $ms-line; background: #fff; color: $ms-ink; font: inherit; font-size: 0.8rem; border-radius: 8px; padding: 7px 11px; cursor: pointer;
+    &:hover { border-color: $ms-blue-text; }
+    &:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; } }
+.ms-ge-insp-network { display: block; width: 100%; text-align: left; margin-top: 10px; color: $ms-blue-text; }
+
+.ms-ge-struct-open { border: 1px solid $ms-blue-text; background: color-mix(in srgb, $ms-blue-text 6%, #fff); color: $ms-blue-text;
+    font: inherit; font-size: 0.8rem; border-radius: 8px; padding: 7px 12px; margin-top: 12px; cursor: pointer;
+    &.is-inline { margin: 0 0 12px; width: 100%; text-align: left; }
+    &:hover { background: color-mix(in srgb, $ms-blue-text 12%, #fff); }
+    &:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; } }
+
+// ── Table: Models / Fields mode switch ──────────────────────────────────────
+.ms-ge-tbl-modes { display: inline-flex; border: 1px solid $ms-line; border-radius: 999px; overflow: hidden; margin: 18px 20px 0;
+    .ms-ge-tbl-mode { background: #fff; border: 0; padding: 6px 16px; font: inherit; font-size: 0.8rem; color: $ms-ink-soft; cursor: pointer;
+        & + .ms-ge-tbl-mode { border-left: 1px solid $ms-line; }
+        &.is-active { background: $ms-ink; color: #fff; }
+        &:focus-visible { outline: 2px solid $ms-ink; outline-offset: -2px; } } }
+.ms-ge-tbl-fields { font-size: 0.78rem;
+    .ms-ge-tbl-path { color: $ms-ink-soft; font-size: 0.74rem; }
+    .ms-ge-tbl-struct { border: 0; background: none; font: inherit; font-weight: 600; color: $ms-ink; cursor: pointer; text-align: left; padding: 0;
+        &:hover { color: $ms-blue-text; text-decoration: underline; }
+        &:focus-visible { outline: 2px solid $ms-ink; outline-offset: 2px; } }
+    .ms-ge-dt { font-family: $ms-font-mono; font-size: 0.66rem; padding: 1px 6px; border-radius: 5px; white-space: nowrap;
+        background: color-mix(in srgb, var(--c) 12%, #fff); color: $ms-ink; border: 1px solid var(--c); } }
+
+// Risk 5: depth 7 x tapered columns cannot be made legible at 375px, and a
+// pinch-zoom puzzle is not a mobile rendering. Below 768px the SVG is not drawn
+// at all (graph-explorer.js skips it) and the outline becomes the visible view —
+// so mobile and accessibility are served by the same code path, not two.
+@media (max-width: 767px) {
+    .ms-ge-struct-figure { display: none; }
+    .ms-ge-struct-outline,
+    .ms-ge-pane.show-outline .ms-ge-struct-outline {
+        position: static; width: auto; height: auto; overflow: auto; clip-path: none; white-space: normal;
+        max-height: none; padding: 0 14px 14px; border-top: 0; }
+    .ms-ge-struct-tools .ms-ge-struct-search input { min-width: 120px; }
+    .ms-ge-struct-tools .ms-ge-struct-btns #ms-ge-struct-outline-btn { display: none; }
+}
+
+// C9: the stage was pinned to 560px at every breakpoint while the viewBox is set
+// 1:1 from the live rect, so there is no scaling. At 375px the stage is ~327px
+// wide but nodes need a.r + b.r ≈ 74–92px of separation — nodes were pushed
+// outside the viewBox and clipped. Shorter stage + the JS `k` scale factor in
+// graph-explorer.js (radii, linkDistance, charge) keeps the layout in bounds.
+// item 6: below the two-column threshold the drawer becomes a bottom sheet
+// rather than a column — a 380px sidebar inside a ~330px stage is not a layout.
+@media (max-width: 860px) {
+    .ms-ge-stage.has-drawer { grid-template-columns: minmax(0, 1fr); }
+    .ms-ge-drawer { position: absolute; grid-column: 1; inset: auto 0 0 0; max-height: 74%;
+        border-left: 0; border-top: 1px solid $ms-line; border-radius: 18px 18px 0 0;
+        transform: translateY(100%); box-shadow: 0 -18px 44px rgba($ms-ink, 0.14); }
+}
 @media (max-width: 700px) {
-    .ms-ge-stats { gap: 16px; } .ms-ge-drawer { width: 100%; }
+    .ms-ge-stats { gap: 16px; }
+    .ms-ge-stage { min-height: 460px; }
+    #ms-ge-svg { min-height: 380px; }
+    .ms-ge-plotly { min-height: 400px; }
+    .ms-ge-matrix, .ms-ge-table-wrap { padding-left: 12px; padding-right: 12px; }
+    .ms-ge-mx .ms-ge-mx-corner { min-width: 96px; }
+    .ms-ge-mx .ms-ge-mx-rowh { max-width: 100px; font-size: 0.72rem; }
+    .ms-ge-mx .ms-ge-mx-cell { width: 30px; height: 30px; min-width: 30px; }
+}
+// Below ~600px the scaled radii bring node labels close enough to collide. The
+// matrix and the table carry the same information without the labels.
+@media (max-width: 600px) {
+    .ms-ge-node .ms-ge-node-label { display: none; }
+    .ms-ge-edge-label { display: none; }
+}
+
+// ── C6: CSS-level reduced-motion.
+// graph-explorer.js already honours the media query for the simulation, but no
+// stylesheet in the pages bundle did — every transition, the drawer slide and the
+// `.reveal` translate still played for users who asked for less motion.
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    .reveal { opacity: 1 !important; transform: none !important; }
 }

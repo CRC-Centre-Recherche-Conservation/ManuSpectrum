@@ -8,6 +8,11 @@ $ms-paper-2:    #f2f0ec;
 $ms-line:       rgba(26, 26, 46, 0.10);
 $ms-glass:      rgba(250, 249, 247, 0.72);
 
+// --- Decorative spectrum -----------------------------------------------------
+// These six hues exist to render the spectral gradient motif. They are tuned for
+// the *gradient*, not for legibility, and several of them fail WCAG when used as
+// text or as a solid background behind white text. Use them for ms-spectral-gradient()
+// and for decorative swatches ONLY — never for text or for UI state.
 $ms-red:    #dc3545;
 $ms-orange: #e67e22;
 $ms-yellow: #f0b429;
@@ -16,21 +21,54 @@ $ms-blue:   #3b82f6;
 $ms-purple: #8b5cf6;
 $ms-spectral: ($ms-red, $ms-orange, $ms-yellow, $ms-green, $ms-blue, $ms-purple);
 
+// --- Contrast-safe ramp (WCAG 2.1 AA) ---------------------------------------
+// Same hue families as the decorative spectrum, darkened until they pass.
+// `-text`  : safe as ink on $ms-paper (#faf9f7) and on #fff — 4.5:1 for body text.
+// `-solid` : safe as a solid background behind #fff text — 4.5:1.
+// Measured ratios are in the trailing comments; recompute if a value changes.
+$ms-blue-text:    #1d4ed8;  // 6.37:1 on $ms-paper · 6.70:1 on #fff  (was $ms-blue, 3.50:1 — FAIL)
+$ms-red-text:     #b91c1c;  // 6.15:1 on $ms-paper · 6.47:1 on #fff  (was $ms-red,  4.30:1 — FAIL)
+$ms-green-solid:  #047857;  // 5.48:1 vs #fff  (was $ms-green,  2.54:1 — FAIL)
+$ms-orange-solid: #b45309;  // 5.02:1 vs #fff  (was $ms-orange, 2.85:1 — FAIL)
+$ms-purple-solid: #6d28d9;  // 7.10:1 vs #fff  (was $ms-purple, 4.23:1 — FAIL)
+$ms-blue-solid:   #1d4ed8;  // 6.70:1 vs #fff  (was $ms-blue,   3.68:1 — FAIL)
+
 $ms-font-serif: 'Cormorant Garamond', Georgia, serif;
 $ms-font-sans:  'Sora', system-ui, -apple-system, sans-serif;
 $ms-font-mono:  'JetBrains Mono', 'Sora', monospace;
 
-$ms-maxw: 1200px;
+// Must match `.ms-container` in _ms-chrome.scss (1240px / 0 2rem), otherwise the
+// footer (which uses the class) and the About content (which uses the mixin)
+// misalign by 12px where they meet.
+$ms-maxw:    1240px;
+$ms-gutter:  2rem;
+$ms-gutter-sm: 1.2rem;  // matches the .ms-container @media (max-width:768px) reduction
 
 @mixin ms-spectral-gradient($angle: 90deg) {
     background: linear-gradient($angle, $ms-red, $ms-orange, $ms-yellow, $ms-green, $ms-blue, $ms-purple);
 }
 
+// Gutters come from `--ms-gutter` (declared in _ms-chrome.scss, reduced to
+// $ms-gutter-sm at 768px there) so this mixin and the `.ms-container` CLASS used
+// by the footer always resolve to the same number. Declaration-only on purpose:
+// a nested @media here would trip Sass's mixed-decls rule in every caller that
+// adds a declaration after the @include.
 @mixin ms-container {
     max-width: $ms-maxw;
-    margin: 0 auto;
-    padding-left: 24px;
-    padding-right: 24px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--ms-gutter, #{$ms-gutter});
+    padding-right: var(--ms-gutter, #{$ms-gutter});
+}
+
+// Vertical rhythm for a top-level About section. The homepage runs `.ms-section`
+// at 7rem 0; About pages stack more sections per page, so they run at 5rem,
+// easing to 3rem on small screens. Horizontal padding comes from ms-container —
+// never set a `padding` shorthand on a section that includes it, or the gutters
+// get clobbered.
+@mixin ms-section-rhythm {
+    padding-top: clamp(3rem, 5.5vw, 5rem);
+    padding-bottom: clamp(3rem, 5.5vw, 5rem);
 }
 
 @mixin ms-reveal {
