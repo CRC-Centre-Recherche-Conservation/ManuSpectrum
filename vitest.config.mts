@@ -78,8 +78,17 @@ function generateConfig(): Promise<UserConfig> {
             test: {
                 alias: alias,
                 coverage: {
-                    include: [path.join(parsedData['APP_RELATIVE_PATH'], 'src', path.sep)],
-                    exclude: exclude,
+                    // src/ (Vue) plus the public-pages KnockoutJS-era code that
+                    // actually carries specs (utils/, views/pages/). Deliberately
+                    // NOT all of media/js: pulling in the untested legacy tree
+                    // (bindings, widgets, workflows…) would crater the ratio and
+                    // trip CI's "no coverage decrease" gate for every branch.
+                    include: [
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'src', path.sep),
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'utils', path.sep),
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'views', 'pages', path.sep),
+                    ],
+                    exclude: [...exclude, '**/*.spec.js'],
                     reporter: [
                         ['clover', { 'file': 'coverage.xml' }],
                         'text',
