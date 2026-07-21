@@ -206,17 +206,17 @@ Homepage — Prismatic Luminescence aesthetic
             <!-- Fullscreen overlay for zoomed logo -->
             <div class="ms-logo-overlay" id="ms-logo-overlay">
               <div class="ms-logo-overlay-inner">
-                <button class="ms-logo-close-btn" id="ms-logo-close" aria-label="Close">
+                <button class="ms-logo-close-btn" id="ms-logo-close" aria-label="{% trans 'Close' %}">
                   <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
                 </button>
                 <div class="ms-logo-overlay-header">
-                  <span class="ms-logo-overlay-title">ManuSpectrum — Spectral Analysis Plot</span>
-                  <span class="ms-logo-overlay-badge">interactive</span>
+                  <span class="ms-logo-overlay-title">{% trans "ManuSpectrum — Spectral Analysis Plot" %}</span>
+                  <span class="ms-logo-overlay-badge">{% trans "interactive" %}</span>
                 </div>
                 <div id="ms-logo-zoom-target"></div>
                 <div class="ms-logo-overlay-footer">
-                  <span><i class="dot-blue"></i>Channel 1 (XRF)</span>
-                  <span><i class="dot-red"></i>Channel 2 (FORS)</span>
+                  <span><i class="dot-blue"></i>{% trans "Channel 1 (XRF)" %}</span>
+                  <span><i class="dot-red"></i>{% trans "Channel 2 (FORS)" %}</span>
                   <span>λ : 380 – 780 nm</span>
                 </div>
               </div>
@@ -262,7 +262,7 @@ Homepage — Prismatic Luminescence aesthetic
             <div class="ms-project-grid">
                 <div class="ms-project-text reveal reveal-d1">
                     <p>
-                        {% trans "ManuSpectrum was developed within Cluster 2 — \"Consideration and searchability of materials analysis data\" — of the ANR Biblissima+ programme. This cluster aims to ensure the long-term archiving and reuse of physicochemical analysis data for manuscripts, inscriptions, seals and other heritage objects, in partnership with Huma-Num." %}
+                        {% trans "ManuSpectrum was developed within Cluster 2 — “Consideration and searchability of materials analysis data” — of the ANR Biblissima+ programme. This cluster aims to ensure the long-term archiving and reuse of physicochemical analysis data for manuscripts, inscriptions, seals and other heritage objects, in partnership with Huma-Num." %}
                     </p>
                     <p>
                         {% trans "Through structuring and standardizing data according to shared models, the project provides reliable, easy-to-use tools accessible to non-specialists. Built on Arches, an open-source platform for heritage data management, ManuSpectrum facilitates data access and collaboration between researchers from different disciplines." %}

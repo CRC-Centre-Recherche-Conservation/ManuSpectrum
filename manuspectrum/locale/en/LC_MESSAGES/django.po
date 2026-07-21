@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-20 08:54-0500\n"
+"POT-Creation-Date: 2026-07-21 04:40-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -38,13 +38,17 @@ msgstr "Invalid URL format"
 msgid "Undefined"
 msgstr "Undefined"
 
-#: settings.py:409
+#: settings.py:416
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:446
+#: settings.py:453
 msgid "English"
 msgstr "English"
+
+#: settings.py:454
+msgid "French"
+msgstr ""
 
 #: templates/custom_email_footer.htm:47
 msgid ""
@@ -53,6 +57,115 @@ msgid ""
 msgstr ""
 "Interoperable database for physicochemical analysis of written cultural "
 "heritage"
+
+#: templates/errors/400.htm:5
+#, fuzzy
+#| msgid "Access request"
+msgid "Bad request"
+msgstr "Access request"
+
+#: templates/errors/400.htm:6
+msgid "The server could not understand this request."
+msgstr ""
+
+#: templates/errors/400.htm:11
+#, fuzzy
+#| msgid "Error"
+msgid "Error 400"
+msgstr "Error"
+
+#: templates/errors/400.htm:13
+msgid "We couldn't read that request"
+msgstr ""
+
+#: templates/errors/400.htm:15
+msgid ""
+"Your browser sent a request this server could not understand. This usually "
+"comes from an out-of-date or malformed link, or from stale cookies. Try "
+"again from the homepage — and if it keeps happening, clearing your cookies "
+"for this site usually fixes it."
+msgstr ""
+
+#: templates/errors/400.htm:18 templates/errors/403.htm:19
+#: templates/errors/404.htm:63
+msgid "Back to the homepage"
+msgstr ""
+
+#: templates/errors/400.htm:19 templates/errors/403.htm:20
+#: templates/errors/404.htm:65
+#, fuzzy
+#| msgid "Meet the team"
+msgid "Contact the team"
+msgstr "Meet the team"
+
+#: templates/errors/403.htm:5
+#, fuzzy
+#| msgid "Access request"
+msgid "Access restricted"
+msgstr "Access request"
+
+#: templates/errors/403.htm:6
+msgid "This page requires an account or additional permissions."
+msgstr ""
+
+#: templates/errors/403.htm:11
+msgid "Error 403 · Conservation lab"
+msgstr ""
+
+#: templates/errors/403.htm:13
+msgid "This room needs a badge"
+msgstr ""
+
+#: templates/errors/403.htm:15
+msgid ""
+"Like a conservation lab, some rooms are badge-only. Reading published data "
+"never needs an account — but this page requires one, or higher permissions. "
+"If you believe you should have access, contact the team."
+msgstr ""
+
+#: templates/errors/403.htm:18 templates/includes/ms_footer.htm:20
+#: templates/includes/ms_header.htm:63 templates/includes/ms_header.htm:119
+msgid "Sign In"
+msgstr "Sign In"
+
+#: templates/errors/404.htm:14
+#, fuzzy
+#| msgid "Manifest not found"
+msgid "Page not found"
+msgstr "Manifest not found"
+
+#: templates/errors/404.htm:15
+msgid "This page does not exist or has moved."
+msgstr ""
+
+#: templates/errors/404.htm:20
+#, fuzzy
+#| msgid "Spectra and analysis data"
+msgid "Spectral analysis report"
+msgstr "Spectra and analysis data"
+
+#: templates/errors/404.htm:22
+msgid "Reflectance spectrum with no signal at 404 nanometres"
+msgstr ""
+
+#: templates/errors/404.htm:52
+msgid "no signal detected"
+msgstr ""
+
+#: templates/errors/404.htm:58
+msgid "No signal at λ = 404 nm"
+msgstr ""
+
+#: templates/errors/404.htm:60
+msgid ""
+"We scanned the whole spectrum: the page you asked for does not absorb, "
+"reflect or fluoresce anywhere on this server. It may have moved — or never "
+"existed."
+msgstr ""
+
+#: templates/errors/404.htm:64
+msgid "Search the data"
+msgstr ""
 
 #: templates/help/create-project-workflow-help.htm:5
 msgid "New Project Workflow"
@@ -70,154 +183,158 @@ msgstr ""
 msgid "Platform"
 msgstr "Platform"
 
-#: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:14
-#: templates/includes/ms_header.htm:81 templates/index.htm:528
+#: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:18
+#: templates/includes/ms_header.htm:93 templates/index.htm:531
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:49
 msgid "Search"
 msgstr "Search"
-
-#: templates/includes/ms_footer.htm:20 templates/includes/ms_header.htm:59
-#: templates/includes/ms_header.htm:98
-msgid "Sign In"
-msgstr "Sign In"
 
 #: templates/includes/ms_footer.htm:22
 msgid "My Profile"
 msgstr "My Profile"
 
-#: templates/includes/ms_footer.htm:27
-msgid "Resources"
-msgstr "Resources"
-
-#: templates/includes/ms_footer.htm:35
-msgid "Standards"
-msgstr "Standards"
-
-#: templates/includes/ms_footer.htm:46
-msgid ""
-"This work has benefited from state aid managed by the Agence Nationale de la"
-" Recherche under the Investissements d'avenir programme, reference "
-"ANR-21-ESRE-0005 (Biblissima+)."
-msgstr ""
-"This work has benefited from state aid managed by the Agence Nationale de la"
-" Recherche under the Investissements d'avenir programme, reference "
-"ANR-21-ESRE-0005 (Biblissima+)."
-
-#: templates/includes/ms_footer.htm:50
-msgid "All rights reserved"
-msgstr "All rights reserved"
-
-#: templates/includes/ms_footer.htm:53 templates/views/pages/contact.htm:124
-msgid "Source code"
-msgstr "Source code"
-
-#: templates/includes/ms_footer.htm:57
-msgid "GPL-3.0 License"
-msgstr "GPL-3.0 License"
-
-#: templates/includes/ms_footer.htm:60
-msgid ""
-"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
-"rel=\"noopener\">Arches</a>"
-msgstr ""
-"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
-"rel=\"noopener\">Arches</a>"
-
-#: templates/includes/ms_header.htm:4
-msgid "ManuSpectrum — Home"
-msgstr "ManuSpectrum — Home"
-
-#: templates/includes/ms_header.htm:9
-msgid "Main Navigation"
-msgstr "Main Navigation"
-
-#: templates/includes/ms_header.htm:11 templates/includes/ms_header.htm:78
-#: templates/index.htm:255
-msgid "The Project"
-msgstr "The Project"
-
-#: templates/includes/ms_header.htm:12 templates/includes/ms_header.htm:79
-#: templates/index.htm:398
-msgid "Explore"
-msgstr "Explore"
-
-#: templates/includes/ms_header.htm:13 templates/includes/ms_header.htm:80
-#: templates/index.htm:464
-msgid "Analyses"
-msgstr "Analyses"
-
-#: templates/includes/ms_header.htm:18 templates/includes/ms_header.htm:84
+#: templates/includes/ms_footer.htm:27 templates/includes/ms_header.htm:22
+#: templates/includes/ms_header.htm:96
 msgid "About"
 msgstr "About"
 
-#: templates/includes/ms_header.htm:28 templates/includes/ms_header.htm:87
+#: templates/includes/ms_footer.htm:29 templates/includes/ms_header.htm:32
+#: templates/includes/ms_header.htm:99
 #: templates/views/pages/conceptual-model.htm:4
 #: templates/views/pages/conceptual-model.htm:9
 msgid "Conceptual Model"
 msgstr "Conceptual Model"
 
-#: templates/includes/ms_header.htm:28
-msgid "The data model behind ManuSpectrum"
-msgstr "The data model behind ManuSpectrum"
-
-#: templates/includes/ms_header.htm:32 templates/includes/ms_header.htm:88
+#: templates/includes/ms_footer.htm:30 templates/includes/ms_header.htm:36
+#: templates/includes/ms_header.htm:100
 #: templates/views/pages/graph-explorer.htm:4
 #: templates/views/pages/graph-explorer.htm:9
 msgid "Graph Explorer"
 msgstr "Graph Explorer"
 
-#: templates/includes/ms_header.htm:32
-msgid "Explore models and relationships interactively"
-msgstr "Explore models and relationships interactively"
-
-#: templates/includes/ms_header.htm:36 templates/includes/ms_header.htm:89
-#: templates/views/pages/team.htm:4 templates/views/pages/team.htm:9
+#: templates/includes/ms_footer.htm:31 templates/includes/ms_header.htm:40
+#: templates/includes/ms_header.htm:101 templates/views/pages/team.htm:4
+#: templates/views/pages/team.htm:9
 msgid "About & Team"
 msgstr "About & Team"
 
-#: templates/includes/ms_header.htm:36
-msgid "The project and the people behind it"
-msgstr "The project and the people behind it"
-
-#: templates/includes/ms_header.htm:40 templates/includes/ms_header.htm:90
-#: templates/views/pages/contact.htm:4 templates/views/pages/contact.htm:9
+#: templates/includes/ms_footer.htm:32 templates/includes/ms_header.htm:44
+#: templates/includes/ms_header.htm:102 templates/views/pages/contact.htm:4
+#: templates/views/pages/contact.htm:9
 msgid "Contact"
 msgstr "Contact"
 
+#: templates/includes/ms_footer.htm:36
+msgid "Resources"
+msgstr "Resources"
+
+#: templates/includes/ms_footer.htm:44
+msgid "Standards"
+msgstr "Standards"
+
+#: templates/includes/ms_footer.htm:55
+msgid ""
+"This work has benefited from state aid managed by the Agence Nationale de la "
+"Recherche under the Investissements d'avenir programme, reference ANR-21-"
+"ESRE-0005 (Biblissima+)."
+msgstr ""
+"This work has benefited from state aid managed by the Agence Nationale de la "
+"Recherche under the Investissements d'avenir programme, reference ANR-21-"
+"ESRE-0005 (Biblissima+)."
+
+#: templates/includes/ms_footer.htm:59
+msgid "All rights reserved"
+msgstr "All rights reserved"
+
+#: templates/includes/ms_footer.htm:62 templates/views/pages/contact.htm:136
+msgid "Source code"
+msgstr "Source code"
+
+#: templates/includes/ms_footer.htm:66
+msgid "GPL-3.0 License"
+msgstr "GPL-3.0 License"
+
+#: templates/includes/ms_footer.htm:69
+msgid ""
+"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
+"rel=\"noopener\">Arches</a>"
+msgstr ""
+"Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
+"rel=\"noopener\">Arches</a>"
+
+#: templates/includes/ms_header.htm:8
+msgid "ManuSpectrum — Home"
+msgstr "ManuSpectrum — Home"
+
+#: templates/includes/ms_header.htm:13
+msgid "Main Navigation"
+msgstr "Main Navigation"
+
+#: templates/includes/ms_header.htm:15 templates/includes/ms_header.htm:90
+#: templates/index.htm:258
+msgid "The Project"
+msgstr "The Project"
+
+#: templates/includes/ms_header.htm:16 templates/includes/ms_header.htm:91
+#: templates/index.htm:401
+msgid "Explore"
+msgstr "Explore"
+
+#: templates/includes/ms_header.htm:17 templates/includes/ms_header.htm:92
+#: templates/index.htm:467
+msgid "Analyses"
+msgstr "Analyses"
+
+#: templates/includes/ms_header.htm:32
+msgid "The data model behind ManuSpectrum"
+msgstr "The data model behind ManuSpectrum"
+
+#: templates/includes/ms_header.htm:36
+msgid "Explore models and relationships interactively"
+msgstr "Explore models and relationships interactively"
+
 #: templates/includes/ms_header.htm:40
+msgid "The project and the people behind it"
+msgstr "The project and the people behind it"
+
+#: templates/includes/ms_header.htm:44
 msgid "Submit a project or ask a question"
 msgstr "Submit a project or ask a question"
 
-#: templates/includes/ms_header.htm:47 templates/includes/ms_header.htm:94
+#: templates/includes/ms_header.htm:51 templates/includes/ms_header.htm:106
 msgid "Management"
 msgstr "Management"
 
-#: templates/includes/ms_header.htm:52 templates/views/pages/team.htm:151
+#: templates/includes/ms_header.htm:56 templates/views/pages/team.htm:151
 msgid "Source code on GitHub"
 msgstr "Source code on GitHub"
 
-#: templates/includes/ms_header.htm:61
+#: templates/includes/ms_header.htm:65
 msgid "User Profile"
 msgstr "User Profile"
 
-#: templates/includes/ms_header.htm:61
+#: templates/includes/ms_header.htm:65
 #, python-format
 msgid "Welcome, %(name)s"
 msgstr "Welcome, %(name)s"
 
-#: templates/includes/ms_header.htm:62 templates/includes/ms_header.htm:101
+#: templates/includes/ms_header.htm:66 templates/includes/ms_header.htm:122
 msgid "Sign Out"
 msgstr "Sign Out"
 
-#: templates/includes/ms_header.htm:73
+#: templates/includes/ms_header.htm:77 templates/includes/ms_header.htm:111
+msgid "Language"
+msgstr ""
+
+#: templates/includes/ms_header.htm:85
 msgid "Open Menu"
 msgstr "Open Menu"
 
-#: templates/index.htm:12
+#: templates/index.htm:13
 msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
 msgstr "ManuSpectrum — Physicochemical Analysis of Heritage"
 
-#: templates/index.htm:13
+#: templates/index.htm:14
 msgid ""
 "Interoperable database for written cultural heritage materials analysis — "
 "Biblissima+ Cluster"
@@ -225,17 +342,29 @@ msgstr ""
 "Interoperable database for written cultural heritage materials analysis — "
 "Biblissima+ Cluster"
 
-#: templates/index.htm:23
-msgid ""
-"spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, printed books, "
-"inscriptions, written cultural heritage, IIIF, CIDOC-CRM, Biblissima, "
-"physicochemical analysis, heritage science"
-msgstr ""
-"spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, printed books, "
-"inscriptions, written cultural heritage, IIIF, CIDOC-CRM, Biblissima, "
-"physicochemical analysis, heritage science"
+#: templates/index.htm:209 templates/views/pages/graph-explorer.htm:169
+msgid "Close"
+msgstr "Close"
 
-#: templates/index.htm:223
+#: templates/index.htm:213
+#, fuzzy
+#| msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
+msgid "ManuSpectrum — Spectral Analysis Plot"
+msgstr "ManuSpectrum — Physicochemical Analysis of Heritage"
+
+#: templates/index.htm:214
+msgid "interactive"
+msgstr ""
+
+#: templates/index.htm:218
+msgid "Channel 1 (XRF)"
+msgstr ""
+
+#: templates/index.htm:219
+msgid "Channel 2 (FORS)"
+msgstr ""
+
+#: templates/index.htm:226
 msgid ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
@@ -243,7 +372,7 @@ msgstr ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
 
-#: templates/index.htm:227
+#: templates/index.htm:230
 msgid ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
@@ -251,130 +380,144 @@ msgstr ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
 
-#: templates/index.htm:232 templates/index.htm:529
+#: templates/index.htm:235 templates/index.htm:532
 msgid "Explore the database"
 msgstr "Explore the database"
 
-#: templates/index.htm:235
+#: templates/index.htm:238
 msgid "Learn more"
 msgstr "Learn more"
 
-#: templates/index.htm:242
+#: templates/index.htm:245
 msgid "scroll"
 msgstr "scroll"
 
-#: templates/index.htm:256
+#: templates/index.htm:259
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Thinking and modeling written cultural heritage materials"
 
-#: templates/index.htm:262
-msgid "ManuSpectrum was developed within Cluster 2 — \\"
-msgstr "ManuSpectrum was developed within Cluster 2 — \\"
-
 #: templates/index.htm:265
+#, fuzzy
+#| msgid ""
+#| "It is developed within Cluster 2 — “Consideration and searchability of "
+#| "materials-analysis data” — of the ANR Biblissima+ programme, at the "
+#| "Centre de Recherche sur la Conservation (CRC), in partnership with Huma-"
+#| "Num."
 msgid ""
-"Through structuring and standardizing data according to shared models, the "
-"project provides reliable, easy-to-use tools accessible to non-specialists. "
-"Built on Arches, an open-source platform for heritage data management, "
-"ManuSpectrum facilitates data access and collaboration between researchers "
-"from different disciplines."
+"ManuSpectrum was developed within Cluster 2 — “Consideration and "
+"searchability of materials analysis data” — of the ANR Biblissima+ "
+"programme. This cluster aims to ensure the long-term archiving and reuse of "
+"physicochemical analysis data for manuscripts, inscriptions, seals and other "
+"heritage objects, in partnership with Huma-Num."
 msgstr ""
-"Through structuring and standardizing data according to shared models, the "
-"project provides reliable, easy-to-use tools accessible to non-specialists. "
-"Built on Arches, an open-source platform for heritage data management, "
-"ManuSpectrum facilitates data access and collaboration between researchers "
-"from different disciplines."
+"It is developed within Cluster 2 — “Consideration and searchability of "
+"materials-analysis data” — of the ANR Biblissima+ programme, at the Centre "
+"de Recherche sur la Conservation (CRC), in partnership with Huma-Num."
 
 #: templates/index.htm:268
 msgid ""
+"Through structuring and standardizing data according to shared models, the "
+"project provides reliable, easy-to-use tools accessible to non-specialists. "
+"Built on Arches, an open-source platform for heritage data management, "
+"ManuSpectrum facilitates data access and collaboration between researchers "
+"from different disciplines."
+msgstr ""
+"Through structuring and standardizing data according to shared models, the "
+"project provides reliable, easy-to-use tools accessible to non-specialists. "
+"Built on Arches, an open-source platform for heritage data management, "
+"ManuSpectrum facilitates data access and collaboration between researchers "
+"from different disciplines."
+
+#: templates/index.htm:271
+msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
-"object, its context, the analyses, and their interpretations, using thesauri"
-" and authority databases to contextualize information on heterogeneous "
+"object, its context, the analyses, and their interpretations, using thesauri "
+"and authority databases to contextualize information on heterogeneous "
 "documents."
 msgstr ""
 "The model focuses on identifying the component as a pivot axis between the "
-"object, its context, the analyses, and their interpretations, using thesauri"
-" and authority databases to contextualize information on heterogeneous "
+"object, its context, the analyses, and their interpretations, using thesauri "
+"and authority databases to contextualize information on heterogeneous "
 "documents."
 
-#: templates/index.htm:276 templates/views/pages/contact.htm:123
+#: templates/index.htm:279 templates/views/pages/contact.htm:135
 #: templates/views/pages/team.htm:145
 msgid "Biblissima+ — Cluster 2"
 msgstr "Biblissima+ — Cluster 2"
 
-#: templates/index.htm:278
+#: templates/index.htm:281
 msgid ""
-"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient"
-" written cultures. Within Cluster 2, the objective is to archive, share and "
+"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
+"written cultures. Within Cluster 2, the objective is to archive, share and "
 "enable searching of materials analysis data from the community, ensuring "
 "interoperability with the Biblissima portal and written cultural heritage "
 "standards."
 msgstr ""
-"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient"
-" written cultures. Within Cluster 2, the objective is to archive, share and "
+"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
+"written cultures. Within Cluster 2, the objective is to archive, share and "
 "enable searching of materials analysis data from the community, ensuring "
 "interoperability with the Biblissima portal and written cultural heritage "
 "standards."
 
-#: templates/index.htm:295 templates/index.htm:476
+#: templates/index.htm:298 templates/index.htm:479
 msgid "X-ray Fluorescence"
 msgstr "X-ray Fluorescence"
 
-#: templates/index.htm:300
+#: templates/index.htm:303
 msgid "X-ray Micro-Fluorescence"
 msgstr "X-ray Micro-Fluorescence"
 
-#: templates/index.htm:305
+#: templates/index.htm:308
 msgid "Fiber Optic Reflectance"
 msgstr "Fiber Optic Reflectance"
 
-#: templates/index.htm:310
+#: templates/index.htm:313
 msgid "Raman Spectroscopy"
 msgstr "Raman Spectroscopy"
 
-#: templates/index.htm:315
+#: templates/index.htm:318
 msgid "IR Spectroscopy"
 msgstr "IR Spectroscopy"
 
-#: templates/index.htm:320
+#: templates/index.htm:323
 msgid "Hyperspectral Imaging"
 msgstr "Hyperspectral Imaging"
 
-#: templates/index.htm:325 templates/index.htm:499
+#: templates/index.htm:328 templates/index.htm:502
 msgid "Multispectral Imaging"
 msgstr "Multispectral Imaging"
 
-#: templates/index.htm:330
+#: templates/index.htm:333
 msgid "Proteomics (MALDI-TOF)"
 msgstr "Proteomics (MALDI-TOF)"
 
-#: templates/index.htm:335
+#: templates/index.htm:338
 msgid "And many more"
 msgstr "And many more"
 
-#: templates/index.htm:343
+#: templates/index.htm:346
 msgid "Manuscript under analysis with a macro-XRF scanner"
 msgstr "Manuscript under analysis with a macro-XRF scanner"
 
-#: templates/index.htm:345
+#: templates/index.htm:348
 msgid "Macro-XRF scanning of a manuscript"
 msgstr "Macro-XRF scanning of a manuscript"
 
-#: templates/index.htm:346
+#: templates/index.htm:349
 msgid ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 msgstr ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 
-#: templates/index.htm:351
+#: templates/index.htm:354
 msgid "FORS analysis of a manuscript"
 msgstr "FORS analysis of a manuscript"
 
-#: templates/index.htm:353
+#: templates/index.htm:356
 msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgstr "Fiber optic reflectance spectroscopy (FORS)"
 
-#: templates/index.htm:354
+#: templates/index.htm:357
 msgid ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
@@ -382,15 +525,15 @@ msgstr ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
 
-#: templates/index.htm:359
+#: templates/index.htm:362
 msgid "UV hyperspectral imaging of a manuscript"
 msgstr "UV hyperspectral imaging of a manuscript"
 
-#: templates/index.htm:361
+#: templates/index.htm:364
 msgid "UV hyperspectral imaging"
 msgstr "UV hyperspectral imaging"
 
-#: templates/index.htm:362
+#: templates/index.htm:365
 msgid ""
 "Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
 "eye"
@@ -398,19 +541,19 @@ msgstr ""
 "Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
 "eye"
 
-#: templates/index.htm:370
+#: templates/index.htm:373
 msgid "Previous"
 msgstr "Previous"
 
-#: templates/index.htm:373
+#: templates/index.htm:376
 msgid "Next"
 msgstr "Next"
 
-#: templates/index.htm:399
+#: templates/index.htm:402
 msgid "What you can discover"
 msgstr "What you can discover"
 
-#: templates/index.htm:401
+#: templates/index.htm:404
 msgid ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
@@ -418,23 +561,23 @@ msgstr ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
 
-#: templates/index.htm:408
+#: templates/index.htm:411
 msgid "Spectra and analysis data"
 msgstr "Spectra and analysis data"
 
-#: templates/index.htm:409
+#: templates/index.htm:412
 msgid ""
-"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other"
-" analysis results directly on the platform."
+"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
+"analysis results directly on the platform."
 msgstr ""
-"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other"
-" analysis results directly on the platform."
+"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
+"analysis results directly on the platform."
 
-#: templates/index.htm:420
+#: templates/index.htm:423
 msgid "IIIF Annotations"
 msgstr "IIIF Annotations"
 
-#: templates/index.htm:421
+#: templates/index.htm:424
 msgid ""
 "Analysis data is exposed as IIIF annotations, making it accessible from any "
 "compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
@@ -446,11 +589,11 @@ msgstr ""
 "allows any external site to visualize ManuSpectrum's spectral data (XRF, "
 "Raman, FTIR, UV-Vis) directly overlaid on high-resolution document images."
 
-#: templates/index.htm:432
+#: templates/index.htm:435
 msgid "Interoperability and Standards"
 msgstr "Interoperability and Standards"
 
-#: templates/index.htm:433
+#: templates/index.htm:436
 msgid ""
 "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
 "ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
@@ -462,15 +605,15 @@ msgstr ""
 "interoperability with international heritage systems and the Biblissima "
 "portal."
 
-#: templates/index.htm:437
+#: templates/index.htm:440
 msgid "AGORHA thesaurus"
 msgstr "AGORHA thesaurus"
 
-#: templates/index.htm:444
+#: templates/index.htm:447
 msgid "Material Characterization"
 msgstr "Material Characterization"
 
-#: templates/index.htm:445
+#: templates/index.htm:448
 msgid ""
 "Explore the layers, materials, and chemical elements identified on written "
 "cultural heritage documents, with different levels of reliability and "
@@ -480,27 +623,27 @@ msgstr ""
 "cultural heritage documents, with different levels of reliability and "
 "characterization."
 
-#: templates/index.htm:447
+#: templates/index.htm:450
 msgid "Pigments"
 msgstr "Pigments"
 
-#: templates/index.htm:448
+#: templates/index.htm:451
 msgid "Layers"
 msgstr "Layers"
 
-#: templates/index.htm:449
+#: templates/index.htm:452
 msgid "Binders"
 msgstr "Binders"
 
-#: templates/index.htm:450
+#: templates/index.htm:453
 msgid "Substrates"
 msgstr "Substrates"
 
-#: templates/index.htm:465
+#: templates/index.htm:468
 msgid "Visualize physicochemical analyses"
 msgstr "Visualize physicochemical analyses"
 
-#: templates/index.htm:467
+#: templates/index.htm:470
 msgid ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to written cultural heritage objects."
@@ -508,19 +651,19 @@ msgstr ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to written cultural heritage objects."
 
-#: templates/index.htm:473
+#: templates/index.htm:476
 msgid "Macro-XRF map — Calcium (Ca)"
 msgstr "Macro-XRF map — Calcium (Ca)"
 
-#: templates/index.htm:474
+#: templates/index.htm:477
 msgid "Macro-XRF map — Mercury (Hg)"
 msgstr "Macro-XRF map — Mercury (Hg)"
 
-#: templates/index.htm:477
+#: templates/index.htm:480
 msgid "Macro-XRF mapping"
 msgstr "Macro-XRF mapping"
 
-#: templates/index.htm:478
+#: templates/index.htm:481
 msgid ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
@@ -528,96 +671,96 @@ msgstr ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
 
-#: templates/index.htm:483
+#: templates/index.htm:486
 msgid "Manuscript analysis"
 msgstr "Manuscript analysis"
 
-#: templates/index.htm:485 templates/index.htm:486 templates/index.htm:487
-#: templates/index.htm:488
+#: templates/index.htm:488 templates/index.htm:489 templates/index.htm:490
+#: templates/index.htm:491
 msgid "Analysis point"
 msgstr "Analysis point"
 
-#: templates/index.htm:492
+#: templates/index.htm:495
 msgid "Spectroscopy"
 msgstr "Spectroscopy"
 
-#: templates/index.htm:493
+#: templates/index.htm:496
 msgid "Point Analysis"
 msgstr "Point Analysis"
 
-#: templates/index.htm:494
+#: templates/index.htm:497
 msgid "Click on analysis points to explore spectral data"
 msgstr "Click on analysis points to explore spectral data"
 
-#: templates/index.htm:509
+#: templates/index.htm:512
 msgid "Imaging"
 msgstr "Imaging"
 
-#: templates/index.htm:510
+#: templates/index.htm:513
 msgid "Multispectral"
 msgstr "Multispectral"
 
-#: templates/index.htm:511
+#: templates/index.htm:514
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Spectral band scanning and false-color composites via IIIF"
 
-#: templates/index.htm:531
+#: templates/index.htm:534
 msgid ""
-"Search by material, analysis technique, written cultural heritage object, or"
-" chemical element. Advanced filters available in the search interface."
+"Search by material, analysis technique, written cultural heritage object, or "
+"chemical element. Advanced filters available in the search interface."
 msgstr ""
-"Search by material, analysis technique, written cultural heritage object, or"
-" chemical element. Advanced filters available in the search interface."
+"Search by material, analysis technique, written cultural heritage object, or "
+"chemical element. Advanced filters available in the search interface."
 
-#: templates/index.htm:544
+#: templates/index.htm:547
 msgid "Search materials, techniques, objects..."
 msgstr "Search materials, techniques, objects..."
 
-#: templates/index.htm:551
+#: templates/index.htm:554
 msgid "Vermilion"
 msgstr "Vermilion"
 
-#: templates/index.htm:552
+#: templates/index.htm:555
 msgid "manuscript"
 msgstr "manuscript"
 
-#: templates/index.htm:552
+#: templates/index.htm:555
 msgid "Manuscripts"
 msgstr "Manuscripts"
 
-#: templates/index.htm:553
+#: templates/index.htm:556
 msgid "XRF"
 msgstr "XRF"
 
-#: templates/index.htm:554
+#: templates/index.htm:557
 msgid "parchment"
 msgstr "parchment"
 
-#: templates/index.htm:554
+#: templates/index.htm:557
 msgid "Parchment"
 msgstr "Parchment"
 
-#: templates/index.htm:555
+#: templates/index.htm:558
 msgid "illumination"
 msgstr "illumination"
 
-#: templates/index.htm:555
+#: templates/index.htm:558
 msgid "Illuminations"
 msgstr "Illuminations"
 
-#: templates/index.htm:556
+#: templates/index.htm:559
 msgid "Raman"
 msgstr "Raman"
 
-#: templates/index.htm:561
+#: templates/index.htm:564
 msgid "Access advanced search"
 msgstr "Access advanced search"
 
-#: templates/index.htm:574 templates/views/pages/team.htm:162
+#: templates/index.htm:577 templates/views/pages/team.htm:162
 msgid "Our Partners"
 msgstr "Our Partners"
 
-#: templates/index.htm:578 templates/views/pages/team.htm:165
+#: templates/index.htm:581 templates/views/pages/team.htm:165
 msgid "Ministry of Culture"
 msgstr "Ministry of Culture"
 
@@ -834,11 +977,9 @@ msgstr "The Biblissima search failed. Please try again in a moment."
 
 #: templates/javascript.htm:60
 msgid ""
-"Network error while querying Biblissima. Check your connection and try "
-"again."
+"Network error while querying Biblissima. Check your connection and try again."
 msgstr ""
-"Network error while querying Biblissima. Check your connection and try "
-"again."
+"Network error while querying Biblissima. Check your connection and try again."
 
 #: templates/javascript.htm:61
 msgid "Connecting to Biblissima…"
@@ -866,11 +1007,11 @@ msgstr "Cart limit reached"
 
 #: templates/javascript.htm:67
 msgid ""
-"Too many results on this page for the remaining cart slots — reduce the page"
-" size or unselect some"
+"Too many results on this page for the remaining cart slots — reduce the page "
+"size or unselect some"
 msgstr ""
-"Too many results on this page for the remaining cart slots — reduce the page"
-" size or unselect some"
+"Too many results on this page for the remaining cart slots — reduce the page "
+"size or unselect some"
 
 #: templates/javascript.htm:68
 msgid "Paste a Biblissima QID (e.g. Q63633)"
@@ -995,7 +1136,7 @@ msgstr "EN: "
 msgid "Please fill in all fields with a valid email."
 msgstr "Please fill in all fields with a valid email."
 
-#: templates/javascript.htm:101 templates/views/pages/contact.htm:85
+#: templates/javascript.htm:101 templates/views/pages/contact.htm:97
 msgid "A contact address is not configured yet. Please check back soon."
 msgstr "A contact address is not configured yet. Please check back soon."
 
@@ -1007,11 +1148,11 @@ msgstr "Project submission"
 msgid "Access request"
 msgstr "Access request"
 
-#: templates/javascript.htm:104 templates/views/pages/contact.htm:61
+#: templates/javascript.htm:104 templates/views/pages/contact.htm:73
 msgid "Question"
 msgstr "Question"
 
-#: templates/javascript.htm:105 templates/views/pages/contact.htm:72
+#: templates/javascript.htm:105 templates/views/pages/contact.htm:84
 msgid "Message"
 msgstr "Message"
 
@@ -1024,7 +1165,7 @@ msgstr "Name"
 msgid "Email"
 msgstr "Email"
 
-#: templates/javascript.htm:108 templates/views/pages/contact.htm:57
+#: templates/javascript.htm:108 templates/views/pages/contact.htm:69
 msgid "Reason"
 msgstr "Reason"
 
@@ -1053,12 +1194,12 @@ msgstr "Copied."
 msgid "Copy failed — select the text and copy it manually."
 msgstr "Copy failed — select the text and copy it manually."
 
-#: templates/javascript.htm:115 templates/javascript.htm:128
-#: templates/views/pages/graph-explorer.htm:154
+#: templates/javascript.htm:115 templates/javascript.htm:129
+#: templates/views/pages/graph-explorer.htm:163
 msgid "Fields"
 msgstr "Fields"
 
-#: templates/javascript.htm:116 templates/views/pages/graph-explorer.htm:47
+#: templates/javascript.htm:116 templates/views/pages/graph-explorer.htm:48
 msgid "Relations"
 msgstr "Relations"
 
@@ -1083,43 +1224,47 @@ msgid "No relations"
 msgstr "No relations"
 
 #: templates/javascript.htm:122
+msgid "The chart could not be loaded — reopen this tab to retry."
+msgstr ""
+
+#: templates/javascript.htm:123
 msgid "models"
 msgstr "models"
 
-#: templates/javascript.htm:123
+#: templates/javascript.htm:124
 msgid "relations"
 msgstr "relations"
 
-#: templates/javascript.htm:124
+#: templates/javascript.htm:125
 msgid "fields"
 msgstr "fields"
 
-#: templates/javascript.htm:125
+#: templates/javascript.htm:126
 msgid "datatypes"
 msgstr "datatypes"
 
-#: templates/javascript.htm:126
+#: templates/javascript.htm:127
 msgid "Fields by datatype"
 msgstr "Fields by datatype"
 
-#: templates/javascript.htm:127
+#: templates/javascript.htm:128
 msgid "Datatype (sorted by field count, descending)"
 msgstr "Datatype (sorted by field count, descending)"
 
-#: templates/javascript.htm:129
+#: templates/javascript.htm:130
 #, python-brace-format
 msgid ""
-"Adjacency matrix: {models} models, {relations} typed relationships. Rows are"
-" sources, columns are targets."
+"Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
+"sources, columns are targets."
 msgstr ""
-"Adjacency matrix: {models} models, {relations} typed relationships. Rows are"
-" sources, columns are targets."
+"Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
+"sources, columns are targets."
 
-#: templates/javascript.htm:130
+#: templates/javascript.htm:131
 msgid "Source model, down; target model, across"
 msgstr "Source model, down; target model, across"
 
-#: templates/javascript.htm:131
+#: templates/javascript.htm:132
 msgid ""
 "Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
 "open the model."
@@ -1127,28 +1272,28 @@ msgstr ""
 "Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
 "open the model."
 
-#: templates/javascript.htm:132
+#: templates/javascript.htm:133
 msgid "same model"
 msgstr "same model"
 
-#: templates/javascript.htm:133
+#: templates/javascript.htm:134
 msgid "no relation"
 msgstr "no relation"
 
-#: templates/javascript.htm:134
+#: templates/javascript.htm:135
 msgid "1 relation"
 msgstr "1 relation"
 
-#: templates/javascript.htm:135
+#: templates/javascript.htm:136
 #, python-brace-format
 msgid "{n} relations"
 msgstr "{n} relations"
 
-#: templates/javascript.htm:136
+#: templates/javascript.htm:137
 msgid "No family selected — turn one back on to see the matrix."
 msgstr "No family selected — turn one back on to see the matrix."
 
-#: templates/javascript.htm:137
+#: templates/javascript.htm:138
 #, python-brace-format
 msgid ""
 "{model} and its {n} directly connected models, joined by {r} typed "
@@ -1159,40 +1304,40 @@ msgstr ""
 "relationships. Each curve is one relationship, labelled with its CIDOC-CRM "
 "property."
 
-#: templates/javascript.htm:138 templates/views/pages/graph-explorer.htm:115
+#: templates/javascript.htm:139 templates/views/pages/graph-explorer.htm:124
 msgid "Select a model to see it with its directly connected models."
 msgstr "Select a model to see it with its directly connected models."
 
-#: templates/javascript.htm:139
+#: templates/javascript.htm:140
 msgid "Circle size = published records"
 msgstr "Circle size = published records"
 
-#: templates/javascript.htm:140
+#: templates/javascript.htm:141
 msgid "Dashed outline = no records published yet"
 msgstr "Dashed outline = no records published yet"
 
-#: templates/javascript.htm:141 templates/javascript.htm:185
-#: templates/views/pages/graph-explorer.htm:77
+#: templates/javascript.htm:142 templates/javascript.htm:188
+#: templates/views/pages/graph-explorer.htm:78
 msgid "Model"
 msgstr "Model"
 
-#: templates/javascript.htm:142
+#: templates/javascript.htm:143
 msgid "Family"
 msgstr "Family"
 
-#: templates/javascript.htm:143
+#: templates/javascript.htm:144
 msgid "Links"
 msgstr "Links"
 
-#: templates/javascript.htm:144
+#: templates/javascript.htm:145
 msgid "Outgoing"
 msgstr "Outgoing"
 
-#: templates/javascript.htm:145
+#: templates/javascript.htm:146
 msgid "Incoming"
 msgstr "Incoming"
 
-#: templates/javascript.htm:146
+#: templates/javascript.htm:147
 #, python-brace-format
 msgid ""
 "Every model with its outgoing and incoming typed relationships. {n} models, "
@@ -1201,42 +1346,42 @@ msgstr ""
 "Every model with its outgoing and incoming typed relationships. {n} models, "
 "{r} relationships."
 
-#: templates/javascript.htm:147
+#: templates/javascript.htm:148
 msgid "Filter fields…"
 msgstr "Filter fields…"
 
-#: templates/javascript.htm:148
+#: templates/javascript.htm:149
 msgid "Relation fields only"
 msgstr "Relation fields only"
 
-#: templates/javascript.htm:149
+#: templates/javascript.htm:150
 msgid "No field matches."
 msgstr "No field matches."
 
-#: templates/javascript.htm:150
+#: templates/javascript.htm:151
 #, python-brace-format
 msgid "{n} of {total}"
 msgstr "{n} of {total}"
 
-#: templates/javascript.htm:151
+#: templates/javascript.htm:152
 msgid "No model matches"
 msgstr "No model matches"
 
-#: templates/javascript.htm:152
+#: templates/javascript.htm:153
 #, python-brace-format
 msgid "{n} records published"
 msgstr "{n} records published"
 
-#: templates/javascript.htm:153
+#: templates/javascript.htm:154
 #, python-brace-format
 msgid "{n} models defined and open for deposit"
 msgstr "{n} models defined and open for deposit"
 
-#: templates/javascript.htm:154
+#: templates/javascript.htm:155
 msgid "No records published yet — model defined and open for deposit."
 msgstr "No records published yet — model defined and open for deposit."
 
-#: templates/javascript.htm:155
+#: templates/javascript.htm:156
 #, python-format, python-brace-format
 msgid ""
 "Every field in ManuSpectrum and every link between models: {fields} fields "
@@ -1247,38 +1392,37 @@ msgstr ""
 "across {models} models, {pct}%% of them bound to a published thesaurus "
 "rather than free text. Click any model to read its schema."
 
-#: templates/javascript.htm:156
+#: templates/javascript.htm:157
 #, python-brace-format
-msgid ""
-"of fields draw on a published thesaurus, not free text — {n} of {total}"
+msgid "of fields draw on a published thesaurus, not free text — {n} of {total}"
 msgstr ""
 "of fields draw on a published thesaurus, not free text — {n} of {total}"
 
-#: templates/javascript.htm:157 templates/views/pages/conceptual-model.htm:101
+#: templates/javascript.htm:158 templates/views/pages/conceptual-model.htm:103
 msgid "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
 msgstr "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
 
-#: templates/javascript.htm:158
+#: templates/javascript.htm:159
 #, python-brace-format
 msgid "typed relationships across {models} interconnected models"
 msgstr "typed relationships across {models} interconnected models"
 
-#: templates/javascript.htm:159 templates/views/pages/conceptual-model.htm:109
+#: templates/javascript.htm:160 templates/views/pages/conceptual-model.htm:111
 msgid "concepts from Getty AAT, Pactols, AGORHA and LOTERRE"
 msgstr "concepts from Getty AAT, Pactols, AGORHA and LOTERRE"
-
-#: templates/javascript.htm:160
-#, python-brace-format
-msgid ""
-"{nodegroups} field groups · {total} nodes ({data} of them data) · "
-"{properties} ontology properties · {thesauri} thesauri."
-msgstr ""
-"{nodegroups} field groups · {total} nodes ({data} of them data) · "
-"{properties} ontology properties · {thesauri} thesauri."
 
 #: templates/javascript.htm:161
 #, python-brace-format
 msgid ""
+"{nodegroups} field groups · {total} nodes ({data} of them data) · "
+"{properties} ontology properties · {thesauri} thesauri."
+msgstr ""
+"{nodegroups} field groups · {total} nodes ({data} of them data) · "
+"{properties} ontology properties · {thesauri} thesauri."
+
+#: templates/javascript.htm:162
+#, python-brace-format
+msgid ""
 "{models} independent models linked by {relations} typed CIDOC relationships "
 "— so a person recorded once as an analyst is the same record when they "
 "reappear as a manuscript's owner."
@@ -1287,156 +1431,168 @@ msgstr ""
 "— so a person recorded once as an analyst is the same record when they "
 "reappear as a manuscript's owner."
 
-#: templates/javascript.htm:165 templates/views/pages/graph-explorer.htm:137
+#: templates/javascript.htm:166 templates/views/pages/graph-explorer.htm:146
 msgid "Choose a model to see how it is built."
 msgstr "Choose a model to see how it is built."
 
-#: templates/javascript.htm:166
+#: templates/javascript.htm:167
 #, python-brace-format
 msgid "No field, class or property matches “{q}”."
 msgstr "No field, class or property matches “{q}”."
 
-#: templates/javascript.htm:167
+#: templates/javascript.htm:168
 #, python-brace-format
 msgid "{n} of {total} fields"
 msgstr "{n} of {total} fields"
 
-#: templates/javascript.htm:168
+#: templates/javascript.htm:169
 #, python-brace-format
 msgid "{n} fields"
 msgstr "{n} fields"
 
-#: templates/javascript.htm:169
+#: templates/javascript.htm:170
+#, fuzzy, python-brace-format
+#| msgid "{n} fields"
+msgid "{n} field"
+msgstr "{n} fields"
+
+#: templates/javascript.htm:171
+#, fuzzy, python-brace-format
+#| msgid "{n} fields · {m} groups"
+msgid "{n} fields · {m} group"
+msgstr "{n} fields · {m} groups"
+
+#: templates/javascript.htm:172
 #, python-brace-format
 msgid "{n} fields · {m} groups"
 msgstr "{n} fields · {m} groups"
 
-#: templates/javascript.htm:170
+#: templates/javascript.htm:173
 msgid "Repeatable"
 msgstr "Repeatable"
 
-#: templates/javascript.htm:171
+#: templates/javascript.htm:174
 msgid "Once"
 msgstr "Once"
 
-#: templates/javascript.htm:172
+#: templates/javascript.htm:175
 msgid "Structural node — carries no data"
 msgstr "Structural node — carries no data"
 
-#: templates/javascript.htm:173
+#: templates/javascript.htm:176
 #, python-brace-format
 msgid "Links to {model}"
 msgstr "Links to {model}"
 
-#: templates/javascript.htm:174
+#: templates/javascript.htm:177
 #, python-brace-format
 msgid "View {model} →"
 msgstr "View {model} →"
 
-#: templates/javascript.htm:175
+#: templates/javascript.htm:178
 msgid "From parent"
 msgstr "From parent"
 
-#: templates/javascript.htm:176
+#: templates/javascript.htm:179
 msgid "View structure →"
 msgstr "View structure →"
 
-#: templates/javascript.htm:177 templates/views/pages/graph-explorer.htm:85
+#: templates/javascript.htm:180 templates/views/pages/graph-explorer.htm:86
 msgid "Expand all"
 msgstr "Expand all"
 
-#: templates/javascript.htm:178 templates/views/pages/graph-explorer.htm:86
+#: templates/javascript.htm:181 templates/views/pages/graph-explorer.htm:87
 msgid "Collapse all"
 msgstr "Collapse all"
 
-#: templates/javascript.htm:179 templates/views/pages/graph-explorer.htm:90
+#: templates/javascript.htm:182 templates/views/pages/graph-explorer.htm:91
 msgid "Structural nodes"
 msgstr "Structural nodes"
 
-#: templates/javascript.htm:180 templates/views/pages/graph-explorer.htm:91
+#: templates/javascript.htm:183 templates/views/pages/graph-explorer.htm:92
 msgid "CIDOC classes on every node"
 msgstr "CIDOC classes on every node"
 
-#: templates/javascript.htm:181
+#: templates/javascript.htm:184
 #, python-brace-format
 msgid "Showing {node} and below"
 msgstr "Showing {node} and below"
 
-#: templates/javascript.htm:182
+#: templates/javascript.htm:185
 #, python-brace-format
 msgid "← {model}"
 msgstr "← {model}"
 
-#: templates/javascript.htm:183 templates/views/pages/graph-explorer.htm:87
+#: templates/javascript.htm:186 templates/views/pages/graph-explorer.htm:88
 msgid "Outline view"
 msgstr "Outline view"
 
-#: templates/javascript.htm:184
+#: templates/javascript.htm:187
 #, python-brace-format
 msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 msgstr "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 
-#: templates/javascript.htm:186 templates/views/pages/graph-explorer.htm:81
+#: templates/javascript.htm:189 templates/views/pages/graph-explorer.htm:82
 msgid "Find a field, class or property…"
 msgstr "Find a field, class or property…"
 
-#: templates/javascript.htm:187
+#: templates/javascript.htm:190
 msgid "Common properties (P1, P2) are dimmed."
 msgstr "Common properties (P1, P2) are dimmed."
 
-#: templates/javascript.htm:188
+#: templates/javascript.htm:191
 msgid "Ring = field group · double ring = repeatable"
 msgstr "Ring = field group · double ring = repeatable"
 
-#: templates/javascript.htm:189
+#: templates/javascript.htm:192
 msgid "∗ = required"
 msgstr "∗ = required"
 
-#: templates/javascript.htm:190
+#: templates/javascript.htm:193
 msgid "Node"
 msgstr "Node"
 
-#: templates/javascript.htm:191 templates/javascript.htm:204
+#: templates/javascript.htm:194 templates/javascript.htm:207
 msgid "Datatype"
 msgstr "Datatype"
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:195
 msgid "CIDOC-CRM class"
 msgstr "CIDOC-CRM class"
 
-#: templates/javascript.htm:193 templates/javascript.htm:202
+#: templates/javascript.htm:196 templates/javascript.htm:205
 msgid "Path"
 msgstr "Path"
 
-#: templates/javascript.htm:194 templates/javascript.htm:208
+#: templates/javascript.htm:197 templates/javascript.htm:211
 msgid "Cardinality"
 msgstr "Cardinality"
 
-#: templates/javascript.htm:195 templates/javascript.htm:207
+#: templates/javascript.htm:198 templates/javascript.htm:210
 msgid "Required"
 msgstr "Required"
 
-#: templates/javascript.htm:196
+#: templates/javascript.htm:199
 msgid "Optional"
 msgstr "Optional"
 
-#: templates/javascript.htm:197
+#: templates/javascript.htm:200
 msgid "Controlled vocabulary"
 msgstr "Controlled vocabulary"
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:201
 msgid "Model root"
 msgstr "Model root"
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:202
 msgid "See this relationship in the Network view"
 msgstr "See this relationship in the Network view"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:203
 msgid "Field group"
 msgstr "Field group"
 
-#: templates/javascript.htm:201 templates/views/pages/graph-explorer.htm:126
+#: templates/javascript.htm:204 templates/views/pages/graph-explorer.htm:135
 msgid ""
 "How one model is built: its field groups, the CIDOC-CRM class of each node "
 "and the property that links it to its parent."
@@ -1444,28 +1600,28 @@ msgstr ""
 "How one model is built: its field groups, the CIDOC-CRM class of each node "
 "and the property that links it to its parent."
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:206
 msgid "Field"
 msgstr "Field"
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:208
 msgid "CIDOC class"
 msgstr "CIDOC class"
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:209
 msgid "Property"
 msgstr "Property"
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:212
 msgid "Target"
 msgstr "Target"
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:213
 #, python-brace-format
 msgid "Every field of every model: {n} rows across {m} models."
 msgstr "Every field of every model: {n} rows across {m} models."
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:214
 msgid "Yes"
 msgstr "Yes"
 
@@ -1840,7 +1996,7 @@ msgid "e.g. 500"
 msgstr "e.g. 500"
 
 #: templates/views/components/plugins/importer-configuration.htm:73
-#: templates/views/pages/conceptual-model.htm:75
+#: templates/views/pages/conceptual-model.htm:77
 msgid "Transformations"
 msgstr "Transformations"
 
@@ -1873,7 +2029,7 @@ msgid "Pipe"
 msgstr "Pipe"
 
 #: templates/views/components/plugins/importer-configuration.htm:101
-#: templates/views/pages/contact.htm:62
+#: templates/views/pages/contact.htm:74
 msgid "Other"
 msgstr "Other"
 
@@ -2259,7 +2415,7 @@ msgid "Manuscript, book, printed text"
 msgstr "Manuscript, book, printed text"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
-#: templates/views/pages/conceptual-model.htm:155
+#: templates/views/pages/conceptual-model.htm:157
 msgid "Component"
 msgstr "Component"
 
@@ -2416,11 +2572,11 @@ msgstr "Add Biblissima ARK as alt-name on the matched resource"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:519
 msgid ""
-"No match found. Create a new parent Document from Biblissima data — required"
-" before its components can be imported."
+"No match found. Create a new parent Document from Biblissima data — required "
+"before its components can be imported."
 msgstr ""
-"No match found. Create a new parent Document from Biblissima data — required"
-" before its components can be imported."
+"No match found. Create a new parent Document from Biblissima data — required "
+"before its components can be imported."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:531
 msgid "Create parent"
@@ -2444,11 +2600,11 @@ msgstr "Related resources"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:578
 msgid ""
-"The following places, institutions, and persons were found in the Biblissima"
-" data. Link them to existing resources or create new ones."
+"The following places, institutions, and persons were found in the Biblissima "
+"data. Link them to existing resources or create new ones."
 msgstr ""
-"The following places, institutions, and persons were found in the Biblissima"
-" data. Link them to existing resources or create new ones."
+"The following places, institutions, and persons were found in the Biblissima "
+"data. Link them to existing resources or create new ones."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:600
 msgid "To confirm"
@@ -2546,8 +2702,7 @@ msgstr "Add all visible"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:185
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
-msgstr ""
-"Biblissima can be slow for large searches. You can keep this tab open."
+msgstr "Biblissima can be slow for large searches. You can keep this tab open."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:190
 msgid "Elapsed"
@@ -2555,15 +2710,12 @@ msgstr "Elapsed"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:233
 msgid ""
-"Search by shelfmark, title, or institution to find manuscripts on "
-"Biblissima."
+"Search by shelfmark, title, or institution to find manuscripts on Biblissima."
 msgstr ""
-"Search by shelfmark, title, or institution to find manuscripts on "
-"Biblissima."
+"Search by shelfmark, title, or institution to find manuscripts on Biblissima."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:236
-msgid ""
-"Select iconographic descriptors and click Search to find illuminations."
+msgid "Select iconographic descriptors and click Search to find illuminations."
 msgstr ""
 "Select iconographic descriptors and click Search to find illuminations."
 
@@ -2619,13 +2771,13 @@ msgstr "Resources are saved as Draft."
 msgid ""
 "Open each one to verify the data, fill in anything that couldn't be fetched "
 "from Biblissima, then click <strong>Make Active</strong> on the resource "
-"page to publish it. Drafts stay editable; only Active resources are surfaced"
-" across the rest of the application."
+"page to publish it. Drafts stay editable; only Active resources are surfaced "
+"across the rest of the application."
 msgstr ""
 "Open each one to verify the data, fill in anything that couldn't be fetched "
 "from Biblissima, then click <strong>Make Active</strong> on the resource "
-"page to publish it. Drafts stay editable; only Active resources are surfaced"
-" across the rest of the application."
+"page to publish it. Drafts stay editable; only Active resources are surfaced "
+"across the rest of the application."
 
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:76
 msgid "Created resources"
@@ -2667,55 +2819,50 @@ msgid "Open project"
 msgstr "Open project"
 
 #: templates/views/pages/conceptual-model.htm:5
+#, fuzzy
 #| msgid ""
-#| "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description"
-#| " of manuscripts, analyses and inferred knowledge."
+#| "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci "
+#| "description of written cultural heritage, the analyses applied to it and "
+#| "the knowledge inferred from them."
 msgid ""
-"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description"
-" of written cultural heritage, the analyses applied to it and the knowledge "
-"inferred from them."
+"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
+"of written heritage, its analyses and the knowledge inferred from them."
 msgstr ""
-"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description"
-" of written cultural heritage, the analyses applied to it and the knowledge "
+"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
+"of written cultural heritage, the analyses applied to it and the knowledge "
 "inferred from them."
 
 #: templates/views/pages/conceptual-model.htm:10
 msgid "A model for describing written heritage scientifically"
 msgstr "A model for describing written heritage scientifically"
 
-#: templates/views/pages/conceptual-model.htm:16
-#| msgid ""
-#| "Most heritage databases record what a manuscript <em>is</em>. ManuSpectrum "
-#| "records what <em>happened to it</em> — and who said so. Every measurement is"
-#| " an event with a date, an instrument and an operator. Every interpretation "
-#| "is stored separately from the observation that supports it. That separation "
-#| "is what lets you re-read someone else's conclusion — and disagree with it."
+#: templates/views/pages/conceptual-model.htm:17
 msgid ""
 "Most heritage databases record what an object <em>is</em>. ManuSpectrum "
-"records what <em>happened to it</em> — and who said so. Every measurement is"
-" an event with a date, an instrument and an operator. Every interpretation "
-"is stored separately from the observation that supports it. That separation "
-"is what lets you re-read someone else's conclusion — and disagree with it."
+"records what <em>happened to it</em> — and who said so. Every measurement is "
+"an event with a date, an instrument and an operator. Every interpretation is "
+"stored separately from the observation that supports it. That separation is "
+"what lets you re-read someone else's conclusion — and disagree with it."
 msgstr ""
 "Most heritage databases record what an object <em>is</em>. ManuSpectrum "
-"records what <em>happened to it</em> — and who said so. Every measurement is"
-" an event with a date, an instrument and an operator. Every interpretation "
-"is stored separately from the observation that supports it. That separation "
-"is what lets you re-read someone else's conclusion — and disagree with it."
+"records what <em>happened to it</em> — and who said so. Every measurement is "
+"an event with a date, an instrument and an operator. Every interpretation is "
+"stored separately from the observation that supports it. That separation is "
+"what lets you re-read someone else's conclusion — and disagree with it."
 
-#: templates/views/pages/conceptual-model.htm:28
+#: templates/views/pages/conceptual-model.htm:30
 msgid "01 · Abstraction"
 msgstr "01 · Abstraction"
 
-#: templates/views/pages/conceptual-model.htm:29
+#: templates/views/pages/conceptual-model.htm:31
 msgid "Three levels of abstraction"
 msgstr "Three levels of abstraction"
 
-#: templates/views/pages/conceptual-model.htm:38
+#: templates/views/pages/conceptual-model.htm:40
 msgid "Ontology"
 msgstr "Ontology"
 
-#: templates/views/pages/conceptual-model.htm:39
+#: templates/views/pages/conceptual-model.htm:41
 msgid ""
 "Semantic foundation: CIDOC-CRM v7.1.2 (ISO 21127) and its CRMsci extension "
 "for scientific observation."
@@ -2723,16 +2870,12 @@ msgstr ""
 "Semantic foundation: CIDOC-CRM v7.1.2 (ISO 21127) and its CRMsci extension "
 "for scientific observation."
 
-#: templates/views/pages/conceptual-model.htm:43
-#: templates/views/pages/graph-explorer.htm:153
+#: templates/views/pages/conceptual-model.htm:45
+#: templates/views/pages/graph-explorer.htm:162
 msgid "Models"
 msgstr "Models"
 
-#: templates/views/pages/conceptual-model.htm:49
-#| msgid ""
-#| "12 independent models linked by 70 typed CIDOC relationships — so a person "
-#| "recorded once as an analyst is the same record when they reappear as a "
-#| "manuscript's owner."
+#: templates/views/pages/conceptual-model.htm:51
 msgid ""
 "12 independent models linked by 70 typed CIDOC relationships — so a person "
 "recorded once as an analyst is the same record when they reappear as a "
@@ -2742,11 +2885,11 @@ msgstr ""
 "recorded once as an analyst is the same record when they reappear as a "
 "volume's owner."
 
-#: templates/views/pages/conceptual-model.htm:53
+#: templates/views/pages/conceptual-model.htm:55
 msgid "Vocabularies"
 msgstr "Vocabularies"
 
-#: templates/views/pages/conceptual-model.htm:54
+#: templates/views/pages/conceptual-model.htm:56
 msgid ""
 "Controlled values referencing normalized thesauri: Getty AAT, Pactols, "
 "AGORHA, LOTERRE."
@@ -2754,85 +2897,79 @@ msgstr ""
 "Controlled values referencing normalized thesauri: Getty AAT, Pactols, "
 "AGORHA, LOTERRE."
 
-#: templates/views/pages/conceptual-model.htm:62
+#: templates/views/pages/conceptual-model.htm:64
 msgid "02 · Resource map"
 msgstr "02 · Resource map"
 
-#: templates/views/pages/conceptual-model.htm:63
+#: templates/views/pages/conceptual-model.htm:65
 msgid "Twelve models, four families"
 msgstr "Twelve models, four families"
 
-#: templates/views/pages/conceptual-model.htm:65
-#| msgid ""
-#| "Nothing is described twice. An actor, a place or an instrument is recorded "
-#| "once and referenced everywhere it appears — so the person who ran an XRF "
-#| "scan in 2024 is the same record as the manuscript's eighteenth-century "
-#| "owner, if they happen to be the same person."
+#: templates/views/pages/conceptual-model.htm:67
 msgid ""
 "Nothing is described twice. An actor, a place or an instrument is recorded "
 "once and referenced everywhere it appears — so the person who ran an XRF "
-"scan in 2024 is the same record as the volume's eighteenth-century owner, if"
-" they happen to be the same person."
+"scan in 2024 is the same record as the volume's eighteenth-century owner, if "
+"they happen to be the same person."
 msgstr ""
 "Nothing is described twice. An actor, a place or an instrument is recorded "
 "once and referenced everywhere it appears — so the person who ran an XRF "
-"scan in 2024 is the same record as the volume's eighteenth-century owner, if"
-" they happen to be the same person."
+"scan in 2024 is the same record as the volume's eighteenth-century owner, if "
+"they happen to be the same person."
 
-#: templates/views/pages/conceptual-model.htm:72
+#: templates/views/pages/conceptual-model.htm:74
 msgid "Studied object"
 msgstr "Studied object"
 
-#: templates/views/pages/conceptual-model.htm:72
-#| msgid "Manuscript → Component · Sample"
+#: templates/views/pages/conceptual-model.htm:74
 msgid "Document → Component · Sample"
 msgstr "Document → Component · Sample"
 
-#: templates/views/pages/conceptual-model.htm:73
+#: templates/views/pages/conceptual-model.htm:75
 msgid "Observation · CRMsci"
 msgstr "Observation · CRMsci"
 
-#: templates/views/pages/conceptual-model.htm:73
+#: templates/views/pages/conceptual-model.htm:75
 msgid "Analysis → Characterization"
 msgstr "Analysis → Characterization"
 
-#: templates/views/pages/conceptual-model.htm:74
+#: templates/views/pages/conceptual-model.htm:76
 msgid "Shared context"
 msgstr "Shared context"
 
-#: templates/views/pages/conceptual-model.htm:74
+#: templates/views/pages/conceptual-model.htm:76
 msgid "Actor · Place · Project · Instrument"
 msgstr "Actor · Place · Project · Instrument"
 
-#: templates/views/pages/conceptual-model.htm:75
+#: templates/views/pages/conceptual-model.htm:77
 msgid "Alteration · Modification"
 msgstr "Alteration · Modification"
 
-#: templates/views/pages/conceptual-model.htm:77
+#: templates/views/pages/conceptual-model.htm:79
 msgid "Explore the model interactively"
 msgstr "Explore the model interactively"
 
-#: templates/views/pages/conceptual-model.htm:83
+#: templates/views/pages/conceptual-model.htm:85
 msgid "03 · Granularity"
 msgstr "03 · Granularity"
 
-#: templates/views/pages/conceptual-model.htm:84
+#: templates/views/pages/conceptual-model.htm:86
 msgid "Granularity of the model"
 msgstr "Granularity of the model"
 
-#: templates/views/pages/conceptual-model.htm:97
+#: templates/views/pages/conceptual-model.htm:99
 msgid "of fields draw on a published thesaurus, not free text — 187 of 452"
 msgstr "of fields draw on a published thesaurus, not free text — 187 of 452"
 
-#: templates/views/pages/conceptual-model.htm:105
+#: templates/views/pages/conceptual-model.htm:107
 msgid "typed relationships across 12 interconnected models"
 msgstr "typed relationships across 12 interconnected models"
 
-#: templates/views/pages/conceptual-model.htm:113
+#: templates/views/pages/conceptual-model.htm:115
 msgid "Technical detail"
 msgstr "Technical detail"
 
-#: templates/views/pages/conceptual-model.htm:120
+#: templates/views/pages/conceptual-model.htm:122
 msgid ""
 "169 field groups · 580 nodes (452 of them data) · 77 ontology properties · "
 "12 thesauri."
@@ -2840,15 +2977,15 @@ msgstr ""
 "169 field groups · 580 nodes (452 of them data) · 77 ontology properties · "
 "12 thesauri."
 
-#: templates/views/pages/conceptual-model.htm:128
+#: templates/views/pages/conceptual-model.htm:130
 msgid "04 · Thought schema"
 msgstr "04 · Thought schema"
 
-#: templates/views/pages/conceptual-model.htm:129
+#: templates/views/pages/conceptual-model.htm:131
 msgid "Two timelines, one pivot"
 msgstr "Two timelines, one pivot"
 
-#: templates/views/pages/conceptual-model.htm:138
+#: templates/views/pages/conceptual-model.htm:140
 msgid ""
 "An event-based trajectory rather than a static object-attribute schema. Two "
 "timelines run at different speeds and meet on a single object."
@@ -2856,43 +2993,43 @@ msgstr ""
 "An event-based trajectory rather than a static object-attribute schema. Two "
 "timelines run at different speeds and meet on a single object."
 
-#: templates/views/pages/conceptual-model.htm:143
+#: templates/views/pages/conceptual-model.htm:145
 msgid "The object's life"
 msgstr "The object's life"
 
-#: templates/views/pages/conceptual-model.htm:144
+#: templates/views/pages/conceptual-model.htm:146
 msgid "centuries"
 msgstr "centuries"
 
-#: templates/views/pages/conceptual-model.htm:147
+#: templates/views/pages/conceptual-model.htm:149
 msgid "Production"
 msgstr "Production"
 
-#: templates/views/pages/conceptual-model.htm:147
+#: templates/views/pages/conceptual-model.htm:149
 msgid "made: parchment, ink, binding"
 msgstr "made: parchment, ink, binding"
 
-#: templates/views/pages/conceptual-model.htm:148
+#: templates/views/pages/conceptual-model.htm:150
 msgid "Modification"
 msgstr "Modification"
 
-#: templates/views/pages/conceptual-model.htm:148
+#: templates/views/pages/conceptual-model.htm:150
 msgid "deliberate: rebinding, restoration"
 msgstr "deliberate: rebinding, restoration"
 
-#: templates/views/pages/conceptual-model.htm:149
+#: templates/views/pages/conceptual-model.htm:151
 msgid "Alteration"
 msgstr "Alteration"
 
-#: templates/views/pages/conceptual-model.htm:149
+#: templates/views/pages/conceptual-model.htm:151
 msgid "undergone: corrosion, fading, damp"
 msgstr "undergone: corrosion, fading, damp"
 
-#: templates/views/pages/conceptual-model.htm:154
+#: templates/views/pages/conceptual-model.htm:156
 msgid "Pivot"
 msgstr "Pivot"
 
-#: templates/views/pages/conceptual-model.htm:156
+#: templates/views/pages/conceptual-model.htm:158
 msgid ""
 "The material component is what both timelines describe: the thing that was "
 "made and altered, and the thing that was sampled and measured."
@@ -2900,43 +3037,43 @@ msgstr ""
 "The material component is what both timelines describe: the thing that was "
 "made and altered, and the thing that was sampled and measured."
 
-#: templates/views/pages/conceptual-model.htm:161
+#: templates/views/pages/conceptual-model.htm:163
 msgid "The research act"
 msgstr "The research act"
 
-#: templates/views/pages/conceptual-model.htm:162
+#: templates/views/pages/conceptual-model.htm:164
 msgid "days — present day"
 msgstr "days — present day"
 
-#: templates/views/pages/conceptual-model.htm:165
+#: templates/views/pages/conceptual-model.htm:167
 msgid "Sampling"
 msgstr "Sampling"
 
-#: templates/views/pages/conceptual-model.htm:165
+#: templates/views/pages/conceptual-model.htm:167
 msgid "what was examined, and where on the object"
 msgstr "what was examined, and where on the object"
 
-#: templates/views/pages/conceptual-model.htm:166
+#: templates/views/pages/conceptual-model.htm:168
 msgid "Analysis"
 msgstr "Analysis"
 
-#: templates/views/pages/conceptual-model.htm:166
+#: templates/views/pages/conceptual-model.htm:168
 msgid "the measurement: instrument, operator, date"
 msgstr "the measurement: instrument, operator, date"
 
-#: templates/views/pages/conceptual-model.htm:167
+#: templates/views/pages/conceptual-model.htm:169
 msgid "Characterization"
 msgstr "Characterization"
 
-#: templates/views/pages/conceptual-model.htm:167
+#: templates/views/pages/conceptual-model.htm:169
 msgid "the interpretation — stored apart from the measurement"
 msgstr "the interpretation — stored apart from the measurement"
 
-#: templates/views/pages/conceptual-model.htm:176
+#: templates/views/pages/conceptual-model.htm:178
 msgid "05 · Vocabularies"
 msgstr "05 · Vocabularies"
 
-#: templates/views/pages/conceptual-model.htm:177
+#: templates/views/pages/conceptual-model.htm:179
 msgid "Thesauri mobilised"
 msgstr "Thesauri mobilised"
 
@@ -2952,7 +3089,7 @@ msgstr ""
 msgid "Submit a project or reach the team"
 msgstr "Submit a project or reach the team"
 
-#: templates/views/pages/contact.htm:16
+#: templates/views/pages/contact.htm:17
 msgid ""
 "Reading and downloading published data needs no account. If you want to "
 "<em>deposit</em> analysis data, tell us about your project — ManuSpectrum "
@@ -2972,35 +3109,48 @@ msgstr "Get in touch"
 msgid "Send us a message"
 msgstr "Send us a message"
 
-#: templates/views/pages/contact.htm:39
+#: templates/views/pages/contact.htm:43
+#, python-format
+msgid ""
+"This form needs JavaScript — but you can write to us directly at <a "
+"href=\"mailto:%(email)s\">%(email)s</a>."
+msgstr ""
+
+#: templates/views/pages/contact.htm:45
+msgid ""
+"This form needs JavaScript, and no public contact address is available yet — "
+"please check back soon."
+msgstr ""
+
+#: templates/views/pages/contact.htm:51
 msgid "Required field"
 msgstr "Required field"
 
-#: templates/views/pages/contact.htm:43
+#: templates/views/pages/contact.htm:55
 msgid "Your name"
 msgstr "Your name"
 
-#: templates/views/pages/contact.htm:50
+#: templates/views/pages/contact.htm:62
 msgid "Your email"
 msgstr "Your email"
 
-#: templates/views/pages/contact.htm:59
+#: templates/views/pages/contact.htm:71
 msgid "Submit a project"
 msgstr "Submit a project"
 
-#: templates/views/pages/contact.htm:60
+#: templates/views/pages/contact.htm:72
 msgid "Request an account / access"
 msgstr "Request an account / access"
 
-#: templates/views/pages/contact.htm:82
+#: templates/views/pages/contact.htm:94
 msgid "Open my email app"
 msgstr "Open my email app"
 
-#: templates/views/pages/contact.htm:95
+#: templates/views/pages/contact.htm:107
 msgid "Nothing happened?"
 msgstr "Nothing happened?"
 
-#: templates/views/pages/contact.htm:96
+#: templates/views/pages/contact.htm:108
 msgid ""
 "Some webmail clients ignore email links. Copy the address and the message "
 "below and send it yourself."
@@ -3008,27 +3158,27 @@ msgstr ""
 "Some webmail clients ignore email links. Copy the address and the message "
 "below and send it yourself."
 
-#: templates/views/pages/contact.htm:101
+#: templates/views/pages/contact.htm:113
 msgid "Copy address"
 msgstr "Copy address"
 
-#: templates/views/pages/contact.htm:104
+#: templates/views/pages/contact.htm:116
 msgid "Your message"
 msgstr "Your message"
 
-#: templates/views/pages/contact.htm:108
+#: templates/views/pages/contact.htm:120
 msgid "Copy message"
 msgstr "Copy message"
 
-#: templates/views/pages/contact.htm:119
+#: templates/views/pages/contact.htm:131
 msgid "Elsewhere"
 msgstr "Elsewhere"
 
-#: templates/views/pages/contact.htm:121
+#: templates/views/pages/contact.htm:133
 msgid "Who we are, how to cite, funding and licence"
 msgstr "Who we are, how to cite, funding and licence"
 
-#: templates/views/pages/contact.htm:122
+#: templates/views/pages/contact.htm:134
 msgid "The conceptual model"
 msgstr "The conceptual model"
 
@@ -3044,96 +3194,100 @@ msgstr ""
 msgid "The model as a living graph"
 msgstr "The model as a living graph"
 
-#: templates/views/pages/graph-explorer.htm:20
+#: templates/views/pages/graph-explorer.htm:21
 #, python-format
 msgid ""
-"Every field in ManuSpectrum and every link between models: 452 fields across"
-" 12 models, 41%% of them bound to a published thesaurus rather than free "
+"Every field in ManuSpectrum and every link between models: 452 fields across "
+"12 models, 41%% of them bound to a published thesaurus rather than free "
 "text. Click any model to read its schema."
 msgstr ""
-"Every field in ManuSpectrum and every link between models: 452 fields across"
-" 12 models, 41%% of them bound to a published thesaurus rather than free "
+"Every field in ManuSpectrum and every link between models: 452 fields across "
+"12 models, 41%% of them bound to a published thesaurus rather than free "
 "text. Click any model to read its schema."
 
-#: templates/views/pages/graph-explorer.htm:38
+#: templates/views/pages/graph-explorer.htm:39
 msgid "Explorer"
 msgstr "Explorer"
 
-#: templates/views/pages/graph-explorer.htm:39
+#: templates/views/pages/graph-explorer.htm:40
 msgid "Every model, every field, every link"
 msgstr "Every model, every field, every link"
 
-#: templates/views/pages/graph-explorer.htm:46
+#: templates/views/pages/graph-explorer.htm:47
 msgid "Explorer views"
 msgstr "Explorer views"
 
-#: templates/views/pages/graph-explorer.htm:48
+#: templates/views/pages/graph-explorer.htm:49
 msgid "Network"
 msgstr "Network"
 
-#: templates/views/pages/graph-explorer.htm:52
+#: templates/views/pages/graph-explorer.htm:53
 msgid "Structure"
 msgstr "Structure"
 
-#: templates/views/pages/graph-explorer.htm:53
+#: templates/views/pages/graph-explorer.htm:54
 msgid "Datatypes"
 msgstr "Datatypes"
 
-#: templates/views/pages/graph-explorer.htm:54
+#: templates/views/pages/graph-explorer.htm:55
 msgid "Table"
 msgstr "Table"
 
-#: templates/views/pages/graph-explorer.htm:59
+#: templates/views/pages/graph-explorer.htm:60
 msgid "Find a model…"
 msgstr "Find a model…"
 
-#: templates/views/pages/graph-explorer.htm:59
+#: templates/views/pages/graph-explorer.htm:60
 msgid "Find a model"
 msgstr "Find a model"
 
-#: templates/views/pages/graph-explorer.htm:65
+#: templates/views/pages/graph-explorer.htm:66
 msgid "Order rows and columns"
 msgstr "Order rows and columns"
 
-#: templates/views/pages/graph-explorer.htm:67
+#: templates/views/pages/graph-explorer.htm:68
 msgid "By family"
 msgstr "By family"
 
-#: templates/views/pages/graph-explorer.htm:68
+#: templates/views/pages/graph-explorer.htm:69
 msgid "By connectedness"
 msgstr "By connectedness"
 
-#: templates/views/pages/graph-explorer.htm:69
+#: templates/views/pages/graph-explorer.htm:70
 msgid "A–Z"
 msgstr "A–Z"
 
-#: templates/views/pages/graph-explorer.htm:81
+#: templates/views/pages/graph-explorer.htm:82
 msgid "Find a field, class or property"
 msgstr "Find a field, class or property"
 
-#: templates/views/pages/graph-explorer.htm:100
+#: templates/views/pages/graph-explorer.htm:101
 msgid "Loading the model…"
 msgstr "Loading the model…"
 
-#: templates/views/pages/graph-explorer.htm:101
+#: templates/views/pages/graph-explorer.htm:102
 msgid "The model could not be loaded."
 msgstr "The model could not be loaded."
 
-#: templates/views/pages/graph-explorer.htm:127
+#: templates/views/pages/graph-explorer.htm:107
+msgid "The interactive explorer requires JavaScript."
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:108
+msgid "The Conceptual Model page presents the same model as readable text."
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:136
 msgid "Structure breadcrumb"
 msgstr "Structure breadcrumb"
 
-#: templates/views/pages/graph-explorer.htm:152
+#: templates/views/pages/graph-explorer.htm:161
 msgid "Table contents"
 msgstr "Table contents"
 
-#: templates/views/pages/graph-explorer.htm:159
+#: templates/views/pages/graph-explorer.htm:168
 msgid "Model details"
 msgstr "Model details"
-
-#: templates/views/pages/graph-explorer.htm:160
-msgid "Close"
-msgstr "Close"
 
 #: templates/views/pages/team.htm:5
 msgid ""
@@ -3148,18 +3302,14 @@ msgid "The project & the people"
 msgstr "The project & the people"
 
 #: templates/views/pages/team.htm:22
-#| msgid ""
-#| "ManuSpectrum archives, standardises and makes searchable the physicochemical"
-#| " analysis of manuscripts and written heritage, so that reliable, "
-#| "interoperable data can be reused by people who did not run the measurements."
 msgid ""
-"ManuSpectrum archives, standardises and makes searchable the physicochemical"
-" analysis of written cultural heritage — manuscripts, printed books, "
+"ManuSpectrum archives, standardises and makes searchable the physicochemical "
+"analysis of written cultural heritage — manuscripts, printed books, "
 "inscriptions and more — so that reliable, interoperable data can be reused "
 "by people who did not run the measurements."
 msgstr ""
-"ManuSpectrum archives, standardises and makes searchable the physicochemical"
-" analysis of written cultural heritage — manuscripts, printed books, "
+"ManuSpectrum archives, standardises and makes searchable the physicochemical "
+"analysis of written cultural heritage — manuscripts, printed books, "
 "inscriptions and more — so that reliable, interoperable data can be reused "
 "by people who did not run the measurements."
 
@@ -3227,12 +3377,12 @@ msgstr "Maîtresse de conférences, physical chemistry"
 
 #: templates/views/pages/team.htm:92
 msgid ""
-"Physico-chemist at the Centre de Recherche sur la Conservation, specialising"
-" in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
+"Physico-chemist at the Centre de Recherche sur la Conservation, specialising "
+"in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
 "written cultural heritage. Referent for Biblissima+ Cluster 2."
 msgstr ""
-"Physico-chemist at the Centre de Recherche sur la Conservation, specialising"
-" in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
+"Physico-chemist at the Centre de Recherche sur la Conservation, specialising "
+"in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
 "written cultural heritage. Referent for Biblissima+ Cluster 2."
 
 #: templates/views/pages/team.htm:93 templates/views/pages/team.htm:106
@@ -3255,7 +3405,9 @@ msgstr ""
 "virtuelle des manuscrits médiévaux)."
 
 #: templates/views/pages/team.htm:116
-msgid "Study engineer / web developer"
+#, fuzzy
+#| msgid "Study engineer / web developer"
+msgid "Engineer / web developer"
 msgstr "Study engineer / web developer"
 
 #: templates/views/pages/team.htm:118
@@ -3312,11 +3464,11 @@ msgstr ""
 
 #: templates/views/pages/team.htm:149
 msgid ""
-"The platform's source code is published under the GNU General Public License"
-" v3. Reading and downloading published data needs no account."
+"The platform's source code is published under the GNU General Public License "
+"v3. Reading and downloading published data needs no account."
 msgstr ""
-"The platform's source code is published under the GNU General Public License"
-" v3. Reading and downloading published data needs no account."
+"The platform's source code is published under the GNU General Public License "
+"v3. Reading and downloading published data needs no account."
 
 # Biblissima search & workflow — added in the progressive-loading refactor
 #: views/biblissima_proxy.py:257
@@ -3356,23 +3508,35 @@ msgstr "<h1>Renderers do not exist</h1>"
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>Renderers config does not exist</h1>"
 
+#~ msgid "ManuSpectrum was developed within Cluster 2 — \\"
+#~ msgstr "ManuSpectrum was developed within Cluster 2 — \\"
+
+#~ msgid ""
+#~ "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, printed books, "
+#~ "inscriptions, written cultural heritage, IIIF, CIDOC-CRM, Biblissima, "
+#~ "physicochemical analysis, heritage science"
+#~ msgstr ""
+#~ "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, printed books, "
+#~ "inscriptions, written cultural heritage, IIIF, CIDOC-CRM, Biblissima, "
+#~ "physicochemical analysis, heritage science"
+
 #~ msgid "A model for scientific manuscript description"
 #~ msgstr "A model for scientific manuscript description"
 
 #~ msgid ""
-#~ "The object, the analyses applied to it, and the knowledge inferred from them"
-#~ " — formalised with a shared ontology (CIDOC-CRM + CRMsci) for interoperable,"
-#~ " reusable data within the Biblissima+ ecosystem. The approach is event-"
-#~ "centric: it tracks production, sampling, analysis, characterization, "
-#~ "alteration and modification, and keeps observed facts distinct from "
-#~ "inferences while preserving source attribution."
+#~ "The object, the analyses applied to it, and the knowledge inferred from "
+#~ "them — formalised with a shared ontology (CIDOC-CRM + CRMsci) for "
+#~ "interoperable, reusable data within the Biblissima+ ecosystem. The "
+#~ "approach is event-centric: it tracks production, sampling, analysis, "
+#~ "characterization, alteration and modification, and keeps observed facts "
+#~ "distinct from inferences while preserving source attribution."
 #~ msgstr ""
-#~ "The object, the analyses applied to it, and the knowledge inferred from them"
-#~ " — formalised with a shared ontology (CIDOC-CRM + CRMsci) for interoperable,"
-#~ " reusable data within the Biblissima+ ecosystem. The approach is event-"
-#~ "centric: it tracks production, sampling, analysis, characterization, "
-#~ "alteration and modification, and keeps observed facts distinct from "
-#~ "inferences while preserving source attribution."
+#~ "The object, the analyses applied to it, and the knowledge inferred from "
+#~ "them — formalised with a shared ontology (CIDOC-CRM + CRMsci) for "
+#~ "interoperable, reusable data within the Biblissima+ ecosystem. The "
+#~ "approach is event-centric: it tracks production, sampling, analysis, "
+#~ "characterization, alteration and modification, and keeps observed facts "
+#~ "distinct from inferences while preserving source attribution."
 
 #~ msgid ""
 #~ "12 autonomous resource models, interconnected by 84 typed relationships."
@@ -3398,31 +3562,28 @@ msgstr "<h1>Renderers config does not exist</h1>"
 #~ msgstr "Transformation"
 
 #~ msgid ""
-#~ "Account creation is not open: access is granted individually. To propose a "
-#~ "project, request an account, or ask a question, send us a message below."
+#~ "Account creation is not open: access is granted individually. To propose "
+#~ "a project, request an account, or ask a question, send us a message below."
 #~ msgstr ""
-#~ "Account creation is not open: access is granted individually. To propose a "
-#~ "project, request an account, or ask a question, send us a message below."
+#~ "Account creation is not open: access is granted individually. To propose "
+#~ "a project, request an account, or ask a question, send us a message below."
 
 #~ msgid "Who we are"
 #~ msgstr "Who we are"
 
 #~ msgid ""
-#~ "ManuSpectrum is developed within Cluster 2 of the ANR Biblissima+ programme,"
-#~ " at the Centre de Recherche sur la Conservation (CRC)."
+#~ "ManuSpectrum is developed within Cluster 2 of the ANR Biblissima+ "
+#~ "programme, at the Centre de Recherche sur la Conservation (CRC)."
 #~ msgstr ""
-#~ "ManuSpectrum is developed within Cluster 2 of the ANR Biblissima+ programme,"
-#~ " at the Centre de Recherche sur la Conservation (CRC)."
-
-#~ msgid "Meet the team"
-#~ msgstr "Meet the team"
+#~ "ManuSpectrum is developed within Cluster 2 of the ANR Biblissima+ "
+#~ "programme, at the Centre de Recherche sur la Conservation (CRC)."
 
 #~ msgid ""
-#~ "Drag the nodes, follow the relationships, and click any model to inspect its"
-#~ " fields, datatypes and CIDOC-CRM classes."
+#~ "Drag the nodes, follow the relationships, and click any model to inspect "
+#~ "its fields, datatypes and CIDOC-CRM classes."
 #~ msgstr ""
-#~ "Drag the nodes, follow the relationships, and click any model to inspect its"
-#~ " fields, datatypes and CIDOC-CRM classes."
+#~ "Drag the nodes, follow the relationships, and click any model to inspect "
+#~ "its fields, datatypes and CIDOC-CRM classes."
 
 #~ msgid "Entities"
 #~ msgstr "Entities"
