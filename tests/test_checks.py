@@ -1,4 +1,4 @@
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from manuspectrum.checks import (
     check_contact_email,
@@ -70,3 +70,13 @@ class ContactEmailCheckTests(SimpleTestCase):
     def test_no_address_at_all_is_accepted(self):
         # Designed fallback: the contact page disables its button.
         self.assertEqual(check_contact_email(None), [])
+
+
+class PublishedGraphLanguageCheckTests(TestCase):
+    def test_check_runs_cleanly(self):
+        # Smoke: the DB-tagged check must return a list and never raise, even
+        # on a database with no resources (the test DB).
+        from manuspectrum.checks import check_published_graph_languages
+
+        result = check_published_graph_languages(None, databases=["default"])
+        self.assertIsInstance(result, list)

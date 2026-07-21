@@ -455,6 +455,10 @@ LANGUAGES = [
     #   ('en-gb', _('British English')),
     #    ('es', _('Spanish')),
 ]
+# OPS — after ADDING a language here, run:  python manage.py graph publish --update
+# Arches serialises graphs per language at publication time; without that step
+# every Arches page under /<newlang>/ 500s. manuspectrum.checks.W002 (a
+# database system check, runs with migrate) detects the gap.
 
 # override this to permenantly display/hide the language switcher
 SHOW_LANGUAGE_SWITCH = len(LANGUAGES) > 1
