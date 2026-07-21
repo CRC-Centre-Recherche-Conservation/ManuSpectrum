@@ -91,6 +91,18 @@
 // moved to _ms-chrome.scss because includes/ms_header.htm is shared with index.htm,
 // which loads only the `css/homepage` bundle — the dropdown was unstyled there.
 
+// ── Glossary box (conceptual-model): indexable definitions for non-technicians
+.ms-gloss-box { margin-top: 30px; padding: 20px 24px; background: #fff;
+    border: 1px solid $ms-line; border-left: 3px solid var(--accent-text); border-radius: 12px; }
+.ms-gloss-head { font-family: $ms-font-mono; font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.14em; color: var(--accent-text); margin: 0 0 12px; }
+.ms-gloss-list { display: grid; grid-template-columns: max-content 1fr; gap: 10px 18px; margin: 0;
+    dt { font-weight: 600; font-size: 0.92rem; }
+    dd { margin: 0; color: $ms-ink-soft; line-height: 1.55; font-size: 0.95rem; } }
+@media (max-width: 700px) {
+    .ms-gloss-list { grid-template-columns: 1fr; gap: 2px;
+        dd { margin-bottom: 10px; } } }
+
 // ── Error pages (templates/errors/*.htm override the Arches defaults)
 .ms-error { @include ms-container; padding-top: 150px; padding-bottom: 90px; text-align: center; }
 .ms-error-code { font-family: $ms-font-serif; font-weight: 300; line-height: 1;
@@ -399,6 +411,23 @@ select.ms-contact-input { appearance: none; background-image: none; cursor: poin
 
 // ── Graph Explorer
 .ms-ge { @include ms-container; @include ms-section-rhythm; }
+
+// Onboarding panel ("How do I read this?"). Dot colours mirror the GROUPS
+// palette pinned in model_graph_service.py — update both together.
+.ms-ge-howto { margin: 18px 0 24px; border: 1px solid $ms-line; border-radius: 12px; background: #fff; padding: 4px 20px;
+    summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+    &[open] summary { border-bottom: 1px solid $ms-line; margin-bottom: 12px; } }
+.ms-ge-howto-steps { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 7px; color: $ms-ink-soft; line-height: 1.55; }
+.ms-ge-howto-families { list-style: none; margin: 0 0 14px; padding: 0;
+    display: flex; flex-wrap: wrap; gap: 8px 26px; color: $ms-ink-soft; font-size: 0.92rem; }
+.ms-ge-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; }
+.ms-ge-dot--object { background: #3b82f6; }
+.ms-ge-dot--obs { background: #10b981; }
+.ms-ge-dot--ctx { background: #8b5cf6; }
+.ms-ge-dot--transf { background: #e67e22; }
+
+// Inline glossary affordance (dotted underline + help cursor on <abbr title>)
+abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
 
 // Visually-hidden, still announced. Used by the matrix/table <caption>s and by
 // the matrix corner cell, which carry the orientation text ("rows are sources").

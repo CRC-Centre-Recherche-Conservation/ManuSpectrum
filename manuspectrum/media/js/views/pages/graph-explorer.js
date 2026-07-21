@@ -197,6 +197,22 @@ const matchesQuery = (m) => !state.query || m.name.toLowerCase().includes(state.
 async function boot() {
     initMsNav();
     revealOnScroll();
+
+    // Onboarding panel: open by default (server-rendered); remember the
+    // visitor's choice so it stays collapsed on return visits. localStorage
+    // can throw (private browsing) — in that case it simply stays open.
+    const howto = el('ms-ge-howto');
+    if (howto) {
+        try {
+            if (localStorage.getItem('ms-ge-howto') === 'closed') howto.open = false;
+            howto.addEventListener('toggle', () => {
+                localStorage.setItem('ms-ge-howto', howto.open ? 'open' : 'closed');
+            });
+        } catch {
+            /* stay open */
+        }
+    }
+
     const stage = el('ms-ge-stage');
     if (!stage) return;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

@@ -67,6 +67,25 @@
             <p>{% trans "Controlled values referencing normalized thesauri: Getty AAT, Pactols, AGORHA, LOTERRE." %}</p>
         </div>
     </div>
+
+    {% comment %} Glossary (UX audit: nodegroup / datatype / CIDOC were used
+       without ever being defined for non-technicians). Server-rendered on
+       purpose: indexable, translated, no tooltip a11y traps. {% endcomment %}
+    <aside class="ms-gloss-box reveal" aria-labelledby="ms-gloss-head">
+        <h3 class="ms-gloss-head" id="ms-gloss-head">{% trans "The terms on this page, in plain words" %}</h3>
+        <dl class="ms-gloss-list">
+            <dt>CIDOC-CRM</dt>
+            <dd>{% trans "The international reference ontology (ISO 21127) for describing cultural heritage — a shared vocabulary so that databases can understand each other." %}</dd>
+            <dt>CRMsci</dt>
+            <dd>{% trans "Its extension for scientific observation: measurements, samples, instruments." %}</dd>
+            <dt>{% trans "Thesaurus" %}</dt>
+            <dd>{% trans "A published, curated list of terms (pigments, techniques…) that fields draw from instead of free text — so a search for “vermilion” finds every record, however it was typed." %}</dd>
+            <dt>{% trans "Datatype" %}</dt>
+            <dd>{% trans "The kind of value a field stores: text, a thesaurus concept, a date, a file, a link to another record…" %}</dd>
+            <dt>{% trans "Field group" %}</dt>
+            <dd>{% trans "Fields recorded together as one small form — an address, a dating, a measurement with its unit. (Arches calls this a “nodegroup”.)" %}</dd>
+        </dl>
+    </aside>
 </section>
 
 <div class="ms-section-rule"><div class="spectral-line-thin"></div></div>

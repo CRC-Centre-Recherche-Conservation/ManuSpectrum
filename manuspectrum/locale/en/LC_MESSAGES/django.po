@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 04:57-0500\n"
+"POT-Creation-Date: 2026-07-21 05:02-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -347,7 +347,7 @@ msgid ""
 "supports."
 msgstr ""
 
-#: templates/index.htm:224 templates/views/pages/graph-explorer.htm:183
+#: templates/index.htm:224 templates/views/pages/graph-explorer.htm:204
 msgid "Close"
 msgstr "Close"
 
@@ -1215,11 +1215,11 @@ msgid "Copy failed — select the text and copy it manually."
 msgstr "Copy failed — select the text and copy it manually."
 
 #: templates/javascript.htm:115 templates/javascript.htm:129
-#: templates/views/pages/graph-explorer.htm:177
+#: templates/views/pages/graph-explorer.htm:198
 msgid "Fields"
 msgstr "Fields"
 
-#: templates/javascript.htm:116 templates/views/pages/graph-explorer.htm:62
+#: templates/javascript.htm:116 templates/views/pages/graph-explorer.htm:83
 msgid "Relations"
 msgstr "Relations"
 
@@ -1324,7 +1324,7 @@ msgstr ""
 "relationships. Each curve is one relationship, labelled with its CIDOC-CRM "
 "property."
 
-#: templates/javascript.htm:139 templates/views/pages/graph-explorer.htm:138
+#: templates/javascript.htm:139 templates/views/pages/graph-explorer.htm:159
 msgid "Select a model to see it with its directly connected models."
 msgstr "Select a model to see it with its directly connected models."
 
@@ -1337,7 +1337,7 @@ msgid "Dashed outline = no records published yet"
 msgstr "Dashed outline = no records published yet"
 
 #: templates/javascript.htm:142 templates/javascript.htm:188
-#: templates/views/pages/graph-explorer.htm:92
+#: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Model"
 
@@ -1418,7 +1418,7 @@ msgid "of fields draw on a published thesaurus, not free text — {n} of {total}
 msgstr ""
 "of fields draw on a published thesaurus, not free text — {n} of {total}"
 
-#: templates/javascript.htm:158 templates/views/pages/conceptual-model.htm:117
+#: templates/javascript.htm:158 templates/views/pages/conceptual-model.htm:137
 msgid "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
 msgstr "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
 
@@ -1427,7 +1427,7 @@ msgstr "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
 msgid "typed relationships across {models} interconnected models"
 msgstr "typed relationships across {models} interconnected models"
 
-#: templates/javascript.htm:160 templates/views/pages/conceptual-model.htm:125
+#: templates/javascript.htm:160 templates/views/pages/conceptual-model.htm:145
 msgid "concepts from Getty AAT, Pactols, AGORHA and LOTERRE"
 msgstr "concepts from Getty AAT, Pactols, AGORHA and LOTERRE"
 
@@ -1451,7 +1451,7 @@ msgstr ""
 "— so a person recorded once as an analyst is the same record when they "
 "reappear as a manuscript's owner."
 
-#: templates/javascript.htm:166 templates/views/pages/graph-explorer.htm:160
+#: templates/javascript.htm:166 templates/views/pages/graph-explorer.htm:181
 msgid "Choose a model to see how it is built."
 msgstr "Choose a model to see how it is built."
 
@@ -1517,19 +1517,19 @@ msgstr "From parent"
 msgid "View structure →"
 msgstr "View structure →"
 
-#: templates/javascript.htm:180 templates/views/pages/graph-explorer.htm:100
+#: templates/javascript.htm:180 templates/views/pages/graph-explorer.htm:121
 msgid "Expand all"
 msgstr "Expand all"
 
-#: templates/javascript.htm:181 templates/views/pages/graph-explorer.htm:101
+#: templates/javascript.htm:181 templates/views/pages/graph-explorer.htm:122
 msgid "Collapse all"
 msgstr "Collapse all"
 
-#: templates/javascript.htm:182 templates/views/pages/graph-explorer.htm:105
+#: templates/javascript.htm:182 templates/views/pages/graph-explorer.htm:126
 msgid "Structural nodes"
 msgstr "Structural nodes"
 
-#: templates/javascript.htm:183 templates/views/pages/graph-explorer.htm:106
+#: templates/javascript.htm:183 templates/views/pages/graph-explorer.htm:127
 msgid "CIDOC classes on every node"
 msgstr "CIDOC classes on every node"
 
@@ -1543,7 +1543,7 @@ msgstr "Showing {node} and below"
 msgid "← {model}"
 msgstr "← {model}"
 
-#: templates/javascript.htm:186 templates/views/pages/graph-explorer.htm:102
+#: templates/javascript.htm:186 templates/views/pages/graph-explorer.htm:123
 msgid "Outline view"
 msgstr "Outline view"
 
@@ -1552,7 +1552,7 @@ msgstr "Outline view"
 msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 msgstr "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 
-#: templates/javascript.htm:189 templates/views/pages/graph-explorer.htm:96
+#: templates/javascript.htm:189 templates/views/pages/graph-explorer.htm:117
 msgid "Find a field, class or property…"
 msgstr "Find a field, class or property…"
 
@@ -1573,6 +1573,7 @@ msgid "Node"
 msgstr "Node"
 
 #: templates/javascript.htm:194 templates/javascript.htm:207
+#: templates/views/pages/conceptual-model.htm:87
 msgid "Datatype"
 msgstr "Datatype"
 
@@ -1608,11 +1609,11 @@ msgstr "Model root"
 msgid "See this relationship in the Network view"
 msgstr "See this relationship in the Network view"
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:203 templates/views/pages/conceptual-model.htm:89
 msgid "Field group"
 msgstr "Field group"
 
-#: templates/javascript.htm:204 templates/views/pages/graph-explorer.htm:149
+#: templates/javascript.htm:204 templates/views/pages/graph-explorer.htm:170
 msgid ""
 "How one model is built: its field groups, the CIDOC-CRM class of each node "
 "and the property that links it to its parent."
@@ -2016,7 +2017,7 @@ msgid "e.g. 500"
 msgstr "e.g. 500"
 
 #: templates/views/components/plugins/importer-configuration.htm:73
-#: templates/views/pages/conceptual-model.htm:91
+#: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
@@ -2439,7 +2440,7 @@ msgid "Manuscript, book, printed text"
 msgstr "Manuscript, book, printed text"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
-#: templates/views/pages/conceptual-model.htm:171
+#: templates/views/pages/conceptual-model.htm:191
 msgid "Component"
 msgstr "Component"
 
@@ -2903,7 +2904,7 @@ msgstr ""
 "for scientific observation."
 
 #: templates/views/pages/conceptual-model.htm:59
-#: templates/views/pages/graph-explorer.htm:176
+#: templates/views/pages/graph-explorer.htm:197
 msgid "Models"
 msgstr "Models"
 
@@ -2929,15 +2930,55 @@ msgstr ""
 "Controlled values referencing normalized thesauri: Getty AAT, Pactols, "
 "AGORHA, LOTERRE."
 
-#: templates/views/pages/conceptual-model.htm:78
+#: templates/views/pages/conceptual-model.htm:79
+msgid "The terms on this page, in plain words"
+msgstr ""
+
+#: templates/views/pages/conceptual-model.htm:82
+msgid ""
+"The international reference ontology (ISO 21127) for describing cultural "
+"heritage — a shared vocabulary so that databases can understand each other."
+msgstr ""
+
+#: templates/views/pages/conceptual-model.htm:84
+msgid ""
+"Its extension for scientific observation: measurements, samples, instruments."
+msgstr ""
+
+#: templates/views/pages/conceptual-model.htm:85
+#, fuzzy
+#| msgid "AGORHA thesaurus"
+msgid "Thesaurus"
+msgstr "AGORHA thesaurus"
+
+#: templates/views/pages/conceptual-model.htm:86
+msgid ""
+"A published, curated list of terms (pigments, techniques…) that fields draw "
+"from instead of free text — so a search for “vermilion” finds every record, "
+"however it was typed."
+msgstr ""
+
+#: templates/views/pages/conceptual-model.htm:88
+msgid ""
+"The kind of value a field stores: text, a thesaurus concept, a date, a file, "
+"a link to another record…"
+msgstr ""
+
+#: templates/views/pages/conceptual-model.htm:90
+msgid ""
+"Fields recorded together as one small form — an address, a dating, a "
+"measurement with its unit. (Arches calls this a “nodegroup”.)"
+msgstr ""
+
+#: templates/views/pages/conceptual-model.htm:98
 msgid "02 · Resource map"
 msgstr "02 · Resource map"
 
-#: templates/views/pages/conceptual-model.htm:79
+#: templates/views/pages/conceptual-model.htm:99
 msgid "Twelve models, four families"
 msgstr "Twelve models, four families"
 
-#: templates/views/pages/conceptual-model.htm:81
+#: templates/views/pages/conceptual-model.htm:101
 msgid ""
 "Nothing is described twice. An actor, a place or an instrument is recorded "
 "once and referenced everywhere it appears — so the person who ran an XRF "
@@ -2949,59 +2990,59 @@ msgstr ""
 "scan in 2024 is the same record as the volume's eighteenth-century owner, if "
 "they happen to be the same person."
 
-#: templates/views/pages/conceptual-model.htm:88
+#: templates/views/pages/conceptual-model.htm:108
 msgid "Studied object"
 msgstr "Studied object"
 
-#: templates/views/pages/conceptual-model.htm:88
+#: templates/views/pages/conceptual-model.htm:108
 msgid "Document → Component · Sample"
 msgstr "Document → Component · Sample"
 
-#: templates/views/pages/conceptual-model.htm:89
+#: templates/views/pages/conceptual-model.htm:109
 msgid "Observation · CRMsci"
 msgstr "Observation · CRMsci"
 
-#: templates/views/pages/conceptual-model.htm:89
+#: templates/views/pages/conceptual-model.htm:109
 msgid "Analysis → Characterization"
 msgstr "Analysis → Characterization"
 
-#: templates/views/pages/conceptual-model.htm:90
+#: templates/views/pages/conceptual-model.htm:110
 msgid "Shared context"
 msgstr "Shared context"
 
-#: templates/views/pages/conceptual-model.htm:90
+#: templates/views/pages/conceptual-model.htm:110
 msgid "Actor · Place · Project · Instrument"
 msgstr "Actor · Place · Project · Instrument"
 
-#: templates/views/pages/conceptual-model.htm:91
+#: templates/views/pages/conceptual-model.htm:111
 msgid "Alteration · Modification"
 msgstr "Alteration · Modification"
 
-#: templates/views/pages/conceptual-model.htm:93
+#: templates/views/pages/conceptual-model.htm:113
 msgid "Explore the model interactively"
 msgstr "Explore the model interactively"
 
-#: templates/views/pages/conceptual-model.htm:99
+#: templates/views/pages/conceptual-model.htm:119
 msgid "03 · Granularity"
 msgstr "03 · Granularity"
 
-#: templates/views/pages/conceptual-model.htm:100
+#: templates/views/pages/conceptual-model.htm:120
 msgid "Granularity of the model"
 msgstr "Granularity of the model"
 
-#: templates/views/pages/conceptual-model.htm:113
+#: templates/views/pages/conceptual-model.htm:133
 msgid "of fields draw on a published thesaurus, not free text — 187 of 452"
 msgstr "of fields draw on a published thesaurus, not free text — 187 of 452"
 
-#: templates/views/pages/conceptual-model.htm:121
+#: templates/views/pages/conceptual-model.htm:141
 msgid "typed relationships across 12 interconnected models"
 msgstr "typed relationships across 12 interconnected models"
 
-#: templates/views/pages/conceptual-model.htm:129
+#: templates/views/pages/conceptual-model.htm:149
 msgid "Technical detail"
 msgstr "Technical detail"
 
-#: templates/views/pages/conceptual-model.htm:136
+#: templates/views/pages/conceptual-model.htm:156
 msgid ""
 "169 field groups · 580 nodes (452 of them data) · 77 ontology properties · "
 "12 thesauri."
@@ -3009,15 +3050,15 @@ msgstr ""
 "169 field groups · 580 nodes (452 of them data) · 77 ontology properties · "
 "12 thesauri."
 
-#: templates/views/pages/conceptual-model.htm:144
+#: templates/views/pages/conceptual-model.htm:164
 msgid "04 · Thought schema"
 msgstr "04 · Thought schema"
 
-#: templates/views/pages/conceptual-model.htm:145
+#: templates/views/pages/conceptual-model.htm:165
 msgid "Two timelines, one pivot"
 msgstr "Two timelines, one pivot"
 
-#: templates/views/pages/conceptual-model.htm:154
+#: templates/views/pages/conceptual-model.htm:174
 msgid ""
 "An event-based trajectory rather than a static object-attribute schema. Two "
 "timelines run at different speeds and meet on a single object."
@@ -3025,43 +3066,43 @@ msgstr ""
 "An event-based trajectory rather than a static object-attribute schema. Two "
 "timelines run at different speeds and meet on a single object."
 
-#: templates/views/pages/conceptual-model.htm:159
+#: templates/views/pages/conceptual-model.htm:179
 msgid "The object's life"
 msgstr "The object's life"
 
-#: templates/views/pages/conceptual-model.htm:160
+#: templates/views/pages/conceptual-model.htm:180
 msgid "centuries"
 msgstr "centuries"
 
-#: templates/views/pages/conceptual-model.htm:163
+#: templates/views/pages/conceptual-model.htm:183
 msgid "Production"
 msgstr "Production"
 
-#: templates/views/pages/conceptual-model.htm:163
+#: templates/views/pages/conceptual-model.htm:183
 msgid "made: parchment, ink, binding"
 msgstr "made: parchment, ink, binding"
 
-#: templates/views/pages/conceptual-model.htm:164
+#: templates/views/pages/conceptual-model.htm:184
 msgid "Modification"
 msgstr "Modification"
 
-#: templates/views/pages/conceptual-model.htm:164
+#: templates/views/pages/conceptual-model.htm:184
 msgid "deliberate: rebinding, restoration"
 msgstr "deliberate: rebinding, restoration"
 
-#: templates/views/pages/conceptual-model.htm:165
+#: templates/views/pages/conceptual-model.htm:185
 msgid "Alteration"
 msgstr "Alteration"
 
-#: templates/views/pages/conceptual-model.htm:165
+#: templates/views/pages/conceptual-model.htm:185
 msgid "undergone: corrosion, fading, damp"
 msgstr "undergone: corrosion, fading, damp"
 
-#: templates/views/pages/conceptual-model.htm:170
+#: templates/views/pages/conceptual-model.htm:190
 msgid "Pivot"
 msgstr "Pivot"
 
-#: templates/views/pages/conceptual-model.htm:172
+#: templates/views/pages/conceptual-model.htm:192
 msgid ""
 "The material component is what both timelines describe: the thing that was "
 "made and altered, and the thing that was sampled and measured."
@@ -3069,43 +3110,43 @@ msgstr ""
 "The material component is what both timelines describe: the thing that was "
 "made and altered, and the thing that was sampled and measured."
 
-#: templates/views/pages/conceptual-model.htm:177
+#: templates/views/pages/conceptual-model.htm:197
 msgid "The research act"
 msgstr "The research act"
 
-#: templates/views/pages/conceptual-model.htm:178
+#: templates/views/pages/conceptual-model.htm:198
 msgid "days — present day"
 msgstr "days — present day"
 
-#: templates/views/pages/conceptual-model.htm:181
+#: templates/views/pages/conceptual-model.htm:201
 msgid "Sampling"
 msgstr "Sampling"
 
-#: templates/views/pages/conceptual-model.htm:181
+#: templates/views/pages/conceptual-model.htm:201
 msgid "what was examined, and where on the object"
 msgstr "what was examined, and where on the object"
 
-#: templates/views/pages/conceptual-model.htm:182
+#: templates/views/pages/conceptual-model.htm:202
 msgid "Analysis"
 msgstr "Analysis"
 
-#: templates/views/pages/conceptual-model.htm:182
+#: templates/views/pages/conceptual-model.htm:202
 msgid "the measurement: instrument, operator, date"
 msgstr "the measurement: instrument, operator, date"
 
-#: templates/views/pages/conceptual-model.htm:183
+#: templates/views/pages/conceptual-model.htm:203
 msgid "Characterization"
 msgstr "Characterization"
 
-#: templates/views/pages/conceptual-model.htm:183
+#: templates/views/pages/conceptual-model.htm:203
 msgid "the interpretation — stored apart from the measurement"
 msgstr "the interpretation — stored apart from the measurement"
 
-#: templates/views/pages/conceptual-model.htm:192
+#: templates/views/pages/conceptual-model.htm:212
 msgid "05 · Vocabularies"
 msgstr "05 · Vocabularies"
 
-#: templates/views/pages/conceptual-model.htm:193
+#: templates/views/pages/conceptual-model.htm:213
 msgid "Thesauri mobilised"
 msgstr "Thesauri mobilised"
 
@@ -3252,79 +3293,142 @@ msgstr "Explorer"
 msgid "Every model, every field, every link"
 msgstr "Every model, every field, every link"
 
-#: templates/views/pages/graph-explorer.htm:61
+#: templates/views/pages/graph-explorer.htm:62
+msgid "How do I read this?"
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:64
+msgid ""
+"<strong>Relations</strong> shows the twelve models as a grid: a filled cell "
+"means the row's model points to the column's model — for instance "
+"<em>Analysis → Document</em>, “this analysis was run on that manuscript”."
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:65
+msgid ""
+"<strong>Click any model</strong> (or open <strong>Network</strong>) to see "
+"just that model and its neighbours, with the property carried by every link."
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:66
+msgid ""
+"<strong>Structure</strong> opens one model's full schema as a tree: every "
+"field, its datatype, and the thesaurus it draws its values from."
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:68
+#, fuzzy
+#| msgid "Twelve models, four families"
+msgid "The four model families"
+msgstr "Twelve models, four families"
+
+#: templates/views/pages/graph-explorer.htm:69
+msgid ""
+"<strong>Studied object</strong> — the manuscript, one of its components, a "
+"sample"
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:70
+msgid ""
+"<strong>Observation</strong> — an analysis event: who measured what, when, "
+"with which instrument"
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:71
+msgid ""
+"<strong>Shared context</strong> — the people, places, projects and "
+"instruments referenced everywhere"
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:72
+msgid ""
+"<strong>Transformations</strong> — the alterations and modifications the "
+"object underwent"
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:82
 msgid "Explorer views"
 msgstr "Explorer views"
 
-#: templates/views/pages/graph-explorer.htm:63
+#: templates/views/pages/graph-explorer.htm:84
 msgid "Network"
 msgstr "Network"
 
-#: templates/views/pages/graph-explorer.htm:67
+#: templates/views/pages/graph-explorer.htm:88
 msgid "Structure"
 msgstr "Structure"
 
-#: templates/views/pages/graph-explorer.htm:68
+#: templates/views/pages/graph-explorer.htm:89
+msgid ""
+"The kind of value each field stores — text, thesaurus concept, date, file…"
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:89
 msgid "Datatypes"
 msgstr "Datatypes"
 
-#: templates/views/pages/graph-explorer.htm:69
+#: templates/views/pages/graph-explorer.htm:90
 msgid "Table"
 msgstr "Table"
 
-#: templates/views/pages/graph-explorer.htm:74
+#: templates/views/pages/graph-explorer.htm:95
 msgid "Find a model…"
 msgstr "Find a model…"
 
-#: templates/views/pages/graph-explorer.htm:74
+#: templates/views/pages/graph-explorer.htm:95
 msgid "Find a model"
 msgstr "Find a model"
 
-#: templates/views/pages/graph-explorer.htm:80
+#: templates/views/pages/graph-explorer.htm:101
 msgid "Order rows and columns"
 msgstr "Order rows and columns"
 
-#: templates/views/pages/graph-explorer.htm:82
+#: templates/views/pages/graph-explorer.htm:103
 msgid "By family"
 msgstr "By family"
 
-#: templates/views/pages/graph-explorer.htm:83
+#: templates/views/pages/graph-explorer.htm:104
 msgid "By connectedness"
 msgstr "By connectedness"
 
-#: templates/views/pages/graph-explorer.htm:84
+#: templates/views/pages/graph-explorer.htm:105
 msgid "A–Z"
 msgstr "A–Z"
 
-#: templates/views/pages/graph-explorer.htm:96
+#: templates/views/pages/graph-explorer.htm:117
 msgid "Find a field, class or property"
 msgstr "Find a field, class or property"
 
-#: templates/views/pages/graph-explorer.htm:115
+#: templates/views/pages/graph-explorer.htm:126
+msgid ""
+"Technical grouping nodes: they organise fields but hold no data themselves."
+msgstr ""
+
+#: templates/views/pages/graph-explorer.htm:136
 msgid "Loading the model…"
 msgstr "Loading the model…"
 
-#: templates/views/pages/graph-explorer.htm:116
+#: templates/views/pages/graph-explorer.htm:137
 msgid "The model could not be loaded."
 msgstr "The model could not be loaded."
 
-#: templates/views/pages/graph-explorer.htm:121
+#: templates/views/pages/graph-explorer.htm:142
 msgid "The interactive explorer requires JavaScript."
 msgstr ""
 
-#: templates/views/pages/graph-explorer.htm:122
+#: templates/views/pages/graph-explorer.htm:143
 msgid "The Conceptual Model page presents the same model as readable text."
 msgstr ""
 
-#: templates/views/pages/graph-explorer.htm:150
+#: templates/views/pages/graph-explorer.htm:171
 msgid "Structure breadcrumb"
 msgstr "Structure breadcrumb"
 
-#: templates/views/pages/graph-explorer.htm:175
+#: templates/views/pages/graph-explorer.htm:196
 msgid "Table contents"
 msgstr "Table contents"
 
-#: templates/views/pages/graph-explorer.htm:182
+#: templates/views/pages/graph-explorer.htm:203
 msgid "Model details"
 msgstr "Model details"
 

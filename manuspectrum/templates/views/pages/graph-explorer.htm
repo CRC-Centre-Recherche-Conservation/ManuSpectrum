@@ -48,6 +48,26 @@
 <section class="ms-ge">
     <p class="ms-section-label">{% trans "Explorer" %}</p>
     <h2 class="ms-section-title">{% trans "Every model, every field, every link" %}</h2>
+
+    {% comment %} Onboarding (UX audit: visitors landed on a 12×12 matrix with no
+       idea what they were looking at). Native <details>, open by default;
+       graph-explorer.js remembers the visitor's choice in localStorage. The
+       family dots mirror the GROUPS colours pinned in model_graph_service.py. {% endcomment %}
+    <details class="ms-ge-howto" id="ms-ge-howto" open>
+        <summary>{% trans "How do I read this?" %}</summary>
+        <ol class="ms-ge-howto-steps">
+            <li>{% blocktrans trimmed %}<strong>Relations</strong> shows the twelve models as a grid: a filled cell means the row's model points to the column's model — for instance <em>Analysis → Document</em>, “this analysis was run on that manuscript”.{% endblocktrans %}</li>
+            <li>{% blocktrans trimmed %}<strong>Click any model</strong> (or open <strong>Network</strong>) to see just that model and its neighbours, with the property carried by every link.{% endblocktrans %}</li>
+            <li>{% blocktrans trimmed %}<strong>Structure</strong> opens one model's full schema as a tree: every field, its datatype, and the thesaurus it draws its values from.{% endblocktrans %}</li>
+        </ol>
+        <ul class="ms-ge-howto-families" aria-label="{% trans 'The four model families' %}">
+            <li><i class="ms-ge-dot ms-ge-dot--object" aria-hidden="true"></i>{% blocktrans trimmed %}<strong>Studied object</strong> — the manuscript, one of its components, a sample{% endblocktrans %}</li>
+            <li><i class="ms-ge-dot ms-ge-dot--obs" aria-hidden="true"></i>{% blocktrans trimmed %}<strong>Observation</strong> — an analysis event: who measured what, when, with which instrument{% endblocktrans %}</li>
+            <li><i class="ms-ge-dot ms-ge-dot--ctx" aria-hidden="true"></i>{% blocktrans trimmed %}<strong>Shared context</strong> — the people, places, projects and instruments referenced everywhere{% endblocktrans %}</li>
+            <li><i class="ms-ge-dot ms-ge-dot--transf" aria-hidden="true"></i>{% blocktrans trimmed %}<strong>Transformations</strong> — the alterations and modifications the object underwent{% endblocktrans %}</li>
+        </ul>
+    </details>
+
     <div class="ms-ge-toolbar">
         {% comment %} WAVE 3 items 1/2/8: the adjacency matrix is now the primary relations view
            (12 models at 68% density is a hairball as a node-link diagram); the
@@ -59,7 +79,7 @@
             {% comment %} The other four views are global (all 12 models at once); this one is
                per-model, so it carries its own sub-toolbar with a model combobox. {% endcomment %}
             <button class="ms-ge-view" data-view="structure" role="tab" aria-selected="false" aria-controls="ms-ge-pane-structure" id="ms-ge-tab-structure">{% trans "Structure" %}</button>
-            <button class="ms-ge-view" data-view="datatypes" role="tab" aria-selected="false" aria-controls="ms-ge-pane-datatypes" id="ms-ge-tab-datatypes">{% trans "Datatypes" %}</button>
+            <button class="ms-ge-view" data-view="datatypes" role="tab" aria-selected="false" aria-controls="ms-ge-pane-datatypes" id="ms-ge-tab-datatypes" title="{% trans 'The kind of value each field stores — text, thesaurus concept, date, file…' %}">{% trans "Datatypes" %}</button>
             <button class="ms-ge-view" data-view="table" role="tab" aria-selected="false" aria-controls="ms-ge-pane-table" id="ms-ge-tab-table">{% trans "Table" %}</button>
         </div>
         <div class="ms-ge-filters" id="ms-ge-filters"></div>
@@ -95,7 +115,7 @@
             <button type="button" class="ms-ge-struct-btn" id="ms-ge-struct-outline-btn" aria-pressed="false" aria-controls="ms-ge-struct-outline">{% trans "Outline view" %}</button>
         </div>
         <div class="ms-ge-struct-toggles">
-            <label class="ms-ge-struct-toggle"><input type="checkbox" id="ms-ge-struct-semantic" checked> {% trans "Structural nodes" %}</label>
+            <label class="ms-ge-struct-toggle"><input type="checkbox" id="ms-ge-struct-semantic" checked> <abbr class="ms-gloss" title="{% trans 'Technical grouping nodes: they organise fields but hold no data themselves.' %}">{% trans "Structural nodes" %}</abbr></label>
             <label class="ms-ge-struct-toggle"><input type="checkbox" id="ms-ge-struct-cidoc"> {% trans "CIDOC classes on every node" %}</label>
         </div>
     </div>
