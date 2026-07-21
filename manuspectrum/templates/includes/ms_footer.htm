@@ -17,7 +17,7 @@
                     <ul>
                         <li><a href="{% url 'search_home' %}">{% trans "Search" %}</a></li>
                         {% if user.username == 'anonymous' %}
-                            <li><a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a></li>
+                            <li><a href="{% url 'auth' %}?next={% url 'root' %}">{% trans "Sign In" %}</a></li>
                         {% else %}
                             <li><a href="{% url 'user_profile_manager' %}">{% trans "My Profile" %}</a></li>
                         {% endif %}

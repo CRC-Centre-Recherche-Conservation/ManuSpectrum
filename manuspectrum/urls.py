@@ -3,7 +3,7 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path, re_path
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 
 from arches.app.views.auth import PasswordResetView
 
@@ -34,6 +34,16 @@ from manuspectrum.views.iiif_annotation import (
 from manuspectrum.views.model_graph import ModelGraphView
 
 urlpatterns = [
+    # SEO: Arches serves the homepage at both "/" and "/index.htm" (names
+    # `root` and `home`) — duplicate content. Project templates only link
+    # `root`; anything still hitting /index.htm gets a permanent redirect.
+    # MUST stay above the app includes: arches_component_lab/querysets/
+    # modular_reports each re-include arches.urls, so the first arches
+    # `^index.htm` pattern appears as early as the include just below.
+    path(
+        "index.htm",
+        RedirectView.as_view(pattern_name="root", permanent=True, query_string=True),
+    ),
     # path("", include("arches_controlled_lists.urls")),
     path("", include("arches_component_lab.urls")),
     # Override password reset to send branded HTML email

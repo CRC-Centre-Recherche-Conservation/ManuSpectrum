@@ -4,7 +4,6 @@
 
 User-agent: *
 Allow: /
-Allow: /index.htm
 Allow: /report/
 Disallow: /search
 Disallow: /resource/

@@ -20,26 +20,25 @@ Homepage — Prismatic Luminescence aesthetic
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ seo_description }}">
-    <meta name="keywords" content="{% trans "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, printed books, inscriptions, written cultural heritage, IIIF, CIDOC-CRM, Biblissima, physicochemical analysis, heritage science" %}">
     <meta name="theme-color" content="#faf9f7">
 
-    <!-- Canonical URL -->
-    <link rel="canonical" href="{{ request.build_absolute_uri }}">
-
-    <!-- Alternate languages -->
-    {% get_available_languages as LANGUAGES %}
-    {% for lang_code, lang_name in LANGUAGES %}
-    <link rel="alternate" hreflang="{{ lang_code }}" href="{{ request.build_absolute_uri }}">
-    {% endfor %}
-    <link rel="alternate" hreflang="x-default" href="{{ request.build_absolute_uri }}">
+    {# Canonical: scheme+host+path only — build_absolute_uri kept the query #}
+    {# string, so /?utm_source=x canonicalised to itself. hreflang alternates #}
+    {# were removed: they all pointed at the SAME URL (harmful noise); real #}
+    {# per-language URLs return with the FR rollout (i18n_patterns). #}
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="ManuSpectrum">
     <meta property="og:title" content="{{ seo_title }}">
     <meta property="og:description" content="{{ seo_description }}">
-    <meta property="og:url" content="{{ request.build_absolute_uri }}">
-    <meta property="og:locale" content="{{ LANGUAGE_CODE }}">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% if LANGUAGE_CODE|slice:":2" == "fr" %}
+    <meta property="og:locale" content="fr_FR">
+    {% else %}
+    <meta property="og:locale" content="en_US">
+    {% endif %}
     <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -271,7 +270,7 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-biblissima-card reveal reveal-d2">
                     <a href="https://projet.biblissima.fr/fr/projet/clusters-biblissima/cluster-2" target="_blank" rel="noopener">
-                        <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
+                        <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" width="2417" height="996">
                     </a>
                     <h3>{% trans "Biblissima+ — Cluster 2" %}</h3>
                     <p>
@@ -578,25 +577,25 @@ Homepage — Prismatic Luminescence aesthetic
                     <img src="{% static 'img/landing/logo-ministere-de-la-culture.webp' %}" alt="{% trans 'Ministry of Culture' %}" width="434" height="330" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--cnrs reveal-d2" href="https://www.cnrs.fr" target="_blank" rel="noopener" title="Centre National de la Recherche Scientifique">
-                    <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS" loading="lazy">
+                    <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS" width="875" height="863" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--mnhn reveal-d3" href="https://www.mnhn.fr" target="_blank" rel="noopener" title="Muséum National d'Histoire Naturelle">
-                    <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN" loading="lazy">
+                    <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN" width="133" height="152" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--crc reveal-d4" href="https://crc.mnhn.fr" target="_blank" rel="noopener" title="CRC — Centre de Recherche sur la Conservation">
-                    <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC" loading="lazy">
+                    <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC" width="1229" height="377" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--anr reveal-d5" href="https://anr.fr" target="_blank" rel="noopener" title="ANR — Agence Nationale de la Recherche">
-                    <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR" loading="lazy">
+                    <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR" width="1211" height="461" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--biblissima reveal-d6" href="https://biblissima.fr" target="_blank" rel="noopener" title="Biblissima+">
-                    <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" loading="lazy">
+                    <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" width="2417" height="996" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--humanum reveal-d7" href="https://www.huma-num.fr" target="_blank" rel="noopener" title="Huma-Num">
-                    <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num" loading="lazy">
+                    <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num" width="3296" height="1055" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--arches reveal-d8" href="https://www.archesproject.org" target="_blank" rel="noopener" title="Arches">
-                    <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches" loading="lazy">
+                    <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches" width="564" height="141" loading="lazy">
                 </a>
             </div>
         </div>

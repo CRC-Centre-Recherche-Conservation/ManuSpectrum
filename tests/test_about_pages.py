@@ -30,9 +30,25 @@ class AboutRoutingTests(TestCase):
             self.assertEqual(resp.status_code, 200, f"{name} should be public")
 
     def test_homepage_and_pages_render(self):
-        self.assertEqual(self.client.get(reverse("home")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("root")).status_code, 200)
         for name in ("about-model", "about-explorer", "about-team", "about-contact"):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+
+    def test_index_htm_redirects_permanently_to_root(self):
+        # SEO: /index.htm duplicated / — it must 301 (and keep query strings).
+        resp = self.client.get("/index.htm")
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(resp["Location"], "/")
+        resp = self.client.get("/index.htm?q=1")
+        self.assertEqual(resp["Location"], "/?q=1")
+
+
+class SitemapTests(TestCase):
+    def test_static_sitemap_lists_about_pages_not_index_htm(self):
+        xml = self.client.get("/sitemap.xml").content.decode()
+        for name in ("about-model", "about-explorer", "about-team", "about-contact"):
+            self.assertIn(reverse(name), xml)
+        self.assertNotIn("/index.htm", xml)
 
 
 class ContactPageTests(TestCase):

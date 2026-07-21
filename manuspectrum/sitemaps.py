@@ -8,16 +8,23 @@ DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
 
 
 class StaticSitemap(Sitemap):
-    """Homepage and other static pages."""
+    """Homepage and the public About pages.
 
-    priority = 1.0
-    changefreq = "weekly"
+    `home` (/index.htm) is deliberately absent: it duplicates `root` and now
+    301-redirects to it (see urls.py).
+    """
 
     def items(self):
-        return ["root", "home"]
+        return ["root", "about-model", "about-explorer", "about-team", "about-contact"]
 
     def location(self, item):
         return reverse(item)
+
+    def priority(self, item):
+        return 1.0 if item == "root" else 0.8
+
+    def changefreq(self, item):
+        return "weekly" if item == "root" else "monthly"
 
 
 class DocumentSitemap(Sitemap):

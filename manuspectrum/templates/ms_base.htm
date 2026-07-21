@@ -10,7 +10,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{% block page_description %}{% trans 'ManuSpectrum — interoperable database for physicochemical analysis of written cultural heritage.' %}{% endblock %}">
     <meta name="theme-color" content="#faf9f7">
-    <link rel="canonical" href="{{ request.build_absolute_uri }}">
+    {# scheme+host+path only: build_absolute_uri kept the query string, so #}
+    {# /about/team?utm_source=x canonicalised to itself. #}
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
