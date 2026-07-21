@@ -56,9 +56,20 @@ def check_published_graph_languages(app_configs, databases, **kwargs):
     defensively: on a fresh database the Arches tables may not exist yet.
     """
     try:
-        from arches.app.models.models import PublishedGraph, ResourceInstance
+        from arches.app.models.models import (
+            GraphModel,
+            PublishedGraph,
+            ResourceInstance,
+        )
 
+        # Every graph's CURRENT publication (resource models AND branches —
+        # the graph designer loads branch cards too, same crash), plus any
+        # older publication still pinned by a resource instance.
         used_pubs = set(
+            GraphModel.objects.filter(publication__isnull=False).values_list(
+                "publication_id", flat=True
+            )
+        ) | set(
             ResourceInstance.objects.exclude(graph_publication_id=None)
             .values_list("graph_publication_id", flat=True)
             .distinct()
@@ -78,8 +89,10 @@ def check_published_graph_languages(app_configs, databases, **kwargs):
                     checks.Warning(
                         f"Language '{code}' has no published-graph serialisation "
                         f"for {len(missing)} graph publication(s) in use — Arches "
-                        f"pages under /{code}/ will raise 500. Run: "
-                        "python manage.py graph publish --update",
+                        f"pages under /{code}/ will raise 500. Run "
+                        "`python manage.py graph publish --update`, and again "
+                        "with `-g <ids>` for branch graphs (isresource=False), "
+                        "which the no-argument form skips.",
                         id="manuspectrum.W002",
                     )
                 )
