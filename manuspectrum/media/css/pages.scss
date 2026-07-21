@@ -80,6 +80,10 @@
     &__title { font-family: $ms-font-serif; font-weight: 400; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.08; margin: 12px 0 16px; }
     &__lead { max-width: 720px; color: $ms-ink-soft; font-size: 1.1rem; line-height: 1.6; }
     &__accent { height: 3px; width: 120px; border-radius: 2px; margin-top: 24px; @include ms-spectral-gradient(); }
+    // The accent bar now sits right under the title on every About page (team
+    // is the reference layout). When a lead follows the bar inside the hero,
+    // give it air; on team nothing follows, so this rule changes nothing there.
+    &__accent + * { margin-top: 28px; }
 }
 @media (max-width: 768px) { .ms-page-hero { padding-top: 108px; padding-bottom: 32px; } }
 
