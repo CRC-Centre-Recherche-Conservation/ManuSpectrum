@@ -69,11 +69,22 @@ $(function () {
     var $dots = $('#ms-showcase-nav .ms-showcase-dot');
     var slideCount = $track.children().length;
     var currentSlide = 0;
+    // CSS `scroll-behavior` can't override a JS scrollTo() option — honour
+    // the preference here too.
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function markActiveDot() {
+        $dots.removeClass('active').attr('aria-selected', 'false')
+            .eq(currentSlide).addClass('active').attr('aria-selected', 'true');
+    }
 
     function goToSlide(idx) {
         currentSlide = (idx + slideCount) % slideCount;
-        $track[0].scrollTo({ left: $track[0].offsetWidth * currentSlide, behavior: 'smooth' });
-        $dots.removeClass('active').eq(currentSlide).addClass('active');
+        $track[0].scrollTo({
+            left: $track[0].offsetWidth * currentSlide,
+            behavior: reduceMotion ? 'auto' : 'smooth',
+        });
+        markActiveDot();
     }
 
     $('#ms-showcase-prev').on('click', function () { goToSlide(currentSlide - 1); });
@@ -88,7 +99,7 @@ $(function () {
             var idx = Math.round($track[0].scrollLeft / $track[0].offsetWidth);
             if (idx !== currentSlide) {
                 currentSlide = idx;
-                $dots.removeClass('active').eq(currentSlide).addClass('active');
+                markActiveDot();
             }
         }, 80);
     });

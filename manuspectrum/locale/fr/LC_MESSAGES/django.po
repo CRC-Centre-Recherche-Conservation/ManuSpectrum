@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 05:21-0500\n"
+"POT-Creation-Date: 2026-07-21 05:25-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -503,9 +503,17 @@ msgstr "Protéomique (MALDI-TOF)"
 msgid "And many more"
 msgstr "Et bien d'autres"
 
+#: templates/index.htm:358
+msgid "Analysis techniques in pictures"
+msgstr "Les techniques d'analyse en images"
+
 #: templates/index.htm:361
-msgid "Manuscript under analysis with a macro-XRF scanner"
-msgstr "Manuscrit en cours d'analyse sous scanner macro-XRF"
+msgid ""
+"A manuscript on the motorised stage of a macro-XRF scanner, which maps "
+"chemical elements across the page without touching it"
+msgstr ""
+"Un manuscrit sur la platine motorisée d'un scanner macro-XRF, qui "
+"cartographie les éléments chimiques de la page sans la toucher"
 
 #: templates/index.htm:363
 msgid "Macro-XRF scanning of a manuscript"
@@ -519,8 +527,12 @@ msgstr ""
 "fluorescence X (macro-XRF)"
 
 #: templates/index.htm:369
-msgid "FORS analysis of a manuscript"
-msgstr "Analyse FORS d'un manuscrit"
+msgid ""
+"An optical fibre held over a manuscript for FORS analysis — the reflected "
+"light carries the spectral signature of the pigments"
+msgstr ""
+"Une fibre optique tenue au-dessus d'un manuscrit pour une analyse FORS — la "
+"lumière réfléchie porte la signature spectrale des pigments"
 
 #: templates/index.htm:371
 msgid "Fiber optic reflectance spectroscopy (FORS)"
@@ -535,8 +547,12 @@ msgstr ""
 "par fibre optique"
 
 #: templates/index.htm:377
-msgid "UV hyperspectral imaging of a manuscript"
-msgstr "Imagerie hyperspectrale UV d'un manuscrit"
+msgid ""
+"A manuscript under ultraviolet light during hyperspectral imaging, revealing"
+" inks and retouches invisible to the naked eye"
+msgstr ""
+"Un manuscrit sous lumière ultraviolette pendant une imagerie hyperspectrale,"
+" révélant encres et retouches invisibles à l'œil nu"
 
 #: templates/index.htm:379
 msgid "UV hyperspectral imaging"
@@ -557,6 +573,22 @@ msgstr "Précédent"
 #: templates/index.htm:391
 msgid "Next"
 msgstr "Suivant"
+
+#: templates/index.htm:397
+msgid "Choose a slide"
+msgstr "Choisir une diapositive"
+
+#: templates/index.htm:398
+msgid "Slide 1 of 3 — Macro-XRF scanning"
+msgstr "Diapositive 1 sur 3 — Balayage macro-XRF"
+
+#: templates/index.htm:399
+msgid "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
+msgstr "Diapositive 2 sur 3 — Spectroscopie de réflectance par fibre optique"
+
+#: templates/index.htm:400
+msgid "Slide 3 of 3 — UV hyperspectral imaging"
+msgstr "Diapositive 3 sur 3 — Imagerie hyperspectrale UV"
 
 #: templates/index.htm:417
 msgid "What you can discover"
@@ -667,12 +699,20 @@ msgstr ""
 "culturel écrit."
 
 #: templates/index.htm:491
-msgid "Macro-XRF map — Calcium (Ca)"
-msgstr "Cartographie macro-XRF — Calcium (Ca)"
+msgid ""
+"Macro-XRF map of calcium (Ca) on an ornate letter — bright areas mark "
+"calcium-rich zones"
+msgstr ""
+"Cartographie macro-XRF du calcium (Ca) sur une lettre ornée — les zones "
+"claires marquent les zones riches en calcium"
 
 #: templates/index.htm:492
-msgid "Macro-XRF map — Mercury (Hg)"
-msgstr "Cartographie macro-XRF — Mercure (Hg)"
+msgid ""
+"Macro-XRF map of mercury (Hg) on the same ornate letter — bright areas "
+"reveal vermilion, a mercury pigment"
+msgstr ""
+"Cartographie macro-XRF du mercure (Hg) sur la même lettre ornée — les zones "
+"claires révèlent le vermillon, un pigment au mercure"
 
 #: templates/index.htm:495
 msgid "Macro-XRF mapping"

@@ -873,12 +873,6 @@ abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; c
 // graph-explorer.js already honours the media query for the simulation, but no
 // stylesheet in the pages bundle did — every transition, the drawer slide and the
 // `.reveal` translate still played for users who asked for less motion.
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-    }
-    .reveal { opacity: 1 !important; transform: none !important; }
-}
+// The prefers-reduced-motion block now lives in _ms-chrome.scss so it also
+// covers the css/homepage bundle (aurora, prism, count-ups) — both bundles
+// import that partial.

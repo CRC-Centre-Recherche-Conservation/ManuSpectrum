@@ -115,6 +115,14 @@
     will-change: transform;
 }
 
+// Battery/CPU: the two infinite background drifts (aurora 25s + prism 40s,
+// the prism additionally under a 60px blur) run for the whole visit. On
+// small screens they are barely visible behind the content and cost real
+// battery — freeze them, keep the static gradients.
+@media (max-width: 800px) {
+    .ms-hero-aurora, .ms-hero-prism { animation: none; will-change: auto; }
+}
+
 @keyframes aurora-drift {
     0%   { transform: scale(1) translate(0, 0) rotate(0deg); }
     33%  { transform: scale(1.05) translate(-2%, 2%) rotate(0.8deg); }

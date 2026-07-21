@@ -800,3 +800,20 @@ img { max-width: 100%; height: auto; display: block; }
     .ms-partner-link--humanum img { height: 34px; }
     .ms-partner-link--arches img { height: 34px; }
 }
+
+// ============================================================
+// REDUCED MOTION — shared by BOTH bundles (css/homepage imports this partial
+// too, so the hero aurora/prism/count-ups are finally covered, not just the
+// About pages). 0.01ms durations rather than `animation: none`: the hero
+// `hero-fade-in … forwards` animations must COMPLETE (instantly) or their
+// `opacity: 0` starting state would stick and leave the hero invisible.
+// ============================================================
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    .reveal, .reveal-scale { opacity: 1 !important; transform: none !important; }
+}
