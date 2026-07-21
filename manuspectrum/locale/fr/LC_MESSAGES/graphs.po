@@ -1,0 +1,1436 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"Report-Msgid-Bugs-To: dev@fargeo.com\n"
+"POT-Creation-Date: 2026-07-21 08:13:10\n"
+"PO-Revision-Date: 2026-07-21 08:13:10\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Value (URI)"
+msgstr "Valeur (URI)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Enter text"
+msgstr "Saisir du texte"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Content"
+msgstr "Contenu"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Name"
+msgstr "Nom"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Color Ramp"
+msgstr "Dégradé de couleurs"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Select an option"
+msgstr "Sélectionner une option"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Date"
+msgstr "Date"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Inference making"
+msgstr "Élaboration d'inférence"
+
+#: cards_x_nodes_x_widgets:1
+msgid ""
+"The detection of collagen residues through Raman spectroscopy on folio 31r "
+"suggests the application of a protein-based binding medium, commonly used in"
+" medieval illuminations. This discovery aligns with the potential use of "
+"verdigris (copper acetate), a pigment frequently mixed with such binders to "
+"enhance adherence and vibrancy. Supporting this hypothesis, the presence of "
+"two characteristic FORS peaks at approximately 570 nm and 610 nm corresponds"
+" to absorption features typically attributed to verdigris..."
+msgstr ""
+"La détection de résidus de collagène par spectroscopie Raman sur le folio "
+"31r suggère l'application d'un liant protéique, couramment utilisé dans les "
+"enluminures médiévales. Cette découverte concorde avec l'usage possible de "
+"vert-de-gris (acétate de cuivre), un pigment fréquemment mélangé à de tels "
+"liants pour renforcer l'adhérence et l'éclat. À l'appui de cette hypothèse, "
+"la présence de deux pics FORS caractéristiques vers 570 nm et 610 nm "
+"correspond aux bandes d'absorption typiquement attribuées au vert-de-gris..."
+
+#: cards_x_nodes_x_widgets:1
+msgid "MapBox API Key (Optional)"
+msgstr "Clé API MapBox (facultative)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Google Analytics Key"
+msgstr "Clé Google Analytics"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Enter key"
+msgstr "Saisir la clé"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Application Name"
+msgstr "Nom de l'application"
+
+#: cards_x_nodes_x_widgets:1
+msgid "e.g. Arches"
+msgstr "ex. Arches"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Number of search results per page"
+msgstr "Nombre de résultats de recherche par page"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Enter number"
+msgstr "Saisir un nombre"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Search Name"
+msgstr "Nom de la recherche"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Title"
+msgstr "Titre"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Project map extent"
+msgstr "Emprise cartographique du projet"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Map"
+msgstr "Carte"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Default Zoom"
+msgstr "Zoom par défaut"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Thesaurus SPARQL Endpoint"
+msgstr "Point d'accès SPARQL du thésaurus"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Hexagon Size (in km)"
+msgstr "Taille des hexagones (en km)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "e.g.: 2"
+msgstr "ex. : 2"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Value"
+msgstr "Valeur"
+
+#: cards_x_nodes_x_widgets:1
+msgid "People"
+msgstr "Personnes"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Observation_Analysis"
+msgstr "Observation_Analyse"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Object observed"
+msgstr "Objet observé"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Appellation"
+msgstr "Appellation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Charles III"
+msgstr "Charles III"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Place"
+msgstr "Lieu"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Type"
+msgstr "Type"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Label"
+msgstr "Libellé"
+
+#: cards_x_nodes_x_widgets:1
+msgid "ex: https://data.biblissima.fr/w/Item:Q26872"
+msgstr "ex: https://data.biblissima.fr/w/Item:Q26872"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Carried_Out_by_Actor"
+msgstr "Réalisé_par_Acteur"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Used_Process"
+msgstr "Procédé_Utilisé"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Temporality"
+msgstr "Temporalité"
+
+#: cards_x_nodes_x_widgets:1
+msgid ""
+"ex: The observation of a darkening phenomenon on the illumination of folio "
+"31r suggests a degradation of the pigment used, probably verdigris (copper "
+"acetate). This pigment, commonly used in the Middle Ages, is ..."
+msgstr ""
+"ex : L'observation d'un phénomène d'assombrissement sur l'enluminure du "
+"folio 31r suggère une dégradation du pigment utilisé, probablement du vert-"
+"de-gris (acétate de cuivre). Ce pigment, couramment employé au Moyen Âge, "
+"est ..."
+
+#: cards_x_nodes_x_widgets:1
+msgid "Observed"
+msgstr "Observé"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Author"
+msgstr "Auteur"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Concept URI"
+msgstr "URI du concept"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Dragon"
+msgstr "Dragon"
+
+#: cards_x_nodes_x_widgets:1
+msgid "https://data.biblissima.fr/entity/Q291430"
+msgstr "https://data.biblissima.fr/entity/Q291430"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Technique"
+msgstr "Technique"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Project"
+msgstr "Projet"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Document/Component"
+msgstr "Document/Composant"
+
+#: cards_x_nodes_x_widgets:1
+msgid "illumination swan - F31r - Ms LATIN 2055 BNF"
+msgstr "enluminure cygne - F31r - Ms LATIN 2055 BNF"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Produced by"
+msgstr "Produit par"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Date type"
+msgstr "Type de date"
+
+#: cards_x_nodes_x_widgets:1
+msgid "https://mandragore.bnf.fr/ark:/12158/cgfbt1162304"
+msgstr "https://mandragore.bnf.fr/ark:/12158/cgfbt1162304"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Places"
+msgstr "Lieux"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Localisation"
+msgstr "Localisation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Person/Group"
+msgstr "Personne/Groupe"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Material"
+msgstr "Matériau"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Context"
+msgstr "Contexte"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Color(s)"
+msgstr "Couleur(s)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Part of (Document)"
+msgstr "Partie de (Document)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Group"
+msgstr "Groupe"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Techniques"
+msgstr "Techniques"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Images"
+msgstr "Images"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Facsimiles (URI)"
+msgstr "Fac-similés (URI)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Characterisation"
+msgstr "Caractérisation"
+
+#: cards_x_nodes_x_widgets:1
+msgid ""
+"Vert-de-gris - illumination right-hand side - f31r in Ms LATIN 2055 BNF"
+msgstr "Vert-de-gris - enluminure côté droit - f31r du Ms LATIN 2055 BNF"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Object"
+msgstr "Objet"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Document"
+msgstr "Document"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Part of Place"
+msgstr "Partie du lieu"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Data file"
+msgstr "Fichier de données"
+
+#: cards_x_nodes_x_widgets:1
+msgid "ex: Darkening Folio 31r Illumination - Ms LATIN 2055 BNF"
+msgstr "ex : Assombrissement de l'enluminure du folio 31r - Ms LATIN 2055 BNF"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Place of Instrument"
+msgstr "Lieu de l'instrument"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Start Date"
+msgstr "Date de début"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Annotation"
+msgstr "Annotation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Test url biblissima"
+msgstr "Test URL Biblissima"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Enter URL Label... "
+msgstr "Saisir le libellé de l'URL… "
+
+#: cards_x_nodes_x_widgets:1
+msgid "Enter URL... "
+msgstr "Saisir l'URL… "
+
+#: cards_x_nodes_x_widgets:1
+msgid "Gender"
+msgstr "Genre"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Studied Objects"
+msgstr "Objets étudiés"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Actor/Group"
+msgstr "Acteur/Groupe"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Actors"
+msgstr "Acteurs"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Status"
+msgstr "Statut"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Sample"
+msgstr "Échantillon"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Instrument"
+msgstr "Instrument"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Filename"
+msgstr "Nom du fichier"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Component observed by Analysis"
+msgstr "Composant observé par l'analyse"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Source of Identifier"
+msgstr "Source de l'identifiant"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Influenced by"
+msgstr "Influencé par"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Techniques used"
+msgstr "Techniques utilisées"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Localisation of Analysis in Object observed"
+msgstr "Localisation de l'analyse dans l'objet observé"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Format (MIME type)"
+msgstr "Format (type MIME)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "text/csv"
+msgstr "text/csv"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Carried out by"
+msgstr "Réalisé par"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Date (end of the begin)"
+msgstr "Date (fin du début)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Analysis reference"
+msgstr "Référence de l'analyse"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Location"
+msgstr "Localisation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Location in Map"
+msgstr "Localisation sur la carte"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Confidence"
+msgstr "Fiabilité"
+
+#: cards_x_nodes_x_widgets:1
+msgid "End Date"
+msgstr "Date de fin"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Annotator of location modification"
+msgstr "Annotateur de la modification de localisation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Influenced by Characterization observation"
+msgstr "Influencé par l'observation de caractérisation"
+
+#: cards_x_nodes_x_widgets:1
+msgid ""
+"Hexagon Grid Precision (Integer, larger numbers ensure more precise counts "
+"at a performance cost)"
+msgstr ""
+"Précision de la grille hexagonale (entier ; plus le nombre est grand, plus "
+"les comptages sont précis, au prix des performances)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "e.g.: 4"
+msgstr "ex. : 4"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Min Zoom"
+msgstr "Zoom minimum"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Cultural influences"
+msgstr "Influences culturelles"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Object Type"
+msgstr "Type d'objet"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Number of search hints per dropdown"
+msgstr "Nombre de suggestions par liste déroulante"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Chemical elements"
+msgstr "Éléments chimiques"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Default Data Import/Export Name"
+msgstr "Nom par défaut des imports/exports de données"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Time wheel configuration"
+msgstr "Configuration de la roue temporelle"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Search URL"
+msgstr "URL de recherche"
+
+#: cards_x_nodes_x_widgets:1
+msgid "(copy and paste from your browser address bar)"
+msgstr "(copier-coller depuis la barre d'adresse du navigateur)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Mapbox Sprites"
+msgstr "Sprites Mapbox"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Annotation of location"
+msgstr "Annotation de la localisation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Color aspect"
+msgstr "Aspect de la couleur"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Publisher"
+msgstr "Éditeur"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Type of Identifier"
+msgstr "Type d'identifiant"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Unit"
+msgstr "Unité"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Language"
+msgstr "Langue"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Label of Analysis's annotation"
+msgstr "Libellé de l'annotation de l'analyse"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Date (end approximative)"
+msgstr "Date (fin approximative)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Authors of inference"
+msgstr "Auteurs de l'inférence"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Source"
+msgstr "Source"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Dataset (URL)"
+msgstr "Jeu de données (URL)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Observation notes"
+msgstr "Notes d'observation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Peak at 630 nm, collagen signature"
+msgstr "Pic à 630 nm, signature du collagène"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Place location of Sample Taking"
+msgstr "Lieu du prélèvement d'échantillon"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Mapbox Glyphs"
+msgstr "Glyphes Mapbox"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Search Description"
+msgstr "Description de la recherche"
+
+#: cards_x_nodes_x_widgets:1
+msgid ""
+"Max number of search results to export (see help for limitations on this "
+"value)"
+msgstr ""
+"Nombre maximal de résultats exportables (voir l'aide pour les limites de "
+"cette valeur)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Origin color"
+msgstr "Couleur d'origine"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Degraded verdigris"
+msgstr "Vert-de-gris dégradé"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Max Zoom"
+msgstr "Zoom maximum"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Features object modified"
+msgstr "Caractéristiques modifiées de l'objet"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Motivated by"
+msgstr "Motivé par"
+
+#: cards_x_nodes_x_widgets:1
+msgid "source"
+msgstr "source"
+
+#: cards_x_nodes_x_widgets:1
+msgid "PeriodO (URI)"
+msgstr "PeriodO (URI)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "http://n2t.net/ark:/99152/p06c6g32vfg"
+msgstr "http://n2t.net/ark:/99152/p06c6g32vfg"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Place of publication"
+msgstr "Lieu de publication"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Literal location of document modification"
+msgstr "Localisation littérale de la modification du document"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Image"
+msgstr "Image"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Author of Analysis's annotation"
+msgstr "Auteur de l'annotation de l'analyse"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Produced at Place"
+msgstr "Produit au lieu"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Publication date"
+msgstr "Date de publication"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Location of characterization"
+msgstr "Localisation de la caractérisation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Annotator"
+msgstr "Annotateur"
+
+#: cards_x_nodes_x_widgets:1
+msgid "end of the begin"
+msgstr "fin du début"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Layers where material is observed"
+msgstr "Couches où le matériau est observé"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Date (end of the end)"
+msgstr "Date (fin de la fin)"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Geographical location"
+msgstr "Localisation géographique"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Instruments used"
+msgstr "Instruments utilisés"
+
+#: cards_x_nodes_x_widgets:1
+msgid "end of the end"
+msgstr "fin de la fin"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Note about location analysis"
+msgstr "Note sur la localisation de l'analyse"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Location appellation"
+msgstr "Appellation de la localisation"
+
+#: cards_x_nodes_x_widgets:1
+msgid "f51r"
+msgstr "f51r"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Document file"
+msgstr "Fichier du document"
+
+#: cards_x_nodes_x_widgets:1
+msgid "From Object"
+msgstr "De l'objet"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Project Context"
+msgstr "Contexte du projet"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Location in object"
+msgstr "Localisation dans l'objet"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Relative Period"
+msgstr "Période relative"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Absolute period attribution"
+msgstr "Attribution de période absolue"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Location in Document"
+msgstr "Localisation dans le document"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Literal location of Modification event"
+msgstr "Localisation littérale de l'événement de modification"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Sample_Owner"
+msgstr "Propriétaire_Échantillon"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Property type"
+msgstr "Type de propriété"
+
+#: cards_x_nodes_x_widgets:1
+msgid "f53r"
+msgstr "f53r"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Current location of sample object"
+msgstr "Localisation actuelle de l'objet échantillon"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Chemical/physical imaging"
+msgstr "Imagerie chimique/physique"
+
+#: cards:1
+msgid "Name of Component"
+msgstr "Nom du composant"
+
+#: cards:1
+msgid "Name of Place"
+msgstr "Nom du lieu"
+
+#: cards:1
+msgid "Mapbox API"
+msgstr "API Mapbox"
+
+#: cards:1
+msgid "Represents a single node in a graph"
+msgstr "Représente un nœud unique dans un graphe"
+
+#: cards:1
+msgid ""
+"Arches uses the Mapbox mapping library for map display and data creation.  "
+"Arches also supports Mapbox basemaps and other services"
+msgstr ""
+"Arches utilise la bibliothèque cartographique Mapbox pour l'affichage des "
+"cartes et la création de données. Arches prend aussi en charge les fonds de "
+"carte Mapbox et d'autres services"
+
+#: cards:1
+msgid "Name of Document"
+msgstr "Nom du document"
+
+#: cards:1
+msgid "Default Application Names"
+msgstr "Noms par défaut de l'application"
+
+#: cards:1
+msgid ""
+"Names used to identify your application and the system data import personna"
+msgstr ""
+"Noms utilisés pour identifier votre application et le compte d'import de "
+"données système"
+
+#: cards:1
+msgid "Name of Project"
+msgstr "Nom du projet"
+
+#: cards:1
+msgid "Name(s) of instrument"
+msgstr "Nom(s) de l'instrument"
+
+#: cards:1
+msgid "Name of Person"
+msgstr "Nom de la personne"
+
+#: cards:1
+msgid "Author(s) of inference"
+msgstr "Auteur(s) de l'inférence"
+
+#: cards:1
+msgid "Joining Group event"
+msgstr "Événement d'entrée dans le groupe"
+
+#: cards:1
+msgid "Name of Analysis"
+msgstr "Nom de l'analyse"
+
+#: cards:1
+msgid "Leaving Group event"
+msgstr "Événement de sortie du groupe"
+
+#: cards:1
+msgid "Identifier"
+msgstr "Identifiant"
+
+#: cards:1
+msgid "Production of Component"
+msgstr "Production du composant"
+
+#: cards:1
+msgid "Web Analytics"
+msgstr "Statistiques web"
+
+#: cards:1
+msgid "Google service used to track application usage and other metrics"
+msgstr ""
+"Service Google de suivi d'usage de l'application et d'autres métriques"
+
+#: cards:1
+msgid "Alteration takes place at"
+msgstr "L'altération a lieu à"
+
+#: cards:1
+msgid "Places where alteration may have occurred "
+msgstr "Lieux où l'altération a pu se produire "
+
+#: cards:1
+msgid "Temporality of Person"
+msgstr "Temporalité de la personne"
+
+#: cards:1
+msgid "Temporality of Group"
+msgstr "Temporalité du groupe"
+
+#: cards:1
+msgid "Statement"
+msgstr "Déclaration"
+
+#: cards:1
+msgid "Project Extent"
+msgstr "Emprise du projet"
+
+#: cards:1
+msgid ""
+"Draw a polygon representing your project's extent. These bounds will serve "
+"as the default for the cache seed bounds, search result grid bounds, and map"
+" bounds in search, cards, and reports"
+msgstr ""
+"Dessinez un polygone représentant l'emprise de votre projet. Ces limites "
+"serviront de valeurs par défaut pour le cache, la grille de résultats de "
+"recherche et les cartes des recherches, fiches et rapports"
+
+#: cards:1
+msgid "Identifier(s)"
+msgstr "Identifiant(s)"
+
+#: cards:1
+msgid "TimeSpan about alteration process"
+msgstr "Intervalle temporel du processus d'altération"
+
+#: cards:1
+msgid "Dataset Evaluation"
+msgstr "Évaluation du jeu de données"
+
+#: cards:1
+msgid "Type of Project"
+msgstr "Type de projet"
+
+#: cards:1
+msgid "Type of Place"
+msgstr "Type de lieu"
+
+#: cards:1
+msgid "Thesaurus Service Providers"
+msgstr "Fournisseurs de services de thésaurus"
+
+#: cards:1
+msgid ""
+"Arches can access Thesaurus services, such as the Getty AAT, to acquire "
+"thesaurus entries using the Reference Data Manager (RDM)"
+msgstr ""
+"Arches peut accéder à des services de thésaurus, comme le Getty AAT, pour "
+"acquérir des entrées via le Reference Data Manager (RDM)"
+
+#: cards:1
+msgid "Map Zoom"
+msgstr "Zoom de la carte"
+
+#: cards:1
+msgid ""
+"You can define the zoom behavior of your maps by specifying max/min and "
+"default values.  Zoom level 0 shows the whole world (and is the minimum zoom"
+" level).  Most map services support a maximum of 20 or so zoom levels"
+msgstr ""
+"Vous pouvez définir le comportement de zoom de vos cartes en précisant les "
+"valeurs max/min et par défaut. Le niveau 0 montre le monde entier (zoom "
+"minimal). La plupart des services cartographiques prennent en charge une "
+"vingtaine de niveaux au maximum"
+
+#: cards:1
+msgid "Identifier of Person"
+msgstr "Identifiant de la personne"
+
+#: cards:1
+msgid "Statement about Instrumentation"
+msgstr "Déclaration sur l'instrumentation"
+
+#: cards:1
+msgid "Type of Group"
+msgstr "Type de groupe"
+
+#: cards:1
+msgid "Type of Document"
+msgstr "Type de document"
+
+#: cards:1
+msgid "Materials observed"
+msgstr "Matériaux observés"
+
+#: cards:1
+msgid "People Membership"
+msgstr "Appartenance des personnes"
+
+#: cards:1
+msgid "Type of Component"
+msgstr "Type de composant"
+
+#: cards:1
+msgid "Author of Analysis"
+msgstr "Auteur de l'analyse"
+
+#: cards:1
+msgid "Search Results Grid"
+msgstr "Grille de résultats de recherche"
+
+#: cards:1
+msgid ""
+"Arches aggregates search results and displays them as hexagons.  You will "
+"need to set default parameters for the hexagon size  and its precision."
+msgstr ""
+"Arches agrège les résultats de recherche et les affiche sous forme "
+"d'hexagones. Définissez les paramètres par défaut de taille et de précision "
+"des hexagones."
+
+#: cards:1
+msgid "Identifier of Group"
+msgstr "Identifiant du groupe"
+
+#: cards:1
+msgid "Gender of Person"
+msgstr "Genre de la personne"
+
+#: cards:1
+msgid "Description features"
+msgstr "Caractéristiques décrites"
+
+#: cards:1
+msgid "Description process"
+msgstr "Description du processus"
+
+#: cards:1
+msgid "Current location"
+msgstr "Localisation actuelle"
+
+#: cards:1
+msgid "Techniques usage"
+msgstr "Usage des techniques"
+
+#: cards:1
+msgid "Member of"
+msgstr "Membre de"
+
+#: cards:1
+msgid "Type of Alteration"
+msgstr "Type d'altération"
+
+#: cards:1
+msgid "Defined by"
+msgstr "Défini par"
+
+#: cards:1
+msgid "Inference_Making"
+msgstr "Inférence"
+
+#: cards:1
+msgid ""
+"Representation of the process by which conclusions, hypotheses or "
+"explanations are deduced from data, observations or analyses."
+msgstr ""
+"Représentation du processus par lequel des conclusions, hypothèses ou "
+"explications sont déduites de données, d'observations ou d'analyses."
+
+#: cards:1
+msgid "Project of Analysis"
+msgstr "Projet de l'analyse"
+
+#: cards:1
+msgid "Period Activity"
+msgstr "Période d'activité"
+
+#: cards:1
+msgid "Inference Making"
+msgstr "Inférence"
+
+#: cards:1
+msgid "Context of Componant"
+msgstr "Contexte du composant"
+
+#: cards:1
+msgid "Example : red lettrine L"
+msgstr "Exemple : lettrine L rouge"
+
+#: cards:1
+msgid "Component expression context. Example: 'L' letter in red "
+msgstr "Contexte d'expression du composant. Exemple : lettre « L » en rouge "
+
+#: cards:1
+msgid "Part of Instrument"
+msgstr "Partie de l'instrument"
+
+#: cards:1
+msgid "Document modified"
+msgstr "Document modifié"
+
+#: cards:1
+msgid "Datetime about Analysis"
+msgstr "Date de l'analyse"
+
+#: cards:1
+msgid "Date of acquisition analysis."
+msgstr "Date d'acquisition de l'analyse."
+
+#: cards:1
+msgid ""
+"<p>The &quot;<strong>End Date</strong>&quot; of experience acquisition corresponds to the end of a long acquisition (e.g. 2 days).</p>\n"
+"\n"
+"<p>If your acquisition takes place over a short period of time, then use only the &ldquo;<strong>Start Date</strong>&rdquo; data entry.</p>\n"
+msgstr ""
+"<p>La &quot;<strong>Date de fin</strong>&quot; de l'acquisition correspond à la fin d'une acquisition longue (ex. 2 jours).</p>\n"
+"\n"
+"<p>Si votre acquisition se déroule sur une courte période, utilisez uniquement la donnée «&nbsp;<strong>Date de début</strong>&nbsp;».</p>\n"
+
+#: cards:1
+msgid "Birth"
+msgstr "Naissance"
+
+#: cards:1
+msgid "Current owner"
+msgstr "Propriétaire actuel"
+
+#: cards:1
+msgid "Color(s) of Component"
+msgstr "Couleur(s) du composant"
+
+#: cards:1
+msgid "show feature of colors"
+msgstr "afficher les caractéristiques des couleurs"
+
+#: cards:1
+msgid "Carried out by Actor"
+msgstr "Réalisé par l'acteur"
+
+#: cards:1
+msgid "Place of acquisition"
+msgstr "Lieu d'acquisition"
+
+#: cards:1
+msgid "Place where the instrument was used to produce the analysis"
+msgstr "Lieu où l'instrument a été utilisé pour produire l'analyse"
+
+#: cards:1
+msgid "Production of Document"
+msgstr "Production du document"
+
+#: cards:1
+msgid "Death"
+msgstr "Décès"
+
+#: cards:1
+msgid "Occured in presence of Material"
+msgstr "S'est produit en présence du matériau"
+
+#: cards:1
+msgid "Dimension(s) of instrument"
+msgstr "Dimension(s) de l'instrument"
+
+#: cards:1
+msgid "Instrument used"
+msgstr "Instrument utilisé"
+
+#: cards:1
+msgid "Similar of"
+msgstr "Similaire à"
+
+#: cards:1
+msgid ""
+"Existing or non-existing geopolitical entity(ies) to which the location can "
+"be linked. Example: Frankish Kingdom with France"
+msgstr ""
+"Entité(s) géopolitique(s) existante(s) ou disparue(s) auxquelles la "
+"localisation peut être rattachée. Exemple : royaume franc avec la France"
+
+#: cards:1
+msgid "Formation"
+msgstr "Formation"
+
+#: cards:1
+msgid "Instrumentals techniques used during the project"
+msgstr "Techniques instrumentales utilisées pendant le projet"
+
+#: cards:1
+msgid "Object altered"
+msgstr "Objet altéré"
+
+#: cards:1
+msgid "Details about the part of the object that has been altered"
+msgstr "Détails sur la partie de l'objet qui a été altérée"
+
+#: cards:1
+msgid "Is (was) member of"
+msgstr "Est (était) membre de"
+
+#: cards:1
+msgid "Part of"
+msgstr "Partie de"
+
+#: cards:1
+msgid ""
+"The document may belong to a larger set. (example: a codicological unit "
+"within a manuscript)"
+msgstr ""
+"Le document peut appartenir à un ensemble plus vaste (exemple : une unité "
+"codicologique au sein d'un manuscrit)"
+
+#: cards:1
+msgid "Modification date"
+msgstr "Date de modification"
+
+#: cards:1
+msgid "Current location of Instrument"
+msgstr "Localisation actuelle de l'instrument"
+
+#: cards:1
+msgid "Dissolution"
+msgstr "Dissolution"
+
+#: cards:1
+msgid "Current owner of Instrument"
+msgstr "Propriétaire actuel de l'instrument"
+
+#: cards:1
+msgid "Technique used"
+msgstr "Technique utilisée"
+
+#: cards:1
+msgid "Took place at Place"
+msgstr "A eu lieu au lieu"
+
+#: cards:1
+msgid "Part of Project"
+msgstr "Partie du projet"
+
+#: cards:1
+msgid "Item Feature of Component"
+msgstr "Caractéristique d'item du composant"
+
+#: cards:1
+msgid "Dimension"
+msgstr "Dimension"
+
+#: cards:1
+msgid "Profession activity"
+msgstr "Activité professionnelle"
+
+#: cards:1
+msgid "Composed of"
+msgstr "Composé de"
+
+#: cards:1
+msgid "folios, quires, gathering, or other parts"
+msgstr "folios, cahiers, assemblages ou autres parties"
+
+#: cards:1
+msgid "Observed by Characterisation"
+msgstr "Observé par la caractérisation"
+
+#: cards:1
+msgid " Production of Instrument"
+msgstr " Production de l'instrument"
+
+#: cards:1
+msgid "Sample observed by analysis"
+msgstr "Échantillon observé par l'analyse"
+
+#: cards:1
+msgid "Bibliographic reference"
+msgstr "Référence bibliographique"
+
+#: cards:1
+msgid "Facsimiles"
+msgstr "Fac-similés"
+
+#: cards:1
+msgid "Data Resource"
+msgstr "Ressource de données"
+
+#: cards:1
+msgid "Bibliographic Reference"
+msgstr "Référence bibliographique"
+
+#: cards:1
+msgid "Leaving Group Period"
+msgstr "Période de sortie du groupe"
+
+#: cards:1
+msgid "Studied objects during Project"
+msgstr "Objets étudiés pendant le projet"
+
+#: cards:1
+msgid "Default Map Settings"
+msgstr "Paramètres cartographiques par défaut"
+
+#: cards:1
+msgid ""
+"Initial settings for Arches maps displayed in reports, cards, and search"
+msgstr ""
+"Paramètres initiaux des cartes Arches affichées dans les rapports, fiches et"
+" recherches"
+
+#: cards:1
+msgid "Settings Time Search"
+msgstr "Paramètres de recherche temporelle"
+
+#: cards:1
+msgid "Configuration Settings for temporal search"
+msgstr "Paramètres de configuration de la recherche temporelle"
+
+#: cards:1
+msgid ""
+"Arches supports temporal binning.  Define the configuration and colors to "
+"use in your time wheel"
+msgstr ""
+"Arches prend en charge le regroupement temporel. Définissez la configuration"
+" et les couleurs de votre roue temporelle"
+
+#: cards:1
+msgid ""
+"<p>You can see the color ramps at:</p><p><a "
+"href=\"https://github.com/d3/d3-3.x-api-reference/blob/master/Ordinal-"
+"Scales.md\"><font color=\"#f7f7f7\">https://github.com/d3/d3-3.x-api-"
+"reference/blob/master/Ordinal-Scales.md</font></a><br></p>"
+msgstr ""
+"<p>Les dégradés de couleurs sont consultables ici :</p><p><a "
+"href=\"https://github.com/d3/d3-3.x-api-reference/blob/master/Ordinal-"
+"Scales.md\"><font color=\"#f7f7f7\">https://github.com/d3/d3-3.x-api-"
+"reference/blob/master/Ordinal-Scales.md</font></a><br></p>"
+
+#: cards:1
+msgid "System Data Settings"
+msgstr "Paramètres des données système"
+
+#: cards:1
+msgid "Production period"
+msgstr "Période de production"
+
+#: cards:1
+msgid "Period"
+msgstr "Période"
+
+#: cards:1
+msgid "Bibliographic Identifier"
+msgstr "Identifiant bibliographique"
+
+#: cards:1
+msgid "Settings Basic Search"
+msgstr "Paramètres de recherche de base"
+
+#: cards:1
+msgid "Configuration settings for search returns"
+msgstr "Paramètres de configuration des résultats de recherche"
+
+#: cards:1
+msgid "Set the default search results behavior"
+msgstr "Définit le comportement par défaut des résultats de recherche"
+
+#: cards:1
+msgid "Saved Searches"
+msgstr "Recherches enregistrées"
+
+#: cards:1
+msgid "System configuration for saving searches"
+msgstr "Configuration système de l'enregistrement des recherches"
+
+#: cards:1
+msgid ""
+"Arches allows you save a search and present it as convenience for your "
+"users."
+msgstr ""
+"Arches permet d'enregistrer une recherche et de la proposer à vos "
+"utilisateurs."
+
+#: cards:1
+msgid "Name of Statement"
+msgstr "Nom de la déclaration"
+
+#: cards:1
+msgid "Data Evaluation"
+msgstr "Évaluation des données"
+
+#: cards:1
+msgid "Bibliographic_Identifier"
+msgstr "Identifiant_Bibliographique"
+
+#: cards:1
+msgid "Joining Group"
+msgstr "Entrée dans le groupe"
+
+#: cards:1
+msgid "Birth period"
+msgstr "Période de naissance"
+
+#: cards:1
+msgid "TimeSpan"
+msgstr "Intervalle temporel"
+
+#: cards:1
+msgid "Name of statement"
+msgstr "Nom de la déclaration"
+
+#: cards:1
+msgid "Period production"
+msgstr "Période de production"
+
+#: cards:1
+msgid "Production"
+msgstr "Production"
+
+#: cards:1
+msgid "Author(s)"
+msgstr "Auteur(s)"
+
+#: cards:1
+msgid "Leaving Group"
+msgstr "Sortie du groupe"
+
+#: cards:1
+msgid "Alternative Period"
+msgstr "Période alternative"
+
+#: cards:1
+msgid "Formation period"
+msgstr "Période de formation"
+
+#: cards:1
+msgid "Death period"
+msgstr "Période de décès"
+
+#: cards:1
+msgid "Part of Places"
+msgstr "Partie des lieux"
+
+#: cards:1
+msgid "Authors of Publication"
+msgstr "Auteurs de la publication"
+
+#: cards:1
+msgid "Statement about sample taking activity"
+msgstr "Déclaration sur l'activité de prélèvement"
+
+#: cards:1
+msgid "Sample object"
+msgstr "Objet échantillon"
+
+#: cards:1
+msgid "Alternative period"
+msgstr "Période alternative"
+
+#: cards:1
+msgid "Dissolution period"
+msgstr "Période de dissolution"
+
+#: cards:1
+msgid "Type of Instrument"
+msgstr "Type d'instrument"
+
+#: cards:1
+msgid "Identifier of publication"
+msgstr "Identifiant de la publication"
+
+#: cards:1
+msgid "Visual representation of processed datacube analysis"
+msgstr "Représentation visuelle de l'analyse du cube de données traité"
+
+#: cards:1
+msgid "IIIF manifest imaging"
+msgstr "Imagerie du manifeste IIIF"
+
+#: cards:1
+msgid ""
+"<p>You can upload your data through the <strong>Image Service Manager</strong>.<br />\n"
+"Once the upload is complete, the corresponding <strong>IIIF manifest</strong> will be automatically retrieved and added to your list.</p>\n"
+"\n"
+"<p>Please make sure to <strong>use a clear and consistent naming convention</strong> for your files &mdash; this will help you easily identify and manage your datasets later.</p>\n"
+msgstr ""
+"<p>Vous pouvez téléverser vos données via l'<strong>Image Service Manager</strong>.<br />\n"
+"Une fois le téléversement terminé, le <strong>manifeste IIIF</strong> correspondant sera automatiquement récupéré et ajouté à votre liste.</p>\n"
+"\n"
+"<p>Veillez à <strong>utiliser une convention de nommage claire et cohérente</strong> pour vos fichiers &mdash; cela vous aidera à identifier et gérer vos jeux de données par la suite.</p>\n"
+
+#: cards:1
+msgid "Scientific Imaging"
+msgstr "Imagerie scientifique"
+
+#: cards:1
+msgid "Measurement Point (data)"
+msgstr "Point de mesure (données)"
+
+#: cards:1
+msgid "Authors of publication"
+msgstr "Auteurs de la publication"
+
+#: cards:1
+msgid "Micro/macro Imaging"
+msgstr "Imagerie micro/macro"
+
+#: cards:1
+msgid "Sample taking"
+msgstr "Prélèvement d'échantillon"
+
+#: cards:1
+msgid "Iconographic representation"
+msgstr "Représentation iconographique"
+
+#: cards:1
+msgid "Dimension of Materials Observed"
+msgstr "Dimension des matériaux observés"
+
+#: cards:1
+msgid "Manifest IIIF"
+msgstr "Manifeste IIIF"
+
+#: cards:1
+msgid "Modification period"
+msgstr "Période de modification"
+
+#: cards:1
+msgid "Location of Group"
+msgstr "Localisation du groupe"
+
+#: cards:1
+msgid "Formation timespan"
+msgstr "Intervalle de formation"
+
+#: cards:1
+msgid "Dissolution timespan"
+msgstr "Intervalle de dissolution"
+
+#: cards:1
+msgid "Joining Group Period"
+msgstr "Période d'entrée dans le groupe"
+
+#: cards:1
+msgid "Alteration process period"
+msgstr "Période du processus d'altération"
+
+#: cards:1
+msgid "Appellation of Statement"
+msgstr "Appellation de la déclaration"

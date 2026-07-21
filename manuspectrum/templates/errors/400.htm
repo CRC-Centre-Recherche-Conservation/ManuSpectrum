@@ -1,0 +1,21 @@
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% comment %} Overrides Arches core errors/400.htm — see 404.htm. {% endcomment %}
+{% block page_title %}{% trans "Bad request" %} — ManuSpectrum{% endblock %}
+{% block page_description %}{% trans "The server could not understand this request." %}{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex">{% endblock %}
+
+{% block content %}
+<section class="ms-error">
+    <div class="ms-page-hero__eyebrow">{% trans "Error 400" %}</div>
+    <div class="ms-error-code" aria-hidden="true">400</div>
+    <h1 class="ms-error-title">{% trans "We couldn't read that request" %}</h1>
+    <p class="ms-error-lead">
+        {% trans "Your browser sent a request this server could not understand. This usually comes from an out-of-date or malformed link, or from stale cookies. Try again from the homepage — and if it keeps happening, clearing your cookies for this site usually fixes it." %}
+    </p>
+    <div class="ms-error-actions">
+        <a class="ms-btn ms-btn-primary" href="{% url 'root' %}">{% trans "Back to the homepage" %}</a>
+        <a class="ms-error-link" href="{% url 'about-contact' %}">{% trans "Contact the team" %}</a>
+    </div>
+</section>
+{% endblock %}

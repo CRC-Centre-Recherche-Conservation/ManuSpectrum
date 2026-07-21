@@ -1,0 +1,200 @@
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% load render_bundle from webpack_loader %}
+{% block page_title %}{% trans "Graph Explorer" %} — ManuSpectrum{% endblock %}
+{% block page_description %}{% trans "Explore the ManuSpectrum data model as an interactive graph: 12 resource models, their fields, datatypes and relationships." %}{% endblock %}
+{% block og_title %}{% trans "Graph Explorer" %} — ManuSpectrum{% endblock %}
+{% block og_description %}{% trans "Explore the ManuSpectrum data model as an interactive graph: 12 resource models, their fields, datatypes and relationships." %}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"},
+        {"@type": "ListItem", "position": 2, "name": "{% trans 'Graph Explorer' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'about-explorer' %}"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<section class="ms-page-hero reveal">
+    <div class="ms-page-hero__eyebrow">{% trans "Graph Explorer" %}</div>
+    <h1 class="ms-page-hero__title">{% trans "The model as a living graph" %}</h1>
+    <div class="ms-page-hero__accent"></div>
+    {% comment %} WAVE 4d: the old lead described the controls ("drag the nodes")
+       rather than what is in front of you. {% endcomment %}
+    {% comment %} The figures below are TODAY's live values, kept in the markup as a
+       no-JS fallback only. graph-explorer.js rewrites this sentence from
+       /api/model-graph on load, so the page cannot go stale the way the "84
+       relationships" figure did. Never hand-edit these to "fix" a drift —
+       fix the payload. {% endcomment %}
+    <p class="ms-page-hero__lead" id="ms-ge-lead">{% trans "Every field in ManuSpectrum and every link between models: 452 fields across 12 models, 41% of them bound to a published thesaurus rather than free text. Click any model to read its schema." %}</p>
+    {% comment %} WAVE 3 item 9: this was a flex row of anonymous <div>s carrying aria-live="polite",
+       so it announced four unlabelled numbers, unprompted, once at load. A definition
+       list is the correct semantic for value/label pairs and needs no live region. {% endcomment %}
+    <dl class="ms-ge-stats" id="ms-ge-stats"></dl>
+    {% comment %} WAVE 4c: four of the twelve models hold no records yet. A reader
+       discovers that by clicking, and discovering it unannounced costs more trust
+       than stating it. Rendered from the live payload by graph-explorer.js — it
+       must never be a number typed into a template that then goes stale, which is
+       exactly how the section ended up publishing 84 relationships. {% endcomment %}
+    <p class="ms-ge-volume" id="ms-ge-volume"></p>
+</section>
+
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
+<section class="ms-ge">
+    <p class="ms-section-label">{% trans "Explorer" %}</p>
+    <h2 class="ms-section-title">{% trans "Every model, every field, every link" %}</h2>
+
+    {% comment %} Onboarding (UX audit: visitors landed on a 12×12 matrix with no
+       idea what they were looking at). Native <details>, open by default;
+       graph-explorer.js remembers the visitor's choice in localStorage. The
+       family dots mirror the GROUPS colours pinned in model_graph_service.py. {% endcomment %}
+    <details class="ms-ge-howto" id="ms-ge-howto" open>
+        <summary>{% trans "How do I read this?" %}</summary>
+        <ol class="ms-ge-howto-steps">
+            <li>{% blocktrans trimmed %}<strong>Relations</strong> shows the twelve models as a grid: a filled cell means the row's model points to the column's model — for instance <em>Analysis → Document</em>, “this analysis was run on that manuscript”.{% endblocktrans %}</li>
+            <li>{% blocktrans trimmed %}<strong>Click any model</strong> (or open <strong>Network</strong>) to see just that model and its neighbours, with the property carried by every link.{% endblocktrans %}</li>
+            <li>{% blocktrans trimmed %}<strong>Structure</strong> opens one model's full schema as a tree: every field, its datatype, and the thesaurus it draws its values from.{% endblocktrans %}</li>
+        </ol>
+        <ul class="ms-ge-howto-families" aria-label="{% trans 'The four model families' %}">
+            <li><i class="ms-ge-dot ms-ge-dot--object" aria-hidden="true"></i>{% blocktrans trimmed %}<strong>Studied object</strong> — the manuscript, one of its components, a sample{% endblocktrans %}</li>
+            <li><i class="ms-ge-dot ms-ge-dot--obs" aria-hidden="true"></i>{% blocktrans trimmed %}<strong>Observation</strong> — an analysis event: who measured what, when, with which instrument{% endblocktrans %}</li>
+            <li><i class="ms-ge-dot ms-ge-dot--ctx" aria-hidden="true"></i>{% blocktrans trimmed %}<strong>Shared context</strong> — the people, places, projects and instruments referenced everywhere{% endblocktrans %}</li>
+            <li><i class="ms-ge-dot ms-ge-dot--transf" aria-hidden="true"></i>{% blocktrans trimmed %}<strong>Transformations</strong> — the alterations and modifications the object underwent{% endblocktrans %}</li>
+        </ul>
+    </details>
+
+    <div class="ms-ge-toolbar">
+        {% comment %} WAVE 3 items 1/2/8: the adjacency matrix is now the primary relations view
+           (12 models at 68% density is a hairball as a node-link diagram); the
+           node-link is demoted to a per-model ego network; the table is promoted
+           from a collapsed <details> to a first-class peer. {% endcomment %}
+        <div class="ms-ge-views" role="tablist" aria-label="{% trans 'Explorer views' %}">
+            <button class="ms-ge-view is-active" data-view="matrix" role="tab" aria-selected="true" aria-controls="ms-ge-pane-matrix" id="ms-ge-tab-matrix">{% trans "Relations" %}</button>
+            <button class="ms-ge-view" data-view="network" role="tab" aria-selected="false" aria-controls="ms-ge-pane-network" id="ms-ge-tab-network">{% trans "Network" %}</button>
+            {% comment %} The other four views are global (all 12 models at once); this one is
+               per-model, so it carries its own sub-toolbar with a model combobox. {% endcomment %}
+            <button class="ms-ge-view" data-view="structure" role="tab" aria-selected="false" aria-controls="ms-ge-pane-structure" id="ms-ge-tab-structure">{% trans "Structure" %}</button>
+            <button class="ms-ge-view" data-view="datatypes" role="tab" aria-selected="false" aria-controls="ms-ge-pane-datatypes" id="ms-ge-tab-datatypes" title="{% trans 'The kind of value each field stores — text, thesaurus concept, date, file…' %}">{% trans "Datatypes" %}</button>
+            <button class="ms-ge-view" data-view="table" role="tab" aria-selected="false" aria-controls="ms-ge-pane-table" id="ms-ge-tab-table">{% trans "Table" %}</button>
+        </div>
+        <div class="ms-ge-filters" id="ms-ge-filters"></div>
+        <div class="ms-ge-search">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <input type="search" id="ms-ge-search" placeholder="{% trans 'Find a model…' %}" aria-label="{% trans 'Find a model' %}" aria-describedby="ms-ge-search-count">
+            <span class="ms-ge-search-count" id="ms-ge-search-count" role="status"></span>
+        </div>
+    </div>
+
+    <div class="ms-ge-sorts" id="ms-ge-sorts">
+        <span class="ms-ge-sorts-label" id="ms-ge-sorts-label">{% trans "Order rows and columns" %}</span>
+        <div class="ms-ge-sort-group" role="group" aria-labelledby="ms-ge-sorts-label">
+            <button class="ms-ge-sort is-active" data-sort="group" aria-pressed="true">{% trans "By family" %}</button>
+            <button class="ms-ge-sort" data-sort="degree" aria-pressed="false">{% trans "By connectedness" %}</button>
+            <button class="ms-ge-sort" data-sort="alpha" aria-pressed="false">{% trans "A–Z" %}</button>
+        </div>
+    </div>
+
+    {% comment %} Structure sub-toolbar. Same show/hide-per-view pattern as #ms-ge-sorts
+       above; starts hidden because "Relations" is the default view. {% endcomment %}
+    <div class="ms-ge-struct-tools" id="ms-ge-struct-tools" hidden>
+        <label class="ms-ge-struct-pick" for="ms-ge-struct-model">{% trans "Model" %}</label>
+        <select class="ms-ge-struct-select" id="ms-ge-struct-model"></select>
+        <div class="ms-ge-struct-search">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <input type="search" id="ms-ge-struct-q" placeholder="{% trans 'Find a field, class or property…' %}" aria-label="{% trans 'Find a field, class or property' %}" aria-describedby="ms-ge-struct-qcount">
+            <span class="ms-ge-struct-qcount" id="ms-ge-struct-qcount" role="status"></span>
+        </div>
+        <div class="ms-ge-struct-btns">
+            <button type="button" class="ms-ge-struct-btn" id="ms-ge-struct-expand">{% trans "Expand all" %}</button>
+            <button type="button" class="ms-ge-struct-btn" id="ms-ge-struct-collapse">{% trans "Collapse all" %}</button>
+            <button type="button" class="ms-ge-struct-btn" id="ms-ge-struct-outline-btn" aria-pressed="false" aria-controls="ms-ge-struct-outline">{% trans "Outline view" %}</button>
+        </div>
+        <div class="ms-ge-struct-toggles">
+            <label class="ms-ge-struct-toggle"><input type="checkbox" id="ms-ge-struct-semantic" checked> <abbr class="ms-gloss" title="{% trans 'Technical grouping nodes: they organise fields but hold no data themselves.' %}">{% trans "Structural nodes" %}</abbr></label>
+            <label class="ms-ge-struct-toggle"><input type="checkbox" id="ms-ge-struct-cidoc"> {% trans "CIDOC classes on every node" %}</label>
+        </div>
+    </div>
+
+    <div class="ms-ge-stage" id="ms-ge-stage" data-api="{% url 'model-graph' %}">
+        {% comment %} The overlays sit on the stage, not inside one pane: the matrix is the
+           default view now, so a loader parented to the (hidden) network pane
+           would never be seen. {% endcomment %}
+        <div class="ms-ge-loading" id="ms-ge-loading">{% trans "Loading the model…" %}</div>
+        <div class="ms-ge-error" id="ms-ge-error" hidden>{% trans "The model could not be loaded." %}</div>
+        {# Without JS the loader above would spin forever: hide it and say why. #}
+        <noscript>
+            <style>#ms-ge-loading{display:none}</style>
+            <div class="ms-ge-error">
+                {% trans "The interactive explorer requires JavaScript." %}
+                <a href="{% url 'about-model' %}">{% trans "The Conceptual Model page presents the same model as readable text." %}</a>
+            </div>
+        </noscript>
+
+        <div class="ms-ge-pane" id="ms-ge-pane-matrix" role="tabpanel" tabindex="0" aria-labelledby="ms-ge-tab-matrix">
+            <div class="ms-ge-matrix" id="ms-ge-matrix"></div>
+        </div>
+
+        <div class="ms-ge-pane" id="ms-ge-pane-network" role="tabpanel" tabindex="0" aria-labelledby="ms-ge-tab-network" hidden>
+            <div class="ms-ge-canvas" id="ms-ge-canvas" tabindex="-1">
+                {% comment %} WAVE 3 item 9: role="group" on an <svg> conveys nothing. A <figure>
+                   with a real <figcaption> gives the drawing a text equivalent that is
+                   visible to everyone, not just to assistive technology. {% endcomment %}
+                <figure class="ms-ge-figure">
+                    <svg id="ms-ge-svg" aria-labelledby="ms-ge-figcap"></svg>
+                    <figcaption class="ms-ge-figcaption" id="ms-ge-figcap">{% trans "Select a model to see it with its directly connected models." %}</figcaption>
+                </figure>
+            </div>
+        </div>
+
+        {% comment %} Structure. Every ManuSpectrum graph is a strict tree (edges == nodes-1,
+           one root — verified on the live DB), so this is a SOLVED layered layout, not a
+           force simulation: the same model must draw the same picture on every load,
+           because this is a reference page people screenshot and cite. {% endcomment %}
+        <div class="ms-ge-pane" id="ms-ge-pane-structure" role="tabpanel" tabindex="0" aria-labelledby="ms-ge-tab-structure" hidden>
+            <p class="ms-ge-struct-explainer">{% trans "How one model is built: its field groups, the CIDOC-CRM class of each node and the property that links it to its parent." %}</p>
+            <nav class="ms-ge-struct-crumbs" id="ms-ge-struct-crumbs" aria-label="{% trans 'Structure breadcrumb' %}"></nav>
+            <div class="ms-ge-struct-body">
+                {% comment %} One source of truth, two renderings: at >=768px the SVG is the
+                   picture and the <ul role="tree"> below is its accessible equivalent; below
+                   768px the SVG is not rendered at all and the outline IS the view. {% endcomment %}
+                <figure class="ms-ge-struct-figure" id="ms-ge-struct-figure">
+                    <div class="ms-ge-struct-scroll" id="ms-ge-struct-scroll">
+                        <svg id="ms-ge-struct-svg" aria-hidden="true"></svg>
+                    </div>
+                    <figcaption class="ms-ge-figcaption" id="ms-ge-struct-figcap">{% trans "Choose a model to see how it is built." %}</figcaption>
+                </figure>
+                <div class="ms-ge-struct-outline" id="ms-ge-struct-outline"></div>
+            </div>
+            <ul class="ms-ge-struct-legend" id="ms-ge-struct-legend"></ul>
+        </div>
+
+        <div class="ms-ge-pane" id="ms-ge-pane-datatypes" role="tabpanel" tabindex="0" aria-labelledby="ms-ge-tab-datatypes" hidden>
+            <div class="ms-ge-plotly" id="ms-ge-plotly"></div>
+        </div>
+
+        <div class="ms-ge-pane" id="ms-ge-pane-table" role="tabpanel" tabindex="0" aria-labelledby="ms-ge-tab-table" hidden>
+            {% comment %} "Fields" is the flat, exportable rendering of the same tree the
+               Structure view draws: one row per node across all 12 models. {% endcomment %}
+            <div class="ms-ge-tbl-modes" role="group" aria-label="{% trans 'Table contents' %}">
+                <button type="button" class="ms-ge-tbl-mode is-active" data-mode="models" aria-pressed="true">{% trans "Models" %}</button>
+                <button type="button" class="ms-ge-tbl-mode" data-mode="fields" aria-pressed="false">{% trans "Fields" %}</button>
+            </div>
+            <div class="ms-ge-table-wrap" id="ms-ge-table"></div>
+        </div>
+
+        <aside class="ms-ge-drawer" id="ms-ge-drawer" hidden aria-label="{% trans 'Model details' %}">
+            <button class="ms-ge-drawer-close" id="ms-ge-drawer-close" aria-label="{% trans 'Close' %}"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            <div class="ms-ge-drawer-body" id="ms-ge-drawer-body"></div>
+        </aside>
+    </div>
+
+    <ul class="ms-ge-legend" id="ms-ge-legend"></ul>
+</section>
+{% endblock %}
+
+{% block js_bundle %}{% render_bundle 'views/pages/graph-explorer' %}{% endblock %}

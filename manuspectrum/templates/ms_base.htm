@@ -1,0 +1,57 @@
+{% load static i18n template_tags manuspectrum_settings %}
+{% load render_bundle from webpack_loader %}
+{% load webpack_static from webpack_loader %}
+{% get_current_language as LANGUAGE_CODE %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+    <title>{% block page_title %}ManuSpectrum{% endblock %}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block page_description %}{% trans 'ManuSpectrum — interoperable database for physicochemical analysis of written cultural heritage.' %}{% endblock %}">
+    <meta name="theme-color" content="#faf9f7">
+    {# scheme+host+path only: build_absolute_uri kept the query string, so #}
+    {# /about/team?utm_source=x canonicalised to itself. #}
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% get_available_languages as MS_LANGS %}
+    {% for lang_code, lang_name in MS_LANGS %}
+    <link rel="alternate" hreflang="{{ lang_code }}" href="{% translated_page_url lang_code %}">
+    {% endfor %}
+    <link rel="alternate" hreflang="x-default" href="{% translated_page_url 'en' %}">
+
+    {# Social cards. og_title/og_description default to the generic site copy; #}
+    {# pages that set page_title should override them with the same text. #}
+    {# No twitter:title/description — Twitter documented fallback is og:*. #}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="ManuSpectrum">
+    <meta property="og:title" content="{% block og_title %}ManuSpectrum{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{% trans 'ManuSpectrum — interoperable database for physicochemical analysis of written cultural heritage.' %}{% endblock %}">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% if LANGUAGE_CODE|slice:":2" == "fr" %}
+    <meta property="og:locale" content="fr_FR">
+    {% else %}
+    <meta property="og:locale" content="en_US">
+    {% endif %}
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+
+    {% block structured_data %}{% endblock %}
+    <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
+    {# Fonts are self-hosted (@font-face in _ms-fonts.scss, shipped by the css bundle) #}
+    <noscript><style>.reveal,.reveal-scale{opacity:1 !important;transform:none !important;}</style></noscript>
+    {% render_bundle 'css/homepage/_fa-subset' 'css' %}
+    {% render_bundle 'css/pages' 'css' %}
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="ms-page">
+    {% include 'javascript.htm' %}
+    {% include 'includes/ms_header.htm' %}
+    <main id="ms-main">
+        {% block content %}{% endblock %}
+    </main>
+    {% include 'includes/ms_footer.htm' %}
+    {% block js_bundle %}{% endblock %}
+</body>
+</html>

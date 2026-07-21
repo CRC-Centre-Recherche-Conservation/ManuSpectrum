@@ -5,12 +5,13 @@ Homepage — Prismatic Luminescence aesthetic
 {% load static %}
 {% load template_tags %}
 {% load i18n %}
+{% load manuspectrum_settings %}
 {% load render_bundle from webpack_loader %}
 {% load webpack_static from webpack_loader %}
 {% get_current_language as LANGUAGE_CODE %}
 
 {% trans "ManuSpectrum — Physicochemical Analysis of Heritage" as seo_title %}
-{% trans "Interoperable database for written cultural heritage materials analysis — Biblissima+ Cluster" as seo_description %}
+{% trans "Open heritage science database of physicochemical analyses — XRF, Raman, FTIR, FORS — of manuscripts, printed books and inscriptions: pigments, inks, supports." as seo_description %}
 
 <!DOCTYPE html>
 <html lang="{{ LANGUAGE_CODE }}">
@@ -20,26 +21,28 @@ Homepage — Prismatic Luminescence aesthetic
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ seo_description }}">
-    <meta name="keywords" content="{% trans "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, IIIF, CIDOC-CRM, Biblissima, physicochemical analysis, heritage science" %}">
     <meta name="theme-color" content="#faf9f7">
 
-    <!-- Canonical URL -->
-    <link rel="canonical" href="{{ request.build_absolute_uri }}">
-
-    <!-- Alternate languages -->
-    {% get_available_languages as LANGUAGES %}
-    {% for lang_code, lang_name in LANGUAGES %}
-    <link rel="alternate" hreflang="{{ lang_code }}" href="{{ request.build_absolute_uri }}">
+    {# Canonical: scheme+host+path only — build_absolute_uri kept the query #}
+    {# string, so /?utm_source=x canonicalised to itself. #}
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% get_available_languages as MS_LANGS %}
+    {% for lang_code, lang_name in MS_LANGS %}
+    <link rel="alternate" hreflang="{{ lang_code }}" href="{% translated_page_url lang_code %}">
     {% endfor %}
-    <link rel="alternate" hreflang="x-default" href="{{ request.build_absolute_uri }}">
+    <link rel="alternate" hreflang="x-default" href="{% translated_page_url 'en' %}">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="ManuSpectrum">
     <meta property="og:title" content="{{ seo_title }}">
     <meta property="og:description" content="{{ seo_description }}">
-    <meta property="og:url" content="{{ request.build_absolute_uri }}">
-    <meta property="og:locale" content="{{ LANGUAGE_CODE }}">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% if LANGUAGE_CODE|slice:":2" == "fr" %}
+    <meta property="og:locale" content="fr_FR">
+    {% else %}
+    <meta property="og:locale" content="en_US">
+    {% endif %}
     <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -50,49 +53,62 @@ Homepage — Prismatic Luminescence aesthetic
     <meta name="twitter:description" content="{{ seo_description }}">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
 
-    <!-- JSON-LD Structured Data -->
+    <!-- JSON-LD Structured Data. WebSite + ResearchProject with an identified
+         Grant: the shapes Google's research/dataset surfaces actually read.
+         (The previous WebApplication + isPartOf Project was semantically off:
+         isPartOf expects a CreativeWork.) -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "ManuSpectrum",
-        "description": "{{ seo_description|escapejs }}",
-        "url": "{{ request.build_absolute_uri }}",
-        "applicationCategory": "EducationalApplication",
-        "operatingSystem": "Web",
-        "inLanguage": ["en", "fr"],
-        "provider": {
-            "@type": "ResearchOrganization",
-            "name": "CRC — Centre de Recherche sur la Conservation",
-            "url": "https://crc.mnhn.fr",
-            "parentOrganization": [
-                {"@type": "ResearchOrganization", "name": "CNRS", "url": "https://www.cnrs.fr"},
-                {"@type": "ResearchOrganization", "name": "MNHN", "url": "https://www.mnhn.fr"}
-            ]
-        },
-        "funder": {
-            "@type": "Organization",
-            "name": "ANR — Agence Nationale de la Recherche",
-            "url": "https://anr.fr"
-        },
-        "isPartOf": {
-            "@type": "Project",
-            "name": "Biblissima+",
-            "url": "https://biblissima.fr",
-            "description": "Biblissima+ — Observatory of ancient written cultures"
-        },
-        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
-        "keywords": "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, cultural heritage, IIIF, CIDOC-CRM"
+        "@graph": [
+            {
+                "@type": "WebSite",
+                "name": "ManuSpectrum",
+                "url": "{{ request.scheme }}://{{ request.get_host }}/",
+                "inLanguage": ["en", "fr"],
+                "description": "{{ seo_description|escapejs }}"
+            },
+            {
+                "@type": "ResearchProject",
+                "name": "ManuSpectrum",
+                "url": "{{ request.scheme }}://{{ request.get_host }}/",
+                "description": "{{ seo_description|escapejs }}",
+                "parentOrganization": {
+                    "@type": "ResearchOrganization",
+                    "name": "CRC — Centre de Recherche sur la Conservation",
+                    "url": "https://crc.mnhn.fr",
+                    "parentOrganization": [
+                        {"@type": "ResearchOrganization", "name": "CNRS", "url": "https://www.cnrs.fr"},
+                        {"@type": "ResearchOrganization", "name": "MNHN", "url": "https://www.mnhn.fr"}
+                    ]
+                },
+                "funding": {
+                    "@type": "Grant",
+                    "identifier": "ANR-21-ESRE-0005",
+                    "name": "Biblissima+ (Investissements d'avenir)",
+                    "funder": {
+                        "@type": "Organization",
+                        "name": "ANR — Agence Nationale de la Recherche",
+                        "url": "https://anr.fr"
+                    }
+                },
+                "memberOf": {
+                    "@type": "Organization",
+                    "name": "Biblissima+",
+                    "url": "https://biblissima.fr"
+                },
+                "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+                "keywords": "heritage science, conservation science, spectroscopy, XRF, Raman, FTIR, FORS, multispectral imaging, hyperspectral imaging, non-invasive analysis, pigments, inks, iron gall ink, parchment, manuscripts, printed books, inscriptions, illuminated manuscripts, written cultural heritage, open dataset, IIIF, CIDOC-CRM"
+            }
+        ]
     }
     </script>
 
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
     <link rel="apple-touch-icon" href="{% webpack_static 'favicons/apple-touch-icon.png' %}" />
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Fonts are self-hosted (@font-face in _ms-fonts.scss, shipped by the
+         css bundle below) — no Google Fonts connection. -->
 
     <!-- Fallback: if JS doesn't load, make everything visible -->
     <noscript>
@@ -111,82 +127,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- ============================================================
          HEADER
          ============================================================ -->
-    <header class="ms-header" id="ms-header">
-        <div class="ms-header-inner">
-            <a href="{% url 'home' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Home' %}">
-                <div class="ms-header-logo-mark"></div>
-                <span class="ms-header-logo-text">ManuSpectrum</span>
-            </a>
-
-            <nav class="ms-nav" aria-label="{% trans 'Main Navigation' %}">
-                <ul class="ms-nav-links">
-                    <li><a href="#project">{% trans "The Project" %}</a></li>
-                    <li><a href="#explore">{% trans "Explore" %}</a></li>
-                    <li><a href="#analyses">{% trans "Analyses" %}</a></li>
-                    <li><a href="#search">{% trans "Search" %}</a></li>
-                    {% if user|can_create_resource_instance and user.username != 'anonymous' %}
-                    <li><a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a></li>
-                    {% endif %}
-                </ul>
-
-                <div class="ms-nav-divider"></div>
-
-                <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-nav-github" aria-label="GitHub" title="{% trans 'Source code on GitHub' %}">
-                    <i class="fa-brands fa-github"></i>
-                </a>
-
-                <div class="ms-nav-divider"></div>
-
-                <div class="ms-nav-auth">
-                    {% if user.username == 'anonymous' %}
-                        <a class="ms-btn-signin" href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
-                    {% else %}
-                        <a href="{% url 'user_profile_manager' %}" aria-label="{% trans 'User Profile' %}">
-                            {% blocktrans with name=user.first_name|default:user.username %}Welcome, {{ name }}{% endblocktrans %}
-                        </a>
-                        <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
-                    {% endif %}
-                </div>
-
-                {% if show_language_swtich %}
-                {% csrf_token %}
-                    {% get_current_language as LANGUAGE_CODE %}
-                    <div class="lang-switch" data-bind='component: {
-                        name: "views/components/language-switcher",
-                        params: { current_language: "{{LANGUAGE_CODE}}" }
-                    }'></div>
-                {% endif %}
-            </nav>
-
-            <button class="ms-hamburger" id="ms-hamburger" aria-label="{% trans 'Open Menu' %}">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-    </header>
-
-    <!-- Mobile Navigation -->
-    <div class="ms-mobile-nav" id="ms-mobile-nav">
-        <a href="#project" class="ms-mobile-nav-link">{% trans "The Project" %}</a>
-        <a href="#explore" class="ms-mobile-nav-link">{% trans "Explore" %}</a>
-        <a href="#analyses" class="ms-mobile-nav-link">{% trans "Analyses" %}</a>
-        <a href="#search" class="ms-mobile-nav-link">{% trans "Search" %}</a>
-        {% if user|can_create_resource_instance and user.username != 'anonymous' %}
-            <a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a>
-        {% endif %}
-        <div class="spectral-line"></div>
-        {% if user.username == 'anonymous' %}
-            <a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a>
-        {% else %}
-            <a href="{% url 'user_profile_manager' %}">{{ user.first_name|default:user.username }}</a>
-            <a href="{% url 'auth' %}?next={% url 'home' %}&logout=true">{% trans "Sign Out" %}</a>
-        {% endif %}
-        <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener" class="ms-mobile-nav-github">
-            <i class="fa-brands fa-github"></i>
-        </a>
-    </div>
-
+    {% include 'includes/ms_header.htm' %}
 
     <main>
     <!-- ============================================================
@@ -278,17 +219,17 @@ Homepage — Prismatic Luminescence aesthetic
             <!-- Fullscreen overlay for zoomed logo -->
             <div class="ms-logo-overlay" id="ms-logo-overlay">
               <div class="ms-logo-overlay-inner">
-                <button class="ms-logo-close-btn" id="ms-logo-close" aria-label="Close">
+                <button class="ms-logo-close-btn" id="ms-logo-close" aria-label="{% trans 'Close' %}">
                   <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
                 </button>
                 <div class="ms-logo-overlay-header">
-                  <span class="ms-logo-overlay-title">ManuSpectrum — Spectral Analysis Plot</span>
-                  <span class="ms-logo-overlay-badge">interactive</span>
+                  <span class="ms-logo-overlay-title">{% trans "ManuSpectrum — Spectral Analysis Plot" %}</span>
+                  <span class="ms-logo-overlay-badge">{% trans "interactive" %}</span>
                 </div>
                 <div id="ms-logo-zoom-target"></div>
                 <div class="ms-logo-overlay-footer">
-                  <span><i class="dot-blue"></i>Channel 1 (XRF)</span>
-                  <span><i class="dot-red"></i>Channel 2 (FORS)</span>
+                  <span><i class="dot-blue"></i>{% trans "Channel 1 (XRF)" %}</span>
+                  <span><i class="dot-red"></i>{% trans "Channel 2 (FORS)" %}</span>
                   <span>λ : 380 – 780 nm</span>
                 </div>
               </div>
@@ -334,7 +275,7 @@ Homepage — Prismatic Luminescence aesthetic
             <div class="ms-project-grid">
                 <div class="ms-project-text reveal reveal-d1">
                     <p>
-                        {% trans "ManuSpectrum was developed within Cluster 2 — \"Consideration and searchability of materials analysis data\" — of the ANR Biblissima+ programme. This cluster aims to ensure the long-term archiving and reuse of physicochemical analysis data for manuscripts, inscriptions, seals and other heritage objects, in partnership with Huma-Num." %}
+                        {% trans "ManuSpectrum was developed within Cluster 2 — “Consideration and searchability of materials analysis data” — of the ANR Biblissima+ programme. This cluster aims to ensure the long-term archiving and reuse of physicochemical analysis data for manuscripts, inscriptions, seals and other heritage objects, in partnership with Huma-Num." %}
                     </p>
                     <p>
                         {% trans "Through structuring and standardizing data according to shared models, the project provides reliable, easy-to-use tools accessible to non-specialists. Built on Arches, an open-source platform for heritage data management, ManuSpectrum facilitates data access and collaboration between researchers from different disciplines." %}
@@ -346,7 +287,7 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-biblissima-card reveal reveal-d2">
                     <a href="https://projet.biblissima.fr/fr/projet/clusters-biblissima/cluster-2" target="_blank" rel="noopener">
-                        <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+">
+                        <img class="ms-biblissima-logo" src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" width="2417" height="996">
                     </a>
                     <h3>{% trans "Biblissima+ — Cluster 2" %}</h3>
                     <p>
@@ -412,27 +353,30 @@ Homepage — Prismatic Luminescence aesthetic
             </div>
 
             <!-- Showcase carousel -->
-            <div class="ms-showcase-carousel reveal-scale" id="ms-showcase">
+            <div class="ms-showcase-carousel reveal-scale" id="ms-showcase" role="region" aria-roledescription="carousel" aria-label="{% trans 'Analysis techniques in pictures' %}">
                 <div class="ms-showcase-track" id="ms-showcase-track">
                     <div class="ms-showcase-slide">
-                        <img src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF mapping of a manuscript' %}" loading="lazy">
+                        <img src="{% static 'img/landing/bible-msm-scanx.jpg' %}" alt="{% trans 'A manuscript on the motorised stage of a macro-XRF scanner, which maps chemical elements across the page without touching it' %}" width="2000" height="1161" loading="lazy">
                         <div class="ms-showcase-caption">
-                            <h4>{% trans "XRF mapping of an illuminated manuscript" %}</h4>
-                            <p>{% trans "Elemental analysis by X-ray fluorescence — Spatial distribution of pigments" %}</p>
+                            <h4>{% trans "Macro-XRF scanning of a manuscript" %}</h4>
+                            <p>{% trans "In situ acquisition of elemental maps by macro X-ray fluorescence scanning" %}</p>
+                            <span class="ms-showcase-credit">© Centre de Recherche sur la Conservation (CRC), 2025</span>
                         </div>
                     </div>
                     <div class="ms-showcase-slide">
-                        <img src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'Raman spectrum on a pigment sample' %}" loading="lazy">
+                        <img src="{% static 'img/landing/bible-msm-fors.jpg' %}" alt="{% trans 'An optical fibre held over a manuscript for FORS analysis — the reflected light carries the spectral signature of the pigments' %}" width="1126" height="2000" loading="lazy">
                         <div class="ms-showcase-caption">
-                            <h4>{% trans "Raman spectroscopy on a medieval pigment" %}</h4>
-                            <p>{% trans "Molecular identification of azurite and malachite pigments on a 15th-century illumination" %}</p>
+                            <h4>{% trans "Fiber optic reflectance spectroscopy (FORS)" %}</h4>
+                            <p>{% trans "Non-invasive characterization of pigments by fiber optic reflectance spectroscopy" %}</p>
+                            <span class="ms-showcase-credit">© Centre de Recherche sur la Conservation (CRC), 2025</span>
                         </div>
                     </div>
                     <div class="ms-showcase-slide">
-                        <img src="{% static 'img/landing/image-3.svg' %}" alt="{% trans 'Multispectral imaging of a manuscript page' %}" loading="lazy">
+                        <img src="{% static 'img/landing/bible-msm-uv.jpg' %}" alt="{% trans 'A manuscript under ultraviolet light during hyperspectral imaging, revealing inks and retouches invisible to the naked eye' %}" width="2000" height="1430" loading="lazy">
                         <div class="ms-showcase-caption">
-                            <h4>{% trans "Multispectral imaging — Revealing hidden texts" %}</h4>
-                            <p>{% trans "UV and infrared reflectography combined to reveal underdrawings and erased inscriptions" %}</p>
+                            <h4>{% trans "UV hyperspectral imaging" %}</h4>
+                            <p>{% trans "Ultraviolet hyperspectral imaging to reveal details invisible to the naked eye" %}</p>
+                            <span class="ms-showcase-credit">© Centre de Recherche sur la Conservation (CRC), 2025</span>
                         </div>
                     </div>
                 </div>
@@ -448,10 +392,10 @@ Homepage — Prismatic Luminescence aesthetic
                 </div>
 
                 <!-- Dots -->
-                <div class="ms-showcase-nav" id="ms-showcase-nav">
-                    <button class="ms-showcase-dot active" data-slide="0" aria-label="Slide 1"></button>
-                    <button class="ms-showcase-dot" data-slide="1" aria-label="Slide 2"></button>
-                    <button class="ms-showcase-dot" data-slide="2" aria-label="Slide 3"></button>
+                <div class="ms-showcase-nav" id="ms-showcase-nav" role="tablist" aria-label="{% trans 'Choose a slide' %}">
+                    <button class="ms-showcase-dot active" data-slide="0" role="tab" aria-selected="true" aria-label="{% trans 'Slide 1 of 3 — Macro-XRF scanning' %}"></button>
+                    <button class="ms-showcase-dot" data-slide="1" role="tab" aria-selected="false" aria-label="{% trans 'Slide 2 of 3 — Fiber optic reflectance spectroscopy' %}"></button>
+                    <button class="ms-showcase-dot" data-slide="2" role="tab" aria-selected="false" aria-label="{% trans 'Slide 3 of 3 — UV hyperspectral imaging' %}"></button>
                 </div>
             </div>
         </div>
@@ -478,7 +422,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-feature-card reveal reveal-d1">
                     <div class="ms-feature-icon"><i class="fa-solid fa-chart-line"></i></div>
                     <h3>{% trans "Spectra and analysis data" %}</h3>
-                    <p>{% trans "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other analysis results directly on the platform." %}</p>
+                    <p>{% trans "Visualize and compare reference spectra and analysis datasets. Explore XRF, FTIR, Raman, and other analysis results directly on the platform." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">XRF</span>
                         <span class="ms-feature-tag">FTIR</span>
@@ -490,7 +434,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-feature-card reveal reveal-d2">
                     <div class="ms-feature-icon"><i class="fa-solid fa-layer-group"></i></div>
                     <h3>{% trans "IIIF Annotations" %}</h3>
-                    <p>{% trans "Analysis data is exposed as IIIF annotations, making it accessible from any compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, allows any external site to visualize ManuSpectrum's spectral data (XRF, Raman, FTIR, UV-Vis) directly overlaid on high-resolution manuscript images." %}</p>
+                    <p>{% trans "Analysis data is exposed as IIIF annotations, making it accessible from any compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, allows any external site to visualize ManuSpectrum's spectral data (XRF, Raman, FTIR, UV-Vis) directly overlaid on high-resolution document images." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">IIIF v2/v3</span>
                         <span class="ms-feature-tag">Mirador 4</span>
@@ -514,7 +458,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-feature-card reveal reveal-d4">
                     <div class="ms-feature-icon"><i class="fa-solid fa-microscope"></i></div>
                     <h3>{% trans "Material Characterization" %}</h3>
-                    <p>{% trans "Explore the layers, materials, and chemical elements identified on written cultural heritage documents, with different levels of reliability and characterization." %}</p>
+                    <p>{% trans "Explore the layers, materials and chemical elements identified on manuscripts, printed books and other written heritage — pigments, inks, binders, parchment and paper supports — with different levels of reliability and characterization." %}</p>
                     <div class="ms-feature-tags">
                         <span class="ms-feature-tag">{% trans "Pigments" %}</span>
                         <span class="ms-feature-tag">{% trans "Layers" %}</span>
@@ -536,18 +480,18 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-section-label">{% trans "Analyses" %}</div>
                 <h2 class="ms-section-title">{% trans "Visualize physicochemical analyses" %}</h2>
                 <p class="ms-section-subtitle">
-                    {% trans "From elemental mapping to multispectral imaging, explore the different analysis techniques applied to manuscripts and written cultural heritage objects." %}
+                    {% trans "From elemental mapping to multispectral imaging, explore the different analysis techniques applied to written cultural heritage objects." %}
                 </p>
             </div>
 
             <div class="ms-gallery-grid">
                 <div class="ms-gallery-item ms-gallery-compare reveal reveal-d1" id="ms-xrf-compare">
-                    <img class="ms-compare-img ms-compare-bottom" src="{% static 'img/landing/image-1.svg' %}" alt="{% trans 'XRF Mapping — Element A' %}" loading="lazy">
-                    <img class="ms-compare-img ms-compare-top" src="{% static 'img/landing/image-2.svg' %}" alt="{% trans 'XRF Mapping — Element B' %}" loading="lazy">
+                    <img class="ms-compare-img ms-compare-bottom" src="{% static 'img/landing/ms86-f32v-deconv-ca.webp' %}" alt="{% trans 'Macro-XRF map of calcium (Ca) on an ornate letter — bright areas mark calcium-rich zones' %}" width="963" height="804" loading="lazy">
+                    <img class="ms-compare-img ms-compare-top" src="{% static 'img/landing/ms86-f32v-deconv-hg.webp' %}" alt="{% trans 'Macro-XRF map of mercury (Hg) on the same ornate letter — bright areas reveal vermilion, a mercury pigment' %}" width="963" height="804" loading="lazy">
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "X-ray Fluorescence" %}</div>
-                        <h4>{% trans "XRF Mapping" %}</h4>
-                        <p>{% trans "Spatial distribution of chemical elements on an illuminated manuscript" %}</p>
+                        <h4>{% trans "Macro-XRF mapping" %}</h4>
+                        <p>{% trans "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — Avranches, BM, Ms. 86, f. 32v" %}</p>
                     </div>
                 </div>
 
@@ -600,7 +544,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-section-label">{% trans "Search" %}</div>
                 <h2 class="ms-section-title">{% trans "Explore the database" %}</h2>
                 <p class="ms-section-subtitle">
-                    {% trans "Search by material, analysis technique, written cultural heritage object, or chemical element. Advanced filters available in the search interface." %}
+                    {% trans "Search by material — a pigment, an ink, a support —, analysis technique, written cultural heritage object, or chemical element. Advanced filters available in the search interface." %}
                 </p>
             </div>
 
@@ -647,28 +591,28 @@ Homepage — Prismatic Luminescence aesthetic
             <div class="ms-partners-grid">
                 <!-- Ministere en premier (charte : premier sur les bandeaux, fond blanc obligatoire) -->
                 <a class="ms-partner-link ms-partner-link--culture reveal-d1" href="https://www.culture.gouv.fr" target="_blank" rel="noopener" title="Ministère de la Culture">
-                    <img src="{% static 'img/landing/logo-ministere-de-la-culture.png' %}" alt="{% trans 'Ministry of Culture' %}" loading="lazy">
+                    <img src="{% static 'img/landing/logo-ministere-de-la-culture.webp' %}" alt="{% trans 'Ministry of Culture' %}" width="434" height="330" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--cnrs reveal-d2" href="https://www.cnrs.fr" target="_blank" rel="noopener" title="Centre National de la Recherche Scientifique">
-                    <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS" loading="lazy">
+                    <img src="{% static 'img/landing/logo-cnrs.svg' %}" alt="CNRS" width="875" height="863" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--mnhn reveal-d3" href="https://www.mnhn.fr" target="_blank" rel="noopener" title="Muséum National d'Histoire Naturelle">
-                    <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN" loading="lazy">
+                    <img src="{% static 'img/landing/logo-mnhn.svg' %}" alt="MNHN" width="133" height="152" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--crc reveal-d4" href="https://crc.mnhn.fr" target="_blank" rel="noopener" title="CRC — Centre de Recherche sur la Conservation">
-                    <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC" loading="lazy">
+                    <img src="{% static 'img/landing/logo-crc.svg' %}" alt="CRC" width="1229" height="377" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--anr reveal-d5" href="https://anr.fr" target="_blank" rel="noopener" title="ANR — Agence Nationale de la Recherche">
-                    <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR" loading="lazy">
+                    <img src="{% static 'img/landing/logo-ANR.png' %}" alt="ANR" width="1211" height="461" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--biblissima reveal-d6" href="https://biblissima.fr" target="_blank" rel="noopener" title="Biblissima+">
-                    <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" loading="lazy">
+                    <img src="{% static 'img/landing/logo-biblissima.svg' %}" alt="Biblissima+" width="2417" height="996" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--humanum reveal-d7" href="https://www.huma-num.fr" target="_blank" rel="noopener" title="Huma-Num">
-                    <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num" loading="lazy">
+                    <img src="{% static 'img/landing/logo-humanum.png' %}" alt="Huma-Num" width="3296" height="1055" loading="lazy">
                 </a>
                 <a class="ms-partner-link ms-partner-link--arches reveal-d8" href="https://www.archesproject.org" target="_blank" rel="noopener" title="Arches">
-                    <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches" loading="lazy">
+                    <img src="{% static 'img/landing/logo-arches.svg' %}" alt="Arches" width="564" height="141" loading="lazy">
                 </a>
             </div>
         </div>
@@ -679,69 +623,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- ============================================================
          FOOTER
          ============================================================ -->
-    <footer class="ms-footer">
-        <div class="ms-container">
-            <div class="spectral-line"></div>
-
-            <div class="ms-footer-inner">
-                <div class="ms-footer-brand">
-                    <div class="ms-footer-brand-name">ManuSpectrum</div>
-                    <p class="ms-footer-brand-desc">
-                        {% trans "Interoperable database for physicochemical analysis of written cultural heritage materials. A Biblissima+ cluster project." %}
-                    </p>
-                </div>
-
-                <div class="ms-footer-links">
-                    <div class="ms-footer-col">
-                        <h4>{% trans "Platform" %}</h4>
-                        <ul>
-                            <li><a href="{% url 'search_home' %}">{% trans "Search" %}</a></li>
-                            {% if user.username == 'anonymous' %}
-                                <li><a href="{% url 'auth' %}?next={% url 'home' %}">{% trans "Sign In" %}</a></li>
-                            {% else %}
-                                <li><a href="{% url 'user_profile_manager' %}">{% trans "My Profile" %}</a></li>
-                            {% endif %}
-                        </ul>
-                    </div>
-                    <div class="ms-footer-col">
-                        <h4>{% trans "Resources" %}</h4>
-                        <ul>
-                            <li><a href="https://biblissima.fr" target="_blank" rel="noopener">Biblissima+</a></li>
-                            <li><a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches Project</a></li>
-                            <li><a href="https://iiif.io" target="_blank" rel="noopener">IIIF</a></li>
-                        </ul>
-                    </div>
-                    <div class="ms-footer-col">
-                        <h4>{% trans "Standards" %}</h4>
-                        <ul>
-                            <li><a href="https://www.cidoc-crm.org" target="_blank" rel="noopener">CIDOC-CRM</a></li>
-                            <li><a href="https://www.getty.edu/research/tools/vocabularies/aat/" target="_blank" rel="noopener">AAT Getty</a></li>
-                            <li><a href="https://thesaurus.inha.fr/thesaurus/" target="_blank" rel="noopener">AGORHA</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <p class="ms-footer-anr">
-                {% trans "This work has benefited from state aid managed by the Agence Nationale de la Recherche under the Investissements d'avenir programme, reference ANR-21-ESRE-0005 (Biblissima+)." %}
-            </p>
-
-            <div class="ms-footer-bottom">
-                <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "All rights reserved" %}</p>
-                <div class="ms-footer-opensource">
-                    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener">
-                        <i class="fa-brands fa-github"></i> {% trans "Source code" %}
-                    </a>
-                    <span class="ms-footer-separator">·</span>
-                    <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/LICENSE" target="_blank" rel="noopener">
-                        {% trans "GPL-3.0 License" %}
-                    </a>
-                    <span class="ms-footer-separator">·</span>
-                    <span class="ms-footer-arches">{% blocktrans %}Powered by <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>{% endblocktrans %}</span>
-                </div>
-            </div>
-        </div>
-    </footer>
+    {% include 'includes/ms_footer.htm' %}
 
 
     <!-- ============================================================

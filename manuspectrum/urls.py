@@ -3,7 +3,7 @@ from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path, re_path
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 
 from arches.app.views.auth import PasswordResetView
 
@@ -31,8 +31,19 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationPageViewV2,
     IIIFAnnotationViewV2,
 )
+from manuspectrum.views.model_graph import ModelGraphView
 
 urlpatterns = [
+    # SEO: Arches serves the homepage at both "/" and "/index.htm" (names
+    # `root` and `home`) — duplicate content. Project templates only link
+    # `root`; anything still hitting /index.htm gets a permanent redirect.
+    # MUST stay above the app includes: arches_component_lab/querysets/
+    # modular_reports each re-include arches.urls, so the first arches
+    # `^index.htm` pattern appears as early as the include just below.
+    path(
+        "index.htm",
+        RedirectView.as_view(pattern_name="root", permanent=True, query_string=True),
+    ),
     # path("", include("arches_controlled_lists.urls")),
     path("", include("arches_component_lab.urls")),
     # Override password reset to send branded HTML email
@@ -68,14 +79,70 @@ handler500 = "arches.app.views.main.custom_500"
 # Ensure Arches core urls are superseded by project-level urls
 urlpatterns.append(path("", include("arches.urls")))
 
-# Only handle i18n routing in active project. This will still handle the routes provided by Arches core and Arches applications,
-# but handling i18n routes in multiple places causes application errors.
-if settings.ROOT_URLCONF == __name__:
-    if settings.SHOW_LANGUAGE_SWITCH is True:
-        urlpatterns = i18n_patterns(*urlpatterns)
+### Manuspectrum URL — public About pages. Registered BEFORE the i18n wrap so
+### they get language-prefixed routes (/fr/about/team) like the rest of the UI.
+### API endpoints, robots.txt and sitemap.xml stay below the wrap on purpose:
+### they are language-neutral URLs.
+for _slug, _name, _tpl in [
+    ("about/model", "about-model", "views/pages/conceptual-model.htm"),
+    ("about/explorer", "about-explorer", "views/pages/graph-explorer.htm"),
+    ("about/team", "about-team", "views/pages/team.htm"),
+    ("about/contact", "about-contact", "views/pages/contact.htm"),
+]:
+    urlpatterns.append(
+        path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
+    )
 
+### Model-graph API: wrapped too, so the URL carries the language
+### (/api/model-graph = EN, /fr/api/model-graph = FR). With
+### prefix_default_language=False Django forces the default language on any
+### unprefixed URL — a cookie can never select FR outside the wrap, so the
+### language MUST live in the path. Templates reverse {% url 'model-graph' %}
+### per request language, so consumers pick the right one for free.
+urlpatterns.append(
+    path("api/model-graph", ModelGraphView.as_view(), name="model-graph")
+)
+
+if settings.ROOT_URLCONF == __name__:
+    # set_language must live INSIDE i18n_patterns: Django's view calls
+    # translate_url() with the REQUEST's active language, and with
+    # prefix_default_language=False an unprefixed /i18n/setlang request is
+    # forced to English — resolve('/fr/…') then Resolver404s inside
+    # translate_url and switching back to English silently no-ops (the
+    # switcher bounced users back to the French page). Wrapped, the Arches
+    # switcher posts to /fr/i18n/setlang from French pages and the request
+    # carries its language.
     urlpatterns.append(path("i18n/", include("django.conf.urls.i18n")))
 
+    if settings.SHOW_LANGUAGE_SWITCH is True:
+        # prefix_default_language=False: English keeps its historical
+        # unprefixed URLs (/, /about/team — already indexed and linked),
+        # French gets /fr/…. LocaleMiddleware 302s a fr-cookie visitor from
+        # an unprefixed URL to its /fr/ twin.
+        #
+        # ┌───────────────────────────────────────────────────────────────────┐
+        # │ OPS / SECURITY — verify BEFORE deploying with French enabled.      │
+        # │ Wrapping ALL routes means every Arches path now also resolves      │
+        # │ under /fr/ : /fr/admin/, /fr/rdm/, /fr/graph/, /fr/plugins/ …      │
+        # │ Django auth is INTACT (these still 302 to the login), so this is   │
+        # │ NOT an app-level bypass. BUT if the edge (nginx / WAF / reverse    │
+        # │ proxy) restricts admin or internal tooling by PATH PREFIX          │
+        # │ — e.g. `location /admin/ { allow 10.0.0.0/8; deny all; }` —        │
+        # │ the /fr/ twins slip past that rule.                               │
+        # │ Action: make the edge ACLs match the language prefix too, e.g.     │
+        # │   location ~ ^/(fr/)?admin/  { … }                                 │
+        # │ (regex, or duplicate the location blocks). Tracked as GH issue.    │
+        # └───────────────────────────────────────────────────────────────────┘
+        urlpatterns = i18n_patterns(*urlpatterns, prefix_default_language=False)
+
+# ============================================================================
+# LANGUAGE BOUNDARY — everything appended BELOW this line sits OUTSIDE
+# i18n_patterns and is therefore language-NEUTRAL (one URL, no /fr/ twin,
+# active language forced to English by prefix_default_language=False).
+# Correct for machine endpoints: Biblissima proxy, IIIF, robots.txt,
+# sitemap.xml. Anything a HUMAN reads in a language (pages, or APIs whose
+# payload is localised like model-graph) must be registered ABOVE the wrap.
+# ============================================================================
 
 ### Manuspectrum URL - Biblissima proxy
 
@@ -163,7 +230,6 @@ urlpatterns.append(
         name="biblissima-link-to-project",
     )
 )
-
 
 ### Manuspectrum URL - IIIF Annotations
 

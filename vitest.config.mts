@@ -29,6 +29,13 @@ function generateConfig(): Promise<UserConfig> {
         const alias: { [key: string]: string } = {
             '@/arches': path.join(parsedData['ROOT_DIR'], 'app', 'src', 'arches'),
             'arches': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'arches.js'),
+            // Webpack builds an alias for every file under media/js from its path
+            // relative to that directory (see `javascriptRelativeFilepathToAbsoluteFilepathLookup`
+            // in webpack/webpack.common.js), which is how the KnockoutJS side writes
+            // `import { createForceGraph } from 'utils/force-graph'`. Mirroring the
+            // `utils/` prefix here lets a spec import a page module that uses those
+            // bare specifiers instead of only leaf utilities via relative paths.
+            'utils': path.join(parsedData['APP_ROOT'], 'media', 'js', 'utils'),
         };
 
         for (
@@ -71,8 +78,17 @@ function generateConfig(): Promise<UserConfig> {
             test: {
                 alias: alias,
                 coverage: {
-                    include: [path.join(parsedData['APP_RELATIVE_PATH'], 'src', path.sep)],
-                    exclude: exclude,
+                    // src/ (Vue) plus the public-pages KnockoutJS-era code that
+                    // actually carries specs (utils/, views/pages/). Deliberately
+                    // NOT all of media/js: pulling in the untested legacy tree
+                    // (bindings, widgets, workflows…) would crater the ratio and
+                    // trip CI's "no coverage decrease" gate for every branch.
+                    include: [
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'src', path.sep),
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'utils', path.sep),
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'views', 'pages', path.sep),
+                    ],
+                    exclude: [...exclude, '**/*.spec.js'],
                     reporter: [
                         ['clover', { 'file': 'coverage.xml' }],
                         'text',

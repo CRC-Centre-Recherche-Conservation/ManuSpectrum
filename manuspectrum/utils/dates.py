@@ -34,7 +34,6 @@ import re
 
 from edtf import parse_edtf, text_to_edtf
 
-
 CENTURY_MAPPING = {
     "1": "82f4c4ef-1ca8-3721-8ee0-fc9bfdd4d2e7",
     "2": "8130e10c-175c-36bd-b16f-a3f19e3bab2c",

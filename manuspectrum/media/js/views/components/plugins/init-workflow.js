@@ -21,9 +21,19 @@ const InitWorkflow = function(params) {
             params.alert(new JsonErrorAlertViewModel('ep-alert-red', resp.responseJSON));
         }
     }).then((respJSON) => {
+        // The API localises `name` (I18n_String) itself, but `config` is raw
+        // JSON: our workflow registrations store description as {en, fr}.
+        // Resolve it here so the card binding stays a plain string.
+        // arches.activeLanguage, NOT document.documentElement.lang: Arches
+        // core's base-root.htm hardcodes <html lang="en"> whatever the active
+        // language (the same source core viewmodels use, e.g. card.js).
+        const lang = (arches.activeLanguage || 'en').split('-')[0];
+        const localize = (v) =>
+            v && typeof v === 'object' ? (v[lang] || v.en || Object.values(v)[0] || '') : v;
         const workflows = respJSON.reduce((acc, plugin) => {
             if (plugin.config.is_workflow) {
                 plugin.url = arches.urls.plugin(plugin.slug);
+                plugin.config.description = localize(plugin.config.description);
                 acc.push(plugin);
             }
             return acc;

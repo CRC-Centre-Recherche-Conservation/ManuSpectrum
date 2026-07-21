@@ -193,6 +193,13 @@ TEMPLATES = build_templates_config(
     app_root=APP_ROOT,
 )
 
+# Arches only injects `show_language_swtich` (upstream typo) from its own
+# views; the public About pages are plain TemplateViews, so without this the
+# header's language switcher would never render there.
+TEMPLATES[0]["OPTIONS"]["context_processors"].append(
+    "manuspectrum.context_processors.language_switch"
+)
+
 ALLOWED_HOSTS = []
 
 SYSTEM_SETTINGS_LOCAL_PATH = os.path.join(
@@ -305,7 +312,7 @@ GRAPH_MODEL_CACHE_TIMEOUT = None
 
 OAUTH_CLIENT_ID = ""  #'9JCibwrWQ4hwuGn5fu2u1oRZSs9V6gK8Vu8hpRC4'
 
-APP_TITLE = "Arches | Heritage Data Management"
+APP_TITLE = "ManuSpectrum"
 COPYRIGHT_TEXT = "All Rights Reserved."
 COPYRIGHT_YEAR = "2019"
 
@@ -324,6 +331,16 @@ EMAIL_HOST_USER = "xxxx@xxx.com"
 # EMAIL_PORT = 587
 
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# Public contact inbox for the About > Contact form (mailto link).
+# Leave empty until a dedicated address exists; overridable in settings_local.py.
+# Falls back to DEFAULT_FROM_EMAIL (set once SMTP is configured) via the
+# {% contact_email %} template tag, so no address is ever hardcoded in templates/JS.
+# Outside DEBUG this address is also published in the outbound User-Agent
+# (manuspectrum.utils.http), together with PUBLIC_SERVER_ADDRESS — set BOTH in
+# settings_local.py on a production host, otherwise the User-Agent silently
+# drops the unusable parts (Arches defaults PUBLIC_SERVER_ADDRESS to localhost).
+CONTACT_EMAIL = ""
 
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -438,10 +455,16 @@ LANGUAGE_CODE = "en"
 LANGUAGES = [
     #   ('de', _('German')),
     ("en", _("English")),
-    #    ('fr', _('French')),
+    ("fr", _("French")),
     #   ('en-gb', _('British English')),
     #    ('es', _('Spanish')),
 ]
+# OPS — after ADDING a language here, run:  python manage.py i18n synclanguages
+# (the official Arches sync: creates the Language row and republishes the
+# per-language graph serialisations for models AND branches). Without it,
+# every Arches page under /<newlang>/ 500s. manuspectrum.checks.W002 (a
+# database system check, runs with migrate) detects the gap.
+# See https://arches.readthedocs.io/en/stable/developing/advanced/localizing-arches/
 
 # override this to permenantly display/hide the language switcher
 SHOW_LANGUAGE_SWITCH = len(LANGUAGES) > 1

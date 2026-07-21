@@ -1,0 +1,67 @@
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% comment %} Overrides Arches core errors/404.htm, whose "Back to Homepage"
+   button pointed at /index.html (sic — a URL that does not exist) and carried
+   Arches branding. Served by arches.app.views.main.custom_404 when
+   DEBUG=False; API calls get JSON instead of this page.
+
+   The joke is physically accurate: 404 nm is a real wavelength (violet), so
+   the page is presented as a spectral scan with a signal gap at λ = 404 nm.
+   The wavelength axis runs violet→red like a real spectrum (the reverse of
+   the decorative house gradient), which is also why the gap sits near the
+   left edge. {% endcomment %}
+{% block page_title %}{% trans "Page not found" %} — ManuSpectrum{% endblock %}
+{% block page_description %}{% trans "This page does not exist or has moved." %}{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex">{% endblock %}
+
+{% block content %}
+<section class="ms-error">
+    <div class="ms-page-hero__eyebrow">{% trans "Spectral analysis report" %}</div>
+
+    <svg class="ms-error-spectrum" viewBox="0 0 600 190" role="img" aria-label="{% trans 'Reflectance spectrum with no signal at 404 nanometres' %}">
+        <defs>
+            {# Physical order: violet (380 nm) on the left, red (780 nm) on the right. #}
+            <linearGradient id="ms-err-spectral" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#8b5cf6"/><stop offset="20%" stop-color="#3b82f6"/>
+                <stop offset="45%" stop-color="#10b981"/><stop offset="65%" stop-color="#f0b429"/>
+                <stop offset="82%" stop-color="#e67e22"/><stop offset="100%" stop-color="#dc3545"/>
+            </linearGradient>
+        </defs>
+
+        <!-- axes -->
+        <line x1="40" y1="150" x2="580" y2="150" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+        <line x1="40" y1="150" x2="40" y2="20" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+        <text x="40" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">380</text>
+        <text x="310" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">580</text>
+        <text x="580" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">780 nm</text>
+
+        <!-- spectrum before the gap: a healthy start… -->
+        <path d="M40,142 C48,138 54,132 58,128 L62,146"
+              fill="none" stroke="url(#ms-err-spectral)" stroke-width="2" stroke-linecap="round"/>
+        <!-- …flatline across 404 nm ("no signal")… -->
+        <path d="M62,148 L88,148" fill="none" stroke="#dc3545" stroke-width="1.6"
+              stroke-dasharray="3 4" stroke-linecap="round" opacity="0.7"/>
+        <!-- …then the rest of the spectrum carries on as if nothing happened. -->
+        <path d="M88,146 C110,140 130,80 150,66 C168,54 184,90 200,98 C224,110 240,52 260,44 C282,36 300,88 320,96 C348,107 368,60 390,52 C414,44 434,96 458,104 C486,113 520,84 552,74 L580,68"
+              fill="none" stroke="url(#ms-err-spectral)" stroke-width="2" stroke-linecap="round"/>
+
+        <!-- the 404 nm marker -->
+        <line x1="74" y1="26" x2="74" y2="150" stroke="#dc3545" stroke-width="1" stroke-dasharray="4 4" opacity="0.55"/>
+        <text x="80" y="34" fill="#dc3545" font-size="11" font-family="monospace" opacity="0.9">λ = 404 nm</text>
+        <text x="80" y="48" fill="#1a1a2e" font-size="9.5" font-family="monospace" opacity="0.55">{% trans "no signal detected" %}</text>
+
+        <!-- instrument scan line (animation lives in pages.scss, frozen by prefers-reduced-motion) -->
+        <rect class="ms-error-scan" x="40" y="20" width="1.5" height="130" fill="#1a1a2e" opacity="0.35"/>
+    </svg>
+
+    <h1 class="ms-error-title">{% trans "No signal at λ = 404 nm" %}</h1>
+    <p class="ms-error-lead">
+        {% trans "We scanned the whole spectrum: the page you asked for does not absorb, reflect or fluoresce anywhere on this server. It may have moved — or never existed." %}
+    </p>
+    <div class="ms-error-actions">
+        <a class="ms-btn ms-btn-primary" href="{% url 'root' %}">{% trans "Back to the homepage" %}</a>
+        <a class="ms-error-link" href="{% url 'search_home' %}">{% trans "Search the data" %}</a>
+        <a class="ms-error-link" href="{% url 'about-contact' %}">{% trans "Contact the team" %}</a>
+    </div>
+</section>
+{% endblock %}

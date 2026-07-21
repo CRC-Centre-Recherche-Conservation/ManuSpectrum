@@ -1,35 +1,15 @@
 import ko from 'knockout';
 import arches from 'arches';
 import 'views/components/language-switcher';
+import initMsNav from 'utils/ms-nav';
 
 $(function () {
     'use strict';
 
-    var $header = $('#ms-header');
-    var $hamburger = $('#ms-hamburger');
-    var $mobileNav = $('#ms-mobile-nav');
-
     // ================================================================
-    // HEADER — Glass-like scroll behavior
+    // SHARED NAV — header scroll, mobile drawer, About dropdown
     // ================================================================
-    $(window).on('scroll', function () {
-        $header.toggleClass('scrolled', window.scrollY > 80);
-    }).trigger('scroll');
-
-    // ================================================================
-    // MOBILE NAV
-    // ================================================================
-    $hamburger.on('click', function () {
-        $hamburger.toggleClass('active');
-        $mobileNav.toggleClass('open');
-        $('body').css('overflow', $mobileNav.hasClass('open') ? 'hidden' : '');
-    });
-
-    $mobileNav.on('click', 'a', function () {
-        $hamburger.removeClass('active');
-        $mobileNav.removeClass('open');
-        $('body').css('overflow', '');
-    });
+    initMsNav();
 
     // ================================================================
     // SCROLL REVEAL (IntersectionObserver)
@@ -38,7 +18,7 @@ $(function () {
         var revealObserver = new IntersectionObserver(function (entries) {
             $.each(entries, function (_, entry) {
                 if (entry.isIntersecting) {
-                    $(entry.target).addClass('visible');
+                    $(entry.target).addClass('is-visible');
                 }
             });
         }, { threshold: 0.06, rootMargin: '0px 0px -30px 0px' });
@@ -47,7 +27,7 @@ $(function () {
             revealObserver.observe(this);
         });
     } else {
-        $('.reveal, .reveal-scale').addClass('visible');
+        $('.reveal, .reveal-scale').addClass('is-visible');
     }
 
     // ================================================================
@@ -89,11 +69,22 @@ $(function () {
     var $dots = $('#ms-showcase-nav .ms-showcase-dot');
     var slideCount = $track.children().length;
     var currentSlide = 0;
+    // CSS `scroll-behavior` can't override a JS scrollTo() option — honour
+    // the preference here too.
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function markActiveDot() {
+        $dots.removeClass('active').attr('aria-selected', 'false')
+            .eq(currentSlide).addClass('active').attr('aria-selected', 'true');
+    }
 
     function goToSlide(idx) {
         currentSlide = (idx + slideCount) % slideCount;
-        $track[0].scrollTo({ left: $track[0].offsetWidth * currentSlide, behavior: 'smooth' });
-        $dots.removeClass('active').eq(currentSlide).addClass('active');
+        $track[0].scrollTo({
+            left: $track[0].offsetWidth * currentSlide,
+            behavior: reduceMotion ? 'auto' : 'smooth',
+        });
+        markActiveDot();
     }
 
     $('#ms-showcase-prev').on('click', function () { goToSlide(currentSlide - 1); });
@@ -108,7 +99,7 @@ $(function () {
             var idx = Math.round($track[0].scrollLeft / $track[0].offsetWidth);
             if (idx !== currentSlide) {
                 currentSlide = idx;
-                $dots.removeClass('active').eq(currentSlide).addClass('active');
+                markActiveDot();
             }
         }, 80);
     });
