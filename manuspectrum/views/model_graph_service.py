@@ -8,7 +8,7 @@ import re
 
 from django.conf import settings
 from django.db.models import Count
-from django.utils import translation
+from django.utils import timezone, translation
 
 # The four atelier "carte des ressources" groupings, keyed by graph slug.
 GROUPS = [
@@ -252,6 +252,7 @@ def _excluded_graph_ids():
 def build_model_graph(language="en"):
     """Introspect resource graphs into the explorer payload (see spec)."""
     from arches.app.models.models import (
+        CardXNodeXWidget,
         Concept,
         GraphModel,
         Node,
@@ -318,6 +319,35 @@ def build_model_graph(language="en"):
 
         all_nodes = list(Node.objects.filter(graph_id__in=graph_ids))
 
+        # Localised field labels. Node.name is NOT localizable in Arches core;
+        # the curated, per-language labels live on the card/widget rows (and
+        # were translated via `i18n loadmessages`). Prefer them when present —
+        # this is also what the Arches data-entry forms display.
+        widget_labels = {}
+        for row in CardXNodeXWidget.objects.filter(
+            node_id__in=[n.nodeid for n in all_nodes]
+        ).values("node_id", "label"):
+            raw = row["label"]
+            if raw is None:
+                continue
+            if isinstance(raw, dict):
+                lbl = (
+                    raw.get(language)
+                    or raw.get(language.split("-")[0])
+                    or raw.get("en")
+                )
+            else:
+                # .values() still applies from_db_value, so this is an
+                # I18n_String — str() resolves it in the ACTIVE language
+                # (we are inside translation.override(language)).
+                lbl = str(raw)
+            lbl = (lbl or "").strip()
+            if lbl and lbl.lower() not in ("null", "none"):
+                widget_labels[str(row["node_id"])] = lbl
+
+        def node_label(n):
+            return widget_labels.get(str(n.nodeid)) or str(n.name)
+
         # The single new query: cardinality + nesting for every nodegroup in play.
         # `nodegroups[]` already ships a flat list of groups; what it cannot say is
         # that Person's 23 groups are really 10 roots in a depth-4 forest.
@@ -369,7 +399,7 @@ def build_model_graph(language="en"):
                 struct_nodes.append(
                     {
                         "id": nid,
-                        "name": str(n.name),
+                        "name": node_label(n),
                         "datatype": dt,
                         "cidoc": prettify_cidoc(n.ontologyclass),
                         "cidoc_uri": str(n.ontologyclass or ""),
@@ -396,7 +426,7 @@ def build_model_graph(language="en"):
                 bucket = ng_map.setdefault(ngid, {"id": ngid, "name": "", "nodes": []})
                 bucket["nodes"].append(
                     {
-                        "name": str(n.name),
+                        "name": node_label(n),
                         "datatype": dt,
                         "cidoc": prettify_cidoc(n.ontologyclass),
                         "required": bool(n.isrequired),
@@ -440,6 +470,7 @@ def build_model_graph(language="en"):
                 {
                     "id": gid,
                     "name": str(g.name),
+                    "slug": (g.slug or "").strip().lower(),
                     "description": str(g.description or ""),
                     "group": group_for_slug(g.slug),
                     "cidoc": prettify_cidoc(_top_ontologyclass(g_nodes)),
@@ -503,8 +534,58 @@ def build_model_graph(language="en"):
             "thesauri": thesauri,
         }
 
+        # RDM collection labels + sizes: concept fields expose
+        # "collection_label"/"collection_size" ("Pigments", 312) instead of a
+        # bare UUID — the FAIR argument, readable. Two cheap queries; any RDM
+        # quirk degrades to the UUID, never to a 500.
+        coll_ids = set()
+        for m in models:
+            for nd in m["structure"]["nodes"]:
+                c = (nd.get("config") or {}).get("collection")
+                if c:
+                    coll_ids.add(c)
+        if coll_ids:
+            try:
+                from arches.app.models.models import Relation, Value
+
+                labels = {}
+                for v in Value.objects.filter(
+                    concept_id__in=coll_ids, valuetype_id="prefLabel"
+                ).values("concept_id", "value", "language_id"):
+                    lang2 = (v["language_id"] or "").lower()[:2]
+                    labels.setdefault(str(v["concept_id"]), {})[lang2] = v["value"]
+                sizes = {
+                    str(r["conceptfrom_id"]): r["n"]
+                    for r in Relation.objects.filter(
+                        conceptfrom_id__in=coll_ids, relationtype_id="member"
+                    )
+                    .values("conceptfrom_id")
+                    .order_by()
+                    .annotate(n=Count("relationid"))
+                }
+                page_lang = language.split("-")[0]
+                for m in models:
+                    for nd in m["structure"]["nodes"]:
+                        cfg = nd.get("config") or {}
+                        c = cfg.get("collection")
+                        if not c:
+                            continue
+                        lbls = labels.get(c) or {}
+                        lbl = (
+                            lbls.get(page_lang)
+                            or lbls.get("en")
+                            or next(iter(lbls.values()), None)
+                        )
+                        if lbl:
+                            cfg["collection_label"] = str(lbl)
+                        if c in sizes:
+                            cfg["collection_size"] = sizes[c]
+            except Exception:  # noqa: BLE001
+                pass
+
         return {
             "language": language,
+            "generated_at": timezone.now().isoformat(),
             "stats": stats,
             "groups": GROUPS,
             "datatypes": datatypes,

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 05:34-0500\n"
+"POT-Creation-Date: 2026-07-21 08:42-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -181,7 +181,7 @@ msgid "Platform"
 msgstr "Plateforme"
 
 #: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:18
-#: templates/includes/ms_header.htm:93 templates/index.htm:546
+#: templates/includes/ms_header.htm:93 templates/index.htm:544
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:49
 msgid "Search"
 msgstr "Rechercher"
@@ -274,17 +274,17 @@ msgid "Main Navigation"
 msgstr "Navigation principale"
 
 #: templates/includes/ms_header.htm:15 templates/includes/ms_header.htm:90
-#: templates/index.htm:273
+#: templates/index.htm:271
 msgid "The Project"
 msgstr "Le Projet"
 
 #: templates/includes/ms_header.htm:16 templates/includes/ms_header.htm:91
-#: templates/index.htm:416
+#: templates/index.htm:414
 msgid "Explore"
 msgstr "Explorer"
 
 #: templates/includes/ms_header.htm:17 templates/includes/ms_header.htm:92
-#: templates/index.htm:482
+#: templates/index.htm:480
 msgid "Analyses"
 msgstr "Analyses"
 
@@ -350,30 +350,30 @@ msgstr ""
 "chimiques — XRF, Raman, FTIR, FORS — de manuscrits, imprimés et inscriptions"
 " : pigments, encres, supports."
 
-#: templates/index.htm:224 templates/views/pages/graph-explorer.htm:204
+#: templates/index.htm:222 templates/views/pages/graph-explorer.htm:204
 msgid "Close"
 msgstr "Fermer"
 
 # ============================================================
 # Homepage — index.htm
 # ============================================================
-#: templates/index.htm:228
+#: templates/index.htm:226
 msgid "ManuSpectrum — Spectral Analysis Plot"
 msgstr "ManuSpectrum — Tracé d'analyse spectrale"
 
-#: templates/index.htm:229
+#: templates/index.htm:227
 msgid "interactive"
 msgstr "interactif"
 
-#: templates/index.htm:233
+#: templates/index.htm:231
 msgid "Channel 1 (XRF)"
 msgstr "Canal 1 (XRF)"
 
-#: templates/index.htm:234
+#: templates/index.htm:232
 msgid "Channel 2 (FORS)"
 msgstr "Canal 2 (FORS)"
 
-#: templates/index.htm:241
+#: templates/index.htm:239
 msgid ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
@@ -381,7 +381,7 @@ msgstr ""
 "Base de données interopérable pour l'<em>analyse physico-chimique</em> du "
 "patrimoine culturel écrit"
 
-#: templates/index.htm:245
+#: templates/index.htm:243
 msgid ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
@@ -389,23 +389,23 @@ msgstr ""
 "Explorer, visualiser et partager les données d'analyse des matériaux du "
 "patrimoine culturel écrit au sein de l'écosystème Biblissima+."
 
-#: templates/index.htm:250 templates/index.htm:547
+#: templates/index.htm:248 templates/index.htm:545
 msgid "Explore the database"
 msgstr "Explorer la base de données"
 
-#: templates/index.htm:253
+#: templates/index.htm:251
 msgid "Learn more"
 msgstr "En savoir plus"
 
-#: templates/index.htm:260
+#: templates/index.htm:258
 msgid "scroll"
 msgstr "défiler"
 
-#: templates/index.htm:274
+#: templates/index.htm:272
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Penser et modéliser les matériaux du patrimoine culturel écrit"
 
-#: templates/index.htm:280
+#: templates/index.htm:278
 msgid ""
 "ManuSpectrum was developed within Cluster 2 — “Consideration and "
 "searchability of materials analysis data” — of the ANR Biblissima+ "
@@ -420,7 +420,7 @@ msgstr ""
 "inscriptions, sceaux et autres objets patrimoniaux, en partenariat avec "
 "Huma-Num."
 
-#: templates/index.htm:283
+#: templates/index.htm:281
 msgid ""
 "Through structuring and standardizing data according to shared models, the "
 "project provides reliable, easy-to-use tools accessible to non-specialists. "
@@ -435,7 +435,7 @@ msgstr ""
 "l'accès aux données et la collaboration entre chercheurs de différentes "
 "disciplines."
 
-#: templates/index.htm:286
+#: templates/index.htm:284
 msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
 "object, its context, the analyses, and their interpretations, using thesauri"
@@ -447,12 +447,12 @@ msgstr ""
 "utilisant des thésaurus et des bases d'autorité pour contextualiser les "
 "informations sur des documents hétérogènes."
 
-#: templates/index.htm:294 templates/views/pages/contact.htm:146
+#: templates/index.htm:292 templates/views/pages/contact.htm:146
 #: templates/views/pages/team.htm:173
 msgid "Biblissima+ — Cluster 2"
 msgstr "Biblissima+ — Cluster 2"
 
-#: templates/index.htm:296
+#: templates/index.htm:294
 msgid ""
 "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient"
 " written cultures. Within Cluster 2, the objective is to archive, share and "
@@ -467,47 +467,47 @@ msgstr ""
 "interopérabilité avec le portail Biblissima et les standards du patrimoine "
 "culturel écrit."
 
-#: templates/index.htm:313 templates/index.htm:494
+#: templates/index.htm:311 templates/index.htm:492
 msgid "X-ray Fluorescence"
 msgstr "Fluorescence X"
 
-#: templates/index.htm:318
+#: templates/index.htm:316
 msgid "X-ray Micro-Fluorescence"
 msgstr "Microfluorescence X"
 
-#: templates/index.htm:323
+#: templates/index.htm:321
 msgid "Fiber Optic Reflectance"
 msgstr "Réflectance par fibre optique"
 
-#: templates/index.htm:328
+#: templates/index.htm:326
 msgid "Raman Spectroscopy"
 msgstr "Spectroscopie Raman"
 
-#: templates/index.htm:333
+#: templates/index.htm:331
 msgid "IR Spectroscopy"
 msgstr "Spectroscopie IR"
 
-#: templates/index.htm:338
+#: templates/index.htm:336
 msgid "Hyperspectral Imaging"
 msgstr "Imagerie hyperspectrale"
 
-#: templates/index.htm:343 templates/index.htm:517
+#: templates/index.htm:341 templates/index.htm:515
 msgid "Multispectral Imaging"
 msgstr "Imagerie multispectrale"
 
-#: templates/index.htm:348
+#: templates/index.htm:346
 msgid "Proteomics (MALDI-TOF)"
 msgstr "Protéomique (MALDI-TOF)"
 
-#: templates/index.htm:353
+#: templates/index.htm:351
 msgid "And many more"
 msgstr "Et bien d'autres"
 
-#: templates/index.htm:358
+#: templates/index.htm:356
 msgid "Analysis techniques in pictures"
 msgstr "Les techniques d'analyse en images"
 
-#: templates/index.htm:361
+#: templates/index.htm:359
 msgid ""
 "A manuscript on the motorised stage of a macro-XRF scanner, which maps "
 "chemical elements across the page without touching it"
@@ -515,18 +515,18 @@ msgstr ""
 "Un manuscrit sur la platine motorisée d'un scanner macro-XRF, qui "
 "cartographie les éléments chimiques de la page sans la toucher"
 
-#: templates/index.htm:363
+#: templates/index.htm:361
 msgid "Macro-XRF scanning of a manuscript"
 msgstr "Balayage macro-XRF d'un manuscrit"
 
-#: templates/index.htm:364
+#: templates/index.htm:362
 msgid ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 msgstr ""
 "Acquisition in situ de cartographies élémentaires par balayage de "
 "fluorescence X (macro-XRF)"
 
-#: templates/index.htm:369
+#: templates/index.htm:367
 msgid ""
 "An optical fibre held over a manuscript for FORS analysis — the reflected "
 "light carries the spectral signature of the pigments"
@@ -534,11 +534,11 @@ msgstr ""
 "Une fibre optique tenue au-dessus d'un manuscrit pour une analyse FORS — la "
 "lumière réfléchie porte la signature spectrale des pigments"
 
-#: templates/index.htm:371
+#: templates/index.htm:369
 msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgstr "Spectroscopie de réflectance par fibre optique (FORS)"
 
-#: templates/index.htm:372
+#: templates/index.htm:370
 msgid ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
@@ -546,7 +546,7 @@ msgstr ""
 "Caractérisation non invasive des pigments par spectroscopie de réflectance "
 "par fibre optique"
 
-#: templates/index.htm:377
+#: templates/index.htm:375
 msgid ""
 "A manuscript under ultraviolet light during hyperspectral imaging, revealing"
 " inks and retouches invisible to the naked eye"
@@ -554,11 +554,11 @@ msgstr ""
 "Un manuscrit sous lumière ultraviolette pendant une imagerie hyperspectrale,"
 " révélant encres et retouches invisibles à l'œil nu"
 
-#: templates/index.htm:379
+#: templates/index.htm:377
 msgid "UV hyperspectral imaging"
 msgstr "Imagerie hyperspectrale UV"
 
-#: templates/index.htm:380
+#: templates/index.htm:378
 msgid ""
 "Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
 "eye"
@@ -566,35 +566,35 @@ msgstr ""
 "Imagerie hyperspectrale ultraviolette pour révéler des détails invisibles à "
 "l'œil nu"
 
-#: templates/index.htm:388
+#: templates/index.htm:386
 msgid "Previous"
 msgstr "Précédent"
 
-#: templates/index.htm:391
+#: templates/index.htm:389
 msgid "Next"
 msgstr "Suivant"
 
-#: templates/index.htm:397
+#: templates/index.htm:395
 msgid "Choose a slide"
 msgstr "Choisir une diapositive"
 
-#: templates/index.htm:398
+#: templates/index.htm:396
 msgid "Slide 1 of 3 — Macro-XRF scanning"
 msgstr "Diapositive 1 sur 3 — Balayage macro-XRF"
 
-#: templates/index.htm:399
+#: templates/index.htm:397
 msgid "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
 msgstr "Diapositive 2 sur 3 — Spectroscopie de réflectance par fibre optique"
 
-#: templates/index.htm:400
+#: templates/index.htm:398
 msgid "Slide 3 of 3 — UV hyperspectral imaging"
 msgstr "Diapositive 3 sur 3 — Imagerie hyperspectrale UV"
 
-#: templates/index.htm:417
+#: templates/index.htm:415
 msgid "What you can discover"
 msgstr "Ce que vous pouvez découvrir"
 
-#: templates/index.htm:419
+#: templates/index.htm:417
 msgid ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
@@ -603,11 +603,11 @@ msgstr ""
 "documents historiques, en corrélant les données avec leur contexte de "
 "patrimoine culturel écrit."
 
-#: templates/index.htm:426
+#: templates/index.htm:424
 msgid "Spectra and analysis data"
 msgstr "Spectres et données d'analyse"
 
-#: templates/index.htm:427
+#: templates/index.htm:425
 msgid ""
 "Visualize and compare reference spectra and analysis datasets. Explore XRF, "
 "FTIR, Raman, and other analysis results directly on the platform."
@@ -616,11 +616,11 @@ msgstr ""
 "d'analyse. Explorez les résultats d'analyses XRF, FTIR, Raman et d'autres "
 "techniques directement dans la plateforme."
 
-#: templates/index.htm:438
+#: templates/index.htm:436
 msgid "IIIF Annotations"
 msgstr "Annotations IIIF"
 
-#: templates/index.htm:439
+#: templates/index.htm:437
 msgid ""
 "Analysis data is exposed as IIIF annotations, making it accessible from any "
 "compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
@@ -633,11 +633,11 @@ msgstr ""
 " les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
 "directement superposées aux images haute résolution des documents."
 
-#: templates/index.htm:450
+#: templates/index.htm:448
 msgid "Interoperability and Standards"
 msgstr "Interopérabilité et standards"
 
-#: templates/index.htm:451
+#: templates/index.htm:449
 msgid ""
 "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
 "ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
@@ -649,15 +649,15 @@ msgstr ""
 "garantissant leur interopérabilité avec les systèmes patrimoniaux "
 "internationaux et le portail Biblissima."
 
-#: templates/index.htm:455
+#: templates/index.htm:453
 msgid "AGORHA thesaurus"
 msgstr "Thésaurus AGORHA"
 
-#: templates/index.htm:462
+#: templates/index.htm:460
 msgid "Material Characterization"
 msgstr "Caractérisation matérielle"
 
-#: templates/index.htm:463
+#: templates/index.htm:461
 msgid ""
 "Explore the layers, materials and chemical elements identified on "
 "manuscripts, printed books and other written heritage — pigments, inks, "
@@ -669,27 +669,27 @@ msgstr ""
 " liants, supports de parchemin et de papier — avec différents niveaux de "
 "fiabilité et de caractérisation."
 
-#: templates/index.htm:465
+#: templates/index.htm:463
 msgid "Pigments"
 msgstr "Pigments"
 
-#: templates/index.htm:466
+#: templates/index.htm:464
 msgid "Layers"
 msgstr "Couches"
 
-#: templates/index.htm:467
+#: templates/index.htm:465
 msgid "Binders"
 msgstr "Liants"
 
-#: templates/index.htm:468
+#: templates/index.htm:466
 msgid "Substrates"
 msgstr "Supports"
 
-#: templates/index.htm:483
+#: templates/index.htm:481
 msgid "Visualize physicochemical analyses"
 msgstr "Visualiser les analyses physico-chimiques"
 
-#: templates/index.htm:485
+#: templates/index.htm:483
 msgid ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to written cultural heritage objects."
@@ -698,7 +698,7 @@ msgstr ""
 "différentes techniques d'analyse appliquées aux objets du patrimoine "
 "culturel écrit."
 
-#: templates/index.htm:491
+#: templates/index.htm:489
 msgid ""
 "Macro-XRF map of calcium (Ca) on an ornate letter — bright areas mark "
 "calcium-rich zones"
@@ -706,7 +706,7 @@ msgstr ""
 "Cartographie macro-XRF du calcium (Ca) sur une lettre ornée — les zones "
 "claires marquent les zones riches en calcium"
 
-#: templates/index.htm:492
+#: templates/index.htm:490
 msgid ""
 "Macro-XRF map of mercury (Hg) on the same ornate letter — bright areas "
 "reveal vermilion, a mercury pigment"
@@ -714,11 +714,11 @@ msgstr ""
 "Cartographie macro-XRF du mercure (Hg) sur la même lettre ornée — les zones "
 "claires révèlent le vermillon, un pigment au mercure"
 
-#: templates/index.htm:495
+#: templates/index.htm:493
 msgid "Macro-XRF mapping"
 msgstr "Cartographie macro-XRF"
 
-#: templates/index.htm:496
+#: templates/index.htm:494
 msgid ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
@@ -726,40 +726,40 @@ msgstr ""
 "Répartition du mercure (Hg) et du calcium (Ca) sur une lettre ornée — "
 "Avranches, BM, Ms. 86, f. 32v"
 
-#: templates/index.htm:501
+#: templates/index.htm:499
 msgid "Manuscript analysis"
 msgstr "Analyse sur manuscrit"
 
-#: templates/index.htm:503 templates/index.htm:504 templates/index.htm:505
-#: templates/index.htm:506
+#: templates/index.htm:501 templates/index.htm:502 templates/index.htm:503
+#: templates/index.htm:504
 msgid "Analysis point"
 msgstr "Point d'analyse"
 
-#: templates/index.htm:510
+#: templates/index.htm:508
 msgid "Spectroscopy"
 msgstr "Spectroscopie"
 
-#: templates/index.htm:511
+#: templates/index.htm:509
 msgid "Point Analysis"
 msgstr "Analyse ponctuelle"
 
-#: templates/index.htm:512
+#: templates/index.htm:510
 msgid "Click on analysis points to explore spectral data"
 msgstr "Cliquez sur les points d'analyse pour explorer les données spectrales"
 
-#: templates/index.htm:527
+#: templates/index.htm:525
 msgid "Imaging"
 msgstr "Imagerie"
 
-#: templates/index.htm:528
+#: templates/index.htm:526
 msgid "Multispectral"
 msgstr "Multispectral"
 
-#: templates/index.htm:529
+#: templates/index.htm:527
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Balayage de bandes spectrales et composites fausses couleurs via IIIF"
 
-#: templates/index.htm:549
+#: templates/index.htm:547
 msgid ""
 "Search by material — a pigment, an ink, a support —, analysis technique, "
 "written cultural heritage object, or chemical element. Advanced filters "
@@ -769,55 +769,55 @@ msgstr ""
 "d'analyse, objet du patrimoine culturel écrit ou élément chimique. Filtres "
 "avancés disponibles dans l'interface de recherche."
 
-#: templates/index.htm:562
+#: templates/index.htm:560
 msgid "Search materials, techniques, objects..."
 msgstr "Rechercher des matériaux, techniques, objets..."
 
-#: templates/index.htm:569
+#: templates/index.htm:567
 msgid "Vermilion"
 msgstr "Vermillon"
 
-#: templates/index.htm:570
+#: templates/index.htm:568
 msgid "manuscript"
 msgstr "manuscrit"
 
-#: templates/index.htm:570
+#: templates/index.htm:568
 msgid "Manuscripts"
 msgstr "Manuscrits"
 
-#: templates/index.htm:571
+#: templates/index.htm:569
 msgid "XRF"
 msgstr "XRF"
 
-#: templates/index.htm:572
+#: templates/index.htm:570
 msgid "parchment"
 msgstr "parchemin"
 
-#: templates/index.htm:572
+#: templates/index.htm:570
 msgid "Parchment"
 msgstr "Parchemin"
 
-#: templates/index.htm:573
+#: templates/index.htm:571
 msgid "illumination"
 msgstr "enluminure"
 
-#: templates/index.htm:573
+#: templates/index.htm:571
 msgid "Illuminations"
 msgstr "Enluminures"
 
-#: templates/index.htm:574
+#: templates/index.htm:572
 msgid "Raman"
 msgstr "Raman"
 
-#: templates/index.htm:579
+#: templates/index.htm:577
 msgid "Access advanced search"
 msgstr "Accéder à la recherche avancée"
 
-#: templates/index.htm:592 templates/views/pages/team.htm:190
+#: templates/index.htm:590 templates/views/pages/team.htm:190
 msgid "Our Partners"
 msgstr "Nos Partenaires"
 
-#: templates/index.htm:596 templates/views/pages/team.htm:193
+#: templates/index.htm:594 templates/views/pages/team.htm:193
 msgid "Ministry of Culture"
 msgstr "Ministère de la Culture"
 
@@ -1195,7 +1195,7 @@ msgstr "Copié."
 msgid "Copy failed — select the text and copy it manually."
 msgstr "Échec de la copie — sélectionnez le texte et copiez-le manuellement."
 
-#: templates/javascript.htm:99 templates/javascript.htm:113
+#: templates/javascript.htm:99 templates/javascript.htm:114
 #: templates/views/pages/graph-explorer.htm:198
 msgid "Fields"
 msgstr "Champs"
@@ -1230,30 +1230,35 @@ msgstr ""
 "Le graphique n'a pas pu être chargé — rouvrez cet onglet pour réessayer."
 
 #: templates/javascript.htm:107
+#, python-brace-format
+msgid "data as of {date}"
+msgstr "données au {date}"
+
+#: templates/javascript.htm:108
 msgid "models"
 msgstr "modèles"
 
-#: templates/javascript.htm:108
+#: templates/javascript.htm:109
 msgid "relations"
 msgstr "relations"
 
-#: templates/javascript.htm:109
+#: templates/javascript.htm:110
 msgid "fields"
 msgstr "champs"
 
-#: templates/javascript.htm:110
+#: templates/javascript.htm:111
 msgid "datatypes"
 msgstr "types de données"
 
-#: templates/javascript.htm:111
+#: templates/javascript.htm:112
 msgid "Fields by datatype"
 msgstr "Champs par type de données"
 
-#: templates/javascript.htm:112
+#: templates/javascript.htm:113
 msgid "Datatype (sorted by field count, descending)"
 msgstr "Type de données (trié par nombre de champs, décroissant)"
 
-#: templates/javascript.htm:114
+#: templates/javascript.htm:115
 #, python-brace-format
 msgid ""
 "Adjacency matrix: {models} models, {relations} typed relationships. Rows are"
@@ -1262,11 +1267,11 @@ msgstr ""
 "Matrice d'adjacence : {models} modèles, {relations} relations typées. Les "
 "lignes sont les sources, les colonnes les cibles."
 
-#: templates/javascript.htm:115
+#: templates/javascript.htm:116
 msgid "Source model, down; target model, across"
 msgstr "Modèle source en ligne ; modèle cible en colonne"
 
-#: templates/javascript.htm:116
+#: templates/javascript.htm:117
 msgid ""
 "Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
 "open the model."
@@ -1274,29 +1279,29 @@ msgstr ""
 "Survolez une cellule ou placez-y le focus pour lire ses propriétés CIDOC-"
 "CRM. Sélectionnez-la pour ouvrir le modèle."
 
-#: templates/javascript.htm:117
+#: templates/javascript.htm:118
 msgid "same model"
 msgstr "même modèle"
 
-#: templates/javascript.htm:118
+#: templates/javascript.htm:119
 msgid "no relation"
 msgstr "aucune relation"
 
-#: templates/javascript.htm:119
+#: templates/javascript.htm:120
 msgid "1 relation"
 msgstr "1 relation"
 
-#: templates/javascript.htm:120
+#: templates/javascript.htm:121
 #, python-brace-format
 msgid "{n} relations"
 msgstr "{n} relations"
 
-#: templates/javascript.htm:121
+#: templates/javascript.htm:122
 msgid "No family selected — turn one back on to see the matrix."
 msgstr ""
 "Aucune famille sélectionnée — réactivez-en une pour afficher la matrice."
 
-#: templates/javascript.htm:122
+#: templates/javascript.htm:123
 #, python-brace-format
 msgid ""
 "{model} and its {n} directly connected models, joined by {r} typed "
@@ -1307,41 +1312,41 @@ msgstr ""
 "typées. Chaque courbe représente une relation, annotée de sa propriété "
 "CIDOC-CRM."
 
-#: templates/javascript.htm:123 templates/views/pages/graph-explorer.htm:159
+#: templates/javascript.htm:124 templates/views/pages/graph-explorer.htm:159
 msgid "Select a model to see it with its directly connected models."
 msgstr ""
 "Sélectionnez un modèle pour l'afficher avec les modèles qui lui sont "
 "directement connectés."
 
-#: templates/javascript.htm:124
+#: templates/javascript.htm:125
 msgid "Circle size = published records"
 msgstr "Taille du cercle = enregistrements publiés"
 
-#: templates/javascript.htm:125
+#: templates/javascript.htm:126
 msgid "Dashed outline = no records published yet"
 msgstr "Contour en pointillés = aucun enregistrement publié"
 
-#: templates/javascript.htm:126 templates/views/pages/graph-explorer.htm:113
+#: templates/javascript.htm:127 templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Modèle"
 
-#: templates/javascript.htm:127
+#: templates/javascript.htm:128
 msgid "Family"
 msgstr "Famille"
 
-#: templates/javascript.htm:128
+#: templates/javascript.htm:129
 msgid "Links"
 msgstr "Liens"
 
-#: templates/javascript.htm:129
+#: templates/javascript.htm:130
 msgid "Outgoing"
 msgstr "Sortantes"
 
-#: templates/javascript.htm:130
+#: templates/javascript.htm:131
 msgid "Incoming"
 msgstr "Entrantes"
 
-#: templates/javascript.htm:131
+#: templates/javascript.htm:132
 #, python-brace-format
 msgid ""
 "Every model with its outgoing and incoming typed relationships. {n} models, "
@@ -1350,44 +1355,44 @@ msgstr ""
 "Chaque modèle avec ses relations typées sortantes et entrantes. {n} modèles,"
 " {r} relations."
 
-#: templates/javascript.htm:132
+#: templates/javascript.htm:133
 msgid "Filter fields…"
 msgstr "Filtrer les champs…"
 
-#: templates/javascript.htm:133
+#: templates/javascript.htm:134
 msgid "Relation fields only"
 msgstr "Champs de relation uniquement"
 
-#: templates/javascript.htm:134
+#: templates/javascript.htm:135
 msgid "No field matches."
 msgstr "Aucun champ ne correspond."
 
-#: templates/javascript.htm:135
+#: templates/javascript.htm:136
 #, python-brace-format
 msgid "{n} of {total}"
 msgstr "{n} sur {total}"
 
-#: templates/javascript.htm:136
+#: templates/javascript.htm:137
 msgid "No model matches"
 msgstr "Aucun modèle ne correspond"
 
-#: templates/javascript.htm:137
+#: templates/javascript.htm:138
 #, python-brace-format
 msgid "{n} records published"
 msgstr "{n} enregistrements publiés"
 
-#: templates/javascript.htm:138
+#: templates/javascript.htm:139
 #, python-brace-format
 msgid "{n} models defined and open for deposit"
 msgstr "{n} modèles définis et ouverts au dépôt"
 
-#: templates/javascript.htm:139
+#: templates/javascript.htm:140
 msgid "No records published yet — model defined and open for deposit."
 msgstr ""
 "Aucun enregistrement publié pour l'instant — modèle défini et ouvert au "
 "dépôt."
 
-#: templates/javascript.htm:140
+#: templates/javascript.htm:141
 #, python-format, python-brace-format
 msgid ""
 "Every field in ManuSpectrum and every link between models: {fields} fields "
@@ -1398,7 +1403,7 @@ msgstr ""
 "répartis sur {models} modèles, dont {pct}%% adossés à un thésaurus publié "
 "plutôt qu’à du texte libre. Cliquez sur un modèle pour consulter son schéma."
 
-#: templates/javascript.htm:141
+#: templates/javascript.htm:142
 #, python-brace-format
 msgid ""
 "of fields draw on a published thesaurus, not free text — {n} of {total}"
@@ -1406,12 +1411,12 @@ msgstr ""
 "des champs s’appuient sur un thésaurus publié plutôt que sur du texte libre "
 "— {n} sur {total}"
 
-#: templates/javascript.htm:142
+#: templates/javascript.htm:143
 #, python-brace-format
 msgid "typed relationships across {models} interconnected models"
 msgstr "relations typées entre {models} modèles interconnectés"
 
-#: templates/javascript.htm:143
+#: templates/javascript.htm:144
 #, python-brace-format
 msgid ""
 "{nodegroups} field groups · {total} nodes ({data} of them data) · "
@@ -1420,7 +1425,7 @@ msgstr ""
 "{nodegroups} groupes de champs · {total} nœuds (dont {data} porteurs de "
 "données) · {properties} propriétés d’ontologie · {thesauri} thésaurus."
 
-#: templates/javascript.htm:144
+#: templates/javascript.htm:145
 #, python-brace-format
 msgid ""
 "{models} independent models linked by {relations} typed CIDOC relationships "
@@ -1431,152 +1436,152 @@ msgstr ""
 "— ainsi une personne enregistrée une fois comme analyste est le même "
 "enregistrement lorsqu’elle réapparaît comme propriétaire d’un manuscrit."
 
-#: templates/javascript.htm:148
+#: templates/javascript.htm:149
 #, python-brace-format
 msgid "No field, class or property matches “{q}”."
 msgstr "Aucun champ, classe ou propriété ne correspond à « {q} »."
 
-#: templates/javascript.htm:149
+#: templates/javascript.htm:150
 #, python-brace-format
 msgid "{n} of {total} fields"
 msgstr "{n} champs sur {total}"
 
-#: templates/javascript.htm:150
+#: templates/javascript.htm:151
 #, python-brace-format
 msgid "{n} fields"
 msgstr "{n} champs"
 
-#: templates/javascript.htm:151
+#: templates/javascript.htm:152
 #, python-brace-format
 msgid "{n} field"
 msgstr "{n} champ"
 
-#: templates/javascript.htm:152
+#: templates/javascript.htm:153
 #, python-brace-format
 msgid "{n} fields · {m} group"
 msgstr "{n} champs · {m} groupe"
 
-#: templates/javascript.htm:153
+#: templates/javascript.htm:154
 #, python-brace-format
 msgid "{n} fields · {m} groups"
 msgstr "{n} champs · {m} groupes"
 
-#: templates/javascript.htm:154
+#: templates/javascript.htm:155
 msgid "Repeatable"
 msgstr "Répétable"
 
-#: templates/javascript.htm:155
+#: templates/javascript.htm:156
 msgid "Once"
 msgstr "Une seule fois"
 
-#: templates/javascript.htm:156
+#: templates/javascript.htm:157
 msgid "Structural node — carries no data"
 msgstr "Nœud structurel — ne porte aucune donnée"
 
-#: templates/javascript.htm:157
+#: templates/javascript.htm:158
 #, python-brace-format
 msgid "Links to {model}"
 msgstr "Pointe vers {model}"
 
-#: templates/javascript.htm:158
+#: templates/javascript.htm:159
 #, python-brace-format
 msgid "View {model} →"
 msgstr "Voir {model} →"
 
-#: templates/javascript.htm:159
+#: templates/javascript.htm:160
 msgid "From parent"
 msgstr "Depuis le parent"
 
-#: templates/javascript.htm:160
+#: templates/javascript.htm:161
 msgid "View structure →"
 msgstr "Voir la structure →"
 
-#: templates/javascript.htm:161
+#: templates/javascript.htm:162
 #, python-brace-format
 msgid "Showing {node} and below"
 msgstr "Affichage de {node} et de ses descendants"
 
-#: templates/javascript.htm:162
+#: templates/javascript.htm:163
 #, python-brace-format
 msgid "← {model}"
 msgstr "← {model}"
 
-#: templates/javascript.htm:163
+#: templates/javascript.htm:164
 #, python-brace-format
 msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 msgstr "{model} : {n} champs dans {g} groupes, imbriqués sur {d} niveaux."
 
-#: templates/javascript.htm:164
+#: templates/javascript.htm:165
 msgid "Common properties (P1, P2) are dimmed."
 msgstr "Les propriétés courantes (P1, P2) sont estompées."
 
-#: templates/javascript.htm:165
+#: templates/javascript.htm:166
 msgid "Ring = field group · double ring = repeatable"
 msgstr "Anneau = groupe de champs · double anneau = répétable"
 
-#: templates/javascript.htm:166
+#: templates/javascript.htm:167
 msgid "∗ = required"
 msgstr "∗ = obligatoire"
 
-#: templates/javascript.htm:167
+#: templates/javascript.htm:168
 msgid "CIDOC-CRM class"
 msgstr "Classe CIDOC-CRM"
 
-#: templates/javascript.htm:168 templates/javascript.htm:175
+#: templates/javascript.htm:169 templates/javascript.htm:176
 msgid "Path"
 msgstr "Chemin"
 
-#: templates/javascript.htm:169 templates/javascript.htm:181
+#: templates/javascript.htm:170 templates/javascript.htm:182
 msgid "Cardinality"
 msgstr "Cardinalité"
 
-#: templates/javascript.htm:170 templates/javascript.htm:180
+#: templates/javascript.htm:171 templates/javascript.htm:181
 msgid "Required"
 msgstr "Obligatoire"
 
-#: templates/javascript.htm:171
+#: templates/javascript.htm:172
 msgid "Optional"
 msgstr "Facultatif"
 
-#: templates/javascript.htm:172
+#: templates/javascript.htm:173
 msgid "Controlled vocabulary"
 msgstr "Vocabulaire contrôlé"
 
-#: templates/javascript.htm:173
+#: templates/javascript.htm:174
 msgid "See this relationship in the Network view"
 msgstr "Voir cette relation dans la vue Réseau"
 
-#: templates/javascript.htm:174 templates/views/pages/conceptual-model.htm:89
+#: templates/javascript.htm:175 templates/views/pages/conceptual-model.htm:89
 msgid "Field group"
 msgstr "Groupe de champs"
 
-#: templates/javascript.htm:176
+#: templates/javascript.htm:177
 msgid "Field"
 msgstr "Champ"
 
-#: templates/javascript.htm:177 templates/views/pages/conceptual-model.htm:87
+#: templates/javascript.htm:178 templates/views/pages/conceptual-model.htm:87
 msgid "Datatype"
 msgstr "Type de donnée"
 
-#: templates/javascript.htm:178
+#: templates/javascript.htm:179
 msgid "CIDOC class"
 msgstr "Classe CIDOC"
 
-#: templates/javascript.htm:179
+#: templates/javascript.htm:180
 msgid "Property"
 msgstr "Propriété"
 
-#: templates/javascript.htm:182
+#: templates/javascript.htm:183
 msgid "Target"
 msgstr "Cible"
 
-#: templates/javascript.htm:183
+#: templates/javascript.htm:184
 #, python-brace-format
 msgid "Every field of every model: {n} rows across {m} models."
 msgstr ""
 "Tous les champs de tous les modèles : {n} lignes réparties sur {m} modèles."
 
-#: templates/javascript.htm:184
+#: templates/javascript.htm:185
 msgid "Yes"
 msgstr "Oui"
 

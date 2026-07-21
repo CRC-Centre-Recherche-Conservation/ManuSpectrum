@@ -29,9 +29,8 @@ CACHE_TTL = 60 * 60 * 24  # 24h backstop; fingerprint busts earlier on republish
 # stops serving payloads built by the previous code — no manual redis flush,
 # and no window where freshly deployed JS reads fields the cached payload
 # doesn't have.
-# v3: French graph content loaded via `i18n loadmessages` — an in-place graph
-# edit the publication fingerprint cannot see.
-PAYLOAD_VERSION = 3
+# v4: slugs, localized widget labels, RDM collection labels, generated_at.
+PAYLOAD_VERSION = 4
 
 # The fingerprint tracks (graphid, publication) plus the resource and concept
 # table sizes, so it moves on republish AND when records/concepts are added or

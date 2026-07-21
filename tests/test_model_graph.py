@@ -466,3 +466,13 @@ class ModelGraphCachingTests(TestCase):
         # One build per language: the fr request must not reuse the en cache.
         self.assertEqual(m_build.call_count, 2)
         m_build.assert_any_call("fr")
+
+
+class PayloadEnrichmentTests(TestCase):
+    def test_payload_carries_slugs_and_generated_at(self):
+        from manuspectrum.views.model_graph_service import build_model_graph
+
+        payload = build_model_graph("en")
+        self.assertIn("generated_at", payload)
+        for m in payload["models"]:
+            self.assertTrue(m.get("slug"), f"model {m['name']} missing slug")
