@@ -14,9 +14,6 @@ const viewModel = function(params) {
     params.configKeys = ['defaultManifest'];
     WidgetViewModel.apply(this, [params]);
 
-    self.expandGallery = ko.observable(false);
-    self.showGallery = ko.observable(true);
-
     self.state = params.state || 'form';
     self.hideEmptyNodes = params.hideEmptyNodes || false;
 

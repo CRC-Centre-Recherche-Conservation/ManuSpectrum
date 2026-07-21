@@ -160,39 +160,47 @@
 }
 
 // Report mode
-.manifest-widget-report {
-    width: 100%;
-    margin-top: 10px;
-}
-.manifest-widget-report .iiif-viewer {
-    width: 100%;
-    position: relative;
-}
-.manifest-widget-report .iiif-leaflet {
-    height: 500px !important;
-    width: 100% !important;
-}
-.manifest-widget-report .iiif-viewer-gallery {
-    position: relative !important;
-    height: 108px;
-    bottom: 0;
-    left: 0;
-    right: 0;
-}
-.manifest-widget-report .show-gallery-control {
-    position: relative !important;
-}
 .manifest-report-info {
-    margin-bottom: 10px;
+    margin-bottom: 4px;
 }
 .manifest-report-link {
     font-size: 0.9em;
     color: #5b9bd7;
+    word-break: break-all;
 }
+// The core card-report template (default-card-report.htm) wraps each tile
+// in an inline-flex row, which shrink-to-fits the tile to its text content:
+// a tile hosting the viewer must take the full row instead.
+.rp-report-tile:has(dd.manifest-report-viewer-cell) {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+// The report dl is a CSS grid (260px label column + 1fr value column):
+// the viewer gets its own row spanning both columns instead of being
+// squeezed into the value column. Selector must outweigh core's
+// `.rp-card-section .rp-report-tile .dl-horizontal dd { grid-column: 2 }`.
+.rp-card-section .rp-report-tile .dl-horizontal dd.manifest-report-viewer-cell {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 5px 0 10px;
+    padding: 0 20px;
+}
+// Fixed-height positioning context: the core workbench chrome
+// (.workbench-card-wrapper/container at height:100%, absolute gallery
+// and sidebar) lays itself out inside it without overrides.
 .manifest-viewer {
-    aspect-ratio: 2 / 1;
-    width: 200%;
-    max-height: 90vh;
+    position: relative;
+    width: 100%;
+    height: clamp(420px, 65vh, 760px);
     border: 1px solid #ddd;
+    overflow: hidden;
     box-sizing: border-box;
+}
+// keep the 400px workbench sidepanel inside the viewer bounds
+.manifest-viewer .workbench-card-sidepanel {
+    width: min(400px, calc(100% - 75px));
+}
+// 75px sidebar rail: default 16px padding wraps "Overlays" mid-word
+.manifest-viewer .workbench-card-sidebar-tab {
+    padding: 12px 4px;
 }
