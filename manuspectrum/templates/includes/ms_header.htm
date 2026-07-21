@@ -1,4 +1,8 @@
 {% load i18n static template_tags %}
+{# No-JS fallback (same pattern as ms_base.htm's reveal fix): ms-nav.js opens #}
+{# the About dropdown by toggling `.open`; without JS, hover/focus-within must #}
+{# do that job or the four About pages become unreachable from the header. #}
+<noscript><style>.ms-nav-dropdown:hover .ms-nav-dropdown-menu,.ms-nav-dropdown:focus-within .ms-nav-dropdown-menu{opacity:1;visibility:visible;transform:translateY(0);}</style></noscript>
 <header class="ms-header" id="ms-header">
     <div class="ms-header-inner">
         <a href="{% url 'home' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Home' %}">

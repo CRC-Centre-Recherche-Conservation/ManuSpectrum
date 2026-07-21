@@ -91,6 +91,14 @@
            would never be seen. {% endcomment %}
         <div class="ms-ge-loading" id="ms-ge-loading">{% trans "Loading the model…" %}</div>
         <div class="ms-ge-error" id="ms-ge-error" hidden>{% trans "The model could not be loaded." %}</div>
+        {# Without JS the loader above would spin forever: hide it and say why. #}
+        <noscript>
+            <style>#ms-ge-loading{display:none}</style>
+            <div class="ms-ge-error">
+                {% trans "The interactive explorer requires JavaScript." %}
+                <a href="{% url 'about-model' %}">{% trans "The Conceptual Model page presents the same model as readable text." %}</a>
+            </div>
+        </noscript>
 
         <div class="ms-ge-pane" id="ms-ge-pane-matrix" role="tabpanel" tabindex="0" aria-labelledby="ms-ge-tab-matrix">
             <div class="ms-ge-matrix" id="ms-ge-matrix"></div>

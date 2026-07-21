@@ -90,6 +90,15 @@
 // ── Contact page
 .ms-contact { @include ms-container; @include ms-section-rhythm; }
 .ms-contact__grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 40px; align-items: start; }
+// No-JS fallback shown above the (inert) form: hand out the address directly.
+.ms-contact-noscript {
+    padding: 14px 18px;
+    border: 1px solid $ms-line;
+    border-left: 3px solid var(--accent-text);
+    border-radius: 10px;
+    background: #fff;
+    color: $ms-ink;
+}
 .ms-contact-form { display: flex; flex-direction: column; gap: 18px;
     background: #fff; border: 1px solid $ms-line; border-radius: 18px; padding: 28px; box-shadow: 0 12px 40px rgba(26,26,46,0.06); }
 .ms-contact-field { display: flex; flex-direction: column; gap: 6px;

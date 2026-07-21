@@ -32,6 +32,18 @@
            form that never said WHICH field was wrong. Each field now owns an
            error node wired through aria-describedby + aria-invalid, and
            contact.js moves focus to the first invalid one. {% endcomment %}
+        {# The form is entirely JS-driven (contact.js builds a mailto:); without #}
+        {# JS it submits nowhere. Give no-JS visitors the address directly. #}
+        <noscript>
+            <p class="ms-contact-noscript">
+                {% contact_email as ce %}
+                {% if ce %}
+                    {% blocktrans with email=ce %}This form needs JavaScript — but you can write to us directly at <a href="mailto:{{ email }}">{{ email }}</a>.{% endblocktrans %}
+                {% else %}
+                    {% trans "This form needs JavaScript, and no public contact address is available yet — please check back soon." %}
+                {% endif %}
+            </p>
+        </noscript>
         <form class="ms-contact-form" id="ms-contact-form" data-contact-email="{% contact_email %}" novalidate>
             <p class="ms-contact-required-hint">
                 <span class="ms-req" aria-hidden="true">*</span> {% trans "Required field" %}
