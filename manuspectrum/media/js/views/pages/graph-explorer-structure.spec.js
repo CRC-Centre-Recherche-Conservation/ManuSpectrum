@@ -202,7 +202,7 @@ async function boot() {
         removeEventListener: () => {},
     }));
     window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => PAYLOAD });
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => PAYLOAD });
     vi.resetModules();
     await import('./graph-explorer');
     document.dispatchEvent(new Event('DOMContentLoaded'));

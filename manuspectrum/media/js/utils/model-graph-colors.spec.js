@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
     groupColor,
     datatypeColor,
-    nodeRadius,
     instanceRadius,
     contrastVsWhite,
     contrastSafeStroke,
@@ -22,10 +21,6 @@ describe('model-graph colors', () => {
     it('resolves a datatype color and falls back', () => {
         expect(datatypeColor(datatypes, 'concept')).toBe('#8b5cf6');
         expect(datatypeColor(datatypes, 'zzz')).toMatch(/^#[0-9a-f]{6}$/i);
-    });
-    it('node radius grows monotonically with field count', () => {
-        expect(nodeRadius(0)).toBeGreaterThan(0);
-        expect(nodeRadius(50)).toBeGreaterThan(nodeRadius(5));
     });
 });
 

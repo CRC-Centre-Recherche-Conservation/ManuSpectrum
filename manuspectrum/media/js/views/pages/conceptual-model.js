@@ -1,28 +1,11 @@
-import arches from "arches";
 import initMsNav from "utils/ms-nav";
-
-function revealOnScroll() {
-    const els = document.querySelectorAll(".reveal");
-    if (!("IntersectionObserver" in window)) {
-        els.forEach((e) => e.classList.add("is-visible"));
-        return;
-    }
-    const io = new IntersectionObserver(
-        (entries) => {
-            entries.forEach((en) => {
-                if (en.isIntersecting) {
-                    en.target.classList.add("is-visible");
-                    io.unobserve(en.target);
-                }
-            });
-        },
-        { threshold: 0.15 },
-    );
-    els.forEach((e) => io.observe(e));
-}
+import { tv as trv } from "utils/i18n";
+import revealOnScroll from "utils/reveal-on-scroll";
 
 function countUp() {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+    ).matches;
     const locale = document.documentElement.lang || "en";
     document.querySelectorAll(".ms-cm-stat-value[data-count]").forEach((el) => {
         const target = parseInt(el.dataset.count, 10);
@@ -59,12 +42,6 @@ function countUp() {
 // already published "84 relationships" for a while when the live answer was 70.
 // The markup ships today's values so the page is correct without JS; this
 // upgrades them in place before the count-up animation reads `data-count`.
-const tr = (k, fallback) => (arches.translations && arches.translations[k]) || fallback;
-const trv = (k, fallback, vars) =>
-    String(tr(k, fallback)).replace(/\{(\w+)\}/g, (m, name) =>
-        Object.prototype.hasOwnProperty.call(vars || {}, name) ? String(vars[name]) : m,
-    );
-
 // textContent only — nothing here is interpolated into innerHTML.
 function setStat(box, stat, count, opts) {
     const tile = box.querySelector(`[data-stat="${stat}"]`);
@@ -80,10 +57,12 @@ async function liveFigures() {
     if (!box || !box.dataset.api) return;
     let s;
     try {
-        const res = await fetch(box.dataset.api, { headers: { Accept: "application/json" } });
+        const res = await fetch(box.dataset.api, {
+            headers: { Accept: "application/json" },
+        });
         if (!res.ok) return; // keep the server-rendered fallback figures
         s = (await res.json()).stats;
-    } catch (e) {
+    } catch {
         return;
     }
     if (!s || s.nodes === undefined) return;
@@ -97,9 +76,13 @@ async function liveFigures() {
     });
     setStat(box, "cidoc", s.cidoc_classes);
     setStat(box, "relations", s.relations, {
-        label: trv("msCmRelationsLabel", "typed relationships across {models} interconnected models", {
-            models: s.models,
-        }),
+        label: trv(
+            "msCmRelationsLabel",
+            "typed relationships across {models} interconnected models",
+            {
+                models: s.models,
+            },
+        ),
     });
     setStat(box, "concepts", s.concepts);
 

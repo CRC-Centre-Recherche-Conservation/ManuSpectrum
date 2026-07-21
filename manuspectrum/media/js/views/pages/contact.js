@@ -1,14 +1,6 @@
-import arches from "arches";
 import initMsNav from "utils/ms-nav";
-
-const t = (key, fallback) =>
-    (arches.translations && arches.translations[key]) || fallback;
-const tv = (key, fallback, vars) =>
-    String(t(key, fallback)).replace(/\{(\w+)\}/g, (m, name) =>
-        Object.prototype.hasOwnProperty.call(vars || {}, name)
-            ? String(vars[name])
-            : m,
-    );
+import { t, tv } from "utils/i18n";
+import revealOnScroll from "utils/reveal-on-scroll";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -36,29 +28,6 @@ function buildMailto(email, data) {
     const subject = encodeURIComponent(composeSubject(data));
     const body = encodeURIComponent(composeBody(data));
     return `mailto:${email}?subject=${subject}&body=${body}`;
-}
-
-// Same pattern as team.js / conceptual-model.js / graph-explorer.js: the hero and
-// the form section ship with `.reveal` (opacity 0) and need `.is-visible` applied,
-// otherwise they never paint. `prefers-reduced-motion` is handled in pages.scss.
-function revealOnScroll() {
-    const els = document.querySelectorAll(".reveal");
-    if (!("IntersectionObserver" in window)) {
-        els.forEach((e) => e.classList.add("is-visible"));
-        return;
-    }
-    const io = new IntersectionObserver(
-        (entries) => {
-            entries.forEach((en) => {
-                if (en.isIntersecting) {
-                    en.target.classList.add("is-visible");
-                    io.unobserve(en.target);
-                }
-            });
-        },
-        { threshold: 0.15 },
-    );
-    els.forEach((e) => io.observe(e));
 }
 
 // WAVE 4f — per-field errors.
@@ -166,11 +135,9 @@ function wireCounter(message) {
     if (!counter || !max) return;
     const update = () => {
         const left = max - message.value.length;
-        counter.textContent = tv(
-            "msContactCharsLeft",
-            "{n} characters left",
-            { n: left },
-        );
+        counter.textContent = tv("msContactCharsLeft", "{n} characters left", {
+            n: left,
+        });
         counter.classList.toggle("is-low", left <= 100);
     };
     message.addEventListener("input", update);
@@ -231,7 +198,9 @@ document.addEventListener("DOMContentLoaded", () => {
         );
         const problems = validate(fields);
         if (problems.length) {
-            problems.forEach(([input, message]) => setFieldError(input, message));
+            problems.forEach(([input, message]) =>
+                setFieldError(input, message),
+            );
             error.textContent = t(
                 "msContactFill",
                 "Please fill in all fields with a valid email.",

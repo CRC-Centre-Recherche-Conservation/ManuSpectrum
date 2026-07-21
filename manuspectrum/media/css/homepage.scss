@@ -67,7 +67,7 @@
     transform: translateY(28px);
     transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo);
 }
-.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal.is-visible { opacity: 1; transform: translateY(0); }
 .reveal-d1 { transition-delay: 0.08s; }
 .reveal-d2 { transition-delay: 0.16s; }
 .reveal-d3 { transition-delay: 0.24s; }
@@ -83,7 +83,7 @@
     transform: scale(0.97);
     transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
 }
-.reveal-scale.visible { opacity: 1; transform: scale(1); }
+.reveal-scale.is-visible { opacity: 1; transform: scale(1); }
 
 
 // ============================================================
@@ -1021,7 +1021,7 @@ a.ms-feature-tag--link i {
     }
 }
 
-.ms-gallery-analysis.visible .ms-analysis-point {
+.ms-gallery-analysis.is-visible .ms-analysis-point {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
     &::after { opacity: 1; }
@@ -1189,9 +1189,9 @@ a.ms-feature-tag--link i {
 }
 
 // Animations start only when scrolled into view
-.ms-gallery-msi.visible .ms-msi-processed,
-.ms-gallery-msi.visible .ms-msi-scanline,
-.ms-gallery-msi.visible .ms-msi-indicator-dot {
+.ms-gallery-msi.is-visible .ms-msi-processed,
+.ms-gallery-msi.is-visible .ms-msi-scanline,
+.ms-gallery-msi.is-visible .ms-msi-indicator-dot {
     animation-play-state: running;
 }
 

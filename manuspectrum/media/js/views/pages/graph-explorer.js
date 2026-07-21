@@ -1,5 +1,6 @@
-import arches from 'arches';
 import initMsNav from 'utils/ms-nav';
+import { t, tv } from 'utils/i18n';
+import revealOnScroll from 'utils/reveal-on-scroll';
 import { createForceGraph } from 'utils/force-graph';
 // The Structure view uses THIS, never createForceGraph — see the header comment
 // on tree-layout.js for why a solved layout is mandatory there.
@@ -19,14 +20,6 @@ const svgEl = (tag, attrs) => {
     Object.entries(attrs || {}).forEach(([k, v]) => n.setAttribute(k, v));
     return n;
 };
-const t = (k, fallback) => (arches.translations && arches.translations[k]) || fallback;
-// Interpolating variant: `{name}` placeholders, same convention as the
-// biblissima-batch-* keys already in javascript.htm.
-const tv = (k, fallback, vars) =>
-    String(t(k, fallback)).replace(/\{(\w+)\}/g, (m, name) =>
-        Object.prototype.hasOwnProperty.call(vars || {}, name) ? String(vars[name]) : m,
-    );
-
 // ---------------------------------------------------------------------------
 // WAVE 3 — why this page is no longer a node-link diagram by default.
 //
@@ -94,26 +87,6 @@ function groupLabel(data, group) {
     if (!group) return '';
     const preferred = data.language === 'fr' ? group.label_fr : group.label_en;
     return preferred || group.label_en || group.label_fr || group.id || '';
-}
-
-function revealOnScroll() {
-    const els = document.querySelectorAll('.reveal');
-    if (!('IntersectionObserver' in window)) {
-        els.forEach((e) => e.classList.add('is-visible'));
-        return;
-    }
-    const io = new IntersectionObserver(
-        (entries) => {
-            entries.forEach((en) => {
-                if (en.isIntersecting) {
-                    en.target.classList.add('is-visible');
-                    io.unobserve(en.target);
-                }
-            });
-        },
-        { threshold: 0.15 },
-    );
-    els.forEach((e) => io.observe(e));
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +196,7 @@ async function boot() {
         const data = await res.json();
         el('ms-ge-loading').hidden = true;
         render(data, reduce);
-    } catch (e) {
+    } catch {
         el('ms-ge-loading').hidden = true;
         el('ms-ge-error').hidden = false;
     }
@@ -271,7 +244,10 @@ function renderLead(data) {
 }
 
 const hashParam = (name) => {
-    const m = new RegExp(`[#&]${name}=([^&]+)`).exec(location.hash || '');
+    // Every caller passes a literal today, but escape regex metacharacters
+    // anyway — hashParam('node.id') must match a literal dot, not "any char".
+    const safe = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = new RegExp(`[#&]${safe}=([^&]+)`).exec(location.hash || '');
     return m ? decodeURIComponent(m[1]) : null;
 };
 
@@ -289,8 +265,14 @@ function updateHash() {
         }
         if (structure.activeNodeId) parts.push(`node=${encodeURIComponent(structure.activeNodeId)}`);
     }
-    if (!parts.length) return;
-    history.replaceState(null, '', `#${parts.join('&')}`);
+    if (parts.length) {
+        history.replaceState(null, '', `#${parts.join('&')}`);
+    } else if (location.hash) {
+        // Nothing selected any more (drawer closed, back to the matrix):
+        // clear the stale deep link instead of leaving an outdated #model=…
+        // for the reader to copy and share.
+        history.replaceState(null, '', location.pathname + location.search);
+    }
 }
 
 function openFromHash(data) {
@@ -1411,7 +1393,7 @@ class StructureView {
         this.rows = rows;
         this.renderCrumbs();
         this.renderSvg(rows, slots);
-        this.renderOutline(rows);
+        this.renderOutline();
         this.renderCaption();
         this.renderQueryCount();
     }
@@ -1863,7 +1845,7 @@ class StructureView {
 
     // -- the outline: same tree, real DOM, and the mobile rendering ----------
 
-    renderOutline(rows) {
+    renderOutline() {
         const box = this.outlineBox;
         if (!box) return;
         const rootNode = this.byId.get(this.rootId);
@@ -2505,7 +2487,9 @@ function openDrawer(model, data, trigger, highlightTargetId) {
         if (ego) ego.reflow();
     });
     markSelection();
-    history.replaceState(null, '', `#model=${encodeURIComponent(model.id)}`);
+    // Through updateHash(), not a direct write: the direct `#model=…` used to
+    // wipe the view/root/node segments a structure deep link had just set.
+    updateHash();
 }
 
 // Entry point shared by the drawer buttons, the Fields table and the deep link.
@@ -2837,6 +2821,7 @@ function wireSorts() {
 function wireSearch() {
     const input = el('ms-ge-search');
     const count = el('ms-ge-search-count');
+    if (!input) return; // the one element this file otherwise dereferences unguarded
     // item 7 — this was bound to `change`, so typing did nothing at all until the
     // field lost focus. On `input`, with a live match count and an explicit
     // no-match state.

@@ -18,7 +18,7 @@ $(function () {
         var revealObserver = new IntersectionObserver(function (entries) {
             $.each(entries, function (_, entry) {
                 if (entry.isIntersecting) {
-                    $(entry.target).addClass('visible');
+                    $(entry.target).addClass('is-visible');
                 }
             });
         }, { threshold: 0.06, rootMargin: '0px 0px -30px 0px' });
@@ -27,7 +27,7 @@ $(function () {
             revealObserver.observe(this);
         });
     } else {
-        $('.reveal, .reveal-scale').addClass('visible');
+        $('.reveal, .reveal-scale').addClass('is-visible');
     }
 
     // ================================================================

@@ -11,13 +11,6 @@ export function datatypeColor(datatypes, id) {
     return (d && d.color) || DATATYPE_FALLBACK;
 }
 
-export function nodeRadius(fieldCount) {
-    // 18px base, +sqrt scaling, capped at 46px.
-    // Kept for callers that size by field count; the Graph Explorer now sizes by
-    // published records instead (see instanceRadius / WAVE 3 item 3).
-    return Math.min(46, 18 + Math.sqrt(Math.max(0, fieldCount)) * 4);
-}
-
 // WAVE 3 item 3 — node radius used to encode `counts.nodes` (22–62 fields), which
 // maps to 36.8–46px: a 9px spread across the whole dataset, with 8 of 12 models
 // visually identical. `instances` (published records) spans 0–80, so a sqrt-area

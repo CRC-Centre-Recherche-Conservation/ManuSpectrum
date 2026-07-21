@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 05:25-0500\n"
+"POT-Creation-Date: 2026-07-21 05:34-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -976,23 +976,15 @@ msgid "Search iconographic descriptors..."
 msgstr "Rechercher des descripteurs iconographiques..."
 
 #: templates/javascript.htm:48
-msgid "All dates"
-msgstr "Toutes les dates"
-
-#: templates/javascript.htm:49
-msgid "Associate with a project (optional)..."
-msgstr "Associer à un projet (optionnel)..."
-
-#: templates/javascript.htm:50
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:417
 msgid "Pending"
 msgstr "En attente"
 
-#: templates/javascript.htm:51
+#: templates/javascript.htm:49
 msgid "Creating..."
 msgstr "Création..."
 
-#: templates/javascript.htm:52
+#: templates/javascript.htm:50
 #: templates/views/components/plugins/init-workflow.htm:52
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:402
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:597
@@ -1000,40 +992,36 @@ msgstr "Création..."
 msgid "Created"
 msgstr "Créées"
 
-#: templates/javascript.htm:53
+#: templates/javascript.htm:51
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:412
 msgid "Error"
 msgstr "Erreur"
 
-#: templates/javascript.htm:54
+#: templates/javascript.htm:52
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:37
 msgid "Skipped"
 msgstr "Ignorées"
 
-#: templates/javascript.htm:55
+#: templates/javascript.htm:53
 msgid "Duplicate"
 msgstr "Doublon"
 
-#: templates/javascript.htm:56
-msgid "Create new resource"
-msgstr "Créer une nouvelle ressource"
-
-#: templates/javascript.htm:57
+#: templates/javascript.htm:54
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:397
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:594
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:31
 msgid "Linked"
 msgstr "Liés"
 
-#: templates/javascript.htm:58
+#: templates/javascript.htm:55
 msgid "Search existing resource..."
 msgstr "Rechercher une ressource existante..."
 
-#: templates/javascript.htm:59
+#: templates/javascript.htm:56
 msgid "The Biblissima search failed. Please try again in a moment."
 msgstr "La recherche Biblissima a échoué. Veuillez réessayer dans un instant."
 
-#: templates/javascript.htm:60
+#: templates/javascript.htm:57
 msgid ""
 "Network error while querying Biblissima. Check your connection and try "
 "again."
@@ -1041,32 +1029,32 @@ msgstr ""
 "Erreur réseau lors de la requête Biblissima. Vérifiez votre connexion et "
 "réessayez."
 
-#: templates/javascript.htm:61
+#: templates/javascript.htm:58
 msgid "Connecting to Biblissima…"
 msgstr "Connexion à Biblissima…"
 
-#: templates/javascript.htm:62
+#: templates/javascript.htm:59
 msgid "Fetching manuscripts from the archive…"
 msgstr "Récupération des manuscrits depuis l'archive…"
 
-#: templates/javascript.htm:63
+#: templates/javascript.htm:60
 msgid "Enriching manuscript metadata…"
 msgstr "Enrichissement des métadonnées…"
 
-#: templates/javascript.htm:64
+#: templates/javascript.htm:61
 msgid "Matching records…"
 msgstr "Rapprochement des notices…"
 
-#: templates/javascript.htm:65
+#: templates/javascript.htm:62
 msgid "Still working — large searches may take up to 2 minutes"
 msgstr ""
 "Toujours en cours — les recherches larges peuvent prendre jusqu'à 2 minutes"
 
-#: templates/javascript.htm:66
+#: templates/javascript.htm:63
 msgid "Cart limit reached"
 msgstr "Limite du panier atteinte"
 
-#: templates/javascript.htm:67
+#: templates/javascript.htm:64
 msgid ""
 "Too many results on this page for the remaining cart slots — reduce the page"
 " size or unselect some"
@@ -1074,255 +1062,198 @@ msgstr ""
 "Trop de résultats sur cette page pour les places restantes du panier — "
 "réduisez la taille de page ou désélectionnez des éléments"
 
-#: templates/javascript.htm:68
+#: templates/javascript.htm:65
 msgid "Paste a Biblissima QID (e.g. Q63633)"
 msgstr "Collez un QID Biblissima (ex. Q63633)"
 
-#: templates/javascript.htm:69
+#: templates/javascript.htm:66
 msgid "No Biblissima entity matches this identifier"
 msgstr "Aucune entité Biblissima ne correspond à cet identifiant"
 
-#: templates/javascript.htm:70
-msgid "default"
-msgstr "par défaut"
-
-#: templates/javascript.htm:71
-msgid "type"
-msgstr "type"
-
-#: templates/javascript.htm:72 templates/javascript.htm:74
+#: templates/javascript.htm:67 templates/javascript.htm:69
 #: templates/views/components/widgets/biblissima-concept-widget.htm:72
 msgid "Manuscript"
 msgstr "Manuscrit"
 
-#: templates/javascript.htm:73
+#: templates/javascript.htm:68
 msgid "Custom type"
 msgstr "Type personnalisé"
 
-#: templates/javascript.htm:75
+#: templates/javascript.htm:70
 msgid "Illumination"
 msgstr "Enluminure"
 
-#: templates/javascript.htm:76
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:366
-msgid "Detected parent Documents"
-msgstr "Documents parents détectés"
-
-#: templates/javascript.htm:77
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:38
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:379
-msgid "Resolving parent manuscripts…"
-msgstr "Résolution des manuscrits parents…"
-
-#: templates/javascript.htm:78
-msgid "Use this"
-msgstr "Utiliser celui-ci"
-
-#: templates/javascript.htm:79
-msgid "Unlink"
-msgstr "Délier"
-
-#: templates/javascript.htm:80
-msgid "Create new parent Document"
-msgstr "Créer un nouveau Document parent"
-
-#: templates/javascript.htm:81
-msgid "Creating…"
-msgstr "Création…"
-
-#: templates/javascript.htm:82
-msgid "Add Biblissima ARK as alt-name on existing"
-msgstr "Ajouter l'ARK Biblissima comme nom alternatif"
-
-#: templates/javascript.htm:83
-msgid "Items with no identified manuscript"
-msgstr "Items sans manuscrit identifié"
-
-#: templates/javascript.htm:84
-msgid "Pick a Document manually…"
-msgstr "Choisir un Document manuellement…"
-
-#: templates/javascript.htm:85
-msgid "Pick a Document (required)…"
-msgstr "Choisir un Document (obligatoire)…"
-
-#: templates/javascript.htm:86
+#: templates/javascript.htm:71
 msgid "Cannot create parent — no Biblissima QID"
 msgstr "Impossible de créer le parent — pas de QID Biblissima"
 
 # --- Step 4 (Summary)
 # --------------------------------------------------------
-#: templates/javascript.htm:87
+#: templates/javascript.htm:72
 #, python-brace-format
 msgid "{n} resources created"
 msgstr "{n} ressources créées"
 
-#: templates/javascript.htm:88
+#: templates/javascript.htm:73
 #, python-brace-format
 msgid "{created} created · {failed} failed"
 msgstr "{created} créées · {failed} échouées"
 
-#: templates/javascript.htm:89
+#: templates/javascript.htm:74
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:139
 msgid "Retry all failed"
 msgstr "Réessayer les échecs"
 
-#: templates/javascript.htm:90
+#: templates/javascript.htm:75
 msgid "Batch creation failed. Please retry."
 msgstr "La création groupée a échoué. Veuillez réessayer."
 
-#: templates/javascript.htm:91
+#: templates/javascript.htm:76
 msgid "Search using French terms (e.g. dragon, vierge)..."
 msgstr "Rechercher en français (ex. dragon, vierge)..."
 
-#: templates/javascript.htm:92
+#: templates/javascript.htm:77
 msgid "Searching Biblissima..."
 msgstr "Interrogation de Biblissima..."
 
-#: templates/javascript.htm:93
+#: templates/javascript.htm:78
 msgid "No results. Try French keywords or check the Biblissima portal."
 msgstr ""
 "Aucun résultat. Essayez un terme français ou consultez le portail "
 "Biblissima."
 
-#: templates/javascript.htm:94
+#: templates/javascript.htm:79
 msgid "Biblissima is temporarily unavailable - you can use manual entry."
 msgstr ""
 "Biblissima est momentanément indisponible - vous pouvez utiliser la saisie "
 "manuelle."
 
-#: templates/javascript.htm:95
+#: templates/javascript.htm:80
 msgid "Type at least 2 characters..."
 msgstr "Saisissez au moins 2 caractères..."
 
-#: templates/javascript.htm:96
+#: templates/javascript.htm:81
 msgid "EN: "
 msgstr "EN : "
 
-#: templates/javascript.htm:100
+#: templates/javascript.htm:85
 msgid "Please fill in all fields with a valid email."
 msgstr ""
 "Veuillez remplir tous les champs et indiquer une adresse e-mail valide."
 
-#: templates/javascript.htm:101 templates/views/pages/contact.htm:116
-msgid "A contact address is not configured yet. Please check back soon."
-msgstr ""
-"Aucune adresse de contact n'est configurée pour le moment. Merci de revenir "
-"bientôt."
-
-#: templates/javascript.htm:102
+#: templates/javascript.htm:86
 msgid "Project submission"
 msgstr "Soumission de projet"
 
-#: templates/javascript.htm:103
+#: templates/javascript.htm:87
 msgid "Access request"
 msgstr "Demande d'accès"
 
-#: templates/javascript.htm:104 templates/views/pages/contact.htm:92
+#: templates/javascript.htm:88 templates/views/pages/contact.htm:92
 msgid "Question"
 msgstr "Question"
 
-#: templates/javascript.htm:105 templates/views/pages/contact.htm:103
+#: templates/javascript.htm:89 templates/views/pages/contact.htm:103
 msgid "Message"
 msgstr "Message"
 
-#: templates/javascript.htm:106
+#: templates/javascript.htm:90
 #: templates/views/components/plugins/file-configuration.htm:17
 msgid "Name"
 msgstr "Nom"
 
-#: templates/javascript.htm:107
+#: templates/javascript.htm:91
 msgid "Email"
 msgstr "E-mail"
 
-#: templates/javascript.htm:108 templates/views/pages/contact.htm:88
+#: templates/javascript.htm:92 templates/views/pages/contact.htm:88
 msgid "Reason"
 msgstr "Motif"
 
-#: templates/javascript.htm:109
+#: templates/javascript.htm:93
 msgid "Please enter your name."
 msgstr "Veuillez saisir votre nom."
 
-#: templates/javascript.htm:110
+#: templates/javascript.htm:94
 msgid "Please enter a valid email address."
 msgstr "Veuillez saisir une adresse e-mail valide."
 
-#: templates/javascript.htm:111
+#: templates/javascript.htm:95
 msgid "Please write a message."
 msgstr "Veuillez rédiger un message."
 
-#: templates/javascript.htm:112
+#: templates/javascript.htm:96
 #, python-brace-format
 msgid "{n} characters left"
 msgstr "{n} caractères restants"
 
-#: templates/javascript.htm:113
+#: templates/javascript.htm:97
 msgid "Copied."
 msgstr "Copié."
 
-#: templates/javascript.htm:114
+#: templates/javascript.htm:98
 msgid "Copy failed — select the text and copy it manually."
 msgstr "Échec de la copie — sélectionnez le texte et copiez-le manuellement."
 
-#: templates/javascript.htm:115 templates/javascript.htm:129
+#: templates/javascript.htm:99 templates/javascript.htm:113
 #: templates/views/pages/graph-explorer.htm:198
 msgid "Fields"
 msgstr "Champs"
 
-#: templates/javascript.htm:116 templates/views/pages/graph-explorer.htm:83
+#: templates/javascript.htm:100 templates/views/pages/graph-explorer.htm:83
 msgid "Relations"
 msgstr "Relations"
 
-#: templates/javascript.htm:117
+#: templates/javascript.htm:101
 msgid "records"
 msgstr "enregistrements"
 
-#: templates/javascript.htm:118
+#: templates/javascript.htm:102
 msgid "field groups"
 msgstr "groupes de champs"
 
-#: templates/javascript.htm:119
+#: templates/javascript.htm:103
 msgid "required"
 msgstr "requis"
 
-#: templates/javascript.htm:120
+#: templates/javascript.htm:104
 msgid "→ target · ← source"
 msgstr "→ cible · ← source"
 
-#: templates/javascript.htm:121
+#: templates/javascript.htm:105
 msgid "No relations"
 msgstr "Aucune relation"
 
-#: templates/javascript.htm:122
+#: templates/javascript.htm:106
 msgid "The chart could not be loaded — reopen this tab to retry."
 msgstr ""
 "Le graphique n'a pas pu être chargé — rouvrez cet onglet pour réessayer."
 
-#: templates/javascript.htm:123
+#: templates/javascript.htm:107
 msgid "models"
 msgstr "modèles"
 
-#: templates/javascript.htm:124
+#: templates/javascript.htm:108
 msgid "relations"
 msgstr "relations"
 
-#: templates/javascript.htm:125
+#: templates/javascript.htm:109
 msgid "fields"
 msgstr "champs"
 
-#: templates/javascript.htm:126
+#: templates/javascript.htm:110
 msgid "datatypes"
 msgstr "types de données"
 
-#: templates/javascript.htm:127
+#: templates/javascript.htm:111
 msgid "Fields by datatype"
 msgstr "Champs par type de données"
 
-#: templates/javascript.htm:128
+#: templates/javascript.htm:112
 msgid "Datatype (sorted by field count, descending)"
 msgstr "Type de données (trié par nombre de champs, décroissant)"
 
-#: templates/javascript.htm:130
+#: templates/javascript.htm:114
 #, python-brace-format
 msgid ""
 "Adjacency matrix: {models} models, {relations} typed relationships. Rows are"
@@ -1331,11 +1262,11 @@ msgstr ""
 "Matrice d'adjacence : {models} modèles, {relations} relations typées. Les "
 "lignes sont les sources, les colonnes les cibles."
 
-#: templates/javascript.htm:131
+#: templates/javascript.htm:115
 msgid "Source model, down; target model, across"
 msgstr "Modèle source en ligne ; modèle cible en colonne"
 
-#: templates/javascript.htm:132
+#: templates/javascript.htm:116
 msgid ""
 "Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
 "open the model."
@@ -1343,29 +1274,29 @@ msgstr ""
 "Survolez une cellule ou placez-y le focus pour lire ses propriétés CIDOC-"
 "CRM. Sélectionnez-la pour ouvrir le modèle."
 
-#: templates/javascript.htm:133
+#: templates/javascript.htm:117
 msgid "same model"
 msgstr "même modèle"
 
-#: templates/javascript.htm:134
+#: templates/javascript.htm:118
 msgid "no relation"
 msgstr "aucune relation"
 
-#: templates/javascript.htm:135
+#: templates/javascript.htm:119
 msgid "1 relation"
 msgstr "1 relation"
 
-#: templates/javascript.htm:136
+#: templates/javascript.htm:120
 #, python-brace-format
 msgid "{n} relations"
 msgstr "{n} relations"
 
-#: templates/javascript.htm:137
+#: templates/javascript.htm:121
 msgid "No family selected — turn one back on to see the matrix."
 msgstr ""
 "Aucune famille sélectionnée — réactivez-en une pour afficher la matrice."
 
-#: templates/javascript.htm:138
+#: templates/javascript.htm:122
 #, python-brace-format
 msgid ""
 "{model} and its {n} directly connected models, joined by {r} typed "
@@ -1376,42 +1307,41 @@ msgstr ""
 "typées. Chaque courbe représente une relation, annotée de sa propriété "
 "CIDOC-CRM."
 
-#: templates/javascript.htm:139 templates/views/pages/graph-explorer.htm:159
+#: templates/javascript.htm:123 templates/views/pages/graph-explorer.htm:159
 msgid "Select a model to see it with its directly connected models."
 msgstr ""
 "Sélectionnez un modèle pour l'afficher avec les modèles qui lui sont "
 "directement connectés."
 
-#: templates/javascript.htm:140
+#: templates/javascript.htm:124
 msgid "Circle size = published records"
 msgstr "Taille du cercle = enregistrements publiés"
 
-#: templates/javascript.htm:141
+#: templates/javascript.htm:125
 msgid "Dashed outline = no records published yet"
 msgstr "Contour en pointillés = aucun enregistrement publié"
 
-#: templates/javascript.htm:142 templates/javascript.htm:188
-#: templates/views/pages/graph-explorer.htm:113
+#: templates/javascript.htm:126 templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Modèle"
 
-#: templates/javascript.htm:143
+#: templates/javascript.htm:127
 msgid "Family"
 msgstr "Famille"
 
-#: templates/javascript.htm:144
+#: templates/javascript.htm:128
 msgid "Links"
 msgstr "Liens"
 
-#: templates/javascript.htm:145
+#: templates/javascript.htm:129
 msgid "Outgoing"
 msgstr "Sortantes"
 
-#: templates/javascript.htm:146
+#: templates/javascript.htm:130
 msgid "Incoming"
 msgstr "Entrantes"
 
-#: templates/javascript.htm:147
+#: templates/javascript.htm:131
 #, python-brace-format
 msgid ""
 "Every model with its outgoing and incoming typed relationships. {n} models, "
@@ -1420,44 +1350,44 @@ msgstr ""
 "Chaque modèle avec ses relations typées sortantes et entrantes. {n} modèles,"
 " {r} relations."
 
-#: templates/javascript.htm:148
+#: templates/javascript.htm:132
 msgid "Filter fields…"
 msgstr "Filtrer les champs…"
 
-#: templates/javascript.htm:149
+#: templates/javascript.htm:133
 msgid "Relation fields only"
 msgstr "Champs de relation uniquement"
 
-#: templates/javascript.htm:150
+#: templates/javascript.htm:134
 msgid "No field matches."
 msgstr "Aucun champ ne correspond."
 
-#: templates/javascript.htm:151
+#: templates/javascript.htm:135
 #, python-brace-format
 msgid "{n} of {total}"
 msgstr "{n} sur {total}"
 
-#: templates/javascript.htm:152
+#: templates/javascript.htm:136
 msgid "No model matches"
 msgstr "Aucun modèle ne correspond"
 
-#: templates/javascript.htm:153
+#: templates/javascript.htm:137
 #, python-brace-format
 msgid "{n} records published"
 msgstr "{n} enregistrements publiés"
 
-#: templates/javascript.htm:154
+#: templates/javascript.htm:138
 #, python-brace-format
 msgid "{n} models defined and open for deposit"
 msgstr "{n} modèles définis et ouverts au dépôt"
 
-#: templates/javascript.htm:155
+#: templates/javascript.htm:139
 msgid "No records published yet — model defined and open for deposit."
 msgstr ""
 "Aucun enregistrement publié pour l'instant — modèle défini et ouvert au "
 "dépôt."
 
-#: templates/javascript.htm:156
+#: templates/javascript.htm:140
 #, python-format, python-brace-format
 msgid ""
 "Every field in ManuSpectrum and every link between models: {fields} fields "
@@ -1468,7 +1398,7 @@ msgstr ""
 "répartis sur {models} modèles, dont {pct}%% adossés à un thésaurus publié "
 "plutôt qu’à du texte libre. Cliquez sur un modèle pour consulter son schéma."
 
-#: templates/javascript.htm:157
+#: templates/javascript.htm:141
 #, python-brace-format
 msgid ""
 "of fields draw on a published thesaurus, not free text — {n} of {total}"
@@ -1476,21 +1406,12 @@ msgstr ""
 "des champs s’appuient sur un thésaurus publié plutôt que sur du texte libre "
 "— {n} sur {total}"
 
-#: templates/javascript.htm:158 templates/views/pages/conceptual-model.htm:137
-msgid "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
-msgstr ""
-"classes CIDOC-CRM / CRMsci — chaque entité s'aligne sur la norme ISO 21127"
-
-#: templates/javascript.htm:159
+#: templates/javascript.htm:142
 #, python-brace-format
 msgid "typed relationships across {models} interconnected models"
 msgstr "relations typées entre {models} modèles interconnectés"
 
-#: templates/javascript.htm:160 templates/views/pages/conceptual-model.htm:145
-msgid "concepts from Getty AAT, Pactols, AGORHA and LOTERRE"
-msgstr "concepts issus de Getty AAT, Pactols, AGORHA et LOTERRE"
-
-#: templates/javascript.htm:161
+#: templates/javascript.htm:143
 #, python-brace-format
 msgid ""
 "{nodegroups} field groups · {total} nodes ({data} of them data) · "
@@ -1499,7 +1420,7 @@ msgstr ""
 "{nodegroups} groupes de champs · {total} nœuds (dont {data} porteurs de "
 "données) · {properties} propriétés d’ontologie · {thesauri} thésaurus."
 
-#: templates/javascript.htm:162
+#: templates/javascript.htm:144
 #, python-brace-format
 msgid ""
 "{models} independent models linked by {relations} typed CIDOC relationships "
@@ -1510,197 +1431,152 @@ msgstr ""
 "— ainsi une personne enregistrée une fois comme analyste est le même "
 "enregistrement lorsqu’elle réapparaît comme propriétaire d’un manuscrit."
 
-#: templates/javascript.htm:166 templates/views/pages/graph-explorer.htm:181
-msgid "Choose a model to see how it is built."
-msgstr "Choisissez un modèle pour voir sa construction."
-
-#: templates/javascript.htm:167
+#: templates/javascript.htm:148
 #, python-brace-format
 msgid "No field, class or property matches “{q}”."
 msgstr "Aucun champ, classe ou propriété ne correspond à « {q} »."
 
-#: templates/javascript.htm:168
+#: templates/javascript.htm:149
 #, python-brace-format
 msgid "{n} of {total} fields"
 msgstr "{n} champs sur {total}"
 
-#: templates/javascript.htm:169
+#: templates/javascript.htm:150
 #, python-brace-format
 msgid "{n} fields"
 msgstr "{n} champs"
 
-#: templates/javascript.htm:170
+#: templates/javascript.htm:151
 #, python-brace-format
 msgid "{n} field"
 msgstr "{n} champ"
 
-#: templates/javascript.htm:171
+#: templates/javascript.htm:152
 #, python-brace-format
 msgid "{n} fields · {m} group"
 msgstr "{n} champs · {m} groupe"
 
-#: templates/javascript.htm:172
+#: templates/javascript.htm:153
 #, python-brace-format
 msgid "{n} fields · {m} groups"
 msgstr "{n} champs · {m} groupes"
 
-#: templates/javascript.htm:173
+#: templates/javascript.htm:154
 msgid "Repeatable"
 msgstr "Répétable"
 
-#: templates/javascript.htm:174
+#: templates/javascript.htm:155
 msgid "Once"
 msgstr "Une seule fois"
 
-#: templates/javascript.htm:175
+#: templates/javascript.htm:156
 msgid "Structural node — carries no data"
 msgstr "Nœud structurel — ne porte aucune donnée"
 
-#: templates/javascript.htm:176
+#: templates/javascript.htm:157
 #, python-brace-format
 msgid "Links to {model}"
 msgstr "Pointe vers {model}"
 
-#: templates/javascript.htm:177
+#: templates/javascript.htm:158
 #, python-brace-format
 msgid "View {model} →"
 msgstr "Voir {model} →"
 
-#: templates/javascript.htm:178
+#: templates/javascript.htm:159
 msgid "From parent"
 msgstr "Depuis le parent"
 
-#: templates/javascript.htm:179
+#: templates/javascript.htm:160
 msgid "View structure →"
 msgstr "Voir la structure →"
 
-#: templates/javascript.htm:180 templates/views/pages/graph-explorer.htm:121
-msgid "Expand all"
-msgstr "Tout déplier"
-
-#: templates/javascript.htm:181 templates/views/pages/graph-explorer.htm:122
-msgid "Collapse all"
-msgstr "Tout replier"
-
-#: templates/javascript.htm:182 templates/views/pages/graph-explorer.htm:126
-msgid "Structural nodes"
-msgstr "Nœuds structurels"
-
-#: templates/javascript.htm:183 templates/views/pages/graph-explorer.htm:127
-msgid "CIDOC classes on every node"
-msgstr "Classes CIDOC sur tous les nœuds"
-
-#: templates/javascript.htm:184
+#: templates/javascript.htm:161
 #, python-brace-format
 msgid "Showing {node} and below"
 msgstr "Affichage de {node} et de ses descendants"
 
-#: templates/javascript.htm:185
+#: templates/javascript.htm:162
 #, python-brace-format
 msgid "← {model}"
 msgstr "← {model}"
 
-#: templates/javascript.htm:186 templates/views/pages/graph-explorer.htm:123
-msgid "Outline view"
-msgstr "Vue plan"
-
-#: templates/javascript.htm:187
+#: templates/javascript.htm:163
 #, python-brace-format
 msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 msgstr "{model} : {n} champs dans {g} groupes, imbriqués sur {d} niveaux."
 
-#: templates/javascript.htm:189 templates/views/pages/graph-explorer.htm:117
-msgid "Find a field, class or property…"
-msgstr "Rechercher un champ, une classe ou une propriété…"
-
-#: templates/javascript.htm:190
+#: templates/javascript.htm:164
 msgid "Common properties (P1, P2) are dimmed."
 msgstr "Les propriétés courantes (P1, P2) sont estompées."
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:165
 msgid "Ring = field group · double ring = repeatable"
 msgstr "Anneau = groupe de champs · double anneau = répétable"
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:166
 msgid "∗ = required"
 msgstr "∗ = obligatoire"
 
-#: templates/javascript.htm:193
-msgid "Node"
-msgstr "Nœud"
-
-#: templates/javascript.htm:194 templates/javascript.htm:207
-#: templates/views/pages/conceptual-model.htm:87
-msgid "Datatype"
-msgstr "Type de donnée"
-
-#: templates/javascript.htm:195
+#: templates/javascript.htm:167
 msgid "CIDOC-CRM class"
 msgstr "Classe CIDOC-CRM"
 
-#: templates/javascript.htm:196 templates/javascript.htm:205
+#: templates/javascript.htm:168 templates/javascript.htm:175
 msgid "Path"
 msgstr "Chemin"
 
-#: templates/javascript.htm:197 templates/javascript.htm:211
+#: templates/javascript.htm:169 templates/javascript.htm:181
 msgid "Cardinality"
 msgstr "Cardinalité"
 
-#: templates/javascript.htm:198 templates/javascript.htm:210
+#: templates/javascript.htm:170 templates/javascript.htm:180
 msgid "Required"
 msgstr "Obligatoire"
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:171
 msgid "Optional"
 msgstr "Facultatif"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:172
 msgid "Controlled vocabulary"
 msgstr "Vocabulaire contrôlé"
 
-#: templates/javascript.htm:201
-msgid "Model root"
-msgstr "Racine du modèle"
-
-#: templates/javascript.htm:202
+#: templates/javascript.htm:173
 msgid "See this relationship in the Network view"
 msgstr "Voir cette relation dans la vue Réseau"
 
-#: templates/javascript.htm:203 templates/views/pages/conceptual-model.htm:89
+#: templates/javascript.htm:174 templates/views/pages/conceptual-model.htm:89
 msgid "Field group"
 msgstr "Groupe de champs"
 
-#: templates/javascript.htm:204 templates/views/pages/graph-explorer.htm:170
-msgid ""
-"How one model is built: its field groups, the CIDOC-CRM class of each node "
-"and the property that links it to its parent."
-msgstr ""
-"La modélisation d’un modèle : ses groupes de champs, la classe CIDOC-CRM de "
-"chaque nœud et la propriété qui le relie à son parent."
-
-#: templates/javascript.htm:206
+#: templates/javascript.htm:176
 msgid "Field"
 msgstr "Champ"
 
-#: templates/javascript.htm:208
+#: templates/javascript.htm:177 templates/views/pages/conceptual-model.htm:87
+msgid "Datatype"
+msgstr "Type de donnée"
+
+#: templates/javascript.htm:178
 msgid "CIDOC class"
 msgstr "Classe CIDOC"
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:179
 msgid "Property"
 msgstr "Propriété"
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:182
 msgid "Target"
 msgstr "Cible"
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:183
 #, python-brace-format
 msgid "Every field of every model: {n} rows across {m} models."
 msgstr ""
 "Tous les champs de tous les modèles : {n} lignes réparties sur {m} modèles."
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:184
 msgid "Yes"
 msgstr "Oui"
 
@@ -2537,6 +2413,11 @@ msgstr "Composants à créer"
 msgid "linked"
 msgstr "liés"
 
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:38
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:379
+msgid "Resolving parent manuscripts…"
+msgstr "Résolution des manuscrits parents…"
+
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:55
 msgid "parents"
 msgstr "parents"
@@ -2622,6 +2503,10 @@ msgstr "Lier à cette ressource"
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:348
 msgid "Not a match, create new"
 msgstr "Pas de correspondance, créer"
+
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:366
+msgid "Detected parent Documents"
+msgstr "Documents parents détectés"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:373
 msgid ""
@@ -3122,9 +3007,18 @@ msgstr ""
 "des champs s'appuient sur un thésaurus publié plutôt que sur du texte libre "
 "— 187 sur 452"
 
+#: templates/views/pages/conceptual-model.htm:137
+msgid "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
+msgstr ""
+"classes CIDOC-CRM / CRMsci — chaque entité s'aligne sur la norme ISO 21127"
+
 #: templates/views/pages/conceptual-model.htm:141
 msgid "typed relationships across 12 interconnected models"
 msgstr "relations typées entre 12 modèles interconnectés"
+
+#: templates/views/pages/conceptual-model.htm:145
+msgid "concepts from Getty AAT, Pactols, AGORHA and LOTERRE"
+msgstr "concepts issus de Getty AAT, Pactols, AGORHA et LOTERRE"
 
 #: templates/views/pages/conceptual-model.htm:149
 msgid "Technical detail"
@@ -3313,6 +3207,12 @@ msgstr "Demander un compte / un accès"
 msgid "Open my email app"
 msgstr "Ouvrir mon application e-mail"
 
+#: templates/views/pages/contact.htm:116
+msgid "A contact address is not configured yet. Please check back soon."
+msgstr ""
+"Aucune adresse de contact n'est configurée pour le moment. Merci de revenir "
+"bientôt."
+
 #: templates/views/pages/contact.htm:127
 msgid "Or write to us directly:"
 msgstr "Ou écrivez-nous directement :"
@@ -3487,8 +3387,24 @@ msgid "A–Z"
 msgstr "A–Z"
 
 #: templates/views/pages/graph-explorer.htm:117
+msgid "Find a field, class or property…"
+msgstr "Rechercher un champ, une classe ou une propriété…"
+
+#: templates/views/pages/graph-explorer.htm:117
 msgid "Find a field, class or property"
 msgstr "Rechercher un champ, une classe ou une propriété"
+
+#: templates/views/pages/graph-explorer.htm:121
+msgid "Expand all"
+msgstr "Tout déplier"
+
+#: templates/views/pages/graph-explorer.htm:122
+msgid "Collapse all"
+msgstr "Tout replier"
+
+#: templates/views/pages/graph-explorer.htm:123
+msgid "Outline view"
+msgstr "Vue plan"
 
 #: templates/views/pages/graph-explorer.htm:126
 msgid ""
@@ -3496,6 +3412,14 @@ msgid ""
 msgstr ""
 "Nœuds techniques de regroupement : ils organisent les champs mais ne portent"
 " aucune donnée."
+
+#: templates/views/pages/graph-explorer.htm:126
+msgid "Structural nodes"
+msgstr "Nœuds structurels"
+
+#: templates/views/pages/graph-explorer.htm:127
+msgid "CIDOC classes on every node"
+msgstr "Classes CIDOC sur tous les nœuds"
 
 #: templates/views/pages/graph-explorer.htm:136
 msgid "Loading the model…"
@@ -3515,9 +3439,21 @@ msgstr ""
 "La page Modèle conceptuel présente le même modèle sous forme de texte "
 "lisible."
 
+#: templates/views/pages/graph-explorer.htm:170
+msgid ""
+"How one model is built: its field groups, the CIDOC-CRM class of each node "
+"and the property that links it to its parent."
+msgstr ""
+"La modélisation d’un modèle : ses groupes de champs, la classe CIDOC-CRM de "
+"chaque nœud et la propriété qui le relie à son parent."
+
 #: templates/views/pages/graph-explorer.htm:171
 msgid "Structure breadcrumb"
 msgstr "Fil d’Ariane de la structure"
+
+#: templates/views/pages/graph-explorer.htm:181
+msgid "Choose a model to see how it is built."
+msgstr "Choisissez un modèle pour voir sa construction."
 
 #: templates/views/pages/graph-explorer.htm:196
 msgid "Table contents"
