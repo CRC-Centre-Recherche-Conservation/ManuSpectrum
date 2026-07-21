@@ -153,6 +153,31 @@ class FrenchRoutingTests(TestCase):
         self.assertIn("ms-lang-switch", html)
         self.assertIn('href="http://testserver/fr/about/team"', html)
 
+    def test_translated_page_url_cannot_leak_an_external_host(self):
+        # Security regression (open redirect): a "//evil.com/…" request path
+        # must never surface as an off-site href in the switcher / hreflang.
+        from django.template import Context, Template
+        from django.test import RequestFactory
+
+        req = RequestFactory().get("/placeholder")
+        req.path = "//evil.com/login"  # what a raw WSGI request preserves
+        req.resolver_match = None  # unrouted → the 404 render path
+        tpl = Template("{% load manuspectrum_settings %}{% translated_page_url 'fr' %}")
+        out = tpl.render(Context({"request": req}))
+        self.assertNotIn("evil.com", out)
+        self.assertEqual(out, "")  # no switcher on unrouted pages
+
+    def test_all_about_alternates_point_at_our_host(self):
+        import re
+
+        for name in ("about-model", "about-explorer", "about-team", "about-contact"):
+            html = self.client.get(reverse(name)).content.decode()
+            for href in re.findall(r'hreflang="[^"]+" href="([^"]*)"', html):
+                self.assertTrue(
+                    href.startswith("http://testserver/"),
+                    f"{name}: alternate escaped host → {href}",
+                )
+
     def test_language_switcher_round_trip(self):
         # Regression: set_language must live INSIDE i18n_patterns. Unprefixed,
         # the request was forced to English (prefix_default_language=False),
