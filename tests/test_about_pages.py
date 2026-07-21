@@ -43,6 +43,49 @@ class AboutRoutingTests(TestCase):
         self.assertEqual(resp["Location"], "/?q=1")
 
 
+# ArchesTestRunner forces debug_mode=True, and Django serves its technical 404
+# instead of handler404 whenever DEBUG is on — so these tests pin DEBUG=False,
+# which is also the only mode where real visitors ever see these pages.
+@override_settings(DEBUG=False)
+class ErrorPageTests(TestCase):
+    def test_404_is_branded_with_working_home_link(self):
+        # The Arches default 404 linked /index.html (sic) — a URL that does
+        # not exist. Ours must carry the ManuSpectrum chrome and a real link.
+        resp = self.client.get("/this-page-does-not-exist")
+        self.assertEqual(resp.status_code, 404)
+        self.assertContains(resp, "ManuSpectrum", status_code=404)
+        self.assertContains(resp, 'href="/"', status_code=404)
+        self.assertNotContains(resp, "/index.html", status_code=404)
+        self.assertContains(resp, 'name="robots" content="noindex"', status_code=404)
+
+    def test_404_api_calls_get_json(self):
+        resp = self.client.get(
+            "/api/this-does-not-exist", HTTP_ACCEPT="application/json"
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertIn("application/json", resp["Content-Type"])
+
+    def test_500_template_renders_standalone(self):
+        # The 500 page must render with an EMPTY context — no context
+        # processors, no bundles — or it can crash during a real incident.
+        from django.template.loader import render_to_string
+
+        # Rendering with an empty context IS the guarantee: any dependency on
+        # request context or bundles would raise right here.
+        html = render_to_string("errors/500.htm", {})
+        self.assertIn("ManuSpectrum", html)
+        self.assertIn("Une erreur est survenue", html)
+
+    def test_403_and_400_templates_render(self):
+        from django.template.loader import get_template
+        from django.test import RequestFactory
+
+        req = RequestFactory().get("/x")
+        for name in ("errors/403.htm", "errors/400.htm"):
+            html = get_template(name).render({}, req)
+            self.assertIn("ManuSpectrum", html)
+
+
 class SitemapTests(TestCase):
     def test_static_sitemap_lists_about_pages_not_index_htm(self):
         xml = self.client.get("/sitemap.xml").content.decode()

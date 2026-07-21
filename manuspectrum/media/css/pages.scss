@@ -91,6 +91,22 @@
 // moved to _ms-chrome.scss because includes/ms_header.htm is shared with index.htm,
 // which loads only the `css/homepage` bundle — the dropdown was unstyled there.
 
+// ── Error pages (templates/errors/*.htm override the Arches defaults)
+.ms-error { @include ms-container; padding-top: 150px; padding-bottom: 90px; text-align: center; }
+.ms-error-code { font-family: $ms-font-serif; font-weight: 300; line-height: 1;
+    font-size: clamp(5rem, 14vw, 8.5rem);
+    @include ms-spectral-gradient(); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ms-error-title { font-family: $ms-font-serif; font-weight: 400; font-size: clamp(1.6rem, 3vw, 2.2rem); margin: 10px 0 14px; }
+.ms-error-lead { max-width: 560px; margin: 0 auto; color: $ms-ink-soft; line-height: 1.6; }
+.ms-error-actions { display: flex; gap: 18px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 30px; }
+.ms-error-link { color: $ms-ink; text-decoration: underline; text-underline-offset: 3px; }
+// The 404 "spectral scan": an instrument sweep across the wavelength axis
+// (40 → 580 in the SVG's viewBox, hence the 538px travel). Frozen for
+// prefers-reduced-motion users by the global block below.
+.ms-error-spectrum { width: 100%; max-width: 560px; height: auto; margin: 8px auto 4px; display: block; }
+.ms-error-scan { animation: ms-error-scan 5.5s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+@keyframes ms-error-scan { to { transform: translateX(538px); } }
+
 // ── Contact page
 .ms-contact { @include ms-container; @include ms-section-rhythm; }
 .ms-contact__grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 40px; align-items: start; }
