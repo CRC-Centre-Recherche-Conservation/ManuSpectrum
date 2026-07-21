@@ -155,14 +155,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const error = document.getElementById("ms-contact-error");
     const direct = document.getElementById("ms-contact-direct");
 
-    // `form.name` / `form.email` / `form.message` resolve to the CONTROLS, not to
-    // HTMLFormElement's own properties: the interface is [LegacyOverrideBuiltIns],
-    // so the named-control getter shadows the built-ins. Verified, not a footgun.
+    // form.elements.namedItem(), not the `form.name` named-control shortcut:
+    // the [LegacyOverrideBuiltIns] getter works in every browser but is NOT
+    // implemented by jsdom, where `form.name` is the (empty) name attribute —
+    // the page module would crash in the test environment before wiring the
+    // submit handler. elements.namedItem is the spec-guaranteed equivalent.
     const fields = {
-        name: form.name,
-        email: form.email,
-        type: form.type,
-        message: form.message,
+        name: form.elements.namedItem("name"),
+        email: form.elements.namedItem("email"),
+        type: form.elements.namedItem("type"),
+        message: form.elements.namedItem("message"),
     };
 
     wireCounter(fields.message);
