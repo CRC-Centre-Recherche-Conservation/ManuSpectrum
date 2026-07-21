@@ -16,6 +16,10 @@
 // Never render that bundle.
 // ============================================================
 
+// Self-hosted webfonts — replaces the Google Fonts <link> both templates used
+// to carry (see _ms-fonts.scss for the why).
+@import 'ms-fonts';
+
 // --- RESET & CUSTOM PROPERTIES ---
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
