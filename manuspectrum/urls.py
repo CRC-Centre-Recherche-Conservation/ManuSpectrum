@@ -119,6 +119,20 @@ if settings.ROOT_URLCONF == __name__:
         # unprefixed URLs (/, /about/team — already indexed and linked),
         # French gets /fr/…. LocaleMiddleware 302s a fr-cookie visitor from
         # an unprefixed URL to its /fr/ twin.
+        #
+        # ┌───────────────────────────────────────────────────────────────────┐
+        # │ OPS / SECURITY — verify BEFORE deploying with French enabled.      │
+        # │ Wrapping ALL routes means every Arches path now also resolves      │
+        # │ under /fr/ : /fr/admin/, /fr/rdm/, /fr/graph/, /fr/plugins/ …      │
+        # │ Django auth is INTACT (these still 302 to the login), so this is   │
+        # │ NOT an app-level bypass. BUT if the edge (nginx / WAF / reverse    │
+        # │ proxy) restricts admin or internal tooling by PATH PREFIX          │
+        # │ — e.g. `location /admin/ { allow 10.0.0.0/8; deny all; }` —        │
+        # │ the /fr/ twins slip past that rule.                               │
+        # │ Action: make the edge ACLs match the language prefix too, e.g.     │
+        # │   location ~ ^/(fr/)?admin/  { … }                                 │
+        # │ (regex, or duplicate the location blocks). Tracked as GH issue.    │
+        # └───────────────────────────────────────────────────────────────────┘
         urlpatterns = i18n_patterns(*urlpatterns, prefix_default_language=False)
 
 # ============================================================================
