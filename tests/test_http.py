@@ -8,7 +8,114 @@ from manuspectrum.utils.http import (
     assert_url_is_safe,
     fetch_iiif_manifest,
     get_iiif_session,
+    get_user_agent,
 )
+
+
+class UserAgentTests(SimpleTestCase):
+    """The outbound User-Agent identifies us to external hosts (issue #29).
+
+    In production it must carry a way back to a human (public site + contact
+    inbox) so an operator who sees our traffic can reach us; in DEBUG that
+    block is omitted — a localhost URL and a dev mailbox tell them nothing.
+    """
+
+    def setUp(self):
+        # The builder is lru_cached; override_settings must not read a stale value.
+        get_user_agent.cache_clear()
+        self.addCleanup(get_user_agent.cache_clear)
+
+    @override_settings(
+        DEBUG=True,
+        PUBLIC_SERVER_ADDRESS="http://localhost:8000/",
+        CONTACT_EMAIL="dev@example.org",
+    )
+    def test_debug_omits_contact_block(self):
+        ua = get_user_agent()
+        self.assertNotIn("(", ua)
+        self.assertNotIn("localhost", ua)
+        self.assertNotIn("dev@example.org", ua)
+
+    @override_settings(
+        DEBUG=False,
+        PUBLIC_SERVER_ADDRESS="https://manuspectrum.fr/",
+        CONTACT_EMAIL="team@manuspectrum.fr",
+    )
+    def test_prod_appends_site_and_contact_email(self):
+        self.assertTrue(
+            get_user_agent().endswith(
+                "(+https://manuspectrum.fr/about/contact; team@manuspectrum.fr)"
+            ),
+            get_user_agent(),
+        )
+
+    @override_settings(
+        DEBUG=False,
+        PUBLIC_SERVER_ADDRESS="https://manuspectrum.fr",  # no trailing slash
+        CONTACT_EMAIL="team@manuspectrum.fr",
+    )
+    def test_site_url_joins_cleanly_without_trailing_slash(self):
+        self.assertIn("+https://manuspectrum.fr/about/contact;", get_user_agent())
+
+    @override_settings(
+        DEBUG=False,
+        PUBLIC_SERVER_ADDRESS="https://manuspectrum.fr/",
+        CONTACT_EMAIL="",
+        DEFAULT_FROM_EMAIL="team@manuspectrum.fr",
+    )
+    def test_falls_back_to_default_from_email(self):
+        self.assertIn("team@manuspectrum.fr", get_user_agent())
+
+    @override_settings(
+        DEBUG=False,
+        PUBLIC_SERVER_ADDRESS="https://manuspectrum.fr/",
+        CONTACT_EMAIL="",
+        DEFAULT_FROM_EMAIL="xxxx@xxx.com",
+    )
+    def test_placeholder_email_is_never_published(self):
+        ua = get_user_agent()
+        self.assertNotIn("xxxx@xxx.com", ua)
+        self.assertTrue(ua.endswith("(+https://manuspectrum.fr/about/contact)"), ua)
+
+    @override_settings(
+        DEBUG=False,
+        PUBLIC_SERVER_ADDRESS="http://localhost:8000/",  # Arches' shipped default
+        CONTACT_EMAIL="team@manuspectrum.fr",
+    )
+    def test_unconfigured_local_address_is_not_advertised(self):
+        # A prod deploy that forgot to set PUBLIC_SERVER_ADDRESS must not tell
+        # remote hosts to visit their own localhost.
+        ua = get_user_agent()
+        self.assertNotIn("localhost", ua)
+        self.assertTrue(ua.endswith("(team@manuspectrum.fr)"), ua)
+
+    @override_settings(
+        DEBUG=False,
+        PUBLIC_SERVER_ADDRESS="",
+        CONTACT_EMAIL="team@manuspectrum.fr",
+    )
+    def test_email_only_when_no_public_address(self):
+        self.assertTrue(get_user_agent().endswith("(team@manuspectrum.fr)"))
+
+    @override_settings(
+        DEBUG=False,
+        PUBLIC_SERVER_ADDRESS="",
+        CONTACT_EMAIL="",
+        DEFAULT_FROM_EMAIL="",
+    )
+    def test_nothing_configured_leaves_the_bare_agent(self):
+        self.assertNotIn("(", get_user_agent())
+
+    @override_settings(
+        DEBUG=False,
+        PUBLIC_SERVER_ADDRESS="https://manuspectrum.fr/",
+        CONTACT_EMAIL="team@manuspectrum.fr",
+    )
+    def test_stays_a_single_header_line(self):
+        # A newline in a header value is a header-injection vector.
+        ua = get_user_agent()
+        self.assertNotIn("\n", ua)
+        self.assertNotIn("\r", ua)
 
 
 def _gai(ip):

@@ -336,6 +336,10 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 # Leave empty until a dedicated address exists; overridable in settings_local.py.
 # Falls back to DEFAULT_FROM_EMAIL (set once SMTP is configured) via the
 # {% contact_email %} template tag, so no address is ever hardcoded in templates/JS.
+# Outside DEBUG this address is also published in the outbound User-Agent
+# (manuspectrum.utils.http), together with PUBLIC_SERVER_ADDRESS — set BOTH in
+# settings_local.py on a production host, otherwise the User-Agent silently
+# drops the unusable parts (Arches defaults PUBLIC_SERVER_ADDRESS to localhost).
 CONTACT_EMAIL = ""
 
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"

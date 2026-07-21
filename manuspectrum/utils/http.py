@@ -18,12 +18,71 @@ from django.conf import settings as django_settings
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from manuspectrum.utils.contact import publishable_contact_email
+
+# Public page an external operator should land on when they look us up: it
+# carries the project description and the same contact address.
+UA_INFO_PATH = "about/contact"
+
+
+def _is_reachable_site(url):
+    """True when *url* is worth advertising to a third party.
+
+    Arches ships ``PUBLIC_SERVER_ADDRESS = "http://localhost:8000/"``; a prod
+    deploy that never overrode it would otherwise tell every remote host to
+    visit their own machine. Pure string/literal-IP inspection — no DNS, since
+    this runs while building a header.
+    """
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in _ALLOWED_URL_SCHEMES or not host:
+        return False
+    if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+        return False
+    try:
+        return _address_is_public(host)
+    except ValueError:
+        # Not an IP literal: a name is publishable if it is qualified.
+        return "." in host
+
+
+def _ua_contact_block():
+    """The "(+<site>/about/contact; <email>)" suffix of the User-Agent, or "".
+
+    Only emitted outside DEBUG. In development the public address is
+    http://localhost:8000/ and the inbox is whatever the developer has in
+    settings_local.py — publishing either to a remote host is noise at best.
+    Placeholder addresses are dropped (a dead mailto is worse than none), and
+    both halves are optional, so an unconfigured prod still gets a bare agent.
+    """
+    if getattr(django_settings, "DEBUG", False):
+        return ""
+
+    bits = []
+    site = (getattr(django_settings, "PUBLIC_SERVER_ADDRESS", "") or "").strip()
+    if _is_reachable_site(site):
+        bits.append(f"+{site.rstrip('/')}/{UA_INFO_PATH}")
+    email = publishable_contact_email().strip()
+    if email:
+        bits.append(email)
+    if not bits:
+        return ""
+    # Collapse any whitespace: a CR/LF reaching a header value is injection.
+    return "(" + " ".join("; ".join(bits).split()) + ")"
+
 
 @lru_cache(maxsize=1)
 def get_user_agent():
     """Return the ManuSpectrum User-Agent string.
 
-    Format: "<APP_NAME>/<APP_VERSION> Arches/<arches_version>".
+    Format: "<APP_NAME>/<APP_VERSION> Arches/<arches_version>", plus
+    "(+<site_url>/about/contact; <contact_email>)" in production so an
+    operator seeing our traffic can identify and reach us (issue #29).
     Falls back gracefully when app/arches versions are missing.
     """
     app_name = getattr(django_settings, "APP_NAME", "Arches")
@@ -32,6 +91,9 @@ def get_user_agent():
     parts = [f"{app_name}/{app_version}" if app_version else app_name]
     if arches_version:
         parts.append(f"Arches/{arches_version}")
+    contact = _ua_contact_block()
+    if contact:
+        parts.append(contact)
     return " ".join(parts)
 
 
