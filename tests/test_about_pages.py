@@ -93,6 +93,48 @@ class SitemapTests(TestCase):
             self.assertIn(reverse(name), xml)
         self.assertNotIn("/index.htm", xml)
 
+    def test_sitemap_carries_french_alternates(self):
+        xml = self.client.get("/sitemap.xml").content.decode()
+        self.assertIn("/fr/about/team", xml)
+        self.assertIn('hreflang="fr"', xml)
+        self.assertIn('hreflang="x-default"', xml)
+
+
+class FrenchRoutingTests(TestCase):
+    """prefix_default_language=False: EN stays unprefixed, FR lives at /fr/."""
+
+    def test_english_urls_stay_unprefixed(self):
+        self.assertEqual(reverse("about-team"), "/about/team")
+        resp = self.client.get("/about/team")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'lang="en"')
+
+    def test_french_twin_serves_french(self):
+        resp = self.client.get("/fr/about/team")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'lang="fr"')
+
+    def test_en_prefix_does_not_exist(self):
+        # With prefix_default_language=False there must be no /en/ tree —
+        # a working /en/ twin would be duplicate content.
+        self.assertEqual(self.client.get("/en/about/team").status_code, 404)
+
+    def test_hreflang_alternates_on_about_pages(self):
+        html = self.client.get("/about/team").content.decode()
+        self.assertIn('hreflang="fr"', html)
+        self.assertIn("/fr/about/team", html)
+        self.assertIn('hreflang="x-default"', html)
+
+    def test_language_switcher_rendered_with_crawlable_links(self):
+        html = self.client.get("/about/team").content.decode()
+        self.assertIn("ms-lang-switch", html)
+        self.assertIn('href="http://testserver/fr/about/team"', html)
+
+    def test_robots_blocks_french_app_routes(self):
+        body = self.client.get("/robots.txt").content.decode()
+        self.assertIn("Disallow: /fr/search", body)
+        self.assertIn("Disallow: /fr/graph/", body)
+
 
 class ContactPageTests(TestCase):
     @override_settings(CONTACT_EMAIL="team@manuspectrum.fr")

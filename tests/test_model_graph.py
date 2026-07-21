@@ -417,7 +417,6 @@ class ModelGraphCachingTests(TestCase):
         self.assertIn(f"v{PAYLOAD_VERSION}", resp["ETag"])
         self.assertIn("en", resp["ETag"])
         self.assertIn("max-age", resp["Cache-Control"])
-        self.assertIn("Cookie", resp["Vary"])
 
     @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
     @mock.patch("manuspectrum.views.model_graph.build_model_graph")
@@ -453,15 +452,15 @@ class ModelGraphCachingTests(TestCase):
         resp = self.client.get(reverse("model-graph"), HTTP_ACCEPT_ENCODING="gzip")
         self.assertEqual(resp.get("Content-Encoding"), "gzip")
 
-    @override_settings(USE_I18N=True, LANGUAGES=[("en", "English"), ("fr", "French")])
     @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
     @mock.patch("manuspectrum.views.model_graph.build_model_graph")
     def test_language_isolation_of_cache_and_etag(self, m_build, _fp):
+        # The route sits inside i18n_patterns (prefix_default_language=False):
+        # the language is carried by the URL, never by a cookie.
         m_build.return_value = self.PAYLOAD
-        etag_en = self.client.get(reverse("model-graph"))["ETag"]
+        etag_en = self.client.get("/api/model-graph")["ETag"]
 
-        self.client.cookies["django_language"] = "fr"
-        resp_fr = self.client.get(reverse("model-graph"))
+        resp_fr = self.client.get("/fr/api/model-graph")
         self.assertNotEqual(etag_en, resp_fr["ETag"])
         self.assertIn(":fr:", resp_fr["ETag"])
         # One build per language: the fr request must not reuse the en cache.

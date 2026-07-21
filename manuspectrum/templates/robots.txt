@@ -1,25 +1,44 @@
 # ManuSpectrum — Crawl directives
-# Only allow homepage and public resource reports.
+# Only allow homepage, public About pages and public resource reports.
 # Block application routes (search, editor, API, admin) to protect the site.
+# English URLs are unprefixed (prefix_default_language=False); French twins
+# live under /fr/ — every Disallow needs both forms because robots rules
+# match by path prefix.
 
 User-agent: *
 Allow: /
 Allow: /report/
+Allow: /fr/report/
 Disallow: /search
+Disallow: /fr/search
 Disallow: /resource/
+Disallow: /fr/resource/
 Disallow: /api/
+Disallow: /fr/api/
 Disallow: /auth/
+Disallow: /fr/auth/
 Disallow: /admin/
+Disallow: /fr/admin/
 Disallow: /password_reset/
+Disallow: /fr/password_reset/
 Disallow: /user_profile/
+Disallow: /fr/user_profile/
 Disallow: /renderer/
 Disallow: /renderer_config/
 Disallow: /files/
+Disallow: /fr/files/
 Disallow: /concepts/
+Disallow: /fr/concepts/
 Disallow: /rdm/
+Disallow: /fr/rdm/
 Disallow: /graph/
+Disallow: /fr/graph/
 Disallow: /plugins/
+Disallow: /fr/plugins/
 Disallow: /etl_manager
+Disallow: /fr/etl_manager
 Disallow: /notifications
+Disallow: /fr/notifications
+Disallow: /i18n/
 
 Sitemap: {{ request.scheme }}://{{ request.get_host }}/sitemap.xml

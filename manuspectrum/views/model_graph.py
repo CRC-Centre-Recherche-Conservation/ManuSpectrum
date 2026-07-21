@@ -14,7 +14,6 @@ import logging
 from django.core.cache import cache
 from django.http import HttpResponseNotModified, JsonResponse
 from django.utils import translation
-from django.utils.cache import patch_vary_headers
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.gzip import gzip_page
@@ -85,11 +84,9 @@ class ModelGraphView(View):
             resp = JsonResponse(payload)
             resp["Cache-Control"] = "public, max-age=3600"
             resp["ETag"] = etag
-            # The payload is language-dependent and the active language can be
-            # selected by the django_language cookie (LocaleMiddleware only adds
-            # Vary: Accept-Language). Without Vary: Cookie a shared proxy/CDN
-            # could serve an "fr" payload to an "en" visitor.
-            patch_vary_headers(resp, ("Cookie",))
+            # No Vary: Cookie — since the route sits inside i18n_patterns the
+            # language is carried by the URL itself (/api/… vs /fr/api/…), so
+            # shared caches can key on the path alone.
             return resp
         except (
             Exception

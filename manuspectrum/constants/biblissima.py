@@ -17,7 +17,6 @@ they're re-exposed in that module's namespace.
 
 import re
 
-
 # ---------------------------------------------------------------------------
 # Cache key templates (the TTL itself lives in
 # ``settings.BIBLISSIMA_CACHE_TTL``).

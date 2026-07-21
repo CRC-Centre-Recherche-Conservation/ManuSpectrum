@@ -193,6 +193,13 @@ TEMPLATES = build_templates_config(
     app_root=APP_ROOT,
 )
 
+# Arches only injects `show_language_swtich` (upstream typo) from its own
+# views; the public About pages are plain TemplateViews, so without this the
+# header's language switcher would never render there.
+TEMPLATES[0]["OPTIONS"]["context_processors"].append(
+    "manuspectrum.context_processors.language_switch"
+)
+
 ALLOWED_HOSTS = []
 
 SYSTEM_SETTINGS_LOCAL_PATH = os.path.join(
@@ -444,7 +451,7 @@ LANGUAGE_CODE = "en"
 LANGUAGES = [
     #   ('de', _('German')),
     ("en", _("English")),
-    #    ('fr', _('French')),
+    ("fr", _("French")),
     #   ('en-gb', _('British English')),
     #    ('es', _('Spanish')),
 ]

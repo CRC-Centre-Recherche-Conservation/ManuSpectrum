@@ -5,6 +5,7 @@ Homepage — Prismatic Luminescence aesthetic
 {% load static %}
 {% load template_tags %}
 {% load i18n %}
+{% load manuspectrum_settings %}
 {% load render_bundle from webpack_loader %}
 {% load webpack_static from webpack_loader %}
 {% get_current_language as LANGUAGE_CODE %}
@@ -23,10 +24,13 @@ Homepage — Prismatic Luminescence aesthetic
     <meta name="theme-color" content="#faf9f7">
 
     {# Canonical: scheme+host+path only — build_absolute_uri kept the query #}
-    {# string, so /?utm_source=x canonicalised to itself. hreflang alternates #}
-    {# were removed: they all pointed at the SAME URL (harmful noise); real #}
-    {# per-language URLs return with the FR rollout (i18n_patterns). #}
+    {# string, so /?utm_source=x canonicalised to itself. #}
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% get_available_languages as MS_LANGS %}
+    {% for lang_code, lang_name in MS_LANGS %}
+    <link rel="alternate" hreflang="{{ lang_code }}" href="{% translated_page_url lang_code %}">
+    {% endfor %}
+    <link rel="alternate" hreflang="x-default" href="{% translated_page_url 'en' %}">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">

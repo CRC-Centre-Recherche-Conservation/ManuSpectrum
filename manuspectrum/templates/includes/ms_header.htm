@@ -1,4 +1,4 @@
-{% load i18n static template_tags %}
+{% load i18n static template_tags manuspectrum_settings %}
 {# No-JS fallback (same pattern as ms_base.htm's reveal fix): ms-nav.js opens #}
 {# the About dropdown by toggling `.open`; without JS, hover/focus-within must #}
 {# do that job or the four About pages become unreachable from the header. #}
@@ -68,9 +68,17 @@
             </div>
 
             {% if show_language_swtich %}
-            {% csrf_token %}
-                {% get_current_language as LANGUAGE_CODE %}
-                <div class="lang-switch" data-bind='component: { name: "views/components/language-switcher", params: { current_language: "{{LANGUAGE_CODE}}" } }'></div>
+                {# Plain crawlable links, not the Arches KO component: the #}
+                {# public pages load no Knockout stack, and real <a hreflang> #}
+                {# links double as SEO signals. translate_url keeps the visitor #}
+                {# on the same page in the other language. #}
+                {% get_current_language as MS_CUR_LANG %}
+                {% get_available_languages as MS_LANGS %}
+                <nav class="ms-lang-switch" aria-label="{% trans 'Language' %}">
+                    {% for lang_code, lang_name in MS_LANGS %}
+                    <a href="{% translated_page_url lang_code %}" lang="{{ lang_code }}" hreflang="{{ lang_code }}"{% if lang_code == MS_CUR_LANG %} class="is-current" aria-current="true"{% endif %}>{{ lang_code|upper }}</a>
+                    {% endfor %}
+                </nav>
             {% endif %}
         </nav>
 
@@ -96,6 +104,15 @@
 
     {% if user|can_create_resource_instance and user.username != 'anonymous' %}
         <a href="{% url 'resource' %}" target="_blank">{% trans "Management" %}</a>
+    {% endif %}
+    {% if show_language_swtich %}
+        {% get_current_language as MS_CUR_LANG %}
+        {% get_available_languages as MS_LANGS %}
+        <nav class="ms-lang-switch ms-lang-switch--mobile" aria-label="{% trans 'Language' %}">
+            {% for lang_code, lang_name in MS_LANGS %}
+            <a href="{% translated_page_url lang_code %}" lang="{{ lang_code }}" hreflang="{{ lang_code }}"{% if lang_code == MS_CUR_LANG %} class="is-current" aria-current="true"{% endif %}>{{ lang_code|upper }}</a>
+            {% endfor %}
+        </nav>
     {% endif %}
     <div class="spectral-line"></div>
     {% if user.username == 'anonymous' %}

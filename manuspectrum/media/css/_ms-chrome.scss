@@ -263,6 +263,31 @@ img { max-width: 100%; height: auto; display: block; }
     transition: color 0.3s, transform 0.3s;
 }
 
+// Language switcher — plain crawlable links (see ms_header.htm for why the
+// Arches KO component is not used on the public pages).
+.ms-lang-switch {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+}
+.ms-lang-switch a {
+    color: var(--ink-muted);
+    text-decoration: none;
+    padding: 0.3rem 0.45rem;
+    border-radius: 6px;
+    transition: color 0.3s, background 0.3s;
+}
+.ms-lang-switch a:hover { color: var(--ink); }
+.ms-lang-switch a.is-current {
+    color: var(--ink);
+    font-weight: 600;
+    background: rgba(26, 26, 46, 0.06);
+}
+.ms-lang-switch--mobile { justify-content: center; padding: 0.5rem 0; }
+
 .ms-nav-github:hover {
     color: var(--ink);
     transform: scale(1.1);

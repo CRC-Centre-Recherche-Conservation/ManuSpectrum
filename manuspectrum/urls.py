@@ -81,9 +81,37 @@ urlpatterns.append(path("", include("arches.urls")))
 
 # Only handle i18n routing in active project. This will still handle the routes provided by Arches core and Arches applications,
 # but handling i18n routes in multiple places causes application errors.
+### Manuspectrum URL — public About pages. Registered BEFORE the i18n wrap so
+### they get language-prefixed routes (/fr/about/team) like the rest of the UI.
+### API endpoints, robots.txt and sitemap.xml stay below the wrap on purpose:
+### they are language-neutral URLs.
+for _slug, _name, _tpl in [
+    ("about/model", "about-model", "views/pages/conceptual-model.htm"),
+    ("about/explorer", "about-explorer", "views/pages/graph-explorer.htm"),
+    ("about/team", "about-team", "views/pages/team.htm"),
+    ("about/contact", "about-contact", "views/pages/contact.htm"),
+]:
+    urlpatterns.append(
+        path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
+    )
+
+### Model-graph API: wrapped too, so the URL carries the language
+### (/api/model-graph = EN, /fr/api/model-graph = FR). With
+### prefix_default_language=False Django forces the default language on any
+### unprefixed URL — a cookie can never select FR outside the wrap, so the
+### language MUST live in the path. Templates reverse {% url 'model-graph' %}
+### per request language, so consumers pick the right one for free.
+urlpatterns.append(
+    path("api/model-graph", ModelGraphView.as_view(), name="model-graph")
+)
+
 if settings.ROOT_URLCONF == __name__:
     if settings.SHOW_LANGUAGE_SWITCH is True:
-        urlpatterns = i18n_patterns(*urlpatterns)
+        # prefix_default_language=False: English keeps its historical
+        # unprefixed URLs (/, /about/team — already indexed and linked),
+        # French gets /fr/…. LocaleMiddleware 302s a fr-cookie visitor from
+        # an unprefixed URL to its /fr/ twin.
+        urlpatterns = i18n_patterns(*urlpatterns, prefix_default_language=False)
 
     urlpatterns.append(path("i18n/", include("django.conf.urls.i18n")))
 
@@ -174,24 +202,6 @@ urlpatterns.append(
         name="biblissima-link-to-project",
     )
 )
-
-### Manuspectrum URL - Public model-graph API (cached, for the Graph Explorer)
-
-urlpatterns.append(
-    path("api/model-graph", ModelGraphView.as_view(), name="model-graph")
-)
-
-### Manuspectrum URL — public About pages (TemplateView already imported at top of urls.py)
-for _slug, _name, _tpl in [
-    ("about/model", "about-model", "views/pages/conceptual-model.htm"),
-    ("about/explorer", "about-explorer", "views/pages/graph-explorer.htm"),
-    ("about/team", "about-team", "views/pages/team.htm"),
-    ("about/contact", "about-contact", "views/pages/contact.htm"),
-]:
-    urlpatterns.append(
-        path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
-    )
-
 
 ### Manuspectrum URL - IIIF Annotations
 

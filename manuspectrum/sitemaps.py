@@ -11,8 +11,14 @@ class StaticSitemap(Sitemap):
     """Homepage and the public About pages.
 
     `home` (/index.htm) is deliberately absent: it duplicates `root` and now
-    301-redirects to it (see urls.py).
+    301-redirects to it (see urls.py). i18n + alternates emit one <url> per
+    language with xhtml:link hreflang entries — the most reliable hreflang
+    channel (x_default falls back to LANGUAGE_CODE, i.e. English).
     """
+
+    i18n = True
+    alternates = True
+    x_default = True
 
     def items(self):
         return ["root", "about-model", "about-explorer", "about-team", "about-contact"]
@@ -32,6 +38,9 @@ class DocumentSitemap(Sitemap):
 
     priority = 0.7
     changefreq = "monthly"
+    i18n = True
+    alternates = True
+    x_default = True
 
     def items(self):
         return Resource.objects.filter(graph_id=DOCUMENT_GRAPH_ID).values_list(
