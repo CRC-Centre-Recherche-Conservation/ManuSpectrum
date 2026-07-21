@@ -190,29 +190,28 @@
 <dt data-bind="text: label, class: nodeCssClasses"></dt>
 <dd>
     <!-- ko if: manifestUrl -->
-    <div class="manifest-widget-report">
-        <!-- Display manifest title and link -->
-        <div class="manifest-report-info">
-            <strong data-bind="text: manifestLabel() || 'IIIF Manifest'"></strong><br>
-            <a class="manifest-report-link" data-bind="attr: { href: manifestDisplayUrl }, text: manifestDisplayUrl" target="_blank"></a>
-        </div>
-
-        <!-- IIIF Viewer -->
-        <div class="manifest-viewer"
-          data-bind="component: {
-              name: 'iiif-viewer',
-              params: {
-                  manifest: manifestUrl(),
-                  expandGallery: expandGallery,
-                  showGallery: showGallery,
-                  editManifest: false
-              }
-          }"
-        ></div>
+    <div class="manifest-report-info">
+        <strong data-bind="text: manifestLabel() || 'IIIF Manifest'"></strong><br>
+        <a class="manifest-report-link" data-bind="attr: { href: manifestDisplayUrl }, text: manifestDisplayUrl" target="_blank" rel="noopener"></a>
     </div>
     <!-- /ko -->
     <!-- ko ifnot: manifestUrl -->
     <span data-bind="text: $root.translations.none || 'None'"></span>
     <!-- /ko -->
 </dd>
+<!-- ko if: manifestUrl -->
+<dd class="manifest-report-viewer-cell">
+    <div class="manifest-viewer"
+      data-bind="component: {
+          name: 'iiif-viewer',
+          params: {
+              manifest: manifestUrl(),
+              expandGallery: false,
+              showGallery: true,
+              editManifest: false
+          }
+      }"
+    ></div>
+</dd>
+<!-- /ko -->
 {% endblock report %}
