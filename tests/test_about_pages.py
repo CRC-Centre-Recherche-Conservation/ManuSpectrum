@@ -205,6 +205,26 @@ class FrenchRoutingTests(TestCase):
         self.assertIn("Disallow: /fr/search", body)
         self.assertIn("Disallow: /fr/graph/", body)
 
+    def test_every_disallow_has_a_french_twin(self):
+        # Regression: /fr/renderer/ and /fr/renderer_config/ were the two
+        # missing twins. Assert the invariant for the whole file instead of
+        # a hand-picked subset, so a new rule can't reintroduce the gap.
+        body = self.client.get("/robots.txt").content.decode()
+        rules = [
+            line[len("Disallow:") :].strip()
+            for line in body.splitlines()
+            if line.startswith("Disallow:")
+        ]
+        for path in rules:
+            if path.startswith("/fr/") or path == "/api/":
+                # /api/ is language-neutral (registered below the i18n wrap).
+                continue
+            self.assertIn(
+                f"/fr{path}",
+                rules,
+                f"robots.txt: {path} has no /fr/ twin",
+            )
+
 
 class ContactPageTests(TestCase):
     @override_settings(CONTACT_EMAIL="team@manuspectrum.fr")

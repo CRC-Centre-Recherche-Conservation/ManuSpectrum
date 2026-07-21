@@ -9,6 +9,7 @@ import re
 from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone, translation
+from django.utils.translation import gettext_lazy as _
 
 # The four atelier "carte des ressources" groupings, keyed by graph slug.
 GROUPS = [
@@ -91,11 +92,32 @@ EXCLUDED_GRAPH_SLUGS = {
 }
 EXCLUDED_GRAPH_NAMES = {"test ressource", "test resource"}
 
-# Human labels where `.title()` of the id is wrong (custom datatypes, acronyms).
+# Human, translatable labels for the datatypes shown in the "Datatypes" chart.
+# gettext_lazy at module level (import time has no active language); resolved to
+# a real str per request inside `with translation.override(language)` — see the
+# str() at the build site. Complete on purpose: the old `.title()` fallback only
+# ever produced English, so FR pages showed "Concept List", "Resource Instance"…
+# next to French axes.
 DATATYPE_LABELS = {
-    "manifest": "IIIF Manifest",
-    "edtf": "EDTF",
-    "non-localized-string": "Non-localized String",
+    "string": _("String"),
+    "concept": _("Concept"),
+    "concept-list": _("Concept List"),
+    "resource-instance": _("Resource Instance"),
+    "resource-instance-list": _("Resource Instance List"),
+    "number": _("Number"),
+    "date": _("Date"),
+    "boolean": _("Boolean"),
+    "domain-value": _("Domain Value"),
+    "domain-value-list": _("Domain Value List"),
+    "geojson-feature-collection": _("GeoJSON Feature Collection"),
+    "file-list": _("File List"),
+    "url": _("URL"),
+    "node-value": _("Node Value"),
+    "annotation": _("Annotation"),
+    "edtf": _("EDTF"),
+    "non-localized-string": _("Non-localized String"),
+    "reference": _("Reference"),
+    "manifest": _("IIIF Manifest"),
 }
 
 
@@ -487,7 +509,9 @@ def build_model_graph(language="en"):
         datatypes = [
             {
                 "id": dt,
-                "label": DATATYPE_LABELS.get(dt) or dt.replace("-", " ").title(),
+                # str() forces the lazy proxy to resolve NOW, in the active
+                # language, into a plain string safe to JSON-encode and cache.
+                "label": str(DATATYPE_LABELS.get(dt) or dt.replace("-", " ").title()),
                 "color": datatype_color(dt),
                 "count": c,
             }

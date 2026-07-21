@@ -24,7 +24,9 @@ Disallow: /fr/password_reset/
 Disallow: /user_profile/
 Disallow: /fr/user_profile/
 Disallow: /renderer/
+Disallow: /fr/renderer/
 Disallow: /renderer_config/
+Disallow: /fr/renderer_config/
 Disallow: /files/
 Disallow: /fr/files/
 Disallow: /concepts/
@@ -40,5 +42,6 @@ Disallow: /fr/etl_manager
 Disallow: /notifications
 Disallow: /fr/notifications
 Disallow: /i18n/
+Disallow: /fr/i18n/
 
 Sitemap: {{ request.scheme }}://{{ request.get_host }}/sitemap.xml

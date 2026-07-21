@@ -239,7 +239,8 @@ class DatatypeCoverageTests(TestCase):
         )
 
     def test_custom_datatype_labels(self):
-        self.assertEqual(DATATYPE_LABELS["manifest"], "IIIF Manifest")
+        # str(): the values are gettext_lazy proxies now.
+        self.assertEqual(str(DATATYPE_LABELS["manifest"]), "IIIF Manifest")
 
 
 class ExcludedGraphExactMatchTests(SimpleTestCase):
@@ -476,3 +477,23 @@ class PayloadEnrichmentTests(TestCase):
         self.assertIn("generated_at", payload)
         for m in payload["models"]:
             self.assertTrue(m.get("slug"), f"model {m['name']} missing slug")
+
+    def test_datatype_chart_labels_are_localized(self):
+        # Regression: DATATYPE_LABELS was a plain dict — FR pages showed
+        # "Concept List", "Resource Instance"… in English next to French axes.
+        # Pure resolution test (the test DB has no graphs, so the built payload
+        # carries no datatypes) — this is exactly what the build site does:
+        # str() the lazy proxy inside translation.override(language).
+        from django.utils import translation
+
+        from manuspectrum.views.model_graph_service import DATATYPE_LABELS
+
+        with translation.override("fr"):
+            self.assertEqual(str(DATATYPE_LABELS["string"]), "Texte")
+            self.assertEqual(
+                str(DATATYPE_LABELS["resource-instance"]), "Instance de ressource"
+            )
+            self.assertEqual(str(DATATYPE_LABELS["file-list"]), "Liste de fichiers")
+            self.assertEqual(str(DATATYPE_LABELS["manifest"]), "Manifeste IIIF")
+        with translation.override("en"):
+            self.assertEqual(str(DATATYPE_LABELS["string"]), "String")

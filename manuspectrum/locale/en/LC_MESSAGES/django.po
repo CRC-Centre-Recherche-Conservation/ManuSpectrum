@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 08:42-0500\n"
+"POT-Creation-Date: 2026-07-21 09:40-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -38,15 +38,15 @@ msgstr "Invalid URL format"
 msgid "Undefined"
 msgstr "Undefined"
 
-#: settings.py:416
+#: settings.py:420
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:453
+#: settings.py:457
 msgid "English"
 msgstr "English"
 
-#: settings.py:454
+#: settings.py:458
 msgid "French"
 msgstr ""
 
@@ -2136,6 +2136,7 @@ msgid "Label"
 msgstr "Label"
 
 #: templates/views/components/widgets/biblissima-concept-widget.htm:31
+#: views/model_graph_service.py:114
 msgid "URL"
 msgstr "URL"
 
@@ -3614,6 +3615,88 @@ msgstr "Invalid response from the Biblissima portal."
 #: views/biblissima_proxy.py:300
 msgid "Unknown error while querying Biblissima."
 msgstr "Unknown error while querying Biblissima."
+
+#: views/model_graph_service.py:102
+msgid "String"
+msgstr ""
+
+#: views/model_graph_service.py:103
+#, fuzzy
+#| msgid "Conceptual Model"
+msgid "Concept"
+msgstr "Conceptual Model"
+
+#: views/model_graph_service.py:104
+msgid "Concept List"
+msgstr ""
+
+#: views/model_graph_service.py:105
+#, fuzzy
+#| msgid "Resources"
+msgid "Resource Instance"
+msgstr "Resources"
+
+#: views/model_graph_service.py:106
+msgid "Resource Instance List"
+msgstr ""
+
+#: views/model_graph_service.py:107
+msgid "Number"
+msgstr ""
+
+#: views/model_graph_service.py:108
+msgid "Date"
+msgstr ""
+
+#: views/model_graph_service.py:109
+msgid "Boolean"
+msgstr ""
+
+#: views/model_graph_service.py:110
+msgid "Domain Value"
+msgstr ""
+
+#: views/model_graph_service.py:111
+msgid "Domain Value List"
+msgstr ""
+
+#: views/model_graph_service.py:112
+msgid "GeoJSON Feature Collection"
+msgstr ""
+
+#: views/model_graph_service.py:113
+#, fuzzy
+#| msgid "Files"
+msgid "File List"
+msgstr "Files"
+
+#: views/model_graph_service.py:115
+msgid "Node Value"
+msgstr ""
+
+#: views/model_graph_service.py:116
+#, fuzzy
+#| msgid "IIIF Annotations"
+msgid "Annotation"
+msgstr "IIIF Annotations"
+
+#: views/model_graph_service.py:117
+msgid "EDTF"
+msgstr ""
+
+#: views/model_graph_service.py:118
+msgid "Non-localized String"
+msgstr ""
+
+#: views/model_graph_service.py:119
+msgid "Reference"
+msgstr ""
+
+#: views/model_graph_service.py:120
+#, fuzzy
+#| msgid "IIIF manifest"
+msgid "IIIF Manifest"
+msgstr "IIIF manifest"
 
 #: views/renderer_config.py:38
 msgid "<h1>Renderers do not exist</h1>"

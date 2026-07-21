@@ -30,7 +30,8 @@ CACHE_TTL = 60 * 60 * 24  # 24h backstop; fingerprint busts earlier on republish
 # and no window where freshly deployed JS reads fields the cached payload
 # doesn't have.
 # v4: slugs, localized widget labels, RDM collection labels, generated_at.
-PAYLOAD_VERSION = 4
+# v5: datatype chart labels localized (were English on FR pages).
+PAYLOAD_VERSION = 5
 
 # The fingerprint tracks (graphid, publication) plus the resource and concept
 # table sizes, so it moves on republish AND when records/concepts are added or
