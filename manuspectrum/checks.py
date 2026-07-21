@@ -50,7 +50,9 @@ def check_published_graph_languages(app_configs, databases, **kwargs):
     Arches serialises each graph PER LANGUAGE at publication time. Activating a
     new language after publishing leaves those serialisations missing, and every
     Arches page under /<lang>/ then 500s (`NoneType has no attribute
-    'serialized_graph'`). Fix: ``python manage.py graph publish --update``.
+    'serialized_graph'` — find_publication_in_language has no fallback).
+    Fix: ``python manage.py i18n synclanguages`` (official add-a-language sync,
+    covers resource models AND branches).
 
     Database-tagged so it runs with migrate — the natural deploy gate. Wrapped
     defensively: on a fresh database the Arches tables may not exist yet.
@@ -90,9 +92,9 @@ def check_published_graph_languages(app_configs, databases, **kwargs):
                         f"Language '{code}' has no published-graph serialisation "
                         f"for {len(missing)} graph publication(s) in use — Arches "
                         f"pages under /{code}/ will raise 500. Run "
-                        "`python manage.py graph publish --update`, and again "
-                        "with `-g <ids>` for branch graphs (isresource=False), "
-                        "which the no-argument form skips.",
+                        "`python manage.py i18n synclanguages` (the official "
+                        "add-a-language sync: it updates publications for "
+                        "models AND branches).",
                         id="manuspectrum.W002",
                     )
                 )

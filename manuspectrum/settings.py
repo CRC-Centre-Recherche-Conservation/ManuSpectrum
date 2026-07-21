@@ -455,10 +455,12 @@ LANGUAGES = [
     #   ('en-gb', _('British English')),
     #    ('es', _('Spanish')),
 ]
-# OPS — after ADDING a language here, run:  python manage.py graph publish --update
-# Arches serialises graphs per language at publication time; without that step
+# OPS — after ADDING a language here, run:  python manage.py i18n synclanguages
+# (the official Arches sync: creates the Language row and republishes the
+# per-language graph serialisations for models AND branches). Without it,
 # every Arches page under /<newlang>/ 500s. manuspectrum.checks.W002 (a
 # database system check, runs with migrate) detects the gap.
+# See https://arches.readthedocs.io/en/stable/developing/advanced/localizing-arches/
 
 # override this to permenantly display/hide the language switcher
 SHOW_LANGUAGE_SWITCH = len(LANGUAGES) > 1

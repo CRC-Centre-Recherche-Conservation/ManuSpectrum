@@ -153,6 +153,28 @@ class FrenchRoutingTests(TestCase):
         self.assertIn("ms-lang-switch", html)
         self.assertIn('href="http://testserver/fr/about/team"', html)
 
+    def test_language_switcher_round_trip(self):
+        # Regression: set_language must live INSIDE i18n_patterns. Unprefixed,
+        # the request was forced to English (prefix_default_language=False),
+        # translate_url Resolver404'd on the /fr/ referer, and switching back
+        # to English bounced users to the same French page.
+        resp = self.client.post(
+            "/fr/i18n/setlang/",
+            {"language": "en"},
+            HTTP_REFERER="http://testserver/fr/about/team",
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(resp["Location"].endswith("/about/team"))
+        self.assertNotIn("/fr/", resp["Location"])
+
+        resp = self.client.post(
+            "/i18n/setlang/",
+            {"language": "fr"},
+            HTTP_REFERER="http://testserver/about/team",
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/fr/about/team", resp["Location"])
+
     def test_robots_blocks_french_app_routes(self):
         body = self.client.get("/robots.txt").content.decode()
         self.assertIn("Disallow: /fr/search", body)

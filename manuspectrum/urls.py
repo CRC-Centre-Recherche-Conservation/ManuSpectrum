@@ -79,8 +79,6 @@ handler500 = "arches.app.views.main.custom_500"
 # Ensure Arches core urls are superseded by project-level urls
 urlpatterns.append(path("", include("arches.urls")))
 
-# Only handle i18n routing in active project. This will still handle the routes provided by Arches core and Arches applications,
-# but handling i18n routes in multiple places causes application errors.
 ### Manuspectrum URL — public About pages. Registered BEFORE the i18n wrap so
 ### they get language-prefixed routes (/fr/about/team) like the rest of the UI.
 ### API endpoints, robots.txt and sitemap.xml stay below the wrap on purpose:
@@ -106,6 +104,16 @@ urlpatterns.append(
 )
 
 if settings.ROOT_URLCONF == __name__:
+    # set_language must live INSIDE i18n_patterns: Django's view calls
+    # translate_url() with the REQUEST's active language, and with
+    # prefix_default_language=False an unprefixed /i18n/setlang request is
+    # forced to English — resolve('/fr/…') then Resolver404s inside
+    # translate_url and switching back to English silently no-ops (the
+    # switcher bounced users back to the French page). Wrapped, the Arches
+    # switcher posts to /fr/i18n/setlang from French pages and the request
+    # carries its language.
+    urlpatterns.append(path("i18n/", include("django.conf.urls.i18n")))
+
     if settings.SHOW_LANGUAGE_SWITCH is True:
         # prefix_default_language=False: English keeps its historical
         # unprefixed URLs (/, /about/team — already indexed and linked),
@@ -113,8 +121,14 @@ if settings.ROOT_URLCONF == __name__:
         # an unprefixed URL to its /fr/ twin.
         urlpatterns = i18n_patterns(*urlpatterns, prefix_default_language=False)
 
-    urlpatterns.append(path("i18n/", include("django.conf.urls.i18n")))
-
+# ============================================================================
+# LANGUAGE BOUNDARY — everything appended BELOW this line sits OUTSIDE
+# i18n_patterns and is therefore language-NEUTRAL (one URL, no /fr/ twin,
+# active language forced to English by prefix_default_language=False).
+# Correct for machine endpoints: Biblissima proxy, IIIF, robots.txt,
+# sitemap.xml. Anything a HUMAN reads in a language (pages, or APIs whose
+# payload is localised like model-graph) must be registered ABOVE the wrap.
+# ============================================================================
 
 ### Manuspectrum URL - Biblissima proxy
 
