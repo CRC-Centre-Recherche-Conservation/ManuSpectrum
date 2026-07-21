@@ -113,28 +113,20 @@
                 {% trans "A contact address is not configured yet. Please check back soon." %}
             </p>
 
-            {% comment %} WAVE 4f: `window.location.href = 'mailto:…'` does nothing
-               at all on institutional webmail (Outlook Web, Zimbra, Roundcube),
-               which is a large share of this audience — the button appeared to
-               be broken. This panel is revealed after the click so the message
-               can be copied wholesale instead. {% endcomment %}
-            <div class="ms-contact-fallback" id="ms-contact-fallback" hidden>
-                <h3 class="ms-contact-fallback__head">{% trans "Nothing happened?" %}</h3>
-                <p>{% trans "Some webmail clients ignore email links. Copy the address and the message below and send it yourself." %}</p>
-                <div class="ms-contact-copyrow">
-                    <span class="ms-contact-address" id="ms-contact-address">{% contact_email %}</span>
-                    <button type="button" class="ms-contact-copy" id="ms-contact-copy-address"
-                            data-copy-target="ms-contact-address">
-                        <i class="fa-regular fa-copy" aria-hidden="true"></i> {% trans "Copy address" %}
-                    </button>
-                </div>
-                <label class="ms-contact-fallback__label" for="ms-contact-body">{% trans "Your message" %}</label>
-                <textarea class="ms-contact-input ms-contact-body" id="ms-contact-body" rows="8" readonly></textarea>
-                <button type="button" class="ms-contact-copy" id="ms-contact-copy-body"
-                        data-copy-target="ms-contact-body">
-                    <i class="fa-regular fa-copy" aria-hidden="true"></i> {% trans "Copy message" %}
+            {% comment %} WAVE 4f + UX audit: `window.location.href = 'mailto:…'`
+               does nothing at all on institutional webmail (Outlook Web, Zimbra,
+               Roundcube), which is a large share of this audience — the button
+               appeared to be broken. The escape hatch is simply the address,
+               visible from the start; a typed message is never lost anyway,
+               it stays in the form fields above. {% endcomment %}
+            <div class="ms-contact-direct" id="ms-contact-direct">
+                <span>{% trans "Or write to us directly:" %}</span>
+                <span class="ms-contact-address" id="ms-contact-address">{% contact_email %}</span>
+                <button type="button" class="ms-contact-copy" id="ms-contact-copy-address"
+                        data-copy-target="ms-contact-address">
+                    <i class="fa-regular fa-copy" aria-hidden="true"></i> {% trans "Copy address" %}
                 </button>
-                <p class="ms-contact-copied" id="ms-contact-copied" role="status"></p>
+                <span class="ms-contact-copied" id="ms-contact-copied" role="status"></span>
             </div>
         </form>
 

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 05:02-0500\n"
+"POT-Creation-Date: 2026-07-21 05:21-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -249,7 +249,7 @@ msgstr ""
 msgid "All rights reserved"
 msgstr "Tous droits réservés"
 
-#: templates/includes/ms_footer.htm:62 templates/views/pages/contact.htm:155
+#: templates/includes/ms_footer.htm:62 templates/views/pages/contact.htm:147
 msgid "Source code"
 msgstr "Code source"
 
@@ -447,7 +447,7 @@ msgstr ""
 "utilisant des thésaurus et des bases d'autorité pour contextualiser les "
 "informations sur des documents hétérogènes."
 
-#: templates/index.htm:294 templates/views/pages/contact.htm:154
+#: templates/index.htm:294 templates/views/pages/contact.htm:146
 #: templates/views/pages/team.htm:173
 msgid "Biblissima+ — Cluster 2"
 msgstr "Biblissima+ — Cluster 2"
@@ -3273,39 +3273,23 @@ msgstr "Demander un compte / un accès"
 msgid "Open my email app"
 msgstr "Ouvrir mon application e-mail"
 
-#: templates/views/pages/contact.htm:126
-msgid "Nothing happened?"
-msgstr "Rien ne s'est passé ?"
-
 #: templates/views/pages/contact.htm:127
-msgid ""
-"Some webmail clients ignore email links. Copy the address and the message "
-"below and send it yourself."
-msgstr ""
-"Certaines messageries en ligne ignorent les liens d'e-mail. Copiez l'adresse"
-" et le message ci-dessous, puis envoyez-le vous-même."
+msgid "Or write to us directly:"
+msgstr "Ou écrivez-nous directement :"
 
-#: templates/views/pages/contact.htm:132
+#: templates/views/pages/contact.htm:131
 msgid "Copy address"
 msgstr "Copier l'adresse"
 
-#: templates/views/pages/contact.htm:135
-msgid "Your message"
-msgstr "Votre message"
-
-#: templates/views/pages/contact.htm:139
-msgid "Copy message"
-msgstr "Copier le message"
-
-#: templates/views/pages/contact.htm:150
+#: templates/views/pages/contact.htm:142
 msgid "Elsewhere"
 msgstr "Ailleurs"
 
-#: templates/views/pages/contact.htm:152
+#: templates/views/pages/contact.htm:144
 msgid "Who we are, how to cite, funding and licence"
 msgstr "Qui nous sommes, comment citer, financement et licence"
 
-#: templates/views/pages/contact.htm:153
+#: templates/views/pages/contact.htm:145
 msgid "The conceptual model"
 msgstr "Le modèle conceptuel"
 

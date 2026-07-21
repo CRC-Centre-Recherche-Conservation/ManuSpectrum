@@ -186,8 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const submit = document.getElementById("ms-contact-submit");
     const note = document.getElementById("ms-contact-note");
     const error = document.getElementById("ms-contact-error");
-    const fallback = document.getElementById("ms-contact-fallback");
-    const fallbackBody = document.getElementById("ms-contact-body");
+    const direct = document.getElementById("ms-contact-direct");
 
     // `form.name` / `form.email` / `form.message` resolve to the CONTROLS, not to
     // HTMLFormElement's own properties: the interface is [LegacyOverrideBuiltIns],
@@ -212,6 +211,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!email) {
         submit.disabled = true;
         if (note) note.hidden = false;
+        // No address to show — hide the "write to us directly" row too.
+        if (direct) direct.hidden = true;
         return;
     }
 
@@ -241,14 +242,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         error.hidden = true;
 
-        // The fallback is revealed BEFORE navigating, not after: if the handler
-        // does open a mail client the page is left behind anyway, and if it does
-        // not, the panel is already there instead of the user staring at a
-        // button that appears to do nothing.
-        if (fallback && fallbackBody) {
-            fallbackBody.value = `${composeSubject(data)}\n\n${composeBody(data)}`;
-            fallback.hidden = false;
-        }
         window.location.href = buildMailto(email, data);
     });
 });

@@ -181,12 +181,11 @@ select.ms-contact-input { appearance: none; background-image: none; cursor: poin
 // The "Nothing happened?" panel. `window.location.href = 'mailto:…'` is a no-op
 // on institutional webmail (Outlook Web, Zimbra, Roundcube) — a large share of
 // this audience — where the submit button simply appeared to be broken.
-.ms-contact-fallback { border: 1px dashed rgba(26, 26, 46, 0.28); border-radius: 14px; padding: 20px; background: $ms-paper;
-    display: flex; flex-direction: column; gap: 10px;
-    &__head { font-family: $ms-font-serif; font-weight: 500; font-size: 1.25rem; margin: 0; }
-    &__label { font-weight: 600; font-size: 0.85rem; }
-    p { color: $ms-ink-soft; font-size: 0.88rem; margin: 0; } }
-.ms-contact-copyrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+// "Or write to us directly": the webmail escape hatch — just the address,
+// visible from the start. A typed message is never lost; it stays in the form.
+.ms-contact-direct { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding-top: 14px; border-top: 1px dashed rgba(26, 26, 46, 0.22);
+    color: $ms-ink-soft; font-size: 0.9rem; }
 // Selectable, not a link: the point is that the reader can highlight it by hand
 // when every automated path has failed them.
 .ms-contact-address { font-family: $ms-font-mono; font-size: 0.9rem; color: $ms-ink; background: #fff;
@@ -198,7 +197,6 @@ select.ms-contact-input { appearance: none; background-image: none; cursor: poin
     &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
 .ms-contact-copied { margin: 0; font-size: 0.8rem; color: $ms-ink-soft;
     &:empty { display: none; } }
-.ms-contact-body { font-family: $ms-font-mono; font-size: 0.8rem; }
 
 // Off-screen host for the execCommand('copy') fallback textarea. `display:none`
 // would make the selection uncopyable, so it has to stay rendered.
