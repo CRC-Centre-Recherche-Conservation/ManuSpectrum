@@ -53,39 +53,54 @@ Homepage — Prismatic Luminescence aesthetic
     <meta name="twitter:description" content="{{ seo_description }}">
     <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'img/landing/og-image.png' %}">
 
-    <!-- JSON-LD Structured Data -->
+    <!-- JSON-LD Structured Data. WebSite + ResearchProject with an identified
+         Grant: the shapes Google's research/dataset surfaces actually read.
+         (The previous WebApplication + isPartOf Project was semantically off:
+         isPartOf expects a CreativeWork.) -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "ManuSpectrum",
-        "description": "{{ seo_description|escapejs }}",
-        "url": "{{ request.build_absolute_uri }}",
-        "applicationCategory": "EducationalApplication",
-        "operatingSystem": "Web",
-        "inLanguage": ["en", "fr"],
-        "provider": {
-            "@type": "ResearchOrganization",
-            "name": "CRC — Centre de Recherche sur la Conservation",
-            "url": "https://crc.mnhn.fr",
-            "parentOrganization": [
-                {"@type": "ResearchOrganization", "name": "CNRS", "url": "https://www.cnrs.fr"},
-                {"@type": "ResearchOrganization", "name": "MNHN", "url": "https://www.mnhn.fr"}
-            ]
-        },
-        "funder": {
-            "@type": "Organization",
-            "name": "ANR — Agence Nationale de la Recherche",
-            "url": "https://anr.fr"
-        },
-        "isPartOf": {
-            "@type": "Project",
-            "name": "Biblissima+",
-            "url": "https://biblissima.fr",
-            "description": "Biblissima+ — Observatory of ancient written cultures"
-        },
-        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
-        "keywords": "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, printed books, inscriptions, written cultural heritage, IIIF, CIDOC-CRM"
+        "@graph": [
+            {
+                "@type": "WebSite",
+                "name": "ManuSpectrum",
+                "url": "{{ request.scheme }}://{{ request.get_host }}/",
+                "inLanguage": ["en", "fr"],
+                "description": "{{ seo_description|escapejs }}"
+            },
+            {
+                "@type": "ResearchProject",
+                "name": "ManuSpectrum",
+                "url": "{{ request.scheme }}://{{ request.get_host }}/",
+                "description": "{{ seo_description|escapejs }}",
+                "parentOrganization": {
+                    "@type": "ResearchOrganization",
+                    "name": "CRC — Centre de Recherche sur la Conservation",
+                    "url": "https://crc.mnhn.fr",
+                    "parentOrganization": [
+                        {"@type": "ResearchOrganization", "name": "CNRS", "url": "https://www.cnrs.fr"},
+                        {"@type": "ResearchOrganization", "name": "MNHN", "url": "https://www.mnhn.fr"}
+                    ]
+                },
+                "funding": {
+                    "@type": "Grant",
+                    "identifier": "ANR-21-ESRE-0005",
+                    "name": "Biblissima+ (Investissements d'avenir)",
+                    "funder": {
+                        "@type": "Organization",
+                        "name": "ANR — Agence Nationale de la Recherche",
+                        "url": "https://anr.fr"
+                    }
+                },
+                "memberOf": {
+                    "@type": "Organization",
+                    "name": "Biblissima+",
+                    "url": "https://biblissima.fr"
+                },
+                "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+                "keywords": "spectroscopy, XRF, Raman, FTIR, FORS, manuscripts, printed books, inscriptions, written cultural heritage, IIIF, CIDOC-CRM"
+            }
+        ]
     }
     </script>
 

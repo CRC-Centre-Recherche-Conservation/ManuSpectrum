@@ -86,6 +86,29 @@ class ErrorPageTests(TestCase):
             self.assertIn("ManuSpectrum", html)
 
 
+class SocialMetaTests(TestCase):
+    def test_about_pages_carry_og_and_valid_json_ld(self):
+        import json
+        import re
+
+        for name in ("about-model", "about-explorer", "about-team", "about-contact"):
+            html = self.client.get(reverse(name)).content.decode()
+            self.assertIn('property="og:title"', html, name)
+            self.assertIn('property="og:image"', html, name)
+            self.assertIn('name="twitter:card"', html, name)
+            blocks = re.findall(
+                r'<script type="application/ld\+json">(.*?)</script>', html, re.S
+            )
+            self.assertTrue(blocks, f"{name}: no JSON-LD")
+            for b in blocks:
+                json.loads(b)  # raises on invalid JSON
+
+    def test_team_json_ld_lists_members(self):
+        html = self.client.get(reverse("about-team")).content.decode()
+        for member in ("Anne Michelin", "Gilles Kagan", "Maxime Humeau"):
+            self.assertIn(f'"name": "{member}"', html)
+
+
 class SitemapTests(TestCase):
     def test_static_sitemap_lists_about_pages_not_index_htm(self):
         xml = self.client.get("/sitemap.xml").content.decode()

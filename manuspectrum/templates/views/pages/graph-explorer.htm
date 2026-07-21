@@ -3,6 +3,20 @@
 {% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "Graph Explorer" %} — ManuSpectrum{% endblock %}
 {% block page_description %}{% trans "Explore the ManuSpectrum data model as an interactive graph: 12 resource models, their fields, datatypes and relationships." %}{% endblock %}
+{% block og_title %}{% trans "Graph Explorer" %} — ManuSpectrum{% endblock %}
+{% block og_description %}{% trans "Explore the ManuSpectrum data model as an interactive graph: 12 resource models, their fields, datatypes and relationships." %}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"},
+        {"@type": "ListItem", "position": 2, "name": "{% trans 'Graph Explorer' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'about-explorer' %}"}
+    ]
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <section class="ms-page-hero reveal">

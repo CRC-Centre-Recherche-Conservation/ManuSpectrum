@@ -3568,3 +3568,7 @@ msgstr "<h1>Les rendus n'existent pas</h1>"
 #: views/renderer_config.py:53
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
+
+#: templates/views/pages/team.htm:0
+msgid "Home"
+msgstr "Accueil"

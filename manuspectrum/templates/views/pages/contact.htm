@@ -3,6 +3,24 @@
 {% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "Contact" %} — ManuSpectrum{% endblock %}
 {% block page_description %}{% trans "Contact the ManuSpectrum team to submit a project, request access, or ask a question." %}{% endblock %}
+{% block og_title %}{% trans "Contact" %} — ManuSpectrum{% endblock %}
+{% block og_description %}{% trans "Contact the ManuSpectrum team to submit a project, request access, or ask a question." %}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@graph": [
+        {"@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"},
+            {"@type": "ListItem", "position": 2, "name": "{% trans 'Contact' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'about-contact' %}"}
+        ]},
+        {"@type": "ResearchProject", "name": "ManuSpectrum",
+         "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"{% contact_email as ms_ce %}{% if ms_ce %},
+         "contactPoint": {"@type": "ContactPoint", "contactType": "research inquiries", "email": "{{ ms_ce|escapejs }}"}{% endif %}}
+    ]
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <section class="ms-page-hero reveal">

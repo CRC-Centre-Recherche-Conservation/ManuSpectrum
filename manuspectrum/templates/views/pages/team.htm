@@ -3,6 +3,33 @@
 {% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "About & Team" %} — ManuSpectrum{% endblock %}
 {% block page_description %}{% trans "About the ManuSpectrum project and the team behind it, within Biblissima+ Cluster 2." %}{% endblock %}
+{% block og_title %}{% trans "About & Team" %} — ManuSpectrum{% endblock %}
+{% block og_description %}{% trans "About the ManuSpectrum project and the team behind it, within Biblissima+ Cluster 2." %}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@graph": [
+        {"@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"},
+            {"@type": "ListItem", "position": 2, "name": "{% trans 'About & Team' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'about-team' %}"}
+        ]},
+        {"@type": "Person", "name": "Anne Michelin",
+         "jobTitle": "{% trans 'Maîtresse de conférences, physical chemistry' as ms_j1 %}{{ ms_j1|escapejs }}",
+         "worksFor": {"@type": "ResearchOrganization", "name": "Centre de Recherche sur la Conservation (CRC)", "url": "https://crc.mnhn.fr"},
+         "url": "https://crc.mnhn.fr/fr/annuaire/anne-michelin-9373"},
+        {"@type": "Person", "name": "Gilles Kagan",
+         "jobTitle": "{% trans 'Research engineer, head of the Images service' as ms_j2 %}{{ ms_j2|escapejs }}",
+         "worksFor": {"@type": "ResearchOrganization", "name": "IRHT — Institut de recherche et d'histoire des textes", "url": "https://www.irht.cnrs.fr"},
+         "url": "https://www.irht.cnrs.fr/fr/annuaire/kagan-gilles"},
+        {"@type": "Person", "name": "Maxime Humeau",
+         "jobTitle": "{% trans 'Engineer / web developer' as ms_j3 %}{{ ms_j3|escapejs }}",
+         "worksFor": {"@type": "ResearchOrganization", "name": "Centre de Recherche sur la Conservation (CRC)", "url": "https://crc.mnhn.fr"},
+         "url": "https://crc.mnhn.fr/fr/annuaire/maxime-humeau-9510"}
+    ]
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <section class="ms-page-hero reveal">
