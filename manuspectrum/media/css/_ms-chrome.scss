@@ -129,6 +129,53 @@ img { max-width: 100%; height: auto; display: block; }
     border-radius: 1px;
 }
 
+.spectral-line-thin {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--spectral-1) 10%, var(--spectral-2) 25%, var(--spectral-3) 40%, var(--spectral-4) 55%, var(--spectral-5) 70%, var(--spectral-6) 85%, transparent 100%);
+    opacity: 0.45;
+}
+
+// --- SECTION HEADINGS (shared by homepage + About pages) ---
+// Deduplicated from homepage.scss / pages.scss, which had drifted: the
+// homepage copy still coloured the label with --accent (3.67:1 — the ratio
+// this file's own :root comment forbids for text). Unified on --accent-text.
+.ms-section-label {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent-text);
+    margin: 0 0 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.ms-section-label::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--accent);
+    flex: 0 0 auto;
+}
+
+.ms-section-title {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 300;
+    line-height: 1.2;
+    color: var(--ink);
+    margin: 0 0 1.5rem;
+}
+
+.ms-section-subtitle {
+    font-size: 1rem;
+    color: var(--ink-muted);
+    max-width: 640px;
+    line-height: 1.7;
+    font-weight: 300;
+}
+
 // --- LAYOUT ---
 .ms-container {
     max-width: 1240px;
