@@ -27,6 +27,8 @@
         "@uppy/drag-drop": "3.1.0",
         "@uppy/progress-bar": "3.1.1",
         "arches": "archesproject/arches#stable/8.1.4",
+        "arches_controlled_lists": "archesproject/arches-controlled-lists#stable/1.2.0",
+        "arches_vue_components": "archesproject/arches-vue-components#stable/2.0.2",
         "es-toolkit": "^1.44.0",
         "papaparse": "^5.5.3",
         "plotly.js-cartesian-dist": "^2.24.3",
@@ -38,6 +40,7 @@
     },
     "nodeModulesPaths": {},
     "overrides": {
+        "arches": "archesproject/arches#stable/8.1.4",
         "moment-timezone": "^0.5.45",
         "nomnom": "npm:@gerhobbelt/nomnom",
         "rimraf": "^5.0.7",
