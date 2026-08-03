@@ -85,12 +85,46 @@ ELASTICSEARCH_CONNECTION_OPTIONS = {
 # a prefix to append to all elasticsearch indexes, note: must be lower case
 ELASTICSEARCH_PREFIX = "manuspectrum"
 
-ELASTICSEARCH_CUSTOM_INDEXES = []
+# arches_controlled_lists indexes reference-datatype values in their own ES
+# index, separate from the resource index, so list items stay searchable as
+# terms. Adding an entry here requires a reindex.
+REFERENCES_INDEX_NAME = "references"
+
+ELASTICSEARCH_CUSTOM_INDEXES = [
+    {
+        "module": "arches_controlled_lists.search_indexes.reference_index.ReferenceIndex",
+        "name": REFERENCES_INDEX_NAME,
+        "should_update_asynchronously": True,
+    }
+]
 # [{
 #     'module': 'manuspectrum.search_indexes.sample_index.SampleIndex',
 #     'name': 'my_new_custom_index', <-- follow ES index naming rules
 #     'should_update_asynchronously': False  <-- denotes if asynchronously updating the index would affect custom functionality within the project.
 # }]
+
+# Adds a third "References" bucket next to the Arches defaults (terms and
+# concepts) in the search bar's term dropdown.
+TERM_SEARCH_TYPES = [
+    {
+        "type": "term",
+        "label": _("Term Matches"),
+        "key": "terms",
+        "module": "arches.app.search.search_term.TermSearch",
+    },
+    {
+        "type": "concept",
+        "label": _("Concepts"),
+        "key": "concepts",
+        "module": "arches.app.search.concept_search.ConceptSearch",
+    },
+    {
+        "type": "reference",
+        "label": _("References"),
+        "key": REFERENCES_INDEX_NAME,
+        "module": "arches_controlled_lists.search_indexes.reference_index.ReferenceIndex",
+    },
+]
 
 KIBANA_URL = "http://localhost:5601/"
 KIBANA_CONFIG_BASEPATH = "kibana"  # must match Kibana config.yml setting (server.basePath) but without the leading slash,
@@ -152,7 +186,12 @@ INSTALLED_APPS = (
     "django_migrate_sql",
     "arches_querysets",
     "rest_framework",
-    # "arches_controlled_lists",
+    # Arches applications. They must precede the "arches.app" append below,
+    # which is what actually provides the core templates — that ordering, not
+    # the position relative to "arches", is what lets them win.
+    "arches_vue_components",
+    "arches_controlled_lists",
+    "django.contrib.postgres",
 )
 
 # Placing this last ensures any templates provided by Arches Applications
@@ -470,6 +509,13 @@ SHOW_LANGUAGE_SWITCH = len(LANGUAGES) > 1
 # Implement this class to associate custom documents to the ES resource index
 # See tests.views.search_tests.TestEsMappingModifier class for example
 # ES_MAPPING_MODIFIER_CLASSES = ["manuspectrum.search.es_mapping_modifier.EsMappingModifier"]
+#
+# arches_controlled_lists needs its modifier here so reference-datatype values
+# land in the resource index. It changes the resource mapping, so a full
+# reindex is required after enabling it.
+ES_MAPPING_MODIFIER_CLASSES = [
+    "arches_controlled_lists.search.references_es_mapping_modifier.ReferencesEsMappingModifier"
+]
 
 RENDERERS += [
     {
