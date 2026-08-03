@@ -27,8 +27,6 @@
         "@uppy/drag-drop": "3.1.0",
         "@uppy/progress-bar": "3.1.1",
         "arches": "archesproject/arches#stable/8.0.x",
-        "arches_component_lab": "archesproject/arches-component-lab#main",
-        "arches-modular-reports": "archesproject/arches-modular-reports#beta/1.0.0b2",
         "es-toolkit": "^1.44.0",
         "papaparse": "^5.5.3",
         "plotly.js-cartesian-dist": "^2.24.3",

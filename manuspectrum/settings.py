@@ -152,9 +152,7 @@ INSTALLED_APPS = (
     "django_migrate_sql",
     "arches_querysets",
     "rest_framework",
-    "arches_component_lab",
     # "arches_controlled_lists",
-    "arches_modular_reports",
 )
 
 # Placing this last ensures any templates provided by Arches Applications

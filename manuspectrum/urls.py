@@ -37,15 +37,14 @@ urlpatterns = [
     # SEO: Arches serves the homepage at both "/" and "/index.htm" (names
     # `root` and `home`) — duplicate content. Project templates only link
     # `root`; anything still hitting /index.htm gets a permanent redirect.
-    # MUST stay above the app includes: arches_component_lab/querysets/
-    # modular_reports each re-include arches.urls, so the first arches
-    # `^index.htm` pattern appears as early as the include just below.
+    # MUST stay above the app includes: arches_querysets re-includes
+    # arches.urls, so the first arches `^index.htm` pattern appears as early
+    # as that include.
     path(
         "index.htm",
         RedirectView.as_view(pattern_name="root", permanent=True, query_string=True),
     ),
     # path("", include("arches_controlled_lists.urls")),
-    path("", include("arches_component_lab.urls")),
     # Override password reset to send branded HTML email
     path(
         "password_reset/",
@@ -69,7 +68,6 @@ urlpatterns = [
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 urlpatterns.append(path("", include("arches_querysets.urls")))
-urlpatterns.append(path("", include("arches_modular_reports.urls")))
 
 handler400 = "arches.app.views.main.custom_400"
 handler403 = "arches.app.views.main.custom_403"
