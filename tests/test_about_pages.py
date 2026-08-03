@@ -142,6 +142,25 @@ class FrenchRoutingTests(TestCase):
         # a working /en/ twin would be duplicate content.
         self.assertEqual(self.client.get("/en/about/team").status_code, 404)
 
+    def test_en_api_prefix_redirects_without_losing_the_method(self):
+        # Counterpart to the rule above, and the reason it stops at pages:
+        # generateArchesURL() fills {language_code} from the document's lang,
+        # so every Vue app shipped by an Arches application asks for
+        # /en/api/... on an English page. Without this alias the i18n bootstrap
+        # 404s and createVueApplication() throws before mounting anything.
+        resp = self.client.get("/en/api/get_frontend_i18n_data")
+        self.assertEqual(resp.status_code, 308)
+        self.assertEqual(resp["Location"], "/api/get_frontend_i18n_data")
+
+        # 308 rather than 301/302 so writes stay writes: a browser rewrites the
+        # latter to GET, silently turning an API write into a read.
+        posted = self.client.post("/en/api/get_frontend_i18n_data")
+        self.assertEqual(posted.status_code, 308)
+
+        # The query string has to survive, or paginated/filtered calls break.
+        with_query = self.client.get("/en/api/get_frontend_i18n_data?page=2")
+        self.assertEqual(with_query["Location"], "/api/get_frontend_i18n_data?page=2")
+
     def test_hreflang_alternates_on_about_pages(self):
         html = self.client.get("/about/team").content.decode()
         self.assertIn('hreflang="fr"', html)

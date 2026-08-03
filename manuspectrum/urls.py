@@ -2,6 +2,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
+from django.http import HttpResponsePermanentRedirect
 from django.urls import include, path, re_path
 from django.views.generic import RedirectView, TemplateView
 
@@ -306,5 +307,51 @@ urlpatterns.append(
         sitemap,
         {"sitemaps": sitemaps},
         name="django.contrib.sitemaps.views.sitemap",
+    )
+)
+
+
+### /en/api/ compatibility shim — required by the Vue components that Arches
+### applications ship (arches_vue_components, arches_controlled_lists).
+###
+### `generateArchesURL()` resolves routes from frontend_configuration/urls.json,
+### where 413 of the 442 entries carry a `{language_code}` placeholder, and
+### fills it from `document.documentElement.lang`. On an English page that
+### yields `/en/…`, which prefix_default_language=False never serves: English
+### lives on the unprefixed URLs. The fetch 404s and createVueApplication()
+### throws "Not Found" before it can mount, so every Vue app dies in English
+### while working in French. Today exactly one call is affected —
+### `arches:get_frontend_i18n_data`, the i18n bootstrap — because the
+### controlled-list APIs go through `arches.urls.*`, which Django reverses
+### server-side and therefore resolves per language correctly.
+###
+### Scoped to `api/` deliberately: `test_en_prefix_does_not_exist` pins the
+### rule that no /en/ PAGE twin may exist (duplicate content). Machine
+### endpoints are not indexed content, so aliasing them does not weaken that,
+### and the prefix stays scoped rather than needing a new entry each time an
+### Arches application calls another API this way.
+###
+### 308, not 301/302: browsers rewrite the latter to GET, which would quietly
+### turn write APIs into reads. 308 preserves method and body.
+###
+### Registered BELOW the language boundary on purpose — this alias must stay
+### language-neutral, or it would gain a nonsensical /fr/en/ twin.
+class HttpResponsePermanentRedirectPreservingMethod(HttpResponsePermanentRedirect):
+    status_code = 308
+
+
+def _strip_redundant_en_prefix(request, remainder):
+    target = "/api/" + remainder
+    query_string = request.META.get("QUERY_STRING")
+    if query_string:
+        target = f"{target}?{query_string}"
+    return HttpResponsePermanentRedirectPreservingMethod(target)
+
+
+urlpatterns.append(
+    re_path(
+        r"^en/api/(?P<remainder>.*)$",
+        _strip_redundant_en_prefix,
+        name="en-api-prefix-shim",
     )
 )
