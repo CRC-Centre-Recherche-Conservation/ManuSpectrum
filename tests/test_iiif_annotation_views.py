@@ -248,8 +248,10 @@ class TestIIIFAnnotationMixin(TestCase):
             "manifest": "https://example.com/manifest",
         }
 
-        with patch.object(
-            self.mixin, "_get_canvas_dimensions", return_value=(2000, 3000)
+        with patch.multiple(
+            self.mixin,
+            _get_canvas_dimensions=MagicMock(return_value=(2000, 3000)),
+            _get_manifest_data=MagicMock(return_value=None),
         ):
             with patch("manuspectrum.utils.iiif_tools.BBoxCalculator") as mock_calc:
                 mock_calc.geometry_to_xywh.return_value = "xywh=100,200,300,400"
@@ -979,6 +981,278 @@ class TestGetCanvasIndex(TestCase):
 
         self.assertIsNone(CanvasIIIF.get_canvas_index(manifest_v3, None))
         self.assertIsNone(CanvasIIIF.get_canvas_index(manifest_v3, ""))
+
+
+# =============================================================================
+# CANVAS ID RESOLUTION TESTS (issue #32)
+# =============================================================================
+
+# VwAnnotation.canvas stores the *image service* URL, not the Canvas id.
+# Both manifests below mirror the real Avranches demo data: the Canvas id
+# (.../AVRANCHES_MS059/10) differs from the image service URL it displays
+# (.../AVRANCHES_MS059_0010.tif).
+IMAGE_SERVICE_URL = (
+    "https://iiif.unicaen.fr/mrsh/bvmsm/AVRANCHES_MS059/AVRANCHES_MS059_0010.tif"
+)
+CANVAS_ID = "https://iiif.unicaen.fr/mrsh/bvmsm/AVRANCHES_MS059/10"
+MANIFEST_URL = "https://emmsm.unicaen.fr/manifests/Avranches_BM_59.json"
+
+MANIFEST_V2 = {
+    "@context": "http://iiif.io/api/presentation/2/context.json",
+    "@id": MANIFEST_URL,
+    "@type": "sc:Manifest",
+    "sequences": [
+        {
+            "@type": "sc:Sequence",
+            "canvases": [
+                {
+                    "@id": CANVAS_ID,
+                    "@type": "sc:Canvas",
+                    "images": [
+                        {
+                            "@type": "oa:Annotation",
+                            "resource": {
+                                "@id": f"{IMAGE_SERVICE_URL}/full/full/0/default.jpg",
+                                "@type": "dctypes:Image",
+                                "service": {"@id": IMAGE_SERVICE_URL},
+                            },
+                        }
+                    ],
+                },
+            ],
+        }
+    ],
+}
+
+MANIFEST_V3 = {
+    "@context": "http://iiif.io/api/presentation/3/context.json",
+    "id": MANIFEST_URL,
+    "type": "Manifest",
+    "items": [
+        {
+            "id": CANVAS_ID,
+            "type": "Canvas",
+            "items": [
+                {
+                    "type": "AnnotationPage",
+                    "items": [
+                        {
+                            "type": "Annotation",
+                            "body": {
+                                "id": f"{IMAGE_SERVICE_URL}/full/full/0/default.jpg",
+                                "type": "Image",
+                                "service": [{"id": IMAGE_SERVICE_URL}],
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    ],
+}
+
+
+@override_settings(
+    PUBLIC_SERVER_ADDRESS="https://test.example.com/", CACHE_BY_USER={"anonymous": 3600}
+)
+class TestResolveCanvasId(TestCase):
+    """Tests for _resolve_canvas_id: image service URL -> IIIF Canvas id."""
+
+    def setUp(self):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+
+        self.mixin = IIIFAnnotationMixin()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_resolves_image_service_url_to_canvas_id_v2(self):
+        """A v2 image service URL should resolve to the Canvas @id."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            result = self.mixin._resolve_canvas_id(IMAGE_SERVICE_URL, MANIFEST_URL)
+
+        self.assertEqual(result, CANVAS_ID)
+
+    def test_resolves_image_service_url_to_canvas_id_v3(self):
+        """A v3 image service URL should resolve to the Canvas id."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V3):
+            result = self.mixin._resolve_canvas_id(IMAGE_SERVICE_URL, MANIFEST_URL)
+
+        self.assertEqual(result, CANVAS_ID)
+
+    def test_is_idempotent_when_already_a_canvas_id(self):
+        """Resolving an actual Canvas id should return it unchanged."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            result = self.mixin._resolve_canvas_id(CANVAS_ID, MANIFEST_URL)
+
+        self.assertEqual(result, CANVAS_ID)
+
+    def test_falls_back_when_manifest_unavailable(self):
+        """Should return the stored value when the manifest cannot be fetched."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=None):
+            result = self.mixin._resolve_canvas_id(IMAGE_SERVICE_URL, MANIFEST_URL)
+
+        self.assertEqual(result, IMAGE_SERVICE_URL)
+
+    def test_falls_back_when_canvas_not_in_manifest(self):
+        """Should return the stored value when no canvas matches."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            result = self.mixin._resolve_canvas_id(
+                "https://iiif.unicaen.fr/unknown.tif", MANIFEST_URL
+            )
+
+        self.assertEqual(result, "https://iiif.unicaen.fr/unknown.tif")
+
+    def test_returns_input_without_manifest_url(self):
+        """No manifest URL means nothing to resolve against."""
+        self.assertEqual(
+            self.mixin._resolve_canvas_id(IMAGE_SERVICE_URL, None), IMAGE_SERVICE_URL
+        )
+        self.assertIsNone(self.mixin._resolve_canvas_id(None, MANIFEST_URL))
+
+    def test_caches_resolved_canvas_id(self):
+        """Second call should hit the cache instead of re-reading the manifest."""
+        with patch.object(
+            self.mixin, "_get_manifest_data", return_value=MANIFEST_V2
+        ) as mock_manifest:
+            self.mixin._resolve_canvas_id(IMAGE_SERVICE_URL, MANIFEST_URL)
+            reads_after_cold_call = mock_manifest.call_count
+            result = self.mixin._resolve_canvas_id(IMAGE_SERVICE_URL, MANIFEST_URL)
+
+        self.assertEqual(result, CANVAS_ID)
+        self.assertEqual(
+            mock_manifest.call_count,
+            reads_after_cold_call,
+            "a resolved canvas id must be served from cache, not re-read",
+        )
+
+
+@override_settings(
+    PUBLIC_SERVER_ADDRESS="https://test.example.com/", CACHE_BY_USER={"anonymous": 3600}
+)
+class TestAnnotationTargetsCanvas(TestCase):
+    """The IIIF target must be the Canvas id, never the image service URL."""
+
+    def setUp(self):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+
+        self.mixin = IIIFAnnotationMixin()
+        self.annotation = {
+            "geometry": {"type": "Point", "coordinates": [90.4, -80.2]},
+            "canvas": IMAGE_SERVICE_URL,
+            "manifest": MANIFEST_URL,
+            "analysis_id": str(uuid.uuid4()),
+        }
+        cache.clear()
+
+        # Dimensions come from the image service over HTTP: stub them everywhere.
+        dims_patcher = patch.object(
+            self.mixin, "_get_canvas_dimensions", return_value=(4000, 5000)
+        )
+        self.mock_dims = dims_patcher.start()
+        self.addCleanup(dims_patcher.stop)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_target_is_built_on_canvas_id(self):
+        """_convert_geojson_to_iiif_target must anchor #xywh on the Canvas id."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            result = self.mixin._convert_geojson_to_iiif_target(self.annotation)
+
+        self.assertTrue(
+            result.startswith(f"{CANVAS_ID}#xywh="),
+            f"target should be anchored on the Canvas id, got: {result}",
+        )
+        self.assertNotIn(".tif", result)
+
+    def test_dimensions_still_read_from_image_service(self):
+        """Dimensions must keep using the image service URL, not the Canvas id."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            self.mixin._convert_geojson_to_iiif_target(self.annotation)
+
+        self.mock_dims.assert_called_once_with(IMAGE_SERVICE_URL)
+
+    def test_target_without_geometry_is_canvas_id(self):
+        """Even without geometry the bare target must be the Canvas id."""
+        annotation = dict(self.annotation, geometry=None)
+
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            result = self.mixin._convert_geojson_to_iiif_target(annotation)
+
+        self.assertEqual(result, CANVAS_ID)
+
+    def test_payload_passes_canvas_id_to_serializer(self):
+        """The serializer must receive the Canvas id as canvas_uri."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            payload = self.mixin._build_annotation_payload(self.annotation)
+
+        self.assertEqual(payload["canvas_uri"], CANVAS_ID)
+        self.assertEqual(payload["manifest_url"], MANIFEST_URL)
+        self.assertEqual(payload["resource_id"], self.annotation["analysis_id"])
+        self.assertTrue(payload["target"].startswith(f"{CANVAS_ID}#xywh="))
+
+    def test_payload_resolves_the_canvas_only_once(self):
+        """target and canvas_uri share one resolution, so they cannot diverge."""
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            with patch.object(
+                self.mixin, "_resolve_canvas_id", return_value=CANVAS_ID
+            ) as mock_resolve:
+                payload = self.mixin._build_annotation_payload(self.annotation)
+
+        mock_resolve.assert_called_once_with(IMAGE_SERVICE_URL, MANIFEST_URL)
+        self.assertEqual(payload["target"].split("#")[0], payload["canvas_uri"])
+
+    def test_payload_keys_match_serializer_signature(self):
+        """The payload is splatted into to_representation: keys must line up."""
+        import inspect
+
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializer,
+        )
+
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            payload = self.mixin._build_annotation_payload(self.annotation)
+
+        accepted = set(
+            inspect.signature(IIIFAnnotationSerializer.to_representation).parameters
+        )
+        self.assertEqual(set(payload) - accepted, set())
+
+    def test_v3_specific_resource_source_is_the_canvas(self):
+        """v3 target.source.id must be the Canvas id, matching its "type": "Canvas"."""
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializer,
+        )
+
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V3):
+            payload = self.mixin._build_annotation_payload(self.annotation)
+
+        target = IIIFAnnotationSerializer._build_target(
+            payload["target"], payload["canvas_uri"], payload["manifest_url"]
+        )
+
+        self.assertEqual(target["type"], "SpecificResource")
+        self.assertEqual(target["source"]["id"], CANVAS_ID)
+        self.assertEqual(target["source"]["type"], "Canvas")
+        self.assertTrue(target["selector"]["value"].startswith("xywh="))
+
+    def test_v2_on_is_the_canvas(self):
+        """v2 'on' must be the Canvas id plus fragment (Presentation 2.1 §5.4)."""
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializerV2,
+        )
+
+        with patch.object(self.mixin, "_get_manifest_data", return_value=MANIFEST_V2):
+            payload = self.mixin._build_annotation_payload(self.annotation)
+
+        on_target = IIIFAnnotationSerializerV2._build_target_v2(
+            payload["target"], payload["canvas_uri"], payload["manifest_url"]
+        )
+
+        self.assertTrue(on_target.startswith(f"{CANVAS_ID}#xywh="))
+        self.assertNotIn(".tif", on_target)
 
 
 class TestGetCanvasPageNumbers(TestCase):

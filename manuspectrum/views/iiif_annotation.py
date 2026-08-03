@@ -160,10 +160,64 @@ class IIIFAnnotationMixin:
             logger.debug(f"Canvas '{canvas_uri}' not found in manifest items/sequences")
         return page_num
 
+    def _resolve_canvas_id(
+        self, canvas_uri: str | None, manifest_url: str | None
+    ) -> str | None:
+        """
+        Resolve the value stored in ``VwAnnotation.canvas`` to a real IIIF Canvas id.
+
+        ``VwAnnotation.canvas`` holds the *image service* URL
+        (…/AVRANCHES_MS059_0010.tif), not the Canvas id (…/AVRANCHES_MS059/10), and
+        it must stay that way: Arches' Leaflet annotation editor builds its tile
+        requests from it, as do both thumbnail fetchers — see the comment at
+        ``views/biblissima_proxy.py`` where the ingestion deliberately prefers
+        ``imageServiceUrl`` over the ``canvasId`` it also has in hand.
+
+        IIIF export needs the opposite: annotations must be attached to a Canvas
+        (Presentation 2.1 §5.4, 3.0 §2.2), and Mirador filters on
+        `canvasIds.includes(targetId)`, silently dropping anything that targets an
+        image resource. One column, two consumers with opposite needs — hence the
+        translation here, at the export boundary, rather than in the stored data.
+
+        Returns the Canvas id, or ``canvas_uri`` unchanged when it cannot be resolved
+        (already a Canvas id, canvas absent from the manifest, manifest unreachable).
+        """
+        if not canvas_uri or not manifest_url:
+            return canvas_uri
+
+        cache_key = f"iiif_canvas_id:{canvas_uri}"
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
+        # _get_canvas_page_num already fetches the manifest, runs get_canvas_index
+        # and caches the position: reuse it rather than scanning the manifest twice
+        # for the same canvas within a single request.
+        index = self._get_canvas_page_num(canvas_uri, manifest_url)
+
+        canvas_id = None
+        if index is not None:
+            from manuspectrum.utils.iiif_tools import CanvasIIIF
+
+            manifest_data = self._get_manifest_data(manifest_url)
+            _, canvas_id = CanvasIIIF.get_canvas_by_index(manifest_data, index)
+
+        if not canvas_id:
+            logger.warning(
+                f"Could not resolve a canvas id for '{canvas_uri}' "
+                f"in manifest '{manifest_url}'; targeting the stored value, "
+                "which viewers will not render on the canvas."
+            )
+            return canvas_uri
+
+        cache.set(cache_key, canvas_id, timeout=self.CACHE_TIMEOUT)
+        return canvas_id
+
     @lru_cache(maxsize=256)
     def _get_canvas_dimensions(self, canvas_uri: str):
         """
         Retrieve canvas width/height from the IIIF infrastructure.
+        Expects an image service URL (its /info.json carries the dimensions).
         """
         cache_key = f"iiif_canvas_dim:{canvas_uri}"
 
@@ -178,18 +232,28 @@ class IIIFAnnotationMixin:
 
         return width, height
 
-    def _convert_geojson_to_iiif_target(self, annotation: dict, zoom: int = 5) -> str:
+    def _convert_geojson_to_iiif_target(
+        self, annotation: dict, zoom: int = 5, canvas_id: str | None = None
+    ) -> str:
         """
         Convert a GeoJSON geometry to a IIIF target with xywh fragment.
+
+        The fragment is anchored on the *Canvas id*: the coordinate space of an
+        annotation is defined by the Canvas, not by the image resource. Pass
+        ``canvas_id`` when it has already been resolved, to avoid resolving twice.
         """
         geometry = annotation.get("geometry")
-        canvas_uri = annotation.get("canvas")
+        image_service_url = annotation.get("canvas")
         manifest_url = annotation.get("manifest")
 
-        if not geometry or not canvas_uri:
-            return canvas_uri or ""
+        target_base = canvas_id or self._resolve_canvas_id(
+            image_service_url, manifest_url
+        )
 
-        canvas_width, canvas_height = self._get_canvas_dimensions(canvas_uri)
+        if not geometry or not image_service_url:
+            return target_base or ""
+
+        canvas_width, canvas_height = self._get_canvas_dimensions(image_service_url)
 
         from manuspectrum.utils.iiif_tools import BBoxCalculator
 
@@ -201,7 +265,32 @@ class IIIFAnnotationMixin:
             margin=0,
             radius=0,
         )
-        return f"{canvas_uri}#{xywh_fragment}" if xywh_fragment else canvas_uri
+        return f"{target_base}#{xywh_fragment}" if xywh_fragment else target_base
+
+    def _build_annotation_payload(
+        self, annotation: dict, resource_id: str | None = None
+    ) -> dict:
+        """
+        Build the serializer payload for a single annotation.
+
+        ``canvas_uri`` handed over to the serializers is always the resolved Canvas
+        id, never the image service URL stored in ``VwAnnotation.canvas`` — the v3
+        serializer labels it ``"type": "Canvas"`` and the v2 one uses it as ``on``.
+        Resolving here once keeps that id and the base of ``target`` identical by
+        construction; the serializers rely on the two agreeing.
+
+        The returned keys match the serializers' ``to_representation`` signature.
+        """
+        manifest_url = annotation.get("manifest")
+        canvas_id = self._resolve_canvas_id(annotation.get("canvas"), manifest_url)
+        return {
+            "target": self._convert_geojson_to_iiif_target(
+                annotation, canvas_id=canvas_id
+            ),
+            "resource_id": resource_id or str(annotation["analysis_id"]),
+            "canvas_uri": canvas_id,
+            "manifest_url": manifest_url,
+        }
 
     def _get_annotations_from_analyses(self, analyses: list[Resource]) -> list[dict]:
         """
@@ -290,14 +379,7 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
             for canvas_uri, canvas_annotations in grouped_annos.items():
                 for a in canvas_annotations:
                     idx = len(all_annotation_data)
-                    all_annotation_data.append(
-                        {
-                            "target": self._convert_geojson_to_iiif_target(a),
-                            "resource_id": str(a["analysis_id"]),
-                            "canvas_uri": canvas_uri,
-                            "manifest_url": a.get("manifest"),
-                        }
-                    )
+                    all_annotation_data.append(self._build_annotation_payload(a))
                     canvas_mapping.setdefault(canvas_uri, []).append(idx)
 
             # Batch serialize all annotations
@@ -505,15 +587,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
             annos = grouped[canvas_uri]
 
-            annotation_data = [
-                {
-                    "target": self._convert_geojson_to_iiif_target(a),
-                    "resource_id": str(a["analysis_id"]),
-                    "canvas_uri": canvas_uri,
-                    "manifest_url": a.get("manifest"),
-                }
-                for a in annos
-            ]
+            annotation_data = [self._build_annotation_payload(a) for a in annos]
 
             items = IIIFAnnotationSerializer.batch_to_representation(annotation_data)
 
@@ -588,13 +662,8 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
                 return JsonResponse({"error": "No annotation data"}, status=404)
 
             anno = annos[0]  # 1 analysis -> 1 annotation
-            target = self._convert_geojson_to_iiif_target(anno)
-            iiif_annotation = IIIFAnnotationSerializer.to_representation(
-                target,
-                resource_id=str(resource_id),
-                canvas_uri=anno.get("canvas"),
-                manifest_url=anno.get("manifest"),
-            )
+            payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
+            iiif_annotation = IIIFAnnotationSerializer.to_representation(**payload)
 
             return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
 
@@ -737,15 +806,7 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
 
             annos = grouped[canvas_uri]
 
-            annotation_data = [
-                {
-                    "target": self._convert_geojson_to_iiif_target(a),
-                    "resource_id": str(a["analysis_id"]),
-                    "canvas_uri": canvas_uri,
-                    "manifest_url": a.get("manifest"),
-                }
-                for a in annos
-            ]
+            annotation_data = [self._build_annotation_payload(a) for a in annos]
 
             # Use v2 serializer
             items = IIIFAnnotationSerializerV2.batch_to_representation(annotation_data)
@@ -800,15 +861,10 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
                 return JsonResponse({"error": "No annotation data"}, status=404)
 
             anno = annos[0]  # 1 analysis -> 1 annotation
-            target = self._convert_geojson_to_iiif_target(anno)
+            payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
 
             # Use v2 serializer
-            iiif_annotation = IIIFAnnotationSerializerV2.to_representation(
-                target,
-                resource_id=str(resource_id),
-                canvas_uri=anno.get("canvas"),
-                manifest_url=anno.get("manifest"),
-            )
+            iiif_annotation = IIIFAnnotationSerializerV2.to_representation(**payload)
 
             return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
 
