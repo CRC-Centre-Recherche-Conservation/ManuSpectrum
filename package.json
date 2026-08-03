@@ -26,14 +26,14 @@
         "@uppy/dashboard": "3.9.0",
         "@uppy/drag-drop": "3.1.0",
         "@uppy/progress-bar": "3.1.1",
-        "arches": "archesproject/arches#stable/8.0.x",
+        "arches": "archesproject/arches#stable/8.1.4",
         "es-toolkit": "^1.44.0",
         "papaparse": "^5.5.3",
         "plotly.js-cartesian-dist": "^2.24.3",
         "typescript": "5.6.2"
     },
     "devDependencies": {
-        "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.0.x",
+        "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.1.4",
         "webpack": "^5.97.1"
     },
     "nodeModulesPaths": {},
