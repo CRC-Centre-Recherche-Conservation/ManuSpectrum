@@ -76,6 +76,7 @@ DATATYPE_COLORS = {
     "semantic": "#cbd5e1",
     "non-localized-string": "#60a5fa",
     "reference": "#9333ea",
+    "language": "#84cc16",
     # Custom project datatypes (DATATYPE_LOCATIONS -> manuspectrum/datatypes/).
     "manifest": "#ec4899",
 }
@@ -117,6 +118,7 @@ DATATYPE_LABELS = {
     "edtf": _("EDTF"),
     "non-localized-string": _("Non-localized String"),
     "reference": _("Reference"),
+    "language": _("Language"),
     "manifest": _("IIIF Manifest"),
 }
 
