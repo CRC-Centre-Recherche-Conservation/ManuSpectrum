@@ -1,8 +1,9 @@
 """Biblissima import workflow — module-level constants.
 
 Mapping / graph / node-id constants used by ``biblissima_proxy.py``
-(Wikibase property IDs, Arches graph/nodegroup/node UUIDs, concept value
-ids, type/document-nature mappings, cache key templates) live here so the
+(Wikibase property IDs, Arches graph/nodegroup/node UUIDs, concept ids —
+which are also their controlled-list item ids — type/document-nature
+mappings, cache key templates) live here so the
 proxy module keeps its focus on request handling and tile creation logic.
 
 Runtime/network configuration (URLs, HTTP timeouts, concurrency limit,
@@ -302,8 +303,10 @@ BIBLISSIMA_TYPE_MAPPING = {
 # Default fallback when no Component type mapping matches.
 BIBLISSIMA_TYPE_DEFAULT = "b4a3fe54-2d82-4361-9adf-8b6b780f3aa4"  # illumination
 
-# Human-readable labels for each Component target concept (FR; matches the
-# concept collection language).
+# Human-readable labels for each Component target concept, used by the badge
+# UI. FR only, and NOT guaranteed to match the list item's own prefLabel —
+# see the casing note in the review; the list is the authority, this is a
+# display shortcut that avoids a round-trip.
 BIBLISSIMA_TYPE_LABELS = {
     "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b": "Lettrine",
     "56505060-781b-4d12-b0f2-a7efab68fae0": "Lettre ornée",

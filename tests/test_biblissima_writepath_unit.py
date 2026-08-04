@@ -187,6 +187,29 @@ def _make_minimal_component_data(**extra):
     return data
 
 
+_STUB_REFERENCE = {
+    "uri": "https://example.org/x",
+    "labels": [{"value": "x"}],
+    "list_id": "l",
+}
+
+
+def _stub_concept_resolution(testcase):
+    """Builder tests exercise tile shape, not concept resolution, and run with no
+    controlled lists loaded. `_concept_list` now fails loudly on an unresolvable
+    concept — correct in production, so the scaffolding has to say what it wants
+    instead of relying on the old swallow-and-return-the-raw-id fallback."""
+    from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+    patcher = patch.object(
+        BiblissimaCreateResourceView,
+        "_concept_reference",
+        staticmethod(lambda concept_id: dict(_STUB_REFERENCE)),
+    )
+    patcher.start()
+    testcase.addCleanup(patcher.stop)
+
+
 def _make_builder_view():
     """Return a BiblissimaCreateResourceView with empty _tile_buffer."""
     from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
@@ -206,6 +229,7 @@ class SortorderSiblingTests(TestCase):
     """
 
     def setUp(self):
+        _stub_concept_resolution(self)
         cache.clear()
 
     def tearDown(self):
@@ -432,30 +456,38 @@ class ConceptReferenceCacheTests(TestCase):
 
     @patch("manuspectrum.views.biblissima_proxy.ListItem")
     def test_transient_miss_is_not_cached(self, mock_list_item):
-        cid = "concept-abc"
-        query = mock_list_item.objects.filter.return_value.prefetch_related.return_value
+        cid = "11111111-2222-3333-4444-555555555555"
+        query = (
+            mock_list_item.objects.filter.return_value.with_list_item_labels.return_value
+        )
         # First lookup: the lists are not loaded yet (transient/startup).
         query.first.return_value = None
-        self.assertIsNone(self.View._concept_reference(cid))
+        with self.assertRaises(LookupError):
+            self.View._concept_reference(cid)
 
         # The list item now exists -> a second call must resolve, proving the
         # miss was NOT cached.
         query.first.return_value = MagicMock(
-            build_tile_value=lambda: {"uri": "u", "labels": [], "list_id": "l"}
+            build_tile_value=lambda: {
+                "uri": "u",
+                "labels": [{"value": "x"}],
+                "list_id": "l",
+            }
         )
-        self.assertEqual(
-            self.View._concept_reference(cid),
-            {"uri": "u", "labels": [], "list_id": "l"},
-        )
+        self.assertEqual(self.View._concept_reference(cid)["uri"], "u")
 
     def test_real_resolution_is_cached(self):
-        cid = "concept-def"
+        cid = "22222222-3333-4444-5555-666666666666"
         with patch("manuspectrum.views.biblissima_proxy.ListItem") as mock_list_item:
             query = (
-                mock_list_item.objects.filter.return_value.prefetch_related.return_value
+                mock_list_item.objects.filter.return_value.with_list_item_labels.return_value
             )
             query.first.return_value = MagicMock(
-                build_tile_value=lambda: {"uri": "u", "labels": [], "list_id": "l"}
+                build_tile_value=lambda: {
+                    "uri": "u",
+                    "labels": [{"value": "x"}],
+                    "list_id": "l",
+                }
             )
             self.assertEqual(self.View._concept_reference(cid)["uri"], "u")
 
@@ -469,15 +501,104 @@ class ConceptReferenceCacheTests(TestCase):
         corrupt what the next resource gets."""
         with patch("manuspectrum.views.biblissima_proxy.ListItem") as mock_list_item:
             query = (
-                mock_list_item.objects.filter.return_value.prefetch_related.return_value
+                mock_list_item.objects.filter.return_value.with_list_item_labels.return_value
+            )
+            query.first.return_value = MagicMock(
+                build_tile_value=lambda: {
+                    "uri": "u",
+                    "labels": [{"value": "x"}],
+                    "list_id": "l",
+                }
+            )
+            first = self.View._concept_reference("33333333-4444-5555-6666-777777777777")
+            first["labels"].append("tampered")
+
+            self.assertEqual(
+                len(
+                    self.View._concept_reference(
+                        "33333333-4444-5555-6666-777777777777"
+                    )["labels"]
+                ),
+                1,
+            )
+
+    def test_a_list_item_without_labels_is_a_miss_not_a_resolution(self):
+        """ReferenceDataType rejects a value with no labels, so memoising one
+        would fail every later import of that concept until the worker
+        restarts — the finding #14 failure mode, one level down."""
+        with patch("manuspectrum.views.biblissima_proxy.ListItem") as mock_list_item:
+            query = (
+                mock_list_item.objects.filter.return_value.with_list_item_labels.return_value
             )
             query.first.return_value = MagicMock(
                 build_tile_value=lambda: {"uri": "u", "labels": [], "list_id": "l"}
             )
-            first = self.View._concept_reference("concept-ghi")
-            first["labels"].append("tampered")
+            with self.assertRaises(LookupError):
+                self.View._concept_reference("44444444-5555-6666-7777-888888888888")
 
-            self.assertEqual(self.View._concept_reference("concept-ghi")["labels"], [])
+            self.assertEqual(
+                self.View._resolve_concept_reference.cache_info().currsize, 0
+            )
+
+    def test_a_malformed_id_raises_lookuperror_not_validationerror(self):
+        """Callers only handle one failure type; Django's UUIDField would
+        otherwise surface a ValidationError from deep in the ORM."""
+        with self.assertRaises(LookupError):
+            self.View._concept_reference("not-a-uuid")
+
+
+class ConceptListFailsLoudTests(TestCase):
+    """An unresolvable concept must abort the item, never be dropped.
+
+    With the concept datatype a bad id was written through as a bare string and
+    arches' validate() rejected it, so nothing was written. Reference values have
+    no such backstop: ReferenceDataType.validate does no existence check and an
+    empty list validates clean, so a silent drop would write a resource missing
+    its type, language or source with a 200 response.
+    """
+
+    def setUp(self):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        self.View = BiblissimaCreateResourceView
+        self.View._resolve_concept_reference.cache_clear()
+        self.addCleanup(self.View._resolve_concept_reference.cache_clear)
+        self.view = BiblissimaCreateResourceView()
+
+    def test_unresolvable_concept_raises(self):
+        with patch("manuspectrum.views.biblissima_proxy.ListItem") as mock_list_item:
+            mock_list_item.objects.filter.return_value.with_list_item_labels.return_value.first.return_value = (
+                None
+            )
+            with self.assertRaises(LookupError):
+                self.view._concept_list(["55555555-6666-7777-8888-999999999999"])
+
+    def test_a_partially_resolving_list_is_never_truncated(self):
+        """The multi-valued period nodes would otherwise lose centuries in
+        silence."""
+        good = "66666666-7777-8888-9999-aaaaaaaaaaaa"
+        bad = "77777777-8888-9999-aaaa-bbbbbbbbbbbb"
+
+        def resolve(pk=None, **kwargs):
+            result = MagicMock()
+            found = (
+                MagicMock(
+                    build_tile_value=lambda: {
+                        "uri": "u",
+                        "labels": [{"value": "x"}],
+                        "list_id": "l",
+                    }
+                )
+                if pk == good
+                else None
+            )
+            result.with_list_item_labels.return_value.first.return_value = found
+            return result
+
+        with patch("manuspectrum.views.biblissima_proxy.ListItem") as mock_list_item:
+            mock_list_item.objects.filter.side_effect = resolve
+            with self.assertRaises(LookupError):
+                self.view._concept_list([good, bad])
 
 
 class NestedTileFKOrderingTests(TestCase):
@@ -491,6 +612,7 @@ class NestedTileFKOrderingTests(TestCase):
     """
 
     def setUp(self):
+        _stub_concept_resolution(self)
         cache.clear()
 
     def tearDown(self):
@@ -1527,7 +1649,6 @@ class OrchestratorDelegationTests(TestCase):
 
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
 
-        CONCEPT_SET = frozenset({"valid-concept-uuid"})
         mock_factory_inst = MagicMock(name="factory_inst")
         MockFactory.return_value = mock_factory_inst
         MockTileModel.objects.bulk_create.return_value = []
@@ -1619,7 +1740,6 @@ class OrchestratorDelegationTests(TestCase):
         view._tile_buffer = []
         resource = _make_resource()
 
-        collect_mock = MagicMock()
         validate_mock = MagicMock()
         run_hook_mock = MagicMock()
         write_mock = MagicMock()
@@ -1631,7 +1751,6 @@ class OrchestratorDelegationTests(TestCase):
         ):
             view._flush_tile_buffer(resource, user=None, default_transaction_id=None)
 
-        collect_mock.assert_not_called()
         validate_mock.assert_not_called()
         run_hook_mock.assert_not_called()
         write_mock.assert_not_called()

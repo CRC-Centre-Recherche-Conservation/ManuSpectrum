@@ -1912,9 +1912,9 @@ def _attach_document_type(entity, session=None):
     entity["documentTypeIsFallback"] = type_is_fallback
 
 
-def _biblissima_type_label(valueid):
-    """Return the display label for a resolved Component type valueid."""
-    return BIBLISSIMA_TYPE_LABELS.get(valueid, "")
+def _biblissima_type_label(concept_id):
+    """Return the display label for a resolved Component type concept."""
+    return BIBLISSIMA_TYPE_LABELS.get(concept_id, "")
 
 
 def _resolve_biblissima_type(typologie="", descriptor="", type_field=""):
@@ -2523,7 +2523,7 @@ class BiblissimaCreateResourceView(View):
                 "currentOwner":     [<uuid>],    // Document → Owner
                 "productionActors": [<uuid>]
             },
-            "conceptMappings": { "type": <valueid> }
+            "conceptMappings": { "type": <concept id> }
         }
 
     Dispatch:
@@ -3077,15 +3077,15 @@ class BiblissimaCreateResourceView(View):
 
         Thin orchestrator: captures and resets the buffer, builds the shared
         ``DataTypeFactory`` and ``nodes_by_id`` lookup, then delegates to the
-        four reusable primitives in order:
+        three reusable primitives in order:
 
         1. ``_validate_tiles`` — Tier-2 validate-net (raises
            ``TileValidationError`` on any ERROR before any DB write).
-        3. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
-        4. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
-        5. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
-        6. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
-        7. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+        2. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
+        3. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
+        4. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
+        5. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        6. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
 
         After this method, ``self._tile_buffer`` is reset to an empty
         list — any further ``_create_tile`` call inside the same
@@ -3249,50 +3249,62 @@ class BiblissimaCreateResourceView(View):
 
         Raises ``LookupError`` when the concept has no list item, so a (possibly
         transient) miss is NOT stored by ``lru_cache`` — only real resolutions
-        are memoised for the worker's lifetime. The keyspace is bounded by the
-        ~30 concepts referenced from this view (constants/biblissima.py).
+        are memoised for the worker's lifetime (finding #14). The keyspace is
+        bounded by the ~30 concepts referenced from this view
+        (constants/biblissima.py).
+
+        A list item that exists but carries no labels yet — the same package/list
+        load window finding #14 was written for, one level down — is also a miss,
+        not a resolution: ``ReferenceDataType`` rejects such a value with
+        "Missing required value(s): 'labels'", and memoising it would make every
+        later import of that concept fail until the worker restarts.
         """
-        item = (
-            ListItem.objects.filter(pk=concept_id)
-            .prefetch_related("list_item_values")
-            .first()
-        )
+        try:
+            uuid.UUID(str(concept_id))
+        except (ValueError, TypeError):
+            # A malformed id would otherwise surface as Django's ValidationError
+            # from the UUIDField; callers only have to handle one failure type.
+            raise LookupError(concept_id)
+        item = ListItem.objects.filter(pk=concept_id).with_list_item_labels().first()
         if item is None:
             raise LookupError(concept_id)
-        return item.build_tile_value()
+        tile_value = item.build_tile_value()
+        if not tile_value.get("labels"):
+            raise LookupError(concept_id)
+        return tile_value
 
     @staticmethod
     def _concept_reference(concept_id):
-        """Get the reference tile value for a concept ID, or None when it cannot
-        be resolved.
+        """Get the reference tile value for a concept ID.
 
-        Returning None rather than the raw id matters: a bare string was a valid
-        concept-datatype value but is not a valid reference one, so falling back
-        to it would write malformed data. An unresolvable concept now yields an
-        absent value, which the caller drops.
+        Propagates ``LookupError`` when the concept cannot be resolved. That is
+        deliberate and load-bearing: with the concept datatype, an unresolvable
+        id was written through as a bare string and arches' own validate() then
+        rejected it, so the import failed loudly and wrote nothing. Reference
+        values carry no such backstop — ``ReferenceDataType.validate`` does no
+        existence checking, and an empty list validates clean — so swallowing
+        the failure here would write a resource silently missing its type,
+        language or source. Callers run inside the per-item try/except that
+        reports the item failed.
 
-        The miss is deliberately NOT cached (see ``_resolve_concept_reference``):
-        a transient empty/errored first lookup — e.g. before a package reload has
-        finished loading the lists — must not pin the failure for the worker's
-        whole lifetime (finding #14).
+        Returns a copy: the cached dict is shared, and a caller mutating its
+        tile value must not corrupt what the next resource gets.
         """
-        try:
-            return deepcopy(
-                BiblissimaCreateResourceView._resolve_concept_reference(concept_id)
-            )
-        except Exception:
-            return None
+        return deepcopy(
+            BiblissimaCreateResourceView._resolve_concept_reference(concept_id)
+        )
 
     def _concept_list(self, concept_ids):
         """Convert concept IDs to the list of reference values a tile expects.
 
         Reference nodes store a list whether or not they are multi-valued, so
-        single-valued callers use this too.
+        single-valued callers use this too. Every id must resolve — a partially
+        resolving list would silently drop values, which on the multi-valued
+        period nodes means a manuscript quietly losing centuries.
         """
         if isinstance(concept_ids, str):
             concept_ids = [concept_ids]
-        resolved = (self._concept_reference(cid) for cid in concept_ids)
-        return [reference for reference in resolved if reference is not None]
+        return [self._concept_reference(cid) for cid in concept_ids]
 
     def _create_document_tiles(
         self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps
@@ -3533,7 +3545,7 @@ class BiblissimaCreateResourceView(View):
         Card                         Source
         ============================ =========================================================================
         Name of Component            ``pageTitle`` > ``label`` > ``legend``
-        Type of Component            ``concepts["type"]`` (per-item valueid, correctable via inline editor)
+        Type of Component            ``concepts["type"]`` (per-item concept id, correctable via inline editor)
         Item Feature                 ``deps["parentDocument"]``
         Identifier                   Biblissima ARK (``arkId``) + Mandragore ARK (``mandragoreArk``) if present
         Statement                    ``text`` → ``identification`` ; ``rubric`` → ``inscriptions``

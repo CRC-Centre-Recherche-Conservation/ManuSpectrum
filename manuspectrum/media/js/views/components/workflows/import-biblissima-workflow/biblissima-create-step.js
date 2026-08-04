@@ -91,7 +91,7 @@ const LIST_DOC_TYPE = '73cf3108-5fef-429b-a92f-24074871aed9';
 const LIST_COMP_TYPE = 'e85080b2-c39b-4e37-b6bc-b57d34092b7b';
 
 // Server-side fallback when no Component mapping matches (illumination générique).
-// Must stay in sync with BIBLISSIMA_TYPE_DEFAULT in views/biblissima_proxy.py.
+// Must stay in sync with BIBLISSIMA_TYPE_DEFAULT in constants/biblissima.py.
 const COMPONENT_FALLBACK_TYPE_CONCEPT = 'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4';
 
 // Client-side backstop timeout for the per-item enrichment fetch. The backend
@@ -739,7 +739,7 @@ const viewModel = function(params) {
     // In Document mode there is no descriptor and all items default to the
     // same "manuscrit" value — so we show a generic label.
     // Short human label for the badge. Looks up the current concept against
-    // the local label map (mirrors backend BIBLISSIMA_TYPE_VALUEID_LABELS),
+    // the local label map (mirrors backend BIBLISSIMA_TYPE_LABELS),
     // so the badge updates immediately when the user picks a new value via
     // the inline editor. Unknown concepts (rare — only if the user picks a
     // concept not in our Biblissima mapping) show as "Custom type".
