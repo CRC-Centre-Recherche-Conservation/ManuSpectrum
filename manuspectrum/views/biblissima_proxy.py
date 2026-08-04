@@ -54,7 +54,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
-from functools import lru_cache
 from html import unescape
 
 import requests
@@ -3237,7 +3236,6 @@ class BiblissimaCreateResourceView(View):
         return {lang: {"value": str(value), "direction": "ltr"}}
 
     @staticmethod
-    @lru_cache(maxsize=256)
     def _resolve_concept_reference(concept_id):
         """Return the reference tile value for a concept ID.
 
@@ -3247,17 +3245,11 @@ class BiblissimaCreateResourceView(View):
         library's own serialiser, which keeps the shape in step with whatever
         ``ReferenceDataType`` expects.
 
-        Raises ``LookupError`` when the concept has no list item, so a (possibly
-        transient) miss is NOT stored by ``lru_cache`` — only real resolutions
-        are memoised for the worker's lifetime (finding #14). The keyspace is
-        bounded by the ~30 concepts referenced from this view
-        (constants/biblissima.py).
-
-        A list item that exists but carries no labels yet — the same package/list
-        load window finding #14 was written for, one level down — is also a miss,
-        not a resolution: ``ReferenceDataType`` rejects such a value with
-        "Missing required value(s): 'labels'", and memoising it would make every
-        later import of that concept fail until the worker restarts.
+        Raises ``LookupError`` when the concept has no list item — and also when
+        the item exists but carries no labels yet, the package/list load window
+        finding #14 was written for. ``ReferenceDataType`` rejects such a value
+        with "Missing required value(s): 'labels'", so treating it as a
+        resolution would poison whatever memoises it.
         """
         try:
             uuid.UUID(str(concept_id))
@@ -3273,9 +3265,18 @@ class BiblissimaCreateResourceView(View):
             raise LookupError(concept_id)
         return tile_value
 
-    @staticmethod
-    def _concept_reference(concept_id):
-        """Get the reference tile value for a concept ID.
+    def _concept_reference(self, concept_id):
+        """Get the reference tile value for a concept ID, memoised per request.
+
+        The cache is deliberately scoped to this view instance — one request —
+        rather than to the worker. Its whole benefit is intra-batch: the 25th
+        resource of a "create all" reuses what the 1st resolved. Keeping it any
+        longer only creates staleness, because unlike the valueid this replaced,
+        a reference value embeds the label TEXT and the datatype copies that text
+        into every tile. A worker-lifetime cache would keep stamping a label
+        edited since in the Controlled List Manager, and would do so out of step
+        with its sibling workers — one import writing two spellings of the same
+        term.
 
         Propagates ``LookupError`` when the concept cannot be resolved. That is
         deliberate and load-bearing: with the concept datatype, an unresolvable
@@ -3285,14 +3286,19 @@ class BiblissimaCreateResourceView(View):
         existence checking, and an empty list validates clean — so swallowing
         the failure here would write a resource silently missing its type,
         language or source. Callers run inside the per-item try/except that
-        reports the item failed.
+        reports the item failed. A miss is never memoised, so a concept whose
+        list finishes loading mid-request resolves on the next attempt.
 
-        Returns a copy: the cached dict is shared, and a caller mutating its
-        tile value must not corrupt what the next resource gets.
+        Returns a copy: the entry is shared within the request, and a caller
+        mutating its tile value must not corrupt what the next resource gets.
         """
-        return deepcopy(
-            BiblissimaCreateResourceView._resolve_concept_reference(concept_id)
-        )
+        try:
+            cache = self._reference_cache
+        except AttributeError:
+            cache = self._reference_cache = {}
+        if concept_id not in cache:
+            cache[concept_id] = self._resolve_concept_reference(concept_id)
+        return deepcopy(cache[concept_id])
 
     def _concept_list(self, concept_ids):
         """Convert concept IDs to the list of reference values a tile expects.

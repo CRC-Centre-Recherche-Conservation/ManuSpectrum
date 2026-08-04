@@ -204,7 +204,7 @@ def _stub_concept_resolution(testcase):
     patcher = patch.object(
         BiblissimaCreateResourceView,
         "_concept_reference",
-        staticmethod(lambda concept_id: dict(_STUB_REFERENCE)),
+        lambda self, concept_id: dict(_STUB_REFERENCE),
     )
     patcher.start()
     testcase.addCleanup(patcher.stop)
@@ -451,8 +451,7 @@ class ConceptReferenceCacheTests(TestCase):
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
 
         self.View = BiblissimaCreateResourceView
-        self.View._resolve_concept_reference.cache_clear()
-        self.addCleanup(self.View._resolve_concept_reference.cache_clear)
+        self.view = BiblissimaCreateResourceView()
 
     @patch("manuspectrum.views.biblissima_proxy.ListItem")
     def test_transient_miss_is_not_cached(self, mock_list_item):
@@ -463,7 +462,7 @@ class ConceptReferenceCacheTests(TestCase):
         # First lookup: the lists are not loaded yet (transient/startup).
         query.first.return_value = None
         with self.assertRaises(LookupError):
-            self.View._concept_reference(cid)
+            self.view._concept_reference(cid)
 
         # The list item now exists -> a second call must resolve, proving the
         # miss was NOT cached.
@@ -474,7 +473,7 @@ class ConceptReferenceCacheTests(TestCase):
                 "list_id": "l",
             }
         )
-        self.assertEqual(self.View._concept_reference(cid)["uri"], "u")
+        self.assertEqual(self.view._concept_reference(cid)["uri"], "u")
 
     def test_real_resolution_is_cached(self):
         cid = "22222222-3333-4444-5555-666666666666"
@@ -489,11 +488,11 @@ class ConceptReferenceCacheTests(TestCase):
                     "list_id": "l",
                 }
             )
-            self.assertEqual(self.View._concept_reference(cid)["uri"], "u")
+            self.assertEqual(self.view._concept_reference(cid)["uri"], "u")
 
             # Second call served from cache -> ListItem is not queried again.
             mock_list_item.reset_mock()
-            self.assertEqual(self.View._concept_reference(cid)["uri"], "u")
+            self.assertEqual(self.view._concept_reference(cid)["uri"], "u")
             mock_list_item.objects.filter.assert_not_called()
 
     def test_callers_cannot_mutate_the_cached_value(self):
@@ -510,12 +509,12 @@ class ConceptReferenceCacheTests(TestCase):
                     "list_id": "l",
                 }
             )
-            first = self.View._concept_reference("33333333-4444-5555-6666-777777777777")
+            first = self.view._concept_reference("33333333-4444-5555-6666-777777777777")
             first["labels"].append("tampered")
 
             self.assertEqual(
                 len(
-                    self.View._concept_reference(
+                    self.view._concept_reference(
                         "33333333-4444-5555-6666-777777777777"
                     )["labels"]
                 ),
@@ -534,17 +533,43 @@ class ConceptReferenceCacheTests(TestCase):
                 build_tile_value=lambda: {"uri": "u", "labels": [], "list_id": "l"}
             )
             with self.assertRaises(LookupError):
-                self.View._concept_reference("44444444-5555-6666-7777-888888888888")
+                self.view._concept_reference("44444444-5555-6666-7777-888888888888")
 
-            self.assertEqual(
-                self.View._resolve_concept_reference.cache_info().currsize, 0
+            self.assertEqual(getattr(self.view, "_reference_cache", {}), {})
+
+    def test_a_new_request_re_reads_the_labels(self):
+        """The cache is per view instance on purpose: a reference value embeds
+        the label text and the datatype copies it into every tile, so a
+        worker-lifetime cache would keep stamping a label edited since."""
+        stub = MagicMock(
+            build_tile_value=lambda: {
+                "uri": "u",
+                "labels": [{"value": "x"}],
+                "list_id": "l",
+            }
+        )
+        cid = "88888888-9999-aaaa-bbbb-cccccccccccc"
+        with patch("manuspectrum.views.biblissima_proxy.ListItem") as mock_list_item:
+            query = (
+                mock_list_item.objects.filter.return_value.with_list_item_labels.return_value
             )
+            query.first.return_value = stub
+
+            self.view._concept_reference(cid)
+            self.view._concept_reference(cid)
+            within_one_request = mock_list_item.objects.filter.call_count
+
+            self.View()._concept_reference(cid)
+            after_a_new_request = mock_list_item.objects.filter.call_count
+
+        self.assertEqual(within_one_request, 1, "reused within the request")
+        self.assertEqual(after_a_new_request, 2, "re-read for a new request")
 
     def test_a_malformed_id_raises_lookuperror_not_validationerror(self):
         """Callers only handle one failure type; Django's UUIDField would
         otherwise surface a ValidationError from deep in the ORM."""
         with self.assertRaises(LookupError):
-            self.View._concept_reference("not-a-uuid")
+            self.view._concept_reference("not-a-uuid")
 
 
 class ConceptListFailsLoudTests(TestCase):
@@ -561,8 +586,6 @@ class ConceptListFailsLoudTests(TestCase):
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
 
         self.View = BiblissimaCreateResourceView
-        self.View._resolve_concept_reference.cache_clear()
-        self.addCleanup(self.View._resolve_concept_reference.cache_clear)
         self.view = BiblissimaCreateResourceView()
 
     def test_unresolvable_concept_raises(self):
