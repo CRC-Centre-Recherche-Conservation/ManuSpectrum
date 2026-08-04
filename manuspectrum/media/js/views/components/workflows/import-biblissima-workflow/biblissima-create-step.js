@@ -538,20 +538,41 @@ const viewModel = function(params) {
     };
 
     // The reference-select widget speaks tile values — an array of
-    // `{labels: [{list_item_id}], list_id, uri}` — while an item stores the bare
-    // concept id it sends to the backend. Since the migration mints each list
-    // item with the id of its source concept, the two are the same identifier
-    // and this bridges the shapes rather than changing what we send.
+    // `{labels: [...], list_id, uri}` — while an item stores the bare concept id
+    // it sends to the backend. Since the migration mints each list item with the
+    // id of its source concept, the two are the same identifier and this bridges
+    // the shapes rather than changing what we send.
+    //
+    // The labels have to be carried, not just the id: the widget renders the
+    // selection through `getPrefLabel`, which looks for a prefLabel in the
+    // ACTIVE language and falls back to "Unlabeled Item" when the array holds
+    // none. So we keep whatever the widget hands us on write, and synthesise an
+    // entry from the badge label otherwise — which also keeps the dropdown and
+    // the badge showing the same wording.
     this._attachTypeReference = (item) => {
+        const pickedLabels = ko.observable(null);
         item.typeReference = ko.pureComputed({
             read: () => {
                 const conceptId = item.typeConceptId();
-                return conceptId ? [{ labels: [{ list_item_id: conceptId }] }] : null;
+                if (!conceptId) return null;
+                const kept = pickedLabels();
+                const labels =
+                    kept && kept[0]?.list_item_id === conceptId
+                        ? kept
+                        : [{
+                            list_item_id: conceptId,
+                            value: self.typeBadgeLabel(item),
+                            language_id: arches.activeLanguage,
+                            valuetype_id: 'prefLabel',
+                        }];
+                return [{ labels }];
             },
             write: (value) => {
                 const labels = value && value[0] && ko.unwrap(value[0].labels);
+                const plain = labels ? ko.toJS(labels) : null;
+                pickedLabels(plain);
                 item.typeConceptId(
-                    (labels && ko.unwrap(labels[0]?.list_item_id)) || null
+                    (plain && plain[0]?.list_item_id) || null
                 );
             },
         });

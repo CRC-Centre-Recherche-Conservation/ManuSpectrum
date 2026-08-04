@@ -76,6 +76,18 @@ vi.mock('knockout', () => {
             pureComputed: makePureComputed,
             components: { register: vi.fn() },
             toJS: (item) => {
+                if (Array.isArray(item)) {
+                    return item.map((entry) =>
+                        entry && typeof entry === 'object'
+                            ? Object.fromEntries(
+                                Object.entries(entry).map(([k, v]) => [
+                                    k,
+                                    typeof v === 'function' ? v() : v,
+                                ]),
+                            )
+                            : entry,
+                    );
+                }
                 const r = {};
                 for (const k of Object.keys(item || {})) {
                     const v = item[k];
@@ -239,6 +251,70 @@ describe('biblissima-create-step', () => {
     // =========================================================================
     // T2: _buildCreatePayload — structure snapshot
     // =========================================================================
+
+
+    // =========================================================================
+    // typeReference — bridge between the widget's tile value and the concept id
+    // =========================================================================
+
+    describe('typeReference adapter', () => {
+        it('carries a label so the widget does not render "Unlabeled Item"', async () => {
+            const vm = await makeViewModel([makeRawItem()]);
+            const item = vm.items()[0];
+
+            const [reference] = item.typeReference();
+            const label = reference.labels[0];
+
+            expect(label.list_item_id).toBe(item.typeConceptId());
+            expect(label.valuetype_id).toBe('prefLabel');
+            expect(label.value).toBeTruthy();
+            expect(label.value).toBe(vm.typeBadgeLabel(item));
+        });
+
+        it('writes back only the concept id the backend expects', async () => {
+            const vm = await makeViewModel([makeRawItem()]);
+            const item = vm.items()[0];
+
+            item.typeReference([
+                {
+                    labels: [
+                        {
+                            list_item_id: 'b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b',
+                            value: 'Lettrine',
+                            language_id: 'fr',
+                            valuetype_id: 'prefLabel',
+                        },
+                    ],
+                },
+            ]);
+
+            expect(item.typeConceptId()).toBe('b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b');
+        });
+
+        it('keeps the labels the widget picked rather than re-synthesising them', async () => {
+            const vm = await makeViewModel([makeRawItem()]);
+            const item = vm.items()[0];
+            const picked = {
+                list_item_id: 'b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b',
+                value: 'Lettrine ornée',
+                language_id: 'fr',
+                valuetype_id: 'prefLabel',
+            };
+
+            item.typeReference([{ labels: [picked] }]);
+
+            expect(item.typeReference()[0].labels[0].value).toBe('Lettrine ornée');
+        });
+
+        it('is null when the item carries no type', async () => {
+            const vm = await makeViewModel([makeRawItem()]);
+            const item = vm.items()[0];
+
+            item.typeConceptId(null);
+
+            expect(item.typeReference()).toBeNull();
+        });
+    });
 
     describe('_buildCreatePayload', () => {
         it('returns the correct top-level payload structure', async () => {
