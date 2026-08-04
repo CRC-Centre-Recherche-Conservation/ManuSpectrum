@@ -52,11 +52,28 @@ vi.mock('knockout', () => {
         return obs;
     };
 
+    // Writable computed: `typeReference` bridges the reference-select widget's
+    // tile-value shape and the bare concept id an item stores, so the mock has
+    // to honour the read/write form as well as the plain one.
+    const makePureComputed = (fnOrOptions) => {
+        const read =
+            typeof fnOrOptions === 'function' ? fnOrOptions : fnOrOptions.read;
+        const write =
+            typeof fnOrOptions === 'function' ? null : fnOrOptions.write;
+        const obs = (...args) => {
+            if (args.length > 0 && write) return write(args[0]);
+            return read();
+        };
+        obs.subscribe = vi.fn(() => ({ dispose: vi.fn() }));
+        return obs;
+    };
+
     return {
         default: {
             observable: makeObs,
             observableArray: makeObsArr,
             computed: makeComputed,
+            pureComputed: makePureComputed,
             components: { register: vi.fn() },
             toJS: (item) => {
                 const r = {};
@@ -147,8 +164,8 @@ const makeRawItem = (overrides = {}) => ({
     authorLabel: '',
     location: '',
     ifdataHash: '',     // empty → enrichStatus = 'na', no enrichment fetch
-    typeValueId: '30931466-b4e0-4527-ac93-b7290e80084c',
-    documentTypeValueId: '30931466-b4e0-4527-ac93-b7290e80084c',
+    typeConceptId: '56c61151-3bc5-45b4-957e-3cccde26abe7',
+    documentTypeConceptId: '56c61151-3bc5-45b4-957e-3cccde26abe7',
     documentTypeIsFallback: false,
     ...overrides,
 });

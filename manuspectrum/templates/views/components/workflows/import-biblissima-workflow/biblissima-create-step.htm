@@ -202,12 +202,12 @@
                     <div class="bbma-item-type-editor">
                         <div class="bbma-item-type-editor-field"
                              data-bind="component: {
-                                name: 'concept-select-widget',
+                                name: 'reference-select-widget',
                                 params: {
-                                    node: {config: {rdmCollection: $parent.typeRdmCollection}},
+                                    node: {config: {controlledList: $parent.typeControlledList, multiValue: false}},
                                     config: {label: '', placeholder: ''},
                                     renderContext: 'workflow',
-                                    value: typeValueId,
+                                    value: typeReference,
                                 }
                              }"></div>
                         <button type="button" class="btn btn-xs btn-default"

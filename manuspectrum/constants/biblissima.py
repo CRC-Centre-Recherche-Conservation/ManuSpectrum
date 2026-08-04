@@ -264,64 +264,63 @@ CONCEPT_MANUSCRIT = "56c61151-3bc5-45b4-957e-3cccde26abe7"
 CONCEPT_DECOR = "c19f3196-d1e9-4f08-9917-4d627e61e153"
 CONCEPT_SHELF_MARKS = "2cbf15b4-aa04-4b5b-bf4a-2594bbeb72ca"
 CONCEPT_MEDIEVAL = "f8101404-1570-35cf-ac70-1a18a84072ca"
-
-RELATIONSHIP_CONCEPT = "ac41d9be-79db-4256-b368-2f4559cfbe55"
+CONCEPT_TEXTE_IMPRIME = "0e224837-f3b3-498b-9b47-b08e56694740"
 
 
 # ---------------------------------------------------------------------------
 # Component Type mapping — Biblissima illumination type/typologie/descriptor
-# strings → Arches Type-of-Component valueid. Keys are lowercase; matching
+# strings → Arches Type-of-Component concept id (= controlled list item id). Keys are lowercase; matching
 # uses ``startswith`` to handle variants like "initiale ornée (1)".
 # ---------------------------------------------------------------------------
 BIBLISSIMA_TYPE_MAPPING = {
-    "initiale ornée": "31158e76-817a-447d-a40c-3963731296a8",  # lettrine/initial
-    "initiale filigranée": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale historiée": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale animée": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale zoomorphe": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale anthropomorphe": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale de couleur": "31158e76-817a-447d-a40c-3963731296a8",
-    "initiale": "31158e76-817a-447d-a40c-3963731296a8",
-    "lettrine": "31158e76-817a-447d-a40c-3963731296a8",
-    "lettre ornée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",  # decorated letter
-    "lettre cadelée": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
-    "lettre or": "2f5df709-4f32-40b4-8858-d0d54ba25d61",
-    "miniature": "63bc98e3-57de-48fc-a656-8d6f9a9acf40",  # miniature
-    "page décorée": "4063b4aa-c50b-4101-947c-d8094eed6e25",  # Decoration
-    "décor": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "bordure": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "bandeau": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "encadrement": "4063b4aa-c50b-4101-947c-d8094eed6e25",
-    "frontispice": "0805a584-1395-48df-8e84-4ae4b25cdeae",  # frontispiece
-    "vignette": "29167061-2645-4d86-8f30-9206c1f83297",  # vignette
-    "photographie": "85e458af-0292-4ecb-84b9-5715071d45e1",  # photography
-    "filigrane": "c3168cc7-23d3-4ddb-9eac-38383b852f5a",  # watermark
-    "planche": "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a",  # board
-    "enluminure": "3ecd8040-7c4b-4b1d-88f7-379297358f66",  # illumination (default)
+    "initiale ornée": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",  # lettrine/initial
+    "initiale filigranée": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",
+    "initiale historiée": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",
+    "initiale animée": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",
+    "initiale zoomorphe": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",
+    "initiale anthropomorphe": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",
+    "initiale de couleur": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",
+    "initiale": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",
+    "lettrine": "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b",
+    "lettre ornée": "56505060-781b-4d12-b0f2-a7efab68fae0",  # decorated letter
+    "lettre cadelée": "56505060-781b-4d12-b0f2-a7efab68fae0",
+    "lettre or": "56505060-781b-4d12-b0f2-a7efab68fae0",
+    "miniature": "9d280558-fb7e-4ea0-a582-2df2b425ee57",  # miniature
+    "page décorée": "c19f3196-d1e9-4f08-9917-4d627e61e153",  # Decoration
+    "décor": "c19f3196-d1e9-4f08-9917-4d627e61e153",
+    "bordure": "c19f3196-d1e9-4f08-9917-4d627e61e153",
+    "bandeau": "c19f3196-d1e9-4f08-9917-4d627e61e153",
+    "encadrement": "c19f3196-d1e9-4f08-9917-4d627e61e153",
+    "frontispice": "6ca33fec-ea82-44a0-ac0f-2f9cf07bfaaa",  # frontispiece
+    "vignette": "2124a1ad-236e-41cc-b270-df368f459a84",  # vignette
+    "photographie": "97111c29-6689-4a00-9f13-c8e2a39e0cee",  # photography
+    "filigrane": "61a8ac03-c6e5-480c-ba6f-afe8c2aafb1f",  # watermark
+    "planche": "dbd13b3e-b2ba-4558-a931-6d8e6a62fc3f",  # board
+    "enluminure": "b4a3fe54-2d82-4361-9adf-8b6b780f3aa4",  # illumination (default)
 }
 
 # Default fallback when no Component type mapping matches.
-BIBLISSIMA_TYPE_DEFAULT = "3ecd8040-7c4b-4b1d-88f7-379297358f66"  # illumination
+BIBLISSIMA_TYPE_DEFAULT = "b4a3fe54-2d82-4361-9adf-8b6b780f3aa4"  # illumination
 
-# Human-readable labels for each Component target valueid (FR; matches the
+# Human-readable labels for each Component target concept (FR; matches the
 # concept collection language).
-BIBLISSIMA_TYPE_VALUEID_LABELS = {
-    "31158e76-817a-447d-a40c-3963731296a8": "Lettrine",
-    "2f5df709-4f32-40b4-8858-d0d54ba25d61": "Lettre ornée",
-    "63bc98e3-57de-48fc-a656-8d6f9a9acf40": "Miniature",
-    "4063b4aa-c50b-4101-947c-d8094eed6e25": "Décor",
-    "0805a584-1395-48df-8e84-4ae4b25cdeae": "Frontispice",
-    "29167061-2645-4d86-8f30-9206c1f83297": "Vignette",
-    "85e458af-0292-4ecb-84b9-5715071d45e1": "Photographie",
-    "c3168cc7-23d3-4ddb-9eac-38383b852f5a": "Filigrane",
-    "36a20d43-f316-4d0f-bf58-ec8a2cb71d0a": "Planche",
-    "3ecd8040-7c4b-4b1d-88f7-379297358f66": "Enluminure",
+BIBLISSIMA_TYPE_LABELS = {
+    "b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b": "Lettrine",
+    "56505060-781b-4d12-b0f2-a7efab68fae0": "Lettre ornée",
+    "9d280558-fb7e-4ea0-a582-2df2b425ee57": "Miniature",
+    "c19f3196-d1e9-4f08-9917-4d627e61e153": "Décor",
+    "6ca33fec-ea82-44a0-ac0f-2f9cf07bfaaa": "Frontispice",
+    "2124a1ad-236e-41cc-b270-df368f459a84": "Vignette",
+    "97111c29-6689-4a00-9f13-c8e2a39e0cee": "Photographie",
+    "61a8ac03-c6e5-480c-ba6f-afe8c2aafb1f": "Filigrane",
+    "dbd13b3e-b2ba-4558-a931-6d8e6a62fc3f": "Planche",
+    "b4a3fe54-2d82-4361-9adf-8b6b780f3aa4": "Enluminure",
 }
 
 
 # ---------------------------------------------------------------------------
 # Document Type mapping — Biblissima 'nature de l'élément' (P2 label) →
-# Arches Document Type valueid. Sample of 1500 random Biblissima items
+# Arches Document Type concept id (= controlled list item id). Sample of 1500 random Biblissima items
 # shows ~96% are some flavour of 'manuscrit' and ~7.5% are 'imprimé'; the
 # remainder (<1%, e.g. estampe) falls through to the default and the UI
 # shows a "needs review" badge so the analyst can correct the type inline.
@@ -329,24 +328,21 @@ BIBLISSIMA_TYPE_VALUEID_LABELS = {
 #   • robust if Biblissima reorganises entities under different QIDs
 #   • mirrors _resolve_biblissima_type (Component) which also keys on labels
 # ---------------------------------------------------------------------------
-VALUEID_MANUSCRIT = "30931466-b4e0-4527-ac93-b7290e80084c"
-VALUEID_TEXTE_IMPRIME = "feff36de-e9d0-4723-b00b-142dc19df8ed"
-
 BIBLISSIMA_DOCUMENT_NATURE_MAP = {
-    "manuscrit": VALUEID_MANUSCRIT,
-    "manuscrits en plusieurs volumes": VALUEID_MANUSCRIT,
-    "unité codicologique": VALUEID_MANUSCRIT,
-    "imprimé": VALUEID_TEXTE_IMPRIME,
-    "texte imprimé": VALUEID_TEXTE_IMPRIME,
+    "manuscrit": CONCEPT_MANUSCRIT,
+    "manuscrits en plusieurs volumes": CONCEPT_MANUSCRIT,
+    "unité codicologique": CONCEPT_MANUSCRIT,
+    "imprimé": CONCEPT_TEXTE_IMPRIME,
+    "texte imprimé": CONCEPT_TEXTE_IMPRIME,
 }
 
-DOCUMENT_NATURE_DEFAULT = VALUEID_MANUSCRIT  # 96% Biblissima is manuscrit
+DOCUMENT_NATURE_DEFAULT = CONCEPT_MANUSCRIT  # 96% Biblissima is manuscrit
 
-# Human-readable labels for the resolved valueids — used by the badge UI
-# (mirrors BIBLISSIMA_TYPE_VALUEID_LABELS for Components).
-BIBLISSIMA_DOCUMENT_TYPE_VALUEID_LABELS = {
-    VALUEID_MANUSCRIT: "Manuscrit",
-    VALUEID_TEXTE_IMPRIME: "Texte imprimé",
+# Human-readable labels for the resolved concepts — used by the badge UI
+# (mirrors BIBLISSIMA_TYPE_LABELS for Components).
+BIBLISSIMA_DOCUMENT_TYPE_LABELS = {
+    CONCEPT_MANUSCRIT: "Manuscrit",
+    CONCEPT_TEXTE_IMPRIME: "Texte imprimé",
 }
 
 
@@ -517,16 +513,14 @@ __all__ = [
     "CONCEPT_DECOR",
     "CONCEPT_SHELF_MARKS",
     "CONCEPT_MEDIEVAL",
-    "RELATIONSHIP_CONCEPT",
+    "CONCEPT_TEXTE_IMPRIME",
     # Type mappings
     "BIBLISSIMA_TYPE_MAPPING",
     "BIBLISSIMA_TYPE_DEFAULT",
-    "BIBLISSIMA_TYPE_VALUEID_LABELS",
-    "VALUEID_MANUSCRIT",
-    "VALUEID_TEXTE_IMPRIME",
+    "BIBLISSIMA_TYPE_LABELS",
     "BIBLISSIMA_DOCUMENT_NATURE_MAP",
     "DOCUMENT_NATURE_DEFAULT",
-    "BIBLISSIMA_DOCUMENT_TYPE_VALUEID_LABELS",
+    "BIBLISSIMA_DOCUMENT_TYPE_LABELS",
     # Misc
     "_ARK_RE",
 ]
