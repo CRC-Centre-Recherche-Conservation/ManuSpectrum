@@ -103,20 +103,24 @@ ELASTICSEARCH_CUSTOM_INDEXES = [
 #     'should_update_asynchronously': False  <-- denotes if asynchronously updating the index would affect custom functionality within the project.
 # }]
 
-# Adds a third "References" bucket next to the Arches defaults (terms and
-# concepts) in the search bar's term dropdown.
+# Replaces the Arches "Concepts" bucket with "References" in the search bar's
+# term dropdown.
+#
+# The concept bucket is deliberately absent. Since the migration to controlled
+# lists, no tile stores a thesaurus valueid any more — the only RDM valueid left
+# in tile data is the resource-instance relationship type ("is related to"),
+# which the concept search does not target. So ConceptSearch could still match a
+# label in the concepts index and then filter against nothing: an empty result
+# set with no error, next to a "References" bucket that duplicates its labels
+# and does work. The RDM itself stays — Arches still types resource-to-resource
+# relationships with its concepts, and it remains the source the controlled
+# lists are converted from.
 TERM_SEARCH_TYPES = [
     {
         "type": "term",
         "label": _("Term Matches"),
         "key": "terms",
         "module": "arches.app.search.search_term.TermSearch",
-    },
-    {
-        "type": "concept",
-        "label": _("Concepts"),
-        "key": "concepts",
-        "module": "arches.app.search.concept_search.ConceptSearch",
     },
     {
         "type": "reference",
