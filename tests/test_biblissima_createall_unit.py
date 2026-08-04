@@ -169,13 +169,6 @@ class CreateAllBase(TestCase):
                 side_effect=_bulk_create,
             )
         )
-        self.mock_collect = self._start(
-            patch.object(
-                BiblissimaCreateResourceView,
-                "_collect_valid_concepts",
-                return_value=set(),
-            )
-        )
         self.mock_validate = self._start(
             patch.object(BiblissimaCreateResourceView, "_validate_tiles")
         )
@@ -485,7 +478,6 @@ class InheritancePrimitiveTests(CreateAllBase):
         for name in (
             "_run_hook",
             "_validate_tiles",
-            "_collect_valid_concepts",
             "_write_editlog",
         ):
             self.assertNotIn(

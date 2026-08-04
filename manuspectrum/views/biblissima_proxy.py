@@ -53,7 +53,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from functools import lru_cache
+from copy import deepcopy
 from html import unescape
 
 import requests
@@ -70,8 +70,8 @@ from django.views.decorators.cache import cache_control, cache_page, never_cache
 
 from arches.app.models.models import ResourceInstance
 from arches.app.models.models import TileModel
-from arches.app.models.models import Value  # used in _concept_valueid
 from arches.app.models.tile import Tile
+from arches_controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
 from manuspectrum.utils.dates import (
@@ -680,7 +680,7 @@ def _parse_iiif_canvases(manifest_json):
         # nothing matches, which will default to "Enluminure".
         canvas_label = _strip_html(canvas.get("label", "")) or ""
         first_desc = descriptors[0] if descriptors else ""
-        type_valueid, type_is_fallback = _resolve_biblissima_type(
+        type_concept_id, type_is_fallback = _resolve_biblissima_type(
             descriptor=first_desc, type_field=canvas_label
         )
 
@@ -699,8 +699,8 @@ def _parse_iiif_canvases(manifest_json):
                 "location": location,
                 "descriptors": descriptors,
                 "portalUrl": portal_url,
-                "typeValueId": type_valueid,
-                "typeLabel": _biblissima_type_label(type_valueid),
+                "typeConceptId": type_concept_id,
+                "typeLabel": _biblissima_type_label(type_concept_id),
                 "typeIsFallback": type_is_fallback,
                 # Derive ifdataHash from the portal ARK so that step 3
                 # enrichment can fetch the individual page and fill in
@@ -1364,10 +1364,10 @@ def _enrich_canvases(canvases, session=None):
                 if nature_qid and nature_qid in secondaries_by_qid:
                     nature = secondaries_by_qid[nature_qid]
                     ms_data["documentNatureLabel"] = nature.get("label", "") or None
-                type_valueid, type_is_fallback = _resolve_biblissima_document_type(
+                type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
                     ms_data.get("documentNatureLabel")
                 )
-                ms_data["documentTypeValueId"] = type_valueid
+                ms_data["documentTypeConceptId"] = type_concept_id
                 ms_data["documentTypeIsFallback"] = type_is_fallback
             cache.set(
                 _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
@@ -1432,14 +1432,14 @@ def _enrich_canvases(canvases, session=None):
             # as a one-time fallback. Falls back to MANUSCRIT with
             # is_fallback=True if the nature label is missing or unknown.
             canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
-            if "documentTypeValueId" in ms_data:
-                canvas["documentTypeValueId"] = ms_data["documentTypeValueId"]
+            if "documentTypeConceptId" in ms_data:
+                canvas["documentTypeConceptId"] = ms_data["documentTypeConceptId"]
                 canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
             else:
-                type_valueid, type_is_fallback = _resolve_biblissima_document_type(
+                type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
                     ms_data.get("documentNatureLabel")
                 )
-                canvas["documentTypeValueId"] = type_valueid
+                canvas["documentTypeConceptId"] = type_concept_id
                 canvas["documentTypeIsFallback"] = type_is_fallback
     finally:
         if owned_session:
@@ -1906,14 +1906,14 @@ def _attach_document_type(entity, session=None):
         if nature_entity:
             nature_label = nature_entity.get("label") or None
             entity["documentNatureLabel"] = nature_label
-    type_valueid, type_is_fallback = _resolve_biblissima_document_type(nature_label)
-    entity["documentTypeValueId"] = type_valueid
+    type_concept_id, type_is_fallback = _resolve_biblissima_document_type(nature_label)
+    entity["documentTypeConceptId"] = type_concept_id
     entity["documentTypeIsFallback"] = type_is_fallback
 
 
-def _biblissima_type_label(valueid):
-    """Return the display label for a resolved Component type valueid."""
-    return BIBLISSIMA_TYPE_VALUEID_LABELS.get(valueid, "")
+def _biblissima_type_label(concept_id):
+    """Return the display label for a resolved Component type concept."""
+    return BIBLISSIMA_TYPE_LABELS.get(concept_id, "")
 
 
 def _resolve_biblissima_type(typologie="", descriptor="", type_field=""):
@@ -1995,7 +1995,9 @@ def _parse_manuscript_illuminations(html):
                 break
             parent = parent.getparent()
 
-        type_valueid, type_is_fallback = _resolve_biblissima_type(descriptor=descriptor)
+        type_concept_id, type_is_fallback = _resolve_biblissima_type(
+            descriptor=descriptor
+        )
 
         results.append(
             {
@@ -2006,8 +2008,8 @@ def _parse_manuscript_illuminations(html):
                 "folio": folio,
                 "hasImage": has_image,
                 "portalUrl": f"{BIBLISSIMA_PORTAL}/{ifdata_hash}",
-                "typeValueId": type_valueid,
-                "typeLabel": _biblissima_type_label(type_valueid),
+                "typeConceptId": type_concept_id,
+                "typeLabel": _biblissima_type_label(type_concept_id),
                 "typeIsFallback": type_is_fallback,
             }
         )
@@ -2450,11 +2452,11 @@ class BiblissimaIlluminationDetailView(View):
                 if desc_match:
                     descriptor = desc_match.group(1).strip()
             type_field = result.get("type", "")
-            type_valueid, type_is_fallback = _resolve_biblissima_type(
+            type_concept_id, type_is_fallback = _resolve_biblissima_type(
                 typologie, descriptor, type_field
             )
-            result["typeValueId"] = type_valueid
-            result["typeLabel"] = _biblissima_type_label(type_valueid)
+            result["typeConceptId"] = type_concept_id
+            result["typeLabel"] = _biblissima_type_label(type_concept_id)
             result["typeIsFallback"] = type_is_fallback
 
             # Parse the date string (English preferred, French fallback)
@@ -2520,7 +2522,7 @@ class BiblissimaCreateResourceView(View):
                 "currentOwner":     [<uuid>],    // Document → Owner
                 "productionActors": [<uuid>]
             },
-            "conceptMappings": { "type": <valueid> }
+            "conceptMappings": { "type": <concept id> }
         }
 
     Dispatch:
@@ -2926,52 +2928,14 @@ class BiblissimaCreateResourceView(View):
         self._tile_buffer.append(tile)
         return tile
 
-    def _collect_valid_concepts(self, tiles, nodes_by_id):
-        """Batch-confirm concept valueids with a single ``Value.objects.filter``.
-
-        Scans all concept/concept-list node values across *tiles*, sends
-        only the well-formed UUID strings to the DB in one query, and
-        returns the set of confirmed (existing) valueid strings.
-
-        Malformed (non-UUID) values are excluded from the filter and
-        will fall through to the authoritative arches ``validate()`` call
-        inside ``_validate_tiles``.
-        """
-        valid_concept_ids = set()
-        concept_ids = set()
-        for tile in tiles:
-            for nodeid, value in tile.data.items():
-                node = nodes_by_id.get(str(nodeid))
-                if node is None or value is None:
-                    continue
-                if node["datatype"] in ("concept", "concept-list"):
-                    for v in value if isinstance(value, list) else [value]:
-                        if isinstance(v, str) and v.strip():
-                            concept_ids.add(v.strip())
-        if concept_ids:
-            well_formed = set()
-            for cid in concept_ids:
-                try:
-                    uuid.UUID(cid)
-                    well_formed.add(cid)
-                except (ValueError, TypeError):
-                    pass  # malformed → falls back to arches validate below
-            if well_formed:
-                valid_concept_ids = {
-                    str(v)
-                    for v in Value.objects.filter(valueid__in=well_formed).values_list(
-                        "valueid", flat=True
-                    )
-                }
-        return valid_concept_ids
-
-    def _validate_tiles(self, tiles, nodes_by_id, factory, valid_concept_ids):
+    def _validate_tiles(self, tiles, nodes_by_id, factory):
         """Tier-2 validate-net: run ``datatype.validate()`` on every (tile, node).
 
-        Concept/concept-list nodes whose values are ALL confirmed in
-        *valid_concept_ids* (from ``_collect_valid_concepts``) are
-        short-circuited with no further DB call. Anything malformed or
-        absent falls through to the authoritative arches ``validate()``.
+        There used to be a batched pre-confirmation of concept valueids here,
+        short-circuiting the per-value DB lookup arches does. It went away with
+        the concept datatype: ``_concept_list`` now resolves every value from a
+        list item that has to exist for the resolution to have succeeded at all,
+        so there is nothing left to pre-confirm.
 
         Raises ``TileValidationError`` on any ERROR-level result.
         ``strict=False`` avoids the per-ref existence check on
@@ -2985,17 +2949,6 @@ class BiblissimaCreateResourceView(View):
                 node = nodes_by_id.get(str(nodeid))
                 if node is None:
                     continue
-                if (
-                    node["datatype"] in ("concept", "concept-list")
-                    and value is not None
-                ):
-                    vals = value if isinstance(value, list) else [value]
-                    if vals and all(
-                        isinstance(v, str) and v.strip() in valid_concept_ids
-                        for v in vals
-                    ):
-                        continue  # all concept values exist (batched) — net satisfied
-                    # else: fall through to the authoritative arches validate
                 datatype = factory.get_instance(node["datatype"])
                 node_ns = SimpleNamespace(**node)
                 errors = datatype.validate(
@@ -3123,17 +3076,15 @@ class BiblissimaCreateResourceView(View):
 
         Thin orchestrator: captures and resets the buffer, builds the shared
         ``DataTypeFactory`` and ``nodes_by_id`` lookup, then delegates to the
-        four reusable primitives in order:
+        three reusable primitives in order:
 
-        1. ``_collect_valid_concepts`` — batch-confirm concept valueids
-           (ONE ``Value.objects.filter`` for the whole batch).
-        2. ``_validate_tiles`` — Tier-2 validate-net (raises
+        1. ``_validate_tiles`` — Tier-2 validate-net (raises
            ``TileValidationError`` on any ERROR before any DB write).
-        3. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
-        4. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
-        5. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
-        6. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
-        7. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+        2. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
+        3. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
+        4. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
+        5. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        6. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
 
         After this method, ``self._tile_buffer`` is reset to an empty
         list — any further ``_create_tile`` call inside the same
@@ -3158,8 +3109,7 @@ class BiblissimaCreateResourceView(View):
         serialized_graph = resource.get_serialized_graph() or {}
         nodes_by_id = {str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])}
 
-        valid_concept_ids = self._collect_valid_concepts(tiles, nodes_by_id)
-        self._validate_tiles(tiles, nodes_by_id, factory, valid_concept_ids)
+        self._validate_tiles(tiles, nodes_by_id, factory)
         self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
         TileModel.objects.bulk_create(tiles)
         self._run_hook(tiles, nodes_by_id, factory, "post_tile_save")
@@ -3286,50 +3236,81 @@ class BiblissimaCreateResourceView(View):
         return {lang: {"value": str(value), "direction": "ltr"}}
 
     @staticmethod
-    @lru_cache(maxsize=256)
-    def _resolve_concept_valueid(concept_id):
-        """Return the prefLabel valueid for a concept ID (English preferred, any
-        language otherwise). Raises ``LookupError`` when it cannot be resolved,
-        so a (possibly transient) miss is NOT stored by ``lru_cache`` — only real
-        resolutions are memoised for the worker's lifetime.
+    def _resolve_concept_reference(concept_id):
+        """Return the reference tile value for a concept ID.
 
-        concept→valueid is immutable at runtime (a server restart is required to
-        pick up new Value rows from a package reload), and the keyspace is bounded
-        by the ~30 concepts referenced from this view (constants/biblissima.py).
-        """
-        val = (
-            Value.objects.filter(concept_id=concept_id, valuetype="prefLabel")
-            .filter(language__in=["en", "en-US", "en-UK", "English"])
-            .first()
-        )
-        if val is None:
-            val = Value.objects.filter(
-                concept_id=concept_id, valuetype="prefLabel"
-            ).first()
-        if val is None:
-            raise LookupError(concept_id)
-        return str(val.valueid)
+        The RDM-to-controlled-lists migration mints each list item with the id of
+        the concept it came from, so a concept id addresses its list item
+        directly and no mapping table is needed. ``build_tile_value`` is the
+        library's own serialiser, which keeps the shape in step with whatever
+        ``ReferenceDataType`` expects.
 
-    @staticmethod
-    def _concept_valueid(concept_id):
-        """Get the prefLabel valueid for a concept ID, falling back to the raw
-        ``concept_id`` when it cannot be resolved.
-
-        The fallback is deliberately NOT cached (see ``_resolve_concept_valueid``):
-        a transient empty/errored first lookup — e.g. before a package reload has
-        finished loading Value rows — must not pin the raw concept_id for the
-        worker's whole lifetime (finding #14).
+        Raises ``LookupError`` when the concept has no list item — and also when
+        the item exists but carries no labels yet, the package/list load window
+        finding #14 was written for. ``ReferenceDataType`` rejects such a value
+        with "Missing required value(s): 'labels'", so treating it as a
+        resolution would poison whatever memoises it.
         """
         try:
-            return BiblissimaCreateResourceView._resolve_concept_valueid(concept_id)
-        except Exception:
-            return concept_id
+            uuid.UUID(str(concept_id))
+        except (ValueError, TypeError):
+            # A malformed id would otherwise surface as Django's ValidationError
+            # from the UUIDField; callers only have to handle one failure type.
+            raise LookupError(concept_id)
+        item = ListItem.objects.filter(pk=concept_id).with_list_item_labels().first()
+        if item is None:
+            raise LookupError(concept_id)
+        tile_value = item.build_tile_value()
+        if not tile_value.get("labels"):
+            raise LookupError(concept_id)
+        return tile_value
+
+    def _concept_reference(self, concept_id):
+        """Get the reference tile value for a concept ID, memoised per request.
+
+        The cache is deliberately scoped to this view instance — one request —
+        rather than to the worker. Its whole benefit is intra-batch: the 25th
+        resource of a "create all" reuses what the 1st resolved. Keeping it any
+        longer only creates staleness, because unlike the valueid this replaced,
+        a reference value embeds the label TEXT and the datatype copies that text
+        into every tile. A worker-lifetime cache would keep stamping a label
+        edited since in the Controlled List Manager, and would do so out of step
+        with its sibling workers — one import writing two spellings of the same
+        term.
+
+        Propagates ``LookupError`` when the concept cannot be resolved. That is
+        deliberate and load-bearing: with the concept datatype, an unresolvable
+        id was written through as a bare string and arches' own validate() then
+        rejected it, so the import failed loudly and wrote nothing. Reference
+        values carry no such backstop — ``ReferenceDataType.validate`` does no
+        existence checking, and an empty list validates clean — so swallowing
+        the failure here would write a resource silently missing its type,
+        language or source. Callers run inside the per-item try/except that
+        reports the item failed. A miss is never memoised, so a concept whose
+        list finishes loading mid-request resolves on the next attempt.
+
+        Returns a copy: the entry is shared within the request, and a caller
+        mutating its tile value must not corrupt what the next resource gets.
+        """
+        try:
+            cache = self._reference_cache
+        except AttributeError:
+            cache = self._reference_cache = {}
+        if concept_id not in cache:
+            cache[concept_id] = self._resolve_concept_reference(concept_id)
+        return deepcopy(cache[concept_id])
 
     def _concept_list(self, concept_ids):
-        """Convert a list of concept IDs to a list of valueids."""
+        """Convert concept IDs to the list of reference values a tile expects.
+
+        Reference nodes store a list whether or not they are multi-valued, so
+        single-valued callers use this too. Every id must resolve — a partially
+        resolving list would silently drop values, which on the multi-valued
+        period nodes means a manuscript quietly losing centuries.
+        """
         if isinstance(concept_ids, str):
             concept_ids = [concept_ids]
-        return [self._concept_valueid(cid) for cid in concept_ids]
+        return [self._concept_reference(cid) for cid in concept_ids]
 
     def _create_document_tiles(
         self, resource_id, transaction_id, bbma_data, deps, concepts, created_deps
@@ -3365,14 +3346,15 @@ class BiblissimaCreateResourceView(View):
                 transaction_id,
             )
 
-        # Type (concept node, single valueid string)
+        # Type (reference node, single-valued but stored as a list)
         doc_type = concepts.get("type")
         if doc_type:
-            # doc_type from frontend is already a valueid (selected via concept-select-widget)
+            # doc_type from the frontend is a concept id, which is also the id of
+            # its controlled list item — clist turns it into the tile value.
             self._create_tile(
                 DOC_TYPE_NG,
                 resource_id,
-                {DOC_TYPE_NODE: doc_type},
+                {DOC_TYPE_NODE: clist([doc_type])},
                 transaction_id,
             )
 
@@ -3569,7 +3551,7 @@ class BiblissimaCreateResourceView(View):
         Card                         Source
         ============================ =========================================================================
         Name of Component            ``pageTitle`` > ``label`` > ``legend``
-        Type of Component            ``concepts["type"]`` (per-item valueid, correctable via inline editor)
+        Type of Component            ``concepts["type"]`` (per-item concept id, correctable via inline editor)
         Item Feature                 ``deps["parentDocument"]``
         Identifier                   Biblissima ARK (``arkId``) + Mandragore ARK (``mandragoreArk``) if present
         Statement                    ``text`` → ``identification`` ; ``rubric`` → ``inscriptions``
@@ -3608,14 +3590,15 @@ class BiblissimaCreateResourceView(View):
             transaction_id,
         )
 
-        # Type (concept-list node, expects list of valueids)
+        # Type (reference node, expects a list of reference values)
         comp_type = concepts.get("type")
         if comp_type:
-            # comp_type from frontend is already a valueid
+            # comp_type from the frontend is a concept id, which is also the id
+            # of its controlled list item.
             self._create_tile(
                 COMP_TYPE_NG,
                 resource_id,
-                {COMP_TYPE_NODE: [comp_type]},
+                {COMP_TYPE_NODE: clist([comp_type])},
                 transaction_id,
             )
 
@@ -4158,8 +4141,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         ]}
 
     Integration task (Phase 3.4). Inherits ALL write-path primitives from
-    :class:`BiblissimaCreateResourceView` (``_collect_valid_concepts``,
-    ``_validate_tiles``, ``_run_hook``, ``_write_editlog``, the tile builders,
+    :class:`BiblissimaCreateResourceView` (``_validate_tiles``, ``_run_hook``, ``_write_editlog``, the tile builders,
     ``_batch_save_descriptors``, ``_bulk_create_resources``,
     ``_link_to_project_batch``) — nothing is redefined, so a patch on the base
     class is observed here.
@@ -4311,8 +4293,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                 builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
                 item_tiles = self._tile_buffer[start:]
 
-                valid_concepts = self._collect_valid_concepts(item_tiles, nodes_by_id)
-                self._validate_tiles(item_tiles, nodes_by_id, factory, valid_concepts)
+                self._validate_tiles(item_tiles, nodes_by_id, factory)
                 # pre_tile_save = IIIF manifest fetch; can raise
                 # requests.HTTPError / UnsafeURLError / FailParsingManifestIIIF /
                 # TileValidationError. Runs here, OUTSIDE the transaction.

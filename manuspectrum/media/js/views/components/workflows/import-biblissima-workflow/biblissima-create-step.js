@@ -63,8 +63,9 @@
  *
  * ## Type badge editor
  *
- * Each item carries a `typeValueId` observable backed by an inline
- * `concept-select-widget` editor. Component items additionally have a
+ * Each item carries a `typeConceptId` observable — the concept id, which is
+ * also its controlled list item id — bridged to an inline `reference-select-widget`
+ * editor by `typeReference`. Component items additionally have a
  * `typeIsFallback` flag set by the backend resolver: it's ``true`` **only**
  * when no Biblissima input matched the type mapping at all, so that an
  * explicit "Enluminure" (which genuinely matches the mapping) isn't
@@ -78,20 +79,20 @@ import ResourceInstanceSelectViewModel from 'viewmodels/resource-instance-select
 import biblissimaCreateStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm';
 import ParentResolver from './parentResolver';
 
-// Type of Document: "manuscrit" valueid — default for every imported Document
+// Type of Document: the "manuscrit" concept — default for every imported Document
 // since Biblissima's search already filters on type=manuscript.
-const VALUEID_MANUSCRIT = '30931466-b4e0-4527-ac93-b7290e80084c';
+const CONCEPT_MANUSCRIT = '56c61151-3bc5-45b4-957e-3cccde26abe7';
 
 // Document graph ID (used by the parent-resolver manual picker).
 const DOCUMENT_GRAPH_ID = '0c8226c1-11a9-4c48-9601-a7a0c6f2df6b';
 
-// RDM collections for the per-item inline concept-select-widget
-const RDM_DOC_TYPE = '73cf3108-5fef-429b-a92f-24074871aed9';
-const RDM_COMP_TYPE = 'e85080b2-c39b-4e37-b6bc-b57d34092b7b';
+// Controlled lists backing the per-item inline reference-select-widget
+const LIST_DOC_TYPE = '73cf3108-5fef-429b-a92f-24074871aed9';
+const LIST_COMP_TYPE = 'e85080b2-c39b-4e37-b6bc-b57d34092b7b';
 
 // Server-side fallback when no Component mapping matches (illumination générique).
-// Must stay in sync with BIBLISSIMA_TYPE_DEFAULT in views/biblissima_proxy.py.
-const COMPONENT_FALLBACK_TYPE_VALUEID = '3ecd8040-7c4b-4b1d-88f7-379297358f66';
+// Must stay in sync with BIBLISSIMA_TYPE_DEFAULT in constants/biblissima.py.
+const COMPONENT_FALLBACK_TYPE_CONCEPT = 'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4';
 
 // Client-side backstop timeout for the per-item enrichment fetch. The backend
 // now fails fast on a dead IIIF host (~5 s), so this only fires in pathological
@@ -100,22 +101,22 @@ const COMPONENT_FALLBACK_TYPE_VALUEID = '3ecd8040-7c4b-4b1d-88f7-379297358f66';
 // 'loading' forever (an unbounded fetch once left items stuck for minutes).
 const ENRICH_FETCH_TIMEOUT_MS = 60000;
 
-// Label lookup for known Component type valueids — mirrors
-// BIBLISSIMA_TYPE_VALUEID_LABELS in views/biblissima_proxy.py. Used when the
-// user picks a new valueid via the inline editor so the badge can update
-// without round-tripping the RDM. Any valueid not in this map falls back to
+// Label lookup for known Component type concepts — mirrors
+// BIBLISSIMA_TYPE_LABELS in constants/biblissima.py. Used when the
+// user picks a new type via the inline editor so the badge can update
+// without round-tripping the lists. Any concept not in this map falls back to
 // a generic "Custom type" label.
 const BIBLISSIMA_TYPE_LABELS = {
-    '31158e76-817a-447d-a40c-3963731296a8': 'Lettrine',
-    '2f5df709-4f32-40b4-8858-d0d54ba25d61': 'Lettre ornée',
-    '63bc98e3-57de-48fc-a656-8d6f9a9acf40': 'Miniature',
-    '4063b4aa-c50b-4101-947c-d8094eed6e25': 'Décor',
-    '0805a584-1395-48df-8e84-4ae4b25cdeae': 'Frontispice',
-    '29167061-2645-4d86-8f30-9206c1f83297': 'Vignette',
-    '85e458af-0292-4ecb-84b9-5715071d45e1': 'Photographie',
-    'c3168cc7-23d3-4ddb-9eac-38383b852f5a': 'Filigrane',
-    '36a20d43-f316-4d0f-bf58-ec8a2cb71d0a': 'Planche',
-    '3ecd8040-7c4b-4b1d-88f7-379297358f66': 'Enluminure',
+    'b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b': 'Lettrine',
+    '56505060-781b-4d12-b0f2-a7efab68fae0': 'Lettre ornée',
+    '9d280558-fb7e-4ea0-a582-2df2b425ee57': 'Miniature',
+    'c19f3196-d1e9-4f08-9917-4d627e61e153': 'Décor',
+    '6ca33fec-ea82-44a0-ac0f-2f9cf07bfaaa': 'Frontispice',
+    '2124a1ad-236e-41cc-b270-df368f459a84': 'Vignette',
+    '97111c29-6689-4a00-9f13-c8e2a39e0cee': 'Photographie',
+    '61a8ac03-c6e5-480c-ba6f-afe8c2aafb1f': 'Filigrane',
+    'dbd13b3e-b2ba-4558-a931-6d8e6a62fc3f': 'Planche',
+    'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4': 'Enluminure',
 };
 
 const viewModel = function(params) {
@@ -136,10 +137,10 @@ const viewModel = function(params) {
     this.resourceType = this.config.resourceType || 'Document';
     this.projectId = this.config.projectId || null;
     this.isComponent = this.resourceType === 'Component';
-    // RDM collection used by the inline type editor. Depends on mode, wrapped
-    // as an observable because concept-select-widget expects one.
-    this.typeRdmCollection = ko.observable(
-        this.isComponent ? RDM_COMP_TYPE : RDM_DOC_TYPE
+    // Controlled list backing the inline type editor. Same UUID as the RDM
+    // collection it came from: the migration reuses the collection id as list id.
+    this.typeControlledList = ko.observable(
+        this.isComponent ? LIST_COMP_TYPE : LIST_DOC_TYPE
     );
 
     // Items from step 2
@@ -471,30 +472,30 @@ const viewModel = function(params) {
             linkedDisplayname: ko.observable(''),
             enrichExisting: ko.observable(true),
             // Per-item type: observable so the inline editor can mutate it and
-            // the badge can re-render. Component items carry a typeValueId
+            // the badge can re-render. Component items carry a typeConceptId
             // resolved server-side from the Biblissima descriptor; Documents
             // all default to "manuscrit" (Biblissima filters on manuscripts).
             // For Document items, prefer the backend-resolved Document Type
-            // valueid (from documentTypeValueId, attached by _enrich_canvases
+            // concept (from documentTypeConceptId, attached by _enrich_canvases
             // and BiblissimaSearchManuscriptsView). For Component items, the
             // existing per-descriptor resolution still wins.
-            typeValueId: ko.observable(
-                item.typeValueId
+            typeConceptId: ko.observable(
+                item.typeConceptId
                 || (self.isComponent
-                        ? COMPONENT_FALLBACK_TYPE_VALUEID
-                        : (item.documentTypeValueId || VALUEID_MANUSCRIT))
+                        ? COMPONENT_FALLBACK_TYPE_CONCEPT
+                        : (item.documentTypeConceptId || CONCEPT_MANUSCRIT))
             ),
             // Flag set by the backend resolver:
             //  - Component: True only when no Biblissima input matched the
             //    type mapping (distinct from an explicit "Enluminure" that
-            //    correctly maps to the default valueid).
+            //    correctly maps to the default concept).
             //  - Document: True when the backend's _resolve_biblissima_document_type
             //    fell back to MANUSCRIT for an unknown nature (e.g. estampe).
             typeIsFallback: ko.observable(
                 item.typeIsFallback !== undefined
                     ? !!item.typeIsFallback
                     : (self.isComponent
-                        ? !item.typeValueId
+                        ? !item.typeConceptId
                         : !!item.documentTypeIsFallback)
             ),
             typeEditing: ko.observable(false),
@@ -532,7 +533,49 @@ const viewModel = function(params) {
             // any IIIF-compliant provider (Gallica, e-codices, …) works.
             thumbnail: ko.observable(item.thumbnail || ''),
         }));
+        items.forEach(self._attachTypeReference);
         self.items(items);
+    };
+
+    // The reference-select widget speaks tile values — an array of
+    // `{labels: [...], list_id, uri}` — while an item stores the bare concept id
+    // it sends to the backend. Since the migration mints each list item with the
+    // id of its source concept, the two are the same identifier and this bridges
+    // the shapes rather than changing what we send.
+    //
+    // The labels have to be carried, not just the id: the widget renders the
+    // selection through `getPrefLabel`, which looks for a prefLabel in the
+    // ACTIVE language and falls back to "Unlabeled Item" when the array holds
+    // none. So we keep whatever the widget hands us on write, and synthesise an
+    // entry from the badge label otherwise — which also keeps the dropdown and
+    // the badge showing the same wording.
+    this._attachTypeReference = (item) => {
+        const pickedLabels = ko.observable(null);
+        item.typeReference = ko.pureComputed({
+            read: () => {
+                const conceptId = item.typeConceptId();
+                if (!conceptId) return null;
+                const kept = pickedLabels();
+                const labels =
+                    kept && kept[0]?.list_item_id === conceptId
+                        ? kept
+                        : [{
+                            list_item_id: conceptId,
+                            value: self.typeBadgeLabel(item),
+                            language_id: arches.activeLanguage,
+                            valuetype_id: 'prefLabel',
+                        }];
+                return [{ labels }];
+            },
+            write: (value) => {
+                const labels = value && value[0] && ko.unwrap(value[0].labels);
+                const plain = labels ? ko.toJS(labels) : null;
+                pickedLabels(plain);
+                item.typeConceptId(
+                    (plain && plain[0]?.list_item_id) || null
+                );
+            },
+        });
     };
 
     // Merge fields returned by /api/biblissima/illumination/{hash} into the
@@ -546,14 +589,14 @@ const viewModel = function(params) {
             item.pageTitle = data.pageTitle;
         }
         // Type: always honour a confidently-resolved enrichment result,
-        // even if the item already had a typeValueId from step 2 — the
+        // even if the item already had a typeConceptId from step 2 — the
         // individual portal page is the richer source of truth.
-        if (data.typeValueId && !data.typeIsFallback) {
-            item.typeValueId(data.typeValueId);
+        if (data.typeConceptId && !data.typeIsFallback) {
+            item.typeConceptId(data.typeConceptId);
             item.typeIsFallback(false);
         } else if (data.typeIsFallback !== undefined) {
             // Enrichment confirmed the resolver still fell through to the
-            // default. Leave the current valueid but sync the flag.
+            // default. Leave the current concept but sync the flag.
             item.typeIsFallback(!!data.typeIsFallback);
         }
         if (data.text && !item.text()) item.text(data.text);
@@ -695,14 +738,14 @@ const viewModel = function(params) {
     // is to tell the user what Biblissima sent so they can spot mis-mappings.
     // In Document mode there is no descriptor and all items default to the
     // same "manuscrit" value — so we show a generic label.
-    // Short human label for the badge. Looks up the current valueid against
-    // the local label map (mirrors backend BIBLISSIMA_TYPE_VALUEID_LABELS),
+    // Short human label for the badge. Looks up the current concept against
+    // the local label map (mirrors backend BIBLISSIMA_TYPE_LABELS),
     // so the badge updates immediately when the user picks a new value via
-    // the inline editor. Unknown valueids (rare — only if the user picks a
+    // the inline editor. Unknown concepts (rare — only if the user picks a
     // concept not in our Biblissima mapping) show as "Custom type".
     this.typeBadgeLabel = (item) => {
-        const vid = item.typeValueId();
-        if (!self.isComponent && vid === VALUEID_MANUSCRIT) {
+        const vid = item.typeConceptId();
+        if (!self.isComponent && vid === CONCEPT_MANUSCRIT) {
             return arches.translations.biblissimaTypeManuscript || 'Manuscrit';
         }
         if (BIBLISSIMA_TYPE_LABELS[vid]) {
@@ -717,7 +760,7 @@ const viewModel = function(params) {
 
     this.closeTypeEditor = (item) => {
         item.typeEditing(false);
-        // Once the user confirms the editor, whatever is in typeValueId is
+        // Once the user confirms the editor, whatever is in typeConceptId is
         // their explicit pick — clear the yellow "needs review" flag so we
         // don't keep nagging them.
         item.typeIsFallback(false);
@@ -1088,7 +1131,7 @@ const viewModel = function(params) {
      * Options (subset of `createResource` options):
      *   - `asParent`        flip Component→Document mode for this call.
      *   - `biblissimaData`  override payload body (defaults to `ko.toJS(item)`).
-     *   - `conceptMappings` override (defaults to `{type: item.typeValueId}`).
+     *   - `conceptMappings` override (defaults to `{type: item.typeConceptId}`).
      *   - `transactionId`   optional tx id string (defaults to `null`).
      *
      * Returns `{resourceType, transactionId, biblissimaData, dependencies, conceptMappings}`.
@@ -1150,7 +1193,7 @@ const viewModel = function(params) {
             biblissimaData: options.biblissimaData || ko.toJS(item),
             dependencies: deps,
             conceptMappings: options.conceptMappings || {
-                type: ko.unwrap(item.typeValueId),
+                type: ko.unwrap(item.typeConceptId),
             },
         };
     };
@@ -1181,7 +1224,7 @@ const viewModel = function(params) {
      *                        no parentDocument link, etc.).
      *   - ``biblissimaData`` (object) override the payload body sent to
      *                        the backend; defaults to ``ko.toJS(item)``.
-     *   - ``conceptMappings`` (object) override (defaults to ``{type: item.typeValueId}``).
+     *   - ``conceptMappings`` (object) override (defaults to ``{type: item.typeConceptId}``).
      *   - ``onSuccess``      (fn) called with ``(resourceId, data)`` on
      *                        success when ``asParent`` is true. Caller is
      *                        responsible for updating the parent group state.

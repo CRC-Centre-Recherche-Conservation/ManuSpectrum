@@ -571,7 +571,7 @@ class ParseIiifCanvasesTests(TestCase):
         self.assertEqual(c["location"], "Paris")
         self.assertEqual(c["descriptors"], ["miniature"])
         self.assertEqual(c["ifdataHash"], "ifdata1")
-        self.assertEqual(c["typeValueId"], bp.BIBLISSIMA_TYPE_MAPPING["miniature"])
+        self.assertEqual(c["typeConceptId"], bp.BIBLISSIMA_TYPE_MAPPING["miniature"])
         self.assertFalse(c["typeIsFallback"])
         self.assertEqual(
             c["portalUrl"], "https://portail.biblissima.fr/fr/ark:/43093/ifdata1"
@@ -620,7 +620,7 @@ class ParseIiifCanvasesTests(TestCase):
     def test_no_descriptors_falls_back_to_default_type(self):
         canvases = [{"@id": "c1", "label": "anything", "images": [], "metadata": []}]
         result = bp._parse_iiif_canvases(self._manifest(canvases))
-        self.assertEqual(result[0]["typeValueId"], bp.BIBLISSIMA_TYPE_DEFAULT)
+        self.assertEqual(result[0]["typeConceptId"], bp.BIBLISSIMA_TYPE_DEFAULT)
         self.assertTrue(result[0]["typeIsFallback"])
 
 
@@ -746,7 +746,9 @@ class ParseManuscriptIlluminationsTests(TestCase):
         self.assertEqual(first["descriptor"], "Miniature")
         self.assertEqual(first["folio"], "12r")
         self.assertTrue(first["hasImage"])
-        self.assertEqual(first["typeValueId"], bp.BIBLISSIMA_TYPE_MAPPING["miniature"])
+        self.assertEqual(
+            first["typeConceptId"], bp.BIBLISSIMA_TYPE_MAPPING["miniature"]
+        )
 
         second = results[1]
         self.assertEqual(second["ifdataHash"], "ifdataXYZ")
@@ -1118,7 +1120,7 @@ class ParseManuscriptIlluminationsRealFixtureTests(TestCase):
         # "Arbre de Jessé", …), so every item falls back to the default
         # type with is_fallback=True.
         for r in self.results:
-            self.assertEqual(r["typeValueId"], bp.BIBLISSIMA_TYPE_DEFAULT)
+            self.assertEqual(r["typeConceptId"], bp.BIBLISSIMA_TYPE_DEFAULT)
             self.assertTrue(r["typeIsFallback"], msg=r["descriptor"])
 
     def test_dedupes_against_real_html(self):
@@ -1419,42 +1421,42 @@ class ResolveBiblissimaDocumentTypeTests(TestCase):
     def test_returns_manuscrit_valueid_for_canonical_label(self):
         from manuspectrum.views.biblissima_proxy import (
             _resolve_biblissima_document_type,
-            VALUEID_MANUSCRIT,
+            CONCEPT_MANUSCRIT,
         )
 
         valueid, is_fallback = _resolve_biblissima_document_type("manuscrit")
-        self.assertEqual(valueid, VALUEID_MANUSCRIT)
+        self.assertEqual(valueid, CONCEPT_MANUSCRIT)
         self.assertFalse(is_fallback)
 
     def test_normalizes_case_and_whitespace(self):
         from manuspectrum.views.biblissima_proxy import (
             _resolve_biblissima_document_type,
-            VALUEID_MANUSCRIT,
+            CONCEPT_MANUSCRIT,
         )
 
         valueid, is_fallback = _resolve_biblissima_document_type("  Manuscrit  ")
-        self.assertEqual(valueid, VALUEID_MANUSCRIT)
+        self.assertEqual(valueid, CONCEPT_MANUSCRIT)
         self.assertFalse(is_fallback)
 
     def test_maps_imprime_variants_to_texte_imprime(self):
         from manuspectrum.views.biblissima_proxy import (
             _resolve_biblissima_document_type,
-            VALUEID_TEXTE_IMPRIME,
+            CONCEPT_TEXTE_IMPRIME,
         )
 
         for label in ("imprimé", "texte imprimé"):
             valueid, is_fallback = _resolve_biblissima_document_type(label)
-            self.assertEqual(valueid, VALUEID_TEXTE_IMPRIME)
+            self.assertEqual(valueid, CONCEPT_TEXTE_IMPRIME)
             self.assertFalse(is_fallback)
 
     def test_maps_codicological_unit_to_manuscrit(self):
         from manuspectrum.views.biblissima_proxy import (
             _resolve_biblissima_document_type,
-            VALUEID_MANUSCRIT,
+            CONCEPT_MANUSCRIT,
         )
 
         valueid, is_fallback = _resolve_biblissima_document_type("unité codicologique")
-        self.assertEqual(valueid, VALUEID_MANUSCRIT)
+        self.assertEqual(valueid, CONCEPT_MANUSCRIT)
         self.assertFalse(is_fallback)
 
     def test_returns_default_with_fallback_flag_for_unknown_label(self):
@@ -1499,7 +1501,7 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
 
     @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
     def test_resolves_label_and_valueid_for_known_nature(self, mock_get):
-        from manuspectrum.views.biblissima_proxy import VALUEID_MANUSCRIT
+        from manuspectrum.views.biblissima_proxy import CONCEPT_MANUSCRIT
 
         # First call: the manuscript itself with a P2 pointing to Q32810
         # Second call: Q32810's own entity, where label is "manuscrit"
@@ -1546,7 +1548,7 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
 
         data = json.loads(resp.content)
         self.assertEqual(data["documentNatureLabel"], "manuscrit")
-        self.assertEqual(data["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertEqual(data["documentTypeConceptId"], CONCEPT_MANUSCRIT)
         self.assertFalse(data["documentTypeIsFallback"])
 
     @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
@@ -1596,7 +1598,7 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
 
         data = json.loads(resp.content)
         self.assertEqual(data["documentNatureLabel"], "estampe")
-        self.assertEqual(data["documentTypeValueId"], DOCUMENT_NATURE_DEFAULT)
+        self.assertEqual(data["documentTypeConceptId"], DOCUMENT_NATURE_DEFAULT)
         self.assertTrue(data["documentTypeIsFallback"])
 
     @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
@@ -1627,12 +1629,12 @@ class BiblissimaEntityViewDocumentNatureTests(TestCase):
 
         data = json.loads(resp.content)
         self.assertIsNone(data["documentNatureLabel"])
-        self.assertEqual(data["documentTypeValueId"], DOCUMENT_NATURE_DEFAULT)
+        self.assertEqual(data["documentTypeConceptId"], DOCUMENT_NATURE_DEFAULT)
         self.assertTrue(data["documentTypeIsFallback"])
 
 
 class EnrichCanvasesDocumentNatureTests(TestCase):
-    """Verify _enrich_canvases decorates every canvas with documentTypeValueId."""
+    """Verify _enrich_canvases decorates every canvas with documentTypeConceptId."""
 
     def setUp(self):
         from django.core.cache import cache
@@ -1649,7 +1651,7 @@ class EnrichCanvasesDocumentNatureTests(TestCase):
     def test_attaches_document_type_to_canvases(self, mock_bib, mock_batch):
         from manuspectrum.views.biblissima_proxy import (
             _enrich_canvases,
-            VALUEID_MANUSCRIT,
+            CONCEPT_MANUSCRIT,
         )
 
         # _bib_request is used for the CirrusSearch fulltext call
@@ -1699,7 +1701,7 @@ class EnrichCanvasesDocumentNatureTests(TestCase):
 
         c = canvases[0]
         self.assertEqual(c["documentNatureLabel"], "manuscrit")
-        self.assertEqual(c["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertEqual(c["documentTypeConceptId"], CONCEPT_MANUSCRIT)
         self.assertFalse(c["documentTypeIsFallback"])
 
 
@@ -1720,21 +1722,21 @@ class AttachDocumentTypeHelperTests(TestCase):
     def test_resolves_label_and_valueid(self, mock_get):
         from manuspectrum.views.biblissima_proxy import (
             _attach_document_type,
-            VALUEID_MANUSCRIT,
+            CONCEPT_MANUSCRIT,
         )
 
         mock_get.return_value = {"biblissimaQid": "Q32810", "label": "manuscrit"}
         entity = {"documentNatureQid": "Q32810", "documentNatureLabel": None}
         _attach_document_type(entity)
         self.assertEqual(entity["documentNatureLabel"], "manuscrit")
-        self.assertEqual(entity["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertEqual(entity["documentTypeConceptId"], CONCEPT_MANUSCRIT)
         self.assertFalse(entity["documentTypeIsFallback"])
 
     @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
     def test_does_not_refetch_when_label_already_set(self, mock_get):
         from manuspectrum.views.biblissima_proxy import (
             _attach_document_type,
-            VALUEID_MANUSCRIT,
+            CONCEPT_MANUSCRIT,
         )
 
         entity = {
@@ -1744,7 +1746,7 @@ class AttachDocumentTypeHelperTests(TestCase):
         _attach_document_type(entity)
         # Helper should NOT call _get_wikibase_entity when label is already set.
         mock_get.assert_not_called()
-        self.assertEqual(entity["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertEqual(entity["documentTypeConceptId"], CONCEPT_MANUSCRIT)
         self.assertFalse(entity["documentTypeIsFallback"])
 
     def test_is_safe_on_none_entity(self):
@@ -1763,7 +1765,7 @@ class AttachDocumentTypeHelperTests(TestCase):
         entity = {"documentNatureQid": None, "documentNatureLabel": None}
         _attach_document_type(entity)
         mock_get.assert_not_called()
-        self.assertEqual(entity["documentTypeValueId"], DOCUMENT_NATURE_DEFAULT)
+        self.assertEqual(entity["documentTypeConceptId"], DOCUMENT_NATURE_DEFAULT)
         self.assertTrue(entity["documentTypeIsFallback"])
 
 
@@ -1787,7 +1789,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
     def test_results_include_document_type(
         self, mock_build_session, mock_bib, mock_batch, mock_get_single
     ):
-        from manuspectrum.views.biblissima_proxy import VALUEID_MANUSCRIT
+        from manuspectrum.views.biblissima_proxy import CONCEPT_MANUSCRIT
 
         # Stub session
         mock_session = MagicMock()
@@ -1863,7 +1865,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
         self.assertEqual(data["total"], 1)
         first = data["results"][0]
         self.assertEqual(first["documentNatureLabel"], "manuscrit")
-        self.assertEqual(first["documentTypeValueId"], VALUEID_MANUSCRIT)
+        self.assertEqual(first["documentTypeConceptId"], CONCEPT_MANUSCRIT)
         self.assertFalse(first["documentTypeIsFallback"])
 
 

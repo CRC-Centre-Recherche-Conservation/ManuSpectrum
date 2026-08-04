@@ -53,7 +53,7 @@ function makeGroup(seed) {
         enrichExisting: ko.observable(false),
         creating: ko.observable(false),
         typeIsFallback: ko.observable(false),
-        typeValueId: ko.observable(null),
+        typeConceptId: ko.observable(null),
         errorMessage: ko.observable(""),
     };
 }
@@ -427,13 +427,13 @@ export default function ParentResolver(params) {
                 asParent: true,
                 biblissimaData: entityData,
                 conceptMappings: {
-                    type: entityData.documentTypeValueId || null,
+                    type: entityData.documentTypeConceptId || null,
                 },
                 onSuccess: (resourceId) => {
                     group.resolvedResourceId(resourceId);
                     group.resolvedDisplayname(entityData.label || group.label);
                     group.resolutionMode("created");
-                    group.typeValueId(entityData.documentTypeValueId || null);
+                    group.typeConceptId(entityData.documentTypeConceptId || null);
                     group.typeIsFallback(!!entityData.documentTypeIsFallback);
                     group.state("resolved");
                 },

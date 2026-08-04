@@ -414,7 +414,7 @@ const viewModel = function(params) {
                 mandragoreId: detail.mandragoreId || '',
                 digitizationUrl: detail.digitizationUrl || '',
                 hasImage: !!detail.imageUrl,
-                typeValueId: detail.typeValueId || '',
+                typeConceptId: detail.typeConceptId || '',
                 typeLabel: detail.typeLabel || '',
                 ifdataHash: detail.ifdataHash,
                 mandragoreArk: detail.mandragoreArk || '',
@@ -599,7 +599,7 @@ const viewModel = function(params) {
         parentInstitutionLabel: entityData.parentInstitutionLabel || '',
         parentInstitutionQid: entityData.parentInstitutionQid || '',
         hasImage: item.hasImage,
-        typeValueId: item.typeValueId || '',
+        typeConceptId: item.typeConceptId || '',
         typeLabel: item.typeLabel || '',
         ifdataHash: item.ifdataHash,
     });

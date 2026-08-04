@@ -2,6 +2,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
+from django.http import HttpResponsePermanentRedirect
 from django.urls import include, path, re_path
 from django.views.generic import RedirectView, TemplateView
 
@@ -37,15 +38,13 @@ urlpatterns = [
     # SEO: Arches serves the homepage at both "/" and "/index.htm" (names
     # `root` and `home`) — duplicate content. Project templates only link
     # `root`; anything still hitting /index.htm gets a permanent redirect.
-    # MUST stay above the app includes: arches_component_lab/querysets/
-    # modular_reports each re-include arches.urls, so the first arches
-    # `^index.htm` pattern appears as early as the include just below.
+    # MUST stay above the app includes: arches_querysets and
+    # arches_controlled_lists each re-include arches.urls, so the first arches
+    # `^index.htm` pattern appears as early as those includes.
     path(
         "index.htm",
         RedirectView.as_view(pattern_name="root", permanent=True, query_string=True),
     ),
-    # path("", include("arches_controlled_lists.urls")),
-    path("", include("arches_component_lab.urls")),
     # Override password reset to send branded HTML email
     path(
         "password_reset/",
@@ -69,7 +68,12 @@ urlpatterns = [
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 urlpatterns.append(path("", include("arches_querysets.urls")))
-urlpatterns.append(path("", include("arches_modular_reports.urls")))
+# arches_controlled_lists ships the Controlled List Manager plugin and the
+# reference-datatype APIs; arches_vue_components serves the Vue widgets they
+# render with. The latter is namespaced (app_name), the former re-includes
+# arches.urls — hence its position below the project's own routes.
+urlpatterns.append(path("", include("arches_controlled_lists.urls")))
+urlpatterns.append(path("", include("arches_vue_components.urls")))
 
 handler400 = "arches.app.views.main.custom_400"
 handler403 = "arches.app.views.main.custom_403"
@@ -303,5 +307,51 @@ urlpatterns.append(
         sitemap,
         {"sitemaps": sitemaps},
         name="django.contrib.sitemaps.views.sitemap",
+    )
+)
+
+
+### /en/api/ compatibility shim — required by the Vue components that Arches
+### applications ship (arches_vue_components, arches_controlled_lists).
+###
+### `generateArchesURL()` resolves routes from frontend_configuration/urls.json,
+### where 413 of the 442 entries carry a `{language_code}` placeholder, and
+### fills it from `document.documentElement.lang`. On an English page that
+### yields `/en/…`, which prefix_default_language=False never serves: English
+### lives on the unprefixed URLs. The fetch 404s and createVueApplication()
+### throws "Not Found" before it can mount, so every Vue app dies in English
+### while working in French. Today exactly one call is affected —
+### `arches:get_frontend_i18n_data`, the i18n bootstrap — because the
+### controlled-list APIs go through `arches.urls.*`, which Django reverses
+### server-side and therefore resolves per language correctly.
+###
+### Scoped to `api/` deliberately: `test_en_prefix_does_not_exist` pins the
+### rule that no /en/ PAGE twin may exist (duplicate content). Machine
+### endpoints are not indexed content, so aliasing them does not weaken that,
+### and the prefix stays scoped rather than needing a new entry each time an
+### Arches application calls another API this way.
+###
+### 308, not 301/302: browsers rewrite the latter to GET, which would quietly
+### turn write APIs into reads. 308 preserves method and body.
+###
+### Registered BELOW the language boundary on purpose — this alias must stay
+### language-neutral, or it would gain a nonsensical /fr/en/ twin.
+class HttpResponsePermanentRedirectPreservingMethod(HttpResponsePermanentRedirect):
+    status_code = 308
+
+
+def _strip_redundant_en_prefix(request, remainder):
+    target = "/api/" + remainder
+    query_string = request.META.get("QUERY_STRING")
+    if query_string:
+        target = f"{target}?{query_string}"
+    return HttpResponsePermanentRedirectPreservingMethod(target)
+
+
+urlpatterns.append(
+    re_path(
+        r"^en/api/(?P<remainder>.*)$",
+        _strip_redundant_en_prefix,
+        name="en-api-prefix-shim",
     )
 )
