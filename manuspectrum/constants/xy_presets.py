@@ -153,6 +153,24 @@ ANALYST_ONLY_TRANSFORMS = frozenset(
 CORRECTIVE_TRANSFORMS = frozenset({TRANSFORM_REFERENCE_NORMALIZE})
 
 
+# ---------------------------------------------------------------------------
+# What to plot when several Y columns remain
+# ---------------------------------------------------------------------------
+# One question with three mutually exclusive answers, replacing two independent
+# settings that could both be set and, together, silently did nothing: `mean`
+# collapses every Y column into one series at parse time, after which no column
+# carries the `reference` role any more, so the normalisation found nothing to
+# divide by and returned the data untouched.
+#
+# As an enum that state cannot be written down at all, which is a stronger
+# guarantee than validating against it.
+MULTI_Y_SEPARATE = "separate"  # plot every Y column as its own series
+MULTI_Y_MEAN = "mean"  # average them into a single series
+MULTI_Y_REFERENCE = "reference-normalize"  # R = (S - D) / (W - D)
+
+MULTI_Y_CHOICES = frozenset({MULTI_Y_SEPARATE, MULTI_Y_MEAN, MULTI_Y_REFERENCE})
+
+
 def _preset(config_id, name, description, x_label, y_label, **kwargs):
     """Build a preset entry, keeping the repeated scaffolding out of the table.
 
@@ -175,7 +193,10 @@ def _preset(config_id, name, description, x_label, y_label, **kwargs):
     if x_max is not None:
         display["xRangeMax"] = x_max
 
-    config = {"display": display, "transforms": kwargs.pop("transforms", [])}
+    config = {
+        "display": display,
+        "multiYHandling": kwargs.pop("multi_y", MULTI_Y_SEPARATE),
+    }
     config.update(kwargs)
     return {
         "config_id": config_id,
@@ -229,7 +250,7 @@ XY_PRESETS = {
         "reflectance (S-D)/(W-D) is computed for you.",
         "Wavelength (nm)",
         "Reflectance (%)",
-        transforms=[{"type": TRANSFORM_REFERENCE_NORMALIZE}],
+        multi_y=MULTI_Y_REFERENCE,
     ),
     "maldi": _preset(
         "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a04",

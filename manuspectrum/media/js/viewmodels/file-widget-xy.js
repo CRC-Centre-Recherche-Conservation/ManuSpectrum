@@ -3,7 +3,12 @@ import $ from 'jquery';
 import arches from 'arches';
 import FileWidgetViewModel from 'viewmodels/file-widget';
 import XyParser from 'utils/xy-parser';
-import { applyTransforms, deriveAxisLabel, describeChain } from 'utils/xy-transforms';
+import {
+    applyTransforms,
+    deriveAxisLabel,
+    describeChain,
+    expandStoredConfig,
+} from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
 import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 
@@ -320,11 +325,13 @@ const FileWidgetXYViewModel = function (params) {
                                     registry.chartYAxisLabel(
                                         deriveAxisLabel(
                                             d.yAxisLabel,
-                                            config.config
+                                            expandStoredConfig(config.config)
                                         )
                                     );
                                 registry.processing(
-                                    describeChain(config.config)
+                                    describeChain(
+                                        expandStoredConfig(config.config)
+                                    )
                                 );
                                 if (d.yAxisRightLabel)
                                     registry.chartYAxisRightLabel(
@@ -365,7 +372,9 @@ const FileWidgetXYViewModel = function (params) {
                     if (!r) return;
                     try {
                         const fileOverrides = parseOverrides(ko.unwrap(r.entry.file.parsingOverrides));
-                        const effectiveConfig = Object.assign({}, r.config.config, fileOverrides);
+                        const effectiveConfig = expandStoredConfig(
+                            Object.assign({}, r.config.config, fileOverrides)
+                        );
 
                         const validation = XyParser.validateContent(r.text, {
                             xColumnMode: effectiveConfig.xColumnMode,

@@ -10,7 +10,12 @@ import afsReaderTemplate from 'templates/views/components/cards/file-renderers/x
 import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
 import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
-import { applyTransforms, deriveAxisLabel, describeChain } from 'utils/xy-transforms';
+import {
+    applyTransforms,
+    deriveAxisLabel,
+    describeChain,
+    expandStoredConfig,
+} from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
 import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-cache';
 import 'bindings/plotly';
@@ -132,17 +137,15 @@ export default ko.components.register('xy-reader', {
                     ? display.xAxisLabel
                     : arches.translations.xAxis
             );
+            const expanded = expandStoredConfig(
+                this.selectedConfiguration?.config
+            );
             this.yAxisLabel(
                 display?.yAxisLabel
-                    ? deriveAxisLabel(
-                          display.yAxisLabel,
-                          this.selectedConfiguration?.config
-                      )
+                    ? deriveAxisLabel(display.yAxisLabel, expanded)
                     : arches.translations.yAxis
             );
-            this.processing(
-                describeChain(this.selectedConfiguration?.config)
-            );
+            this.processing(describeChain(expanded));
             this._xRangeMin = display?.xRangeMin;
             this._xRangeMax = display?.xRangeMax;
             this._columnAssignments = display?.columnAssignments || null;
@@ -643,7 +646,10 @@ export default ko.components.register('xy-reader', {
                 );
             }
             const baseConfig = this.selectedConfiguration?.config || {};
-            const effectiveConfig = { ...baseConfig, ...fileOverrides };
+            const effectiveConfig = expandStoredConfig({
+                ...baseConfig,
+                ...fileOverrides,
+            });
 
             const validation = XyParser.validateContent(text, {
                 xColumnMode: effectiveConfig.xColumnMode,

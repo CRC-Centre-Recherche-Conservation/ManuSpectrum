@@ -333,6 +333,35 @@ const POINTWISE = {
  * skipped rather than throwing, so a configuration written by a newer version
  * still renders on an older client.
  */
+export const MULTI_Y_SEPARATE = 'separate';
+export const MULTI_Y_MEAN = 'mean';
+export const MULTI_Y_REFERENCE = 'reference-normalize';
+
+/**
+ * Expand a stored configuration into what the parser and the engine read.
+ *
+ * A configuration records ONE answer to "several Y columns remain — what do we
+ * plot?". The parser still wants `transformation: 'mean'` and the engine still
+ * wants a `transforms` chain, so the single stored choice fans out here rather
+ * than the two being written down separately: set independently, they could
+ * contradict each other silently.
+ *
+ * A configuration with no `multiYHandling` is left untouched — that is the
+ * pre-migration shape, and a cached copy of it must keep rendering.
+ */
+export const expandStoredConfig = (config) => {
+    const choice = config?.multiYHandling;
+    if (!choice) return config;
+    return {
+        ...config,
+        transformation: choice === MULTI_Y_MEAN ? 'mean' : undefined,
+        transforms:
+            choice === MULTI_Y_REFERENCE
+                ? [{ type: TRANSFORM_REFERENCE_NORMALIZE }]
+                : [],
+    };
+};
+
 /**
  * How each transform is named on an axis, and whether it renames the quantity.
  *
@@ -448,6 +477,7 @@ export const applyTransforms = (parsed, config) => {
 
 export default {
     applyTransforms,
+    expandStoredConfig,
     deriveAxisLabel,
     describeChain,
     TRANSFORM_LABELS,
