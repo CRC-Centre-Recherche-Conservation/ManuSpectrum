@@ -24,7 +24,7 @@
 <div class="xy-staged-panel">
     <div class="xy-staged-header">
         <i class="fa fa-files-o"></i>
-        <span data-bind="text: stagedXyTileCount()"></span> {% trans "XY file(s) staged" %}
+        <span data-bind="text: stagedXyTileCount()"></span> {% trans "XY file(s) selected" %}
     </div>
     <div class="xy-staged-list">
     <!-- ko foreach: stagedXyFiles() -->
@@ -71,7 +71,7 @@
             data-bind="click: applyConfigToStaged, disable: batchApplying()">
         <!-- ko ifnot: batchApplying() -->
         <i class="fa fa-check-square-o"></i>
-        {% trans "Apply to" %} <span data-bind="text: stagedXyTileCount()"></span> {% trans "staged file(s)" %}
+        {% trans "Apply to" %} <span data-bind="text: stagedXyTileCount()"></span> {% trans "selected file(s)" %}
         <!-- /ko -->
         <!-- ko if: batchApplying() -->
         <i class="fa fa-spinner fa-spin"></i>
