@@ -229,8 +229,29 @@ export default ko.components.register('xy-reader', {
             () => self.stagedXyTileCount() > 0
         );
 
+        // How many selected files the chosen configuration would actually
+        // change. A freshly created resource arrives with its file already
+        // configured from the technique, and the panel pre-selects that same
+        // configuration — so the old count offered to apply what was already
+        // applied, and the button never had anything to do.
+        this.pendingBatchCount = ko.pureComputed(() => {
+            const card = self.fileViewer?.card;
+            const configId = self.selectedConfig();
+            if (!card || !card.staging || !configId) return 0;
+            const tiles = card.tiles();
+            return card.staging().filter((tileid) => {
+                const tile = tiles.find((t) => t.tileid == tileid);
+                if (!tile) return false;
+                const entry = xyEntry(
+                    ko.unwrap(tile.data[self.fileViewer.fileListNodeId])
+                );
+                if (ko.unwrap(entry?.renderer) !== self.renderer) return false;
+                return ko.unwrap(entry.rendererConfig) !== configId;
+            }).length;
+        });
+
         this.canApplyBatch = ko.pureComputed(
-            () => self.stagedXyTileCount() > 0 && !!self.selectedConfig()
+            () => self.pendingBatchCount() > 0
         );
 
         this.applyConfigToStaged = async () => {
@@ -270,6 +291,9 @@ export default ko.components.register('xy-reader', {
             }
 
             self.batchApplying(false);
+            if (applied > 0 && errors === 0) {
+                card.staging([]);
+            }
             if (errors > 0) {
                 self.batchResult(
                     applied +
@@ -637,6 +661,7 @@ export default ko.components.register('xy-reader', {
             this.stagedXyTileCount,
             this.batchMode,
             this.canApplyBatch,
+            this.pendingBatchCount,
             this.stagedXyFiles,
             this.allXyFiles,
             this.overrideTargetLabel,
