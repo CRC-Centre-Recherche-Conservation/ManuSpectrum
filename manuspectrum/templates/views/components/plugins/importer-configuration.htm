@@ -3,14 +3,35 @@
     <div data-bind="visible: showImporterList">
         <h4 class="file-config-header">{% trans "Importer Configurations" %}</h4>
         <h5 class="file-config-instructions">{% trans "Define how to import your x/y data" %}</h5>
+        <div class="importer-list-filter">
+            <input type="text" class="form-control"
+                   placeholder="{% trans 'Filter configurations...' %}"
+                   data-bind="textInput: configFilter">
+            <span class="importer-list-filter-clear" role="button"
+                  data-bind="visible: configFilter().length > 0, click: function() { configFilter(''); }">
+                <i class="fa fa-times-circle"></i>
+            </span>
+        </div>
+
         <div class="importer-list-container">
-            <!-- ko foreach: {data: rendererConfigs, as: 'configuration' } -->
+            <!-- ko foreach: {data: filteredConfigs, as: 'configuration' } -->
             <div class="d-flex align-items-center">
-                <input style="margin: 8px" type="radio" name="selectedConfiguration" data-bind="checked: $parent.selectedConfiguration, value: configuration.configid"></input>
+                <input class="importer-list-radio" type="radio" name="selectedConfiguration" data-bind="checked: $parent.selectedConfiguration, value: configuration.configid"></input>
                 <span class="flex-1"><span data-bind="text: configuration.name"></span><span data-bind="if: configuration.description"><span class="tip"><i class="fa fa-info-circle"></i><span class="tooltiptext" data-bind="text: configuration.description"></span></span></span></span>
                 <i class="fa fa-pencil" role="button" data-bind="click:()=>{$parent.loadConfiguration(configuration);}" aria-label="{% trans 'Edit' %}"></i>
+                <!-- ko if: configuration.protected -->
+                <span class="tip importer-config-lock">
+                    <i class="fa fa-lock"></i>
+                    <span class="tooltiptext">{% trans "Part of the shared baseline: cannot be deleted, and only an administrator can edit it." %}</span>
+                </span>
+                <!-- /ko -->
+                <!-- ko ifnot: configuration.protected -->
                 <i class="fa fa-trash" role="button" data-bind="click:()=>{$parent.deleteConfiguration(configuration);}" aria-label="{% trans 'Delete' %}"></i>
+                <!-- /ko -->
             </div>
+            <!-- /ko -->
+            <!-- ko if: noConfigMatches -->
+            <p class="importer-list-empty">{% trans "No configuration matches this filter." %}</p>
             <!-- /ko -->
         </div>
 

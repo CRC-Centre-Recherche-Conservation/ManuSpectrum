@@ -16,6 +16,29 @@ import 'bindings/select2-query';
 const vm = function (params) {
     this.alert = params.alert;
     this.rendererConfigs = params.rendererConfigs || ko.observableArray();
+
+    // The list is expected to grow into the hundreds as each lab adds its own
+    // instruments' quirks. Filtering client-side keeps every keystroke instant;
+    // the endpoint returns the whole set in one small payload, so paginating it
+    // would buy a round trip and cost responsiveness.
+    this.configFilter = ko.observable('');
+    this.filteredConfigs = ko.pureComputed(() => {
+        const needle = this.configFilter().trim().toLowerCase();
+        const configs = this.rendererConfigs() || [];
+        if (!needle) return configs;
+        return configs.filter((configuration) => {
+            const name = (ko.unwrap(configuration.name) || '').toLowerCase();
+            const description = (
+                ko.unwrap(configuration.description) || ''
+            ).toLowerCase();
+            // Descriptions carry the column layout, so a curator can search
+            // "reference" or "m/z" and find the configuration that fits a file.
+            return name.includes(needle) || description.includes(needle);
+        });
+    });
+    this.noConfigMatches = ko.pureComputed(
+        () => this.configFilter().trim() !== '' && this.filteredConfigs().length === 0
+    );
     this.selectedConfiguration = params.selectedConfiguration || ko.observable();
     this.showConfigurationPanel = ko.observable();
     this.editConfigurationId = ko.observable(undefined);
@@ -490,7 +513,25 @@ const vm = function (params) {
         this.showImporterList(false);
     };
 
-    this.deleteConfiguration = async (configuration) => {
+    // Deleting was a single unguarded click on a bin icon, and a configuration
+    // several files still point at could go with it. Ask first, name what is
+    // about to go, and say plainly that it cannot be undone.
+    this.deleteConfiguration = (configuration) => {
+        this.alert(
+            new AlertViewModel(
+                'ep-alert-red',
+                arches.translations.deleteConfigurationTitle,
+                arches.translations.deleteConfigurationWarning.replace(
+                    '{name}',
+                    ko.unwrap(configuration.name)
+                ),
+                function () {}, // cancel: close and do nothing
+                () => this.performDelete(configuration)
+            )
+        );
+    };
+
+    this.performDelete = async (configuration) => {
         const configDeleteResponse = await fetch(
             `${arches.urls.renderer_config}${configuration.configid}`,
             {
@@ -502,24 +543,34 @@ const vm = function (params) {
             }
         );
 
-        if (configDeleteResponse.ok) {
-            const responseJson = await configDeleteResponse.json();
-            if (responseJson.deleted) {
-                invalidate(this.renderer);
-                await rendererConfigRefresh();
-                if (this.onConfigSaved) {
-                    this.onConfigSaved();
-                }
-            } else {
-                this.alert(
-                    new AlertViewModel(
-                        'ep-alert-red',
-                        arches.translations.importerInUse,
-                        arches.translations.importerInUseWarning
-                    )
-                );
-            }
+        let responseJson = {};
+        try {
+            responseJson = await configDeleteResponse.json();
+        } catch {
+            // no body — fall through to the generic refusal below
         }
+
+        if (configDeleteResponse.ok && responseJson.deleted) {
+            invalidate(this.renderer);
+            await rendererConfigRefresh();
+            if (this.onConfigSaved) {
+                this.onConfigSaved();
+            }
+            return;
+        }
+
+        // A refusal carries its reason: the server knows whether the
+        // configuration is part of the shared baseline or merely still in use.
+        this.alert(
+            new AlertViewModel(
+                'ep-alert-red',
+                responseJson.reason === 'protected'
+                    ? arches.translations.configurationProtected
+                    : arches.translations.importerInUse,
+                responseJson.message ||
+                    arches.translations.importerInUseWarning
+            )
+        );
     };
 
     rendererConfigRefresh();

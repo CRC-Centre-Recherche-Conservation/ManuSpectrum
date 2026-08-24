@@ -151,3 +151,49 @@
         margin-right: 4px;
     }
 }
+
+// --- Configuration list: filter, scrolling, protection -------------------
+// The list had no height bound at all: with a few hundred configurations it
+// pushed the "Add Importer Configuration" button off the panel entirely.
+.importer-list-filter {
+    position: relative;
+    margin-bottom: 6px;
+
+    input {
+        width: 100%;
+        height: initial;
+        padding-right: 26px;
+    }
+}
+.importer-list-filter-clear {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    color: #999;
+    cursor: pointer;
+
+    &:hover {
+        color: #555;
+    }
+}
+.importer-list-container {
+    max-height: 320px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.importer-list-radio {
+    margin: 8px;
+}
+.importer-list-empty {
+    margin: 8px;
+    color: #777;
+    font-size: 12px;
+    font-style: italic;
+}
+// Replaces the bin on a seeded preset. Grey, not red: this is a statement of
+// fact, not a warning about something the curator did wrong.
+.importer-config-lock {
+    color: #999;
+    cursor: help;
+}
