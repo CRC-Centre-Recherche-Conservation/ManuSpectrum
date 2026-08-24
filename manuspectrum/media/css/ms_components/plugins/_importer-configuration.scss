@@ -38,3 +38,116 @@
     flex-shrink: 0;
     padding: 6px;
 }
+
+// --- Reversed X axis -------------------------------------------------------
+.xy-reversed-row {
+    margin-top: 10px;
+}
+
+// --- Transformation chain --------------------------------------------------
+// Steps are ordered and the order is meaningful (a smoothing must precede a
+// normalisation), so each row carries its rank and reorder controls.
+.xy-transform-count {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    border-radius: 9px;
+    background-color: #004577;
+    color: #fff;
+    font-size: 11px;
+    font-weight: normal;
+    text-align: center;
+}
+.xy-transform-step {
+    padding: 6px 0;
+
+    & + & {
+        border-top: 1px solid #e5e5e5;
+    }
+}
+.xy-transform-index {
+    min-width: 18px;
+    color: #777;
+    font-size: 12px;
+    text-align: right;
+}
+.xy-transform-params {
+    margin-top: 6px;
+    padding-left: 24px;
+}
+.xy-transform-warning {
+    margin: 6px 0 0 24px;
+    color: #8a6d3b;
+    font-size: 11px;
+    line-height: 1.4;
+}
+.xy-transform-add {
+    margin-top: 8px;
+}
+
+// --- Description tooltip ---------------------------------------------------
+// The configuration list renders a description next to each name inside
+// .tooltiptext. Neither Arches nor this project ever styled that class, so the
+// description rendered inline and every seeded preset read as its own name
+// twice over. Hide it until the icon is hovered or focused.
+.tip {
+    position: relative;
+    display: inline-block;
+    margin-left: 5px;
+    color: #777;
+    cursor: help;
+
+    .tooltiptext {
+        position: absolute;
+        bottom: 125%;
+        left: 50%;
+        z-index: 10;
+        width: 230px;
+        margin-left: -115px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background-color: #222;
+        color: #fff;
+        font-size: 12px;
+        font-weight: normal;
+        line-height: 1.4;
+        text-align: left;
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.15s;
+
+        // Arrow pointing back down at the icon.
+        &::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border: 5px solid transparent;
+            border-top-color: #222;
+        }
+    }
+
+    &:hover .tooltiptext,
+    &:focus-within .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+}
+
+// A transform that cannot run yet. Louder than .xy-transform-warning, which
+// merely says a step needs parameters: this one says the step is inert.
+.xy-transform-blocked {
+    margin-top: 8px;
+    padding: 6px 8px;
+    border-left: 3px solid #d9534f;
+    background-color: #fdf3f2;
+    color: #a94442;
+    font-size: 12px;
+    line-height: 1.4;
+
+    .fa {
+        margin-right: 4px;
+    }
+}
