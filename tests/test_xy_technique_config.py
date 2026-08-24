@@ -10,6 +10,7 @@ from manuspectrum.utils.file_entries import (
 )
 from manuspectrum.constants.xy_presets import (
     ANALYST_ONLY_TRANSFORMS,
+    CORRECTIVE_TRANSFORMS,
     AUTO_SAFE_TRANSFORMS,
     CONFIG_SOURCE_AUTO,
     CONFIG_SOURCE_KEY,
@@ -109,6 +110,40 @@ class PresetTableTests(SimpleTestCase):
                     msg=f"{key} would silently apply {step['type']}",
                 )
                 self.assertIn(step["type"], AUTO_SAFE_TRANSFORMS)
+
+    def test_a_stored_preset_only_carries_corrective_transforms(self):
+        # A configuration is shared by every analysis of its technique. A step
+        # that is a way of *looking* at the data — log10(1/R), a derivative,
+        # smoothing — must not be decided there once for every reader.
+        for key, preset in XY_PRESETS.items():
+            for step in preset["config"]["transforms"]:
+                self.assertIn(
+                    step["type"],
+                    CORRECTIVE_TRANSFORMS,
+                    msg=(
+                        f"{key} freezes {step['type']} into a shared "
+                        "configuration; it belongs to the reader"
+                    ),
+                )
+
+    def test_a_presets_axis_label_cannot_lie(self):
+        # The Y label names the quantity the file holds once the corrective
+        # chain has run. Corrective steps reach that quantity, they do not
+        # qualify it — so the declared label is exactly what gets plotted, and
+        # a reader can trust it without checking the chain.
+        for key, preset in XY_PRESETS.items():
+            chain = preset["config"]["transforms"]
+            self.assertTrue(
+                set(step["type"] for step in chain) <= CORRECTIVE_TRANSFORMS,
+                msg=f"{key} plots something its Y label does not name",
+            )
+
+    def test_the_two_classifications_answer_different_questions(self):
+        # log10(1/R) is parameter-free, so a preset *could* apply it by itself —
+        # and still must not be frozen into a shared configuration. If these
+        # ever coincide, one of them has lost its meaning.
+        self.assertTrue(CORRECTIVE_TRANSFORMS < AUTO_SAFE_TRANSFORMS)
+        self.assertFalse(CORRECTIVE_TRANSFORMS & ANALYST_ONLY_TRANSFORMS)
 
     def test_fors_normalises_against_its_reference_channel(self):
         transforms = XY_PRESETS["fors"]["config"]["transforms"]

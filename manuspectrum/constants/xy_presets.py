@@ -127,6 +127,31 @@ ANALYST_ONLY_TRANSFORMS = frozenset(
     {TRANSFORM_DERIVATIVE, TRANSFORM_SMOOTH, TRANSFORM_BASELINE}
 )
 
+#: Transforms a stored configuration may contain.
+#:
+#: A configuration describes what turns a file's columns into the physical
+#: quantity its technique measures — nothing more. `reference-normalize` belongs
+#: because reflectance IS the ratio of measurement to white reference: without
+#: it the file holds raw counts, and an axis reading "Reflectance (%)" is simply
+#: false. Everything else is a way of looking at data that is already correct,
+#: and belongs to the reader, not to a row every analysis of that technique
+#: shares.
+#:
+#: This is a DIFFERENT axis from AUTO_SAFE / ANALYST_ONLY above, and the two
+#: deliberately disagree. That pair answers "what may a preset apply by itself?"
+#: (parameter-free versus judgement-required). This one answers "what may be
+#: frozen into a shared configuration?" A transform can be perfectly
+#: deterministic — log10(1/R) is — and still have no business being decided once
+#: for every reader.
+#:
+#: The boundary is technique-specific in principle: E-RIHS's curation policy
+#: states each method must find its own level of processing. MALDI intensity is
+#: arbitrary, so TIC normalisation there is arguably corrective; XRD background
+#: subtraction straddles the line. None of those is needed by any technique in
+#: this database today, so the set stays global until one is — and then it grows
+#: here, per technique, with the reasoning written down.
+CORRECTIVE_TRANSFORMS = frozenset({TRANSFORM_REFERENCE_NORMALIZE})
+
 
 def _preset(config_id, name, description, x_label, y_label, **kwargs):
     """Build a preset entry, keeping the repeated scaffolding out of the table.
