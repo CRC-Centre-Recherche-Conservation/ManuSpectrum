@@ -489,6 +489,16 @@ def is_seeded_preset(config_id):
     return str(config_id) in SEEDED_CONFIG_IDS
 
 
+# Each seeded configuration carries the key of the preset it came from. This is
+# an identifier, not a transform: it lets the reader-side control offer the
+# views that make sense for that instrument family without the configuration
+# ever holding an interpretive step. The invariant holds — a config still stores
+# only what reaches the measured quantity.
+for _key, _preset_entry in XY_PRESETS.items():
+    _preset_entry["config"]["presetKey"] = _key
+del _key, _preset_entry
+
+
 def preset_for_technique(list_item_id):
     """Return the preset dict for a controlled-list item id, or ``None``."""
     key = TECHNIQUE_PRESETS.get(str(list_item_id))
