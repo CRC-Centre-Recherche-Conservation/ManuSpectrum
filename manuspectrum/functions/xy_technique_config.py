@@ -18,7 +18,11 @@ So the mapping fills the blank, and only the blank:
 * when an analysis carries several techniques that map to different presets, it
   writes nothing. A wrong axis label is worse than a missing one.
 
-The mapping itself lives in :mod:`manuspectrum.constants.xy_presets`.
+The mapping itself lives in :mod:`manuspectrum.constants.xy_presets`, whose
+module docstring states the invariant this function exists to uphold: a
+configuration holds exactly what turns a file's columns into the physical
+quantity its technique measures, and nothing beyond it. Read it before adding
+anything to a preset.
 
 Note that :meth:`save` runs *before* Arches writes the tile, so mutating
 ``tile.data`` in place costs no extra query — which is the common case here.

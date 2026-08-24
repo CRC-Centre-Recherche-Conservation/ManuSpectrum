@@ -21,6 +21,60 @@ Two things live here:
 Adding a technique means adding a line to ``TECHNIQUE_PRESETS``. Adding a whole
 new instrument family means adding an entry to ``XY_PRESETS`` **with a fresh
 ``config_id``** and a migration that seeds it.
+
+The invariant
+-------------
+
+**A** ``RendererConfig`` **stores exactly what turns a file's columns into the
+physical quantity its technique measures** — parsing options, column roles, one
+exclusive answer to the multi-Y question, and corrective steps drawn from
+``CORRECTIVE_TRANSFORMS`` — **and the Y axis label is derived from it, never
+typed independently.**
+
+**Everything beyond that quantity is a view.** A view composes strictly *after*
+the configuration, is never the default, is never silent — its chain appears on
+every chart and export, an explicit "none" included — and never lives in a
+``RendererConfig``.
+
+The test is not "is this standard practice", it is *what does the operation
+do*: does it bring the data to the quantity the technique measures, or does it
+apply a model to data that is already correct? Reflectance IS the ratio of
+measurement to white reference, so ``reference-normalize`` is corrective and an
+axis reading "Reflectance (%)" is false without it. A derivative, a smoothing,
+log(1/R) — those are ways of *reading* a correct curve, and which one you want
+depends on the question you are asking, so they belong to the reader.
+
+Why this is the last structural change to this configuration
+------------------------------------------------------------
+
+Every future need lands in one of two registries, and **neither changes the
+config's shape**:
+
+* a new **view**, in the view layer — a reader-side control, deferred until
+  someone asks to see log(1/R) or a derivative in a report. Its acceptance
+  criteria are already fixed: never the default, never silent, composed after
+  the configuration, offered per technique;
+* a new **corrective** entry in ``CORRECTIVE_TRANSFORMS`` — decided per
+  technique, with the reasoning written next to it. E-RIHS's curation policy
+  says each method must find its own level of processing, so this set is global
+  only until a technique needs otherwise. Known candidates: TIC normalisation
+  for MALDI (its intensity is arbitrary), background subtraction for XRD,
+  cosmic-ray removal for Raman. None is needed by any technique in this
+  database today.
+
+Two further things are deliberately deferred, each with its trigger: a named,
+stored *view* as a derived entity with its own identifier — the FORS
+first-derivative protocol for dye identification is the expected first case,
+since the literature finds derivative features more reliable than raw
+reflectance minima — and an explicit ``base_level`` field with full PROV
+export, which the named-view feature will need anyway.
+
+Note that ``CORRECTIVE_TRANSFORMS`` and ``AUTO_SAFE_TRANSFORMS`` are different
+axes and are *meant* to disagree. The first answers "what may be frozen into a
+shared configuration?", the second "what may a preset apply by itself?".
+log(1/R) is parameter-free, so a preset could apply it unaided — and still has
+no business being decided once for every reader. A test asserts they stay
+distinct; if they ever coincide, one of them has lost its meaning.
 """
 
 from functools import lru_cache

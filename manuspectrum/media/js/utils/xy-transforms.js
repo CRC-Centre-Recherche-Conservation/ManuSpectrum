@@ -20,6 +20,22 @@
  * Column roles come from `config.display.columnAssignments`, so a FORS export
  * carrying `wavelength / tgt_count / ref_count` normalises itself once the
  * curator has tagged the reference column, with no arithmetic on their part.
+ *
+ * A SECOND, independent axis governs where a transform may be *stored*. That
+ * invariant is written in full in `manuspectrum/constants/xy_presets.py`: a stored
+ * configuration may only hold **corrective** steps — those without which the
+ * axis label would be false — while everything else is a **view**, composing
+ * after the configuration, never the default, never silent.
+ *
+ * The two axes are meant to disagree. log(1/R) is parameter-free, so a preset
+ * could apply it unaided, and still has no business being decided once for
+ * every reader. Today only `reference-normalize` is corrective, so a stored
+ * chain never exceeds one step.
+ *
+ * This module is the substrate for both sides and is deliberately unaware of
+ * which one a caller is on: `expandStoredConfig` feeds it the corrective chain
+ * today, and a reader-side control will feed it a view chain later, without
+ * either needing a change here.
  */
 
 const EPSILON = 1e-12;
