@@ -21,6 +21,12 @@ import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-ca
 import 'bindings/plotly';
 import 'views/components/plugins/importer-configuration';
 
+// Mirrors CONFIG_SOURCE_* in manuspectrum/constants/xy_presets.py. Written on
+// every entry a curator configures by hand, so the "auto" badge in the file
+// lists tells the truth about where a configuration came from — and so the
+// technique mapping knows a human has spoken and leaves the entry alone.
+const CONFIG_SOURCE_MANUAL = 'manual';
+
 export default ko.components.register('xy-reader', {
     viewModel: function (params) {
         const self = this;
@@ -123,6 +129,9 @@ export default ko.components.register('xy-reader', {
                 );
                 if (entry && config !== currentRendererConfig) {
                     entry.rendererConfig = config;
+                    // A curator picked this one. Without clearing the marker the
+                    // entry would keep claiming the technique derived it.
+                    entry.rendererConfigSource = CONFIG_SOURCE_MANUAL;
                     tile.save();
                 }
             }
@@ -156,21 +165,35 @@ export default ko.components.register('xy-reader', {
 
         rendererConfigRefresh();
 
-        // Rename the core "Edit" tab to "Visualization"
-        setTimeout(() => {
-            $('.workbench-card-sidebar-tab').each(function () {
-                const bind = $(this).attr('data-bind') || '';
-                if (bind.includes("toggleTab('edit')")) {
-                    $(this)
-                        .find('i.fa')
-                        .removeClass('fa-pencil')
-                        .addClass('fa-eye');
-                    $(this)
-                        .find('.map-sidebar-text')
-                        .text('Viz');
-                }
-            });
-        }, 0);
+        // Rename the core "Edit" tab to "Viz".
+        //
+        // The tab belongs to Arches' own file-viewer template, so relabelling it
+        // means reaching into the DOM. Knockout re-renders that strip whenever
+        // the displayed file changes, which silently undid a one-shot rename and
+        // left the tab reading "Edit" again with a pencil icon — so re-apply on
+        // every change rather than once at construction.
+        const renameEditTab = () => {
+            setTimeout(() => {
+                $('.workbench-card-sidebar-tab').each(function () {
+                    const bind = $(this).attr('data-bind') || '';
+                    if (bind.includes("toggleTab('edit')")) {
+                        $(this)
+                            .find('i.fa')
+                            .removeClass('fa-pencil')
+                            .addClass('fa-eye');
+                        $(this)
+                            .find('.map-sidebar-text')
+                            .text(arches.translations.xyVizTab);
+                    }
+                });
+            }, 0);
+        };
+        renameEditTab();
+        if (ko.isObservable(this.fileViewer?.displayContent)) {
+            this.disposables.push(
+                this.fileViewer.displayContent.subscribe(renameEditTab)
+            );
+        }
 
         // Track whether the importer-configuration child is showing its list (not the edit panel)
         this.importerShowingList = ko.observable(true);
@@ -237,6 +260,7 @@ export default ko.components.register('xy-reader', {
                 }
                 try {
                     entry.rendererConfig = configId;
+                    entry.rendererConfigSource = CONFIG_SOURCE_MANUAL;
                     await tile.save();
                     applied++;
                 } catch (e) {
@@ -516,6 +540,7 @@ export default ko.components.register('xy-reader', {
 
             for (const file of files) {
                 try {
+                    if (!file.entry) continue;
                     if (value) {
                         file.entry.parsingOverrides = value;
                     } else {
