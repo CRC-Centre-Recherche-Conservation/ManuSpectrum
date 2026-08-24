@@ -443,26 +443,7 @@ RENDERERS = [
 ]
 
 # THUMBNAIL
-# Search-result thumbnails come from IIIF manifests, through the fetchers in
-# manuspectrum.utils.search_thumbnail_fetchers. That mechanism is driven by
-# SEARCH_THUMBNAILS alone and is unrelated to THUMBNAIL_GENERATOR below.
 SEARCH_THUMBNAILS = True
-
-# No generator. arches.app.utils.thumbnail_generator.ThumbnailGenerator is the
-# ABSTRACT base class — its make_thumbnail() raises NotImplementedError, and
-# Arches ships no concrete subclass. Pointing at it meant every attempt failed
-# by construction, and the cost was paid on every request: FileView.get() calls
-# file.save() whenever thumbnail_data is None (which it stayed, forever), so
-# each fetch of a spectrum did a DB write, copied the whole file into a temp
-# file (get_thumbnail_data reads it chunk by chunk before failing), and printed
-# a full traceback. On a 2.7 MB MALDI CSV, twice per report.
-#
-# Note MIN_FILE_SIZE_T0_GENERATE_THUMBNAIL is declared by Arches but read
-# nowhere in it, so it never guarded anything — do not rely on it.
-#
-# Set this to a real subclass implementing make_thumbnail(in_path, out_path) if
-# thumbnails for uploaded files are ever wanted; a falsy value makes
-# ThumbnailFactory return None and skips the machinery entirely.
 THUMBNAIL_GENERATOR = None
 GENERATE_THUMBNAILS_ON_DEMAND = False
 
