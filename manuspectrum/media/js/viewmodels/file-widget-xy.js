@@ -3,6 +3,7 @@ import $ from 'jquery';
 import arches from 'arches';
 import FileWidgetViewModel from 'viewmodels/file-widget';
 import XyParser from 'utils/xy-parser';
+import { applyTransforms } from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
 import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 
@@ -37,6 +38,8 @@ const getOrCreateRegistry = (nodeId) => {
             ),
             chartYAxisLabelSize: ko.observable(17),
             chartYAxisRightLabel: ko.observable(''),
+            // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
+            chartXReversed: ko.observable(false),
             xRangeMin: ko.observable(undefined),
             xRangeMax: ko.observable(undefined),
             columnAssignments: null,
@@ -98,6 +101,9 @@ const FileWidgetXYViewModel = function (params) {
     this.chartYAxisRightLabel = registry
         ? registry.chartYAxisRightLabel
         : ko.observable('');
+    this.chartXReversed = registry
+        ? registry.chartXReversed
+        : ko.observable(false);
     this.xRangeMin = registry
         ? registry.xRangeMin
         : ko.observable(undefined);
@@ -313,6 +319,7 @@ const FileWidgetXYViewModel = function (params) {
                                     registry.xRangeMin(d.xRangeMin);
                                 if (d.xRangeMax !== undefined)
                                     registry.xRangeMax(d.xRangeMax);
+                                registry.chartXReversed(!!d.xReversed);
                                 if (d.columnAssignments)
                                     registry.columnAssignments =
                                         d.columnAssignments;
@@ -355,7 +362,10 @@ const FileWidgetXYViewModel = function (params) {
                             return;
                         }
 
-                        const parsed = XyParser.parse(r.text, effectiveConfig);
+                        const parsed = applyTransforms(
+                            XyParser.parse(r.text, effectiveConfig),
+                            effectiveConfig
+                        );
 
                         r.entry.chartData(
                             parsed.ys

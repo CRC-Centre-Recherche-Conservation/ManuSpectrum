@@ -97,6 +97,13 @@ const plotlyBinding = {
             width: $(element).width() - 2,
         };
 
+        // Reversed X axis. Required for FTIR, where wavenumber runs 4000 -> 400
+        // cm-1 by near-universal convention, and for NMR and XPS. Plotting such
+        // a spectrum ascending reads as an error to a spectroscopist.
+        if (config.xReversed && ko.unwrap(config.xReversed)) {
+            layout.xaxis.autorange = 'reversed';
+        }
+
         // Dual Y axis support
         const yRightLabel = config.yAxisRightLabel
             ? ko.unwrap(config.yAxisRightLabel)

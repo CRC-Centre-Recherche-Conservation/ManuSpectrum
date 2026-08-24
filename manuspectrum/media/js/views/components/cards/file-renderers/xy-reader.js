@@ -10,6 +10,7 @@ import afsReaderTemplate from 'templates/views/components/cards/file-renderers/x
 import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
 import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
+import { applyTransforms } from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
 import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-cache';
 import 'bindings/plotly';
@@ -31,10 +32,32 @@ export default ko.components.register('xy-reader', {
         AfsInstrumentViewModel.apply(this, [params]);
         this.disposables = [];
 
+        // One file per tile is the rule here: Arches' file workbench creates a
+        // fresh tile per dropped file, and its getUrl() only reads a tile whose
+        // value holds exactly one entry. An instrument's original and its CSV
+        // derivative therefore live in sibling tiles, not together.
+        //
+        // The node still permits several files (`maxFiles`), and the card form
+        // can write them, so resolve the entry this renderer owns instead of
+        // trusting position. Falls back to the first entry so a tile whose file
+        // has no renderer yet still reports itself — that is what drives the
+        // "No config" warnings.
+        const xyEntry = (node) => {
+            if (!node || !node.length) return null;
+            return (
+                node.find(
+                    (entry) => ko.unwrap(entry?.renderer) === self.renderer
+                ) || node[0]
+            );
+        };
+        this.xyEntry = xyEntry;
+
         // set defaults for chart title/axis
         this.chartTitle(arches.translations.data);
         this.xAxisLabel(arches.translations.xAxis);
         this.yAxisLabel(arches.translations.yAxis);
+        // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
+        this.xReversed = ko.observable(false);
 
         this.rendererConfigs = ko.observable([]);
 
@@ -52,9 +75,11 @@ export default ko.components.register('xy-reader', {
 
                     // displayContent is formatted differently from the core file viewer.
                     const configId = tile
-                        ? ko.unwrap(
-                              tile.data[self.fileViewer.fileListNodeId]
-                          )?.[0]?.rendererConfig
+                        ? xyEntry(
+                              ko.unwrap(
+                                  tile.data[self.fileViewer.fileListNodeId]
+                              )
+                          )?.rendererConfig
                         : displayContent?.rendererConfig;
 
                     if (configId) {
@@ -85,11 +110,12 @@ export default ko.components.register('xy-reader', {
                 const node = ko.unwrap(
                     tile.data[self.fileViewer.fileListNodeId]
                 );
+                const entry = xyEntry(node);
                 const currentRendererConfig = ko.unwrap(
-                    node[0].rendererConfig
+                    entry?.rendererConfig
                 );
-                if (config !== currentRendererConfig) {
-                    node[0].rendererConfig = config;
+                if (entry && config !== currentRendererConfig) {
+                    entry.rendererConfig = config;
                     tile.save();
                 }
             }
@@ -114,6 +140,7 @@ export default ko.components.register('xy-reader', {
             this._columnAssignments = display?.columnAssignments || null;
             this._xColumnMode = this.selectedConfiguration?.config?.xColumnMode || null;
             this.yAxisRightLabel(display?.yAxisRightLabel || '');
+            this.xReversed(!!display?.xReversed);
         }));
 
         rendererConfigRefresh();
@@ -155,9 +182,7 @@ export default ko.components.register('xy-reader', {
                         tile.data[self.fileViewer.fileListNodeId]
                     );
                     if (
-                        node &&
-                        node.length > 0 &&
-                        ko.unwrap(node[0].renderer) === self.renderer
+                        ko.unwrap(xyEntry(node)?.renderer) === self.renderer
                     ) {
                         count++;
                     }
@@ -195,15 +220,12 @@ export default ko.components.register('xy-reader', {
                 const node = ko.unwrap(
                     tile.data[self.fileViewer.fileListNodeId]
                 );
-                if (
-                    !node ||
-                    !node.length ||
-                    ko.unwrap(node[0].renderer) !== self.renderer
-                ) {
+                const entry = xyEntry(node);
+                if (ko.unwrap(entry?.renderer) !== self.renderer) {
                     continue;
                 }
                 try {
-                    node[0].rendererConfig = configId;
+                    entry.rendererConfig = configId;
                     await tile.save();
                     applied++;
                 } catch (e) {
@@ -245,19 +267,23 @@ export default ko.components.register('xy-reader', {
                     const node = ko.unwrap(
                         tile.data[self.fileViewer.fileListNodeId]
                     );
-                    if (
-                        !node?.length ||
-                        ko.unwrap(node[0].renderer) !== self.renderer
-                    )
+                    const entry = xyEntry(node);
+                    if (ko.unwrap(entry?.renderer) !== self.renderer)
                         return null;
-                    const configId = ko.unwrap(node[0].rendererConfig);
+                    const configId = ko.unwrap(entry.rendererConfig);
                     const cfg = configs.find(
                         (c) => c.configid === configId
                     );
                     return {
-                        name: ko.unwrap(node[0].name) || 'Unknown',
+                        name: ko.unwrap(entry.name) || 'Unknown',
                         hasConfig: !!configId,
                         configName: cfg?.name || null,
+                        // Surfaced in the UI so a deduced configuration never
+                        // passes for a deliberate one: an analysis tagged with
+                        // the wrong technique would otherwise hand a plausible
+                        // but wrong axis label to whoever reads the spectrum.
+                        isAutoConfig:
+                            ko.unwrap(entry.rendererConfigSource) === 'auto',
                         tileid: tileid,
                     };
                 })
@@ -275,26 +301,27 @@ export default ko.components.register('xy-reader', {
                     const node = ko.unwrap(
                         tile.data[self.fileViewer.fileListNodeId]
                     );
-                    if (
-                        !node?.length ||
-                        ko.unwrap(node[0].renderer) !== self.renderer
-                    )
+                    const entry = xyEntry(node);
+                    if (ko.unwrap(entry?.renderer) !== self.renderer)
                         return null;
-                    const configId = ko.unwrap(node[0].rendererConfig);
+                    const configId = ko.unwrap(entry.rendererConfig);
                     const cfg = configs.find(
                         (c) => c.configid === configId
                     );
-                    const overrides = parseOverrides(ko.unwrap(node[0].parsingOverrides));
+                    const overrides = parseOverrides(ko.unwrap(entry.parsingOverrides));
                     return {
-                        name: ko.unwrap(node[0].name) || 'Unknown',
+                        name: ko.unwrap(entry.name) || 'Unknown',
                         hasConfig: !!configId,
                         configName: cfg?.name || null,
+                        isAutoConfig:
+                            ko.unwrap(entry.rendererConfigSource) === 'auto',
                         configId: configId,
                         configObj: cfg?.config || {},
                         tileid: tile.tileid,
                         tile: tile,
                         node: node,
-                        url: ko.unwrap(node[0].url),
+                        entry: entry,
+                        url: ko.unwrap(entry.url),
                         hasOverrides: Object.keys(overrides).length > 0,
                         overrides: overrides,
                     };
@@ -325,7 +352,9 @@ export default ko.components.register('xy-reader', {
         // After tile.save(), koMapping.fromJS() wraps nested props as observables,
         // so we use ko.toJS() to deeply unwrap all nested observables.
         const getFileOverrides = (file) => {
-            return parseOverrides(ko.unwrap(file.node?.[0]?.parsingOverrides));
+            // file.entry is the entry this renderer owns, resolved by xyEntry
+            // when allXyFiles was built — not necessarily node[0].
+            return parseOverrides(ko.unwrap(file.entry?.parsingOverrides));
         };
 
         // Load radio state from a file's existing overrides
@@ -477,9 +506,9 @@ export default ko.components.register('xy-reader', {
             for (const file of files) {
                 try {
                     if (value) {
-                        file.node[0].parsingOverrides = value;
+                        file.entry.parsingOverrides = value;
                     } else {
-                        delete file.node[0].parsingOverrides;
+                        delete file.entry.parsingOverrides;
                     }
                     await file.tile.save();
                 } catch (e) {
@@ -590,7 +619,20 @@ export default ko.components.register('xy-reader', {
             const dc = self.fileViewer?.displayContent() || self.displayContent;
             if (dc?.tile) {
                 const node = ko.unwrap(dc.tile.data[self.fileViewer.fileListNodeId]);
-                fileOverrides = parseOverrides(ko.unwrap(node?.[0]?.parsingOverrides));
+                // Overrides belong to the file on screen. A tile can hold the
+                // archival original alongside the CSV, so match on file_id and
+                // only fall back to the renderer-owned entry when the viewer
+                // does not tell us which file it is showing.
+                const displayedId = ko.unwrap(dc.file_id);
+                const entry =
+                    (displayedId &&
+                        (node || []).find(
+                            (e) => ko.unwrap(e?.file_id) === displayedId
+                        )) ||
+                    xyEntry(node);
+                fileOverrides = parseOverrides(
+                    ko.unwrap(entry?.parsingOverrides)
+                );
             }
             const baseConfig = this.selectedConfiguration?.config || {};
             const effectiveConfig = { ...baseConfig, ...fileOverrides };
@@ -605,7 +647,14 @@ export default ko.components.register('xy-reader', {
             }
 
             try {
-                const parsedData = XyParser.parse(text, effectiveConfig);
+                // Transforms run on the parsed spectrum, never on the file. A
+                // reference-normalised FORS acquisition loses its reference and
+                // dark columns here, so the routing below sees only the series
+                // that are actually plotted.
+                const parsedData = applyTransforms(
+                    XyParser.parse(text, effectiveConfig),
+                    effectiveConfig
+                );
                 this.invalidDelimiter(false);
                 const assignments = this._columnAssignments;
                 const xMin = this._xRangeMin;

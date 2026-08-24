@@ -39,6 +39,12 @@
         <!-- ko if: configName -->
         <span class="label label-default" data-bind="text: configName"></span>
         <!-- /ko -->
+        <!-- ko if: isAutoConfig -->
+        <span class="label xy-config-auto-badge"
+              title="{% trans "Deduced from the analysis technique. Change it here if the technique is wrong." %}">
+            <i class="fa fa-magic"></i> {% trans "auto" %}
+        </span>
+        <!-- /ko -->
         <!-- ko ifnot: configName -->
         <span class="label label-warning">{% trans "No config" %}</span>
         <!-- /ko -->
@@ -136,6 +142,12 @@
         <!-- /ko -->
         <!-- ko if: configName -->
         <span class="label label-info text-xs" data-bind="text: configName"></span>
+        <!-- /ko -->
+        <!-- ko if: isAutoConfig -->
+        <span class="label xy-config-auto-badge"
+              title="{% trans "Deduced from the analysis technique. Change it here if the technique is wrong." %}">
+            <i class="fa fa-magic"></i> {% trans "auto" %}
+        </span>
         <!-- /ko -->
         <!-- ko ifnot: configName -->
         <span class="label label-warning text-xs">{% trans "none" %}</span>

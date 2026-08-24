@@ -94,3 +94,17 @@
     font-size: 11px;
     color: #8a6d3b;
 }
+
+// Marks a configuration the technique mapping deduced, as opposed to one a
+// curator chose. Visible provenance matters here: an analysis carrying the
+// wrong technique yields a plausible-looking but wrong axis label, and the
+// reader is where someone would notice.
+.xy-config-auto-badge {
+    background-color: #6c757d;
+    font-weight: normal;
+    cursor: help;
+
+    .fa {
+        margin-right: 3px;
+    }
+}
