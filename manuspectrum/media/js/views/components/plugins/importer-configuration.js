@@ -6,8 +6,12 @@ import arches from 'arches';
 import ko from 'knockout';
 import $ from 'jquery';
 import Cookies from 'js-cookie';
-import xyParser from 'utils/xy-parser';
 import AlertViewModel from 'viewmodels/alert';
+import {
+    MULTI_Y_MEAN,
+    MULTI_Y_REFERENCE,
+    MULTI_Y_SEPARATE,
+} from 'utils/xy-transforms';
 import { getRendererConfig, invalidate } from 'utils/renderer-cache';
 import importerConfigurationTemplate from 'templates/views/components/plugins/importer-configuration.htm';
 import 'bootstrap';
@@ -59,7 +63,6 @@ const vm = function (params) {
     this.xAxisLabel = ko.observable();
     this.yAxisLabel = ko.observable();
     this.dataDelimiter = ko.observable();
-    this.placeholder = arches.translations.selectColumnCombination;
 
     // X column mode: 'data' (default) or 'generate'
     this.xColumnMode = ko.observable('data');
@@ -127,143 +130,35 @@ const vm = function (params) {
         )
     );
 
-    const transformations = xyParser.transformations().map((transform) => {
-        return {
-            text: transform,
-            id: transform,
-        };
-    });
-
-    this.xyTransformations = ko.observable(transformations);
-    this.selectedTransformation = ko.observable();
-
     // ------------------------------------------------------------------
-    // Transformation chain
+    // Several Y columns remain — what do we plot?
     // ------------------------------------------------------------------
-    // Applied in order to the plotted spectrum, never to the stored file.
-    // Transforms flagged `analystOnly` need a parameter the analyst chooses, so
-    // they are offered here but never shipped inside a technique preset: a
-    // researcher must be able to trust that an axis they did not configure
-    // shows the numbers that are in the file.
-    this.availableTransforms = [
-        {
-            value: 'reference-normalize',
-            text: arches.translations.xyTransformReferenceNormalize,
-            analystOnly: false,
-        },
-        {
-            value: 'log-inverse-r',
-            text: arches.translations.xyTransformLogInverseR,
-            analystOnly: false,
-        },
-        {
-            value: 'kubelka-munk',
-            text: arches.translations.xyTransformKubelkaMunk,
-            analystOnly: false,
-        },
-        {
-            value: 'normalize-max',
-            text: arches.translations.xyTransformNormalizeMax,
-            analystOnly: false,
-        },
-        {
-            value: 'normalize-area',
-            text: arches.translations.xyTransformNormalizeArea,
-            analystOnly: false,
-        },
-        {
-            value: 'smooth',
-            text: arches.translations.xyTransformSmooth,
-            analystOnly: true,
-        },
-        {
-            value: 'derivative',
-            text: arches.translations.xyTransformDerivative,
-            analystOnly: true,
-        },
-    ];
+    // One question, three mutually exclusive answers. It used to be two
+    // independent settings — a "mean" select and a transformation chain — that
+    // could both be set and, together, silently did nothing: the mean left a
+    // single series carrying no reference role, so the normalisation found
+    // nothing to divide by and handed the data back untouched.
+    this.multiYHandling = ko.observable(MULTI_Y_SEPARATE);
+    this.MULTI_Y_SEPARATE = MULTI_Y_SEPARATE;
+    this.MULTI_Y_MEAN = MULTI_Y_MEAN;
+    this.MULTI_Y_REFERENCE = MULTI_Y_REFERENCE;
 
-    const PARAMETERISED_TRANSFORMS = ['smooth', 'derivative'];
-
-    this.transformChain = ko.observableArray([]);
-    this.showTransforms = ko.observable(false);
-
-    const makeTransformStep = (step) => {
-        const type = ko.observable(step?.type || 'reference-normalize');
-        return {
-            type: type,
-            window: ko.observable(step?.window ?? ''),
-            polyOrder: ko.observable(step?.polyOrder ?? ''),
-            order: ko.observable(step?.order ?? ''),
-            // Parameter inputs only make sense for the Savitzky-Golay pair.
-            showsParameters: ko.pureComputed(() =>
-                PARAMETERISED_TRANSFORMS.includes(ko.unwrap(type))
-            ),
-            isDerivative: ko.pureComputed(
-                () => ko.unwrap(type) === 'derivative'
-            ),
-        };
-    };
-
-    this.addTransform = () => {
-        this.transformChain.push(makeTransformStep());
-    };
-    this.removeTransform = (step) => {
-        this.transformChain.remove(step);
-    };
-    // Order is meaningful: a baseline or smoothing step must run before a
-    // normalisation, or the normalisation scales the noise it was meant to
-    // remove. Curators reorder by moving steps rather than re-adding them.
-    const moveTransform = (step, offset) => {
-        const chain = this.transformChain();
-        const index = chain.indexOf(step);
-        const target = index + offset;
-        if (index < 0 || target < 0 || target >= chain.length) return;
-        this.transformChain.splice(index, 1);
-        this.transformChain.splice(target, 0, step);
-    };
-    this.moveTransformUp = (step) => moveTransform(step, -1);
-    this.moveTransformDown = (step) => moveTransform(step, 1);
-
-    // Reference normalisation is opt-in: it divides by the column tagged as the
-    // white reference, and returns the data untouched when no column carries
-    // that role. Silently doing nothing is the worst outcome — a curator adds
-    // the step, sees both raw series still plotted, and has no way to tell
-    // whether the transform ran. So say it plainly, right where it is fixed.
-    this.referenceNormalizeNeedsColumn = ko.pureComputed(() => {
-        const inChain = this.transformChain().some(
-            (step) => ko.unwrap(step.type) === 'reference-normalize'
-        );
-        if (!inChain) return false;
-        return !this.columnAssignments().some(
+    // Dividing by the reference is only offered once a column carries that
+    // role — the dependency is structural, not a warning left to be read.
+    this.referenceColumnDeclared = ko.pureComputed(() =>
+        this.columnAssignments().some(
             (assignment) => ko.unwrap(assignment.role) === 'reference'
-        );
+        )
+    );
+
+    // Untagging the reference column while normalising would leave a setting
+    // that cannot run. Fall back rather than keep an inert choice.
+    this.referenceColumnDeclared.subscribe((declared) => {
+        if (!declared && this.multiYHandling() === MULTI_Y_REFERENCE) {
+            this.multiYHandling(MULTI_Y_SEPARATE);
+        }
     });
 
-
-    // Serialise the chain, dropping empty parameters so a step keeps the
-    // engine's own defaults rather than persisting a blank string.
-    const buildTransformChain = () => {
-        const chain = this.transformChain()
-            .map((step) => {
-                const type = ko.unwrap(step.type);
-                if (!type) return null;
-                const serialised = { type: type };
-                if (PARAMETERISED_TRANSFORMS.includes(type)) {
-                    const window = parseInt(ko.unwrap(step.window), 10);
-                    const polyOrder = parseInt(ko.unwrap(step.polyOrder), 10);
-                    if (!isNaN(window)) serialised.window = window;
-                    if (!isNaN(polyOrder)) serialised.polyOrder = polyOrder;
-                    if (type === 'derivative') {
-                        const order = parseInt(ko.unwrap(step.order), 10);
-                        if (!isNaN(order)) serialised.order = order;
-                    }
-                }
-                return serialised;
-            })
-            .filter(Boolean);
-        return chain.length > 0 ? chain : undefined;
-    };
     this.onConfigSaved = params.onConfigSaved;
 
     // Sync showImporterList state to parent if provided
@@ -336,11 +231,7 @@ const vm = function (params) {
             includeDelimiter: this.includeDelimiter(),
             headerFixedLines: this.headerFixedLines(),
             delimiterCharacter: this.dataDelimiter(),
-            transformation: this.selectedTransformation(),
-            // Read by utils/xy-transforms at plot time. Kept at the top level of
-            // the config, alongside the parsing options, because it describes
-            // the data rather than the chart.
-            transforms: buildTransformChain(),
+            multiYHandling: this.multiYHandling(),
             xColumnMode: xMode === 'generate' ? 'generate' : undefined,
             xColumnIndex:
                 xMode !== 'generate' && xColIdx !== 0
@@ -473,22 +364,9 @@ const vm = function (params) {
         this.xReversed(!!configuration?.config?.display?.xReversed);
         this.showAdvancedDisplay(xMin !== undefined || xMax !== undefined);
 
-        // Transformation chain
-        const chain = configuration?.config?.transforms;
-        if (Array.isArray(chain) && chain.length > 0) {
-            this.transformChain(
-                chain
-                    .map((step) =>
-                        typeof step === 'string' ? { type: step } : step
-                    )
-                    .filter((step) => step && step.type)
-                    .map(makeTransformStep)
-            );
-            this.showTransforms(true);
-        } else {
-            this.transformChain([]);
-            this.showTransforms(false);
-        }
+        this.multiYHandling(
+            configuration?.config?.multiYHandling || MULTI_Y_SEPARATE
+        );
 
         // Feature 3: Column assignment
         this.yAxisRightLabel(

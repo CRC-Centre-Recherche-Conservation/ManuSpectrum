@@ -91,26 +91,6 @@
                 <!-- /ko -->
             </div>
             <div class="importer-config-panel">
-                <h4 class="file-config-header">{% trans "Multiple Y Columns" %}</h4>
-                <h5 class="file-config-instructions">{% trans "If your file has multiple Y columns, they are displayed as separate series. Use “mean” to average them into a single series instead." %}</h5>
-                <select class="d-inline-block flex-1"
-                    data-bind="
-                        select2Query: {
-                            select2Config: {
-                                clickBubble: true,
-                                disabled: false,
-                                width: 'element',
-                                data: xyTransformations(),
-                                placeholder: placeholder,
-                                value: selectedTransformation,
-                                closeOnSelect: true,
-                                allowClear: true,
-                                multiple: false
-                            }
-                        }">
-                </select>
-            </div>
-            <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Data Column Delimiter" %}</h4>
                 <div class="afs-error-message ep-alert-red p-5" data-bind="visible: invalidDelimiter()">{% trans "The data delimiter must be a valid regular expression" %}</div>
                 <h5 class="file-config-instructions">{% trans "Define how the data are separated" %}</h5>
@@ -259,80 +239,29 @@
                 <!-- /ko -->
             </div>
 
-            <!-- Transformations (collapsible) -->
+            <!-- Transformations: one exclusive answer, right below the roles it depends on -->
             <div class="importer-config-panel">
-                <h4 class="file-config-header collapsible-header"
-                    data-bind="click: function() { showTransforms(!showTransforms()); }">
-                    <i class="fa chevron-icon" data-bind="css: { 'fa-chevron-right': !showTransforms(), 'fa-chevron-down': showTransforms() }"></i>
-                    {% trans "Transformations" %}
-                    <span class="xy-transform-count" data-bind="visible: transformChain().length > 0, text: transformChain().length"></span>
-                </h4>
-                <!-- ko if: showTransforms -->
-                <h5 class="file-config-instructions">{% trans "Applied to the plotted spectrum in the order shown. The stored file is never modified." %}</h5>
+                <h4 class="file-config-header">{% trans "Transformations" %}</h4>
+                <h5 class="file-config-instructions">{% trans "How the columns are combined into the quantity the Y axis names. The stored file is never modified." %}</h5>
 
-                <!-- ko foreach: transformChain -->
-                <div class="xy-transform-step">
-                    <div class="input-row">
-                        <span class="xy-transform-index" data-bind="text: $index() + 1"></span>
-                        <select class="flex-1"
-                                data-bind="options: $parent.availableTransforms,
-                                           optionsText: 'text',
-                                           optionsValue: 'value',
-                                           value: type">
-                        </select>
-                        <button class="btn btn-xs btn-default" title="{% trans "Move up" %}"
-                                data-bind="click: $parent.moveTransformUp, enable: $index() > 0">
-                            <i class="fa fa-arrow-up"></i>
-                        </button>
-                        <button class="btn btn-xs btn-default" title="{% trans "Move down" %}"
-                                data-bind="click: $parent.moveTransformDown, enable: $index() < $parent.transformChain().length - 1">
-                            <i class="fa fa-arrow-down"></i>
-                        </button>
-                        <button class="btn btn-xs btn-danger" title="{% trans "Remove" %}"
-                                data-bind="click: $parent.removeTransform">
-                            <i class="fa fa-times"></i>
-                        </button>
-                    </div>
-
-                    <!-- ko if: showsParameters -->
-                    <div class="input-row--wide xy-transform-params">
-                        <div class="flex-1">
-                            <label class="input-label-sm">{% trans "Window" %}</label>
-                            <input type="number" step="2" min="3" placeholder="{% trans "e.g. 9" %}"
-                                   data-bind="textInput: window" class="w-100">
-                        </div>
-                        <div class="flex-1">
-                            <label class="input-label-sm">{% trans "Polynomial order" %}</label>
-                            <input type="number" min="1" placeholder="{% trans "e.g. 2" %}"
-                                   data-bind="textInput: polyOrder" class="w-100">
-                        </div>
-                        <!-- ko if: isDerivative -->
-                        <div class="flex-1">
-                            <label class="input-label-sm">{% trans "Derivative order" %}</label>
-                            <input type="number" min="1" max="2" placeholder="1"
-                                   data-bind="textInput: order" class="w-100">
-                        </div>
-                        <!-- /ko -->
-                    </div>
-                    <p class="xy-transform-warning">
-                        <i class="fa fa-exclamation-triangle"></i>
-                        {% trans "This transformation depends on parameters you choose. It is never applied automatically by a technique preset." %}
-                    </p>
-                    <!-- /ko -->
+                <div class="radio-row">
+                    <input id="multi-y-separate" type="radio" name="multiYHandling"
+                           data-bind="checked: multiYHandling, checkedValue: MULTI_Y_SEPARATE">
+                    <label for="multi-y-separate">{% trans "Plot each Y column as its own series" %}</label>
                 </div>
-                <!-- /ko -->
-
-                <!-- ko if: referenceNormalizeNeedsColumn -->
-                <p class="xy-transform-blocked">
-                    <i class="fa fa-exclamation-triangle"></i>
-                    {% trans "Reference normalisation needs a column tagged “White reference” under Column Assignment. Until then this step does nothing and the raw series are plotted." %}
-                </p>
-                <!-- /ko -->
-
-                <button class="btn btn-xs btn-default xy-transform-add"
-                        data-bind="click: addTransform">
-                    <i class="fa fa-plus"></i> {% trans "Add a transformation" %}
-                </button>
+                <div class="radio-row">
+                    <input id="multi-y-mean" type="radio" name="multiYHandling"
+                           data-bind="checked: multiYHandling, checkedValue: MULTI_Y_MEAN">
+                    <label for="multi-y-mean">{% trans "Average them into a single series" %}</label>
+                </div>
+                <div class="radio-row" data-bind="css: { 'xy-choice-unavailable': !referenceColumnDeclared() }">
+                    <input id="multi-y-reference" type="radio" name="multiYHandling"
+                           data-bind="checked: multiYHandling, checkedValue: MULTI_Y_REFERENCE,
+                                      enable: referenceColumnDeclared">
+                    <label for="multi-y-reference">{% trans "Divide by the reference column — R = (S−D)/(W−D)" %}</label>
+                </div>
+                <!-- ko ifnot: referenceColumnDeclared -->
+                <p class="file-config-instructions xy-choice-hint">{% trans "Tag a column as “White reference” under Column Assignment to enable this." %}</p>
                 <!-- /ko -->
             </div>
         </div>

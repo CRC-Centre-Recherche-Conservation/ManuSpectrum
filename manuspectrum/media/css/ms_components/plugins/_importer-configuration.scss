@@ -44,46 +44,16 @@
     margin-top: 10px;
 }
 
-// --- Transformation chain --------------------------------------------------
-// Steps are ordered and the order is meaningful (a smoothing must precede a
-// normalisation), so each row carries its rank and reorder controls.
-.xy-transform-count {
-    display: inline-block;
-    min-width: 18px;
-    padding: 0 5px;
-    margin-left: 6px;
-    border-radius: 9px;
-    background-color: #004577;
-    color: #fff;
-    font-size: 11px;
-    font-weight: normal;
-    text-align: center;
+// --- Transformations: the exclusive multi-Y question ---------------------
+// The third answer needs a column tagged as the reference; until one is, it is
+// disabled rather than hidden, so a curator can see the option exists and what
+// unlocks it.
+.xy-choice-unavailable label {
+    color: #999;
 }
-.xy-transform-step {
-    padding: 6px 0;
-
-    & + & {
-        border-top: 1px solid #e5e5e5;
-    }
-}
-.xy-transform-index {
-    min-width: 18px;
-    color: #777;
-    font-size: 12px;
-    text-align: right;
-}
-.xy-transform-params {
-    margin-top: 6px;
-    padding-left: 24px;
-}
-.xy-transform-warning {
-    margin: 6px 0 0 24px;
-    color: #8a6d3b;
-    font-size: 11px;
-    line-height: 1.4;
-}
-.xy-transform-add {
-    margin-top: 8px;
+.xy-choice-hint {
+    margin-left: 22px;
+    font-style: italic;
 }
 
 // --- Description tooltip ---------------------------------------------------
