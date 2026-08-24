@@ -223,17 +223,48 @@ export default ko.components.register('xy-reader', {
         // configured from the technique, and the panel pre-selects that same
         // configuration — so the old count offered to apply what was already
         // applied, and the button never had anything to do.
-        this.pendingBatchCount = ko.pureComputed(() => {
+        // Bumped after a batch runs. Tile data is mutated in place — plain
+        // properties on plain objects — so nothing would otherwise tell this
+        // count to re-evaluate, and the button would sit there claiming work
+        // remained. Clearing the selection instead would have worked, but it
+        // throws away a selection the curator may still want: after applying
+        // one configuration they often try another on the same files.
+        const batchVersion = ko.observable(0);
+
+        // What "apply" acts on.
+        //
+        // Ticking files and viewing one are two different things in Arches:
+        // `card.staging()` is the checkbox list, while `displayContent` derives
+        // from `tile.selected()`. Opening a file does not tick it. So a curator
+        // looking at a single spectrum has nothing staged, and a count based on
+        // staging alone left them no way to commit a configuration change — the
+        // button simply never appeared.
+        //
+        // Ticked files win when there are any; otherwise the file on screen is
+        // the obvious subject.
+        const batchTiles = () => {
             const card = self.fileViewer?.card;
-            const configId = self.selectedConfig();
-            if (!card || !card.staging || !configId) return 0;
+            if (!card) return [];
             const tiles = card.tiles();
-            return card.staging().filter((tileid) => {
-                const tile = tiles.find((t) => t.tileid == tileid);
-                if (!tile) return false;
-                const entry = xyEntry(
-                    ko.unwrap(tile.data[self.fileViewer.fileListNodeId])
-                );
+            const stagingIds = card.staging ? card.staging() : [];
+            if (stagingIds.length) {
+                return stagingIds
+                    .map((tileid) => tiles.find((t) => t.tileid == tileid))
+                    .filter(Boolean);
+            }
+            const displayed = self.fileViewer.displayContent();
+            return displayed?.tile ? [displayed.tile] : [];
+        };
+
+        const xyEntryOf = (tile) =>
+            xyEntry(ko.unwrap(tile.data[self.fileViewer.fileListNodeId]));
+
+        this.pendingBatchCount = ko.pureComputed(() => {
+            batchVersion();
+            const configId = self.selectedConfig();
+            if (!configId) return 0;
+            return batchTiles().filter((tile) => {
+                const entry = xyEntryOf(tile);
                 if (ko.unwrap(entry?.renderer) !== self.renderer) return false;
                 return ko.unwrap(entry.rendererConfig) !== configId;
             }).length;
@@ -253,18 +284,11 @@ export default ko.components.register('xy-reader', {
             self.batchApplying(true);
             self.batchResult('');
 
-            const stagingIds = card.staging();
-            const tiles = card.tiles();
             let applied = 0;
             let errors = 0;
 
-            for (const tileid of stagingIds) {
-                const tile = tiles.find((t) => t.tileid == tileid);
-                if (!tile) continue;
-                const node = ko.unwrap(
-                    tile.data[self.fileViewer.fileListNodeId]
-                );
-                const entry = xyEntry(node);
+            for (const tile of batchTiles()) {
+                const entry = xyEntryOf(tile);
                 if (ko.unwrap(entry?.renderer) !== self.renderer) {
                     continue;
                 }
@@ -274,14 +298,16 @@ export default ko.components.register('xy-reader', {
                     await tile.save();
                     applied++;
                 } catch (e) {
-                    console.error('Batch config save error:', tileid, e);
+                    console.error('Batch config save error:', tile.tileid, e);
                     errors++;
                 }
             }
 
             self.batchApplying(false);
-            if (applied > 0 && errors === 0) {
-                card.staging([]);
+            if (applied > 0) {
+                // Re-evaluate against the configurations just written; the
+                // selection itself is left alone.
+                batchVersion(batchVersion() + 1);
             }
             if (errors > 0) {
                 self.batchResult(
