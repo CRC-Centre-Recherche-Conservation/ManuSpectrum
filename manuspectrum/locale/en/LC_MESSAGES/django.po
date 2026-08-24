@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 08:08-0500\n"
+"POT-Creation-Date: 2026-08-24 08:40-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -38,7 +38,7 @@ msgstr "Invalid URL format"
 msgid "Undefined"
 msgstr "Undefined"
 
-#: functions/xy_technique_config.py:184
+#: functions/xy_technique_config.py:188
 #, python-format
 msgid "Could not apply the XY configuration to tile %s"
 msgstr ""
@@ -1608,88 +1608,112 @@ msgid "Protected configuration"
 msgstr "Chart Configuration"
 
 #: templates/javascript.htm:190
+msgid "As measured"
+msgstr ""
+
+#: templates/javascript.htm:191 templates/javascript.htm:203
+msgid "Pseudo-absorbance log10(1/R)"
+msgstr ""
+
+#: templates/javascript.htm:192
+msgid "Kubelka-Munk"
+msgstr ""
+
+#: templates/javascript.htm:193
+msgid "Normalised to maximum"
+msgstr ""
+
+#: templates/javascript.htm:194
+msgid "Normalised to total (TIC)"
+msgstr ""
+
+#: templates/javascript.htm:195
+msgid "First derivative"
+msgstr ""
+
+#: templates/javascript.htm:196
+msgid "Second derivative"
+msgstr ""
+
+#: templates/javascript.htm:197
 #: templates/views/components/plugins/importer-configuration.htm:154
 msgid "Reverse the X axis"
 msgstr ""
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:198
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
 msgstr ""
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:199
 #: templates/views/components/plugins/importer-configuration.htm:244
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:193
+#: templates/javascript.htm:200
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 
-#: templates/javascript.htm:194
+#: templates/javascript.htm:201
 #, fuzzy
 #| msgid "Select a Transformation"
 msgid "Add a transformation"
 msgstr "Select a Transformation"
 
-#: templates/javascript.htm:195
+#: templates/javascript.htm:202
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr ""
 
-#: templates/javascript.htm:196
-msgid "Pseudo-absorbance log10(1/R)"
-msgstr ""
-
-#: templates/javascript.htm:197
+#: templates/javascript.htm:204
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr ""
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:205
 msgid "Normalise to maximum"
 msgstr ""
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:206
 msgid "Normalise to total area (TIC)"
 msgstr ""
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:207
 msgid "Smoothing (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:208
 msgid "Derivative (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:202
+#: templates/javascript.htm:209
 msgid "Window"
 msgstr ""
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:210
 msgid "Polynomial order"
 msgstr ""
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:211
 msgid "Derivative order"
 msgstr ""
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:212
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
 msgstr ""
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:213
 msgid "White reference"
 msgstr ""
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:214
 msgid "Dark current"
 msgstr ""
 
-#: templates/javascript.htm:208
+#: templates/javascript.htm:215
 msgid "Configuration deduced from the analysis technique"
 msgstr ""
 
@@ -1728,12 +1752,12 @@ msgid "Password reset — %(site_name)s"
 msgstr "Password reset — %(site_name)s"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:29
-#: templates/views/components/widgets/file-xy.htm:83
+#: templates/views/components/widgets/file-xy.htm:96
 msgid "Processing:"
 msgstr ""
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:31
-#: templates/views/components/widgets/file-xy.htm:85
+#: templates/views/components/widgets/file-xy.htm:98
 msgid "none applied"
 msgstr ""
 
@@ -2415,15 +2439,25 @@ msgstr "Select all"
 msgid "Deselect all"
 msgstr "Deselect all"
 
-#: templates/views/components/widgets/file-xy.htm:49
+#: templates/views/components/widgets/file-xy.htm:48
+#, fuzzy
+#| msgid "View"
+msgid "View:"
+msgstr "View"
+
+#: templates/views/components/widgets/file-xy.htm:54
+msgid "Changes how the spectrum is shown. The stored file is never modified."
+msgstr ""
+
+#: templates/views/components/widgets/file-xy.htm:62
 msgid "Loading charts..."
 msgstr "Loading charts..."
 
-#: templates/views/components/widgets/file-xy.htm:57
+#: templates/views/components/widgets/file-xy.htm:70
 msgid "Unable to load chart data"
 msgstr "Unable to load chart data"
 
-#: templates/views/components/widgets/file-xy.htm:65
+#: templates/views/components/widgets/file-xy.htm:78
 msgid "Select files to display"
 msgstr "Select files to display"
 

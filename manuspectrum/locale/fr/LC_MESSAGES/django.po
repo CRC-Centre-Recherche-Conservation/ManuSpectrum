@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 08:08-0500\n"
+"POT-Creation-Date: 2026-08-24 08:40-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -36,7 +36,7 @@ msgstr "Format d'URL invalide"
 msgid "Undefined"
 msgstr "Indéfini"
 
-#: functions/xy_technique_config.py:184
+#: functions/xy_technique_config.py:188
 #, python-format
 msgid "Could not apply the XY configuration to tile %s"
 msgstr "Impossible d'appliquer la configuration XY à la tuile %s"
@@ -1615,11 +1615,39 @@ msgid "Protected configuration"
 msgstr "Configuration protégée"
 
 #: templates/javascript.htm:190
+msgid "As measured"
+msgstr "Tel que mesuré"
+
+#: templates/javascript.htm:191 templates/javascript.htm:203
+msgid "Pseudo-absorbance log10(1/R)"
+msgstr "Pseudo-absorbance log10(1/R)"
+
+#: templates/javascript.htm:192
+msgid "Kubelka-Munk"
+msgstr "Kubelka-Munk"
+
+#: templates/javascript.htm:193
+msgid "Normalised to maximum"
+msgstr "Normalisé au maximum"
+
+#: templates/javascript.htm:194
+msgid "Normalised to total (TIC)"
+msgstr "Normalisé au total (TIC)"
+
+#: templates/javascript.htm:195
+msgid "First derivative"
+msgstr "Dérivée première"
+
+#: templates/javascript.htm:196
+msgid "Second derivative"
+msgstr "Dérivée seconde"
+
+#: templates/javascript.htm:197
 #: templates/views/components/plugins/importer-configuration.htm:154
 msgid "Reverse the X axis"
 msgstr "Inverser l'axe X"
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:198
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
@@ -1627,64 +1655,60 @@ msgstr ""
 "Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
 "cm-1), la RMN et l'XPS."
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:199
 #: templates/views/components/plugins/importer-configuration.htm:244
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:193
+#: templates/javascript.htm:200
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 "Appliquées au spectre tracé, dans l'ordre. Le fichier lui-même n'est jamais "
 "modifié."
 
-#: templates/javascript.htm:194
+#: templates/javascript.htm:201
 msgid "Add a transformation"
 msgstr "Ajouter une transformation"
 
-#: templates/javascript.htm:195
+#: templates/javascript.htm:202
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr "Normalisation par référence (S-D)/(B-D)"
 
-#: templates/javascript.htm:196
-msgid "Pseudo-absorbance log10(1/R)"
-msgstr "Pseudo-absorbance log10(1/R)"
-
-#: templates/javascript.htm:197
+#: templates/javascript.htm:204
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr "Kubelka-Munk (1-R)^2/2R"
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:205
 msgid "Normalise to maximum"
 msgstr "Normaliser au maximum"
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:206
 msgid "Normalise to total area (TIC)"
 msgstr "Normaliser à l'aire totale (TIC)"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:207
 msgid "Smoothing (Savitzky-Golay)"
 msgstr "Lissage (Savitzky-Golay)"
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:208
 msgid "Derivative (Savitzky-Golay)"
 msgstr "Dérivée (Savitzky-Golay)"
 
-#: templates/javascript.htm:202
+#: templates/javascript.htm:209
 msgid "Window"
 msgstr "Fenêtre"
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:210
 msgid "Polynomial order"
 msgstr "Ordre du polynôme"
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:211
 msgid "Derivative order"
 msgstr "Ordre de la dérivée"
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:212
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
@@ -1692,15 +1716,15 @@ msgstr ""
 "Cette transformation dépend de paramètres que vous choisissez. Elle n'est "
 "jamais appliquée automatiquement."
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:213
 msgid "White reference"
 msgstr "Référence blanche"
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:214
 msgid "Dark current"
 msgstr "Courant d'obscurité"
 
-#: templates/javascript.htm:208
+#: templates/javascript.htm:215
 msgid "Configuration deduced from the analysis technique"
 msgstr "Configuration déduite de la technique d'analyse"
 
@@ -1740,12 +1764,12 @@ msgid "Password reset — %(site_name)s"
 msgstr "Réinitialisation du mot de passe — %(site_name)s"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:29
-#: templates/views/components/widgets/file-xy.htm:83
+#: templates/views/components/widgets/file-xy.htm:96
 msgid "Processing:"
 msgstr "Traitement :"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:31
-#: templates/views/components/widgets/file-xy.htm:85
+#: templates/views/components/widgets/file-xy.htm:98
 msgid "none applied"
 msgstr "aucun"
 
@@ -2292,7 +2316,8 @@ msgid ""
 "How the columns are combined into the quantity the Y axis names. The stored "
 "file is never modified."
 msgstr ""
-"Comment les colonnes sont combinées pour produire la grandeur nommée par l'axe Y. Le fichier stocké n'est jamais modifié."
+"Comment les colonnes sont combinées pour produire la grandeur nommée par "
+"l'axe Y. Le fichier stocké n'est jamais modifié."
 
 #: templates/views/components/plugins/importer-configuration.htm:250
 msgid "Plot each Y column as its own series"
@@ -2310,7 +2335,8 @@ msgstr "Diviser par la colonne de référence — R = (S−D)/(W−D)"
 msgid ""
 "Tag a column as “White reference” under Column Assignment to enable this."
 msgstr ""
-"Marquez une colonne comme « Référence blanche » dans l'affectation des colonnes pour activer cette option."
+"Marquez une colonne comme « Référence blanche » dans l'affectation des "
+"colonnes pour activer cette option."
 
 #: templates/views/components/plugins/importer-configuration.htm:270
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
@@ -2451,15 +2477,24 @@ msgstr "Tout sélectionner"
 msgid "Deselect all"
 msgstr "Tout désélectionner"
 
-#: templates/views/components/widgets/file-xy.htm:49
+#: templates/views/components/widgets/file-xy.htm:48
+msgid "View:"
+msgstr "Affichage :"
+
+#: templates/views/components/widgets/file-xy.htm:54
+msgid "Changes how the spectrum is shown. The stored file is never modified."
+msgstr ""
+"Change la façon dont le spectre est affiché. Le fichier stocké n'est jamais modifié."
+
+#: templates/views/components/widgets/file-xy.htm:62
 msgid "Loading charts..."
 msgstr "Chargement des graphiques..."
 
-#: templates/views/components/widgets/file-xy.htm:57
+#: templates/views/components/widgets/file-xy.htm:70
 msgid "Unable to load chart data"
 msgstr "Impossible de charger les données du graphique"
 
-#: templates/views/components/widgets/file-xy.htm:65
+#: templates/views/components/widgets/file-xy.htm:78
 msgid "Select files to display"
 msgstr "Sélectionnez les fichiers à afficher"
 
