@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 07:47-0500\n"
+"POT-Creation-Date: 2026-08-24 07:55-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1731,11 +1731,21 @@ msgstr "If you didn't request this, you can safely ignore this email."
 msgid "Password reset — %(site_name)s"
 msgstr "Password reset — %(site_name)s"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:40
+#: templates/views/components/cards/file-renderers/afs-reader.htm:29
+#: templates/views/components/widgets/file-xy.htm:83
+msgid "Processing:"
+msgstr ""
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:31
+#: templates/views/components/widgets/file-xy.htm:85
+msgid "none applied"
+msgstr ""
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:45
 msgid "Config"
 msgstr "Config"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:49
+#: templates/views/components/cards/file-renderers/afs-reader.htm:54
 msgid "Chart Configuration"
 msgstr "Chart Configuration"
 

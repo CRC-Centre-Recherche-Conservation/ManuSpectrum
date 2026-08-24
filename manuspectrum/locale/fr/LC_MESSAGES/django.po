@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 07:47-0500\n"
+"POT-Creation-Date: 2026-08-24 07:55-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -1743,11 +1743,21 @@ msgstr ""
 msgid "Password reset — %(site_name)s"
 msgstr "Réinitialisation du mot de passe — %(site_name)s"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:40
+#: templates/views/components/cards/file-renderers/afs-reader.htm:29
+#: templates/views/components/widgets/file-xy.htm:83
+msgid "Processing:"
+msgstr "Traitement :"
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:31
+#: templates/views/components/widgets/file-xy.htm:85
+msgid "none applied"
+msgstr "aucun"
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:45
 msgid "Config"
 msgstr "Configuration"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:49
+#: templates/views/components/cards/file-renderers/afs-reader.htm:54
 msgid "Chart Configuration"
 msgstr "Configuration du graphique"
 
@@ -2058,7 +2068,8 @@ msgid ""
 "Part of the shared baseline: cannot be deleted, and only an administrator "
 "can edit it."
 msgstr ""
-"Fait partie du socle commun : non supprimable, et modifiable par un administrateur uniquement."
+"Fait partie du socle commun : non supprimable, et modifiable par un "
+"administrateur uniquement."
 
 #: templates/views/components/plugins/importer-configuration.htm:29
 msgid "Delete"
@@ -4018,10 +4029,12 @@ msgid ""
 "This configuration is part of the shared baseline and can only be edited by "
 "an administrator. Duplicate it to make your own."
 msgstr ""
-"Cette configuration fait partie du socle commun et ne peut être modifiée que par un administrateur. Dupliquez-la pour créer la vôtre."
+"Cette configuration fait partie du socle commun et ne peut être modifiée que "
+"par un administrateur. Dupliquez-la pour créer la vôtre."
 
 #: views/renderer_config.py:147
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
-"Cette configuration fait partie du socle commun et ne peut pas être supprimée."
+"Cette configuration fait partie du socle commun et ne peut pas être "
+"supprimée."
