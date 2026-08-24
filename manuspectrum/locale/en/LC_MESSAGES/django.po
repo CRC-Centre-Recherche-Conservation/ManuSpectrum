@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 08:40-0500\n"
+"POT-Creation-Date: 2026-08-24 09:23-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1608,112 +1608,116 @@ msgid "Protected configuration"
 msgstr "Chart Configuration"
 
 #: templates/javascript.htm:190
+msgid "Viz"
+msgstr ""
+
+#: templates/javascript.htm:191
 msgid "As measured"
 msgstr ""
 
-#: templates/javascript.htm:191 templates/javascript.htm:203
+#: templates/javascript.htm:192 templates/javascript.htm:204
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr ""
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:193
 msgid "Kubelka-Munk"
 msgstr ""
 
-#: templates/javascript.htm:193
+#: templates/javascript.htm:194
 msgid "Normalised to maximum"
 msgstr ""
 
-#: templates/javascript.htm:194
+#: templates/javascript.htm:195
 msgid "Normalised to total (TIC)"
 msgstr ""
 
-#: templates/javascript.htm:195
+#: templates/javascript.htm:196
 msgid "First derivative"
 msgstr ""
 
-#: templates/javascript.htm:196
+#: templates/javascript.htm:197
 msgid "Second derivative"
 msgstr ""
 
-#: templates/javascript.htm:197
+#: templates/javascript.htm:198
 #: templates/views/components/plugins/importer-configuration.htm:154
 msgid "Reverse the X axis"
 msgstr ""
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:199
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
 msgstr ""
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:200
 #: templates/views/components/plugins/importer-configuration.htm:244
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:201
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:202
 #, fuzzy
 #| msgid "Select a Transformation"
 msgid "Add a transformation"
 msgstr "Select a Transformation"
 
-#: templates/javascript.htm:202
+#: templates/javascript.htm:203
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr ""
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:205
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr ""
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:206
 msgid "Normalise to maximum"
 msgstr ""
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:207
 msgid "Normalise to total area (TIC)"
 msgstr ""
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:208
 msgid "Smoothing (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:208
+#: templates/javascript.htm:209
 msgid "Derivative (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:210
 msgid "Window"
 msgstr ""
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:211
 msgid "Polynomial order"
 msgstr ""
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:212
 msgid "Derivative order"
 msgstr ""
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:213
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
 msgstr ""
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:214
 msgid "White reference"
 msgstr ""
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:215
 msgid "Dark current"
 msgstr ""
 
-#: templates/javascript.htm:215
+#: templates/javascript.htm:216
 msgid "Configuration deduced from the analysis technique"
 msgstr ""
 
@@ -1782,7 +1786,9 @@ msgstr ""
 "per-file adjustments, use the Status tab."
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:27
-msgid "XY file(s) staged"
+#, fuzzy
+#| msgid "XY file(s) staged"
+msgid "XY file(s) selected"
 msgstr "XY file(s) staged"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:44
@@ -1806,7 +1812,9 @@ msgid "Apply to"
 msgstr "Apply to"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:74
-msgid "staged file(s)"
+#, fuzzy
+#| msgid "staged file(s)"
+msgid "selected file(s)"
 msgstr "staged file(s)"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:78

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 08:40-0500\n"
+"POT-Creation-Date: 2026-08-24 09:23-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -1615,39 +1615,43 @@ msgid "Protected configuration"
 msgstr "Configuration protégée"
 
 #: templates/javascript.htm:190
+msgid "Viz"
+msgstr "Viz"
+
+#: templates/javascript.htm:191
 msgid "As measured"
 msgstr "Tel que mesuré"
 
-#: templates/javascript.htm:191 templates/javascript.htm:203
+#: templates/javascript.htm:192 templates/javascript.htm:204
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr "Pseudo-absorbance log10(1/R)"
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:193
 msgid "Kubelka-Munk"
 msgstr "Kubelka-Munk"
 
-#: templates/javascript.htm:193
+#: templates/javascript.htm:194
 msgid "Normalised to maximum"
 msgstr "Normalisé au maximum"
 
-#: templates/javascript.htm:194
+#: templates/javascript.htm:195
 msgid "Normalised to total (TIC)"
 msgstr "Normalisé au total (TIC)"
 
-#: templates/javascript.htm:195
+#: templates/javascript.htm:196
 msgid "First derivative"
 msgstr "Dérivée première"
 
-#: templates/javascript.htm:196
+#: templates/javascript.htm:197
 msgid "Second derivative"
 msgstr "Dérivée seconde"
 
-#: templates/javascript.htm:197
+#: templates/javascript.htm:198
 #: templates/views/components/plugins/importer-configuration.htm:154
 msgid "Reverse the X axis"
 msgstr "Inverser l'axe X"
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:199
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
@@ -1655,60 +1659,60 @@ msgstr ""
 "Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
 "cm-1), la RMN et l'XPS."
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:200
 #: templates/views/components/plugins/importer-configuration.htm:244
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:201
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 "Appliquées au spectre tracé, dans l'ordre. Le fichier lui-même n'est jamais "
 "modifié."
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:202
 msgid "Add a transformation"
 msgstr "Ajouter une transformation"
 
-#: templates/javascript.htm:202
+#: templates/javascript.htm:203
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr "Normalisation par référence (S-D)/(B-D)"
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:205
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr "Kubelka-Munk (1-R)^2/2R"
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:206
 msgid "Normalise to maximum"
 msgstr "Normaliser au maximum"
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:207
 msgid "Normalise to total area (TIC)"
 msgstr "Normaliser à l'aire totale (TIC)"
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:208
 msgid "Smoothing (Savitzky-Golay)"
 msgstr "Lissage (Savitzky-Golay)"
 
-#: templates/javascript.htm:208
+#: templates/javascript.htm:209
 msgid "Derivative (Savitzky-Golay)"
 msgstr "Dérivée (Savitzky-Golay)"
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:210
 msgid "Window"
 msgstr "Fenêtre"
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:211
 msgid "Polynomial order"
 msgstr "Ordre du polynôme"
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:212
 msgid "Derivative order"
 msgstr "Ordre de la dérivée"
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:213
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
@@ -1716,15 +1720,15 @@ msgstr ""
 "Cette transformation dépend de paramètres que vous choisissez. Elle n'est "
 "jamais appliquée automatiquement."
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:214
 msgid "White reference"
 msgstr "Référence blanche"
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:215
 msgid "Dark current"
 msgstr "Courant d'obscurité"
 
-#: templates/javascript.htm:215
+#: templates/javascript.htm:216
 msgid "Configuration deduced from the analysis technique"
 msgstr "Configuration déduite de la technique d'analyse"
 
@@ -1794,8 +1798,8 @@ msgstr ""
 "fichiers XY. Pour des ajustements par fichier, utilisez l'onglet Statut."
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:27
-msgid "XY file(s) staged"
-msgstr "fichier(s) XY en attente"
+msgid "XY file(s) selected"
+msgstr "fichier(s) XY sélectionné(s)"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:44
 #: templates/views/components/cards/file-renderers/xy-reader.htm:148
@@ -1820,8 +1824,8 @@ msgid "Apply to"
 msgstr "Appliquer à"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:74
-msgid "staged file(s)"
-msgstr "fichier(s) en attente"
+msgid "selected file(s)"
+msgstr "fichier(s) sélectionné(s)"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:78
 msgid "Applying..."
@@ -2484,7 +2488,8 @@ msgstr "Affichage :"
 #: templates/views/components/widgets/file-xy.htm:54
 msgid "Changes how the spectrum is shown. The stored file is never modified."
 msgstr ""
-"Change la façon dont le spectre est affiché. Le fichier stocké n'est jamais modifié."
+"Change la façon dont le spectre est affiché. Le fichier stocké n'est jamais "
+"modifié."
 
 #: templates/views/components/widgets/file-xy.htm:62
 msgid "Loading charts..."
