@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 07:55-0500\n"
+"POT-Creation-Date: 2026-08-24 08:08-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -897,12 +897,12 @@ msgid "Data"
 msgstr "Data"
 
 #: templates/javascript.htm:26
-#: templates/views/components/plugins/importer-configuration.htm:138
+#: templates/views/components/plugins/importer-configuration.htm:118
 msgid "X Axis"
 msgstr "X Axis"
 
 #: templates/javascript.htm:27
-#: templates/views/components/plugins/importer-configuration.htm:156
+#: templates/views/components/plugins/importer-configuration.htm:136
 msgid "Y Axis"
 msgstr "Y Axis"
 
@@ -1608,7 +1608,7 @@ msgid "Protected configuration"
 msgstr "Chart Configuration"
 
 #: templates/javascript.htm:190
-#: templates/views/components/plugins/importer-configuration.htm:174
+#: templates/views/components/plugins/importer-configuration.htm:154
 msgid "Reverse the X axis"
 msgstr ""
 
@@ -1619,7 +1619,7 @@ msgid ""
 msgstr ""
 
 #: templates/javascript.htm:192
-#: templates/views/components/plugins/importer-configuration.htm:267
+#: templates/views/components/plugins/importer-configuration.htm:244
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
@@ -1630,7 +1630,6 @@ msgid ""
 msgstr ""
 
 #: templates/javascript.htm:194
-#: templates/views/components/plugins/importer-configuration.htm:334
 #, fuzzy
 #| msgid "Select a Transformation"
 msgid "Add a transformation"
@@ -1665,17 +1664,14 @@ msgid "Derivative (Savitzky-Golay)"
 msgstr ""
 
 #: templates/javascript.htm:202
-#: templates/views/components/plugins/importer-configuration.htm:300
 msgid "Window"
 msgstr ""
 
 #: templates/javascript.htm:203
-#: templates/views/components/plugins/importer-configuration.htm:305
 msgid "Polynomial order"
 msgstr ""
 
 #: templates/javascript.htm:204
-#: templates/views/components/plugins/importer-configuration.htm:311
 msgid "Derivative order"
 msgstr ""
 
@@ -1864,12 +1860,12 @@ msgstr "Use config"
 #: templates/views/components/cards/file-renderers/xy-reader.htm:187
 #: templates/views/components/cards/file-renderers/xy-reader.htm:199
 #: templates/views/components/plugins/importer-configuration.htm:54
-#: templates/views/components/plugins/importer-configuration.htm:118
+#: templates/views/components/plugins/importer-configuration.htm:98
 msgid "Auto-detect"
 msgstr "Auto-detect"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:188
-#: templates/views/components/plugins/importer-configuration.htm:120
+#: templates/views/components/plugins/importer-configuration.htm:100
 msgid "Comma"
 msgstr "Comma"
 
@@ -2145,111 +2141,95 @@ msgid "e.g. 500"
 msgstr "e.g. 500"
 
 #: templates/views/components/plugins/importer-configuration.htm:94
-msgid "Multiple Y Columns"
-msgstr ""
-
-#: templates/views/components/plugins/importer-configuration.htm:95
-#, fuzzy
-#| msgid ""
-#| "If your file has multiple Y columns, they are displayed as separate "
-#| "series. Use \\"
-msgid ""
-"If your file has multiple Y columns, they are displayed as separate series. "
-"Use “mean” to average them into a single series instead."
-msgstr ""
-"If your file has multiple Y columns, they are displayed as separate series. "
-"Use \\"
-
-#: templates/views/components/plugins/importer-configuration.htm:114
 msgid "Data Column Delimiter"
 msgstr "Data Column Delimiter"
 
-#: templates/views/components/plugins/importer-configuration.htm:115
+#: templates/views/components/plugins/importer-configuration.htm:95
 msgid "The data delimiter must be a valid regular expression"
 msgstr "The data delimiter must be a valid regular expression"
 
-#: templates/views/components/plugins/importer-configuration.htm:116
+#: templates/views/components/plugins/importer-configuration.htm:96
 msgid "Define how the data are separated"
 msgstr "Define how the data are separated"
 
-#: templates/views/components/plugins/importer-configuration.htm:119
+#: templates/views/components/plugins/importer-configuration.htm:99
 msgid "Whitespace"
 msgstr "Whitespace"
 
-#: templates/views/components/plugins/importer-configuration.htm:121
+#: templates/views/components/plugins/importer-configuration.htm:101
 msgid "Pipe"
 msgstr "Pipe"
 
-#: templates/views/components/plugins/importer-configuration.htm:122
+#: templates/views/components/plugins/importer-configuration.htm:102
 #: templates/views/pages/contact.htm:93
 msgid "Other"
 msgstr "Other"
 
-#: templates/views/components/plugins/importer-configuration.htm:127
+#: templates/views/components/plugins/importer-configuration.htm:107
 msgid "Include Delimiter in Value"
 msgstr "Include Delimiter in Value"
 
-#: templates/views/components/plugins/importer-configuration.htm:131
+#: templates/views/components/plugins/importer-configuration.htm:111
 msgid "Display/Charting"
 msgstr "Display/Charting"
 
-#: templates/views/components/plugins/importer-configuration.htm:133
+#: templates/views/components/plugins/importer-configuration.htm:113
 msgid "Chart Title"
 msgstr "Chart Title"
 
-#: templates/views/components/plugins/importer-configuration.htm:134
+#: templates/views/components/plugins/importer-configuration.htm:114
 msgid "Title"
 msgstr "Title"
 
-#: templates/views/components/plugins/importer-configuration.htm:136
+#: templates/views/components/plugins/importer-configuration.htm:116
 msgid "X Axis Label"
 msgstr "X Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:147
-#: templates/views/components/plugins/importer-configuration.htm:165
-#: templates/views/components/plugins/importer-configuration.htm:251
+#: templates/views/components/plugins/importer-configuration.htm:127
+#: templates/views/components/plugins/importer-configuration.htm:145
+#: templates/views/components/plugins/importer-configuration.htm:231
 msgid "Presets..."
 msgstr "Presets..."
 
-#: templates/views/components/plugins/importer-configuration.htm:154
+#: templates/views/components/plugins/importer-configuration.htm:134
 msgid "Y Axis Label"
 msgstr "Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:176
+#: templates/views/components/plugins/importer-configuration.htm:156
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR "
 "and XPS."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:184
+#: templates/views/components/plugins/importer-configuration.htm:164
 msgid "Spectral Range"
 msgstr "Spectral Range"
 
-#: templates/views/components/plugins/importer-configuration.htm:187
+#: templates/views/components/plugins/importer-configuration.htm:167
 msgid "Limit the displayed X range. Leave empty for no limit."
 msgstr "Limit the displayed X range. Leave empty for no limit."
 
-#: templates/views/components/plugins/importer-configuration.htm:190
+#: templates/views/components/plugins/importer-configuration.htm:170
 msgid "Min X"
 msgstr "Min X"
 
-#: templates/views/components/plugins/importer-configuration.htm:191
+#: templates/views/components/plugins/importer-configuration.htm:171
 msgid "e.g. 400"
 msgstr "e.g. 400"
 
-#: templates/views/components/plugins/importer-configuration.htm:195
+#: templates/views/components/plugins/importer-configuration.htm:175
 msgid "Max X"
 msgstr "Max X"
 
-#: templates/views/components/plugins/importer-configuration.htm:196
+#: templates/views/components/plugins/importer-configuration.htm:176
 msgid "e.g. 4000"
 msgstr "e.g. 4000"
 
-#: templates/views/components/plugins/importer-configuration.htm:208
+#: templates/views/components/plugins/importer-configuration.htm:188
 msgid "Column Assignment"
 msgstr "Column Assignment"
 
-#: templates/views/components/plugins/importer-configuration.htm:211
+#: templates/views/components/plugins/importer-configuration.htm:191
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2257,72 +2237,51 @@ msgstr ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
 
-#: templates/views/components/plugins/importer-configuration.htm:216
+#: templates/views/components/plugins/importer-configuration.htm:196
 msgid "Column"
 msgstr "Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:234
+#: templates/views/components/plugins/importer-configuration.htm:214
 msgid "Add Column"
 msgstr "Add Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:240
+#: templates/views/components/plugins/importer-configuration.htm:220
 msgid "Right Y Axis Label"
 msgstr "Right Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:242
+#: templates/views/components/plugins/importer-configuration.htm:222
 msgid "Right Y Axis"
 msgstr "Right Y Axis"
 
-#: templates/views/components/plugins/importer-configuration.htm:271
+#: templates/views/components/plugins/importer-configuration.htm:245
 msgid ""
-"Applied to the plotted spectrum in the order shown. The stored file is never "
-"modified."
+"How the columns are combined into the quantity the Y axis names. The stored "
+"file is never modified."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:283
-msgid "Move up"
+#: templates/views/components/plugins/importer-configuration.htm:250
+msgid "Plot each Y column as its own series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:287
-msgid "Move down"
+#: templates/views/components/plugins/importer-configuration.htm:255
+msgid "Average them into a single series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:291
-#, fuzzy
-#| msgid "Remove all"
-msgid "Remove"
-msgstr "Remove all"
+#: templates/views/components/plugins/importer-configuration.htm:261
+msgid "Divide by the reference column — R = (S−D)/(W−D)"
+msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:301
-#, fuzzy
-#| msgid "e.g. 500"
-msgid "e.g. 9"
-msgstr "e.g. 500"
-
-#: templates/views/components/plugins/importer-configuration.htm:306
-#, fuzzy
-#| msgid "e.g. 500"
-msgid "e.g. 2"
-msgstr "e.g. 500"
-
-#: templates/views/components/plugins/importer-configuration.htm:319
+#: templates/views/components/plugins/importer-configuration.htm:264
 msgid ""
-"This transformation depends on parameters you choose. It is never applied "
-"automatically by a technique preset."
+"Tag a column as “White reference” under Column Assignment to enable this."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:328
-msgid ""
-"Reference normalisation needs a column tagged “White reference” under Column "
-"Assignment. Until then this step does nothing and the raw series are plotted."
-msgstr ""
-
-#: templates/views/components/plugins/importer-configuration.htm:341
+#: templates/views/components/plugins/importer-configuration.htm:270
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Cancel"
 
-#: templates/views/components/plugins/importer-configuration.htm:342
+#: templates/views/components/plugins/importer-configuration.htm:271
 msgid "Save"
 msgstr "Save"
 
@@ -3969,3 +3928,29 @@ msgstr ""
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
+
+#, fuzzy
+#~| msgid ""
+#~| "If your file has multiple Y columns, they are displayed as separate "
+#~| "series. Use \\"
+#~ msgid ""
+#~ "If your file has multiple Y columns, they are displayed as separate "
+#~ "series. Use “mean” to average them into a single series instead."
+#~ msgstr ""
+#~ "If your file has multiple Y columns, they are displayed as separate "
+#~ "series. Use \\"
+
+#, fuzzy
+#~| msgid "Remove all"
+#~ msgid "Remove"
+#~ msgstr "Remove all"
+
+#, fuzzy
+#~| msgid "e.g. 500"
+#~ msgid "e.g. 9"
+#~ msgstr "e.g. 500"
+
+#, fuzzy
+#~| msgid "e.g. 500"
+#~ msgid "e.g. 2"
+#~ msgstr "e.g. 500"
