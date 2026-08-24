@@ -62,10 +62,16 @@ urlpatterns = [
         name="renderer_config",
     ),
     re_path(r"^renderer_config/", RendererConfigView.as_view(), name="renderer_config"),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
 
-# Adds URL pattern to serve media files during development
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# NOTE: media serving is NOT mounted here. MEDIA_URL is "/files/", the same
+# prefix Arches uses for its own ``file_access`` route (files/<uuid>), and
+# static() registers a catch-all "^files/(?P<path>.*)$". Mounted at this point
+# it shadowed that route entirely — every /files/<uuid> request resolved to
+# django.views.static.serve, which looked for a file literally named <uuid> and
+# returned 404. That broke file downloads, thumbnails and the XY chart's fetch.
+# The mount now lives at the very bottom of this module, below the language
+# boundary and after include("arches.urls").
 
 urlpatterns.append(path("", include("arches_querysets.urls")))
 # arches_controlled_lists ships the Controlled List Manager plugin and the
@@ -355,3 +361,6 @@ urlpatterns.append(
         name="en-api-prefix-shim",
     )
 )
+
+
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
