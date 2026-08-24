@@ -333,6 +333,68 @@ const POINTWISE = {
  * skipped rather than throwing, so a configuration written by a newer version
  * still renders on an older client.
  */
+/**
+ * How each transform is named on an axis, and whether it renames the quantity.
+ *
+ * `annotates` steps qualify the quantity without replacing it — the axis keeps
+ * naming the measurement and gains a bracket saying how it is being shown, so
+ * the reader never loses the reference point. `renames` steps produce a
+ * different physical quantity altogether.
+ */
+export const TRANSFORM_LABELS = {
+    [TRANSFORM_REFERENCE_NORMALIZE]: { annotates: null },
+    [TRANSFORM_LOG_INVERSE_R]: { annotates: 'log10(1/R)' },
+    [TRANSFORM_KUBELKA_MUNK]: { annotates: 'Kubelka-Munk' },
+    [TRANSFORM_NORMALIZE_MAX]: { annotates: 'normalised to max' },
+    [TRANSFORM_NORMALIZE_AREA]: { annotates: 'normalised to area' },
+    [TRANSFORM_SMOOTH]: { annotates: 'smoothed' },
+    [TRANSFORM_DERIVATIVE]: { annotates: 'derivative' },
+};
+
+const chainSteps = (config) => {
+    const chain = config?.transforms;
+    return Array.isArray(chain) ? chain : [];
+};
+
+const stepType = (step) => (typeof step === 'string' ? step : step?.type);
+
+/**
+ * The Y axis label, derived rather than typed.
+ *
+ * The base quantity is what the file holds once the configuration's corrective
+ * chain has run — that is what the configuration is *for*. Anything applied on
+ * top is appended in brackets, so "Reflectance (%)" becomes
+ * "Reflectance (%) [log10(1/R)]" and never silently turns into something else.
+ *
+ * Deriving it is the whole point: the label used to be free text with nothing
+ * tying it to the chain, so a curator could apply Kubelka-Munk and leave the
+ * axis reading "Reflectance". A label a reader cannot trust is worse than no
+ * label at all.
+ */
+export const deriveAxisLabel = (baseLabel, config) => {
+    const base = baseLabel || '';
+    const annotations = chainSteps(config)
+        .map((step) => TRANSFORM_LABELS[stepType(step)]?.annotates)
+        .filter(Boolean);
+    if (annotations.length === 0) return base;
+    return `${base} [${annotations.join(', ')}]`.trim();
+};
+
+/**
+ * A one-line statement of what was applied, for the caption under a chart.
+ *
+ * Returns a description even when nothing ran: silence must not be
+ * indistinguishable from "nothing applied" — the convention JCAMP-DX and mzML
+ * both enforce by making the processing field mandatory.
+ */
+export const describeChain = (config) => {
+    const steps = chainSteps(config)
+        .map(stepType)
+        .filter((type) => type && TRANSFORM_LABELS[type]);
+    if (steps.length === 0) return null;
+    return steps.join(' -> ');
+};
+
 export const applyTransforms = (parsed, config) => {
     const chain = config?.transforms;
     if (!Array.isArray(chain) || chain.length === 0 || !parsed) return parsed;
@@ -386,6 +448,9 @@ export const applyTransforms = (parsed, config) => {
 
 export default {
     applyTransforms,
+    deriveAxisLabel,
+    describeChain,
+    TRANSFORM_LABELS,
     resolveRoles,
     referenceNormalize,
     logInverseR,

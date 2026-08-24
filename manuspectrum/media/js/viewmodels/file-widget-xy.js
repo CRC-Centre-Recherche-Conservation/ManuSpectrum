@@ -3,7 +3,7 @@ import $ from 'jquery';
 import arches from 'arches';
 import FileWidgetViewModel from 'viewmodels/file-widget';
 import XyParser from 'utils/xy-parser';
-import { applyTransforms } from 'utils/xy-transforms';
+import { applyTransforms, deriveAxisLabel, describeChain } from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
 import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 
@@ -38,6 +38,9 @@ const getOrCreateRegistry = (nodeId) => {
             ),
             chartYAxisLabelSize: ko.observable(17),
             chartYAxisRightLabel: ko.observable(''),
+            // What the configuration applied, stated under the chart. Null
+            // renders as "none" rather than as nothing at all.
+            processing: ko.observable(null),
             // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
             chartXReversed: ko.observable(false),
             xRangeMin: ko.observable(undefined),
@@ -104,6 +107,7 @@ const FileWidgetXYViewModel = function (params) {
     this.chartXReversed = registry
         ? registry.chartXReversed
         : ko.observable(false);
+    this.processing = registry ? registry.processing : ko.observable(null);
     this.xRangeMin = registry
         ? registry.xRangeMin
         : ko.observable(undefined);
@@ -310,7 +314,18 @@ const FileWidgetXYViewModel = function (params) {
                                 if (d.xAxisLabel)
                                     registry.chartXAxisLabel(d.xAxisLabel);
                                 if (d.yAxisLabel)
-                                    registry.chartYAxisLabel(d.yAxisLabel);
+                                    // Derived, never the stored string on its
+                                    // own: the label must follow what is
+                                    // actually plotted.
+                                    registry.chartYAxisLabel(
+                                        deriveAxisLabel(
+                                            d.yAxisLabel,
+                                            config.config
+                                        )
+                                    );
+                                registry.processing(
+                                    describeChain(config.config)
+                                );
                                 if (d.yAxisRightLabel)
                                     registry.chartYAxisRightLabel(
                                         d.yAxisRightLabel

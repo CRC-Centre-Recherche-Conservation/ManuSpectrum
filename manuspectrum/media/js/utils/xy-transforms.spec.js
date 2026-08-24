@@ -14,6 +14,8 @@ import {
     ROLE_DARK,
     ROLE_REFERENCE,
     ROLE_Y_LEFT,
+    deriveAxisLabel,
+    describeChain,
 } from './xy-transforms';
 
 const closeTo = (actual, expected, precision = 10) => {
@@ -275,5 +277,75 @@ describe('applyTransforms', () => {
         const parsed = { x: [1, 2, 3], y: [1, 2, 4] };
         applyTransforms(parsed, { transforms: [{ type: 'normalize-max' }] });
         expect(parsed.y).toEqual([1, 2, 4]);
+    });
+});
+
+describe('deriveAxisLabel', () => {
+    it('returns the base quantity when nothing is applied', () => {
+        expect(deriveAxisLabel('Reflectance (%)', { transforms: [] })).toBe(
+            'Reflectance (%)'
+        );
+        expect(deriveAxisLabel('Counts', {})).toBe('Counts');
+    });
+
+    it('keeps the measured quantity and appends how it is shown', () => {
+        // Never "log10(1/R)" alone: the reader must keep the reference point.
+        expect(
+            deriveAxisLabel('Reflectance (%)', {
+                transforms: [{ type: 'log-inverse-r' }],
+            })
+        ).toBe('Reflectance (%) [log10(1/R)]');
+    });
+
+    it('does not annotate a corrective step', () => {
+        // reference-normalize is what makes the label true; it does not qualify it.
+        expect(
+            deriveAxisLabel('Reflectance (%)', {
+                transforms: [{ type: 'reference-normalize' }],
+            })
+        ).toBe('Reflectance (%)');
+    });
+
+    it('lists several applied steps in order', () => {
+        expect(
+            deriveAxisLabel('Intensity (a.u.)', {
+                transforms: [
+                    { type: 'smooth', window: 9 },
+                    { type: 'derivative', order: 1 },
+                ],
+            })
+        ).toBe('Intensity (a.u.) [smoothed, derivative]');
+    });
+
+    it('tolerates an empty base and unknown steps', () => {
+        expect(deriveAxisLabel('', { transforms: [{ type: 'nope' }] })).toBe('');
+        expect(deriveAxisLabel('Counts', { transforms: [{ type: 'nope' }] })).toBe(
+            'Counts'
+        );
+    });
+});
+
+describe('describeChain', () => {
+    it('returns null when nothing ran, so the caller can say "none"', () => {
+        expect(describeChain({ transforms: [] })).toBeNull();
+        expect(describeChain({})).toBeNull();
+        expect(describeChain(null)).toBeNull();
+    });
+
+    it('names the applied steps in order', () => {
+        expect(
+            describeChain({
+                transforms: [
+                    { type: 'reference-normalize' },
+                    { type: 'log-inverse-r' },
+                ],
+            })
+        ).toBe('reference-normalize -> log-inverse-r');
+    });
+
+    it('ignores steps the engine does not know', () => {
+        expect(
+            describeChain({ transforms: [{ type: 'nope' }, 'reference-normalize'] })
+        ).toBe('reference-normalize');
     });
 });

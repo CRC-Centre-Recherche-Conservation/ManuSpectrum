@@ -10,7 +10,7 @@ import afsReaderTemplate from 'templates/views/components/cards/file-renderers/x
 import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
 import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
-import { applyTransforms } from 'utils/xy-transforms';
+import { applyTransforms, deriveAxisLabel, describeChain } from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
 import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-cache';
 import 'bindings/plotly';
@@ -58,6 +58,8 @@ export default ko.components.register('xy-reader', {
         this.yAxisLabel(arches.translations.yAxis);
         // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
         this.xReversed = ko.observable(false);
+        // What the configuration applied, stated under the chart.
+        this.processing = ko.observable(null);
 
         this.rendererConfigs = ko.observable([]);
 
@@ -132,8 +134,14 @@ export default ko.components.register('xy-reader', {
             );
             this.yAxisLabel(
                 display?.yAxisLabel
-                    ? display.yAxisLabel
+                    ? deriveAxisLabel(
+                          display.yAxisLabel,
+                          this.selectedConfiguration?.config
+                      )
                     : arches.translations.yAxis
+            );
+            this.processing(
+                describeChain(this.selectedConfiguration?.config)
             );
             this._xRangeMin = display?.xRangeMin;
             this._xRangeMax = display?.xRangeMax;
