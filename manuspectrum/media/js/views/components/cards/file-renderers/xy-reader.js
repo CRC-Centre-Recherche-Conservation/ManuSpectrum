@@ -117,24 +117,13 @@ export default ko.components.register('xy-reader', {
                     return currentConfig.configid === config;
                 }
             );
+            // Picking a configuration PREVIEWS it — it does not commit it.
+            // Choosing one used to write and save it straight onto whichever
+            // file happened to be on screen, so a curator comparing options
+            // silently rewrote the file they were only looking at, and had no
+            // way to back out. Committing is now one deliberate act: select the
+            // files, pick a configuration, press the button.
             self.render();
-            if (self.fileViewer?.displayContent()) {
-                const tile = self.fileViewer.displayContent().tile;
-                const node = ko.unwrap(
-                    tile.data[self.fileViewer.fileListNodeId]
-                );
-                const entry = xyEntry(node);
-                const currentRendererConfig = ko.unwrap(
-                    entry?.rendererConfig
-                );
-                if (entry && config !== currentRendererConfig) {
-                    entry.rendererConfig = config;
-                    // A curator picked this one. Without clearing the marker the
-                    // entry would keep claiming the technique derived it.
-                    entry.rendererConfigSource = CONFIG_SOURCE_MANUAL;
-                    tile.save();
-                }
-            }
             const display = this.selectedConfiguration?.config?.display;
             this.chartTitle(
                 display?.chartTitle
