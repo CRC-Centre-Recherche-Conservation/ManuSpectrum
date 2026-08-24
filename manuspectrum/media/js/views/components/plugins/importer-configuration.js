@@ -19,6 +19,33 @@ import 'bindings/select2-query';
 
 const vm = function (params) {
     this.alert = params.alert;
+
+    // The alert host comes from the page viewmodel, which the file renderer
+    // does not always receive — `params?.pageVm?.alert` is undefined in the
+    // resource editor. Calling it threw, and since the confirmation now runs on
+    // every delete rather than only on a refusal, it threw every time.
+    //
+    // A destructive action must be confirmed one way or another, so fall back
+    // to the browser's own dialog rather than skipping the question.
+    const canAlert = () => typeof this.alert === 'function';
+
+    const confirmThen = (title, text, onConfirm) => {
+        if (canAlert()) {
+            this.alert(
+                new AlertViewModel('ep-alert-red', title, text, function () {}, onConfirm)
+            );
+            return;
+        }
+        if (window.confirm(`${title}\n\n${text}`)) onConfirm();
+    };
+
+    const notify = (title, text) => {
+        if (canAlert()) {
+            this.alert(new AlertViewModel('ep-alert-red', title, text));
+            return;
+        }
+        window.alert(`${title}\n\n${text}`);
+    };
     this.rendererConfigs = params.rendererConfigs || ko.observableArray();
 
     // The list is expected to grow into the hundreds as each lab adds its own
@@ -345,7 +372,6 @@ const vm = function (params) {
         }
         this.editConfigurationId(configuration.configid);
         this.includeDelimiter(configuration?.config?.includeDelimiter);
-        this.selectedTransformation(configuration?.config?.transformation);
 
         // X column mode
         const xMode = configuration?.config?.xColumnMode;
@@ -395,17 +421,13 @@ const vm = function (params) {
     // several files still point at could go with it. Ask first, name what is
     // about to go, and say plainly that it cannot be undone.
     this.deleteConfiguration = (configuration) => {
-        this.alert(
-            new AlertViewModel(
-                'ep-alert-red',
-                arches.translations.deleteConfigurationTitle,
-                arches.translations.deleteConfigurationWarning.replace(
-                    '{name}',
-                    ko.unwrap(configuration.name)
-                ),
-                function () {}, // cancel: close and do nothing
-                () => this.performDelete(configuration)
-            )
+        confirmThen(
+            arches.translations.deleteConfigurationTitle,
+            arches.translations.deleteConfigurationWarning.replace(
+                '{name}',
+                ko.unwrap(configuration.name)
+            ),
+            () => this.performDelete(configuration)
         );
     };
 
@@ -439,15 +461,11 @@ const vm = function (params) {
 
         // A refusal carries its reason: the server knows whether the
         // configuration is part of the shared baseline or merely still in use.
-        this.alert(
-            new AlertViewModel(
-                'ep-alert-red',
-                responseJson.reason === 'protected'
-                    ? arches.translations.configurationProtected
-                    : arches.translations.importerInUse,
-                responseJson.message ||
-                    arches.translations.importerInUseWarning
-            )
+        notify(
+            responseJson.reason === 'protected'
+                ? arches.translations.configurationProtected
+                : arches.translations.importerInUse,
+            responseJson.message || arches.translations.importerInUseWarning
         );
     };
 
