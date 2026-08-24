@@ -11,6 +11,11 @@ from manuspectrum.utils.file_entries import (
 from manuspectrum.constants.xy_presets import (
     ANALYST_ONLY_TRANSFORMS,
     CORRECTIVE_TRANSFORMS,
+    MULTI_Y_CHOICES,
+    MULTI_Y_MEAN,
+    MULTI_Y_REFERENCE,
+    MULTI_Y_SEPARATE,
+    TRANSFORM_REFERENCE_NORMALIZE,
     AUTO_SAFE_TRANSFORMS,
     CONFIG_SOURCE_AUTO,
     CONFIG_SOURCE_KEY,
@@ -101,42 +106,44 @@ class PresetTableTests(SimpleTestCase):
         }
         self.assertEqual(reversed_keys, {"ftir"})
 
-    def test_presets_never_ship_a_transform_needing_parameters(self):
+    def test_every_preset_declares_a_valid_multi_y_choice(self):
         for key, preset in XY_PRESETS.items():
-            for step in preset["config"]["transforms"]:
-                self.assertNotIn(
-                    step["type"],
-                    ANALYST_ONLY_TRANSFORMS,
-                    msg=f"{key} would silently apply {step['type']}",
-                )
-                self.assertIn(step["type"], AUTO_SAFE_TRANSFORMS)
+            self.assertIn(
+                preset["config"]["multiYHandling"],
+                MULTI_Y_CHOICES,
+                msg=f"{key} declares a choice the engine cannot honour",
+            )
 
-    def test_a_stored_preset_only_carries_corrective_transforms(self):
-        # A configuration is shared by every analysis of its technique. A step
-        # that is a way of *looking* at the data — log10(1/R), a derivative,
-        # smoothing — must not be decided there once for every reader.
-        for key, preset in XY_PRESETS.items():
-            for step in preset["config"]["transforms"]:
-                self.assertIn(
-                    step["type"],
-                    CORRECTIVE_TRANSFORMS,
-                    msg=(
-                        f"{key} freezes {step['type']} into a shared "
-                        "configuration; it belongs to the reader"
-                    ),
-                )
+    def test_a_preset_can_only_ever_apply_a_corrective_transform(self):
+        # The three answers are the whole vocabulary: two apply nothing, and the
+        # third applies reference normalisation, which is corrective. So a
+        # preset *cannot* freeze a way of looking at the data into a shared
+        # configuration — not by policy, but because there is no way to say it.
+        applied = {
+            MULTI_Y_SEPARATE: None,
+            MULTI_Y_MEAN: None,
+            MULTI_Y_REFERENCE: TRANSFORM_REFERENCE_NORMALIZE,
+        }
+        self.assertEqual(set(applied), MULTI_Y_CHOICES)
+        for transform in applied.values():
+            if transform is not None:
+                self.assertIn(transform, CORRECTIVE_TRANSFORMS)
 
     def test_a_presets_axis_label_cannot_lie(self):
         # The Y label names the quantity the file holds once the corrective
-        # chain has run. Corrective steps reach that quantity, they do not
-        # qualify it — so the declared label is exactly what gets plotted, and
-        # a reader can trust it without checking the chain.
+        # step has run. Corrective steps reach that quantity, they do not
+        # qualify it — so the declared label is exactly what gets plotted.
         for key, preset in XY_PRESETS.items():
-            chain = preset["config"]["transforms"]
-            self.assertTrue(
-                set(step["type"] for step in chain) <= CORRECTIVE_TRANSFORMS,
+            self.assertIn(
+                preset["config"]["multiYHandling"],
+                MULTI_Y_CHOICES,
                 msg=f"{key} plots something its Y label does not name",
             )
+
+    def test_fors_normalises_against_its_reference_channel(self):
+        self.assertEqual(
+            XY_PRESETS["fors"]["config"]["multiYHandling"], MULTI_Y_REFERENCE
+        )
 
     def test_the_two_classifications_answer_different_questions(self):
         # log10(1/R) is parameter-free, so a preset *could* apply it by itself —
@@ -144,10 +151,6 @@ class PresetTableTests(SimpleTestCase):
         # ever coincide, one of them has lost its meaning.
         self.assertTrue(CORRECTIVE_TRANSFORMS < AUTO_SAFE_TRANSFORMS)
         self.assertFalse(CORRECTIVE_TRANSFORMS & ANALYST_ONLY_TRANSFORMS)
-
-    def test_fors_normalises_against_its_reference_channel(self):
-        transforms = XY_PRESETS["fors"]["config"]["transforms"]
-        self.assertEqual([t["type"] for t in transforms], ["reference-normalize"])
 
     def test_the_four_techniques_in_use_all_resolve(self):
         for item_id in (PXRF, MICRO_XRF, FTIR, FORS, MALDI):
