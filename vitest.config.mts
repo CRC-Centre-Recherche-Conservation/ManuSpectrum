@@ -29,13 +29,6 @@ function generateConfig(): Promise<UserConfig> {
         const alias: { [key: string]: string } = {
             '@/arches': path.join(parsedData['ROOT_DIR'], 'app', 'src', 'arches'),
             'arches': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'arches.js'),
-            // Webpack builds an alias for every file under media/js from its path
-            // relative to that directory (see `javascriptRelativeFilepathToAbsoluteFilepathLookup`
-            // in webpack/webpack.common.js), which is how the KnockoutJS side writes
-            // `import { createForceGraph } from 'utils/force-graph'`. Mirroring the
-            // `utils/` prefix here lets a spec import a page module that uses those
-            // bare specifiers instead of only leaf utilities via relative paths.
-            'utils': path.join(parsedData['APP_ROOT'], 'media', 'js', 'utils'),
         };
 
         for (
@@ -47,12 +40,42 @@ function generateConfig(): Promise<UserConfig> {
             alias[`@/${archesApplicationName}`] = path.join(archesApplicationPath, 'src', archesApplicationName);
         }
 
+        // Webpack builds an alias for every file under media/js from its path
+        // relative to that directory (see `javascriptRelativeFilepathToAbsoluteFilepathLookup`
+        // in webpack/webpack.common.js), which is how the KnockoutJS side writes
+        // `import { createForceGraph } from 'utils/force-graph'`. It searches the
+        // project first and falls back to the Arches core tree, so `utils/dispose`
+        // (core) and `utils/xy-transforms` (ours) both resolve from the same
+        // prefix — reproduce that here rather than aliasing a single directory.
+        const mediaJsRoots = [
+            path.join(parsedData['APP_ROOT'], 'media', 'js'),
+            path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js'),
+        ];
+        const resolveMediaJs = (source: string) => {
+            for (const root of mediaJsRoots) {
+                for (const candidate of [
+                    path.join(root, source),
+                    path.join(root, `${source}.js`),
+                    path.join(root, source, 'index.js'),
+                ]) {
+                    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                        return candidate;
+                    }
+                }
+            }
+            return undefined;
+        };
+
         // Virtual-module plugin: resolves webpack-specific import aliases
         // (bindings/, viewmodels/, templates/) that are not in node_modules.
         // The empty stub is sufficient because vi.mock() in spec files
         // replaces these modules before any code runs.
+        //
+        // `enforce: 'pre'` so bare media/js specifiers are resolved here rather
+        // than by a directory alias, which cannot search two roots.
         const webpackCompatStubs = {
             name: 'webpack-compat-stubs',
+            enforce: 'pre' as const,
             resolveId(source: string) {
                 if (
                     source.startsWith('bindings/') ||
@@ -60,6 +83,9 @@ function generateConfig(): Promise<UserConfig> {
                     (source.startsWith('templates/') && source.endsWith('.htm'))
                 ) {
                     return '\0' + source;
+                }
+                if (source.startsWith('utils/') || source.startsWith('views/')) {
+                    return resolveMediaJs(source);
                 }
             },
             load(id: string) {

@@ -67,10 +67,29 @@ export default ko.components.register('xy-reader', {
         this.chartTitle(arches.translations.data);
         this.xAxisLabel(arches.translations.xAxis);
         this.yAxisLabel(arches.translations.yAxis);
-        // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
-        this.xReversed = ko.observable(false);
-        // What the configuration applied, stated under the chart.
-        this.processing = ko.observable(null);
+        // Both of these belong to the SHARED state, not to this instance.
+        //
+        // Arches builds a file renderer twice per displayed file — once for the
+        // chart (`context: 'render'`) and once for the side panel that hosts the
+        // configuration picker (`context: 'tab-contents'`); see
+        // arches/app/templates/views/components/file-workbench.htm. The two
+        // instances only ever meet through `params.state`, the single object
+        // Arches hangs off each entry of `fileFormatRenderers`, and
+        // AfsInstrumentViewModel already puts every other chart setting there.
+        //
+        // Declared on `this` these were private per instance, so picking a
+        // configuration in the panel moved the panel's own copy while the chart
+        // kept the axis direction and processing note of whatever it had loaded
+        // with — the labels changed, the FTIR axis stayed ascending, and only a
+        // reload put it right.
+        if ('xReversed' in this.commonData === false) {
+            // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
+            this.commonData.xReversed = ko.observable(false);
+            // What the configuration applied, stated under the chart.
+            this.commonData.processing = ko.observable(null);
+        }
+        this.xReversed = this.commonData.xReversed;
+        this.processing = this.commonData.processing;
 
         this.rendererConfigs = ko.observable([]);
 
@@ -104,6 +123,40 @@ export default ko.components.register('xy-reader', {
             }
         };
 
+        // Fan the configuration now in `selectedConfiguration` out over
+        // everything the chart reads.
+        //
+        // Two paths change what is plotted — picking a different configuration,
+        // and saving an edit to the one already picked — and each used to carry
+        // its own copy of this list. The copies drifted: the save path never
+        // touched the reversed axis or the processing note, and derived the Y
+        // label from the stored string instead of from the applied chain. One
+        // list, called from both.
+        const applyDisplayConfig = () => {
+            const config = self.selectedConfiguration?.config;
+            const display = config?.display;
+            const expanded = expandStoredConfig(config);
+
+            // Read back by parse() on the next render.
+            self._xRangeMin = display?.xRangeMin;
+            self._xRangeMax = display?.xRangeMax;
+            self._columnAssignments = display?.columnAssignments || null;
+            self._xColumnMode = config?.xColumnMode || null;
+
+            self.chartTitle(display?.chartTitle || arches.translations.data);
+            self.xAxisLabel(display?.xAxisLabel || arches.translations.xAxis);
+            // Derived, never the stored string on its own: the label has to
+            // follow what is actually plotted.
+            self.yAxisLabel(
+                display?.yAxisLabel
+                    ? deriveAxisLabel(display.yAxisLabel, expanded)
+                    : arches.translations.yAxis
+            );
+            self.yAxisRightLabel(display?.yAxisRightLabel || '');
+            self.xReversed(!!display?.xReversed);
+            self.processing(describeChain(expanded));
+        };
+
         this.disposables.push(this.selectedConfig.subscribe((config) => {
             if (
                 !config ||
@@ -123,33 +176,11 @@ export default ko.components.register('xy-reader', {
             // silently rewrote the file they were only looking at, and had no
             // way to back out. Committing is now one deliberate act: select the
             // files, pick a configuration, press the button.
+            //
+            // Settled before rendering: parse() reads the column roles and the
+            // spectral range this just wrote.
+            applyDisplayConfig();
             self.render();
-            const display = this.selectedConfiguration?.config?.display;
-            this.chartTitle(
-                display?.chartTitle
-                    ? display.chartTitle
-                    : arches.translations.data
-            );
-            this.xAxisLabel(
-                display?.xAxisLabel
-                    ? display.xAxisLabel
-                    : arches.translations.xAxis
-            );
-            const expanded = expandStoredConfig(
-                this.selectedConfiguration?.config
-            );
-            this.yAxisLabel(
-                display?.yAxisLabel
-                    ? deriveAxisLabel(display.yAxisLabel, expanded)
-                    : arches.translations.yAxis
-            );
-            this.processing(describeChain(expanded));
-            this._xRangeMin = display?.xRangeMin;
-            this._xRangeMax = display?.xRangeMax;
-            this._columnAssignments = display?.columnAssignments || null;
-            this._xColumnMode = this.selectedConfiguration?.config?.xColumnMode || null;
-            this.yAxisRightLabel(display?.yAxisRightLabel || '');
-            this.xReversed(!!display?.xReversed);
         }));
 
         rendererConfigRefresh();
@@ -603,28 +634,8 @@ export default ko.components.register('xy-reader', {
                 self.selectedConfiguration = self.rendererConfigs().find(
                     (c) => c.configid === self.selectedConfig()
                 );
-                const display = self.selectedConfiguration?.config?.display;
-                self._xRangeMin = display?.xRangeMin;
-                self._xRangeMax = display?.xRangeMax;
-                self._columnAssignments = display?.columnAssignments || null;
-                self._xColumnMode = self.selectedConfiguration?.config?.xColumnMode || null;
-                self.yAxisRightLabel(display?.yAxisRightLabel || '');
+                applyDisplayConfig();
                 self.render();
-                self.chartTitle(
-                    display?.chartTitle
-                        ? display.chartTitle
-                        : arches.translations.data
-                );
-                self.xAxisLabel(
-                    display?.xAxisLabel
-                        ? display.xAxisLabel
-                        : arches.translations.xAxis
-                );
-                self.yAxisLabel(
-                    display?.yAxisLabel
-                        ? display.yAxisLabel
-                        : arches.translations.yAxis
-                );
             }
         };
 
