@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 09:40-0500\n"
+"POT-Creation-Date: 2026-08-24 05:24-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -36,15 +36,28 @@ msgstr "Format d'URL invalide"
 msgid "Undefined"
 msgstr "Indéfini"
 
-#: settings.py:420
+#: functions/xy_technique_config.py:184
+#, python-format
+msgid "Could not apply the XY configuration to tile %s"
+msgstr "Impossible d'appliquer la configuration XY à la tuile %s"
+
+#: settings.py:121
+msgid "Term Matches"
+msgstr ""
+
+#: settings.py:127
+msgid "References"
+msgstr "Références"
+
+#: settings.py:479
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:457
+#: settings.py:516
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:458
+#: settings.py:517
 msgid "French"
 msgstr "Français"
 
@@ -156,8 +169,8 @@ msgid ""
 "reflect or fluoresce anywhere on this server. It may have moved — or never "
 "existed."
 msgstr ""
-"Nous avons balayé tout le spectre : la page demandée n'absorbe, ne réfléchit"
-" et ne fluoresce nulle part sur ce serveur. Elle a peut-être été déplacée — "
+"Nous avons balayé tout le spectre : la page demandée n'absorbe, ne réfléchit "
+"et ne fluoresce nulle part sur ce serveur. Elle a peut-être été déplacée — "
 "ou n'a jamais existé."
 
 #: templates/errors/404.htm:64
@@ -237,9 +250,9 @@ msgstr "Standards"
 
 #: templates/includes/ms_footer.htm:55
 msgid ""
-"This work has benefited from state aid managed by the Agence Nationale de la"
-" Recherche under the Investissements d'avenir programme, reference "
-"ANR-21-ESRE-0005 (Biblissima+)."
+"This work has benefited from state aid managed by the Agence Nationale de la "
+"Recherche under the Investissements d'avenir programme, reference ANR-21-"
+"ESRE-0005 (Biblissima+)."
 msgstr ""
 "Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale de "
 "la Recherche au titre du programme d'Investissements d'avenir portant la "
@@ -326,6 +339,7 @@ msgid "Sign Out"
 msgstr "Déconnexion"
 
 #: templates/includes/ms_header.htm:77 templates/includes/ms_header.htm:111
+#: views/model_graph_service.py:121
 msgid "Language"
 msgstr "Langue"
 
@@ -343,12 +357,12 @@ msgstr "ManuSpectrum — Analyse physico-chimique du patrimoine"
 #: templates/index.htm:14
 msgid ""
 "Open heritage science database of physicochemical analyses — XRF, Raman, "
-"FTIR, FORS — of manuscripts, printed books and inscriptions: pigments, inks,"
-" supports."
+"FTIR, FORS — of manuscripts, printed books and inscriptions: pigments, inks, "
+"supports."
 msgstr ""
 "Base de données ouverte de sciences du patrimoine : analyses physico-"
-"chimiques — XRF, Raman, FTIR, FORS — de manuscrits, imprimés et inscriptions"
-" : pigments, encres, supports."
+"chimiques — XRF, Raman, FTIR, FORS — de manuscrits, imprimés et "
+"inscriptions : pigments, encres, supports."
 
 #: templates/index.htm:222 templates/views/pages/graph-explorer.htm:204
 msgid "Close"
@@ -410,15 +424,15 @@ msgid ""
 "ManuSpectrum was developed within Cluster 2 — “Consideration and "
 "searchability of materials analysis data” — of the ANR Biblissima+ "
 "programme. This cluster aims to ensure the long-term archiving and reuse of "
-"physicochemical analysis data for manuscripts, inscriptions, seals and other"
-" heritage objects, in partnership with Huma-Num."
+"physicochemical analysis data for manuscripts, inscriptions, seals and other "
+"heritage objects, in partnership with Huma-Num."
 msgstr ""
 "ManuSpectrum a été développé dans le cadre du Cluster 2 — « Prise en compte "
-"et interrogeabilité des données d'analyse des matériaux » — du programme ANR"
-" Biblissima+. Ce cluster vise à garantir l'archivage pérenne et la "
+"et interrogeabilité des données d'analyse des matériaux » — du programme ANR "
+"Biblissima+. Ce cluster vise à garantir l'archivage pérenne et la "
 "réutilisation des données d'analyses physico-chimiques des manuscrits, "
-"inscriptions, sceaux et autres objets patrimoniaux, en partenariat avec "
-"Huma-Num."
+"inscriptions, sceaux et autres objets patrimoniaux, en partenariat avec Huma-"
+"Num."
 
 #: templates/index.htm:281
 msgid ""
@@ -429,17 +443,17 @@ msgid ""
 "from different disciplines."
 msgstr ""
 "Par une structuration et une normalisation des données respectant des "
-"modèles communs, le projet fournit des outils fiables, simples d'utilisation"
-" et accessibles à des non-spécialistes. Construit sur Arches, une plateforme"
-" open source de gestion de données patrimoniales, ManuSpectrum facilite "
+"modèles communs, le projet fournit des outils fiables, simples d'utilisation "
+"et accessibles à des non-spécialistes. Construit sur Arches, une plateforme "
+"open source de gestion de données patrimoniales, ManuSpectrum facilite "
 "l'accès aux données et la collaboration entre chercheurs de différentes "
 "disciplines."
 
 #: templates/index.htm:284
 msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
-"object, its context, the analyses, and their interpretations, using thesauri"
-" and authority databases to contextualize information on heterogeneous "
+"object, its context, the analyses, and their interpretations, using thesauri "
+"and authority databases to contextualize information on heterogeneous "
 "documents."
 msgstr ""
 "Le modèle se concentre sur l'identification du composant comme axe pivot "
@@ -454,8 +468,8 @@ msgstr "Biblissima+ — Cluster 2"
 
 #: templates/index.htm:294
 msgid ""
-"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient"
-" written cultures. Within Cluster 2, the objective is to archive, share and "
+"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
+"written cultures. Within Cluster 2, the objective is to archive, share and "
 "enable searching of materials analysis data from the community, ensuring "
 "interoperability with the Biblissima portal and written cultural heritage "
 "standards."
@@ -548,11 +562,11 @@ msgstr ""
 
 #: templates/index.htm:375
 msgid ""
-"A manuscript under ultraviolet light during hyperspectral imaging, revealing"
-" inks and retouches invisible to the naked eye"
+"A manuscript under ultraviolet light during hyperspectral imaging, revealing "
+"inks and retouches invisible to the naked eye"
 msgstr ""
-"Un manuscrit sous lumière ultraviolette pendant une imagerie hyperspectrale,"
-" révélant encres et retouches invisibles à l'œil nu"
+"Un manuscrit sous lumière ultraviolette pendant une imagerie hyperspectrale, "
+"révélant encres et retouches invisibles à l'œil nu"
 
 #: templates/index.htm:377
 msgid "UV hyperspectral imaging"
@@ -629,8 +643,8 @@ msgid ""
 msgstr ""
 "Les données d'analyse sont exposées sous forme d'annotations IIIF, les "
 "rendant accessibles depuis tout visualiseur compatible. Le plugin mirador-"
-"xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser"
-" les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
+"xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser "
+"les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
 "directement superposées aux images haute résolution des documents."
 
 #: templates/index.htm:448
@@ -661,12 +675,12 @@ msgstr "Caractérisation matérielle"
 msgid ""
 "Explore the layers, materials and chemical elements identified on "
 "manuscripts, printed books and other written heritage — pigments, inks, "
-"binders, parchment and paper supports — with different levels of reliability"
-" and characterization."
+"binders, parchment and paper supports — with different levels of reliability "
+"and characterization."
 msgstr ""
 "Explorez les couches, matériaux et éléments chimiques identifiés sur les "
-"manuscrits, les imprimés et le reste du patrimoine écrit — pigments, encres,"
-" liants, supports de parchemin et de papier — avec différents niveaux de "
+"manuscrits, les imprimés et le reste du patrimoine écrit — pigments, encres, "
+"liants, supports de parchemin et de papier — avec différents niveaux de "
 "fiabilité et de caractérisation."
 
 #: templates/index.htm:463
@@ -907,8 +921,8 @@ msgid ""
 "This importer is in use - it should be replaced in all files where it is "
 "used before deleting."
 msgstr ""
-"Cet importateur est en cours d'utilisation — il doit être remplacé dans tous"
-" les fichiers où il est utilisé avant de le supprimer."
+"Cet importateur est en cours d'utilisation — il doit être remplacé dans tous "
+"les fichiers où il est utilisé avant de le supprimer."
 
 #: templates/javascript.htm:32
 msgid "An error occurred while creating the manifest."
@@ -1023,8 +1037,7 @@ msgstr "La recherche Biblissima a échoué. Veuillez réessayer dans un instant.
 
 #: templates/javascript.htm:57
 msgid ""
-"Network error while querying Biblissima. Check your connection and try "
-"again."
+"Network error while querying Biblissima. Check your connection and try again."
 msgstr ""
 "Erreur réseau lors de la requête Biblissima. Vérifiez votre connexion et "
 "réessayez."
@@ -1056,8 +1069,8 @@ msgstr "Limite du panier atteinte"
 
 #: templates/javascript.htm:64
 msgid ""
-"Too many results on this page for the remaining cart slots — reduce the page"
-" size or unselect some"
+"Too many results on this page for the remaining cart slots — reduce the page "
+"size or unselect some"
 msgstr ""
 "Trop de résultats sur cette page pour les places restantes du panier — "
 "réduisez la taille de page ou désélectionnez des éléments"
@@ -1119,8 +1132,7 @@ msgstr "Interrogation de Biblissima..."
 #: templates/javascript.htm:78
 msgid "No results. Try French keywords or check the Biblissima portal."
 msgstr ""
-"Aucun résultat. Essayez un terme français ou consultez le portail "
-"Biblissima."
+"Aucun résultat. Essayez un terme français ou consultez le portail Biblissima."
 
 #: templates/javascript.htm:79
 msgid "Biblissima is temporarily unavailable - you can use manual entry."
@@ -1261,8 +1273,8 @@ msgstr "Type de données (trié par nombre de champs, décroissant)"
 #: templates/javascript.htm:115
 #, python-brace-format
 msgid ""
-"Adjacency matrix: {models} models, {relations} typed relationships. Rows are"
-" sources, columns are targets."
+"Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
+"sources, columns are targets."
 msgstr ""
 "Matrice d'adjacence : {models} modèles, {relations} relations typées. Les "
 "lignes sont les sources, les colonnes les cibles."
@@ -1309,8 +1321,8 @@ msgid ""
 "property."
 msgstr ""
 "{model} et ses {n} modèles directement connectés, reliés par {r} relations "
-"typées. Chaque courbe représente une relation, annotée de sa propriété "
-"CIDOC-CRM."
+"typées. Chaque courbe représente une relation, annotée de sa propriété CIDOC-"
+"CRM."
 
 #: templates/javascript.htm:124 templates/views/pages/graph-explorer.htm:159
 msgid "Select a model to see it with its directly connected models."
@@ -1352,8 +1364,8 @@ msgid ""
 "Every model with its outgoing and incoming typed relationships. {n} models, "
 "{r} relationships."
 msgstr ""
-"Chaque modèle avec ses relations typées sortantes et entrantes. {n} modèles,"
-" {r} relations."
+"Chaque modèle avec ses relations typées sortantes et entrantes. {n} modèles, "
+"{r} relations."
 
 #: templates/javascript.htm:133
 msgid "Filter fields…"
@@ -1405,8 +1417,7 @@ msgstr ""
 
 #: templates/javascript.htm:142
 #, python-brace-format
-msgid ""
-"of fields draw on a published thesaurus, not free text — {n} of {total}"
+msgid "of fields draw on a published thesaurus, not free text — {n} of {total}"
 msgstr ""
 "des champs s’appuient sur un thésaurus publié plutôt que sur du texte libre "
 "— {n} sur {total}"
@@ -1585,13 +1596,111 @@ msgstr ""
 msgid "Yes"
 msgstr "Oui"
 
+#: templates/javascript.htm:186
+msgid "How to combine them"
+msgstr "Comment les combiner"
+
+#: templates/javascript.htm:187
+#: templates/views/components/plugins/importer-configuration.htm:153
+msgid "Reverse the X axis"
+msgstr "Inverser l'axe X"
+
+#: templates/javascript.htm:188
+msgid ""
+"Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
+"and XPS."
+msgstr ""
+"Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
+"cm-1), la RMN et l'XPS."
+
+#: templates/javascript.htm:189
+#: templates/views/components/plugins/importer-configuration.htm:246
+#: templates/views/pages/conceptual-model.htm:111
+msgid "Transformations"
+msgstr "Transformations"
+
+#: templates/javascript.htm:190
+msgid ""
+"Applied to the plotted spectrum, in order. The file itself is never modified."
+msgstr ""
+"Appliquées au spectre tracé, dans l'ordre. Le fichier lui-même n'est jamais "
+"modifié."
+
+#: templates/javascript.htm:191
+#: templates/views/components/plugins/importer-configuration.htm:313
+msgid "Add a transformation"
+msgstr "Ajouter une transformation"
+
+#: templates/javascript.htm:192
+msgid "Reference normalisation (S-D)/(W-D)"
+msgstr "Normalisation par référence (S-D)/(B-D)"
+
+#: templates/javascript.htm:193
+msgid "Pseudo-absorbance log10(1/R)"
+msgstr "Pseudo-absorbance log10(1/R)"
+
+#: templates/javascript.htm:194
+msgid "Kubelka-Munk (1-R)^2/2R"
+msgstr "Kubelka-Munk (1-R)^2/2R"
+
+#: templates/javascript.htm:195
+msgid "Normalise to maximum"
+msgstr "Normaliser au maximum"
+
+#: templates/javascript.htm:196
+msgid "Normalise to total area (TIC)"
+msgstr "Normaliser à l'aire totale (TIC)"
+
+#: templates/javascript.htm:197
+msgid "Smoothing (Savitzky-Golay)"
+msgstr "Lissage (Savitzky-Golay)"
+
+#: templates/javascript.htm:198
+msgid "Derivative (Savitzky-Golay)"
+msgstr "Dérivée (Savitzky-Golay)"
+
+#: templates/javascript.htm:199
+#: templates/views/components/plugins/importer-configuration.htm:279
+msgid "Window"
+msgstr "Fenêtre"
+
+#: templates/javascript.htm:200
+#: templates/views/components/plugins/importer-configuration.htm:284
+msgid "Polynomial order"
+msgstr "Ordre du polynôme"
+
+#: templates/javascript.htm:201
+#: templates/views/components/plugins/importer-configuration.htm:290
+msgid "Derivative order"
+msgstr "Ordre de la dérivée"
+
+#: templates/javascript.htm:202
+msgid ""
+"This transformation needs parameters you choose. It is never applied "
+"automatically."
+msgstr ""
+"Cette transformation dépend de paramètres que vous choisissez. Elle n'est "
+"jamais appliquée automatiquement."
+
+#: templates/javascript.htm:203
+msgid "White reference"
+msgstr "Référence blanche"
+
+#: templates/javascript.htm:204
+msgid "Dark current"
+msgstr "Courant d'obscurité"
+
+#: templates/javascript.htm:205
+msgid "Configuration deduced from the analysis technique"
+msgstr "Configuration déduite de la technique d'analyse"
+
 #: templates/ms_base.htm:11 templates/ms_base.htm:28
 msgid ""
 "ManuSpectrum — interoperable database for physicochemical analysis of "
 "written cultural heritage."
 msgstr ""
-"ManuSpectrum — base de données interopérable pour l'analyse physico-chimique"
-" du patrimoine culturel écrit."
+"ManuSpectrum — base de données interopérable pour l'analyse physico-chimique "
+"du patrimoine culturel écrit."
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -1620,11 +1729,11 @@ msgstr ""
 msgid "Password reset — %(site_name)s"
 msgstr "Réinitialisation du mot de passe — %(site_name)s"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:39
+#: templates/views/components/cards/file-renderers/afs-reader.htm:40
 msgid "Config"
 msgstr "Configuration"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:48
+#: templates/views/components/cards/file-renderers/afs-reader.htm:49
 msgid "Chart Configuration"
 msgstr "Configuration du graphique"
 
@@ -1644,27 +1753,41 @@ msgstr ""
 msgid "XY file(s) staged"
 msgstr "fichier(s) XY en attente"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:43
+#: templates/views/components/cards/file-renderers/xy-reader.htm:44
+#: templates/views/components/cards/file-renderers/xy-reader.htm:148
+msgid ""
+"Deduced from the analysis technique. Change it here if the technique is "
+"wrong."
+msgstr ""
+"Déduite de la technique d'analyse. Modifiez-la ici si la technique est "
+"erronée."
+
+#: templates/views/components/cards/file-renderers/xy-reader.htm:45
+#: templates/views/components/cards/file-renderers/xy-reader.htm:149
+msgid "auto"
+msgstr "auto"
+
+#: templates/views/components/cards/file-renderers/xy-reader.htm:49
 msgid "No config"
 msgstr "Aucune config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:68
+#: templates/views/components/cards/file-renderers/xy-reader.htm:74
 msgid "Apply to"
 msgstr "Appliquer à"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:68
+#: templates/views/components/cards/file-renderers/xy-reader.htm:74
 msgid "staged file(s)"
 msgstr "fichier(s) en attente"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:72
+#: templates/views/components/cards/file-renderers/xy-reader.htm:78
 msgid "Applying..."
 msgstr "Application en cours..."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:94
+#: templates/views/components/cards/file-renderers/xy-reader.htm:100
 msgid "Files Status"
 msgstr "Statut des fichiers"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:99
+#: templates/views/components/cards/file-renderers/xy-reader.htm:105
 msgid ""
 "Check which files have a configuration applied. Select file(s) to customize "
 "parsing settings individually, overriding the shared config."
@@ -1673,47 +1796,47 @@ msgstr ""
 "plusieurs fichiers pour personnaliser les paramètres d'analyse "
 "individuellement, en remplaçant la configuration partagée."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:104
+#: templates/views/components/cards/file-renderers/xy-reader.htm:110
 msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
 msgstr ""
 "Aucun fichier XY trouvé. Assignez le rendu XY aux fichiers dans l'onglet "
 "Gérer."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:111
+#: templates/views/components/cards/file-renderers/xy-reader.htm:117
 msgid "file(s)"
 msgstr "fichier(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:113
+#: templates/views/components/cards/file-renderers/xy-reader.htm:119
 #: templates/views/components/plugins/file-configuration.htm:54
 msgid "selected"
 msgstr "sélectionné(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:117
+#: templates/views/components/cards/file-renderers/xy-reader.htm:123
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:89
 msgid "All"
 msgstr "Tous"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:118
+#: templates/views/components/cards/file-renderers/xy-reader.htm:124
 msgid "None"
 msgstr "Aucun"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:135
+#: templates/views/components/cards/file-renderers/xy-reader.htm:141
 msgid "Has custom parsing"
 msgstr "A un parsing personnalisé"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:141
+#: templates/views/components/cards/file-renderers/xy-reader.htm:153
 msgid "none"
 msgstr "aucune"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:153
+#: templates/views/components/cards/file-renderers/xy-reader.htm:165
 msgid "Adjust parsing for"
 msgstr "Ajuster le parsing pour"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:164
+#: templates/views/components/cards/file-renderers/xy-reader.htm:176
 msgid "Custom parsing:"
 msgstr "Parsing personnalisé :"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:168
+#: templates/views/components/cards/file-renderers/xy-reader.htm:180
 msgid ""
 "These settings override the shared config for the selected file(s) only. "
 "Choose 'Use config' to keep the shared config value."
@@ -1722,77 +1845,124 @@ msgstr ""
 "fichier(s) sélectionné(s). Choisissez « Utiliser la config » pour conserver "
 "la valeur de la configuration partagée."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:172
+#: templates/views/components/cards/file-renderers/xy-reader.htm:184
 msgid "Delimiter"
 msgstr "Délimiteur"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:174
 #: templates/views/components/cards/file-renderers/xy-reader.htm:186
-#: templates/views/components/cards/file-renderers/xy-reader.htm:196
+#: templates/views/components/cards/file-renderers/xy-reader.htm:198
+#: templates/views/components/cards/file-renderers/xy-reader.htm:208
 msgid "Use config"
 msgstr "Utiliser la config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:175
 #: templates/views/components/cards/file-renderers/xy-reader.htm:187
+#: templates/views/components/cards/file-renderers/xy-reader.htm:199
 #: templates/views/components/plugins/importer-configuration.htm:33
 #: templates/views/components/plugins/importer-configuration.htm:97
 msgid "Auto-detect"
 msgstr "Détection automatique"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:176
+#: templates/views/components/cards/file-renderers/xy-reader.htm:188
 #: templates/views/components/plugins/importer-configuration.htm:99
 msgid "Comma"
 msgstr "Virgule"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:177
+#: templates/views/components/cards/file-renderers/xy-reader.htm:189
 msgid "Tab"
 msgstr "Tabulation"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:178
+#: templates/views/components/cards/file-renderers/xy-reader.htm:190
 msgid "Other:"
 msgstr "Autre :"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:180
+#: templates/views/components/cards/file-renderers/xy-reader.htm:192
 msgid "Custom delimiter"
 msgstr "Délimiteur personnalisé"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:184
+#: templates/views/components/cards/file-renderers/xy-reader.htm:196
 #: templates/views/components/plugins/importer-configuration.htm:30
 msgid "Header"
 msgstr "En-tête"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:188
+#: templates/views/components/cards/file-renderers/xy-reader.htm:200
 msgid "Fixed lines:"
 msgstr "Lignes fixes :"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:190
+#: templates/views/components/cards/file-renderers/xy-reader.htm:202
 msgid "Number of lines"
 msgstr "Nombre de lignes"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:194
+#: templates/views/components/cards/file-renderers/xy-reader.htm:206
 #: templates/views/components/plugins/importer-configuration.htm:41
 msgid "Footer"
 msgstr "Pied de page"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:197
+#: templates/views/components/cards/file-renderers/xy-reader.htm:209
 msgid "End of file"
 msgstr "Fin du fichier"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:198
+#: templates/views/components/cards/file-renderers/xy-reader.htm:210
 msgid "After text:"
 msgstr "Après le texte :"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:200
+#: templates/views/components/cards/file-renderers/xy-reader.htm:212
 msgid "Footer text"
 msgstr "Texte du pied de page"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:205
+#: templates/views/components/cards/file-renderers/xy-reader.htm:217
 msgid "Reset to config"
 msgstr "Réinitialiser à la config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:209
+#: templates/views/components/cards/file-renderers/xy-reader.htm:221
 msgid "Apply & re-render"
 msgstr "Appliquer et re-rendre"
+
+#: templates/views/components/functions/xy-technique-config.htm:5
+msgid "Automatic XY viewer configuration"
+msgstr "Configuration automatique du visualiseur XY"
+
+#: templates/views/components/functions/xy-technique-config.htm:7
+msgid ""
+"When an analysis records its technique, measurement\n"
+"            files uploaded to it receive a matching viewer configuration —\n"
+"            axis labels, units and axis direction. FTIR spectra, for "
+"instance,\n"
+"            are plotted on the conventional reversed wavenumber axis."
+msgstr ""
+"Lorsqu'une analyse renseigne sa technique, les fichiers de\n"
+"            mesure qui y sont déposés reçoivent une configuration de\n"
+"            visualisation correspondante — libellés d'axes, unités et sens "
+"de\n"
+"            l'axe. Les spectres IRTF, par exemple, sont tracés sur l'axe "
+"des\n"
+"            nombres d'onde inversé, comme le veut la convention."
+
+#: templates/views/components/functions/xy-technique-config.htm:13
+msgid "A configuration chosen by hand is never modified."
+msgstr "Une configuration choisie à la main n'est jamais modifiée."
+
+#: templates/views/components/functions/xy-technique-config.htm:14
+msgid ""
+"The mapping only fills files that have no\n"
+"            configuration yet. If an analysis records several techniques "
+"that\n"
+"            disagree, nothing is applied."
+msgstr ""
+"Le mappage ne remplit que les fichiers dépourvus de\n"
+"            configuration. Si une analyse renseigne plusieurs techniques\n"
+"            divergentes, rien n'est appliqué."
+
+#: templates/views/components/functions/xy-technique-config.htm:19
+msgid ""
+"The technique-to-preset table is maintained in\n"
+"            manuspectrum/constants/xy_presets.py."
+msgstr ""
+"La table technique-vers-preset est maintenue dans\n"
+"            manuspectrum/constants/xy_presets.py."
+
+#: templates/views/components/functions/xy-technique-config.htm:26
+msgid "Triggered by"
+msgstr "Déclenchée par"
 
 #: templates/views/components/plugins/file-configuration.htm:5
 msgid ""
@@ -1966,9 +2136,8 @@ msgid "e.g. 500"
 msgstr "ex. 500"
 
 #: templates/views/components/plugins/importer-configuration.htm:73
-#: templates/views/pages/conceptual-model.htm:111
-msgid "Transformations"
-msgstr "Transformations"
+msgid "Multiple Y Columns"
+msgstr "Colonnes Y multiples"
 
 #: templates/views/components/plugins/importer-configuration.htm:74
 msgid ""
@@ -2025,7 +2194,7 @@ msgstr "Libellé de l'axe X"
 
 #: templates/views/components/plugins/importer-configuration.htm:126
 #: templates/views/components/plugins/importer-configuration.htm:144
-#: templates/views/components/plugins/importer-configuration.htm:224
+#: templates/views/components/plugins/importer-configuration.htm:230
 msgid "Presets..."
 msgstr "Préréglages..."
 
@@ -2033,35 +2202,43 @@ msgstr "Préréglages..."
 msgid "Y Axis Label"
 msgstr "Libellé de l'axe Y"
 
-#: templates/views/components/plugins/importer-configuration.htm:157
+#: templates/views/components/plugins/importer-configuration.htm:155
+msgid ""
+"Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR "
+"and XPS."
+msgstr ""
+"Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
+"cm⁻¹), la RMN et l'XPS."
+
+#: templates/views/components/plugins/importer-configuration.htm:163
 msgid "Spectral Range"
 msgstr "Gamme spectrale"
 
-#: templates/views/components/plugins/importer-configuration.htm:160
+#: templates/views/components/plugins/importer-configuration.htm:166
 msgid "Limit the displayed X range. Leave empty for no limit."
 msgstr "Limiter la gamme X affichée. Laisser vide pour aucune limite."
 
-#: templates/views/components/plugins/importer-configuration.htm:163
+#: templates/views/components/plugins/importer-configuration.htm:169
 msgid "Min X"
 msgstr "X min"
 
-#: templates/views/components/plugins/importer-configuration.htm:164
+#: templates/views/components/plugins/importer-configuration.htm:170
 msgid "e.g. 400"
 msgstr "ex. 400"
 
-#: templates/views/components/plugins/importer-configuration.htm:168
+#: templates/views/components/plugins/importer-configuration.htm:174
 msgid "Max X"
 msgstr "X max"
 
-#: templates/views/components/plugins/importer-configuration.htm:169
+#: templates/views/components/plugins/importer-configuration.htm:175
 msgid "e.g. 4000"
 msgstr "ex. 4000"
 
-#: templates/views/components/plugins/importer-configuration.htm:181
+#: templates/views/components/plugins/importer-configuration.htm:187
 msgid "Column Assignment"
 msgstr "Assignation des colonnes"
 
-#: templates/views/components/plugins/importer-configuration.htm:184
+#: templates/views/components/plugins/importer-configuration.htm:190
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2070,28 +2247,71 @@ msgstr ""
 "(axe droit). Laisser vide pour le comportement par défaut : colonne 1 = X, "
 "les autres = Y gauche."
 
-#: templates/views/components/plugins/importer-configuration.htm:189
+#: templates/views/components/plugins/importer-configuration.htm:195
 msgid "Column"
 msgstr "Colonne"
 
-#: templates/views/components/plugins/importer-configuration.htm:207
+#: templates/views/components/plugins/importer-configuration.htm:213
 msgid "Add Column"
 msgstr "Ajouter une colonne"
 
-#: templates/views/components/plugins/importer-configuration.htm:213
+#: templates/views/components/plugins/importer-configuration.htm:219
 msgid "Right Y Axis Label"
 msgstr "Libellé de l'axe Y droit"
 
-#: templates/views/components/plugins/importer-configuration.htm:215
+#: templates/views/components/plugins/importer-configuration.htm:221
 msgid "Right Y Axis"
 msgstr "Axe Y droit"
 
-#: templates/views/components/plugins/importer-configuration.htm:237
+#: templates/views/components/plugins/importer-configuration.htm:250
+msgid ""
+"Applied to the plotted spectrum in the order shown. The stored file is never "
+"modified."
+msgstr ""
+"Appliquées au spectre tracé, dans l'ordre affiché. Le fichier stocké n'est "
+"jamais modifié."
+
+#: templates/views/components/plugins/importer-configuration.htm:262
+msgid "Move up"
+msgstr "Monter"
+
+#: templates/views/components/plugins/importer-configuration.htm:266
+msgid "Move down"
+msgstr "Descendre"
+
+#: templates/views/components/plugins/importer-configuration.htm:270
+msgid "Remove"
+msgstr "Retirer"
+
+#: templates/views/components/plugins/importer-configuration.htm:280
+msgid "e.g. 9"
+msgstr "ex. 9"
+
+#: templates/views/components/plugins/importer-configuration.htm:285
+msgid "e.g. 2"
+msgstr "ex. 2"
+
+#: templates/views/components/plugins/importer-configuration.htm:298
+msgid ""
+"This transformation depends on parameters you choose. It is never applied "
+"automatically by a technique preset."
+msgstr ""
+"Cette transformation dépend de paramètres que vous choisissez. Elle n'est "
+"jamais appliquée automatiquement par un preset de technique."
+
+#: templates/views/components/plugins/importer-configuration.htm:307
+msgid ""
+"Reference normalisation needs a column tagged “White reference” under Column "
+"Assignment. Until then this step does nothing and the raw series are plotted."
+msgstr ""
+"La normalisation par référence exige une colonne marquée « Référence blanche » dans l'affectation des colonnes. Sans cela, cette étape ne fait rien et les séries brutes sont tracées."
+
+#: templates/views/components/plugins/importer-configuration.htm:320
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Annuler"
 
-#: templates/views/components/plugins/importer-configuration.htm:238
+#: templates/views/components/plugins/importer-configuration.htm:321
 msgid "Save"
 msgstr "Enregistrer"
 
@@ -2158,7 +2378,7 @@ msgid "Label"
 msgstr "Libellé"
 
 #: templates/views/components/widgets/biblissima-concept-widget.htm:31
-#: views/model_graph_service.py:114
+#: views/model_graph_service.py:115
 msgid "URL"
 msgstr "URL"
 
@@ -2557,11 +2777,11 @@ msgstr ""
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:519
 msgid ""
-"No match found. Create a new parent Document from Biblissima data — required"
-" before its components can be imported."
+"No match found. Create a new parent Document from Biblissima data — required "
+"before its components can be imported."
 msgstr ""
-"Aucune correspondance trouvée. Créez un nouveau Document parent à partir des"
-" données Biblissima — indispensable avant d'importer ses composants."
+"Aucune correspondance trouvée. Créez un nouveau Document parent à partir des "
+"données Biblissima — indispensable avant d'importer ses composants."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:531
 msgid "Create parent"
@@ -2585,8 +2805,8 @@ msgstr "Ressources liées"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:578
 msgid ""
-"The following places, institutions, and persons were found in the Biblissima"
-" data. Link them to existing resources or create new ones."
+"The following places, institutions, and persons were found in the Biblissima "
+"data. Link them to existing resources or create new ones."
 msgstr ""
 "Les lieux, institutions et personnes suivants ont été trouvés dans les "
 "données Biblissima. Liez-les à des ressources existantes ou créez-en de "
@@ -2689,8 +2909,8 @@ msgstr "Ajouter tous les visibles"
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:185
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
 msgstr ""
-"Biblissima peut être lent sur les recherches larges. Vous pouvez laisser cet"
-" onglet ouvert."
+"Biblissima peut être lent sur les recherches larges. Vous pouvez laisser cet "
+"onglet ouvert."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:190
 msgid "Elapsed"
@@ -2698,15 +2918,13 @@ msgstr "Écoulé"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:233
 msgid ""
-"Search by shelfmark, title, or institution to find manuscripts on "
-"Biblissima."
+"Search by shelfmark, title, or institution to find manuscripts on Biblissima."
 msgstr ""
 "Recherchez par cote, titre ou institution pour trouver des manuscrits sur "
 "Biblissima."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:236
-msgid ""
-"Select iconographic descriptors and click Search to find illuminations."
+msgid "Select iconographic descriptors and click Search to find illuminations."
 msgstr ""
 "Sélectionnez des descripteurs iconographiques et cliquez Rechercher pour "
 "trouver des enluminures."
@@ -2763,8 +2981,8 @@ msgstr "Les ressources sont enregistrées en Brouillon."
 msgid ""
 "Open each one to verify the data, fill in anything that couldn't be fetched "
 "from Biblissima, then click <strong>Make Active</strong> on the resource "
-"page to publish it. Drafts stay editable; only Active resources are surfaced"
-" across the rest of the application."
+"page to publish it. Drafts stay editable; only Active resources are surfaced "
+"across the rest of the application."
 msgstr ""
 "Ouvrez chacune pour vérifier les données, complétez ce qui n'a pas pu être "
 "récupéré depuis Biblissima, puis cliquez sur <strong>Make Active</strong> "
@@ -2814,12 +3032,12 @@ msgstr "Ouvrir le projet"
 #: templates/views/pages/conceptual-model.htm:5
 #: templates/views/pages/conceptual-model.htm:7
 msgid ""
-"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description"
-" of written heritage, its analyses and the knowledge inferred from them."
+"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
+"of written heritage, its analyses and the knowledge inferred from them."
 msgstr ""
-"Le modèle de données ManuSpectrum : une description événementielle, en "
-"CIDOC-CRM / CRMsci, du patrimoine écrit, de ses analyses et des "
-"connaissances qui en sont inférées."
+"Le modèle de données ManuSpectrum : une description événementielle, en CIDOC-"
+"CRM / CRMsci, du patrimoine écrit, de ses analyses et des connaissances qui "
+"en sont inférées."
 
 #: templates/views/pages/conceptual-model.htm:14
 #: templates/views/pages/contact.htm:14
@@ -2835,10 +3053,10 @@ msgstr "Décrire scientifiquement le patrimoine écrit"
 #: templates/views/pages/conceptual-model.htm:31
 msgid ""
 "Most heritage databases record what an object <em>is</em>. ManuSpectrum "
-"records what <em>happened to it</em> — and who said so. Every measurement is"
-" an event with a date, an instrument and an operator. Every interpretation "
-"is stored separately from the observation that supports it. That separation "
-"is what lets you re-read someone else's conclusion — and disagree with it."
+"records what <em>happened to it</em> — and who said so. Every measurement is "
+"an event with a date, an instrument and an operator. Every interpretation is "
+"stored separately from the observation that supports it. That separation is "
+"what lets you re-read someone else's conclusion — and disagree with it."
 msgstr ""
 "La plupart des bases de données patrimoniales consignent ce qu'un objet "
 "<em>est</em>. ManuSpectrum consigne ce qui <em>lui est arrivé</em> — et qui "
@@ -2909,8 +3127,7 @@ msgstr ""
 
 #: templates/views/pages/conceptual-model.htm:84
 msgid ""
-"Its extension for scientific observation: measurements, samples, "
-"instruments."
+"Its extension for scientific observation: measurements, samples, instruments."
 msgstr ""
 "Son extension pour l'observation scientifique : mesures, prélèvements, "
 "instruments."
@@ -2932,8 +3149,8 @@ msgstr ""
 
 #: templates/views/pages/conceptual-model.htm:88
 msgid ""
-"The kind of value a field stores: text, a thesaurus concept, a date, a file,"
-" a link to another record…"
+"The kind of value a field stores: text, a thesaurus concept, a date, a file, "
+"a link to another record…"
 msgstr ""
 "Le type de valeur qu'un champ stocke : du texte, un concept de thésaurus, "
 "une date, un fichier, un lien vers un autre enregistrement…"
@@ -2958,8 +3175,8 @@ msgstr "Douze modèles, quatre familles"
 msgid ""
 "Nothing is described twice. An actor, a place or an instrument is recorded "
 "once and referenced everywhere it appears — so the person who ran an XRF "
-"scan in 2024 is the same record as the volume's eighteenth-century owner, if"
-" they happen to be the same person."
+"scan in 2024 is the same record as the volume's eighteenth-century owner, if "
+"they happen to be the same person."
 msgstr ""
 "Rien n'est décrit deux fois. Un acteur, un lieu ou un instrument est "
 "enregistré une seule fois et référencé partout où il apparaît — ainsi, la "
@@ -3183,8 +3400,8 @@ msgstr ""
 
 #: templates/views/pages/contact.htm:64
 msgid ""
-"This form needs JavaScript, and no public contact address is available yet —"
-" please check back soon."
+"This form needs JavaScript, and no public contact address is available yet — "
+"please check back soon."
 msgstr ""
 "Ce formulaire nécessite JavaScript, et aucune adresse de contact publique "
 "n'est encore disponible — revenez bientôt."
@@ -3256,13 +3473,13 @@ msgstr "Le modèle comme un graphe vivant"
 #: templates/views/pages/graph-explorer.htm:35
 #, python-format
 msgid ""
-"Every field in ManuSpectrum and every link between models: 452 fields across"
-" 12 models, 41%% of them bound to a published thesaurus rather than free "
+"Every field in ManuSpectrum and every link between models: 452 fields across "
+"12 models, 41%% of them bound to a published thesaurus rather than free "
 "text. Click any model to read its schema."
 msgstr ""
 "Chaque champ de ManuSpectrum et chaque lien entre modèles : 452 champs "
-"répartis sur 12 modèles, dont 41%% adossés à un thésaurus publié plutôt qu'à"
-" du texte libre. Cliquez sur un modèle pour consulter son schéma."
+"répartis sur 12 modèles, dont 41%% adossés à un thésaurus publié plutôt qu'à "
+"du texte libre. Cliquez sur un modèle pour consulter son schéma."
 
 #: templates/views/pages/graph-explorer.htm:53
 msgid "Explorer"
@@ -3282,10 +3499,10 @@ msgid ""
 "means the row's model points to the column's model — for instance "
 "<em>Analysis → Document</em>, “this analysis was run on that manuscript”."
 msgstr ""
-"<strong>Relations</strong> affiche les douze modèles en grille : une cellule"
-" remplie signifie que le modèle de la ligne pointe vers celui de la colonne "
-"— par exemple <em>Analyse → Document</em>, « cette analyse a été réalisée "
-"sur ce manuscrit »."
+"<strong>Relations</strong> affiche les douze modèles en grille : une cellule "
+"remplie signifie que le modèle de la ligne pointe vers celui de la colonne — "
+"par exemple <em>Analyse → Document</em>, « cette analyse a été réalisée sur "
+"ce manuscrit »."
 
 #: templates/views/pages/graph-explorer.htm:65
 msgid ""
@@ -3416,8 +3633,8 @@ msgstr "Vue plan"
 msgid ""
 "Technical grouping nodes: they organise fields but hold no data themselves."
 msgstr ""
-"Nœuds techniques de regroupement : ils organisent les champs mais ne portent"
-" aucune donnée."
+"Nœuds techniques de regroupement : ils organisent les champs mais ne portent "
+"aucune donnée."
 
 #: templates/views/pages/graph-explorer.htm:126
 msgid "Structural nodes"
@@ -3495,8 +3712,8 @@ msgstr "Le projet & les personnes"
 
 #: templates/views/pages/team.htm:49
 msgid ""
-"ManuSpectrum archives, standardises and makes searchable the physicochemical"
-" analysis of written cultural heritage — manuscripts, printed books, "
+"ManuSpectrum archives, standardises and makes searchable the physicochemical "
+"analysis of written cultural heritage — manuscripts, printed books, "
 "inscriptions and more — so that reliable, interoperable FAIR data can be "
 "reused by the heritage science community, far beyond those who ran the "
 "measurements."
@@ -3504,8 +3721,8 @@ msgstr ""
 "ManuSpectrum archive, normalise et rend interrogeables les analyses physico-"
 "chimiques du patrimoine culturel écrit — manuscrits, imprimés, inscriptions "
 "et plus encore — afin que des données fiables, interopérables et FAIR "
-"puissent être réutilisées par la communauté des sciences du patrimoine, bien"
-" au-delà de ceux qui ont réalisé les mesures."
+"puissent être réutilisées par la communauté des sciences du patrimoine, bien "
+"au-delà de ceux qui ont réalisé les mesures."
 
 #: templates/views/pages/team.htm:57
 msgid ""
@@ -3524,9 +3741,9 @@ msgid ""
 "ontologies (CIDOC-CRM, CRMsci) and reference thesauri to keep heterogeneous "
 "documents comparable and interoperable with the Biblissima portal."
 msgstr ""
-"Construit sur Arches, il place le composant matériel en position pivot entre"
-" l'objet, son contexte, les analyses et leurs interprétations, en s'appuyant"
-" sur des ontologies communes (CIDOC-CRM, CRMsci) et des thésaurus de "
+"Construit sur Arches, il place le composant matériel en position pivot entre "
+"l'objet, son contexte, les analyses et leurs interprétations, en s'appuyant "
+"sur des ontologies communes (CIDOC-CRM, CRMsci) et des thésaurus de "
 "référence pour garder des documents hétérogènes comparables et "
 "interopérables avec le portail Biblissima."
 
@@ -3568,8 +3785,8 @@ msgstr "Les personnes derrière ManuSpectrum"
 
 #: templates/views/pages/team.htm:120
 msgid ""
-"Physico-chemist at the Centre de Recherche sur la Conservation, specialising"
-" in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
+"Physico-chemist at the Centre de Recherche sur la Conservation, specialising "
+"in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
 "written cultural heritage. Referent for Biblissima+ Cluster 2."
 msgstr ""
 "Physico-chimiste au Centre de Recherche sur la Conservation, spécialisée "
@@ -3596,8 +3813,8 @@ msgid ""
 "Web developer of ManuSpectrum, building the Arches / Django platform, its "
 "IIIF services and interoperability with the Biblissima ecosystem."
 msgstr ""
-"Développeur web de ManuSpectrum, en charge de la plateforme Arches / Django,"
-" de ses services IIIF et de l'interopérabilité avec l'écosystème Biblissima."
+"Développeur web de ManuSpectrum, en charge de la plateforme Arches / Django, "
+"de ses services IIIF et de l'interopérabilité avec l'écosystème Biblissima."
 
 #: templates/views/pages/team.htm:160
 msgid "Reuse"
@@ -3642,13 +3859,13 @@ msgid ""
 "Cluster 2."
 msgstr ""
 "ManuSpectrum est financé par l'Agence Nationale de la Recherche dans le "
-"cadre du programme Biblissima+ « Équipement structurant pour la recherche »,"
-" au sein du Cluster 2."
+"cadre du programme Biblissima+ « Équipement structurant pour la recherche », "
+"au sein du Cluster 2."
 
 #: templates/views/pages/team.htm:177
 msgid ""
-"The platform's source code is published under the GNU General Public License"
-" v3. Reading and downloading published data needs no account."
+"The platform's source code is published under the GNU General Public License "
+"v3. Reading and downloading published data needs no account."
 msgstr ""
 "Le code source de la plateforme est publié sous licence GNU General Public "
 "License v3. La consultation et le téléchargement des données publiées ne "
@@ -3685,75 +3902,75 @@ msgstr "Réponse invalide du portail Biblissima."
 msgid "Unknown error while querying Biblissima."
 msgstr "Erreur inconnue lors de la requête Biblissima."
 
-#: views/model_graph_service.py:102
+#: views/model_graph_service.py:103
 msgid "String"
 msgstr "Texte"
 
-#: views/model_graph_service.py:103
+#: views/model_graph_service.py:104
 msgid "Concept"
 msgstr "Concept"
 
-#: views/model_graph_service.py:104
+#: views/model_graph_service.py:105
 msgid "Concept List"
 msgstr "Liste de concepts"
 
-#: views/model_graph_service.py:105
+#: views/model_graph_service.py:106
 msgid "Resource Instance"
 msgstr "Instance de ressource"
 
-#: views/model_graph_service.py:106
+#: views/model_graph_service.py:107
 msgid "Resource Instance List"
 msgstr "Liste d'instances de ressource"
 
-#: views/model_graph_service.py:107
+#: views/model_graph_service.py:108
 msgid "Number"
 msgstr "Nombre"
 
-#: views/model_graph_service.py:108
+#: views/model_graph_service.py:109
 msgid "Date"
 msgstr "Date"
 
-#: views/model_graph_service.py:109
+#: views/model_graph_service.py:110
 msgid "Boolean"
 msgstr "Booléen"
 
-#: views/model_graph_service.py:110
+#: views/model_graph_service.py:111
 msgid "Domain Value"
 msgstr "Valeur de domaine"
 
-#: views/model_graph_service.py:111
+#: views/model_graph_service.py:112
 msgid "Domain Value List"
 msgstr "Liste de valeurs de domaine"
 
-#: views/model_graph_service.py:112
+#: views/model_graph_service.py:113
 msgid "GeoJSON Feature Collection"
 msgstr "Entités GeoJSON"
 
-#: views/model_graph_service.py:113
+#: views/model_graph_service.py:114
 msgid "File List"
 msgstr "Liste de fichiers"
 
-#: views/model_graph_service.py:115
+#: views/model_graph_service.py:116
 msgid "Node Value"
 msgstr "Valeur de nœud"
 
-#: views/model_graph_service.py:116
+#: views/model_graph_service.py:117
 msgid "Annotation"
 msgstr "Annotation"
 
-#: views/model_graph_service.py:117
+#: views/model_graph_service.py:118
 msgid "EDTF"
 msgstr "EDTF"
 
-#: views/model_graph_service.py:118
+#: views/model_graph_service.py:119
 msgid "Non-localized String"
 msgstr "Chaîne non localisée"
 
-#: views/model_graph_service.py:119
+#: views/model_graph_service.py:120
 msgid "Reference"
 msgstr "Référence"
 
-#: views/model_graph_service.py:120
+#: views/model_graph_service.py:122
 msgid "IIIF Manifest"
 msgstr "Manifeste IIIF"
 

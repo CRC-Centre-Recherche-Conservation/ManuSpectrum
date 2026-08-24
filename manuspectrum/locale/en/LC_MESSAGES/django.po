@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 09:40-0500\n"
+"POT-Creation-Date: 2026-08-24 05:24-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -38,15 +38,28 @@ msgstr "Invalid URL format"
 msgid "Undefined"
 msgstr "Undefined"
 
-#: settings.py:420
+#: functions/xy_technique_config.py:184
+#, python-format
+msgid "Could not apply the XY configuration to tile %s"
+msgstr ""
+
+#: settings.py:121
+msgid "Term Matches"
+msgstr ""
+
+#: settings.py:127
+msgid "References"
+msgstr ""
+
+#: settings.py:479
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:457
+#: settings.py:516
 msgid "English"
 msgstr "English"
 
-#: settings.py:458
+#: settings.py:517
 msgid "French"
 msgstr ""
 
@@ -329,6 +342,7 @@ msgid "Sign Out"
 msgstr "Sign Out"
 
 #: templates/includes/ms_header.htm:77 templates/includes/ms_header.htm:111
+#: views/model_graph_service.py:121
 msgid "Language"
 msgstr ""
 
@@ -1570,6 +1584,102 @@ msgstr "Every field of every model: {n} rows across {m} models."
 msgid "Yes"
 msgstr "Yes"
 
+#: templates/javascript.htm:186
+#, fuzzy
+#| msgid "How to cite"
+msgid "How to combine them"
+msgstr "How to cite"
+
+#: templates/javascript.htm:187
+#: templates/views/components/plugins/importer-configuration.htm:153
+msgid "Reverse the X axis"
+msgstr ""
+
+#: templates/javascript.htm:188
+msgid ""
+"Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
+"and XPS."
+msgstr ""
+
+#: templates/javascript.htm:189
+#: templates/views/components/plugins/importer-configuration.htm:246
+#: templates/views/pages/conceptual-model.htm:111
+msgid "Transformations"
+msgstr "Transformations"
+
+#: templates/javascript.htm:190
+msgid ""
+"Applied to the plotted spectrum, in order. The file itself is never modified."
+msgstr ""
+
+#: templates/javascript.htm:191
+#: templates/views/components/plugins/importer-configuration.htm:313
+#, fuzzy
+#| msgid "Select a Transformation"
+msgid "Add a transformation"
+msgstr "Select a Transformation"
+
+#: templates/javascript.htm:192
+msgid "Reference normalisation (S-D)/(W-D)"
+msgstr ""
+
+#: templates/javascript.htm:193
+msgid "Pseudo-absorbance log10(1/R)"
+msgstr ""
+
+#: templates/javascript.htm:194
+msgid "Kubelka-Munk (1-R)^2/2R"
+msgstr ""
+
+#: templates/javascript.htm:195
+msgid "Normalise to maximum"
+msgstr ""
+
+#: templates/javascript.htm:196
+msgid "Normalise to total area (TIC)"
+msgstr ""
+
+#: templates/javascript.htm:197
+msgid "Smoothing (Savitzky-Golay)"
+msgstr ""
+
+#: templates/javascript.htm:198
+msgid "Derivative (Savitzky-Golay)"
+msgstr ""
+
+#: templates/javascript.htm:199
+#: templates/views/components/plugins/importer-configuration.htm:279
+msgid "Window"
+msgstr ""
+
+#: templates/javascript.htm:200
+#: templates/views/components/plugins/importer-configuration.htm:284
+msgid "Polynomial order"
+msgstr ""
+
+#: templates/javascript.htm:201
+#: templates/views/components/plugins/importer-configuration.htm:290
+msgid "Derivative order"
+msgstr ""
+
+#: templates/javascript.htm:202
+msgid ""
+"This transformation needs parameters you choose. It is never applied "
+"automatically."
+msgstr ""
+
+#: templates/javascript.htm:203
+msgid "White reference"
+msgstr ""
+
+#: templates/javascript.htm:204
+msgid "Dark current"
+msgstr ""
+
+#: templates/javascript.htm:205
+msgid "Configuration deduced from the analysis technique"
+msgstr ""
+
 #: templates/ms_base.htm:11 templates/ms_base.htm:28
 msgid ""
 "ManuSpectrum — interoperable database for physicochemical analysis of "
@@ -1604,11 +1714,11 @@ msgstr "If you didn't request this, you can safely ignore this email."
 msgid "Password reset — %(site_name)s"
 msgstr "Password reset — %(site_name)s"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:39
+#: templates/views/components/cards/file-renderers/afs-reader.htm:40
 msgid "Config"
 msgstr "Config"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:48
+#: templates/views/components/cards/file-renderers/afs-reader.htm:49
 msgid "Chart Configuration"
 msgstr "Chart Configuration"
 
@@ -1628,27 +1738,39 @@ msgstr ""
 msgid "XY file(s) staged"
 msgstr "XY file(s) staged"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:43
+#: templates/views/components/cards/file-renderers/xy-reader.htm:44
+#: templates/views/components/cards/file-renderers/xy-reader.htm:148
+msgid ""
+"Deduced from the analysis technique. Change it here if the technique is "
+"wrong."
+msgstr ""
+
+#: templates/views/components/cards/file-renderers/xy-reader.htm:45
+#: templates/views/components/cards/file-renderers/xy-reader.htm:149
+msgid "auto"
+msgstr ""
+
+#: templates/views/components/cards/file-renderers/xy-reader.htm:49
 msgid "No config"
 msgstr "No config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:68
+#: templates/views/components/cards/file-renderers/xy-reader.htm:74
 msgid "Apply to"
 msgstr "Apply to"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:68
+#: templates/views/components/cards/file-renderers/xy-reader.htm:74
 msgid "staged file(s)"
 msgstr "staged file(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:72
+#: templates/views/components/cards/file-renderers/xy-reader.htm:78
 msgid "Applying..."
 msgstr "Applying..."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:94
+#: templates/views/components/cards/file-renderers/xy-reader.htm:100
 msgid "Files Status"
 msgstr "Files Status"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:99
+#: templates/views/components/cards/file-renderers/xy-reader.htm:105
 msgid ""
 "Check which files have a configuration applied. Select file(s) to customize "
 "parsing settings individually, overriding the shared config."
@@ -1656,45 +1778,45 @@ msgstr ""
 "Check which files have a configuration applied. Select file(s) to customize "
 "parsing settings individually, overriding the shared config."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:104
+#: templates/views/components/cards/file-renderers/xy-reader.htm:110
 msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
 msgstr "No XY files found. Assign the XY renderer to files in the Manage tab."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:111
+#: templates/views/components/cards/file-renderers/xy-reader.htm:117
 msgid "file(s)"
 msgstr "file(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:113
+#: templates/views/components/cards/file-renderers/xy-reader.htm:119
 #: templates/views/components/plugins/file-configuration.htm:54
 msgid "selected"
 msgstr "selected"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:117
+#: templates/views/components/cards/file-renderers/xy-reader.htm:123
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:89
 msgid "All"
 msgstr "All"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:118
+#: templates/views/components/cards/file-renderers/xy-reader.htm:124
 msgid "None"
 msgstr "None"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:135
+#: templates/views/components/cards/file-renderers/xy-reader.htm:141
 msgid "Has custom parsing"
 msgstr "Has custom parsing"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:141
+#: templates/views/components/cards/file-renderers/xy-reader.htm:153
 msgid "none"
 msgstr "none"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:153
+#: templates/views/components/cards/file-renderers/xy-reader.htm:165
 msgid "Adjust parsing for"
 msgstr "Adjust parsing for"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:164
+#: templates/views/components/cards/file-renderers/xy-reader.htm:176
 msgid "Custom parsing:"
 msgstr "Custom parsing:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:168
+#: templates/views/components/cards/file-renderers/xy-reader.htm:180
 msgid ""
 "These settings override the shared config for the selected file(s) only. "
 "Choose 'Use config' to keep the shared config value."
@@ -1702,77 +1824,114 @@ msgstr ""
 "These settings override the shared config for the selected file(s) only. "
 "Choose 'Use config' to keep the shared config value."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:172
+#: templates/views/components/cards/file-renderers/xy-reader.htm:184
 msgid "Delimiter"
 msgstr "Delimiter"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:174
 #: templates/views/components/cards/file-renderers/xy-reader.htm:186
-#: templates/views/components/cards/file-renderers/xy-reader.htm:196
+#: templates/views/components/cards/file-renderers/xy-reader.htm:198
+#: templates/views/components/cards/file-renderers/xy-reader.htm:208
 msgid "Use config"
 msgstr "Use config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:175
 #: templates/views/components/cards/file-renderers/xy-reader.htm:187
+#: templates/views/components/cards/file-renderers/xy-reader.htm:199
 #: templates/views/components/plugins/importer-configuration.htm:33
 #: templates/views/components/plugins/importer-configuration.htm:97
 msgid "Auto-detect"
 msgstr "Auto-detect"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:176
+#: templates/views/components/cards/file-renderers/xy-reader.htm:188
 #: templates/views/components/plugins/importer-configuration.htm:99
 msgid "Comma"
 msgstr "Comma"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:177
+#: templates/views/components/cards/file-renderers/xy-reader.htm:189
 msgid "Tab"
 msgstr "Tab"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:178
+#: templates/views/components/cards/file-renderers/xy-reader.htm:190
 msgid "Other:"
 msgstr "Other:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:180
+#: templates/views/components/cards/file-renderers/xy-reader.htm:192
 msgid "Custom delimiter"
 msgstr "Custom delimiter"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:184
+#: templates/views/components/cards/file-renderers/xy-reader.htm:196
 #: templates/views/components/plugins/importer-configuration.htm:30
 msgid "Header"
 msgstr "Header"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:188
+#: templates/views/components/cards/file-renderers/xy-reader.htm:200
 msgid "Fixed lines:"
 msgstr "Fixed lines:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:190
+#: templates/views/components/cards/file-renderers/xy-reader.htm:202
 msgid "Number of lines"
 msgstr "Number of lines"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:194
+#: templates/views/components/cards/file-renderers/xy-reader.htm:206
 #: templates/views/components/plugins/importer-configuration.htm:41
 msgid "Footer"
 msgstr "Footer"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:197
+#: templates/views/components/cards/file-renderers/xy-reader.htm:209
 msgid "End of file"
 msgstr "End of file"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:198
+#: templates/views/components/cards/file-renderers/xy-reader.htm:210
 msgid "After text:"
 msgstr "After text:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:200
+#: templates/views/components/cards/file-renderers/xy-reader.htm:212
 msgid "Footer text"
 msgstr "Footer text"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:205
+#: templates/views/components/cards/file-renderers/xy-reader.htm:217
 msgid "Reset to config"
 msgstr "Reset to config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:209
+#: templates/views/components/cards/file-renderers/xy-reader.htm:221
 msgid "Apply & re-render"
 msgstr "Apply & re-render"
+
+#: templates/views/components/functions/xy-technique-config.htm:5
+#, fuzzy
+#| msgid "Add Importer Configuration"
+msgid "Automatic XY viewer configuration"
+msgstr "Add Importer Configuration"
+
+#: templates/views/components/functions/xy-technique-config.htm:7
+msgid ""
+"When an analysis records its technique, measurement\n"
+"            files uploaded to it receive a matching viewer configuration —\n"
+"            axis labels, units and axis direction. FTIR spectra, for "
+"instance,\n"
+"            are plotted on the conventional reversed wavenumber axis."
+msgstr ""
+
+#: templates/views/components/functions/xy-technique-config.htm:13
+msgid "A configuration chosen by hand is never modified."
+msgstr ""
+
+#: templates/views/components/functions/xy-technique-config.htm:14
+msgid ""
+"The mapping only fills files that have no\n"
+"            configuration yet. If an analysis records several techniques "
+"that\n"
+"            disagree, nothing is applied."
+msgstr ""
+
+#: templates/views/components/functions/xy-technique-config.htm:19
+msgid ""
+"The technique-to-preset table is maintained in\n"
+"            manuspectrum/constants/xy_presets.py."
+msgstr ""
+
+#: templates/views/components/functions/xy-technique-config.htm:26
+msgid "Triggered by"
+msgstr ""
 
 #: templates/views/components/plugins/file-configuration.htm:5
 msgid ""
@@ -1941,9 +2100,8 @@ msgid "e.g. 500"
 msgstr "e.g. 500"
 
 #: templates/views/components/plugins/importer-configuration.htm:73
-#: templates/views/pages/conceptual-model.htm:111
-msgid "Transformations"
-msgstr "Transformations"
+msgid "Multiple Y Columns"
+msgstr ""
 
 #: templates/views/components/plugins/importer-configuration.htm:74
 #, fuzzy
@@ -2004,7 +2162,7 @@ msgstr "X Axis Label"
 
 #: templates/views/components/plugins/importer-configuration.htm:126
 #: templates/views/components/plugins/importer-configuration.htm:144
-#: templates/views/components/plugins/importer-configuration.htm:224
+#: templates/views/components/plugins/importer-configuration.htm:230
 msgid "Presets..."
 msgstr "Presets..."
 
@@ -2012,35 +2170,41 @@ msgstr "Presets..."
 msgid "Y Axis Label"
 msgstr "Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:157
+#: templates/views/components/plugins/importer-configuration.htm:155
+msgid ""
+"Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR "
+"and XPS."
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:163
 msgid "Spectral Range"
 msgstr "Spectral Range"
 
-#: templates/views/components/plugins/importer-configuration.htm:160
+#: templates/views/components/plugins/importer-configuration.htm:166
 msgid "Limit the displayed X range. Leave empty for no limit."
 msgstr "Limit the displayed X range. Leave empty for no limit."
 
-#: templates/views/components/plugins/importer-configuration.htm:163
+#: templates/views/components/plugins/importer-configuration.htm:169
 msgid "Min X"
 msgstr "Min X"
 
-#: templates/views/components/plugins/importer-configuration.htm:164
+#: templates/views/components/plugins/importer-configuration.htm:170
 msgid "e.g. 400"
 msgstr "e.g. 400"
 
-#: templates/views/components/plugins/importer-configuration.htm:168
+#: templates/views/components/plugins/importer-configuration.htm:174
 msgid "Max X"
 msgstr "Max X"
 
-#: templates/views/components/plugins/importer-configuration.htm:169
+#: templates/views/components/plugins/importer-configuration.htm:175
 msgid "e.g. 4000"
 msgstr "e.g. 4000"
 
-#: templates/views/components/plugins/importer-configuration.htm:181
+#: templates/views/components/plugins/importer-configuration.htm:187
 msgid "Column Assignment"
 msgstr "Column Assignment"
 
-#: templates/views/components/plugins/importer-configuration.htm:184
+#: templates/views/components/plugins/importer-configuration.htm:190
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2048,28 +2212,72 @@ msgstr ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
 
-#: templates/views/components/plugins/importer-configuration.htm:189
+#: templates/views/components/plugins/importer-configuration.htm:195
 msgid "Column"
 msgstr "Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:207
+#: templates/views/components/plugins/importer-configuration.htm:213
 msgid "Add Column"
 msgstr "Add Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:213
+#: templates/views/components/plugins/importer-configuration.htm:219
 msgid "Right Y Axis Label"
 msgstr "Right Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:215
+#: templates/views/components/plugins/importer-configuration.htm:221
 msgid "Right Y Axis"
 msgstr "Right Y Axis"
 
-#: templates/views/components/plugins/importer-configuration.htm:237
+#: templates/views/components/plugins/importer-configuration.htm:250
+msgid ""
+"Applied to the plotted spectrum in the order shown. The stored file is never "
+"modified."
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:262
+msgid "Move up"
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:266
+msgid "Move down"
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:270
+#, fuzzy
+#| msgid "Remove all"
+msgid "Remove"
+msgstr "Remove all"
+
+#: templates/views/components/plugins/importer-configuration.htm:280
+#, fuzzy
+#| msgid "e.g. 500"
+msgid "e.g. 9"
+msgstr "e.g. 500"
+
+#: templates/views/components/plugins/importer-configuration.htm:285
+#, fuzzy
+#| msgid "e.g. 500"
+msgid "e.g. 2"
+msgstr "e.g. 500"
+
+#: templates/views/components/plugins/importer-configuration.htm:298
+msgid ""
+"This transformation depends on parameters you choose. It is never applied "
+"automatically by a technique preset."
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:307
+msgid ""
+"Reference normalisation needs a column tagged “White reference” under Column "
+"Assignment. Until then this step does nothing and the raw series are plotted."
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:320
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Cancel"
 
-#: templates/views/components/plugins/importer-configuration.htm:238
+#: templates/views/components/plugins/importer-configuration.htm:321
 msgid "Save"
 msgstr "Save"
 
@@ -2136,7 +2344,7 @@ msgid "Label"
 msgstr "Label"
 
 #: templates/views/components/widgets/biblissima-concept-widget.htm:31
-#: views/model_graph_service.py:114
+#: views/model_graph_service.py:115
 msgid "URL"
 msgstr "URL"
 
@@ -3616,83 +3824,83 @@ msgstr "Invalid response from the Biblissima portal."
 msgid "Unknown error while querying Biblissima."
 msgstr "Unknown error while querying Biblissima."
 
-#: views/model_graph_service.py:102
+#: views/model_graph_service.py:103
 msgid "String"
 msgstr ""
 
-#: views/model_graph_service.py:103
+#: views/model_graph_service.py:104
 #, fuzzy
 #| msgid "Conceptual Model"
 msgid "Concept"
 msgstr "Conceptual Model"
 
-#: views/model_graph_service.py:104
+#: views/model_graph_service.py:105
 msgid "Concept List"
 msgstr ""
 
-#: views/model_graph_service.py:105
+#: views/model_graph_service.py:106
 #, fuzzy
 #| msgid "Resources"
 msgid "Resource Instance"
 msgstr "Resources"
 
-#: views/model_graph_service.py:106
+#: views/model_graph_service.py:107
 msgid "Resource Instance List"
 msgstr ""
 
-#: views/model_graph_service.py:107
+#: views/model_graph_service.py:108
 msgid "Number"
 msgstr ""
 
-#: views/model_graph_service.py:108
+#: views/model_graph_service.py:109
 msgid "Date"
 msgstr ""
 
-#: views/model_graph_service.py:109
+#: views/model_graph_service.py:110
 msgid "Boolean"
 msgstr ""
 
-#: views/model_graph_service.py:110
+#: views/model_graph_service.py:111
 msgid "Domain Value"
 msgstr ""
 
-#: views/model_graph_service.py:111
+#: views/model_graph_service.py:112
 msgid "Domain Value List"
 msgstr ""
 
-#: views/model_graph_service.py:112
+#: views/model_graph_service.py:113
 msgid "GeoJSON Feature Collection"
 msgstr ""
 
-#: views/model_graph_service.py:113
+#: views/model_graph_service.py:114
 #, fuzzy
 #| msgid "Files"
 msgid "File List"
 msgstr "Files"
 
-#: views/model_graph_service.py:115
+#: views/model_graph_service.py:116
 msgid "Node Value"
 msgstr ""
 
-#: views/model_graph_service.py:116
+#: views/model_graph_service.py:117
 #, fuzzy
 #| msgid "IIIF Annotations"
 msgid "Annotation"
 msgstr "IIIF Annotations"
 
-#: views/model_graph_service.py:117
+#: views/model_graph_service.py:118
 msgid "EDTF"
 msgstr ""
 
-#: views/model_graph_service.py:118
+#: views/model_graph_service.py:119
 msgid "Non-localized String"
 msgstr ""
 
-#: views/model_graph_service.py:119
+#: views/model_graph_service.py:120
 msgid "Reference"
 msgstr ""
 
-#: views/model_graph_service.py:120
+#: views/model_graph_service.py:122
 #, fuzzy
 #| msgid "IIIF manifest"
 msgid "IIIF Manifest"
