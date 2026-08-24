@@ -376,6 +376,19 @@ TECHNIQUE_PRESETS = {
 }
 
 
+#: Config ids of the seeded presets. They are the shared baseline every
+#: technique-derived configuration points at, so they are protected: never
+#: deletable, and editable only by a superuser. Membership is derived from
+#: XY_PRESETS rather than a database flag, so a new preset is protected the
+#: moment it is added here — nothing to remember, nothing to migrate.
+SEEDED_CONFIG_IDS = frozenset(preset["config_id"] for preset in XY_PRESETS.values())
+
+
+def is_seeded_preset(config_id):
+    """True for a configuration seeded by migration, false for a curator's own."""
+    return str(config_id) in SEEDED_CONFIG_IDS
+
+
 def preset_for_technique(list_item_id):
     """Return the preset dict for a controlled-list item id, or ``None``."""
     key = TECHNIQUE_PRESETS.get(str(list_item_id))
