@@ -25,6 +25,11 @@
             seriesData: seriesData,
             loading: loading
         }'></div>
+        <p class="xy-processing-note">
+            {% trans "Processing:" %}
+            <!-- ko if: processing --><span data-bind="text: processing"></span><!-- /ko -->
+            <!-- ko ifnot: processing --><span class="xy-processing-none">{% trans "none applied" %}</span><!-- /ko -->
+        </p>
         <!--/ko-->
     </div>
     <!--/ko-->

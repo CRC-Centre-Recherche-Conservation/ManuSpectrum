@@ -108,3 +108,16 @@
         margin-right: 3px;
     }
 }
+
+// States what the configuration applied to the plotted values. Always present,
+// reading "none" when nothing ran: silence must not be indistinguishable from
+// "nothing applied" — the convention JCAMP-DX and mzML both enforce.
+.xy-processing-note {
+    margin: 4px 0 0;
+    color: #777;
+    font-size: 11px;
+    text-align: right;
+}
+.xy-processing-none {
+    font-style: italic;
+}
