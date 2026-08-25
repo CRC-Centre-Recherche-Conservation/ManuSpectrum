@@ -56,12 +56,25 @@ urlpatterns = [
     re_path(
         r"^renderer/(?P<renderer_id>[^\/]+)", RendererView.as_view(), name="renderer"
     ),
-    re_path(
-        r"^renderer_config/(?P<renderer_config_id>[^\/]+)",
+    # A UUID converter, not a catch-all segment. The two protections on a
+    # seeded preset are decided by comparing the captured value against
+    # canonical ids, while the row it names is resolved by a UUIDField that
+    # also accepts uppercase, hyphen-free, braced and urn:-prefixed spellings.
+    # A permissive pattern let those two disagree, and "7A1C…" skipped the
+    # guard while deleting the row it protects. Django's converter admits the
+    # canonical form only; anything else is a 404 before the view is reached.
+    # The frontend only ever echoes server-returned ids, so no client changes.
+    path(
+        "renderer_config/<uuid:renderer_config_id>",
         RendererConfigView.as_view(),
         name="renderer_config",
     ),
-    re_path(r"^renderer_config/", RendererConfigView.as_view(), name="renderer_config"),
+    # Anchored: without the ``$`` this pattern also swallowed every id the
+    # converter above rejects, so a malformed one fell through to the create
+    # branch and silently made a new configuration instead of failing.
+    re_path(
+        r"^renderer_config/$", RendererConfigView.as_view(), name="renderer_config"
+    ),
 ]
 
 # NOTE: media serving is NOT mounted here. MEDIA_URL is "/files/", the same

@@ -12,6 +12,7 @@ from arches.app.views.api import APIBase
 from manuspectrum.models import RendererConfig
 from manuspectrum.views.permissions import EDITOR_GROUPS
 from manuspectrum.constants.xy_presets import (
+    canonical_config_id,
     is_seeded_preset,
     merge_seed_owned_keys,
 )
@@ -60,6 +61,11 @@ def in_use_query(config_id, file_nodes):
     * it only looked at entry ``0``, while a measurement tile can hold an
       instrument's original next to its CSV derivative.
     """
+    # Canonicalised because JSONB containment is byte-exact and tile data always
+    # carries the lowercase, hyphenated form. Asked in any other spelling the
+    # query matches nothing, and "not in use" is exactly the answer that lets a
+    # delete through.
+    config_id = canonical_config_id(config_id) or config_id
     query = Q()
     for node_id, nodegroup_id in file_nodes:
         query |= Q(

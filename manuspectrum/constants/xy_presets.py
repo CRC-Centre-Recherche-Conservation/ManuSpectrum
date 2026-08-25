@@ -83,6 +83,7 @@ distinct; if they ever coincide, one of them has lost its meaning.
 
 from functools import lru_cache
 import logging
+import uuid
 
 from django.conf import settings
 
@@ -560,9 +561,29 @@ TECHNIQUE_PRESETS = {
 SEEDED_CONFIG_IDS = frozenset(preset["config_id"] for preset in XY_PRESETS.values())
 
 
+def canonical_config_id(config_id):
+    """The one spelling of an id, or None when it is not an id at all.
+
+    Everything that identifies a configuration has to agree on what "the same
+    id" means, and Django decides that for us: ``UUIDField`` funnels its input
+    through ``uuid.UUID(hex=...)``, which is case-insensitive and forgives
+    missing hyphens, surrounding braces and a ``urn:uuid:`` prefix. A guard
+    comparing raw strings therefore accepted a narrower set than the row lookup
+    it was guarding, and ``7A1C…`` skipped the protection while resolving the
+    protected row.
+
+    Returns None rather than raising: a malformed id is not a protected one,
+    and rejecting it is the job of the lookup that follows.
+    """
+    try:
+        return str(uuid.UUID(str(config_id)))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def is_seeded_preset(config_id):
     """True for a configuration seeded by migration, false for a curator's own."""
-    return str(config_id) in SEEDED_CONFIG_IDS
+    return canonical_config_id(config_id) in SEEDED_CONFIG_IDS
 
 
 # Each seeded configuration carries the key of the preset it came from. This is

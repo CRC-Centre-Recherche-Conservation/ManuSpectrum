@@ -14,7 +14,10 @@ common shape.
 """
 
 from django.test import SimpleTestCase
+from django.urls import resolve
+from django.urls.exceptions import Resolver404
 
+from manuspectrum.constants.xy_presets import is_seeded_preset
 from manuspectrum.views.renderer_config import in_use_query
 
 CONFIG_ID = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a03"
@@ -65,3 +68,90 @@ class InUseQueryTests(SimpleTestCase):
         # An empty Q matches everything, which would report every configuration
         # as in use and block all deletion. The caller short-circuits instead.
         self.assertFalse(in_use_query(CONFIG_ID, []))
+
+
+class SeededPresetIdentityTests(SimpleTestCase):
+    """The guard's acceptance set must match the one the database resolves.
+
+    Both protections on a seeded preset — superuser-only editing, no deletion
+    at all — are decided by comparing a string against canonical UUID literals.
+    The value compared is the raw URL segment, and the same raw segment then
+    reaches ``RendererConfig.objects.get(configid=...)``, where Django's
+    UUIDField funnels it through ``uuid.UUID(hex=...)``: case-insensitive, and
+    tolerant of missing hyphens, braces and a ``urn:uuid:`` prefix.
+
+    So the two disagreed. ``7A1C…`` returned False from the guard while
+    resolving the protected row, and any editor could rewrite or delete the
+    shared baseline every technique-derived configuration points at.
+
+    The in-use interlock failed the same way and in the same direction:
+    JSONB containment is byte-exact, tile data always holds the canonical
+    lowercase form, so a non-canonical id matched zero files and the delete was
+    not merely permitted but guaranteed to complete.
+    """
+
+    SEEDED = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a02"
+
+    def test_a_seeded_preset_is_recognised_however_it_is_spelled(self):
+        for spelling in (
+            self.SEEDED,
+            self.SEEDED.upper(),
+            self.SEEDED.replace("-", ""),
+            "{" + self.SEEDED + "}",
+            "urn:uuid:" + self.SEEDED,
+        ):
+            self.assertTrue(
+                is_seeded_preset(spelling),
+                msg=f"{spelling} resolves to a protected row but skips the guard",
+            )
+
+    def test_a_curator_configuration_stays_unprotected(self):
+        self.assertFalse(is_seeded_preset("11111111-2222-3333-4444-555555555555"))
+
+    def test_a_value_that_is_not_a_uuid_is_not_protected(self):
+        # The guard answers "not seeded" rather than raising: the row lookup
+        # that follows is what should reject a malformed id.
+        for junk in ("", "not-a-uuid", None, 42):
+            self.assertFalse(is_seeded_preset(junk))
+
+    def test_the_in_use_lookup_asks_in_the_form_tiles_store(self):
+        # Tile data always carries the canonical lowercase spelling, and JSONB
+        # containment is byte-exact, so the query has to canonicalise too.
+        query = in_use_query(
+            self.SEEDED.upper(), [(MEASUREMENT_NODE, MEASUREMENT_NODE)]
+        )
+        self.assertIn(self.SEEDED, str(query))
+
+
+class ConfigIdRoutingTests(SimpleTestCase):
+    """The URL must admit the one spelling the guard recognises.
+
+    Second layer, deliberately redundant with the canonicalisation above: the
+    protection on a seeded preset should not rest on a single comparison being
+    written correctly.
+    """
+
+    SEEDED = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a02"
+
+    def test_the_canonical_form_reaches_the_view(self):
+        match = resolve(f"/renderer_config/{self.SEEDED}")
+        self.assertEqual(str(match.kwargs["renderer_config_id"]), self.SEEDED)
+
+    def test_every_other_spelling_is_refused_at_the_door(self):
+        for spelling in (
+            self.SEEDED.upper(),
+            self.SEEDED.replace("-", ""),
+            "{" + self.SEEDED + "}",
+            "urn:uuid:" + self.SEEDED,
+            "not-a-uuid",
+        ):
+            with self.assertRaises(
+                Resolver404, msg=f"{spelling} still reaches the view"
+            ):
+                resolve(f"/renderer_config/{spelling}")
+
+    def test_the_create_route_still_takes_no_id(self):
+        # Anchored, so a rejected id cannot fall through here and silently
+        # become "create a new configuration".
+        match = resolve("/renderer_config/")
+        self.assertIsNone(match.kwargs.get("renderer_config_id"))
