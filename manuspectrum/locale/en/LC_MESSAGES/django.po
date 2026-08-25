@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 08:46-0500\n"
+"POT-Creation-Date: 2026-08-25 09:10-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -905,7 +905,7 @@ msgid "Point"
 msgstr ""
 
 #: templates/javascript.htm:28
-#: templates/views/components/plugins/importer-configuration.htm:84
+#: templates/views/components/plugins/importer-configuration.htm:105
 msgid "Y Axis"
 msgstr "Y Axis"
 
@@ -1655,7 +1655,7 @@ msgid "Derivative"
 msgstr ""
 
 #: templates/javascript.htm:202
-#: templates/views/components/plugins/importer-configuration.htm:102
+#: templates/views/components/plugins/importer-configuration.htm:129
 msgid "Reverse the X axis"
 msgstr ""
 
@@ -1666,7 +1666,7 @@ msgid ""
 msgstr ""
 
 #: templates/javascript.htm:204
-#: templates/views/components/plugins/importer-configuration.htm:168
+#: templates/views/components/plugins/importer-configuration.htm:195
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
@@ -1906,7 +1906,7 @@ msgstr "Use config"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:187
 #: templates/views/components/cards/file-renderers/xy-reader.htm:199
-#: templates/views/components/plugins/importer-configuration.htm:54
+#: templates/views/components/plugins/importer-configuration.htm:74
 msgid "Auto-detect"
 msgstr "Auto-detect"
 
@@ -1927,7 +1927,7 @@ msgid "Custom delimiter"
 msgstr "Custom delimiter"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:196
-#: templates/views/components/plugins/importer-configuration.htm:51
+#: templates/views/components/plugins/importer-configuration.htm:71
 msgid "Header"
 msgstr "Header"
 
@@ -1940,7 +1940,7 @@ msgid "Number of lines"
 msgstr "Number of lines"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:206
-#: templates/views/components/plugins/importer-configuration.htm:62
+#: templates/views/components/plugins/importer-configuration.htm:82
 msgid "Footer"
 msgstr "Footer"
 
@@ -2071,125 +2071,131 @@ msgstr "Define how to import your x/y data"
 msgid "Filter configurations..."
 msgstr "Importer Configurations"
 
-#: templates/views/components/plugins/importer-configuration.htm:21
+#: templates/views/components/plugins/importer-configuration.htm:38
 msgid "Edit"
 msgstr "Edit"
 
-#: templates/views/components/plugins/importer-configuration.htm:25
+#: templates/views/components/plugins/importer-configuration.htm:42
 msgid ""
 "Part of the shared baseline: cannot be deleted, and only an administrator "
 "can edit it."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:29
+#: templates/views/components/plugins/importer-configuration.htm:48
 msgid "Delete"
 msgstr "Delete"
 
-#: templates/views/components/plugins/importer-configuration.htm:34
+#: templates/views/components/plugins/importer-configuration.htm:54
 #, fuzzy
 #| msgid "No result matches the current filter."
 msgid "No configuration matches this filter."
 msgstr "No result matches the current filter."
 
-#: templates/views/components/plugins/importer-configuration.htm:38
-#: templates/views/components/plugins/importer-configuration.htm:42
+#: templates/views/components/plugins/importer-configuration.htm:58
+#: templates/views/components/plugins/importer-configuration.htm:62
 msgid "Add Importer Configuration"
 msgstr "Add Importer Configuration"
 
-#: templates/views/components/plugins/importer-configuration.htm:45
+#: templates/views/components/plugins/importer-configuration.htm:65
 msgid "Importer Name"
 msgstr "Importer Name"
 
-#: templates/views/components/plugins/importer-configuration.htm:46
+#: templates/views/components/plugins/importer-configuration.htm:66
 msgid "Name of Importer"
 msgstr "Name of Importer"
 
-#: templates/views/components/plugins/importer-configuration.htm:47
+#: templates/views/components/plugins/importer-configuration.htm:67
 msgid "Importer Description"
 msgstr "Importer Description"
 
-#: templates/views/components/plugins/importer-configuration.htm:48
+#: templates/views/components/plugins/importer-configuration.htm:68
 msgid "Describe the Importer"
 msgstr "Describe the Importer"
 
-#: templates/views/components/plugins/importer-configuration.htm:52
+#: templates/views/components/plugins/importer-configuration.htm:72
 msgid "Define where your x/y data are found in the file"
 msgstr "Define where your x/y data are found in the file"
 
-#: templates/views/components/plugins/importer-configuration.htm:55
+#: templates/views/components/plugins/importer-configuration.htm:75
 msgid "File has a fixed header (constant number of lines)"
 msgstr "File has a fixed header (constant number of lines)"
 
-#: templates/views/components/plugins/importer-configuration.htm:56
+#: templates/views/components/plugins/importer-configuration.htm:76
 msgid "File header ends after specific text"
 msgstr "File header ends after specific text"
 
-#: templates/views/components/plugins/importer-configuration.htm:58
-#: templates/views/components/plugins/importer-configuration.htm:68
+#: templates/views/components/plugins/importer-configuration.htm:78
+#: templates/views/components/plugins/importer-configuration.htm:88
 msgid "Ending Text"
 msgstr "Ending Text"
 
-#: templates/views/components/plugins/importer-configuration.htm:59
+#: templates/views/components/plugins/importer-configuration.htm:79
 msgid "Number of Lines"
 msgstr "Number of Lines"
 
-#: templates/views/components/plugins/importer-configuration.htm:63
+#: templates/views/components/plugins/importer-configuration.htm:83
 msgid "Define where your x/y data end in the file"
 msgstr "Define where your x/y data end in the file"
 
-#: templates/views/components/plugins/importer-configuration.htm:65
+#: templates/views/components/plugins/importer-configuration.htm:85
 msgid "End of File"
 msgstr "End of File"
 
-#: templates/views/components/plugins/importer-configuration.htm:66
+#: templates/views/components/plugins/importer-configuration.htm:86
 msgid "File footer begins after specific text (consistent ending text)"
 msgstr "File footer begins after specific text (consistent ending text)"
 
-#: templates/views/components/plugins/importer-configuration.htm:71
+#: templates/views/components/plugins/importer-configuration.htm:91
 msgid "X Axis Source"
 msgstr "X Axis Source"
 
-#: templates/views/components/plugins/importer-configuration.htm:72
+#: templates/views/components/plugins/importer-configuration.htm:92
 msgid "Define how the X axis values are determined"
 msgstr "Define how the X axis values are determined"
 
-#: templates/views/components/plugins/importer-configuration.htm:74
+#: templates/views/components/plugins/importer-configuration.htm:94
 msgid "From data (first column is X)"
 msgstr "From data (first column is X)"
 
-#: templates/views/components/plugins/importer-configuration.htm:75
+#: templates/views/components/plugins/importer-configuration.htm:95
 #, fuzzy
 #| msgid "Generate from range (no X column in file)"
 msgid "Intensities only (no X column in file)"
 msgstr "Generate from range (no X column in file)"
 
-#: templates/views/components/plugins/importer-configuration.htm:78
+#: templates/views/components/plugins/importer-configuration.htm:98
 msgid ""
 "Rows are plotted against their position — 1, 2, 3 … — and the X axis is "
 "labelled Point. Turning channels into a physical quantity needs the "
 "instrument's calibration, which the file conversion supplies."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:82
+#: templates/views/components/plugins/importer-configuration.htm:103
 msgid "Y Axis Label"
 msgstr "Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:93
-#: templates/views/components/plugins/importer-configuration.htm:155
+#: templates/views/components/plugins/importer-configuration.htm:114
+#: templates/views/components/plugins/importer-configuration.htm:182
 msgid "Presets..."
 msgstr "Presets..."
 
-#: templates/views/components/plugins/importer-configuration.htm:104
+#: templates/views/components/plugins/importer-configuration.htm:126
+#, fuzzy
+#| msgid "X Axis Source"
+msgid "X Axis Direction"
+msgstr "X Axis Source"
+
+#: templates/views/components/plugins/importer-configuration.htm:131
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR "
 "and XPS."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:112
+#: templates/views/components/plugins/importer-configuration.htm:139
 msgid "Column Assignment"
 msgstr "Column Assignment"
 
-#: templates/views/components/plugins/importer-configuration.htm:115
+#: templates/views/components/plugins/importer-configuration.htm:142
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2197,51 +2203,51 @@ msgstr ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
 
-#: templates/views/components/plugins/importer-configuration.htm:120
+#: templates/views/components/plugins/importer-configuration.htm:147
 msgid "Column"
 msgstr "Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:138
+#: templates/views/components/plugins/importer-configuration.htm:165
 msgid "Add Column"
 msgstr "Add Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:144
+#: templates/views/components/plugins/importer-configuration.htm:171
 msgid "Right Y Axis Label"
 msgstr "Right Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:146
+#: templates/views/components/plugins/importer-configuration.htm:173
 msgid "Right Y Axis"
 msgstr "Right Y Axis"
 
-#: templates/views/components/plugins/importer-configuration.htm:169
+#: templates/views/components/plugins/importer-configuration.htm:196
 msgid ""
 "How the columns are combined into the quantity the Y axis names. The stored "
 "file is never modified."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:174
+#: templates/views/components/plugins/importer-configuration.htm:201
 msgid "Plot each Y column as its own series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:179
+#: templates/views/components/plugins/importer-configuration.htm:206
 msgid "Average them into a single series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:185
+#: templates/views/components/plugins/importer-configuration.htm:212
 msgid "Divide by the reference column — R = (S−D)/(W−D)"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:188
+#: templates/views/components/plugins/importer-configuration.htm:215
 msgid ""
 "Tag a column as “White reference” under Column Assignment to enable this."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:194
+#: templates/views/components/plugins/importer-configuration.htm:221
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Cancel"
 
-#: templates/views/components/plugins/importer-configuration.htm:195
+#: templates/views/components/plugins/importer-configuration.htm:222
 msgid "Save"
 msgstr "Save"
 
