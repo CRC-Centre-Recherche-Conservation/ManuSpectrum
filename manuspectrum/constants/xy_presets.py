@@ -251,6 +251,14 @@ def _preset(config_id, name, description, x_label, y_label, **kwargs):
         "display": display,
         "multiYHandling": kwargs.pop("multi_y", MULTI_Y_SEPARATE),
     }
+    # The file already holds the quantity the Y label names, because the
+    # instrument reached it before export. Without this, a preset naming a
+    # quantity it does not compute is indistinguishable from one that forgot
+    # to — which is what the axis-label test exists to catch. Setting it is a
+    # claim about the instrument, so it is written next to the preset that
+    # makes it, never assumed.
+    if kwargs.pop("y_precorrected", False):
+        config["yPrecorrected"] = True
     config.update(kwargs)
     return {
         "config_id": config_id,
@@ -301,9 +309,9 @@ XY_PRESETS = {
         "FORS — wavelength / reflectance",
         "Columns: 1 = wavelength (nm), 2 = target, 3 = white reference, "
         "4 = dark (optional). Tag 3 and 4 under Column Assignment and the "
-        "reflectance (S-D)/(W-D) is computed for you.",
+        "reflectance (S-D)/(W-D) is computed for you, as a fraction (0-1).",
         "Wavelength (nm)",
-        "Reflectance (%)",
+        "Reflectance (0-1)",
         multi_y=MULTI_Y_REFERENCE,
     ),
     "maldi": _preset(
@@ -354,13 +362,20 @@ XY_PRESETS = {
         "Wavelength (nm)",
         "Intensity (a.u.)",
     ),
+    # A spectrocolorimeter calibrates against its own white tile before it
+    # writes a file, so the export already holds the ratio — there is no
+    # reference column to divide by, and the label is free-standing. That is a
+    # claim about the instrument, hence `y_precorrected` rather than silence.
+    # Revisit it the first time an export arrives carrying a white channel.
     "colorimetry": _preset(
         "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a0b",
         "Colorimetry — wavelength / reflectance",
-        "Columns: 1 = wavelength (nm), 2 = reflectance (%). The spectral curve "
-        "behind CIE L*a*b* values.",
+        "Columns: 1 = wavelength (nm), 2 = reflectance (0-1, not %). Already "
+        "referenced by the instrument. The spectral curve behind CIE L*a*b* "
+        "values.",
         "Wavelength (nm)",
-        "Reflectance (%)",
+        "Reflectance (0-1)",
+        y_precorrected=True,
     ),
 }
 

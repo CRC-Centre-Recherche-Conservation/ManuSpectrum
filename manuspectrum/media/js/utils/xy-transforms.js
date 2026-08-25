@@ -140,11 +140,26 @@ export const referenceNormalize = (series, roles) => {
     return { series: outSeries, roles: outRoles };
 };
 
-/** Apparent absorbance, A = log10(1 / R). Undefined for R <= 0. */
+/**
+ * Apparent absorbance, A = log10(1 / R). Undefined for R <= 0.
+ *
+ * PRECONDITION: R is a FRACTION in [0, 1], never a percentage. This is what
+ * referenceNormalize produces — (S-D)/(W-D) — and what every preset naming
+ * reflectance must therefore hold. Fed percentages the function does not fail,
+ * it silently returns the wrong sign: at R = 50 the result is -1.70 where
+ * +0.30 is meant. Nothing downstream can tell the two apart, which is why the
+ * axis labels say "Reflectance (0-1)" rather than "(%)".
+ */
 export const logInverseR = (values) =>
     values.map((r) => (Number.isFinite(r) && r > EPSILON ? Math.log10(1 / r) : NaN));
 
-/** Kubelka-Munk remission, K/S = (1 - R)^2 / (2R). Undefined for R <= 0. */
+/**
+ * Kubelka-Munk remission, K/S = (1 - R)^2 / (2R). Undefined for R <= 0.
+ *
+ * PRECONDITION: R is a FRACTION in [0, 1], as for logInverseR above. At R = 50
+ * (a percentage) this returns 24.0 where 0.25 is meant — two orders of
+ * magnitude, on a curve that still looks like a spectrum.
+ */
 export const kubelkaMunk = (values) =>
     values.map((r) => {
         if (!Number.isFinite(r) || r <= EPSILON) return NaN;
