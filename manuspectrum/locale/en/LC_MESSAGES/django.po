@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 09:23-0500\n"
+"POT-Creation-Date: 2026-08-24 10:14-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1651,7 +1651,7 @@ msgid ""
 msgstr ""
 
 #: templates/javascript.htm:200
-#: templates/views/components/plugins/importer-configuration.htm:244
+#: templates/views/components/plugins/importer-configuration.htm:250
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
@@ -2219,7 +2219,7 @@ msgstr "X Axis Label"
 
 #: templates/views/components/plugins/importer-configuration.htm:127
 #: templates/views/components/plugins/importer-configuration.htm:145
-#: templates/views/components/plugins/importer-configuration.htm:231
+#: templates/views/components/plugins/importer-configuration.htm:237
 msgid "Presets..."
 msgstr "Presets..."
 
@@ -2238,30 +2238,33 @@ msgid "Spectral Range"
 msgstr "Spectral Range"
 
 #: templates/views/components/plugins/importer-configuration.htm:167
-msgid "Limit the displayed X range. Leave empty for no limit."
+#, fuzzy
+#| msgid "Limit the displayed X range. Leave empty for no limit."
+msgid ""
+"Limit the displayed X range. Leave empty to show the whole acquired range."
 msgstr "Limit the displayed X range. Leave empty for no limit."
 
 #: templates/views/components/plugins/importer-configuration.htm:170
 msgid "Min X"
 msgstr "Min X"
 
-#: templates/views/components/plugins/importer-configuration.htm:171
-msgid "e.g. 400"
-msgstr "e.g. 400"
-
 #: templates/views/components/plugins/importer-configuration.htm:175
 msgid "Max X"
 msgstr "Max X"
 
-#: templates/views/components/plugins/importer-configuration.htm:176
-msgid "e.g. 4000"
-msgstr "e.g. 4000"
+#: templates/views/components/plugins/importer-configuration.htm:183
+msgid ""
+"Points outside this range are not plotted. A configuration is shared by "
+"every file of its technique, and instruments do not all cover the same range "
+"— a crop set here hides real signal from acquisitions that go further. The "
+"range is stated under each chart."
+msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:188
+#: templates/views/components/plugins/importer-configuration.htm:194
 msgid "Column Assignment"
 msgstr "Column Assignment"
 
-#: templates/views/components/plugins/importer-configuration.htm:191
+#: templates/views/components/plugins/importer-configuration.htm:197
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2269,51 +2272,51 @@ msgstr ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
 
-#: templates/views/components/plugins/importer-configuration.htm:196
+#: templates/views/components/plugins/importer-configuration.htm:202
 msgid "Column"
 msgstr "Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:214
+#: templates/views/components/plugins/importer-configuration.htm:220
 msgid "Add Column"
 msgstr "Add Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:220
+#: templates/views/components/plugins/importer-configuration.htm:226
 msgid "Right Y Axis Label"
 msgstr "Right Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:222
+#: templates/views/components/plugins/importer-configuration.htm:228
 msgid "Right Y Axis"
 msgstr "Right Y Axis"
 
-#: templates/views/components/plugins/importer-configuration.htm:245
+#: templates/views/components/plugins/importer-configuration.htm:251
 msgid ""
 "How the columns are combined into the quantity the Y axis names. The stored "
 "file is never modified."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:250
+#: templates/views/components/plugins/importer-configuration.htm:256
 msgid "Plot each Y column as its own series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:255
+#: templates/views/components/plugins/importer-configuration.htm:261
 msgid "Average them into a single series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:261
+#: templates/views/components/plugins/importer-configuration.htm:267
 msgid "Divide by the reference column — R = (S−D)/(W−D)"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:264
+#: templates/views/components/plugins/importer-configuration.htm:270
 msgid ""
 "Tag a column as “White reference” under Column Assignment to enable this."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:270
+#: templates/views/components/plugins/importer-configuration.htm:276
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Cancel"
 
-#: templates/views/components/plugins/importer-configuration.htm:271
+#: templates/views/components/plugins/importer-configuration.htm:277
 msgid "Save"
 msgstr "Save"
 
@@ -3970,6 +3973,12 @@ msgstr ""
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
+
+#~ msgid "e.g. 400"
+#~ msgstr "e.g. 400"
+
+#~ msgid "e.g. 4000"
+#~ msgstr "e.g. 4000"
 
 #, fuzzy
 #~| msgid ""
