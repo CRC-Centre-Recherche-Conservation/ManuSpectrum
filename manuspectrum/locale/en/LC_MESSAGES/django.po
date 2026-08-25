@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 08:41-0500\n"
+"POT-Creation-Date: 2026-08-25 08:46-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1618,7 +1618,7 @@ msgstr ""
 msgid "As measured"
 msgstr ""
 
-#: templates/javascript.htm:193 templates/javascript.htm:205
+#: templates/javascript.htm:193 templates/javascript.htm:208
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr ""
 
@@ -1643,84 +1643,96 @@ msgid "Second derivative"
 msgstr ""
 
 #: templates/javascript.htm:199
+msgid "Divided by the white reference"
+msgstr ""
+
+#: templates/javascript.htm:200
+msgid "Smoothed"
+msgstr ""
+
+#: templates/javascript.htm:201
+msgid "Derivative"
+msgstr ""
+
+#: templates/javascript.htm:202
 #: templates/views/components/plugins/importer-configuration.htm:102
 msgid "Reverse the X axis"
 msgstr ""
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:203
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
 msgstr ""
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:204
 #: templates/views/components/plugins/importer-configuration.htm:168
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:202
+#: templates/javascript.htm:205
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:206
 #, fuzzy
 #| msgid "Select a Transformation"
 msgid "Add a transformation"
 msgstr "Select a Transformation"
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:207
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr ""
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:209
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr ""
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:210
 msgid "Normalise to maximum"
 msgstr ""
 
-#: templates/javascript.htm:208
+#: templates/javascript.htm:211
 msgid "Normalise to total area (TIC)"
 msgstr ""
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:212
 msgid "Smoothing (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:213
 msgid "Derivative (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:214
 msgid "Window"
 msgstr ""
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:215
 msgid "Polynomial order"
 msgstr ""
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:216
 msgid "Derivative order"
 msgstr ""
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:217
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
 msgstr ""
 
-#: templates/javascript.htm:215
+#: templates/javascript.htm:218
 msgid "White reference"
 msgstr ""
 
-#: templates/javascript.htm:216
+#: templates/javascript.htm:219
 msgid "Dark current"
 msgstr ""
 
-#: templates/javascript.htm:217
+#: templates/javascript.htm:220
 msgid "Configuration deduced from the analysis technique"
 msgstr ""
 

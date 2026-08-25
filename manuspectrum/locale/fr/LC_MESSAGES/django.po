@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 08:41-0500\n"
+"POT-Creation-Date: 2026-08-25 08:46-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -1625,7 +1625,7 @@ msgstr "Viz"
 msgid "As measured"
 msgstr "Tel que mesuré"
 
-#: templates/javascript.htm:193 templates/javascript.htm:205
+#: templates/javascript.htm:193 templates/javascript.htm:208
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr "Pseudo-absorbance log10(1/R)"
 
@@ -1650,11 +1650,23 @@ msgid "Second derivative"
 msgstr "Dérivée seconde"
 
 #: templates/javascript.htm:199
+msgid "Divided by the white reference"
+msgstr "Divisé par la référence blanche"
+
+#: templates/javascript.htm:200
+msgid "Smoothed"
+msgstr "Lissé"
+
+#: templates/javascript.htm:201
+msgid "Derivative"
+msgstr "Dérivée"
+
+#: templates/javascript.htm:202
 #: templates/views/components/plugins/importer-configuration.htm:102
 msgid "Reverse the X axis"
 msgstr "Inverser l'axe X"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:203
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
@@ -1662,60 +1674,60 @@ msgstr ""
 "Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
 "cm-1), la RMN et l'XPS."
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:204
 #: templates/views/components/plugins/importer-configuration.htm:168
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:202
+#: templates/javascript.htm:205
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 "Appliquées au spectre tracé, dans l'ordre. Le fichier lui-même n'est jamais "
 "modifié."
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:206
 msgid "Add a transformation"
 msgstr "Ajouter une transformation"
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:207
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr "Normalisation par référence (S-D)/(B-D)"
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:209
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr "Kubelka-Munk (1-R)^2/2R"
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:210
 msgid "Normalise to maximum"
 msgstr "Normaliser au maximum"
 
-#: templates/javascript.htm:208
+#: templates/javascript.htm:211
 msgid "Normalise to total area (TIC)"
 msgstr "Normaliser à l'aire totale (TIC)"
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:212
 msgid "Smoothing (Savitzky-Golay)"
 msgstr "Lissage (Savitzky-Golay)"
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:213
 msgid "Derivative (Savitzky-Golay)"
 msgstr "Dérivée (Savitzky-Golay)"
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:214
 msgid "Window"
 msgstr "Fenêtre"
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:215
 msgid "Polynomial order"
 msgstr "Ordre du polynôme"
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:216
 msgid "Derivative order"
 msgstr "Ordre de la dérivée"
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:217
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
@@ -1723,15 +1735,15 @@ msgstr ""
 "Cette transformation dépend de paramètres que vous choisissez. Elle n'est "
 "jamais appliquée automatiquement."
 
-#: templates/javascript.htm:215
+#: templates/javascript.htm:218
 msgid "White reference"
 msgstr "Référence blanche"
 
-#: templates/javascript.htm:216
+#: templates/javascript.htm:219
 msgid "Dark current"
 msgstr "Courant d'obscurité"
 
-#: templates/javascript.htm:217
+#: templates/javascript.htm:220
 msgid "Configuration deduced from the analysis technique"
 msgstr "Configuration déduite de la technique d'analyse"
 
