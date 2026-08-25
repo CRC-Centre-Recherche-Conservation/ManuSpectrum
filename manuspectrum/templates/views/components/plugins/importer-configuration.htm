@@ -65,7 +65,7 @@
                 <h4 class="file-config-header">{% trans "Importer Name" %}</h4>
                 <input type="text" name="configurationName" data-bind="textInput: configurationName" placeholder="{% trans 'Name of Importer' %}">
                 <h4 class="file-config-header">{% trans "Importer Description" %}</h4>
-                <textarea style="height: 50px;" type="text" name="configurationDescription" data-bind="textInput: configurationDescription" placeholder="{% trans 'Describe the Importer' %}"></textarea>
+                <textarea class="xy-description-input" type="text" name="configurationDescription" data-bind="textInput: configurationDescription" placeholder="{% trans 'Describe the Importer' %}"></textarea>
             </div>
             <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Header" %}</h4>
@@ -134,43 +134,50 @@
             <!-- Column Assignment (collapsible) -->
             <div class="importer-config-panel">
                 <h4 class="file-config-header collapsible-header"
-                    data-bind="click: function() { showColumnAssignment(!showColumnAssignment()); }">
+                    tabindex="0" role="button"
+                    data-bind="onEnterkeyClick, onSpaceClick,
+                               click: function() { showColumnAssignment(!showColumnAssignment()); },
+                               attr: { 'aria-expanded': showColumnAssignment().toString(),
+                                       'aria-controls': 'importer-column-assignment' }">
                     <i class="fa chevron-icon" data-bind="css: { 'fa-chevron-right': !showColumnAssignment(), 'fa-chevron-down': showColumnAssignment() }"></i>
                     {% trans "Column Assignment" %}
                 </h4>
+                <div id="importer-column-assignment">
                 <!-- ko if: showColumnAssignment -->
                 <h5 class="file-config-instructions">{% trans "Define which data columns map to X, Y (left axis), or Y (right axis). Leave empty to use the default: column 1 = X, remaining = Y left." %}</h5>
 
                 <!-- ko foreach: columnAssignments -->
-                <div class="input-row" style="margin-bottom: 4px;">
-                    <label class="text-sm" style="min-width: 75px; margin: 0;">
+                <div class="input-row xy-column-row">
+                    <label class="text-sm xy-column-label"
+                           data-bind="attr: { for: 'xy-column-role-' + ko.unwrap(columnIndex) }">
                         {% trans "Column" %} <span data-bind="text: ko.unwrap(columnIndex) + 1"></span>
                     </label>
                     <select class="flex-1"
-                            data-bind="options: $parent.columnRoleOptions,
+                            data-bind="attr: { id: 'xy-column-role-' + ko.unwrap(columnIndex) },
+                                       options: $parent.columnRoleOptions,
                                        optionsText: 'text',
                                        optionsValue: 'value',
                                        value: role">
                     </select>
-                    <button class="btn btn-xs btn-danger"
-                            data-bind="click: $parent.removeColumnAssignment"
-                            style="padding: 2px 6px;">
+                    <button class="btn btn-xs btn-danger xy-column-remove"
+                            data-bind="click: $parent.removeColumnAssignment">
                         <i class="fa fa-times"></i>
                     </button>
                 </div>
                 <!-- /ko -->
 
-                <button class="btn btn-xs btn-default" style="margin-top: 4px;"
+                <button class="btn btn-xs btn-default xy-add-column"
                         data-bind="click: addColumnAssignment">
                     <i class="fa fa-plus"></i> {% trans "Add Column" %}
                 </button>
 
                 <!-- Right Y Axis Label -->
                 <!-- ko if: hasYRightColumn -->
-                <div style="margin-top: 10px;">
-                    <label class="input-label-sm">{% trans "Right Y Axis Label" %}</label>
+                <div class="xy-right-axis-row">
+                    <label class="input-label-sm" for="xy-y-right-label">{% trans "Right Y Axis Label" %}</label>
                     <div class="input-row">
-                        <input type="text" placeholder="{% trans "Right Y Axis" %}"
+                        <input type="text" id="xy-y-right-label"
+                               placeholder="{% trans "Right Y Axis" %}"
                                data-bind="textInput: yAxisRightLabel" class="flex-1">
                         <select class="preset-select"
                                 data-bind="event: { change: function(data, event) {
@@ -188,6 +195,7 @@
                 </div>
                 <!-- /ko -->
                 <!-- /ko -->
+                </div>
             </div>
 
             <!-- Transformations: one exclusive answer, right below the roles it depends on -->

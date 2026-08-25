@@ -14,6 +14,9 @@ import {
 } from 'utils/xy-transforms';
 import { getRendererConfig, invalidate } from 'utils/renderer-cache';
 import importerConfigurationTemplate from 'templates/views/components/plugins/importer-configuration.htm';
+// Arches' onEnterkeyClick / onSpaceClick, so a heading that toggles a section
+// answers the keyboard as well as the mouse.
+import 'bindings/key-events-click';
 import 'bootstrap';
 import 'bindings/select2-query';
 

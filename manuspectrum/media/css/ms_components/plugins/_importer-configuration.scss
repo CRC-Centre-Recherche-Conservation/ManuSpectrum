@@ -54,6 +54,42 @@
     margin-top: 10px;
 }
 
+// --- Spacing that used to be inline ---------------------------------------
+// CLAUDE.md keeps style="" out of templates: a rule here can be overridden,
+// audited and reused, an attribute can only be found by grep.
+.xy-description-input {
+    height: 50px;
+}
+.xy-column-row {
+    margin-bottom: 4px;
+}
+.xy-column-label {
+    min-width: 75px;
+    margin: 0;
+}
+.xy-column-remove {
+    padding: 2px 6px;
+}
+.xy-add-column {
+    margin-top: 4px;
+}
+.xy-right-axis-row {
+    margin-top: 10px;
+}
+
+// A heading that toggles a section. It answers Enter and Space through Arches'
+// key-events-click bindings, so the focus ring has to be visible: a control
+// reachable by keyboard but invisible when focused is worse than one that is
+// not reachable at all, because nothing tells you where you are.
+.collapsible-header {
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: 2px solid #004577;
+        outline-offset: 2px;
+    }
+}
+
 // --- Transformations: the exclusive multi-Y question ---------------------
 // The third answer needs a column tagged as the reference; until one is, it is
 // disabled rather than hidden, so a curator can see the option exists and what
