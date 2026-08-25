@@ -70,6 +70,13 @@ export const VIEWS_BY_PRESET = {
     fors: [PSEUDO_ABSORBANCE, KUBELKA_MUNK, derivative(1), derivative(2)],
     colorimetry: [PSEUDO_ABSORBANCE, KUBELKA_MUNK],
 
+    // Reflection-mode infrared holds a reflectance, so it gets the reflectance
+    // lenses. log(1/R) is what the field actually reports for external
+    // reflection; Kubelka-Munk is offered because diffuse reflection shares
+    // this preset, and refused as a default because it models a diluted
+    // powder that non-invasive measurement never is.
+    ftir_reflection: [PSEUDO_ABSORBANCE, KUBELKA_MUNK, NORMALISE_MAX],
+
     // Counts against energy or angle: the only meaningful lens from the current
     // primitives is putting two spectra on the same scale to compare them.
     xrf: [NORMALISE_MAX],

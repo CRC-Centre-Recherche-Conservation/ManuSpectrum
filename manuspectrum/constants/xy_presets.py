@@ -286,14 +286,45 @@ XY_PRESETS = {
     # The reversed wavenumber axis (4000 -> 400 cm-1) is the one near-universal
     # convention in vibrational spectroscopy; plotting FTIR ascending reads as
     # an error to any spectroscopist.
+    # Infrared splits on ONE question — what quantity does the file hold? —
+    # and the answer follows the sampling geometry, not the spectral region.
+    #
+    # Transmission and ATR both yield absorbance, so they share a preset and the
+    # accessory is descriptive metadata, not a configuration. Reflection is the
+    # break: an external-reflection or diffuse-reflection acquisition holds a
+    # reflectance, and calling it absorbance inverts how every band reads.
+    #
+    # The two reflection geometries share one preset because they produce the
+    # same chart. Splitting them would mean two rows identical to the character,
+    # which is the redundancy `maldi` / `mass_spec` already demonstrates.
     "ftir": _preset(
         "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a02",
         "FTIR — wavenumber (reversed) / absorbance",
-        "Columns: 1 = wavenumber (cm-1), 2 = absorbance. Plotted 4000 -> 400 as "
-        "spectroscopists read it. Convert %T to absorbance before upload.",
+        "Columns: 1 = wavenumber (cm-1), 2 = absorbance. Transmission and ATR. "
+        "The axis runs right to left, as spectroscopists read it — the whole "
+        "acquired range is shown. Convert %T to absorbance before upload.",
         "Wavenumber (cm⁻¹)",
         "Absorbance",
         x_reversed=True,
+    ),
+    # Reflection-mode infrared. The label names what the file holds; log(1/R)
+    # and Kubelka-Munk are reader-side lenses, offered per technique in
+    # media/js/utils/xy-views.js, never frozen into this row.
+    #
+    # Kubelka-Munk deliberately stays out of the label: it models a diluted,
+    # optically thick powder, which non-invasive heritage measurement never is,
+    # and the field reports log(1/R). Offering it as a view says "if you want
+    # this model, ask for it"; naming it here would claim the file already is it.
+    "ftir_reflection": _preset(
+        "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a0c",
+        "FTIR reflection — wavenumber (reversed) / reflectance",
+        "Columns: 1 = wavenumber (cm-1), 2 = reflectance (0-1, not %). External "
+        "or diffuse reflection. Band shapes are derivative-like and are not "
+        "directly comparable with transmission or ATR references.",
+        "Wavenumber (cm⁻¹)",
+        "Reflectance (0-1)",
+        x_reversed=True,
+        y_precorrected=True,
     ),
     # Raman shift is plotted ascending, unlike FTIR, even though both are cm-1.
     "raman": _preset(
@@ -394,6 +425,17 @@ XY_PRESETS = {
 #: (temperature), NMR and XPS (both conventionally reversed axes), EPR,
 #: Mössbauer, EELS, impedance and voltammetry. They plot fine once a curator
 #: configures them, but guessing their axes would do more harm than good.
+# A generic term is mapped ONLY when every descendant it covers measures the
+# same quantity. Three did not, and each handed a curator tagging the broad
+# term a chart in the wrong unit with nothing on screen to say so:
+#
+#   61202 Fluorescence      [nm]  is the parent of  61209 Fluorescence X   [keV]
+#   61237 Réflectométrie    [nm]  is the parent of  61238 … infrarouge     [cm-1]
+#   61330 Spectrophotométrie[nm]  is the parent of  61332 … EDXRF          [keV]
+#
+# They are unmapped rather than re-pointed: no term above them is true for the
+# whole subtree. `manage.py xy_mapping_report --check` walks the thesaurus and
+# fails on any new occurrence.
 TECHNIQUE_PRESETS = {
     # --- X-ray fluorescence and energy-dispersive X-ray spectrometry ---
     "d35a8f0a-4fdd-3733-abbe-3e13e3ba5d26": "xrf",  # 61209 — Fluorescence X
@@ -415,28 +457,43 @@ TECHNIQUE_PRESETS = {
     "a046f954-db78-3805-b107-9e8e20797fde": "xrf",  # 61058 — Microscopie confocale de fluorescence X
     "4059f249-d537-304f-a6b0-8cb2dab3e6a7": "xrf",  # 61064 — MEB associée à une microsonde à dispersion d'énergie
     "d53cd399-fb85-307f-8b66-02473d9d6013": "xrf",  # 61066 — MEB équipée d'un microanalyseur X à dispersion d'énergie
-    # --- Infrared ---
-    "2fe5191b-296f-31d1-aa37-0ecaa18eeeaf": "ftir",  # 61307 — Spectrométrie infrarouge
-    "3e8fbf96-68f4-3dc5-9e41-5d270940cddf": "ftir",  # 61308 — IRTF
-    "de75e16e-deb5-3eef-b342-2cf4818439f0": "ftir",  # 61309 — IRTF polarisante
-    "44f1eded-7f04-31f4-a36a-adbd3ef38f80": "ftir",  # 61310 — Spectrométrie infrarouge à réflexion diffuse
-    "0855e4dc-795c-31e4-a050-d2101e0f1c06": "ftir",  # 61311 — Spectrométrie infrarouge d'absorption réflexion
-    "e0a4fb46-d619-3f19-be79-c688e727e27e": "ftir",  # 61312 — Idem, par modulation de polarisation
-    "6c81f4fc-15a1-35fe-9082-cad955c18793": "ftir",  # 61313 — Spectrométrie MicroIRRS
+    # --- Infrared: absorbance (transmission / ATR) ---
     "f021c6c2-9b1c-3b14-b4d0-20e7be2e1c7d": "ftir",  # 61314 — Spectrométrie moyen infrarouge
-    "6c8b9db7-709e-3631-bfc9-a8ad429247d9": "ftir",  # 61315 — Spectrométrie proche infrarouge
-    "86b42db2-bf11-3adf-98a3-8dcb12b493c3": "ftir",  # 61316 — Spectrométrie SEIRA
-    "0233ee87-52db-3db0-a85f-6a7c4b96bec7": "ftir",  # 61073 — Microscopie infrarouge
-    "be00cd0a-0f8d-35f3-bce1-5c010e69a35f": "ftir",  # 61233 — Microspectrométrie infrarouge
-    "a43b2c27-dbfa-3eeb-b940-e125c8abb919": "ftir",  # 61329 — Spectromicroscopie infrarouge
+    "86b42db2-bf11-3adf-98a3-8dcb12b493c3": "ftir",  # 61316 — SEIRA
     "8efe4d7b-5b84-344d-b514-0643d5ae1c5b": "ftir",  # 61251 — Spectrométrie d'absorption dans l'infrarouge
     "64ea26a1-99e3-3418-ad92-0725f96f20f4": "ftir",  # 61238 — Réflectométrie infrarouge
+    # Unresolved acronym: no scope note, no English label, no attestation in
+    # the literature. Left on the absorbance default rather than guessed at;
+    # the thesaurus owner is the only route to certainty. Zero analyses use it.
     "7c7df6e4-e557-3607-88da-711fe3328504": "ftir",  # 61306 — Spectrométrie FTIIS
+    # --- Infrared: reflection ---
+    # 61308 IRTF is the generic Fourier-transform term, and it sits here rather
+    # than under absorbance because of what this lab actually acquires: all 19
+    # instrument files carry PLF='RFL' and ACC='30GradFocRefl'. A curator doing
+    # ATR corrects it on their own files; the auto badge says the default was
+    # deduced. Elsewhere the same term could well mean transmission.
+    "3e8fbf96-68f4-3dc5-9e41-5d270940cddf": "ftir_reflection",  # 61308 — IRTF
+    "44f1eded-7f04-31f4-a36a-adbd3ef38f80": "ftir_reflection",  # 61310 — réflexion diffuse
+    "0855e4dc-795c-31e4-a050-d2101e0f1c06": "ftir_reflection",  # 61311 — absorption réflexion
+    "e0a4fb46-d619-3f19-be79-c688e727e27e": "ftir_reflection",  # 61312 — … par modulation de polarisation
+    "6c81f4fc-15a1-35fe-9082-cad955c18793": "ftir_reflection",  # 61313 — MicroIRRS
+    # Deliberately unmapped, and why — an absence has to be a decision:
+    #   61073 / 61233 / 61329  infrared microscopies. Run in transmission, ATR
+    #       or reflection depending on the accessory, and the term says which
+    #       none of the time. No default is safer than a guessed one.
+    #   61315  near infrared. Ambiguous twice over: reported in cm-1 by FT
+    #       instruments and in nm by dispersive ones, and dominated by diffuse
+    #       reflectance in heritage work. This lab already reaches the region
+    #       under IRTF (Alpha, to 6997 cm-1) and FORS (ASD, to 2500 nm).
+    #   61307  the broad infrared term. The vocabulary proves it ambiguous
+    #       rather than merely leaving it vague: its own descendants sit in
+    #       both modes, so no single quantity is true for the subtree.
+    #   61309  polarising FTIR. A child of IRTF that would have contradicted
+    #       it, and nothing in the term settles which mode the polariser sits
+    #       in front of.
     # --- Fibre-optic reflectance and diffuse reflectance ---
     "65ea330e-e7ef-3cee-8266-35dc71321421": "fors",  # 61296 — Spectrométrie de réflectance par fibre optique
-    "e1474f64-f7d8-36c3-88d3-9c3db7bf9573": "fors",  # 61237 — Réflectométrie
     "f53d9c69-7dd3-3123-93c1-27ecc5af5cb3": "fors",  # 61331 — Spectrophotométrie d'absorption en réflexion diffuse
-    "24a9366e-69b3-3f9b-b526-469a19db8e93": "fors",  # 61330 — Spectrophotométrie
     # --- Mass spectrometry ---
     # The TAPAC list has no MALDI-TOF item; laser-desorption MS (61292) is the
     # nearest parent and is what the lab has been recording in practice.
@@ -468,7 +525,6 @@ TECHNIQUE_PRESETS = {
     "ac0efba0-ca21-3c9d-82f7-24dde26d9c53": "libs",  # 61247 — Spectrométrie de plasma induit par laser
     "49dfead4-68a5-3d78-bc1c-180f77022d14": "libs",  # 61248 — Idem, à résolution temporelle
     # --- Fluorescence and luminescence emission ---
-    "12ddaa76-d0e6-38f2-a34d-b566f979ad4b": "luminescence",  # 61202 — Fluorescence
     "5dc93f3e-c811-39da-9748-ceb574d7bb40": "luminescence",  # 61203 — Fluorescence 3D
     "0dcec4bf-202b-3498-824f-cd0917453764": "luminescence",  # 61204 — Fluorescence induite par laser
     "25c15fbb-87cb-3d37-8d0c-6ed5245963d6": "luminescence",  # 61205 — Fluorescence UV

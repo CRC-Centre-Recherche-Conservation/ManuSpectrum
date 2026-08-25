@@ -100,13 +100,18 @@ class PresetTableTests(SimpleTestCase):
                 msg=f"{key} describes itself with its own name",
             )
 
-    def test_only_ftir_reverses_its_axis(self):
+    def test_only_infrared_reverses_its_axis(self):
+        # The descending wavenumber axis is an infrared convention, and the
+        # only one among the mapped families. Raman is also in cm-1 and is
+        # plotted ascending; NMR and XPS are reversed too but are deliberately
+        # absent from the map. Both infrared presets share the convention —
+        # they split on the quantity plotted, not on the abscissa.
         reversed_keys = {
             key
             for key, preset in XY_PRESETS.items()
             if preset["config"]["display"]["xReversed"]
         }
-        self.assertEqual(reversed_keys, {"ftir"})
+        self.assertEqual(reversed_keys, {"ftir", "ftir_reflection"})
 
     def test_every_preset_declares_a_valid_multi_y_choice(self):
         for key, preset in XY_PRESETS.items():
@@ -271,9 +276,22 @@ class RendererRegistrationTests(SimpleTestCase):
 
 class TechniqueResolutionTests(SimpleTestCase):
     def test_single_technique_resolves_to_its_config(self):
+        # IRTF resolves to the reflection preset, not the absorbance one: every
+        # instrument file in this database carries PLF='RFL'. The generic term
+        # cannot know that anywhere else, which is why the choice is a default
+        # a curator can override per file rather than a claim about the world.
         self.assertEqual(
-            config_id_for_techniques([FTIR]), XY_PRESETS["ftir"]["config_id"]
+            config_id_for_techniques([FTIR]),
+            XY_PRESETS["ftir_reflection"]["config_id"],
         )
+
+    def test_the_two_infrared_presets_differ_only_in_the_quantity(self):
+        # If they ever agree on both axes they are one preset wearing two
+        # names, which is the redundancy maldi/mass_spec already demonstrates.
+        absorbance = XY_PRESETS["ftir"]["config"]["display"]
+        reflection = XY_PRESETS["ftir_reflection"]["config"]["display"]
+        self.assertEqual(absorbance["xAxisLabel"], reflection["xAxisLabel"])
+        self.assertNotEqual(absorbance["yAxisLabel"], reflection["yAxisLabel"])
 
     def test_agreeing_techniques_resolve(self):
         # Both map to the XRF preset, so there is no ambiguity to report.
