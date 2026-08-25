@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 09:10-0500\n"
+"POT-Creation-Date: 2026-08-25 10:03-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1666,7 +1666,7 @@ msgid ""
 msgstr ""
 
 #: templates/javascript.htm:204
-#: templates/views/components/plugins/importer-configuration.htm:195
+#: templates/views/components/plugins/importer-configuration.htm:203
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
@@ -2175,7 +2175,7 @@ msgid "Y Axis Label"
 msgstr "Y Axis Label"
 
 #: templates/views/components/plugins/importer-configuration.htm:114
-#: templates/views/components/plugins/importer-configuration.htm:182
+#: templates/views/components/plugins/importer-configuration.htm:189
 msgid "Presets..."
 msgstr "Presets..."
 
@@ -2191,11 +2191,11 @@ msgid ""
 "and XPS."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:139
+#: templates/views/components/plugins/importer-configuration.htm:143
 msgid "Column Assignment"
 msgstr "Column Assignment"
 
-#: templates/views/components/plugins/importer-configuration.htm:142
+#: templates/views/components/plugins/importer-configuration.htm:147
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2203,51 +2203,51 @@ msgstr ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
 
-#: templates/views/components/plugins/importer-configuration.htm:147
+#: templates/views/components/plugins/importer-configuration.htm:153
 msgid "Column"
 msgstr "Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:165
+#: templates/views/components/plugins/importer-configuration.htm:171
 msgid "Add Column"
 msgstr "Add Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:171
+#: templates/views/components/plugins/importer-configuration.htm:177
 msgid "Right Y Axis Label"
 msgstr "Right Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:173
+#: templates/views/components/plugins/importer-configuration.htm:180
 msgid "Right Y Axis"
 msgstr "Right Y Axis"
 
-#: templates/views/components/plugins/importer-configuration.htm:196
+#: templates/views/components/plugins/importer-configuration.htm:204
 msgid ""
 "How the columns are combined into the quantity the Y axis names. The stored "
 "file is never modified."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:201
+#: templates/views/components/plugins/importer-configuration.htm:209
 msgid "Plot each Y column as its own series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:206
+#: templates/views/components/plugins/importer-configuration.htm:214
 msgid "Average them into a single series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:212
+#: templates/views/components/plugins/importer-configuration.htm:220
 msgid "Divide by the reference column — R = (S−D)/(W−D)"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:215
+#: templates/views/components/plugins/importer-configuration.htm:223
 msgid ""
 "Tag a column as “White reference” under Column Assignment to enable this."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:221
+#: templates/views/components/plugins/importer-configuration.htm:229
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Cancel"
 
-#: templates/views/components/plugins/importer-configuration.htm:222
+#: templates/views/components/plugins/importer-configuration.htm:230
 msgid "Save"
 msgstr "Save"
 

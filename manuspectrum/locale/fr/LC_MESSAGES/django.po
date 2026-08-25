@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 09:10-0500\n"
+"POT-Creation-Date: 2026-08-25 10:03-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -1675,7 +1675,7 @@ msgstr ""
 "cm-1), la RMN et l'XPS."
 
 #: templates/javascript.htm:204
-#: templates/views/components/plugins/importer-configuration.htm:195
+#: templates/views/components/plugins/importer-configuration.htm:203
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
@@ -2203,7 +2203,7 @@ msgid "Y Axis Label"
 msgstr "Libellé de l'axe Y"
 
 #: templates/views/components/plugins/importer-configuration.htm:114
-#: templates/views/components/plugins/importer-configuration.htm:182
+#: templates/views/components/plugins/importer-configuration.htm:189
 msgid "Presets..."
 msgstr "Préréglages..."
 
@@ -2219,11 +2219,11 @@ msgstr ""
 "Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
 "cm⁻¹), la RMN et l'XPS."
 
-#: templates/views/components/plugins/importer-configuration.htm:139
+#: templates/views/components/plugins/importer-configuration.htm:143
 msgid "Column Assignment"
 msgstr "Assignation des colonnes"
 
-#: templates/views/components/plugins/importer-configuration.htm:142
+#: templates/views/components/plugins/importer-configuration.htm:147
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2232,23 +2232,23 @@ msgstr ""
 "(axe droit). Laisser vide pour le comportement par défaut : colonne 1 = X, "
 "les autres = Y gauche."
 
-#: templates/views/components/plugins/importer-configuration.htm:147
+#: templates/views/components/plugins/importer-configuration.htm:153
 msgid "Column"
 msgstr "Colonne"
 
-#: templates/views/components/plugins/importer-configuration.htm:165
+#: templates/views/components/plugins/importer-configuration.htm:171
 msgid "Add Column"
 msgstr "Ajouter une colonne"
 
-#: templates/views/components/plugins/importer-configuration.htm:171
+#: templates/views/components/plugins/importer-configuration.htm:177
 msgid "Right Y Axis Label"
 msgstr "Libellé de l'axe Y droit"
 
-#: templates/views/components/plugins/importer-configuration.htm:173
+#: templates/views/components/plugins/importer-configuration.htm:180
 msgid "Right Y Axis"
 msgstr "Axe Y droit"
 
-#: templates/views/components/plugins/importer-configuration.htm:196
+#: templates/views/components/plugins/importer-configuration.htm:204
 msgid ""
 "How the columns are combined into the quantity the Y axis names. The stored "
 "file is never modified."
@@ -2256,31 +2256,31 @@ msgstr ""
 "Comment les colonnes sont combinées pour produire la grandeur nommée par "
 "l'axe Y. Le fichier stocké n'est jamais modifié."
 
-#: templates/views/components/plugins/importer-configuration.htm:201
+#: templates/views/components/plugins/importer-configuration.htm:209
 msgid "Plot each Y column as its own series"
 msgstr "Tracer chaque colonne Y comme une série distincte"
 
-#: templates/views/components/plugins/importer-configuration.htm:206
+#: templates/views/components/plugins/importer-configuration.htm:214
 msgid "Average them into a single series"
 msgstr "Les moyenner en une seule série"
 
-#: templates/views/components/plugins/importer-configuration.htm:212
+#: templates/views/components/plugins/importer-configuration.htm:220
 msgid "Divide by the reference column — R = (S−D)/(W−D)"
 msgstr "Diviser par la colonne de référence — R = (S−D)/(W−D)"
 
-#: templates/views/components/plugins/importer-configuration.htm:215
+#: templates/views/components/plugins/importer-configuration.htm:223
 msgid ""
 "Tag a column as “White reference” under Column Assignment to enable this."
 msgstr ""
 "Marquez une colonne comme « Référence blanche » dans l'affectation des "
 "colonnes pour activer cette option."
 
-#: templates/views/components/plugins/importer-configuration.htm:221
+#: templates/views/components/plugins/importer-configuration.htm:229
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Annuler"
 
-#: templates/views/components/plugins/importer-configuration.htm:222
+#: templates/views/components/plugins/importer-configuration.htm:230
 msgid "Save"
 msgstr "Enregistrer"
 
@@ -3979,6 +3979,32 @@ msgid ""
 msgstr ""
 "Cette configuration fait partie du socle commun et ne peut pas être "
 "supprimée."
+
+#~ msgid "These look like percentages, not the 0-1 ratio the axis names."
+#~ msgstr ""
+#~ "Ces valeurs ressemblent à des pourcentages, pas au rapport 0-1 annoncé "
+#~ "par l'axe."
+
+#~ msgid "These values are too large to be an absorbance."
+#~ msgstr "Ces valeurs sont trop grandes pour une absorbance."
+
+#~ msgid ""
+#~ "These values look like percentages, but the axis names a ratio between 0 "
+#~ "and 1. Divide by 100 before upload, or the pseudo-absorbance and Kubelka-"
+#~ "Munk views will be wrong."
+#~ msgstr ""
+#~ "Ces valeurs ressemblent à des pourcentages, alors que l'axe annonce un "
+#~ "rapport entre 0 et 1. Divisez par 100 avant le téléversement, sinon les "
+#~ "vues pseudo-absorbance et Kubelka-Munk seront fausses."
+
+#~ msgid ""
+#~ "These values are too large to be an absorbance. The file probably holds "
+#~ "transmittance or raw counts, in which case every band on this chart is "
+#~ "inverted."
+#~ msgstr ""
+#~ "Ces valeurs sont trop grandes pour une absorbance. Le fichier contient "
+#~ "probablement de la transmittance ou des comptages bruts, auquel cas "
+#~ "toutes les bandes de ce graphique sont inversées."
 
 #~ msgid ""
 #~ "The X axis will be evenly spaced between start and end values, based on "
