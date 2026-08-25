@@ -112,11 +112,18 @@
 // States what the configuration applied to the plotted values. Always present,
 // reading "none" when nothing ran: silence must not be indistinguishable from
 // "nothing applied" — the convention JCAMP-DX and mzML both enforce.
+// Every honesty guarantee in the XY viewer ends up here: what was applied,
+// and an explicit "none" when nothing was. It was styled as a footnote —
+// #777 on white is 4.48:1, under the 4.5:1 WCAG AA floor, at 11px, right
+// aligned away from where the eye lands after reading the axis. A caption
+// nobody can read is a caption nobody reads.
+//
+// Shared with the report widget (file-xy.htm) despite living under cards/.
 .xy-processing-note {
     margin: 4px 0 0;
-    color: #777;
-    font-size: 11px;
-    text-align: right;
+    color: #595959; // 7:1 on white
+    font-size: 12px;
+    text-align: left;
 }
 .xy-processing-none {
     font-style: italic;
