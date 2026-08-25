@@ -434,8 +434,13 @@ XY_PRESETS = {
 #   61330 Spectrophotométrie[nm]  is the parent of  61332 … EDXRF          [keV]
 #
 # They are unmapped rather than re-pointed: no term above them is true for the
-# whole subtree. `manage.py xy_mapping_report --check` walks the thesaurus and
-# fails on any new occurrence.
+# whole subtree. The same holds inside the infrared family, where 61307 covers
+# descendants in both measurement modes.
+#
+# The rule cannot be asserted by a unit test: it needs the thesaurus, which
+# lives in the database and is never loaded into the test one. Check it by hand
+# after editing this map — walk `ListItem.parent` for every key here and compare
+# the axis labels of the presets a parent and a child land on.
 TECHNIQUE_PRESETS = {
     # --- X-ray fluorescence and energy-dispersive X-ray spectrometry ---
     "d35a8f0a-4fdd-3733-abbe-3e13e3ba5d26": "xrf",  # 61209 — Fluorescence X
