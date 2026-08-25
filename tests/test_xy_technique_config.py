@@ -133,11 +133,49 @@ class PresetTableTests(SimpleTestCase):
         # The Y label names the quantity the file holds once the corrective
         # step has run. Corrective steps reach that quantity, they do not
         # qualify it — so the declared label is exactly what gets plotted.
+        #
+        # This test used to assert `multiYHandling in MULTI_Y_CHOICES` — a
+        # verbatim duplicate of test_every_preset_declares_a_valid_multi_y_choice,
+        # under the name of the guarantee the whole preset table rests on. It
+        # checked nothing about an axis label.
+        #
+        # Reflectance is the module's own worked example: it IS the ratio of
+        # measurement to white reference, so a preset claiming it must either
+        # compute that ratio or receive a file where the instrument already
+        # did. The claim is only free-standing for the second case, and a
+        # preset that neither computes it nor says so is asserting a quantity
+        # it cannot reach.
         for key, preset in XY_PRESETS.items():
-            self.assertIn(
-                preset["config"]["multiYHandling"],
-                MULTI_Y_CHOICES,
-                msg=f"{key} plots something its Y label does not name",
+            label = preset["config"]["display"]["yAxisLabel"]
+            if "reflectance" not in label.lower():
+                continue
+            applies_reference = (
+                preset["config"]["multiYHandling"] == MULTI_Y_REFERENCE
+            )
+            precorrected = preset["config"].get("yPrecorrected", False)
+            self.assertTrue(
+                applies_reference or precorrected,
+                msg=(
+                    f"{key} labels its Y axis {label!r} but neither applies "
+                    f"{MULTI_Y_REFERENCE} nor declares y_precorrected — so the "
+                    f"label claims a quantity nothing reaches"
+                ),
+            )
+
+    def test_reflectance_is_a_fraction_everywhere_it_is_named(self):
+        # referenceNormalize returns (S-D)/(W-D) — a fraction in [0, 1]. Both
+        # reader-side lenses that consume R assume the same: at R = 50 %,
+        # log10(1/R) yields -1.70 instead of +0.30 (sign-flipped) and
+        # Kubelka-Munk yields 24.0 instead of 0.25. A label reading "(%)"
+        # invites exactly the export that breaks them, so no preset may say it.
+        for key, preset in XY_PRESETS.items():
+            label = preset["config"]["display"]["yAxisLabel"]
+            if "reflectance" not in label.lower():
+                continue
+            self.assertNotIn(
+                "%",
+                label,
+                msg=f"{key} names reflectance as a percentage; the engine produces a fraction",
             )
 
     def test_fors_normalises_against_its_reference_channel(self):
