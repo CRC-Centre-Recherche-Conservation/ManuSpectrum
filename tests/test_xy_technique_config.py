@@ -20,10 +20,12 @@ from manuspectrum.constants.xy_presets import (
     CONFIG_SOURCE_AUTO,
     CONFIG_SOURCE_KEY,
     CONFIG_SOURCE_MANUAL,
+    SEED_OWNED_CONFIG_KEYS,
     TECHNIQUE_PRESETS,
     XY_PRESETS,
     XY_RENDERER_ID,
     config_id_for_techniques,
+    merge_seed_owned_keys,
     preset_for_technique,
 )
 from manuspectrum.functions.xy_technique_config import (
@@ -149,9 +151,7 @@ class PresetTableTests(SimpleTestCase):
             label = preset["config"]["display"]["yAxisLabel"]
             if "reflectance" not in label.lower():
                 continue
-            applies_reference = (
-                preset["config"]["multiYHandling"] == MULTI_Y_REFERENCE
-            )
+            applies_reference = preset["config"]["multiYHandling"] == MULTI_Y_REFERENCE
             precorrected = preset["config"].get("yPrecorrected", False)
             self.assertTrue(
                 applies_reference or precorrected,
@@ -176,6 +176,51 @@ class PresetTableTests(SimpleTestCase):
                 "%",
                 label,
                 msg=f"{key} names reflectance as a percentage; the engine produces a fraction",
+            )
+
+    def test_saving_keeps_the_keys_the_panel_cannot_send(self):
+        # The editing panel builds its payload from its own form fields, so a
+        # seeded key it has never heard of is absent from every request. A
+        # wholesale replace dropped presetKey on the first superuser save and
+        # silently emptied that technique's reader-side view palette.
+        stored = {"presetKey": "ftir", "delimiterCharacter": ",", "display": {}}
+        incoming = {"delimiterCharacter": ";", "display": {"xReversed": True}}
+
+        merged = merge_seed_owned_keys(stored, incoming)
+
+        self.assertEqual(merged["presetKey"], "ftir")
+        self.assertEqual(merged["delimiterCharacter"], ";")
+        self.assertEqual(merged["display"], {"xReversed": True})
+
+    def test_saving_can_still_clear_a_field_the_panel_owns(self):
+        # The panel serialises a cleared field as `undefined` and JSON omits
+        # it. A blanket merge would resurrect the old value, so an axis could
+        # never be un-reversed — worse than the bug being fixed.
+        stored = {"presetKey": "ftir", "display": {"xReversed": True}}
+        incoming = {"display": {}}
+
+        merged = merge_seed_owned_keys(stored, incoming)
+
+        self.assertEqual(merged["display"], {})
+        self.assertEqual(merged["presetKey"], "ftir")
+
+    def test_saving_invents_no_key_a_configuration_never_had(self):
+        # A curator's own configuration carries none of the seeded keys, and
+        # saving one must not grow them.
+        merged = merge_seed_owned_keys({}, {"delimiterCharacter": ","})
+
+        self.assertEqual(merged, {"delimiterCharacter": ","})
+        self.assertEqual(merge_seed_owned_keys(None, {}), {})
+
+    def test_every_seed_owned_key_is_actually_written_by_a_preset(self):
+        # The list is the contract between _preset() and the save path. An
+        # entry nothing writes is dead weight that reads like a guarantee.
+        written = {key for p in XY_PRESETS.values() for key in p["config"]}
+        for key in SEED_OWNED_CONFIG_KEYS:
+            self.assertIn(
+                key,
+                written,
+                msg=f"{key} is preserved on save but no preset ever writes it",
             )
 
     def test_fors_normalises_against_its_reference_channel(self):
