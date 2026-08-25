@@ -11,7 +11,10 @@ from arches.app.utils.decorators import group_required
 from arches.app.views.api import APIBase
 from manuspectrum.models import RendererConfig
 from manuspectrum.views.permissions import EDITOR_GROUPS
-from manuspectrum.constants.xy_presets import is_seeded_preset
+from manuspectrum.constants.xy_presets import (
+    is_seeded_preset,
+    merge_seed_owned_keys,
+)
 from arches.app.models import models
 from arches.app.utils.response import JSONResponse
 from django.http import HttpResponseNotFound
@@ -122,7 +125,7 @@ class RendererConfigView(APIBase):
             body.pop("rendererId")
             body.pop("name")
             body.pop("description")
-            renderer_config.config = body
+            renderer_config.config = merge_seed_owned_keys(renderer_config.config, body)
             renderer_config.save()
         else:
             renderer_config = RendererConfig.objects.create(
@@ -135,9 +138,16 @@ class RendererConfigView(APIBase):
 
     @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
     def delete(self, request, renderer_config_id):
-        # Not even for a superuser: a migration re-creates these on every deploy,
-        # so deleting one only orphans the files pointing at it until the next
-        # migrate silently brings it back. Edit it, or stop using it.
+        # Not even for a superuser. A seeded configuration is the shared
+        # baseline every file of its technique points at, and deleting it
+        # orphans all of them at once — the reference survives in tile data
+        # while the row it names is gone, so those charts lose their axes with
+        # nothing to say why.
+        #
+        # No migration brings it back either: the seeds run once per database,
+        # never on every deploy. A comment here used to claim otherwise, which
+        # made the ban read as a convenience rather than the only thing
+        # standing between a click and silent data loss.
         if is_seeded_preset(renderer_config_id):
             return JSONResponse(
                 {

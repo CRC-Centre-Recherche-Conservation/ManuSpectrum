@@ -40,7 +40,11 @@ The test is not "is this standard practice", it is *what does the operation
 do*: does it bring the data to the quantity the technique measures, or does it
 apply a model to data that is already correct? Reflectance IS the ratio of
 measurement to white reference, so ``reference-normalize`` is corrective and an
-axis reading "Reflectance (%)" is false without it. A derivative, a smoothing,
+axis reading "Reflectance" is false without it — unless the instrument reached
+the ratio itself, which a preset states with ``y_precorrected`` rather than
+leaving to inference. Note the unit: the ratio is a **fraction in [0, 1]**,
+never a percentage, because ``log(1/R)`` and Kubelka-Munk both consume it and
+both return nonsense from a percentage. A derivative, a smoothing,
 log(1/R) — those are ways of *reading* a correct curve, and which one you want
 depends on the question you are asking, so they belong to the reader.
 
@@ -512,6 +516,33 @@ def is_seeded_preset(config_id):
 for _key, _preset_entry in XY_PRESETS.items():
     _preset_entry["config"]["presetKey"] = _key
 del _key, _preset_entry
+
+
+#: Config keys the editing panel has never heard of.
+#:
+#: ``saveConfigEdit`` in ``importer-configuration.js`` builds its payload from
+#: its own observables — delimiter, column roles, display block, multi-Y choice.
+#: Anything that is not a field on that form is simply absent from the request.
+SEED_OWNED_CONFIG_KEYS = ("presetKey", "yPrecorrected")
+
+
+def merge_seed_owned_keys(stored, incoming):
+    """Carry the keys the panel cannot send; replace everything else.
+
+    Saving used to assign the request body over the whole config. The first
+    superuser edit of a seeded preset therefore dropped ``presetKey``, and the
+    reader-side view control — which looks the palette up by that key — went
+    silently empty for every file of that technique.
+
+    Merging *everything* would be worse than the bug it fixes. The panel
+    serialises a cleared field as ``undefined`` and JSON omits it, so a blanket
+    merge would resurrect the old value: an axis could never be un-reversed, a
+    range never emptied. Only the keys the panel does not own are carried over,
+    which leaves clearing a field working exactly as before.
+    """
+    stored = stored or {}
+    preserved = {key: stored[key] for key in SEED_OWNED_CONFIG_KEYS if key in stored}
+    return {**incoming, **preserved}
 
 
 def preset_for_technique(list_item_id):
