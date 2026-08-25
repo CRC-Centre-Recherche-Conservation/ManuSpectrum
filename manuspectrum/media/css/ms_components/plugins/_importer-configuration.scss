@@ -30,6 +30,16 @@
     flex: 1;
     min-height: 0;
     padding-bottom: 12px;
+
+    // Fifteen sections in a column that clips them: without a signal, a
+    // heading cut in half at the top edge reads as a broken render rather than
+    // as scrolled content. Same treatment as the configuration list, matched to
+    // this panel's own background.
+    background:
+        linear-gradient(#fafafa 30%, hsl(0 0% 98% / 0)) top / 100% 16px no-repeat local,
+        linear-gradient(hsl(0 0% 98% / 0), #fafafa 70%) bottom / 100% 16px no-repeat local,
+        radial-gradient(farthest-side at 50% 0, hsl(0 0% 0% / 0.10), transparent) top / 100% 9px no-repeat scroll,
+        radial-gradient(farthest-side at 50% 100%, hsl(0 0% 0% / 0.10), transparent) bottom / 100% 9px no-repeat scroll;
 }
 .importer-config-footer {
     display: flex;
@@ -151,9 +161,101 @@
     max-height: 320px;
     overflow-y: auto;
     overscroll-behavior: contain;
+
+    // Scrolling was silent: a row clipped mid-line at the top edge reads as a
+    // rendering fault rather than as "there is more above". These two gradients
+    // are painted on the scroll container and pinned to the viewport by
+    // background-attachment: local, so they appear only at the end you can
+    // still scroll towards, and disappear at the extremes.
+    background:
+        linear-gradient(#fff 30%, hsl(0 0% 100% / 0)) top / 100% 14px no-repeat local,
+        linear-gradient(hsl(0 0% 100% / 0), #fff 70%) bottom / 100% 14px no-repeat local,
+        radial-gradient(farthest-side at 50% 0, hsl(0 0% 0% / 0.09), transparent) top / 100% 8px no-repeat scroll,
+        radial-gradient(farthest-side at 50% 100%, hsl(0 0% 0% / 0.09), transparent) bottom / 100% 8px no-repeat scroll;
 }
-.importer-list-radio {
-    margin: 8px;
+
+// One configuration. The radio, the name, then the actions — read left to
+// right, acted on from the right.
+//
+// The gap lives here rather than on the radio because Bootstrap's
+// `input[type="radio"] { margin: 4px 0 0 }` outranks any single class: a
+// margin on the input is silently discarded, which is how the radio came to sit
+// flush against the name it labels.
+.importer-list-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+
+    &:last-child {
+        border-bottom: 0;
+    }
+
+    &:hover {
+        background-color: #f6f8fa;
+    }
+
+    // The filled radio is a 6px dot; on a list of twelve near-identical names
+    // it is not enough to answer "which one am I using?" at a glance.
+    &.is-selected {
+        background-color: #eef4fa;
+        box-shadow: inset 3px 0 0 #004577;
+    }
+
+}
+
+// The clickable target: radio plus name, and the only part allowed to take the
+// leftover width. `min-width: 0` because a flex item defaults to
+// min-width: auto and would otherwise refuse to wrap, pushing the actions off
+// the row instead.
+.importer-list-target {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-weight: normal;
+    cursor: pointer;
+
+    input[type="radio"] {
+        flex-shrink: 0;
+        // Bootstrap's shorthand on the element outranks any single class, so
+        // the horizontal spacing is the row's gap; this only sits the dot on
+        // the first line's baseline.
+        margin: 3px 0 0;
+    }
+}
+.importer-list-name {
+    min-width: 0;
+    line-height: 1.35;
+}
+
+// Actions stay on one line whatever the name does, and stay quiet until the
+// row is under the cursor: they are available, not advertised.
+.importer-list-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 10px;
+    align-self: flex-start;
+    padding-top: 2px;
+    color: #999;
+
+    .fa {
+        cursor: pointer;
+    }
+
+    .fa-pencil:hover {
+        color: #004577;
+    }
+    .fa-trash:hover {
+        color: #a94442;
+    }
+}
+.importer-list-row:hover .importer-list-actions {
+    color: #666;
 }
 .importer-list-empty {
     margin: 8px;

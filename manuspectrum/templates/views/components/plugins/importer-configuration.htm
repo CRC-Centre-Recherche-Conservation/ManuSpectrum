@@ -15,19 +15,39 @@
 
         <div class="importer-list-container">
             <!-- ko foreach: {data: filteredConfigs, as: 'configuration' } -->
-            <div class="d-flex align-items-center">
-                <input class="importer-list-radio" type="radio" name="selectedConfiguration" data-bind="checked: $parent.selectedConfiguration, value: configuration.configid"></input>
-                <span class="flex-1"><span data-bind="text: configuration.name"></span><span data-bind="if: configuration.description"><span class="tip"><i class="fa fa-info-circle"></i><span class="tooltiptext" data-bind="text: configuration.description"></span></span></span></span>
-                <i class="fa fa-pencil" role="button" data-bind="click:()=>{$parent.loadConfiguration(configuration);}" aria-label="{% trans 'Edit' %}"></i>
-                <!-- ko if: configuration.protected -->
-                <span class="tip importer-config-lock">
-                    <i class="fa fa-lock"></i>
-                    <span class="tooltiptext">{% trans "Part of the shared baseline: cannot be deleted, and only an administrator can edit it." %}</span>
+            <div class="importer-list-row"
+                 data-bind="css: { 'is-selected': $parent.selectedConfiguration() === configuration.configid }">
+                <!-- The label wraps only the radio and the name. Putting the
+                     actions inside it too would make a click on the pencil
+                     select the configuration as well, since activating a label
+                     activates its control whatever the child does. -->
+                <label class="importer-list-target">
+                    <input type="radio" name="selectedConfiguration"
+                           data-bind="checked: $parent.selectedConfiguration, value: configuration.configid">
+                    <span class="importer-list-name" data-bind="text: configuration.name"></span>
+                </label>
+                <span class="importer-list-actions">
+                    <!-- ko if: configuration.description -->
+                    <span class="tip" role="button" tabindex="0">
+                        <i class="fa fa-info-circle"></i>
+                        <span class="tooltiptext" data-bind="text: configuration.description"></span>
+                    </span>
+                    <!-- /ko -->
+                    <i class="fa fa-pencil" role="button" tabindex="0"
+                       data-bind="click: () => { $parent.loadConfiguration(configuration); }"
+                       title="{% trans 'Edit' %}" aria-label="{% trans 'Edit' %}"></i>
+                    <!-- ko if: configuration.protected -->
+                    <span class="tip importer-config-lock" role="button" tabindex="0">
+                        <i class="fa fa-lock"></i>
+                        <span class="tooltiptext">{% trans "Part of the shared baseline: cannot be deleted, and only an administrator can edit it." %}</span>
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko ifnot: configuration.protected -->
+                    <i class="fa fa-trash" role="button" tabindex="0"
+                       data-bind="click: () => { $parent.deleteConfiguration(configuration); }"
+                       title="{% trans 'Delete' %}" aria-label="{% trans 'Delete' %}"></i>
+                    <!-- /ko -->
                 </span>
-                <!-- /ko -->
-                <!-- ko ifnot: configuration.protected -->
-                <i class="fa fa-trash" role="button" data-bind="click:()=>{$parent.deleteConfiguration(configuration);}" aria-label="{% trans 'Delete' %}"></i>
-                <!-- /ko -->
             </div>
             <!-- /ko -->
             <!-- ko if: noConfigMatches -->
@@ -79,6 +99,7 @@
                 <!-- /ko -->
             </div>
 
+            <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "Y Axis Label" %}</h4>
                 <div class="input-row">
                     <input type="text" placeholder="{% trans "Y Axis" %}" name="yAxisLabel"
@@ -96,7 +117,13 @@
                         <!-- /ko -->
                     </select>
                 </div>
+            </div>
 
+            <!-- Its own section: a heading reading "Y Axis Label" was carrying
+                 a control about the X axis, which is the one thing a heading
+                 must not do. -->
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "X Axis Direction" %}</h4>
                 <div class="radio-row xy-reversed-row">
                     <input id="xy-x-reversed" type="checkbox" data-bind="checked: xReversed">
                     <label for="xy-x-reversed">{% trans "Reverse the X axis" %}</label>
