@@ -164,19 +164,25 @@
                     {% trans "Spectral Range" %}
                 </h4>
                 <!-- ko if: showAdvancedDisplay -->
-                <h5 class="file-config-instructions">{% trans "Limit the displayed X range. Leave empty for no limit." %}</h5>
+                <h5 class="file-config-instructions">{% trans "Limit the displayed X range. Leave empty to show the whole acquired range." %}</h5>
                 <div class="input-row--wide">
                     <div class="flex-1">
                         <label class="input-label-sm">{% trans "Min X" %}</label>
-                        <input type="number" step="any" placeholder="{% trans "e.g. 400" %}"
+                        <input type="number" step="any"
                                data-bind="textInput: xRangeMin" class="w-100">
                     </div>
                     <div class="flex-1">
                         <label class="input-label-sm">{% trans "Max X" %}</label>
-                        <input type="number" step="any" placeholder="{% trans "e.g. 4000" %}"
+                        <input type="number" step="any"
                                data-bind="textInput: xRangeMax" class="w-100">
                     </div>
                 </div>
+                <!-- ko if: xRangeMin() || xRangeMax() -->
+                <p class="xy-transform-warning">
+                    <i class="fa fa-exclamation-triangle"></i>
+                    {% trans "Points outside this range are not plotted. A configuration is shared by every file of its technique, and instruments do not all cover the same range — a crop set here hides real signal from acquisitions that go further. The range is stated under each chart." %}
+                </p>
+                <!-- /ko -->
                 <!-- /ko -->
             </div>
 
