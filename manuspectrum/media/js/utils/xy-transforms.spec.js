@@ -15,6 +15,7 @@ import {
     ROLE_REFERENCE,
     ROLE_Y_LEFT,
     deriveAxisLabel,
+    deriveXAxisLabel,
     describeChain,
 } from './xy-transforms';
 
@@ -351,34 +352,25 @@ describe('describeChain', () => {
 });
 
 describe('describeChain declares a spectral crop', () => {
-    it('names the range, which filterXRange silently applies to the plot', () => {
+});
+
+describe('deriveXAxisLabel', () => {
+    it('keeps the stored label when the file carries its own abscissa', () => {
         expect(
-            describeChain({ display: { xRangeMin: 400, xRangeMax: 4000 } })
-        ).toBe('cropped to 400-4000');
+            deriveXAxisLabel('Energy (keV)', { xColumnMode: 'data' }, 'Point')
+        ).toBe('Energy (keV)');
     });
 
-    it('handles a one-sided range', () => {
-        expect(describeChain({ display: { xRangeMin: 400 } })).toBe(
-            'cropped from 400'
-        );
-        expect(describeChain({ display: { xRangeMax: 4000 } })).toBe(
-            'cropped to 4000'
-        );
+    it('replaces it when the axis is the row position', () => {
+        // A preset naming keV over a file that holds only intensities asserts
+        // a quantity nothing in the file supplies.
+        expect(
+            deriveXAxisLabel('Energy (keV)', { xColumnMode: 'generate' }, 'Point')
+        ).toBe('Point');
     });
 
-    it('lists the crop after the transforms that produced the values', () => {
-        expect(
-            describeChain({
-                transforms: [{ type: 'reference-normalize' }],
-                display: { xRangeMin: 400, xRangeMax: 4000 },
-            })
-        ).toBe('reference-normalize -> cropped to 400-4000');
-    });
-
-    it('still returns null when nothing at all is applied', () => {
-        expect(describeChain({ display: {} })).toBeNull();
-        expect(
-            describeChain({ display: { xRangeMin: '', xRangeMax: '' } })
-        ).toBeNull();
+    it('treats a missing mode as data, which is the common case', () => {
+        expect(deriveXAxisLabel('m/z', {}, 'Point')).toBe('m/z');
+        expect(deriveXAxisLabel('m/z', undefined, 'Point')).toBe('m/z');
     });
 });

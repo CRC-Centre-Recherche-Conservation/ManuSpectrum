@@ -6,6 +6,7 @@ import XyParser from 'utils/xy-parser';
 import {
     applyTransforms,
     deriveAxisLabel,
+    deriveXAxisLabel,
     describeChain,
     expandStoredConfig,
 } from 'utils/xy-transforms';
@@ -56,8 +57,6 @@ const getOrCreateRegistry = (nodeId) => {
             storedConfig: ko.observable(null),
             // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
             chartXReversed: ko.observable(false),
-            xRangeMin: ko.observable(undefined),
-            xRangeMax: ko.observable(undefined),
             columnAssignments: null,
             xColumnMode: null,
             xColumnIndex: 0,
@@ -171,12 +170,6 @@ const FileWidgetXYViewModel = function (params) {
         ].filter(Boolean);
         return applied.length ? applied.join(' -> ') : null;
     });
-    this.xRangeMin = registry
-        ? registry.xRangeMin
-        : ko.observable(undefined);
-    this.xRangeMax = registry
-        ? registry.xRangeMax
-        : ko.observable(undefined);
 
     // Dropdown
     this.dropdownOpen = ko.observable(false);
@@ -211,8 +204,6 @@ const FileWidgetXYViewModel = function (params) {
     // Unified Plotly traces
     this.unifiedChartData = ko.computed(() => {
         const allTraces = [];
-        const xMin = self.xRangeMin();
-        const xMax = self.xRangeMax();
         const assignments = registry ? registry.columnAssignments : null;
         const isGenerate = registry && registry.xColumnMode === 'generate';
         const xColIdx = registry ? parseInt(registry.xColumnIndex ?? 0, 10) : 0;
@@ -233,15 +224,9 @@ const FileWidgetXYViewModel = function (params) {
                         : null;
                     if (colAssign && colAssign.role === 'ignore') return;
 
-                    const filtered = XyParser.filterXRange(
-                        s.value,
-                        s.count,
-                        xMin,
-                        xMax
-                    );
                     const trace = {
-                        x: filtered.x,
-                        y: filtered.y,
+                        x: s.value,
+                        y: s.count,
                         type: 'scatter',
                         mode: 'lines',
                         name: entry.fileName + ' - ' + s.name,
@@ -257,15 +242,9 @@ const FileWidgetXYViewModel = function (params) {
                     allTraces.push(trace);
                 });
             } else {
-                const filtered = XyParser.filterXRange(
-                    data.value,
-                    data.count,
-                    xMin,
-                    xMax
-                );
                 allTraces.push({
-                    x: filtered.x,
-                    y: filtered.y,
+                    x: data.value,
+                    y: data.count,
                     type: 'scatter',
                     mode: 'lines',
                     name: entry.fileName,
@@ -409,7 +388,18 @@ const FileWidgetXYViewModel = function (params) {
                                 if (d.chartTitle)
                                     registry.chartTitle(d.chartTitle);
                                 if (d.xAxisLabel)
-                                    registry.chartXAxisLabel(d.xAxisLabel);
+                                    // Overridden when the file holds no
+                                    // abscissa: the axis is the row position,
+                                    // and naming it a physical quantity the
+                                    // file cannot supply would be a claim
+                                    // nothing backs.
+                                    registry.chartXAxisLabel(
+                                        deriveXAxisLabel(
+                                            d.xAxisLabel,
+                                            config.config,
+                                            arches.translations.xAxisPoint
+                                        )
+                                    );
                                 if (d.yAxisLabel)
                                     // Derived, never the stored string on its
                                     // own: the label must follow what is
@@ -431,10 +421,6 @@ const FileWidgetXYViewModel = function (params) {
                                     registry.chartYAxisRightLabel(
                                         d.yAxisRightLabel
                                     );
-                                if (d.xRangeMin !== undefined)
-                                    registry.xRangeMin(d.xRangeMin);
-                                if (d.xRangeMax !== undefined)
-                                    registry.xRangeMax(d.xRangeMax);
                                 registry.chartXReversed(!!d.xReversed);
                                 if (d.columnAssignments)
                                     registry.columnAssignments =

@@ -93,13 +93,8 @@ const vm = function (params) {
 
     // X column mode: 'data' (default) or 'generate'
     this.xColumnMode = ko.observable('data');
-    this.xGenerateStart = ko.observable();
-    this.xGenerateEnd = ko.observable();
 
     // Feature 1: Spectral range filter
-    this.xRangeMin = ko.observable();
-    this.xRangeMax = ko.observable();
-    this.showAdvancedDisplay = ko.observable(false);
 
     // Descending X axis. Conventional for FTIR (4000 -> 400 cm-1), NMR and XPS;
     // plotting those ascending reads as an error to a spectroscopist.
@@ -264,33 +259,11 @@ const vm = function (params) {
                 xMode !== 'generate' && xColIdx !== 0
                     ? xColIdx
                     : undefined,
-            xGenerateStart:
-                xMode === 'generate' &&
-                this.xGenerateStart() !== '' &&
-                this.xGenerateStart() !== undefined
-                    ? parseFloat(this.xGenerateStart())
-                    : undefined,
-            xGenerateEnd:
-                xMode === 'generate' &&
-                this.xGenerateEnd() !== '' &&
-                this.xGenerateEnd() !== undefined
-                    ? parseFloat(this.xGenerateEnd())
-                    : undefined,
             display: {
                 chartTitle: this.chartTitle(),
                 xAxisLabel: this.xAxisLabel(),
                 yAxisLabel: this.yAxisLabel(),
                 xReversed: this.xReversed() ? true : undefined,
-                xRangeMin:
-                    this.xRangeMin() !== '' &&
-                    this.xRangeMin() !== undefined
-                        ? parseFloat(this.xRangeMin())
-                        : undefined,
-                xRangeMax:
-                    this.xRangeMax() !== '' &&
-                    this.xRangeMax() !== undefined
-                        ? parseFloat(this.xRangeMax())
-                        : undefined,
                 yAxisRightLabel: this.yAxisRightLabel() || undefined,
                 columnAssignments:
                     this.columnAssignments().length > 0
@@ -376,19 +349,11 @@ const vm = function (params) {
         // X column mode
         const xMode = configuration?.config?.xColumnMode;
         this.xColumnMode(xMode === 'generate' ? 'generate' : 'data');
-        this.xGenerateStart(configuration?.config?.xGenerateStart ?? '');
-        this.xGenerateEnd(configuration?.config?.xGenerateEnd ?? '');
         this.chartTitle(configuration?.config?.display?.chartTitle);
         this.xAxisLabel(configuration?.config?.display?.xAxisLabel);
         this.yAxisLabel(configuration?.config?.display?.yAxisLabel);
 
-        // Feature 1: Spectral range
-        const xMin = configuration?.config?.display?.xRangeMin;
-        const xMax = configuration?.config?.display?.xRangeMax;
-        this.xRangeMin(xMin ?? '');
-        this.xRangeMax(xMax ?? '');
         this.xReversed(!!configuration?.config?.display?.xReversed);
-        this.showAdvancedDisplay(xMin !== undefined || xMax !== undefined);
 
         this.multiYHandling(
             configuration?.config?.multiYHandling || MULTI_Y_SEPARATE

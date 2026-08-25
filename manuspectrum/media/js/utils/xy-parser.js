@@ -245,13 +245,17 @@ const parse = (text, config) => {
             return { x: [], y: [] };
         }
 
+        // The generated axis IS the row index — the channel number — and
+        // nothing else. It used to be interpolated between two values a curator
+        // typed, which fabricated an abscissa: on an MCA export the true axis
+        // runs from a negative offset to 47.6 keV, so the round numbers anyone
+        // would reach for put Fe Ka at 5.68 keV, between chromium and
+        // manganese. The reader saw a normal-looking chart naming the wrong
+        // element. Converting channels to a physical quantity needs the
+        // instrument's own calibration, which belongs to the conversion step,
+        // not to a shared configuration.
         const n = dataRows.length;
-        const xStart = parseFloat(config.xGenerateStart ?? 0);
-        const xEnd = parseFloat(config.xGenerateEnd ?? n - 1);
-        const genX = [];
-        for (let i = 0; i < n; i++) {
-            genX.push(n > 1 ? xStart + (i * (xEnd - xStart)) / (n - 1) : xStart);
-        }
+        const genX = Array.from({ length: n }, (_, i) => i);
 
         const colCount = dataRows[0].length;
         const transform = config?.transformation ?? 'basic';
@@ -364,29 +368,8 @@ const parse = (text, config) => {
     return parsedData;
 };
 
-/**
- * Filters parallel X/Y arrays to only include points where X is within [min, max].
- * Both min and max are optional (undefined = no bound).
- */
-const filterXRange = (xArr, yArr, xMin, xMax) => {
-    if (xMin === undefined && xMax === undefined) return { x: xArr, y: yArr };
-    const x = [];
-    const y = [];
-    for (let i = 0; i < xArr.length; i++) {
-        if (
-            (xMin === undefined || xArr[i] >= xMin) &&
-            (xMax === undefined || xArr[i] <= xMax)
-        ) {
-            x.push(xArr[i]);
-            y.push(yArr[i]);
-        }
-    }
-    return { x, y };
-};
-
 export default {
     transformations,
     parse,
-    validateContent,
-    filterXRange
+    validateContent
 };

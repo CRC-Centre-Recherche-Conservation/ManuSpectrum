@@ -13,6 +13,7 @@ import XyParser from 'utils/xy-parser';
 import {
     applyTransforms,
     deriveAxisLabel,
+    deriveXAxisLabel,
     describeChain,
     expandStoredConfig,
 } from 'utils/xy-transforms';
@@ -138,13 +139,17 @@ export default ko.components.register('xy-reader', {
             const expanded = expandStoredConfig(config);
 
             // Read back by parse() on the next render.
-            self._xRangeMin = display?.xRangeMin;
-            self._xRangeMax = display?.xRangeMax;
             self._columnAssignments = display?.columnAssignments || null;
             self._xColumnMode = config?.xColumnMode || null;
 
             self.chartTitle(display?.chartTitle || arches.translations.data);
-            self.xAxisLabel(display?.xAxisLabel || arches.translations.xAxis);
+            self.xAxisLabel(
+                deriveXAxisLabel(
+                    display?.xAxisLabel || arches.translations.xAxis,
+                    config,
+                    arches.translations.xAxisPoint
+                )
+            );
             // Derived, never the stored string on its own: the label has to
             // follow what is actually plotted.
             self.yAxisLabel(
@@ -747,8 +752,6 @@ export default ko.components.register('xy-reader', {
                 );
                 this.invalidDelimiter(false);
                 const assignments = this._columnAssignments;
-                const xMin = this._xRangeMin;
-                const xMax = this._xRangeMax;
                 const isGenerate = effectiveConfig.xColumnMode === 'generate';
                 const xColIdx = parseInt(effectiveConfig.xColumnIndex ?? 0, 10);
 
@@ -805,30 +808,6 @@ export default ko.components.register('xy-reader', {
                     series.count.push(...parsedData.y);
                 }
 
-                // Apply spectral range filter
-                if (xMin !== undefined || xMax !== undefined) {
-                    const filtered = XyParser.filterXRange(
-                        series.value,
-                        series.count,
-                        xMin,
-                        xMax
-                    );
-                    series.value.length = 0;
-                    series.count.length = 0;
-                    series.value.push(...filtered.x);
-                    series.count.push(...filtered.y);
-                    if (series.multiSeries) {
-                        series.multiSeries = series.multiSeries.map((s) => {
-                            const f = XyParser.filterXRange(
-                                s.value,
-                                s.count,
-                                xMin,
-                                xMax
-                            );
-                            return { ...s, value: f.x, count: f.y };
-                        });
-                    }
-                }
             } catch (e) {
                 this.invalidDelimiter(true);
                 throw e;

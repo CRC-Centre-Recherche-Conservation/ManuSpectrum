@@ -106,29 +106,8 @@
     }
 }
 
-// A setting that works, but whose consequence reaches beyond the file on
-// screen. Amber rather than red: nothing is broken, the curator needs to know
-// what they are committing every reader of the technique to.
-//
-// This class was referenced from the template before it had a rule, so the
-// warning rendered as an unstyled paragraph — no colour, no rule, no icon
-// spacing — which reads as body text rather than as a caution.
-.xy-transform-warning {
-    margin-top: 8px;
-    padding: 6px 8px;
-    border-left: 3px solid #f0ad4e;
-    background-color: #fcf8f2;
-    color: #8a6d3b;
-    font-size: 12px;
-    line-height: 1.4;
-
-    .fa {
-        margin-right: 4px;
-    }
-}
-
-// A transform that cannot run yet. Louder than .xy-transform-warning, which
-// merely says a step needs parameters: this one says the step is inert.
+// A transform that cannot run yet: the step is inert until a column carries
+// the role it needs.
 .xy-transform-blocked {
     margin-top: 8px;
     padding: 6px 8px;

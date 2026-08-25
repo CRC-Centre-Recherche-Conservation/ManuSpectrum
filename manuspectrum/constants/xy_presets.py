@@ -244,13 +244,6 @@ def _preset(config_id, name, description, x_label, y_label, **kwargs):
         "yAxisLabel": y_label,
         "xReversed": kwargs.pop("x_reversed", False),
     }
-    x_min = kwargs.pop("x_min", None)
-    x_max = kwargs.pop("x_max", None)
-    if x_min is not None:
-        display["xRangeMin"] = x_min
-    if x_max is not None:
-        display["xRangeMax"] = x_max
-
     config = {
         "display": display,
         "multiYHandling": kwargs.pop("multi_y", MULTI_Y_SEPARATE),

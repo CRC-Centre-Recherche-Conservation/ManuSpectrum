@@ -72,64 +72,12 @@
                 <h5 class="file-config-instructions">{% trans "Define how the X axis values are determined" %}</h5>
                 <div class="radio-group">
                     <div class="radio-row"><input id="x-mode-data" type="radio" name="xColumnMode" value="data" data-bind="checked: xColumnMode"><label for="x-mode-data">{% trans "From data (first column is X)" %}</label></div>
-                    <div class="radio-row"><input id="x-mode-generate" type="radio" name="xColumnMode" value="generate" data-bind="checked: xColumnMode"><label for="x-mode-generate">{% trans "Generate from range (no X column in file)" %}</label></div>
+                    <div class="radio-row"><input id="x-mode-generate" type="radio" name="xColumnMode" value="generate" data-bind="checked: xColumnMode"><label for="x-mode-generate">{% trans "Intensities only (no X column in file)" %}</label></div>
                 </div>
                 <!-- ko if: xColumnMode() === 'generate' -->
-                <h5 class="file-config-instructions">{% trans "The X axis will be evenly spaced between start and end values, based on the number of data rows." %}</h5>
-                <div class="input-row--wide">
-                    <div class="flex-1">
-                        <label class="input-label-sm">{% trans "Start" %}</label>
-                        <input type="number" step="any" placeholder="{% trans "e.g. -3500" %}"
-                               data-bind="textInput: xGenerateStart" class="w-100">
-                    </div>
-                    <div class="flex-1">
-                        <label class="input-label-sm">{% trans "End" %}</label>
-                        <input type="number" step="any" placeholder="{% trans "e.g. 500" %}"
-                               data-bind="textInput: xGenerateEnd" class="w-100">
-                    </div>
-                </div>
+                <h5 class="file-config-instructions">{% trans "Rows are plotted against their position — 1, 2, 3 … — and the X axis is labelled Point. Turning channels into a physical quantity needs the instrument's calibration, which the file conversion supplies." %}</h5>
                 <!-- /ko -->
             </div>
-            <div class="importer-config-panel">
-                <h4 class="file-config-header">{% trans "Data Column Delimiter" %}</h4>
-                <div class="afs-error-message ep-alert-red p-5" data-bind="visible: invalidDelimiter()">{% trans "The data delimiter must be a valid regular expression" %}</div>
-                <h5 class="file-config-instructions">{% trans "Define how the data are separated" %}</h5>
-                <div class="radio-group--horizontal">
-                    <div class="data-delimiter-radio"><input id="delimiter-auto" type="radio" name="dataDelimiter" value="auto" data-bind="checked: dataDelimiterRadio"><label for="delimiter-auto">{% trans "Auto-detect" %}</label></div>
-                    <div class="data-delimiter-radio"><input id="delimiter-space" type="radio" name="dataDelimiter" value="" data-bind="checked: dataDelimiterRadio"><label for="delimiter-space">{% trans "Whitespace" %}</label></div>
-                    <div class="data-delimiter-radio"><input id="delimiter-comma" type="radio" name="dataDelimiter" value="," data-bind="checked: dataDelimiterRadio"><label for="delimiter-comma">{% trans "Comma" %}</label></div>
-                    <div class="data-delimiter-radio"><input id="delimiter-pipe" type="radio" name="dataDelimiter" value="|" data-bind="checked: dataDelimiterRadio"><label for="delimiter-pipe">{% trans "Pipe" %}</label></div>
-                    <div class="data-delimiter-radio"><input id="delimiter-other" type="radio" name="dataDelimiter" value="other" data-bind="checked: dataDelimiterRadio"><label for="delimiter-other">{% trans "Other" %}</label></div>
-                </div>
-                <input type="text" name="delimiterCharacter" placeholder="String or regex, example: [a-zA-Z]+" data-bind="visible: dataDelimiterRadio()=='other', textInput: dataDelimiter">
-                <div class="d-flex" style="margin: 5px 0;">
-                    <input id="include-delimiter" style="margin: 0 0 0 2px;" type="checkbox" name="includeDelimiter" value="includeDelimiter" data-bind="checked:includeDelimiter">
-                    <label style="margin-top: 2px;" for="include-delimiter">{% trans "Include Delimiter in Value" %}</label>
-                </div>
-            </div>
-            <div class="importer-config-panel">
-                <h4 class="file-config-header">{% trans "Display/Charting" %}</h4>
-
-                <h4 class="file-config-header">{% trans "Chart Title" %}</h4>
-                <input type="text" placeholder="{% trans "Title" %}" name="chartTitle" data-bind="textInput: chartTitle">
-
-                <h4 class="file-config-header">{% trans "X Axis Label" %}</h4>
-                <div class="input-row">
-                    <input type="text" placeholder="{% trans "X Axis" %}" name="xAxisLabel"
-                           data-bind="textInput: xAxisLabel" class="flex-1">
-                    <select class="preset-select"
-                            data-bind="event: { change: function(data, event) {
-                                if (event.target.value) {
-                                    xAxisLabel(event.target.value);
-                                    event.target.selectedIndex = 0;
-                                }
-                            } }">
-                        <option value="">{% trans "Presets..." %}</option>
-                        <!-- ko foreach: xAxisPresets -->
-                        <option data-bind="value: value, text: text"></option>
-                        <!-- /ko -->
-                    </select>
-                </div>
 
                 <h4 class="file-config-header">{% trans "Y Axis Label" %}</h4>
                 <div class="input-row">
@@ -154,36 +102,6 @@
                     <label for="xy-x-reversed">{% trans "Reverse the X axis" %}</label>
                 </div>
                 <h5 class="file-config-instructions">{% trans "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR and XPS." %}</h5>
-            </div>
-
-            <!-- Spectral Range Filter (collapsible) -->
-            <div class="importer-config-panel">
-                <h4 class="file-config-header collapsible-header"
-                    data-bind="click: function() { showAdvancedDisplay(!showAdvancedDisplay()); }">
-                    <i class="fa chevron-icon" data-bind="css: { 'fa-chevron-right': !showAdvancedDisplay(), 'fa-chevron-down': showAdvancedDisplay() }"></i>
-                    {% trans "Spectral Range" %}
-                </h4>
-                <!-- ko if: showAdvancedDisplay -->
-                <h5 class="file-config-instructions">{% trans "Limit the displayed X range. Leave empty to show the whole acquired range." %}</h5>
-                <div class="input-row--wide">
-                    <div class="flex-1">
-                        <label class="input-label-sm">{% trans "Min X" %}</label>
-                        <input type="number" step="any"
-                               data-bind="textInput: xRangeMin" class="w-100">
-                    </div>
-                    <div class="flex-1">
-                        <label class="input-label-sm">{% trans "Max X" %}</label>
-                        <input type="number" step="any"
-                               data-bind="textInput: xRangeMax" class="w-100">
-                    </div>
-                </div>
-                <!-- ko if: xRangeMin() || xRangeMax() -->
-                <p class="xy-transform-warning">
-                    <i class="fa fa-exclamation-triangle"></i>
-                    {% trans "Points outside this range are not plotted. A configuration is shared by every file of its technique, and instruments do not all cover the same range — a crop set here hides real signal from acquisitions that go further. The range is stated under each chart." %}
-                </p>
-                <!-- /ko -->
-                <!-- /ko -->
             </div>
 
             <!-- Column Assignment (collapsible) -->
