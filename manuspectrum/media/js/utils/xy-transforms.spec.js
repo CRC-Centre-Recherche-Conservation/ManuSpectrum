@@ -349,3 +349,36 @@ describe('describeChain', () => {
         ).toBe('reference-normalize');
     });
 });
+
+describe('describeChain declares a spectral crop', () => {
+    it('names the range, which filterXRange silently applies to the plot', () => {
+        expect(
+            describeChain({ display: { xRangeMin: 400, xRangeMax: 4000 } })
+        ).toBe('cropped to 400-4000');
+    });
+
+    it('handles a one-sided range', () => {
+        expect(describeChain({ display: { xRangeMin: 400 } })).toBe(
+            'cropped from 400'
+        );
+        expect(describeChain({ display: { xRangeMax: 4000 } })).toBe(
+            'cropped to 4000'
+        );
+    });
+
+    it('lists the crop after the transforms that produced the values', () => {
+        expect(
+            describeChain({
+                transforms: [{ type: 'reference-normalize' }],
+                display: { xRangeMin: 400, xRangeMax: 4000 },
+            })
+        ).toBe('reference-normalize -> cropped to 400-4000');
+    });
+
+    it('still returns null when nothing at all is applied', () => {
+        expect(describeChain({ display: {} })).toBeNull();
+        expect(
+            describeChain({ display: { xRangeMin: '', xRangeMax: '' } })
+        ).toBeNull();
+    });
+});

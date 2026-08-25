@@ -436,6 +436,20 @@ export const describeChain = (config) => {
     const steps = chainSteps(config)
         .map(stepType)
         .filter((type) => type && TRANSFORM_LABELS[type]);
+
+    // A spectral range is not a transform, but it is applied to what gets
+    // plotted: filterXRange drops every point outside it. Leaving it out of
+    // this description let a configuration crop a spectrum while the caption
+    // underneath read "none applied" — a reader would have no way to tell that
+    // half the acquisition was missing from the chart.
+    const min = config?.display?.xRangeMin;
+    const max = config?.display?.xRangeMax;
+    const hasMin = Number.isFinite(Number(min)) && min !== '';
+    const hasMax = Number.isFinite(Number(max)) && max !== '';
+    if (hasMin && hasMax) steps.push(`cropped to ${min}-${max}`);
+    else if (hasMin) steps.push(`cropped from ${min}`);
+    else if (hasMax) steps.push(`cropped to ${max}`);
+
     if (steps.length === 0) return null;
     return steps.join(' -> ');
 };
