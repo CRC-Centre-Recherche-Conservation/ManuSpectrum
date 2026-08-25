@@ -1,4 +1,20 @@
-"""Seed the XY viewer presets and wire up the technique -> config function."""
+"""Seed the XY viewer presets and wire up the technique -> config function.
+
+This is the **only** migration that writes preset rows, and it reads
+``XY_PRESETS`` live rather than a frozen copy. Two consequences worth knowing
+before touching it:
+
+* **Adding or changing a preset needs no migration.** Edit ``xy_presets.py``;
+  a database created afterwards is seeded with the new shape. Only a database
+  that already ran this migration needs the seed re-running by hand, and until
+  the first production deploy there is exactly one of those.
+* **The reasoning does not live here.** Three migrations used to re-derive
+  these same rows — one seeding them, one collapsing the two multi-Y settings
+  into a single exclusive choice, one stamping ``presetKey``. The last two were
+  squashed away once their result was the shape this seed already produces;
+  their rationale is in ``xy_presets.py``, next to the constants it explains,
+  where it is read rather than archived.
+"""
 
 from django.db import migrations
 
