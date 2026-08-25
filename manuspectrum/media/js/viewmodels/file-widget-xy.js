@@ -4,6 +4,7 @@ import arches from 'arches';
 import FileWidgetViewModel from 'viewmodels/file-widget';
 import XyParser from 'utils/xy-parser';
 import {
+    TRANSFORM_TRANSLATION_KEYS,
     applyTransforms,
     deriveAxisLabel,
     deriveXAxisLabel,
@@ -15,6 +16,18 @@ import dispose from 'utils/dispose';
 import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 
 const XY_RENDERER_UUID = 'e93b7b27-40d8-4141-996e-e59ff08742f3';
+
+
+// Transform key -> the sentence a reader sees. Resolved here, not in
+// utils/xy-transforms.js, so that module stays importable without a page and
+// its specs need no translation bundle. Same split as VIEW_LABELS below.
+const stepLabels = () =>
+    Object.fromEntries(
+        Object.entries(TRANSFORM_TRANSLATION_KEYS).map(([step, key]) => [
+            step,
+            arches.translations[key] || step,
+        ])
+    );
 
 const FILE_COLORS = [
     '#3333ff', '#ff6633', '#33cc33', '#cc33ff', '#ffcc00',
@@ -166,7 +179,10 @@ const FileWidgetXYViewModel = function (params) {
     this.processingNote = ko.pureComputed(() => {
         const applied = [
             self.processing(),
-            describeChain({ transforms: self.currentView().transforms }),
+            describeChain(
+                { transforms: self.currentView().transforms },
+                stepLabels()
+            ),
         ].filter(Boolean);
         return applied.length ? applied.join(' -> ') : null;
     });
@@ -412,7 +428,8 @@ const FileWidgetXYViewModel = function (params) {
                                     );
                                 registry.processing(
                                     describeChain(
-                                        expandStoredConfig(config.config)
+                                        expandStoredConfig(config.config),
+                                        stepLabels()
                                     )
                                 );
                                 registry.baseYAxisLabel(d.yAxisLabel || '');

@@ -411,6 +411,24 @@ export const TRANSFORM_LABELS = {
     [TRANSFORM_DERIVATIVE]: { annotates: 'derivative' },
 };
 
+/**
+ * Transform key -> key in `arches.translations`.
+ *
+ * The mapping lives here, next to the transforms it names, but the *lookup*
+ * happens in the viewmodels: this module must stay importable without a page
+ * around it, so it never touches `arches`. Same split as VIEW_LABELS in
+ * file-widget-xy.js.
+ */
+export const TRANSFORM_TRANSLATION_KEYS = {
+    [TRANSFORM_REFERENCE_NORMALIZE]: 'xyStepReferenceNormalize',
+    [TRANSFORM_LOG_INVERSE_R]: 'xyViewLogInverseR',
+    [TRANSFORM_KUBELKA_MUNK]: 'xyViewKubelkaMunk',
+    [TRANSFORM_NORMALIZE_MAX]: 'xyViewNormalizeMax',
+    [TRANSFORM_NORMALIZE_AREA]: 'xyViewNormalizeArea',
+    [TRANSFORM_SMOOTH]: 'xyStepSmooth',
+    [TRANSFORM_DERIVATIVE]: 'xyStepDerivative',
+};
+
 const chainSteps = (config) => {
     const chain = config?.transforms;
     return Array.isArray(chain) ? chain : [];
@@ -462,10 +480,16 @@ export const deriveAxisLabel = (baseLabel, config) => {
  * indistinguishable from "nothing applied" — the convention JCAMP-DX and mzML
  * both enforce by making the processing field mandatory.
  */
-export const describeChain = (config) => {
+export const describeChain = (config, labels) => {
+    // `labels` maps a transform key to a human sentence. Without it the caption
+    // printed the machine keys — a reader saw "reference-normalize ->
+    // log-inverse-r" under the chart, which is the caption failing at the one
+    // job it exists for. Defaulted rather than required so a spec can assert
+    // the chain's shape without a translation bundle.
     const steps = chainSteps(config)
         .map(stepType)
-        .filter((type) => type && TRANSFORM_LABELS[type]);
+        .filter((type) => type && TRANSFORM_LABELS[type])
+        .map((type) => labels?.[type] || type);
 
     if (steps.length === 0) return null;
     return steps.join(' -> ');

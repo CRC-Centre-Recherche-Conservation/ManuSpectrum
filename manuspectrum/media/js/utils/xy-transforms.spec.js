@@ -374,3 +374,36 @@ describe('deriveXAxisLabel', () => {
         expect(deriveXAxisLabel('m/z', undefined, 'Point')).toBe('m/z');
     });
 });
+
+describe('describeChain wording', () => {
+    const labels = {
+        'reference-normalize': 'Divided by the white reference',
+        'log-inverse-r': 'Pseudo-absorbance log10(1/R)',
+    };
+
+    it('states the steps in words a reader understands', () => {
+        expect(
+            describeChain(
+                {
+                    transforms: [
+                        { type: 'reference-normalize' },
+                        { type: 'log-inverse-r' },
+                    ],
+                },
+                labels
+            )
+        ).toBe('Divided by the white reference -> Pseudo-absorbance log10(1/R)');
+    });
+
+    it('falls back to the key rather than dropping a step it cannot name', () => {
+        // A silent omission would understate what was applied, which is worse
+        // than an ugly caption.
+        expect(
+            describeChain({ transforms: [{ type: 'smooth' }] }, labels)
+        ).toBe('smooth');
+    });
+
+    it('still returns null when nothing ran', () => {
+        expect(describeChain({ transforms: [] }, labels)).toBe(null);
+    });
+});

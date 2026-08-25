@@ -11,6 +11,7 @@ import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
 import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
 import {
+    TRANSFORM_TRANSLATION_KEYS,
     applyTransforms,
     deriveAxisLabel,
     deriveXAxisLabel,
@@ -26,6 +27,18 @@ import 'views/components/plugins/importer-configuration';
 // every entry a curator configures by hand, so the "auto" badge in the file
 // lists tells the truth about where a configuration came from — and so the
 // technique mapping knows a human has spoken and leaves the entry alone.
+
+// Transform key -> the sentence a reader sees. Resolved here, not in
+// utils/xy-transforms.js, so that module stays importable without a page and
+// its specs need no translation bundle. Same split as VIEW_LABELS below.
+const stepLabels = () =>
+    Object.fromEntries(
+        Object.entries(TRANSFORM_TRANSLATION_KEYS).map(([step, key]) => [
+            step,
+            arches.translations[key] || step,
+        ])
+    );
+
 const CONFIG_SOURCE_MANUAL = 'manual';
 
 export default ko.components.register('xy-reader', {
@@ -159,7 +172,7 @@ export default ko.components.register('xy-reader', {
             );
             self.yAxisRightLabel(display?.yAxisRightLabel || '');
             self.xReversed(!!display?.xReversed);
-            self.processing(describeChain(expanded));
+            self.processing(describeChain(expanded, stepLabels()));
         };
 
         this.disposables.push(this.selectedConfig.subscribe((config) => {
