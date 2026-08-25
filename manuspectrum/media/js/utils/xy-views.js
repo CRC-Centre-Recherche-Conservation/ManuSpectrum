@@ -88,8 +88,7 @@ export const VIEWS_BY_PRESET = {
 
     // Mass spectra: intensity is arbitrary, so normalising to the total ion
     // current is what makes two acquisitions comparable at all.
-    maldi: [NORMALISE_AREA, NORMALISE_MAX],
-    mass_spec: [NORMALISE_AREA],
+    mass_spec: [NORMALISE_AREA, NORMALISE_MAX],
 
     // Total-emission normalisation counters shot-to-shot laser energy drift.
     libs: [NORMALISE_AREA],

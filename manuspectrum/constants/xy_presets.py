@@ -342,19 +342,22 @@ XY_PRESETS = {
         "Reflectance (0-1)",
         multi_y=MULTI_Y_REFERENCE,
     ),
-    "maldi": _preset(
+    # One preset for every mass spectrum. There used to be two — "MALDI-TOF"
+    # and "Mass spectrometry" — carrying axis labels identical to the
+    # character. They cost more than the duplication: an analysis tagged with
+    # both a specific and a generic mass-spectrometry term made
+    # config_id_for_techniques see two keys and return None, so the file got no
+    # configuration at all. The guard is right to refuse a real disagreement;
+    # here there was nothing to disagree about.
+    #
+    # Named for the measurement, not the instrument: the technique that carries
+    # every analysis in this database is laser desorption, of which MALDI is one
+    # variant, and titling every chart "MALDI-TOF" overstated what was known.
+    "mass_spec": _preset(
         "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a04",
-        "MALDI-TOF — m/z / intensity",
+        "Mass spectrometry — m/z / intensity",
         "Columns: 1 = m/z, 2 = intensity. Raw counts as acquired — baseline, "
         "smoothing and TIC normalisation stay analyst choices.",
-        "m/z",
-        "Intensity (a.u.)",
-    ),
-    "mass_spec": _preset(
-        "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a05",
-        "Mass spectrometry — m/z / intensity",
-        "Columns: 1 = m/z, 2 = intensity. Fallback for mass spectra with no "
-        "dedicated preset.",
         "m/z",
         "Intensity (a.u.)",
     ),
@@ -495,7 +498,7 @@ TECHNIQUE_PRESETS = {
     # --- Mass spectrometry ---
     # The TAPAC list has no MALDI-TOF item; laser-desorption MS (61292) is the
     # nearest parent and is what the lab has been recording in practice.
-    "5f9bfd47-9b4c-3b0c-a59c-7012504a06ed": "maldi",  # 61292 — Spectrométrie de masse par désorption laser
+    "5f9bfd47-9b4c-3b0c-a59c-7012504a06ed": "mass_spec",  # 61292 — Spectrométrie de masse par désorption laser
     "5ff53d67-a8b1-3aba-b059-c9f300663c39": "mass_spec",  # 61276 — Spectrométrie de masse
     # --- Raman ---
     "7f82d1b9-d04c-3aed-90d1-49f47eb41abb": "raman",  # 61320 — Spectrométrie Raman
