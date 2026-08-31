@@ -294,16 +294,33 @@ const vm = function (params) {
             }
         );
 
+        let responseJson = {};
+        try {
+            responseJson = await configSaveResponse.json();
+        } catch {
+            // no body — fall through to the generic refusal below
+        }
+
         if (configSaveResponse.ok) {
             invalidate(this.renderer);
             await rendererConfigRefresh();
             if (this.onConfigSaved) {
                 this.onConfigSaved();
             }
+            this.showConfigurationPanel(false);
+            this.showImporterList(true);
+            return;
         }
 
-        this.showConfigurationPanel(false);
-        this.showImporterList(true);
+        // The panel stays open on a refusal: closing it would throw away the
+        // edit that was just refused, and leave the rejection indistinguishable
+        // from a save. Same shape as performDelete below.
+        notify(
+            responseJson.reason === 'protected'
+                ? arches.translations.configurationProtected
+                : arches.translations.configurationNotSaved,
+            responseJson.message || arches.translations.configurationNotSavedWarning
+        );
     };
 
     const rendererConfigRefresh = async () => {

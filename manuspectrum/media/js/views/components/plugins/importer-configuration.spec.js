@@ -1,10 +1,13 @@
 /**
- * Vitest unit spec — importer-configuration.js configuration loading.
+ * Vitest unit spec — importer-configuration.js loading and saving.
  *
  * `referenceColumnDeclared` guards the reference-normalise choice: untagging the
  * reference column downgrades it to "separate", because the normalisation has
  * nothing to divide by. The guard must fire on a curator's edit and stay out of
  * the way while a stored configuration is being loaded into the panel.
+ *
+ * The save path has its own rule: a refusal must reach the curator, and must not
+ * close the panel over the edit that was refused.
  *
  * Note: this file lives under media/js/views/components/, which coverage.include
  * does not target, so it executes without touching the coverage gate.
@@ -15,8 +18,20 @@ import ko from 'knockout';
 
 vi.mock('arches', () => ({
     default: {
-        translations: {},
+        translations: {
+            configurationProtected: 'Protected configuration',
+            configurationNotSaved: 'Configuration not saved',
+            configurationNotSavedWarning: 'The server refused the change.',
+        },
         urls: { renderer_config: '/renderer/config' },
+    },
+}));
+
+// The vitest config stubs viewmodels/ to `{}`, which is not constructible.
+vi.mock('viewmodels/alert', () => ({
+    default: function AlertViewModel(type, title, text) {
+        this.title = title;
+        this.text = text;
     },
 }));
 
@@ -107,5 +122,78 @@ describe('loadConfiguration', () => {
 
         expect(vm.referenceColumnDeclared()).toBe(false);
         expect(vm.multiYHandling()).toBe('separate');
+    });
+});
+
+describe('saveConfigEdit', () => {
+    let vm;
+    let alerts;
+
+    const buildVm = () => {
+        alerts = [];
+        return new ImporterConfigurationViewModel({
+            rendererConfigs: ko.observableArray([]),
+            alert: (viewModel) => alerts.push(viewModel),
+        });
+    };
+
+    const respondWith = (status, body) => {
+        window.fetch = vi.fn(async () => ({
+            ok: status >= 200 && status < 300,
+            status,
+            json: async () => {
+                if (body === undefined) throw new Error('no body');
+                return body;
+            },
+        }));
+    };
+
+    beforeEach(() => {
+        vm = buildVm();
+        vm.configurationName('A configuration');
+        vm.showConfigurationPanel(true);
+        vm.showImporterList(false);
+    });
+
+    it('closes the panel once the server has accepted the change', async () => {
+        respondWith(200, { configid: 'x' });
+
+        await vm.saveConfigEdit();
+
+        expect(vm.showConfigurationPanel()).toBe(false);
+        expect(vm.showImporterList()).toBe(true);
+        expect(alerts).toHaveLength(0);
+    });
+
+    it('keeps the panel open and names the reason on a protected refusal', async () => {
+        // A seeded preset edited by a non-superuser. The panel used to close on
+        // this exactly as it does on success, so a curator saw their edit vanish
+        // and had no way to tell it had been rejected.
+        respondWith(403, {
+            saved: false,
+            reason: 'protected',
+            message: 'This configuration is part of the shared baseline.',
+        });
+
+        await vm.saveConfigEdit();
+
+        expect(vm.showConfigurationPanel()).toBe(true);
+        expect(alerts).toHaveLength(1);
+        expect(alerts[0].title).toBe('Protected configuration');
+        expect(alerts[0].text).toBe(
+            'This configuration is part of the shared baseline.'
+        );
+    });
+
+    it('still reports a failure that carries no body', async () => {
+        // A 500 from RendererConfig.DoesNotExist has no JSON to read.
+        respondWith(500, undefined);
+
+        await vm.saveConfigEdit();
+
+        expect(vm.showConfigurationPanel()).toBe(true);
+        expect(alerts).toHaveLength(1);
+        expect(alerts[0].title).toBe('Configuration not saved');
+        expect(alerts[0].text).toBe('The server refused the change.');
     });
 });

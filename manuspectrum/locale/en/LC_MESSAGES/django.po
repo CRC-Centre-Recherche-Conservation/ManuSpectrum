@@ -1610,6 +1610,18 @@ msgstr ""
 msgid "Protected configuration"
 msgstr "Chart Configuration"
 
+#: templates/javascript.htm:190
+msgid "Configuration not saved"
+msgstr "Configuration not saved"
+
+#: templates/javascript.htm:191
+msgid ""
+"The server refused the change. Your edits are still on screen — copy "
+"anything you need before closing the panel."
+msgstr ""
+"The server refused the change. Your edits are still on screen — copy "
+"anything you need before closing the panel."
+
 #: templates/javascript.htm:191
 msgid "Viz"
 msgstr ""
