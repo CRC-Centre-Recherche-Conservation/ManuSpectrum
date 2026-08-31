@@ -5,9 +5,9 @@ This is the **only** migration that writes preset rows, and it reads
 before touching it:
 
 * **Adding or changing a preset needs no migration.** Edit ``xy_presets.py``;
-  a database created afterwards is seeded with the new shape. Only a database
-  that already ran this migration needs the seed re-running by hand, and until
-  the first production deploy there is exactly one of those.
+  a database created afterwards is seeded with the new shape. A database that
+  already ran this migration needs ``seed_presets`` calling by hand — not a
+  rollback, whose reverse deletes rows that tile data points at by id.
 * **The reasoning does not live here.** Three migrations used to re-derive
   these same rows — one seeding them, one collapsing the two multi-Y settings
   into a single exclusive choice, one stamping ``presetKey``. The last two were
