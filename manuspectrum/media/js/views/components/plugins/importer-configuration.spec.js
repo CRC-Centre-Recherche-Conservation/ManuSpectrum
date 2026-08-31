@@ -197,3 +197,60 @@ describe('saveConfigEdit', () => {
         expect(alerts[0].text).toBe('The server refused the change.');
     });
 });
+
+describe('startNewConfiguration', () => {
+    let vm;
+
+    beforeEach(() => {
+        vm = new ImporterConfigurationViewModel({
+            rendererConfigs: ko.observableArray([]),
+        });
+    });
+
+    it('carries nothing over from the configuration last edited', () => {
+        vm.loadConfiguration({
+            ...configWithReference,
+            config: {
+                ...configWithReference.config,
+                delimiterCharacter: '|',
+                display: {
+                    ...configWithReference.config.display,
+                    chartTitle: 'A lab chart',
+                    xAxisLabel: 'Wavelength (nm)',
+                },
+            },
+        });
+
+        vm.startNewConfiguration();
+
+        expect(vm.editConfigurationId()).toBeUndefined();
+        expect(vm.configurationName()).toBeUndefined();
+        expect(vm.chartTitle()).toBeUndefined();
+        expect(vm.xAxisLabel()).toBeUndefined();
+        expect(vm.dataDelimiter()).toBeUndefined();
+        expect(vm.columnAssignments()).toHaveLength(0);
+        expect(vm.multiYHandling()).toBe('separate');
+    });
+
+    it('opens the panel on the list it replaces', () => {
+        vm.startNewConfiguration();
+
+        expect(vm.showConfigurationPanel()).toBe(true);
+        expect(vm.showImporterList()).toBe(false);
+    });
+
+    it('releases a delimiter that had disabled saving', () => {
+        // The case that made a configuration uneditable for good: a stored
+        // delimiter that is not a valid expression raises invalidDelimiter,
+        // which disables Save — and the field that could repair it was gone.
+        vm.loadConfiguration({
+            ...configWithReference,
+            config: { ...configWithReference.config, delimiterCharacter: '[a' },
+        });
+        expect(vm.invalidDelimiter()).toBe(true);
+
+        vm.startNewConfiguration();
+
+        expect(vm.invalidDelimiter()).toBe(false);
+    });
+});

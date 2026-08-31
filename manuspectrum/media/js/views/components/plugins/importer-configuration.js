@@ -84,7 +84,6 @@ const vm = function (params) {
     this.footerConfig = ko.observable();
     this.headerDelimiter = ko.observable();
     this.footerDelimiter = ko.observable();
-    this.delimiterCharacter = ko.observable();
     this.invalidDelimiter = ko.observable(false);
     this.includeDelimiter = ko.observable();
     this.headerFixedLines = ko.observable();
@@ -209,6 +208,36 @@ const vm = function (params) {
     this.cancelConfigEdit = () => {
         this.showConfigurationPanel(false);
         this.showImporterList(true);
+    };
+
+    // Opening the panel for a new configuration clears every field it owns.
+    // Without this it only cleared the id, so a new configuration silently
+    // inherited the title, labels and delimiter of the one last edited.
+    this.startNewConfiguration = () => {
+        this.editConfigurationId(undefined);
+        this.configurationName(undefined);
+        this.configurationDescription(undefined);
+        this.headerConfig('none');
+        this.headerDelimiter(undefined);
+        this.headerFixedLines(undefined);
+        this.footerConfig('none');
+        this.footerDelimiter(undefined);
+        // Also clears any stuck invalidDelimiter, through the radio subscription.
+        this.dataDelimiterRadio('auto');
+        this.includeDelimiter(undefined);
+        this.xColumnMode('data');
+        this.chartTitle(undefined);
+        this.xAxisLabel(undefined);
+        this.yAxisLabel(undefined);
+        this.yAxisRightLabel('');
+        this.xReversed(false);
+        // Before multiYHandling: the referenceColumnDeclared guard downgrades
+        // the choice whenever the column list changes.
+        this.columnAssignments([]);
+        this.showColumnAssignment(false);
+        this.multiYHandling(MULTI_Y_SEPARATE);
+        this.showConfigurationPanel(true);
+        this.showImporterList(false);
     };
 
     this.dataDelimiter.subscribe((newDelimiter) => {

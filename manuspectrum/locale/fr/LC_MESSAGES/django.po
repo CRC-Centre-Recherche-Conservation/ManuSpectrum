@@ -4012,6 +4012,42 @@ msgstr ""
 "Cette configuration fait partie du socle commun et ne peut pas être "
 "supprimée."
 
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Data Delimiter"
+msgstr "Séparateur de colonnes"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "What separates the columns. Auto-detect handles most instrument exports."
+msgstr "Ce qui sépare les colonnes. La détection automatique convient à la plupart des exports d'instruments."
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Pipe"
+msgstr "Barre verticale"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "A single character"
+msgstr "Un seul caractère"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "This delimiter cannot be used. Correct it to save the configuration."
+msgstr "Ce séparateur est inutilisable. Corrigez-le pour pouvoir enregistrer la configuration."
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Chart Title"
+msgstr "Titre du graphique"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Title shown above the chart"
+msgstr "Titre affiché au-dessus du graphique"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "X Axis Label"
+msgstr "Libellé de l'axe X"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
+msgstr "Sans objet ici : un fichier sans colonne X est tracé selon la position des lignes, et l'axe est libellé Point."
+
 #~ msgid "These look like percentages, not the 0-1 ratio the axis names."
 #~ msgstr ""
 #~ "Ces valeurs ressemblent à des pourcentages, pas au rapport 0-1 annoncé "
@@ -4069,23 +4105,14 @@ msgstr ""
 #~ msgid "Whitespace"
 #~ msgstr "Espace"
 
-#~ msgid "Pipe"
-#~ msgstr "Pipe"
-
 #~ msgid "Include Delimiter in Value"
 #~ msgstr "Inclure le délimiteur dans la valeur"
 
 #~ msgid "Display/Charting"
 #~ msgstr "Affichage / Graphique"
 
-#~ msgid "Chart Title"
-#~ msgstr "Titre du graphique"
-
 #~ msgid "Title"
 #~ msgstr "Titre"
-
-#~ msgid "X Axis Label"
-#~ msgstr "Libellé de l'axe X"
 
 #~ msgid "Spectral Range"
 #~ msgstr "Gamme spectrale"

@@ -65,7 +65,7 @@
             <!-- /ko -->
         </div>
 
-        <button class="btn btn-primary" data-bind="click:()=>{showConfigurationPanel(true); showImporterList(false); editConfigurationId(undefined)}">{% trans "Add Importer Configuration" %}</button>
+        <button class="btn btn-primary" type="button" data-bind="click: startNewConfiguration">{% trans "Add Importer Configuration" %}</button>
     </div>
     <div class="importer-config-panel-wrapper" data-bind="visible: showConfigurationPanel">
         <div class="importer-config-panel-inner">
@@ -98,6 +98,25 @@
                 <input type="text" name="headerDelimiter" data-bind="visible: footerConfig()=='delimited', textInput: footerDelimiter" placeholder="{% trans 'Ending Text' %}">
             </div>
             <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Data Delimiter" %}</h4>
+                <h5 class="file-config-instructions">{% trans "What separates the columns. Auto-detect handles most instrument exports." %}</h5>
+                <div class="radio-group">
+                    <div class="radio-row"><input id="delimiter-auto" type="radio" name="dataDelimiterRadio" value="auto" data-bind="checked: dataDelimiterRadio"><label for="delimiter-auto">{% trans "Auto-detect" %}</label></div>
+                    <div class="radio-row"><input id="delimiter-comma" type="radio" name="dataDelimiterRadio" value="," data-bind="checked: dataDelimiterRadio"><label for="delimiter-comma">{% trans "Comma" %}</label></div>
+                    <div class="radio-row"><input id="delimiter-pipe" type="radio" name="dataDelimiterRadio" value="|" data-bind="checked: dataDelimiterRadio"><label for="delimiter-pipe">{% trans "Pipe" %}</label></div>
+                    <div class="radio-row"><input id="delimiter-other" type="radio" name="dataDelimiterRadio" value="other" data-bind="checked: dataDelimiterRadio"><label for="delimiter-other">{% trans "Other" %}</label></div>
+                </div>
+                <input type="text" name="dataDelimiter"
+                       data-bind="visible: dataDelimiterRadio() === 'other', textInput: dataDelimiter"
+                       placeholder="{% trans 'A single character' %}">
+                <!-- Without this field a configuration whose delimiter cannot be
+                     read disabled Save, and the only control that could repair
+                     it was gone — the configuration was uneditable for good. -->
+                <!-- ko if: invalidDelimiter -->
+                <p class="text-danger">{% trans "This delimiter cannot be used. Correct it to save the configuration." %}</p>
+                <!-- /ko -->
+            </div>
+            <div class="importer-config-panel">
                 <h4 class="file-config-header">{% trans "X Axis Source" %}</h4>
                 <h5 class="file-config-instructions">{% trans "Define how the X axis values are determined" %}</h5>
                 <div class="radio-group">
@@ -106,6 +125,26 @@
                 </div>
                 <!-- ko if: xColumnMode() === 'generate' -->
                 <h5 class="file-config-instructions">{% trans "Rows are plotted against their position — 1, 2, 3 … — and the X axis is labelled Point. Turning channels into a physical quantity needs the instrument's calibration, which the file conversion supplies." %}</h5>
+                <!-- /ko -->
+            </div>
+
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Chart Title" %}</h4>
+                <input type="text" name="chartTitle" data-bind="textInput: chartTitle"
+                       placeholder="{% trans 'Title shown above the chart' %}">
+            </div>
+
+            <!-- Its own section rather than a field under "X Axis Source": the
+                 source and the label are different questions, and a heading
+                 must not carry a control about something else. -->
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "X Axis Label" %}</h4>
+                <!-- ko if: xColumnMode() === 'generate' -->
+                <h5 class="file-config-instructions">{% trans "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point." %}</h5>
+                <!-- /ko -->
+                <!-- ko ifnot: xColumnMode() === 'generate' -->
+                <input type="text" name="xAxisLabel" data-bind="textInput: xAxisLabel"
+                       placeholder="{% trans 'X Axis' %}">
                 <!-- /ko -->
             </div>
 
@@ -236,8 +275,8 @@
         </div>
         <div class="importer-config-footer">
             <div class="flex-1"></div>
-            <button class="btn btn-danger" type="text" name="delimiterCharacter" data-bind="click: cancelConfigEdit">{% trans "Cancel" %}</button>
-            <button class="btn btn-success" type="text" name="delimiterCharacter" data-bind="disable: invalidDelimiter(), click: saveConfigEdit">{% trans "Save" %}</button>
+            <button class="btn btn-danger" type="button" data-bind="click: cancelConfigEdit">{% trans "Cancel" %}</button>
+            <button class="btn btn-success" type="button" data-bind="disable: invalidDelimiter, click: saveConfigEdit">{% trans "Save" %}</button>
         </div>
         </div>
     </div>

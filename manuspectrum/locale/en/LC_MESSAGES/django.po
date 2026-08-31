@@ -3941,6 +3941,42 @@ msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
 
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Data Delimiter"
+msgstr "Data Delimiter"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "What separates the columns. Auto-detect handles most instrument exports."
+msgstr "What separates the columns. Auto-detect handles most instrument exports."
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Pipe"
+msgstr "Pipe"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "A single character"
+msgstr "A single character"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "This delimiter cannot be used. Correct it to save the configuration."
+msgstr "This delimiter cannot be used. Correct it to save the configuration."
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Chart Title"
+msgstr "Chart Title"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Title shown above the chart"
+msgstr "Title shown above the chart"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "X Axis Label"
+msgstr "X Axis Label"
+
+#: templates/views/components/plugins/importer-configuration.htm
+msgid "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
+msgstr "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
+
 #~ msgid ""
 #~ "The X axis will be evenly spaced between start and end values, based on "
 #~ "the number of data rows."
@@ -3972,23 +4008,14 @@ msgstr ""
 #~ msgid "Whitespace"
 #~ msgstr "Whitespace"
 
-#~ msgid "Pipe"
-#~ msgstr "Pipe"
-
 #~ msgid "Include Delimiter in Value"
 #~ msgstr "Include Delimiter in Value"
 
 #~ msgid "Display/Charting"
 #~ msgstr "Display/Charting"
 
-#~ msgid "Chart Title"
-#~ msgstr "Chart Title"
-
 #~ msgid "Title"
 #~ msgstr "Title"
-
-#~ msgid "X Axis Label"
-#~ msgstr "X Axis Label"
 
 #~ msgid "Spectral Range"
 #~ msgstr "Spectral Range"
