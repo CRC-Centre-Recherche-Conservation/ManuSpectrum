@@ -13,12 +13,15 @@ configuration — so "entry 0 only" is not a rare edge case here, it is the
 common shape.
 """
 
+import json
+from unittest import mock
+
 from django.test import SimpleTestCase
 from django.urls import resolve
 from django.urls.exceptions import Resolver404
 
 from manuspectrum.constants.xy_presets import is_seeded_preset
-from manuspectrum.views.renderer_config import in_use_query
+from manuspectrum.views.renderer_config import RendererConfigView, in_use_query
 
 CONFIG_ID = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a03"
 MEASUREMENT_NODE = "8fe5161a-7bf2-11ef-b1e5-dd514ecd97bc"
@@ -155,3 +158,85 @@ class ConfigIdRoutingTests(SimpleTestCase):
         # become "create a new configuration".
         match = resolve("/renderer_config/")
         self.assertIsNone(match.kwargs.get("renderer_config_id"))
+
+
+class ConfigurationSaveBodyTests(SimpleTestCase):
+    """How a POST body splits: three columns, and the rest as `config`.
+
+    Create and update read the same envelope, so they are tested against the
+    same body. They used to disagree: create dropped `description` on the floor
+    and stored the envelope inside `config`, which is why the only configuration
+    a curator ever made through the panel has no description.
+    """
+
+    RENDERER_ID = "e93b7b27-40d8-4141-996e-e59ff08742f3"
+    CURATOR_CONFIG = "d5f0e1a2-3b4c-4d5e-8f90-1a2b3c4d5e6f"
+
+    def _post(self, body, renderer_config_id=None):
+        request = mock.Mock()
+        request.body = json.dumps(body).encode()
+        request.user.is_superuser = True
+        with (
+            mock.patch(
+                "arches.app.utils.decorators.permission_group_required",
+                return_value=True,
+            ),
+            mock.patch("manuspectrum.views.renderer_config.RendererConfig") as model,
+            mock.patch(
+                "manuspectrum.views.renderer_config.JSONSerializer"
+            ) as serializer,
+        ):
+            # The response is not what these tests read; it only has to render.
+            serializer.return_value.serialize.return_value = "{}"
+            model.objects.get.return_value.config = {}
+            RendererConfigView().post(request, renderer_config_id=renderer_config_id)
+            return model
+
+    def test_creating_writes_the_description_and_keeps_it_out_of_config(self):
+        model = self._post(
+            {
+                "rendererId": self.RENDERER_ID,
+                "name": "Maldi-Proteo",
+                "description": "Columns: 1 = m/z, 2 = intensity",
+                "delimiterCharacter": ",",
+            }
+        )
+
+        model.objects.create.assert_called_once_with(
+            rendererid=self.RENDERER_ID,
+            name="Maldi-Proteo",
+            description="Columns: 1 = m/z, 2 = intensity",
+            config={"delimiterCharacter": ","},
+        )
+
+    def test_a_body_without_a_description_still_creates(self):
+        # xy-reader.js posts name and rendererId only, and the panel drops the
+        # key entirely when the description box is empty.
+        model = self._post(
+            {
+                "rendererId": self.RENDERER_ID,
+                "name": "From the reader",
+                "headerFixedLines": 3,
+            }
+        )
+
+        kwargs = model.objects.create.call_args.kwargs
+        self.assertEqual(kwargs["description"], "")
+        self.assertEqual(kwargs["config"], {"headerFixedLines": 3})
+
+    def test_updating_splits_the_body_the_same_way(self):
+        model = self._post(
+            {
+                "rendererId": self.RENDERER_ID,
+                "name": "Maldi-Proteo",
+                "description": "Columns: 1 = m/z, 2 = intensity",
+                "delimiterCharacter": ",",
+            },
+            renderer_config_id=self.CURATOR_CONFIG,
+        )
+
+        stored = model.objects.get.return_value
+        self.assertEqual(stored.name, "Maldi-Proteo")
+        self.assertEqual(stored.description, "Columns: 1 = m/z, 2 = intensity")
+        for envelope_key in ("rendererId", "name", "description"):
+            self.assertNotIn(envelope_key, stored.config)

@@ -107,6 +107,15 @@ class RendererConfigView(APIBase):
     @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
     def post(self, request, renderer_config_id=None):
         body = JSONDeserializer().deserialize(request.body)
+        # These three are columns, not configuration. Popped once for both
+        # branches so `body` is exactly what belongs in `config`, and so the two
+        # cannot disagree about which keys are envelope. `description` defaults
+        # because JSON.stringify drops an undefined one, which is what an empty
+        # description box sends.
+        rendererid = body.pop("rendererId")
+        name = body.pop("name")
+        description = body.pop("description", "")
+
         if renderer_config_id:
             # The seeded presets are the shared baseline every technique-derived
             # configuration points at. One edit reaches every analysis using that
@@ -125,17 +134,17 @@ class RendererConfigView(APIBase):
                     status=403,
                 )
             renderer_config = RendererConfig.objects.get(configid=renderer_config_id)
-            renderer_config.rendererid = body["rendererId"]
-            renderer_config.name = body["name"]
-            renderer_config.description = body["description"]
-            body.pop("rendererId")
-            body.pop("name")
-            body.pop("description")
+            renderer_config.rendererid = rendererid
+            renderer_config.name = name
+            renderer_config.description = description
             renderer_config.config = merge_seed_owned_keys(renderer_config.config, body)
             renderer_config.save()
         else:
             renderer_config = RendererConfig.objects.create(
-                rendererid=body["rendererId"], name=body["name"], config=body
+                rendererid=rendererid,
+                name=name,
+                description=description,
+                config=body,
             )
 
         response_dict = JSONSerializer().serialize(renderer_config)
