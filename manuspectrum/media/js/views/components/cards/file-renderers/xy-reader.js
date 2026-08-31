@@ -11,6 +11,7 @@ import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
 import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
 import {
+    TRANSFORM_ANNOTATION_KEYS,
     TRANSFORM_TRANSLATION_KEYS,
     applyTransforms,
     deriveAxisLabel,
@@ -38,6 +39,16 @@ const stepLabels = () =>
             step,
             arches.translations[key] || step,
         ])
+    );
+
+// The terser wording the axis puts in brackets. Untranslated keys are dropped
+// rather than defaulted, so deriveAxisLabel falls back to its English
+// annotation instead of printing a machine key on the chart.
+const annotationLabels = () =>
+    Object.fromEntries(
+        Object.entries(TRANSFORM_ANNOTATION_KEYS)
+            .map(([step, key]) => [step, arches.translations[key]])
+            .filter(([, label]) => label)
     );
 
 const CONFIG_SOURCE_MANUAL = 'manual';
@@ -168,7 +179,11 @@ export default ko.components.register('xy-reader', {
             // follow what is actually plotted.
             self.yAxisLabel(
                 display?.yAxisLabel
-                    ? deriveAxisLabel(display.yAxisLabel, expanded)
+                    ? deriveAxisLabel(
+                          display.yAxisLabel,
+                          expanded,
+                          annotationLabels()
+                      )
                     : arches.translations.yAxis
             );
             self.yAxisRightLabel(display?.yAxisRightLabel || '');

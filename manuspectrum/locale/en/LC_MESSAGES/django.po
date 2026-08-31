@@ -1666,6 +1666,22 @@ msgstr ""
 msgid "Derivative"
 msgstr ""
 
+#: templates/javascript.htm:203
+msgid "normalised to max"
+msgstr "normalised to max"
+
+#: templates/javascript.htm:204
+msgid "normalised to area"
+msgstr "normalised to area"
+
+#: templates/javascript.htm:205
+msgid "smoothed"
+msgstr "smoothed"
+
+#: templates/javascript.htm:206
+msgid "derivative"
+msgstr "derivative"
+
 #: templates/javascript.htm:202
 #: templates/views/components/plugins/importer-configuration.htm:129
 msgid "Reverse the X axis"

@@ -434,6 +434,22 @@ export const TRANSFORM_TRANSLATION_KEYS = {
     [TRANSFORM_DERIVATIVE]: 'xyStepDerivative',
 };
 
+/**
+ * Axis annotation -> key in `arches.translations`.
+ *
+ * Separate from the caption keys above: the caption states what ran as a
+ * sentence, the axis qualifies a quantity inside brackets and has to stay
+ * terse. Only the entries that are words appear here — `log10(1/R)` is a
+ * formula and `Kubelka-Munk` a proper noun, and translating either would be
+ * wrong in every language.
+ */
+export const TRANSFORM_ANNOTATION_KEYS = {
+    [TRANSFORM_NORMALIZE_MAX]: 'xyAnnotateNormalizeMax',
+    [TRANSFORM_NORMALIZE_AREA]: 'xyAnnotateNormalizeArea',
+    [TRANSFORM_SMOOTH]: 'xyAnnotateSmooth',
+    [TRANSFORM_DERIVATIVE]: 'xyAnnotateDerivative',
+};
+
 const chainSteps = (config) => {
     const chain = config?.transforms;
     return Array.isArray(chain) ? chain : [];
@@ -441,19 +457,6 @@ const chainSteps = (config) => {
 
 const stepType = (step) => (typeof step === 'string' ? step : step?.type);
 
-/**
- * The Y axis label, derived rather than typed.
- *
- * The base quantity is what the file holds once the configuration's corrective
- * chain has run — that is what the configuration is *for*. Anything applied on
- * top is appended in brackets, so "Reflectance (%)" becomes
- * "Reflectance (%) [log10(1/R)]" and never silently turns into something else.
- *
- * Deriving it is the whole point: the label used to be free text with nothing
- * tying it to the chain, so a curator could apply Kubelka-Munk and leave the
- * axis reading "Reflectance". A label a reader cannot trust is worse than no
- * label at all.
- */
 /**
  * The X axis label, which must not name a quantity the file does not hold.
  *
@@ -469,10 +472,30 @@ const stepType = (step) => (typeof step === 'string' ? step : step?.type);
 export const deriveXAxisLabel = (storedLabel, config, generatedLabel) =>
     config?.xColumnMode === 'generate' ? generatedLabel : storedLabel || '';
 
-export const deriveAxisLabel = (baseLabel, config) => {
+/**
+ * The Y axis label, derived rather than typed.
+ *
+ * The base quantity is what the file holds once the configuration's corrective
+ * chain has run — that is what the configuration is *for*. Anything applied on
+ * top is appended in brackets, so "Reflectance (%)" becomes
+ * "Reflectance (%) [log10(1/R)]" and never silently turns into something else.
+ *
+ * Deriving it is the whole point: the label used to be free text with nothing
+ * tying it to the chain, so a curator could apply Kubelka-Munk and leave the
+ * axis reading "Reflectance". A label a reader cannot trust is worse than no
+ * label at all.
+ *
+ * `labels` translates the annotations, and is passed in for the same reason
+ * `generatedLabel` is above. Missing entries fall back to English rather than
+ * to the machine key.
+ */
+export const deriveAxisLabel = (baseLabel, config, labels) => {
     const base = baseLabel || '';
     const annotations = chainSteps(config)
-        .map((step) => TRANSFORM_LABELS[stepType(step)]?.annotates)
+        .map((step) => {
+            const type = stepType(step);
+            return labels?.[type] || TRANSFORM_LABELS[type]?.annotates;
+        })
         .filter(Boolean);
     if (annotations.length === 0) return base;
     return `${base} [${annotations.join(', ')}]`.trim();
@@ -577,6 +600,7 @@ export default {
     deriveAxisLabel,
     describeChain,
     TRANSFORM_LABELS,
+    TRANSFORM_ANNOTATION_KEYS,
     resolveRoles,
     seriesRoles,
     referenceNormalize,

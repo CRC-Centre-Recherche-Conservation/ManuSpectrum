@@ -4,6 +4,7 @@ import arches from 'arches';
 import FileWidgetViewModel from 'viewmodels/file-widget';
 import XyParser from 'utils/xy-parser';
 import {
+    TRANSFORM_ANNOTATION_KEYS,
     TRANSFORM_TRANSLATION_KEYS,
     applyTransforms,
     deriveAxisLabel,
@@ -28,6 +29,16 @@ const stepLabels = () =>
             step,
             arches.translations[key] || step,
         ])
+    );
+
+// The terser wording the axis puts in brackets. Untranslated keys are dropped
+// rather than defaulted, so deriveAxisLabel falls back to its English
+// annotation instead of printing a machine key on the chart.
+const annotationLabels = () =>
+    Object.fromEntries(
+        Object.entries(TRANSFORM_ANNOTATION_KEYS)
+            .map(([step, key]) => [step, arches.translations[key]])
+            .filter(([, label]) => label)
     );
 
 const FILE_COLORS = [
@@ -166,9 +177,11 @@ const FileWidgetXYViewModel = function (params) {
     // how it is being shown — "Reflectance (%) [log10(1/R)]", never "log10(1/R)"
     // alone. The reader must not lose the reference point.
     this.displayYAxisLabel = ko.pureComputed(() =>
-        deriveAxisLabel(registry ? registry.baseYAxisLabel() : '', {
-            transforms: self.currentView().transforms,
-        })
+        deriveAxisLabel(
+            registry ? registry.baseYAxisLabel() : '',
+            { transforms: self.currentView().transforms },
+            annotationLabels()
+        )
     );
 
     // One line stating everything applied, configuration and lens alike. Reads
@@ -419,7 +432,8 @@ const FileWidgetXYViewModel = function (params) {
                                     registry.chartYAxisLabel(
                                         deriveAxisLabel(
                                             d.yAxisLabel,
-                                            expandStoredConfig(config.config)
+                                            expandStoredConfig(config.config),
+                                            annotationLabels()
                                         )
                                     );
                                 registry.processing(

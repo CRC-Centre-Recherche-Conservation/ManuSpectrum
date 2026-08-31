@@ -12,6 +12,7 @@ import {
     savitzkyGolayCoefficients,
     seriesColumnIndex,
     seriesRoles,
+    TRANSFORM_ANNOTATION_KEYS,
     ROLE_DARK,
     ROLE_REFERENCE,
     ROLE_Y_LEFT,
@@ -317,6 +318,37 @@ describe('deriveAxisLabel', () => {
                 transforms: [{ type: 'log-inverse-r' }],
             })
         ).toBe('Reflectance (%) [log10(1/R)]');
+    });
+
+    it('translates the annotations it is given', () => {
+        // The caption already routed these through arches.translations; the axis
+        // concatenated English, so /fr/ read "Réflectance (0-1) [smoothed]"
+        // above a French caption.
+        expect(
+            deriveAxisLabel(
+                'Réflectance (0-1)',
+                { transforms: [{ type: 'smooth' }] },
+                { smooth: 'lissé' }
+            )
+        ).toBe('Réflectance (0-1) [lissé]');
+    });
+
+    it('falls back to English rather than printing a machine key', () => {
+        // A locale that has not translated a step must not put "normalize-max"
+        // on the chart.
+        expect(
+            deriveAxisLabel(
+                'Intensity (a.u.)',
+                { transforms: [{ type: 'normalize-max' }] },
+                { smooth: 'lissé' }
+            )
+        ).toBe('Intensity (a.u.) [normalised to max]');
+    });
+
+    it('leaves a formula and a proper noun alone', () => {
+        // log10(1/R) and Kubelka-Munk carry no translation key by design.
+        expect(TRANSFORM_ANNOTATION_KEYS['log-inverse-r']).toBeUndefined();
+        expect(TRANSFORM_ANNOTATION_KEYS['kubelka-munk']).toBeUndefined();
     });
 
     it('does not annotate a corrective step', () => {
