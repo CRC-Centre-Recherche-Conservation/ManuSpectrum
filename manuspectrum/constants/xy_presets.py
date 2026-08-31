@@ -238,6 +238,11 @@ def _preset(config_id, name, description, x_label, y_label, **kwargs):
     French label could only be stored *instead of* the English one, never
     alongside it. One language everyone in the lab reads beats a half-translated
     list.
+
+    ``column_assignments`` takes ``(column index, role)`` pairs, zero-based over
+    the file's columns. A preset whose ``multi_y`` declares a correction has to
+    supply the roles that correction reads: without them the chain is a silent
+    no-op under an axis naming the quantity it did not compute.
     """
     display = {
         "chartTitle": kwargs.pop("chart_title", name),
@@ -245,6 +250,11 @@ def _preset(config_id, name, description, x_label, y_label, **kwargs):
         "yAxisLabel": y_label,
         "xReversed": kwargs.pop("x_reversed", False),
     }
+    assignments = kwargs.pop("column_assignments", None)
+    if assignments:
+        display["columnAssignments"] = [
+            {"columnIndex": index, "role": role} for index, role in assignments
+        ]
     config = {
         "display": display,
         "multiYHandling": kwargs.pop("multi_y", MULTI_Y_SEPARATE),
@@ -329,19 +339,26 @@ XY_PRESETS = {
         "Raman shift (cm⁻¹)",
         "Intensity (a.u.)",
     ),
-    # FORS exports frequently carry the target and the white reference as
-    # separate columns (see tgt_count / ref_count in the ASD text export). When
-    # the curator tags those columns, the normalisation runs; otherwise the
-    # chain is a no-op and the raw counts are shown as-is.
+    # FORS exports carry the target and the white reference as separate columns
+    # (tgt_count / ref_count in the ASD text export), which is the layout these
+    # roles describe. The dark column stays untagged: it is optional in the
+    # export, and claiming a column the file may not hold would subtract the
+    # wrong series.
     "fors": _preset(
         "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a03",
         "FORS — wavelength / reflectance",
         "Columns: 1 = wavelength (nm), 2 = target, 3 = white reference, "
-        "4 = dark (optional). Tag 3 and 4 under Column Assignment and the "
-        "reflectance (S-D)/(W-D) is computed for you, as a fraction (0-1).",
+        "4 = dark (optional). The reflectance (S-D)/(W-D) is computed for you, "
+        "as a fraction (0-1). Tag column 4 under Column Assignment if your "
+        "export carries a dark current.",
         "Wavelength (nm)",
         "Reflectance (0-1)",
         multi_y=MULTI_Y_REFERENCE,
+        column_assignments=[
+            (0, ROLE_X),
+            (1, ROLE_Y_LEFT),
+            (2, ROLE_REFERENCE),
+        ],
     ),
     # One preset for every mass spectrum. There used to be two — "MALDI-TOF"
     # and "Mass spectrometry" — carrying axis labels identical to the

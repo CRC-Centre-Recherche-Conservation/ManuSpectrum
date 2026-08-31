@@ -13,6 +13,10 @@ from manuspectrum.constants.xy_presets import (
     ANALYST_ONLY_TRANSFORMS,
     CORRECTIVE_TRANSFORMS,
     DATA_FILE_NODE_ID,
+    ROLE_DARK,
+    ROLE_REFERENCE,
+    ROLE_X,
+    ROLE_Y_LEFT,
     TECHNIQUE_NODE_ID,
     TECHNIQUE_NODEGROUP_ID,
     MULTI_Y_CHOICES,
@@ -46,6 +50,15 @@ FTIR = "3e8fbf96-68f4-3dc5-9e41-5d270940cddf"  # 61308 IRTF
 FORS = "65ea330e-e7ef-3cee-8266-35dc71321421"  # 61296 FORS
 MALDI = "5f9bfd47-9b4c-3b0c-a59c-7012504a06ed"  # 61292 désorption laser
 UNMAPPED = "716618c3-fdff-36b2-bbc5-663dc3c2d439"  # 61020 Chromatographie
+
+
+def reference_columns(config):
+    """Column indices a preset tags as the white reference."""
+    return [
+        assignment["columnIndex"]
+        for assignment in config["display"].get("columnAssignments", [])
+        if assignment["role"] == ROLE_REFERENCE
+    ]
 
 
 class PresetTableTests(SimpleTestCase):
@@ -141,32 +154,42 @@ class PresetTableTests(SimpleTestCase):
             if transform is not None:
                 self.assertIn(transform, CORRECTIVE_TRANSFORMS)
 
-    def test_a_presets_axis_label_cannot_lie(self):
-        # The Y label names the quantity the file holds once the corrective
-        # step has run. Corrective steps reach that quantity, they do not
-        # qualify it — so the declared label is exactly what gets plotted.
-        #
-        # This test used to assert `multiYHandling in MULTI_Y_CHOICES` — a
-        # verbatim duplicate of test_every_preset_declares_a_valid_multi_y_choice,
-        # under the name of the guarantee the whole preset table rests on. It
-        # checked nothing about an axis label.
-        #
-        # Reflectance is the module's own worked example: it IS the ratio of
-        # measurement to white reference, so a preset claiming it must either
-        # compute that ratio or receive a file where the instrument already
-        # did. The claim is only free-standing for the second case, and a
-        # preset that neither computes it nor says so is asserting a quantity
-        # it cannot reach.
+    def test_a_preset_that_normalises_ships_the_column_it_divides_by(self):
+        # referenceNormalize looks the reference column up by role and returns
+        # the data untouched when it finds none. So the setting alone reaches
+        # nothing: declaring the correction and declaring the column are one
+        # claim, and a preset that makes half of it is a no-op wearing the
+        # label of a computed quantity.
         for key, preset in XY_PRESETS.items():
-            label = preset["config"]["display"]["yAxisLabel"]
+            config = preset["config"]
+            if config["multiYHandling"] != MULTI_Y_REFERENCE:
+                continue
+            self.assertTrue(
+                reference_columns(config),
+                msg=(
+                    f"{key} declares {MULTI_Y_REFERENCE} but tags no column "
+                    f"{ROLE_REFERENCE!r} — the normalisation cannot run"
+                ),
+            )
+
+    def test_a_presets_axis_label_cannot_lie(self):
+        # Reflectance IS the ratio of measurement to white reference, so a
+        # preset naming it must either compute the ratio — which takes the
+        # column, not just the setting — or receive a file where the instrument
+        # already did.
+        for key, preset in XY_PRESETS.items():
+            config = preset["config"]
+            label = config["display"]["yAxisLabel"]
             if "reflectance" not in label.lower():
                 continue
-            applies_reference = preset["config"]["multiYHandling"] == MULTI_Y_REFERENCE
-            precorrected = preset["config"].get("yPrecorrected", False)
+            computes = config["multiYHandling"] == MULTI_Y_REFERENCE and bool(
+                reference_columns(config)
+            )
+            precorrected = config.get("yPrecorrected", False)
             self.assertTrue(
-                applies_reference or precorrected,
+                computes or precorrected,
                 msg=(
-                    f"{key} labels its Y axis {label!r} but neither applies "
+                    f"{key} labels its Y axis {label!r} but neither computes "
                     f"{MULTI_Y_REFERENCE} nor declares y_precorrected — so the "
                     f"label claims a quantity nothing reaches"
                 ),
@@ -234,9 +257,30 @@ class PresetTableTests(SimpleTestCase):
             )
 
     def test_fors_normalises_against_its_reference_channel(self):
+        config = XY_PRESETS["fors"]["config"]
+
+        self.assertEqual(config["multiYHandling"], MULTI_Y_REFERENCE)
+        # wavelength / tgt_count / ref_count — the ASD text export's own layout,
+        # and the shape utils/xy-transforms.spec.js resolves roles against.
         self.assertEqual(
-            XY_PRESETS["fors"]["config"]["multiYHandling"], MULTI_Y_REFERENCE
+            config["display"]["columnAssignments"],
+            [
+                {"columnIndex": 0, "role": ROLE_X},
+                {"columnIndex": 1, "role": ROLE_Y_LEFT},
+                {"columnIndex": 2, "role": ROLE_REFERENCE},
+            ],
         )
+
+    def test_the_dark_column_is_left_for_the_curator_to_tag(self):
+        # The export carries it only sometimes. Tagging it here would subtract
+        # whatever column 4 happens to be on a file that has no dark current.
+        roles = [
+            assignment["role"]
+            for assignment in XY_PRESETS["fors"]["config"]["display"][
+                "columnAssignments"
+            ]
+        ]
+        self.assertNotIn(ROLE_DARK, roles)
 
     def test_the_two_classifications_answer_different_questions(self):
         # log10(1/R) is parameter-free, so a preset *could* apply it by itself —
