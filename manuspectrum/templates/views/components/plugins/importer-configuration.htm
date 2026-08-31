@@ -7,8 +7,10 @@
             <input type="text" class="form-control"
                    placeholder="{% trans 'Filter configurations...' %}"
                    data-bind="textInput: configFilter">
-            <span class="importer-list-filter-clear" role="button"
-                  data-bind="visible: configFilter().length > 0, click: function() { configFilter(''); }">
+            <span class="importer-list-filter-clear" role="button" tabindex="0"
+                  aria-label="{% trans 'Clear the filter' %}"
+                  data-bind="onEnterkeyClick, onSpaceClick,
+                             visible: configFilter().length > 0, click: function() { configFilter(''); }">
                 <i class="fa fa-times-circle"></i>
             </span>
         </div>
@@ -27,24 +29,32 @@
                     <span class="importer-list-name" data-bind="text: configuration.name"></span>
                 </label>
                 <span class="importer-list-actions">
+                    <!-- The two tips carry no action: they are focusable only so
+                         the keyboard can reach the tooltip, which .tip reveals on
+                         :focus-within. Announcing them as buttons named them as
+                         something to press, and named them nothing at all. -->
                     <!-- ko if: configuration.description -->
-                    <span class="tip" role="button" tabindex="0">
+                    <span class="tip" tabindex="0"
+                          data-bind="attr: { 'aria-label': configuration.description }">
                         <i class="fa fa-info-circle"></i>
                         <span class="tooltiptext" data-bind="text: configuration.description"></span>
                     </span>
                     <!-- /ko -->
                     <i class="fa fa-pencil" role="button" tabindex="0"
-                       data-bind="click: () => { $parent.loadConfiguration(configuration); }"
+                       data-bind="onEnterkeyClick, onSpaceClick,
+                                  click: () => { $parent.loadConfiguration(configuration); }"
                        title="{% trans 'Edit' %}" aria-label="{% trans 'Edit' %}"></i>
                     <!-- ko if: configuration.protected -->
-                    <span class="tip importer-config-lock" role="button" tabindex="0">
+                    <span class="tip importer-config-lock" tabindex="0"
+                          aria-label="{% trans 'Part of the shared baseline: cannot be deleted, and only an administrator can edit it.' %}">
                         <i class="fa fa-lock"></i>
                         <span class="tooltiptext">{% trans "Part of the shared baseline: cannot be deleted, and only an administrator can edit it." %}</span>
                     </span>
                     <!-- /ko -->
                     <!-- ko ifnot: configuration.protected -->
                     <i class="fa fa-trash" role="button" tabindex="0"
-                       data-bind="click: () => { $parent.deleteConfiguration(configuration); }"
+                       data-bind="onEnterkeyClick, onSpaceClick,
+                                  click: () => { $parent.deleteConfiguration(configuration); }"
                        title="{% trans 'Delete' %}" aria-label="{% trans 'Delete' %}"></i>
                     <!-- /ko -->
                 </span>

@@ -2108,6 +2108,10 @@ msgstr "Définissez comment importer vos données x/y"
 msgid "Filter configurations..."
 msgstr "Filtrer les configurations…"
 
+#: templates/views/components/plugins/importer-configuration.htm:11
+msgid "Clear the filter"
+msgstr "Effacer le filtre"
+
 #: templates/views/components/plugins/importer-configuration.htm:38
 msgid "Edit"
 msgstr "Modifier"

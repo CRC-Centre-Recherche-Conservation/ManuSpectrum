@@ -2083,6 +2083,10 @@ msgstr "Define how to import your x/y data"
 msgid "Filter configurations..."
 msgstr "Importer Configurations"
 
+#: templates/views/components/plugins/importer-configuration.htm:11
+msgid "Clear the filter"
+msgstr "Clear the filter"
+
 #: templates/views/components/plugins/importer-configuration.htm:38
 msgid "Edit"
 msgstr "Edit"
