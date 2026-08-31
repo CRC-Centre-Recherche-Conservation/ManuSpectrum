@@ -71,8 +71,9 @@ export const ANALYST_ONLY_TRANSFORMS = [TRANSFORM_SMOOTH, TRANSFORM_DERIVATIVE];
  * Maps a parser series index back to its column index in the file.
  *
  * The parser drops the X column from the Y list, so series `i` is file column
- * `i` when X was generated, and `i` or `i + 1` otherwise. This mirrors the
- * remap already performed in xy-reader.js and file-widget-xy.js.
+ * `i` when X was generated, and `i` or `i + 1` otherwise. Valid only before any
+ * transform runs — once a chain removes series the survivors shift. Readers
+ * want `seriesRoles`, not this.
  */
 export const seriesColumnIndex = (seriesIndex, xColumnIndex, isGenerateMode) => {
     if (isGenerateMode) return seriesIndex;
@@ -506,7 +507,10 @@ export const applyTransforms = (parsed, config) => {
     const isMulti = Array.isArray(parsed.ys);
     let series = isMulti ? parsed.ys.map((y) => [...y]) : [[...(parsed.y || [])]];
     let names = isMulti ? [...(parsed.seriesNames || [])] : null;
-    let roles = resolveRoles(config, series.length);
+    // Seeded from upstream when a previous pass already resolved them: a view
+    // chain runs on the output of the configuration chain, and its own config
+    // carries no column assignments to resolve from.
+    let roles = parsed.seriesRoles || resolveRoles(config, series.length);
 
     if (series.length === 0 || series[0].length === 0) return parsed;
 
@@ -545,10 +549,27 @@ export const applyTransforms = (parsed, config) => {
     });
 
     if (isMulti) {
-        return { ...parsed, ys: series, seriesNames: names || parsed.seriesNames };
+        return {
+            ...parsed,
+            ys: series,
+            seriesNames: names || parsed.seriesNames,
+            seriesRoles: roles,
+        };
     }
     return { ...parsed, y: series[0] };
 };
+
+/**
+ * The role of each series as plotted — not the role of each file column.
+ *
+ * A reference-normalised chain removes the reference and dark series, so the
+ * survivors shift and no arithmetic over file columns can recover them.
+ * `applyTransforms` stamps the surviving roles; absent that stamp nothing was
+ * removed and the file's own assignment still applies.
+ */
+export const seriesRoles = (parsed, config) =>
+    parsed?.seriesRoles ||
+    resolveRoles(config, Array.isArray(parsed?.ys) ? parsed.ys.length : 0);
 
 export default {
     applyTransforms,
@@ -557,6 +578,7 @@ export default {
     describeChain,
     TRANSFORM_LABELS,
     resolveRoles,
+    seriesRoles,
     referenceNormalize,
     logInverseR,
     kubelkaMunk,

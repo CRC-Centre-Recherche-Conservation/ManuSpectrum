@@ -17,6 +17,7 @@ import {
     deriveXAxisLabel,
     describeChain,
     expandStoredConfig,
+    seriesRoles,
 } from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
 import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-cache';
@@ -765,28 +766,17 @@ export default ko.components.register('xy-reader', {
                 );
                 this.invalidDelimiter(false);
                 const assignments = this._columnAssignments;
-                const isGenerate = effectiveConfig.xColumnMode === 'generate';
-                const xColIdx = parseInt(effectiveConfig.xColumnIndex ?? 0, 10);
 
                 if (parsedData.ys) {
                     if (assignments && assignments.length > 0) {
+                        // Roles of the series that survived the chain, never of
+                        // the file's columns: a reference normalisation removes
+                        // series, and no arithmetic over columns recovers them.
+                        const roles = seriesRoles(parsedData, effectiveConfig);
                         const leftSeries = [];
                         const rightSeries = [];
                         parsedData.ys.forEach((yArr, i) => {
-                            // Map series index to file column index
-                            // In generate mode: all cols are Y → series i = file col i
-                            // In standard mode: X col is removed → rebuild original index
-                            let colIdx;
-                            if (isGenerate) {
-                                colIdx = i;
-                            } else {
-                                // Y series are file columns in order, skipping xColIdx
-                                colIdx = i < xColIdx ? i : i + 1;
-                            }
-                            const colAssign = assignments.find(
-                                (a) => a.columnIndex === colIdx
-                            );
-                            const role = colAssign ? colAssign.role : 'yLeft';
+                            const role = roles[i] || 'yLeft';
                             if (role === 'yRight') {
                                 rightSeries.push({
                                     value: [...parsedData.x],

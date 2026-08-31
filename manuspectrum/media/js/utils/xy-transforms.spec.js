@@ -11,9 +11,11 @@ import {
     savitzkyGolay,
     savitzkyGolayCoefficients,
     seriesColumnIndex,
+    seriesRoles,
     ROLE_DARK,
     ROLE_REFERENCE,
     ROLE_Y_LEFT,
+    ROLE_Y_RIGHT,
     deriveAxisLabel,
     deriveXAxisLabel,
     describeChain,
@@ -424,5 +426,77 @@ describe('describeChain wording', () => {
 
     it('still returns null when nothing ran', () => {
         expect(describeChain({ transforms: [] }, labels)).toBe(null);
+    });
+});
+
+describe('seriesRoles', () => {
+    // wavelength / white reference / target / auxiliary, in that column order —
+    // the layout that made the old remap visibly wrong.
+    const config = {
+        xColumnIndex: 0,
+        display: {
+            columnAssignments: [
+                { columnIndex: 0, role: 'x' },
+                { columnIndex: 1, role: 'reference' },
+                { columnIndex: 2, role: 'yLeft' },
+                { columnIndex: 3, role: 'yRight' },
+            ],
+        },
+        transforms: [{ type: 'reference-normalize' }],
+    };
+
+    const parsed = () => ({
+        x: [350, 351, 352],
+        ys: [
+            [100, 100, 100],
+            [10, 20, 30],
+            [1, 2, 3],
+        ],
+        seriesNames: ['ref_count', 'tgt_count', 'aux'],
+    });
+
+    it('names the survivors of the chain, not the columns of the file', () => {
+        // Both viewers used to recompute the column index from the series index
+        // (`i < xColIdx ? i : i + 1`), a formula that only holds before a
+        // transform removes anything. Here the reference is dropped, so the
+        // survivor at index 0 was read as the reference column and the yRight
+        // series was plotted on the left axis in the wrong unit.
+        const out = applyTransforms(parsed(), config);
+
+        expect(out.ys).toHaveLength(2);
+        expect(seriesRoles(out, config)).toEqual([ROLE_Y_LEFT, ROLE_Y_RIGHT]);
+    });
+
+    it('keeps names and roles aligned after the removal', () => {
+        const out = applyTransforms(parsed(), config);
+
+        expect(out.seriesNames).toEqual(['tgt_count', 'aux']);
+    });
+
+    it('falls back to the file assignment when no chain ran', () => {
+        const untouched = parsed();
+
+        expect(seriesRoles(untouched, config)).toEqual([
+            ROLE_REFERENCE,
+            ROLE_Y_LEFT,
+            ROLE_Y_RIGHT,
+        ]);
+    });
+
+    it('survives a second pass whose config carries no assignments', () => {
+        // The reader's lens runs on the output of the configuration chain, and
+        // its own config is a bare `{ transforms }`. Re-resolving there would
+        // hand every survivor the default role.
+        const configured = applyTransforms(parsed(), config);
+        const viewed = applyTransforms(configured, {
+            transforms: [{ type: 'normalize-max' }],
+        });
+
+        expect(seriesRoles(viewed, {})).toEqual([ROLE_Y_LEFT, ROLE_Y_RIGHT]);
+    });
+
+    it('tolerates a series list it was never given', () => {
+        expect(seriesRoles(undefined, config)).toEqual([]);
+        expect(seriesRoles({ x: [1], y: [2] }, config)).toEqual([]);
     });
 });

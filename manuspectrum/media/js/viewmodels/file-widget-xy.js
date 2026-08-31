@@ -10,6 +10,7 @@ import {
     deriveXAxisLabel,
     describeChain,
     expandStoredConfig,
+    seriesRoles,
 } from 'utils/xy-transforms';
 import { BASE_VIEW, findView, viewsFor } from 'utils/xy-views';
 import dispose from 'utils/dispose';
@@ -70,9 +71,6 @@ const getOrCreateRegistry = (nodeId) => {
             storedConfig: ko.observable(null),
             // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
             chartXReversed: ko.observable(false),
-            columnAssignments: null,
-            xColumnMode: null,
-            xColumnIndex: 0,
             labelsSet: false
         };
     }
@@ -220,9 +218,6 @@ const FileWidgetXYViewModel = function (params) {
     // Unified Plotly traces
     this.unifiedChartData = ko.computed(() => {
         const allTraces = [];
-        const assignments = registry ? registry.columnAssignments : null;
-        const isGenerate = registry && registry.xColumnMode === 'generate';
-        const xColIdx = registry ? parseInt(registry.xColumnIndex ?? 0, 10) : 0;
 
         self.xyFileEntries().forEach((entry) => {
             if (!entry.selected() || !entry.chartData || !entry.chartData())
@@ -232,13 +227,10 @@ const FileWidgetXYViewModel = function (params) {
             const data = entry.chartData();
 
             if (data.series && Array.isArray(data.series)) {
+                const roles = data.roles || [];
                 data.series.forEach((s, i) => {
-                    // Map series index back to original file column index
-                    const colIdx = isGenerate ? i : (i < xColIdx ? i : i + 1);
-                    const colAssign = assignments
-                        ? assignments.find((a) => a.columnIndex === colIdx)
-                        : null;
-                    if (colAssign && colAssign.role === 'ignore') return;
+                    const role = roles[i];
+                    if (role === 'ignore') return;
 
                     const trace = {
                         x: s.value,
@@ -252,7 +244,7 @@ const FileWidgetXYViewModel = function (params) {
                             dash: DASH_STYLES[i % DASH_STYLES.length],
                         },
                     };
-                    if (colAssign && colAssign.role === 'yRight') {
+                    if (role === 'yRight') {
                         trace.yaxis = 'y2';
                     }
                     allTraces.push(trace);
@@ -352,6 +344,10 @@ const FileWidgetXYViewModel = function (params) {
                     : parsed;
                 return seen.ys
                     ? {
+                          // Carried alongside the series because the chart reads
+                          // them there: the survivors of a chain no longer line
+                          // up with the file's columns.
+                          roles: seriesRoles(seen, registry.storedConfig()),
                           series: seen.ys.map((y, i) => ({
                               value: seen.x,
                               count: y,
@@ -439,16 +435,7 @@ const FileWidgetXYViewModel = function (params) {
                                         d.yAxisRightLabel
                                     );
                                 registry.chartXReversed(!!d.xReversed);
-                                if (d.columnAssignments)
-                                    registry.columnAssignments =
-                                        d.columnAssignments;
                             }
-                            if (config.config.xColumnMode)
-                                registry.xColumnMode =
-                                    config.config.xColumnMode;
-                            if (config.config.xColumnIndex !== undefined)
-                                registry.xColumnIndex =
-                                    config.config.xColumnIndex;
                         }
 
                         return $.ajax({
