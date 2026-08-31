@@ -34,6 +34,7 @@ import os
 
 from django.utils.translation import gettext as _
 from django.conf import settings
+from django.db import transaction
 
 from arches.app.functions.base import BaseFunction
 from arches.app.models.models import TileModel
@@ -150,7 +151,7 @@ class XYTechniqueConfig(BaseFunction):
         if nodegroup_id == DATA_FILE_NODEGROUP_ID:
             self._on_file_saved(tile)
         elif nodegroup_id == TECHNIQUE_NODEGROUP_ID:
-            self._on_technique_saved(tile, request)
+            self._on_technique_saved(tile)
 
         return tile
 
@@ -161,13 +162,18 @@ class XYTechniqueConfig(BaseFunction):
             return
         apply_config_to_file_entries(tile.data.get(DATA_FILE_NODE_ID), config_id)
 
-    def _on_technique_saved(self, tile, request):
-        """Backfill files uploaded before the technique was known."""
+    def _on_technique_saved(self, tile):
+        """Backfill files uploaded before the technique was known.
+
+        Saves without `request` (Arches would route a non-reviewer's edit into
+        provisional edits) and without indexing (the caller reindexes the whole
+        resource). One savepoint per row keeps a failure local.
+        """
         config_id = config_id_for_techniques(technique_ids_from_tile_data(tile.data))
         if not config_id:
             return
 
-        siblings = TileModel.objects.filter(
+        siblings = Tile.objects.filter(
             resourceinstance_id=tile.resourceinstance_id,
             nodegroup_id=DATA_FILE_NODEGROUP_ID,
         )
@@ -176,13 +182,8 @@ class XYTechniqueConfig(BaseFunction):
             if not apply_config_to_file_entries(entries, config_id):
                 continue
             try:
-                # The proxy re-enters this function on the file nodegroup, where
-                # every entry now carries a provenance marker and is skipped —
-                # so it converges after one pass. index=False keeps the extra
-                # Elasticsearch write out of the enclosing transaction.
-                proxy = Tile.objects.get(pk=sibling.tileid)
-                proxy.data = sibling.data
-                proxy.save(request=request, index=False)
+                with transaction.atomic():
+                    sibling.save(index=False)
             except Exception:
                 logger.exception(
                     _("Could not apply the XY configuration to tile %s")

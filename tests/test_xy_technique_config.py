@@ -1,4 +1,5 @@
 import uuid
+from unittest import mock
 
 from django.conf import settings
 from django.test import SimpleTestCase
@@ -11,6 +12,9 @@ from manuspectrum.utils.file_entries import (
 from manuspectrum.constants.xy_presets import (
     ANALYST_ONLY_TRANSFORMS,
     CORRECTIVE_TRANSFORMS,
+    DATA_FILE_NODE_ID,
+    TECHNIQUE_NODE_ID,
+    TECHNIQUE_NODEGROUP_ID,
     MULTI_Y_CHOICES,
     MULTI_Y_MEAN,
     MULTI_Y_REFERENCE,
@@ -29,6 +33,7 @@ from manuspectrum.constants.xy_presets import (
     preset_for_technique,
 )
 from manuspectrum.functions.xy_technique_config import (
+    XYTechniqueConfig,
     apply_config_to_file_entries,
     is_xy_text_file,
     technique_ids_from_tile_data,
@@ -353,6 +358,66 @@ class TileDataParsingTests(SimpleTestCase):
             ),
             [],
         )
+
+
+class TechniqueBackfillWriteTests(SimpleTestCase):
+    """The write path: how a derived config reaches the sibling file tiles."""
+
+    def _technique_tile(self):
+        tile = mock.Mock()
+        tile.nodegroup_id = TECHNIQUE_NODEGROUP_ID
+        tile.resourceinstance_id = uuid.uuid4()
+        tile.data = {TECHNIQUE_NODE_ID: [{"labels": [{"list_item_id": FORS}]}]}
+        return tile
+
+    def _sibling(self):
+        sibling = mock.Mock()
+        sibling.tileid = uuid.uuid4()
+        sibling.data = {
+            DATA_FILE_NODE_ID: [{"name": "spectrum.csv", "file_id": str(uuid.uuid4())}]
+        }
+        return sibling
+
+    def _run(self, siblings):
+        """Drive the real save() dispatch over mocked tiles."""
+        with (
+            mock.patch("manuspectrum.functions.xy_technique_config.Tile") as tile_proxy,
+            mock.patch("manuspectrum.functions.xy_technique_config.transaction") as tx,
+        ):
+            tile_proxy.objects.filter.return_value = siblings
+            # A MagicMock context manager swallows exceptions; atomic() does not.
+            tx.atomic.return_value.__exit__.return_value = False
+            XYTechniqueConfig().save(self._technique_tile(), request=mock.Mock())
+            return tx
+
+    def test_the_derived_config_is_written_without_the_request(self):
+        sibling = self._sibling()
+        self._run([sibling])
+
+        sibling.save.assert_called_once_with(index=False)
+        self.assertNotIn("request", sibling.save.call_args.kwargs)
+
+    def test_each_sibling_write_gets_its_own_savepoint(self):
+        siblings = [self._sibling(), self._sibling()]
+        tx = self._run(siblings)
+
+        self.assertEqual(tx.atomic.call_count, len(siblings))
+
+    def test_one_unwritable_sibling_does_not_stop_the_others(self):
+        first, second = self._sibling(), self._sibling()
+        first.save.side_effect = RuntimeError("row is locked")
+
+        self._run([first, second])
+
+        second.save.assert_called_once_with(index=False)
+
+    def test_a_file_already_carrying_a_config_is_never_rewritten(self):
+        untouched = self._sibling()
+        untouched.data[DATA_FILE_NODE_ID][0]["rendererConfig"] = str(uuid.uuid4())
+
+        self._run([untouched])
+
+        untouched.save.assert_not_called()
 
 
 class FileEntryStampingTests(SimpleTestCase):
