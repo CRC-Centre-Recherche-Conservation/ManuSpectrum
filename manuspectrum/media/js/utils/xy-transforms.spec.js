@@ -142,6 +142,25 @@ describe('pointwise transforms', () => {
         expect(normalizeArea([0, 0])).toEqual([0, 0]);
     });
 
+    it('scales a spectrum longer than the call stack', () => {
+        // MALDI_liant41_A1_MS211-f163.csv holds 136 806 points, and normalize-max
+        // is in the mass_spec palette. Math.max(...values) threw a RangeError
+        // above roughly 130 000, inside a pureComputed where nothing caught it:
+        // the chart stopped updating with no data and no banner.
+        const points = 150000;
+        const values = new Array(points).fill(1);
+        values[points - 1] = 4;
+
+        const out = normalizeMax(values);
+
+        expect(out[0]).toBe(0.25);
+        expect(out[points - 1]).toBe(1);
+    });
+
+    it('ignores the gaps when looking for the peak', () => {
+        expect(normalizeMax([1, NaN, 2])).toEqual([0.5, NaN, 1]);
+    });
+
     it('scales the total signal to one', () => {
         const out = normalizeArea([1, 1, 2]);
         closeTo(out.reduce((a, b) => a + b, 0), 1);

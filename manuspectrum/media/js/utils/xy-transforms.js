@@ -168,9 +168,13 @@ export const kubelkaMunk = (values) =>
 
 /** Scales so the strongest point reads 1. */
 export const normalizeMax = (values) => {
-    const finite = values.filter(Number.isFinite);
-    if (finite.length === 0) return values;
-    const peak = Math.max(...finite.map(Math.abs));
+    // One pass, never `Math.max(...values)`: the spread passes every point as
+    // a separate argument and overflows the call stack past ~130k, which real
+    // spectra reach.
+    let peak = 0;
+    for (const value of values) {
+        if (Number.isFinite(value)) peak = Math.max(peak, Math.abs(value));
+    }
     if (peak < EPSILON) return values;
     return values.map((v) => (Number.isFinite(v) ? v / peak : NaN));
 };
