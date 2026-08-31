@@ -358,10 +358,6 @@ const vm = function (params) {
 
         this.xReversed(!!configuration?.config?.display?.xReversed);
 
-        this.multiYHandling(
-            configuration?.config?.multiYHandling || MULTI_Y_SEPARATE
-        );
-
         // Feature 3: Column assignment
         this.yAxisRightLabel(
             configuration?.config?.display?.yAxisRightLabel ?? ''
@@ -380,6 +376,12 @@ const vm = function (params) {
             this.columnAssignments([]);
             this.showColumnAssignment(false);
         }
+
+        // Must follow columnAssignments: the referenceColumnDeclared guard
+        // downgrades this choice whenever the column list changes.
+        this.multiYHandling(
+            configuration?.config?.multiYHandling || MULTI_Y_SEPARATE
+        );
 
         this.showConfigurationPanel(true);
         this.showImporterList(false);
