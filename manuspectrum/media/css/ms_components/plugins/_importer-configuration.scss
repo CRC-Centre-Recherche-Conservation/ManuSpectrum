@@ -25,7 +25,6 @@
     flex-shrink: 0;
 }
 .importer-config-panel-body {
-    background-color: #fafafa;
     overflow-y: auto;
     flex: 1;
     min-height: 0;
@@ -33,13 +32,17 @@
 
     // Fifteen sections in a column that clips them: without a signal, a
     // heading cut in half at the top edge reads as a broken render rather than
-    // as scrolled content. Same treatment as the configuration list, matched to
-    // this panel's own background.
+    // as scrolled content. Same treatment as the configuration list.
+    //
+    // The base colour rides in the shorthand's last layer, never as a separate
+    // background-color: the shorthand resets it, and the two gradients fade
+    // towards it, so losing it leaves grey bands floating on nothing.
     background:
         linear-gradient(#fafafa 30%, hsl(0 0% 98% / 0)) top / 100% 16px no-repeat local,
         linear-gradient(hsl(0 0% 98% / 0), #fafafa 70%) bottom / 100% 16px no-repeat local,
         radial-gradient(farthest-side at 50% 0, hsl(0 0% 0% / 0.10), transparent) top / 100% 9px no-repeat scroll,
-        radial-gradient(farthest-side at 50% 100%, hsl(0 0% 0% / 0.10), transparent) bottom / 100% 9px no-repeat scroll;
+        radial-gradient(farthest-side at 50% 100%, hsl(0 0% 0% / 0.10), transparent) bottom / 100% 9px no-repeat scroll
+        #fafafa;
 }
 .importer-config-footer {
     display: flex;
