@@ -445,6 +445,11 @@ export default ko.components.register('xy-reader', {
                         tile: tile,
                         node: node,
                         entry: entry,
+                        // Identity for a later write. `entry` above is a
+                        // snapshot: tile.save() replaces the objects inside
+                        // tile.data, so anything writing to it must re-resolve
+                        // from this id first.
+                        fileId: ko.unwrap(entry.file_id),
                         url: ko.unwrap(entry.url),
                         hasOverrides: Object.keys(overrides).length > 0,
                         overrides: overrides,
@@ -620,30 +625,70 @@ export default ko.components.register('xy-reader', {
             return Object.keys(overrides).length > 0 ? overrides : undefined;
         };
 
+        // The entry as tile data holds it right now. Matched on file_id like
+        // parse() does, because a tile can carry the archival original beside
+        // the CSV.
+        const liveEntry = (file) => {
+            const node = ko.unwrap(
+                file.tile?.data?.[self.fileViewer.fileListNodeId]
+            );
+            if (!node) return null;
+            return (
+                (file.fileId &&
+                    node.find((e) => ko.unwrap(e?.file_id) === file.fileId)) ||
+                xyEntry(node)
+            );
+        };
+
         this.saveOverrides = async () => {
             const files = self.statusSelectedFiles();
             if (!files.length) return;
             self.overrideSaving(true);
 
             const value = buildOverrides();
+            const failed = [];
 
             for (const file of files) {
                 try {
-                    if (!file.entry) continue;
+                    // Never file.entry: tile.save() runs koMapping.fromJS over
+                    // tile.data, so an entry captured when allXyFiles evaluated
+                    // is an orphan. Writing to it throws nothing and saves
+                    // nothing — the panel then closed reporting success.
+                    const entry = liveEntry(file);
+                    if (!entry) {
+                        failed.push(file);
+                        continue;
+                    }
                     if (value) {
-                        file.entry.parsingOverrides = value;
+                        entry.parsingOverrides = value;
                     } else {
-                        delete file.entry.parsingOverrides;
+                        delete entry.parsingOverrides;
                     }
                     await file.tile.save();
                 } catch (e) {
                     console.error('Override save error:', file.name, e);
+                    failed.push(file);
                 }
             }
 
             self.overrideSaving(false);
-            self.showOverridePanel(false);
-            self.statusSelectedFiles([]);
+            if (failed.length) {
+                // Leave the failures ticked so the panel stays open on them.
+                // Re-resolved against the live list because the checkbox binding
+                // compares by object identity.
+                self.statusSelectedFiles(
+                    self.allXyFiles().filter((live) =>
+                        failed.some(
+                            (f) =>
+                                f.tileid === live.tileid &&
+                                f.fileId === live.fileId
+                        )
+                    )
+                );
+            } else {
+                self.showOverridePanel(false);
+                self.statusSelectedFiles([]);
+            }
             self.render();
         };
 

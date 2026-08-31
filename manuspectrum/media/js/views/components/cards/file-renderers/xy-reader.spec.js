@@ -255,3 +255,78 @@ describe('xy-reader chart display state', () => {
         expect(chartVm.processing()).toBe('normalize-max');
     });
 });
+
+describe('xy-reader parsing overrides', () => {
+    let fixture;
+    let vm;
+
+    beforeEach(async () => {
+        stored.configs = structuredClone(BASE_CONFIGS);
+        fixture = buildFileViewer(MALDI_ID);
+        // Arches' tile.save() runs koMapping.fromJS over tile.data, which
+        // replaces the entry objects rather than mutating them. Reproduce that
+        // here: anything held from before the save becomes an orphan.
+        fixture.tile.save = vi.fn(async () => {
+            const node = fixture.tile.data[FILE_NODE_ID];
+            node(node().map((entry) => ({ ...entry })));
+        });
+        vm = new XyReaderViewModel({
+            fileViewer: fixture.fileViewer,
+            card: fixture.fileViewer.card,
+            selected: ko.observable(true),
+            state: {},
+            displayContent: fixture.fileViewer.displayContent,
+            context: 'tab-contents',
+        });
+        await flush();
+    });
+
+    const liveNode = () => fixture.tile.data[FILE_NODE_ID]();
+
+    it('writes to the entry tile data holds, not to the captured copy', async () => {
+        // The reproducible path: tick files in the Status tab, apply a
+        // configuration to them (which saves), then open the override panel.
+        // The selection still holds entries captured before that save.
+        const captured = vm.allXyFiles()[0];
+        await fixture.tile.save();
+
+        vm.statusSelectedFiles([captured]);
+        vm.showOverridePanel(true);
+        vm.overrideDelimiterRadio('tab');
+
+        await vm.saveOverrides();
+
+        expect(liveNode()[0].parsingOverrides).toEqual({
+            delimiterCharacter: '\t',
+        });
+        // The orphan is left untouched, which is where the write used to land.
+        expect(captured.entry.parsingOverrides).toBeUndefined();
+    });
+
+    it('clears the selection and closes the panel once every file is written', async () => {
+        vm.statusSelectedFiles([vm.allXyFiles()[0]]);
+        vm.showOverridePanel(true);
+        vm.overrideDelimiterRadio('tab');
+
+        await vm.saveOverrides();
+
+        expect(vm.showOverridePanel()).toBe(false);
+        expect(vm.statusSelectedFiles()).toHaveLength(0);
+    });
+
+    it('keeps a file that could not be written ticked, and the panel open', async () => {
+        // A cleared selection is how this reports success, so a failure must
+        // not clear it.
+        fixture.tile.save = vi.fn(async () => {
+            throw new Error('tile refused');
+        });
+        vm.statusSelectedFiles([vm.allXyFiles()[0]]);
+        vm.showOverridePanel(true);
+        vm.overrideDelimiterRadio('tab');
+
+        await vm.saveOverrides();
+
+        expect(vm.showOverridePanel()).toBe(true);
+        expect(vm.statusSelectedFiles()).toHaveLength(1);
+    });
+});
