@@ -35,19 +35,23 @@
         <!-- ko ifnot: hasConfig -->
         <i class="fa fa-exclamation-circle text-warning"></i>
         <!-- /ko -->
-        <span class="flex-1 text-ellipsis" data-bind="text: name"></span>
-        <!-- ko if: configName -->
-        <span class="label label-default" data-bind="text: configName"></span>
-        <!-- /ko -->
-        <!-- ko if: isAutoConfig -->
-        <span class="label xy-config-auto-badge"
-              title="{% trans "Deduced from the analysis technique. Change it here if the technique is wrong." %}">
-            <i class="fa fa-magic"></i> {% trans "auto" %}
-        </span>
-        <!-- /ko -->
-        <!-- ko ifnot: configName -->
-        <span class="label label-warning">{% trans "No config" %}</span>
-        <!-- /ko -->
+        <div class="xy-item-body">
+            <span class="xy-item-name" data-bind="text: name, attr: { title: name }"></span>
+            <div class="xy-item-meta">
+                <!-- ko if: configName -->
+                <span class="label label-default" data-bind="text: configName, attr: { title: configName }"></span>
+                <!-- /ko -->
+                <!-- ko if: isAutoConfig -->
+                <span class="label xy-config-auto-badge"
+                      title="{% trans "Deduced from the analysis technique. Change it here if the technique is wrong." %}">
+                    <i class="fa fa-magic"></i> {% trans "auto" %}
+                </span>
+                <!-- /ko -->
+                <!-- ko ifnot: configName -->
+                <span class="label label-warning">{% trans "No config" %}</span>
+                <!-- /ko -->
+            </div>
+        </div>
     </div>
     <!-- /ko -->
     </div>
@@ -136,22 +140,26 @@
         <!-- ko ifnot: hasConfig -->
         <i class="fa fa-exclamation-circle text-warning"></i>
         <!-- /ko -->
-        <span class="flex-1 text-ellipsis" data-bind="text: name, attr: { title: name }"></span>
         <!-- ko if: hasOverrides -->
         <i class="fa fa-sliders text-warning" title="{% trans 'Has custom parsing' %}"></i>
         <!-- /ko -->
-        <!-- ko if: configName -->
-        <span class="label label-info text-xs" data-bind="text: configName"></span>
-        <!-- /ko -->
-        <!-- ko if: isAutoConfig -->
-        <span class="label xy-config-auto-badge"
-              title="{% trans "Deduced from the analysis technique. Change it here if the technique is wrong." %}">
-            <i class="fa fa-magic"></i> {% trans "auto" %}
-        </span>
-        <!-- /ko -->
-        <!-- ko ifnot: configName -->
-        <span class="label label-warning text-xs">{% trans "none" %}</span>
-        <!-- /ko -->
+        <div class="xy-item-body">
+            <span class="xy-item-name" data-bind="text: name, attr: { title: name }"></span>
+            <div class="xy-item-meta">
+                <!-- ko if: configName -->
+                <span class="label label-info text-xs" data-bind="text: configName, attr: { title: configName }"></span>
+                <!-- /ko -->
+                <!-- ko if: isAutoConfig -->
+                <span class="label xy-config-auto-badge"
+                      title="{% trans "Deduced from the analysis technique. Change it here if the technique is wrong." %}">
+                    <i class="fa fa-magic"></i> {% trans "auto" %}
+                </span>
+                <!-- /ko -->
+                <!-- ko ifnot: configName -->
+                <span class="label label-warning text-xs">{% trans "none" %}</span>
+                <!-- /ko -->
+            </div>
+        </div>
     </div>
     <!-- /ko -->
     </div>

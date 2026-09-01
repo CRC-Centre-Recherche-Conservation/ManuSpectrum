@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 09:55-0500\n"
+"POT-Creation-Date: 2026-09-01 10:15-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1802,39 +1802,39 @@ msgstr ""
 msgid "XY file(s) selected"
 msgstr "XY file(s) selected"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:44
-#: templates/views/components/cards/file-renderers/xy-reader.htm:148
+#: templates/views/components/cards/file-renderers/xy-reader.htm:46
+#: templates/views/components/cards/file-renderers/xy-reader.htm:154
 msgid ""
 "Deduced from the analysis technique. Change it here if the technique is "
 "wrong."
 msgstr ""
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:45
-#: templates/views/components/cards/file-renderers/xy-reader.htm:149
+#: templates/views/components/cards/file-renderers/xy-reader.htm:47
+#: templates/views/components/cards/file-renderers/xy-reader.htm:155
 msgid "auto"
 msgstr ""
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:49
+#: templates/views/components/cards/file-renderers/xy-reader.htm:51
 msgid "No config"
 msgstr "No config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:74
+#: templates/views/components/cards/file-renderers/xy-reader.htm:78
 msgid "Apply to"
 msgstr "Apply to"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:74
+#: templates/views/components/cards/file-renderers/xy-reader.htm:78
 msgid "selected file(s)"
 msgstr "selected file(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:78
+#: templates/views/components/cards/file-renderers/xy-reader.htm:82
 msgid "Applying..."
 msgstr "Applying..."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:100
+#: templates/views/components/cards/file-renderers/xy-reader.htm:104
 msgid "Files Status"
 msgstr "Files Status"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:105
+#: templates/views/components/cards/file-renderers/xy-reader.htm:109
 msgid ""
 "Check which files have a configuration applied. Select file(s) to customize "
 "parsing settings individually, overriding the shared config."
@@ -1842,45 +1842,45 @@ msgstr ""
 "Check which files have a configuration applied. Select file(s) to customize "
 "parsing settings individually, overriding the shared config."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:110
+#: templates/views/components/cards/file-renderers/xy-reader.htm:114
 msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
 msgstr "No XY files found. Assign the XY renderer to files in the Manage tab."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:117
+#: templates/views/components/cards/file-renderers/xy-reader.htm:121
 msgid "file(s)"
 msgstr "file(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:119
+#: templates/views/components/cards/file-renderers/xy-reader.htm:123
 #: templates/views/components/plugins/file-configuration.htm:54
 msgid "selected"
 msgstr "selected"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:123
+#: templates/views/components/cards/file-renderers/xy-reader.htm:127
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:89
 msgid "All"
 msgstr "All"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:124
+#: templates/views/components/cards/file-renderers/xy-reader.htm:128
 msgid "None"
 msgstr "None"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:141
+#: templates/views/components/cards/file-renderers/xy-reader.htm:144
 msgid "Has custom parsing"
 msgstr "Has custom parsing"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:153
+#: templates/views/components/cards/file-renderers/xy-reader.htm:159
 msgid "none"
 msgstr "none"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:165
+#: templates/views/components/cards/file-renderers/xy-reader.htm:173
 msgid "Adjust parsing for"
 msgstr "Adjust parsing for"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:176
+#: templates/views/components/cards/file-renderers/xy-reader.htm:184
 msgid "Custom parsing:"
 msgstr "Custom parsing:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:180
+#: templates/views/components/cards/file-renderers/xy-reader.htm:188
 msgid ""
 "These settings override the shared config for the selected file(s) only. "
 "Choose 'Use config' to keep the shared config value."
@@ -1888,75 +1888,75 @@ msgstr ""
 "These settings override the shared config for the selected file(s) only. "
 "Choose 'Use config' to keep the shared config value."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:184
+#: templates/views/components/cards/file-renderers/xy-reader.htm:192
 msgid "Delimiter"
 msgstr "Delimiter"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:186
-#: templates/views/components/cards/file-renderers/xy-reader.htm:198
-#: templates/views/components/cards/file-renderers/xy-reader.htm:208
+#: templates/views/components/cards/file-renderers/xy-reader.htm:194
+#: templates/views/components/cards/file-renderers/xy-reader.htm:206
+#: templates/views/components/cards/file-renderers/xy-reader.htm:216
 msgid "Use config"
 msgstr "Use config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:187
-#: templates/views/components/cards/file-renderers/xy-reader.htm:199
+#: templates/views/components/cards/file-renderers/xy-reader.htm:195
+#: templates/views/components/cards/file-renderers/xy-reader.htm:207
 #: templates/views/components/plugins/importer-configuration.htm:84
 #: templates/views/components/plugins/importer-configuration.htm:104
 msgid "Auto-detect"
 msgstr "Auto-detect"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:188
+#: templates/views/components/cards/file-renderers/xy-reader.htm:196
 #: templates/views/components/plugins/importer-configuration.htm:105
 msgid "Comma"
 msgstr "Comma"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:189
+#: templates/views/components/cards/file-renderers/xy-reader.htm:197
 msgid "Tab"
 msgstr "Tab"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:190
+#: templates/views/components/cards/file-renderers/xy-reader.htm:198
 msgid "Other:"
 msgstr "Other:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:192
+#: templates/views/components/cards/file-renderers/xy-reader.htm:200
 msgid "Custom delimiter"
 msgstr "Custom delimiter"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:196
+#: templates/views/components/cards/file-renderers/xy-reader.htm:204
 #: templates/views/components/plugins/importer-configuration.htm:81
 msgid "Header"
 msgstr "Header"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:200
+#: templates/views/components/cards/file-renderers/xy-reader.htm:208
 msgid "Fixed lines:"
 msgstr "Fixed lines:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:202
+#: templates/views/components/cards/file-renderers/xy-reader.htm:210
 msgid "Number of lines"
 msgstr "Number of lines"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:206
+#: templates/views/components/cards/file-renderers/xy-reader.htm:214
 #: templates/views/components/plugins/importer-configuration.htm:92
 msgid "Footer"
 msgstr "Footer"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:209
+#: templates/views/components/cards/file-renderers/xy-reader.htm:217
 msgid "End of file"
 msgstr "End of file"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:210
+#: templates/views/components/cards/file-renderers/xy-reader.htm:218
 msgid "After text:"
 msgstr "After text:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:212
+#: templates/views/components/cards/file-renderers/xy-reader.htm:220
 msgid "Footer text"
 msgstr "Footer text"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:217
+#: templates/views/components/cards/file-renderers/xy-reader.htm:225
 msgid "Reset to config"
 msgstr "Reset to config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:221
+#: templates/views/components/cards/file-renderers/xy-reader.htm:229
 msgid "Apply & re-render"
 msgstr "Apply & re-render"
 
@@ -1995,21 +1995,21 @@ msgstr ""
 msgid "Triggered by"
 msgstr ""
 
-#: templates/views/components/ms-file-workbench.htm:23
+#: templates/views/components/ms-file-workbench.htm:20
 msgid "Additional metadata"
 msgstr "Additional metadata"
 
+#: templates/views/components/ms-file-workbench.htm:23
 #: templates/views/components/ms-file-workbench.htm:26
-#: templates/views/components/ms-file-workbench.htm:29
 msgid "Title"
 msgstr "Title"
 
-#: templates/views/components/ms-file-workbench.htm:34
-#: templates/views/components/ms-file-workbench.htm:40
+#: templates/views/components/ms-file-workbench.htm:31
+#: templates/views/components/ms-file-workbench.htm:37
 msgid "Alternative text"
 msgstr "Alternative text"
 
-#: templates/views/components/ms-file-workbench.htm:36
+#: templates/views/components/ms-file-workbench.htm:33
 msgid ""
 "Concise statement that assistive technology can pronounce to convey the "
 "meaning of the file"
@@ -2017,13 +2017,13 @@ msgstr ""
 "Concise statement that assistive technology can pronounce to convey the "
 "meaning of the file"
 
+#: templates/views/components/ms-file-workbench.htm:41
 #: templates/views/components/ms-file-workbench.htm:44
-#: templates/views/components/ms-file-workbench.htm:47
 msgid "Attribution"
 msgstr "Attribution"
 
+#: templates/views/components/ms-file-workbench.htm:48
 #: templates/views/components/ms-file-workbench.htm:51
-#: templates/views/components/ms-file-workbench.htm:54
 #: templates/views/components/widgets/manifest-widget.htm:133
 msgid "Description"
 msgstr "Description"

@@ -36,7 +36,7 @@
 }
 .xy-staged-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     padding: 4px 10px;
     font-size: 12px;
@@ -58,7 +58,7 @@
 }
 .xy-file-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     padding: 5px 8px;
     border-bottom: 1px solid #f0f0f0;
@@ -68,6 +68,43 @@
 .xy-file-checkbox {
     margin: 0;
     pointer-events: none;
+}
+
+// Shared row layout for both file lists (staged files, status list).
+//
+// The file name is the identity and gets the width; configuration names run to
+// fifty characters and would otherwise reserve their full text width and leave
+// the name a single ellipsed letter. `min-width: 0` is what lets a flex child
+// shrink below its content and ellipse at all.
+.xy-staged-item > .fa,
+.xy-file-item > .fa,
+.xy-file-checkbox {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.xy-item-body {
+    flex: 1;
+    min-width: 0;
+}
+.xy-item-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.xy-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+
+    .label {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 
 // Per-file override panel
