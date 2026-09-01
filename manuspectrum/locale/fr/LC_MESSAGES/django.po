@@ -4048,6 +4048,14 @@ msgstr "Libellé de l'axe X"
 msgid "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
 msgstr "Sans objet ici : un fichier sans colonne X est tracé selon la position des lignes, et l'axe est libellé Point."
 
+#: templates/javascript.htm
+msgid "Averaged into a single series"
+msgstr "Moyennées en une seule série"
+
+#: templates/javascript.htm
+msgid "window"
+msgstr "fenêtre"
+
 #~ msgid "These look like percentages, not the 0-1 ratio the axis names."
 #~ msgstr ""
 #~ "Ces valeurs ressemblent à des pourcentages, pas au rapport 0-1 annoncé "

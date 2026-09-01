@@ -3977,6 +3977,14 @@ msgstr "X Axis Label"
 msgid "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
 msgstr "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
 
+#: templates/javascript.htm
+msgid "Averaged into a single series"
+msgstr "Averaged into a single series"
+
+#: templates/javascript.htm
+msgid "window"
+msgstr "window"
+
 #~ msgid ""
 #~ "The X axis will be evenly spaced between start and end values, based on "
 #~ "the number of data rows."

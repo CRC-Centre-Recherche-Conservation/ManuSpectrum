@@ -20,6 +20,7 @@ import {
     deriveAxisLabel,
     deriveXAxisLabel,
     describeChain,
+    expandStoredConfig,
 } from './xy-transforms';
 
 const closeTo = (actual, expected, precision = 10) => {
@@ -368,7 +369,7 @@ describe('deriveAxisLabel', () => {
                     { type: 'derivative', order: 1 },
                 ],
             })
-        ).toBe('Intensity (a.u.) [smoothed, derivative]');
+        ).toBe('Intensity (a.u.) [smoothed, derivative 1]');
     });
 
     it('tolerates an empty base and unknown steps', () => {
@@ -530,5 +531,80 @@ describe('seriesRoles', () => {
     it('tolerates a series list it was never given', () => {
         expect(seriesRoles(undefined, config)).toEqual([]);
         expect(seriesRoles({ x: [1], y: [2] }, config)).toEqual([]);
+    });
+});
+
+describe('the caption names what the reader is looking at', () => {
+    const labels = {
+        mean: 'Averaged into a single series',
+        derivative: 'Derivative',
+        smooth: 'Smoothed',
+    };
+
+    it('says the mean ran, which no column of the file survives', () => {
+        // expandStoredConfig used to hand the mean to the parser and an empty
+        // chain to the caption, so a curve that is no column of the file was
+        // captioned as untouched.
+        const expanded = expandStoredConfig({ multiYHandling: 'mean' });
+
+        expect(expanded.transformation).toBe('mean');
+        expect(describeChain(expanded, labels)).toBe(
+            'Averaged into a single series'
+        );
+    });
+
+    it('still hands the parser the mean it has to apply', () => {
+        expect(expandStoredConfig({ multiYHandling: 'mean' }).transformation).toBe(
+            'mean'
+        );
+        expect(
+            expandStoredConfig({ multiYHandling: 'reference-normalize' })
+                .transformation
+        ).toBeUndefined();
+    });
+
+    it('tells a first derivative from a second', () => {
+        // Both are TRANSFORM_DERIVATIVE, so a label keyed on the type alone
+        // rendered them byte for byte identically — and 1st against 2nd is the
+        // whole distinction in the FORS dye protocol.
+        const first = { transforms: [{ type: 'derivative', order: 1, window: 9 }] };
+        const second = { transforms: [{ type: 'derivative', order: 2, window: 9 }] };
+
+        expect(describeChain(first, labels)).not.toBe(describeChain(second, labels));
+        expect(describeChain(first, labels)).toBe('Derivative 1');
+        expect(describeChain(second, labels)).toBe('Derivative 2');
+    });
+
+    it('states the Savitzky-Golay window when given the word for it', () => {
+        expect(
+            describeChain(
+                { transforms: [{ type: 'derivative', order: 2, window: 9 }] },
+                labels,
+                'window'
+            )
+        ).toBe('Derivative 2 (window 9)');
+    });
+
+    it('keeps the axis terse — the order, never the window', () => {
+        expect(
+            deriveAxisLabel(
+                'Reflectance (0-1)',
+                { transforms: [{ type: 'derivative', order: 2, window: 9 }] },
+                { derivative: 'dérivée' }
+            )
+        ).toBe('Reflectance (0-1) [dérivée 2]');
+    });
+
+    it('leaves every other step unqualified', () => {
+        expect(describeChain({ transforms: [{ type: 'smooth' }] }, labels)).toBe(
+            'Smoothed'
+        );
+    });
+
+    it('does not annotate the axis for a mean', () => {
+        // Averaging several columns of one quantity still yields that quantity.
+        expect(
+            deriveAxisLabel('Intensity (a.u.)', expandStoredConfig({ multiYHandling: 'mean' }))
+        ).toBe('Intensity (a.u.)');
     });
 });

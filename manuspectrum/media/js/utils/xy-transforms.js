@@ -47,6 +47,7 @@ export const TRANSFORM_NORMALIZE_MAX = 'normalize-max';
 export const TRANSFORM_NORMALIZE_AREA = 'normalize-area';
 export const TRANSFORM_SMOOTH = 'smooth';
 export const TRANSFORM_DERIVATIVE = 'derivative';
+export const TRANSFORM_MEAN = 'mean';
 
 export const ROLE_X = 'x';
 export const ROLE_Y_LEFT = 'yLeft';
@@ -388,13 +389,20 @@ export const MULTI_Y_REFERENCE = 'reference-normalize';
 export const expandStoredConfig = (config) => {
     const choice = config?.multiYHandling;
     if (!choice) return config;
+    // `transforms` is what was applied on the way to the plotted curve, not
+    // what this engine applies: the parser does the averaging, and the mean
+    // step is a no-op here. Leaving it out made the caption read "none applied"
+    // over a curve that is no column of the file.
+    const applied = [];
+    if (choice === MULTI_Y_REFERENCE) {
+        applied.push({ type: TRANSFORM_REFERENCE_NORMALIZE });
+    } else if (choice === MULTI_Y_MEAN) {
+        applied.push({ type: TRANSFORM_MEAN });
+    }
     return {
         ...config,
         transformation: choice === MULTI_Y_MEAN ? 'mean' : undefined,
-        transforms:
-            choice === MULTI_Y_REFERENCE
-                ? [{ type: TRANSFORM_REFERENCE_NORMALIZE }]
-                : [],
+        transforms: applied,
     };
 };
 
@@ -408,6 +416,8 @@ export const expandStoredConfig = (config) => {
  */
 export const TRANSFORM_LABELS = {
     [TRANSFORM_REFERENCE_NORMALIZE]: { annotates: null },
+    // Averaging several columns of one quantity still yields that quantity.
+    [TRANSFORM_MEAN]: { annotates: null },
     [TRANSFORM_LOG_INVERSE_R]: { annotates: 'log10(1/R)' },
     [TRANSFORM_KUBELKA_MUNK]: { annotates: 'Kubelka-Munk' },
     [TRANSFORM_NORMALIZE_MAX]: { annotates: 'normalised to max' },
@@ -426,6 +436,7 @@ export const TRANSFORM_LABELS = {
  */
 export const TRANSFORM_TRANSLATION_KEYS = {
     [TRANSFORM_REFERENCE_NORMALIZE]: 'xyStepReferenceNormalize',
+    [TRANSFORM_MEAN]: 'xyStepMean',
     [TRANSFORM_LOG_INVERSE_R]: 'xyViewLogInverseR',
     [TRANSFORM_KUBELKA_MUNK]: 'xyViewKubelkaMunk',
     [TRANSFORM_NORMALIZE_MAX]: 'xyViewNormalizeMax',
@@ -456,6 +467,23 @@ const chainSteps = (config) => {
 };
 
 const stepType = (step) => (typeof step === 'string' ? step : step?.type);
+
+/**
+ * One step's label, carrying the parameters that change what it names.
+ *
+ * A first and a second derivative are different measurements — the FORS dye
+ * protocol turns on that distinction — yet both are TRANSFORM_DERIVATIVE, so a
+ * label keyed on the type alone renders them identically. `windowWord` is
+ * optional: the axis wants the order alone, a caption states the window too.
+ */
+const qualifyStep = (step, label, windowWord) => {
+    if (stepType(step) !== TRANSFORM_DERIVATIVE) return label;
+    const order = step?.order ?? 1;
+    const window = step?.window;
+    return window && windowWord
+        ? `${label} ${order} (${windowWord} ${window})`
+        : `${label} ${order}`;
+};
 
 /**
  * The X axis label, which must not name a quantity the file does not hold.
@@ -494,7 +522,8 @@ export const deriveAxisLabel = (baseLabel, config, labels) => {
     const annotations = chainSteps(config)
         .map((step) => {
             const type = stepType(step);
-            return labels?.[type] || TRANSFORM_LABELS[type]?.annotates;
+            const label = labels?.[type] || TRANSFORM_LABELS[type]?.annotates;
+            return label && qualifyStep(step, label);
         })
         .filter(Boolean);
     if (annotations.length === 0) return base;
@@ -508,16 +537,18 @@ export const deriveAxisLabel = (baseLabel, config, labels) => {
  * indistinguishable from "nothing applied" — the convention JCAMP-DX and mzML
  * both enforce by making the processing field mandatory.
  */
-export const describeChain = (config, labels) => {
+export const describeChain = (config, labels, windowWord) => {
     // `labels` maps a transform key to a human sentence. Without it the caption
     // printed the machine keys — a reader saw "reference-normalize ->
     // log-inverse-r" under the chart, which is the caption failing at the one
     // job it exists for. Defaulted rather than required so a spec can assert
     // the chain's shape without a translation bundle.
     const steps = chainSteps(config)
-        .map(stepType)
-        .filter((type) => type && TRANSFORM_LABELS[type])
-        .map((type) => labels?.[type] || type);
+        .filter((step) => stepType(step) && TRANSFORM_LABELS[stepType(step)])
+        .map((step) => {
+            const type = stepType(step);
+            return qualifyStep(step, labels?.[type] || type, windowWord);
+        });
 
     if (steps.length === 0) return null;
     return steps.join(' -> ');

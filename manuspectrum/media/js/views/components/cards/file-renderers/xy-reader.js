@@ -51,6 +51,9 @@ const annotationLabels = () =>
             .filter(([, label]) => label)
     );
 
+// The word a caption puts before a Savitzky-Golay window size.
+const windowWord = () => arches.translations.xyStepWindow;
+
 const CONFIG_SOURCE_MANUAL = 'manual';
 
 export default ko.components.register('xy-reader', {
@@ -188,7 +191,7 @@ export default ko.components.register('xy-reader', {
             );
             self.yAxisRightLabel(display?.yAxisRightLabel || '');
             self.xReversed(!!display?.xReversed);
-            self.processing(describeChain(expanded, stepLabels()));
+            self.processing(describeChain(expanded, stepLabels(), windowWord()));
         };
 
         this.disposables.push(this.selectedConfig.subscribe((config) => {

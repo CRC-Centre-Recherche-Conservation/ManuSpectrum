@@ -41,6 +41,9 @@ const annotationLabels = () =>
             .filter(([, label]) => label)
     );
 
+// The word a caption puts before a Savitzky-Golay window size.
+const windowWord = () => arches.translations.xyStepWindow;
+
 const FILE_COLORS = [
     '#3333ff', '#ff6633', '#33cc33', '#cc33ff', '#ffcc00',
     '#00cccc', '#ff3366', '#6633ff', '#33ccff', '#ff9933'
@@ -192,8 +195,7 @@ const FileWidgetXYViewModel = function (params) {
             self.processing(),
             describeChain(
                 { transforms: self.currentView().transforms },
-                stepLabels()
-            ),
+                stepLabels(), windowWord()),
         ].filter(Boolean);
         return applied.length ? applied.join(' -> ') : null;
     });
@@ -439,8 +441,7 @@ const FileWidgetXYViewModel = function (params) {
                                 registry.processing(
                                     describeChain(
                                         expandStoredConfig(config.config),
-                                        stepLabels()
-                                    )
+                                        stepLabels(), windowWord())
                                 );
                                 registry.baseYAxisLabel(d.yAxisLabel || '');
                                 registry.storedConfig(config.config);
