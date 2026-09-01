@@ -4056,6 +4056,10 @@ msgstr "Moyennées en une seule série"
 msgid "window"
 msgstr "fenêtre"
 
+#: templates/javascript.htm
+msgid "These files use different configurations — the axes describe only one of them, and no view is offered."
+msgstr "Ces fichiers utilisent des configurations différentes — les axes n'en décrivent qu'une, et aucune vue n'est proposée."
+
 #~ msgid "These look like percentages, not the 0-1 ratio the axis names."
 #~ msgstr ""
 #~ "Ces valeurs ressemblent à des pourcentages, pas au rapport 0-1 annoncé "

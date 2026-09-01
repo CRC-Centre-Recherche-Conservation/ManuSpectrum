@@ -85,7 +85,10 @@ const getOrCreateRegistry = (nodeId) => {
             storedConfig: ko.observable(null),
             // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
             chartXReversed: ko.observable(false),
-            labelsSet: false
+            // The chart has one set of axes, so the first configuration to
+            // arrive sets them. `mixed` records that a later one disagreed.
+            configId: null,
+            mixed: ko.observable(false)
         };
     }
     return nodeChartRegistries[nodeId];
@@ -149,6 +152,7 @@ const FileWidgetXYViewModel = function (params) {
         ? registry.selectedView
         : ko.observable(BASE_VIEW);
     this.storedConfig = registry ? registry.storedConfig : ko.observable(null);
+    this.mixedConfigurations = registry ? registry.mixed : ko.observable(false);
 
     // The lenses this instrument family supports. A hand-made configuration
     // carries no preset key and so offers the base quantity alone.
@@ -191,6 +195,11 @@ const FileWidgetXYViewModel = function (params) {
     // "none applied" when neither did anything: silence must not be
     // indistinguishable from an untouched spectrum.
     this.processingNote = ko.pureComputed(() => {
+        // Nothing the first configuration applied describes the whole chart any
+        // more, so it is not stated as if it did.
+        if (self.mixedConfigurations()) {
+            return arches.translations.xyMixedConfigurations;
+        }
         const applied = [
             self.processing(),
             describeChain(
@@ -408,10 +417,27 @@ const FileWidgetXYViewModel = function (params) {
                             return null;
                         }
 
-                        if (!registry.labelsSet) {
+                        if (
+                            registry.configId &&
+                            registry.configId !== config.configid
+                        ) {
+                            // Two quantities cannot share one Y axis. Rather
+                            // than let the first file's label describe the
+                            // second's curve, the chart stops claiming a
+                            // configuration — which also withdraws the view
+                            // control, since Kubelka-Munk on XRF counts plots
+                            // a plausible spectrum of nothing.
+                            registry.mixed(true);
+                            registry.storedConfig(null);
+                            registry.chartYAxisLabel(arches.translations.yAxis);
+                            registry.baseYAxisLabel('');
+                        } else if (!registry.configId) {
+                            // Recorded whatever the configuration carries: the
+                            // identity is which one governs the chart, not
+                            // whether it happens to bring labels.
+                            registry.configId = config.configid;
                             const d = config.config && config.config.display;
                             if (d) {
-                                registry.labelsSet = true;
                                 if (d.chartTitle)
                                     registry.chartTitle(d.chartTitle);
                                 if (d.xAxisLabel)
@@ -522,7 +548,8 @@ const FileWidgetXYViewModel = function (params) {
             }
 
             if (registry.entries().length === 0) {
-                registry.labelsSet = false;
+                registry.configId = null;
+                registry.mixed(false);
                 delete nodeChartRegistries[nodeId];
             }
         }

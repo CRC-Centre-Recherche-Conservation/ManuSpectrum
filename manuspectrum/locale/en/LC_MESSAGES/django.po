@@ -3985,6 +3985,10 @@ msgstr "Averaged into a single series"
 msgid "window"
 msgstr "window"
 
+#: templates/javascript.htm
+msgid "These files use different configurations — the axes describe only one of them, and no view is offered."
+msgstr "These files use different configurations — the axes describe only one of them, and no view is offered."
+
 #~ msgid ""
 #~ "The X axis will be evenly spaced between start and end values, based on "
 #~ "the number of data rows."
