@@ -19,6 +19,7 @@ from unittest import mock
 from django.test import SimpleTestCase
 from django.urls import resolve
 from django.urls.exceptions import Resolver404
+from django.utils import translation
 
 from manuspectrum.constants.xy_presets import is_seeded_preset
 from manuspectrum.views.renderer_config import RendererConfigView, in_use_query
@@ -132,9 +133,23 @@ class ConfigIdRoutingTests(SimpleTestCase):
     Second layer, deliberately redundant with the canonicalisation above: the
     protection on a seeded preset should not rest on a single comparison being
     written correctly.
+
+    The language is pinned because the route sits above the ``i18n_patterns``
+    wrap in urls.py, so its path carries the active language: unprefixed under
+    English, ``/fr/`` under French. Any earlier test whose client fetched a
+    ``/fr/`` URL leaves French active — LocaleMiddleware activates it and never
+    undoes it — and every path below would then resolve against the wrong twin.
     """
 
     SEEDED = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a02"
+
+    def setUp(self):
+        # Not a class decorator: translation.override is a plain
+        # ContextDecorator, so decorating the class wraps the class object and
+        # silently stops its tests being collected.
+        override = translation.override("en")
+        override.__enter__()
+        self.addCleanup(override.__exit__, None, None, None)
 
     def test_the_canonical_form_reaches_the_view(self):
         match = resolve(f"/renderer_config/{self.SEEDED}")
@@ -158,6 +173,14 @@ class ConfigIdRoutingTests(SimpleTestCase):
         # become "create a new configuration".
         match = resolve("/renderer_config/")
         self.assertIsNone(match.kwargs.get("renderer_config_id"))
+
+    def test_the_route_carries_the_language_in_its_path(self):
+        # Registering it above the wrap gives it a French twin. Stated here so
+        # that moving it across the boundary shows up as a failing test rather
+        # than as a 404 somebody meets in production.
+        with translation.override("fr"):
+            match = resolve(f"/fr/renderer_config/{self.SEEDED}")
+            self.assertEqual(str(match.kwargs["renderer_config_id"]), self.SEEDED)
 
 
 class ConfigurationSaveBodyTests(SimpleTestCase):
