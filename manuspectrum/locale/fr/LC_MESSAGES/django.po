@@ -2450,12 +2450,6 @@ msgstr "Tout désélectionner"
 msgid "View:"
 msgstr "Affichage :"
 
-#: templates/views/components/widgets/file-xy.htm:54
-msgid "Changes how the spectrum is shown. The stored file is never modified."
-msgstr ""
-"Change la façon dont le spectre est affiché. Le fichier stocké n'est jamais "
-"modifié."
-
 #: templates/views/components/widgets/file-xy.htm:62
 msgid "Loading charts..."
 msgstr "Chargement des graphiques..."

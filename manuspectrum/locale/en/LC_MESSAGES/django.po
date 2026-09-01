@@ -2356,10 +2356,6 @@ msgstr "Deselect all"
 msgid "View:"
 msgstr "View:"
 
-#: templates/views/components/widgets/file-xy.htm:54
-msgid "Changes how the spectrum is shown. The stored file is never modified."
-msgstr ""
-
 #: templates/views/components/widgets/file-xy.htm:62
 msgid "Loading charts..."
 msgstr "Loading charts..."
