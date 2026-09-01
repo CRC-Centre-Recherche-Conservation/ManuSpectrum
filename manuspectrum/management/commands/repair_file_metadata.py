@@ -44,7 +44,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--language",
             default=None,
-            help="Language code for the empty entries (default: LANGUAGE_CODE).",
+            help="Restrict to one language code (default: every configured language).",
         )
 
     def handle(self, *args, **options):

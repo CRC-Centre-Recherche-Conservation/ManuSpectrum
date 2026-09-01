@@ -47,13 +47,32 @@ def _text_direction(language_code):
 
 
 def blank_localized_string(language_code=None):
-    """An empty localised string, shaped as the upload widget writes it."""
+    """An empty localised string, shaped as the upload widget writes it.
+
+    Key order is deliberately not managed: `tiles.tiledata` is jsonb, and
+    Postgres normalises object keys by length then bytes, so `value` always
+    comes back before `direction` whatever this dict says. Only *which* keys
+    exist matters.
+    """
     language_code = language_code or settings.LANGUAGE_CODE
     return {language_code: {"value": "", "direction": _text_direction(language_code)}}
 
 
-def normalize_metadata(entry, language_code=None):
+def configured_languages():
+    """The language codes a reader can actually activate.
+
+    `settings.LANGUAGES`, not the `Language` table: `arches.activeLanguage` is
+    Django's active language, which LocaleMiddleware constrains to this list.
+    """
+    return [code for code, _ in settings.LANGUAGES]
+
+
+def normalize_metadata(entry, language_codes=None):
     """Fill in a file entry's missing localised metadata, in place.
+
+    Defaults to every configured language. Pass a single code, or a list, to
+    narrow it — a repair that fills only one language leaves the entry dirty in
+    the others, which is the whole reason this exists.
 
     Only ever adds: a field that already holds a value is left untouched, so
     this is safe to run over curated data. Returns the number of fields filled,
@@ -62,20 +81,26 @@ def normalize_metadata(entry, language_code=None):
     if not isinstance(entry, dict):
         return 0
 
-    language_code = language_code or settings.LANGUAGE_CODE
+    if language_codes is None:
+        language_codes = configured_languages()
+    elif isinstance(language_codes, str):
+        language_codes = [language_codes]
+
     filled = 0
     for field in METADATA_FIELDS:
-        current = entry.get(field)
-        if current is None or current == {}:
-            entry[field] = blank_localized_string(language_code)
-            filled += 1
-        elif isinstance(current, dict) and language_code not in current:
-            # Present in another language but not this one. The widget adds the
-            # active language the same way rather than replacing what is there.
-            current[language_code] = blank_localized_string(language_code)[
-                language_code
-            ]
-            filled += 1
+        for language_code in language_codes:
+            current = entry.get(field)
+            if current is None or current == {}:
+                entry[field] = blank_localized_string(language_code)
+                filled += 1
+            elif isinstance(current, dict) and language_code not in current:
+                # Present in another language but not this one. The widget adds
+                # the active language the same way rather than replacing what is
+                # there.
+                current[language_code] = blank_localized_string(language_code)[
+                    language_code
+                ]
+                filled += 1
     return filled
 
 

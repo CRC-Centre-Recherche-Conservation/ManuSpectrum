@@ -27,6 +27,11 @@ anything to a preset.
 Note that :meth:`save` runs *before* Arches writes the tile, so mutating
 ``tile.data`` in place costs no extra query — which is the common case here.
 Only the technique-side trigger has to reach out and save sibling tiles.
+
+The same hook also completes each file entry's localised metadata, which is a
+shape invariant rather than a mapping decision — see
+:meth:`XYTechniqueConfig._complete_file_metadata`. Like everything else here it
+applies to the nodegroups this function is registered for, and to nothing else.
 """
 
 import logging
@@ -40,6 +45,7 @@ from arches.app.functions.base import BaseFunction
 from arches.app.models.models import TileModel
 from arches.app.models.tile import Tile
 
+from manuspectrum.utils.file_entries import normalize_metadata
 from manuspectrum.constants.xy_presets import (
     ANALYSIS_GRAPH_ID,
     CONFIG_SOURCE_AUTO,
@@ -149,11 +155,29 @@ class XYTechniqueConfig(BaseFunction):
         nodegroup_id = str(tile.nodegroup_id)
 
         if nodegroup_id == DATA_FILE_NODEGROUP_ID:
+            self._complete_file_metadata(tile)
             self._on_file_saved(tile)
         elif nodegroup_id == TECHNIQUE_NODEGROUP_ID:
             self._on_technique_saved(tile)
 
         return tile
+
+    def _complete_file_metadata(self, tile):
+        """Give every file entry the localised metadata the widget expects.
+
+        Separate from the XY mapping below, and unconditional where that one is
+        careful: this is a shape invariant, not a curatorial choice, so it runs
+        even for an analysis with no technique.
+
+        The upload widget writes only the active language but hydrates every
+        missing one when it renders, mutating tile.data in place. Since
+        `tile.dirty` compares serialised data against the snapshot taken before
+        the widgets mount, an entry missing a language is dirty the instant the
+        page loads — the card shows unsaved edits and the lifecycle button is
+        disabled, with nobody having touched anything.
+        """
+        for entry in tile.data.get(DATA_FILE_NODE_ID) or []:
+            normalize_metadata(entry)
 
     def _on_file_saved(self, tile):
         """Fill in the files being saved, in place — no extra write."""

@@ -13,6 +13,7 @@ from manuspectrum.constants.xy_presets import (
     ANALYST_ONLY_TRANSFORMS,
     CORRECTIVE_TRANSFORMS,
     DATA_FILE_NODE_ID,
+    DATA_FILE_NODEGROUP_ID,
     ROLE_DARK,
     ROLE_REFERENCE,
     ROLE_X,
@@ -630,3 +631,53 @@ class FileEntryBuilderTests(SimpleTestCase):
     def test_tolerates_junk(self):
         self.assertEqual(normalize_metadata(None), 0)
         self.assertEqual(normalize_metadata("not-a-dict"), 0)
+
+
+class FileMetadataCompletenessTests(SimpleTestCase):
+    """Every file entry must carry every language a reader can activate.
+
+    The upload widget writes only the active language but hydrates the missing
+    ones when it renders, mutating tile.data. `tile.dirty` compares that against
+    a snapshot taken before the widgets mount, so an entry short of a language
+    is dirty the moment the page loads: the card shows unsaved edits and the
+    resource lifecycle button is disabled with nobody having touched anything.
+    """
+
+    def test_every_configured_language_is_filled_by_default(self):
+        # A set, never a key order: tiledata is jsonb and Postgres normalises
+        # object keys, so only which languages exist is ours to control.
+        entry = {"name": "spectrum.csv"}
+        normalize_metadata(entry)
+
+        for field in METADATA_FIELDS:
+            self.assertEqual(set(entry[field]), {"en", "fr"})
+
+    def test_a_single_language_can_still_be_asked_for(self):
+        entry = {"name": "spectrum.csv"}
+        normalize_metadata(entry, "en")
+
+        self.assertEqual(set(entry["title"]), {"en"})
+
+    def test_the_language_a_curator_filled_is_never_replaced(self):
+        entry = {"title": {"fr": {"value": "Verso", "direction": "ltr"}}}
+        normalize_metadata(entry)
+
+        self.assertEqual(entry["title"]["fr"]["value"], "Verso")
+        self.assertEqual(entry["title"]["en"]["value"], "")
+
+    def test_a_file_tile_is_completed_even_with_no_technique(self):
+        # The guard in _on_file_saved returns early when no technique resolves,
+        # so the invariant has to run before it — those are exactly the oldest
+        # and most likely malformed entries.
+        tile = mock.Mock()
+        tile.nodegroup_id = DATA_FILE_NODEGROUP_ID
+        tile.resourceinstance_id = uuid.uuid4()
+        tile.data = {DATA_FILE_NODE_ID: [{"name": "spectrum.csv"}]}
+
+        with mock.patch(
+            "manuspectrum.functions.xy_technique_config.resolve_config_id",
+            return_value=None,
+        ):
+            XYTechniqueConfig().save(tile, request=mock.Mock())
+
+        self.assertEqual(set(tile.data[DATA_FILE_NODE_ID][0]["title"]), {"en", "fr"})
