@@ -24,7 +24,7 @@
 <div class="xy-staged-panel">
     <div class="xy-staged-header">
         <i class="fa fa-files-o"></i>
-        <span data-bind="text: stagedXyTileCount()"></span> {% trans "XY file(s) staged" %}
+        <span data-bind="text: stagedXyTileCount()"></span> {% trans "XY file(s) selected" %}
     </div>
     <div class="xy-staged-list">
     <!-- ko foreach: stagedXyFiles() -->
@@ -35,13 +35,23 @@
         <!-- ko ifnot: hasConfig -->
         <i class="fa fa-exclamation-circle text-warning"></i>
         <!-- /ko -->
-        <span class="flex-1 text-ellipsis" data-bind="text: name"></span>
-        <!-- ko if: configName -->
-        <span class="label label-default" data-bind="text: configName"></span>
-        <!-- /ko -->
-        <!-- ko ifnot: configName -->
-        <span class="label label-warning">{% trans "No config" %}</span>
-        <!-- /ko -->
+        <div class="xy-item-body">
+            <span class="xy-item-name" data-bind="text: name, attr: { title: name }"></span>
+            <div class="xy-item-meta">
+                <!-- ko if: configName -->
+                <span class="label label-default" data-bind="text: configName, attr: { title: configName }"></span>
+                <!-- /ko -->
+                <!-- ko if: isAutoConfig -->
+                <span class="label xy-config-auto-badge"
+                      title="{% trans "Deduced from the analysis technique. Change it here if the technique is wrong." %}">
+                    <i class="fa fa-magic"></i> {% trans "auto" %}
+                </span>
+                <!-- /ko -->
+                <!-- ko ifnot: configName -->
+                <span class="label label-warning">{% trans "No config" %}</span>
+                <!-- /ko -->
+            </div>
+        </div>
     </div>
     <!-- /ko -->
     </div>
@@ -65,7 +75,7 @@
             data-bind="click: applyConfigToStaged, disable: batchApplying()">
         <!-- ko ifnot: batchApplying() -->
         <i class="fa fa-check-square-o"></i>
-        {% trans "Apply to" %} <span data-bind="text: stagedXyTileCount()"></span> {% trans "staged file(s)" %}
+        {% trans "Apply to" %} <span data-bind="text: pendingBatchCount()"></span> {% trans "selected file(s)" %}
         <!-- /ko -->
         <!-- ko if: batchApplying() -->
         <i class="fa fa-spinner fa-spin"></i>
@@ -130,16 +140,26 @@
         <!-- ko ifnot: hasConfig -->
         <i class="fa fa-exclamation-circle text-warning"></i>
         <!-- /ko -->
-        <span class="flex-1 text-ellipsis" data-bind="text: name, attr: { title: name }"></span>
         <!-- ko if: hasOverrides -->
         <i class="fa fa-sliders text-warning" title="{% trans 'Has custom parsing' %}"></i>
         <!-- /ko -->
-        <!-- ko if: configName -->
-        <span class="label label-info text-xs" data-bind="text: configName"></span>
-        <!-- /ko -->
-        <!-- ko ifnot: configName -->
-        <span class="label label-warning text-xs">{% trans "none" %}</span>
-        <!-- /ko -->
+        <div class="xy-item-body">
+            <span class="xy-item-name" data-bind="text: name, attr: { title: name }"></span>
+            <div class="xy-item-meta">
+                <!-- ko if: configName -->
+                <span class="label label-info text-xs" data-bind="text: configName, attr: { title: configName }"></span>
+                <!-- /ko -->
+                <!-- ko if: isAutoConfig -->
+                <span class="label xy-config-auto-badge"
+                      title="{% trans "Deduced from the analysis technique. Change it here if the technique is wrong." %}">
+                    <i class="fa fa-magic"></i> {% trans "auto" %}
+                </span>
+                <!-- /ko -->
+                <!-- ko ifnot: configName -->
+                <span class="label label-warning text-xs">{% trans "none" %}</span>
+                <!-- /ko -->
+            </div>
+        </div>
     </div>
     <!-- /ko -->
     </div>

@@ -10,10 +10,51 @@ import afsReaderTemplate from 'templates/views/components/cards/file-renderers/x
 import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
 import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
+import {
+    TRANSFORM_ANNOTATION_KEYS,
+    TRANSFORM_TRANSLATION_KEYS,
+    applyTransforms,
+    deriveAxisLabel,
+    deriveXAxisLabel,
+    describeChain,
+    expandStoredConfig,
+    seriesRoles,
+} from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
 import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-cache';
 import 'bindings/plotly';
 import 'views/components/plugins/importer-configuration';
+
+// Mirrors CONFIG_SOURCE_* in manuspectrum/constants/xy_presets.py. Written on
+// every entry a curator configures by hand, so the "auto" badge in the file
+// lists tells the truth about where a configuration came from — and so the
+// technique mapping knows a human has spoken and leaves the entry alone.
+
+// Transform key -> the sentence a reader sees. Resolved here, not in
+// utils/xy-transforms.js, so that module stays importable without a page and
+// its specs need no translation bundle. Same split as VIEW_LABELS below.
+const stepLabels = () =>
+    Object.fromEntries(
+        Object.entries(TRANSFORM_TRANSLATION_KEYS).map(([step, key]) => [
+            step,
+            arches.translations[key] || step,
+        ])
+    );
+
+// The terser wording the axis puts in brackets. Untranslated keys are dropped
+// rather than defaulted, so deriveAxisLabel falls back to its English
+// annotation instead of printing a machine key on the chart.
+const annotationLabels = () =>
+    Object.fromEntries(
+        Object.entries(TRANSFORM_ANNOTATION_KEYS)
+            .map(([step, key]) => [step, arches.translations[key]])
+            .filter(([, label]) => label)
+    );
+
+// The word a caption puts before a Savitzky-Golay window size.
+const windowWord = () => arches.translations.xyStepWindow;
+
+const CONFIG_SOURCE_MANUAL = 'manual';
 
 export default ko.components.register('xy-reader', {
     viewModel: function (params) {
@@ -31,10 +72,53 @@ export default ko.components.register('xy-reader', {
         AfsInstrumentViewModel.apply(this, [params]);
         this.disposables = [];
 
+        // One file per tile is the rule here: Arches' file workbench creates a
+        // fresh tile per dropped file, and its getUrl() only reads a tile whose
+        // value holds exactly one entry. An instrument's original and its CSV
+        // derivative therefore live in sibling tiles, not together.
+        //
+        // The node still permits several files (`maxFiles`), and the card form
+        // can write them, so resolve the entry this renderer owns instead of
+        // trusting position. Falls back to the first entry so a tile whose file
+        // has no renderer yet still reports itself — that is what drives the
+        // "No config" warnings.
+        const xyEntry = (node) => {
+            if (!node || !node.length) return null;
+            return (
+                node.find(
+                    (entry) => ko.unwrap(entry?.renderer) === self.renderer
+                ) || node[0]
+            );
+        };
+        this.xyEntry = xyEntry;
+
         // set defaults for chart title/axis
         this.chartTitle(arches.translations.data);
         this.xAxisLabel(arches.translations.xAxis);
         this.yAxisLabel(arches.translations.yAxis);
+        // Both of these belong to the SHARED state, not to this instance.
+        //
+        // Arches builds a file renderer twice per displayed file — once for the
+        // chart (`context: 'render'`) and once for the side panel that hosts the
+        // configuration picker (`context: 'tab-contents'`); see
+        // arches/app/templates/views/components/file-workbench.htm. The two
+        // instances only ever meet through `params.state`, the single object
+        // Arches hangs off each entry of `fileFormatRenderers`, and
+        // AfsInstrumentViewModel already puts every other chart setting there.
+        //
+        // Declared on `this` these were private per instance, so picking a
+        // configuration in the panel moved the panel's own copy while the chart
+        // kept the axis direction and processing note of whatever it had loaded
+        // with — the labels changed, the FTIR axis stayed ascending, and only a
+        // reload put it right.
+        if ('xReversed' in this.commonData === false) {
+            // Descending X axis, as FTIR, NMR and XPS are conventionally plotted.
+            this.commonData.xReversed = ko.observable(false);
+            // What the configuration applied, stated under the chart.
+            this.commonData.processing = ko.observable(null);
+        }
+        this.xReversed = this.commonData.xReversed;
+        this.processing = this.commonData.processing;
 
         this.rendererConfigs = ko.observable([]);
 
@@ -52,9 +136,11 @@ export default ko.components.register('xy-reader', {
 
                     // displayContent is formatted differently from the core file viewer.
                     const configId = tile
-                        ? ko.unwrap(
-                              tile.data[self.fileViewer.fileListNodeId]
-                          )?.[0]?.rendererConfig
+                        ? xyEntry(
+                              ko.unwrap(
+                                  tile.data[self.fileViewer.fileListNodeId]
+                              )
+                          )?.rendererConfig
                         : displayContent?.rendererConfig;
 
                     if (configId) {
@@ -64,6 +150,48 @@ export default ko.components.register('xy-reader', {
             } catch {
                 // fetch failed, leave configs empty
             }
+        };
+
+        // Fan the configuration now in `selectedConfiguration` out over
+        // everything the chart reads.
+        //
+        // Two paths change what is plotted — picking a different configuration,
+        // and saving an edit to the one already picked — and each used to carry
+        // its own copy of this list. The copies drifted: the save path never
+        // touched the reversed axis or the processing note, and derived the Y
+        // label from the stored string instead of from the applied chain. One
+        // list, called from both.
+        const applyDisplayConfig = () => {
+            const config = self.selectedConfiguration?.config;
+            const display = config?.display;
+            const expanded = expandStoredConfig(config);
+
+            // Read back by parse() on the next render.
+            self._columnAssignments = display?.columnAssignments || null;
+            self._xColumnMode = config?.xColumnMode || null;
+
+            self.chartTitle(display?.chartTitle || arches.translations.data);
+            self.xAxisLabel(
+                deriveXAxisLabel(
+                    display?.xAxisLabel || arches.translations.xAxis,
+                    config,
+                    arches.translations.xAxisPoint
+                )
+            );
+            // Derived, never the stored string on its own: the label has to
+            // follow what is actually plotted.
+            self.yAxisLabel(
+                display?.yAxisLabel
+                    ? deriveAxisLabel(
+                          display.yAxisLabel,
+                          expanded,
+                          annotationLabels()
+                      )
+                    : arches.translations.yAxis
+            );
+            self.yAxisRightLabel(display?.yAxisRightLabel || '');
+            self.xReversed(!!display?.xReversed);
+            self.processing(describeChain(expanded, stepLabels(), windowWord()));
         };
 
         this.disposables.push(this.selectedConfig.subscribe((config) => {
@@ -79,60 +207,50 @@ export default ko.components.register('xy-reader', {
                     return currentConfig.configid === config;
                 }
             );
+            // Picking a configuration PREVIEWS it — it does not commit it.
+            // Choosing one used to write and save it straight onto whichever
+            // file happened to be on screen, so a curator comparing options
+            // silently rewrote the file they were only looking at, and had no
+            // way to back out. Committing is now one deliberate act: select the
+            // files, pick a configuration, press the button.
+            //
+            // Settled before rendering: parse() reads the column roles and the
+            // spectral range this just wrote.
+            applyDisplayConfig();
             self.render();
-            if (self.fileViewer?.displayContent()) {
-                const tile = self.fileViewer.displayContent().tile;
-                const node = ko.unwrap(
-                    tile.data[self.fileViewer.fileListNodeId]
-                );
-                const currentRendererConfig = ko.unwrap(
-                    node[0].rendererConfig
-                );
-                if (config !== currentRendererConfig) {
-                    node[0].rendererConfig = config;
-                    tile.save();
-                }
-            }
-            const display = this.selectedConfiguration?.config?.display;
-            this.chartTitle(
-                display?.chartTitle
-                    ? display.chartTitle
-                    : arches.translations.data
-            );
-            this.xAxisLabel(
-                display?.xAxisLabel
-                    ? display.xAxisLabel
-                    : arches.translations.xAxis
-            );
-            this.yAxisLabel(
-                display?.yAxisLabel
-                    ? display.yAxisLabel
-                    : arches.translations.yAxis
-            );
-            this._xRangeMin = display?.xRangeMin;
-            this._xRangeMax = display?.xRangeMax;
-            this._columnAssignments = display?.columnAssignments || null;
-            this._xColumnMode = this.selectedConfiguration?.config?.xColumnMode || null;
-            this.yAxisRightLabel(display?.yAxisRightLabel || '');
         }));
 
         rendererConfigRefresh();
 
-        // Rename the core "Edit" tab to "Visualization"
-        setTimeout(() => {
-            $('.workbench-card-sidebar-tab').each(function () {
-                const bind = $(this).attr('data-bind') || '';
-                if (bind.includes("toggleTab('edit')")) {
-                    $(this)
-                        .find('i.fa')
-                        .removeClass('fa-pencil')
-                        .addClass('fa-eye');
-                    $(this)
-                        .find('.map-sidebar-text')
-                        .text('Viz');
-                }
-            });
-        }, 0);
+        // Rename the core "Edit" tab to "Viz".
+        //
+        // The tab belongs to Arches' own file-viewer template, so relabelling it
+        // means reaching into the DOM. Knockout re-renders that strip whenever
+        // the displayed file changes, which silently undid a one-shot rename and
+        // left the tab reading "Edit" again with a pencil icon — so re-apply on
+        // every change rather than once at construction.
+        const renameEditTab = () => {
+            setTimeout(() => {
+                $('.workbench-card-sidebar-tab').each(function () {
+                    const bind = $(this).attr('data-bind') || '';
+                    if (bind.includes("toggleTab('edit')")) {
+                        $(this)
+                            .find('i.fa')
+                            .removeClass('fa-pencil')
+                            .addClass('fa-eye');
+                        $(this)
+                            .find('.map-sidebar-text')
+                            .text(arches.translations.xyVizTab);
+                    }
+                });
+            }, 0);
+        };
+        renameEditTab();
+        if (ko.isObservable(this.fileViewer?.displayContent)) {
+            this.disposables.push(
+                this.fileViewer.displayContent.subscribe(renameEditTab)
+            );
+        }
 
         // Track whether the importer-configuration child is showing its list (not the edit panel)
         this.importerShowingList = ko.observable(true);
@@ -155,9 +273,7 @@ export default ko.components.register('xy-reader', {
                         tile.data[self.fileViewer.fileListNodeId]
                     );
                     if (
-                        node &&
-                        node.length > 0 &&
-                        ko.unwrap(node[0].renderer) === self.renderer
+                        ko.unwrap(xyEntry(node)?.renderer) === self.renderer
                     ) {
                         count++;
                     }
@@ -170,8 +286,60 @@ export default ko.components.register('xy-reader', {
             () => self.stagedXyTileCount() > 0
         );
 
+        // How many selected files the chosen configuration would actually
+        // change. A freshly created resource arrives with its file already
+        // configured from the technique, and the panel pre-selects that same
+        // configuration — so the old count offered to apply what was already
+        // applied, and the button never had anything to do.
+        // Bumped after a batch runs. Tile data is mutated in place — plain
+        // properties on plain objects — so nothing would otherwise tell this
+        // count to re-evaluate, and the button would sit there claiming work
+        // remained. Clearing the selection instead would have worked, but it
+        // throws away a selection the curator may still want: after applying
+        // one configuration they often try another on the same files.
+        const batchVersion = ko.observable(0);
+
+        // What "apply" acts on.
+        //
+        // Ticking files and viewing one are two different things in Arches:
+        // `card.staging()` is the checkbox list, while `displayContent` derives
+        // from `tile.selected()`. Opening a file does not tick it. So a curator
+        // looking at a single spectrum has nothing staged, and a count based on
+        // staging alone left them no way to commit a configuration change — the
+        // button simply never appeared.
+        //
+        // Ticked files win when there are any; otherwise the file on screen is
+        // the obvious subject.
+        const batchTiles = () => {
+            const card = self.fileViewer?.card;
+            if (!card) return [];
+            const tiles = card.tiles();
+            const stagingIds = card.staging ? card.staging() : [];
+            if (stagingIds.length) {
+                return stagingIds
+                    .map((tileid) => tiles.find((t) => t.tileid == tileid))
+                    .filter(Boolean);
+            }
+            const displayed = self.fileViewer.displayContent();
+            return displayed?.tile ? [displayed.tile] : [];
+        };
+
+        const xyEntryOf = (tile) =>
+            xyEntry(ko.unwrap(tile.data[self.fileViewer.fileListNodeId]));
+
+        this.pendingBatchCount = ko.pureComputed(() => {
+            batchVersion();
+            const configId = self.selectedConfig();
+            if (!configId) return 0;
+            return batchTiles().filter((tile) => {
+                const entry = xyEntryOf(tile);
+                if (ko.unwrap(entry?.renderer) !== self.renderer) return false;
+                return ko.unwrap(entry.rendererConfig) !== configId;
+            }).length;
+        });
+
         this.canApplyBatch = ko.pureComputed(
-            () => self.stagedXyTileCount() > 0 && !!self.selectedConfig()
+            () => self.pendingBatchCount() > 0
         );
 
         this.applyConfigToStaged = async () => {
@@ -184,35 +352,31 @@ export default ko.components.register('xy-reader', {
             self.batchApplying(true);
             self.batchResult('');
 
-            const stagingIds = card.staging();
-            const tiles = card.tiles();
             let applied = 0;
             let errors = 0;
 
-            for (const tileid of stagingIds) {
-                const tile = tiles.find((t) => t.tileid == tileid);
-                if (!tile) continue;
-                const node = ko.unwrap(
-                    tile.data[self.fileViewer.fileListNodeId]
-                );
-                if (
-                    !node ||
-                    !node.length ||
-                    ko.unwrap(node[0].renderer) !== self.renderer
-                ) {
+            for (const tile of batchTiles()) {
+                const entry = xyEntryOf(tile);
+                if (ko.unwrap(entry?.renderer) !== self.renderer) {
                     continue;
                 }
                 try {
-                    node[0].rendererConfig = configId;
+                    entry.rendererConfig = configId;
+                    entry.rendererConfigSource = CONFIG_SOURCE_MANUAL;
                     await tile.save();
                     applied++;
                 } catch (e) {
-                    console.error('Batch config save error:', tileid, e);
+                    console.error('Batch config save error:', tile.tileid, e);
                     errors++;
                 }
             }
 
             self.batchApplying(false);
+            if (applied > 0) {
+                // Re-evaluate against the configurations just written; the
+                // selection itself is left alone.
+                batchVersion(batchVersion() + 1);
+            }
             if (errors > 0) {
                 self.batchResult(
                     applied +
@@ -245,19 +409,23 @@ export default ko.components.register('xy-reader', {
                     const node = ko.unwrap(
                         tile.data[self.fileViewer.fileListNodeId]
                     );
-                    if (
-                        !node?.length ||
-                        ko.unwrap(node[0].renderer) !== self.renderer
-                    )
+                    const entry = xyEntry(node);
+                    if (ko.unwrap(entry?.renderer) !== self.renderer)
                         return null;
-                    const configId = ko.unwrap(node[0].rendererConfig);
+                    const configId = ko.unwrap(entry.rendererConfig);
                     const cfg = configs.find(
                         (c) => c.configid === configId
                     );
                     return {
-                        name: ko.unwrap(node[0].name) || 'Unknown',
+                        name: ko.unwrap(entry.name) || 'Unknown',
                         hasConfig: !!configId,
                         configName: cfg?.name || null,
+                        // Surfaced in the UI so a deduced configuration never
+                        // passes for a deliberate one: an analysis tagged with
+                        // the wrong technique would otherwise hand a plausible
+                        // but wrong axis label to whoever reads the spectrum.
+                        isAutoConfig:
+                            ko.unwrap(entry.rendererConfigSource) === 'auto',
                         tileid: tileid,
                     };
                 })
@@ -275,26 +443,32 @@ export default ko.components.register('xy-reader', {
                     const node = ko.unwrap(
                         tile.data[self.fileViewer.fileListNodeId]
                     );
-                    if (
-                        !node?.length ||
-                        ko.unwrap(node[0].renderer) !== self.renderer
-                    )
+                    const entry = xyEntry(node);
+                    if (ko.unwrap(entry?.renderer) !== self.renderer)
                         return null;
-                    const configId = ko.unwrap(node[0].rendererConfig);
+                    const configId = ko.unwrap(entry.rendererConfig);
                     const cfg = configs.find(
                         (c) => c.configid === configId
                     );
-                    const overrides = parseOverrides(ko.unwrap(node[0].parsingOverrides));
+                    const overrides = parseOverrides(ko.unwrap(entry.parsingOverrides));
                     return {
-                        name: ko.unwrap(node[0].name) || 'Unknown',
+                        name: ko.unwrap(entry.name) || 'Unknown',
                         hasConfig: !!configId,
                         configName: cfg?.name || null,
+                        isAutoConfig:
+                            ko.unwrap(entry.rendererConfigSource) === 'auto',
                         configId: configId,
                         configObj: cfg?.config || {},
                         tileid: tile.tileid,
                         tile: tile,
                         node: node,
-                        url: ko.unwrap(node[0].url),
+                        entry: entry,
+                        // Identity for a later write. `entry` above is a
+                        // snapshot: tile.save() replaces the objects inside
+                        // tile.data, so anything writing to it must re-resolve
+                        // from this id first.
+                        fileId: ko.unwrap(entry.file_id),
+                        url: ko.unwrap(entry.url),
                         hasOverrides: Object.keys(overrides).length > 0,
                         overrides: overrides,
                     };
@@ -325,7 +499,9 @@ export default ko.components.register('xy-reader', {
         // After tile.save(), koMapping.fromJS() wraps nested props as observables,
         // so we use ko.toJS() to deeply unwrap all nested observables.
         const getFileOverrides = (file) => {
-            return parseOverrides(ko.unwrap(file.node?.[0]?.parsingOverrides));
+            // file.entry is the entry this renderer owns, resolved by xyEntry
+            // when allXyFiles was built — not necessarily node[0].
+            return parseOverrides(ko.unwrap(file.entry?.parsingOverrides));
         };
 
         // Load radio state from a file's existing overrides
@@ -467,29 +643,70 @@ export default ko.components.register('xy-reader', {
             return Object.keys(overrides).length > 0 ? overrides : undefined;
         };
 
+        // The entry as tile data holds it right now. Matched on file_id like
+        // parse() does, because a tile can carry the archival original beside
+        // the CSV.
+        const liveEntry = (file) => {
+            const node = ko.unwrap(
+                file.tile?.data?.[self.fileViewer.fileListNodeId]
+            );
+            if (!node) return null;
+            return (
+                (file.fileId &&
+                    node.find((e) => ko.unwrap(e?.file_id) === file.fileId)) ||
+                xyEntry(node)
+            );
+        };
+
         this.saveOverrides = async () => {
             const files = self.statusSelectedFiles();
             if (!files.length) return;
             self.overrideSaving(true);
 
             const value = buildOverrides();
+            const failed = [];
 
             for (const file of files) {
                 try {
+                    // Never file.entry: tile.save() runs koMapping.fromJS over
+                    // tile.data, so an entry captured when allXyFiles evaluated
+                    // is an orphan. Writing to it throws nothing and saves
+                    // nothing — the panel then closed reporting success.
+                    const entry = liveEntry(file);
+                    if (!entry) {
+                        failed.push(file);
+                        continue;
+                    }
                     if (value) {
-                        file.node[0].parsingOverrides = value;
+                        entry.parsingOverrides = value;
                     } else {
-                        delete file.node[0].parsingOverrides;
+                        delete entry.parsingOverrides;
                     }
                     await file.tile.save();
                 } catch (e) {
                     console.error('Override save error:', file.name, e);
+                    failed.push(file);
                 }
             }
 
             self.overrideSaving(false);
-            self.showOverridePanel(false);
-            self.statusSelectedFiles([]);
+            if (failed.length) {
+                // Leave the failures ticked so the panel stays open on them.
+                // Re-resolved against the live list because the checkbox binding
+                // compares by object identity.
+                self.statusSelectedFiles(
+                    self.allXyFiles().filter((live) =>
+                        failed.some(
+                            (f) =>
+                                f.tileid === live.tileid &&
+                                f.fileId === live.fileId
+                        )
+                    )
+                );
+            } else {
+                self.showOverridePanel(false);
+                self.statusSelectedFiles([]);
+            }
             self.render();
         };
 
@@ -499,28 +716,8 @@ export default ko.components.register('xy-reader', {
                 self.selectedConfiguration = self.rendererConfigs().find(
                     (c) => c.configid === self.selectedConfig()
                 );
-                const display = self.selectedConfiguration?.config?.display;
-                self._xRangeMin = display?.xRangeMin;
-                self._xRangeMax = display?.xRangeMax;
-                self._columnAssignments = display?.columnAssignments || null;
-                self._xColumnMode = self.selectedConfiguration?.config?.xColumnMode || null;
-                self.yAxisRightLabel(display?.yAxisRightLabel || '');
+                applyDisplayConfig();
                 self.render();
-                self.chartTitle(
-                    display?.chartTitle
-                        ? display.chartTitle
-                        : arches.translations.data
-                );
-                self.xAxisLabel(
-                    display?.xAxisLabel
-                        ? display.xAxisLabel
-                        : arches.translations.xAxis
-                );
-                self.yAxisLabel(
-                    display?.yAxisLabel
-                        ? display.yAxisLabel
-                        : arches.translations.yAxis
-                );
             }
         };
 
@@ -572,6 +769,7 @@ export default ko.components.register('xy-reader', {
             this.stagedXyTileCount,
             this.batchMode,
             this.canApplyBatch,
+            this.pendingBatchCount,
             this.stagedXyFiles,
             this.allXyFiles,
             this.overrideTargetLabel,
@@ -590,10 +788,26 @@ export default ko.components.register('xy-reader', {
             const dc = self.fileViewer?.displayContent() || self.displayContent;
             if (dc?.tile) {
                 const node = ko.unwrap(dc.tile.data[self.fileViewer.fileListNodeId]);
-                fileOverrides = parseOverrides(ko.unwrap(node?.[0]?.parsingOverrides));
+                // Overrides belong to the file on screen. A tile can hold the
+                // archival original alongside the CSV, so match on file_id and
+                // only fall back to the renderer-owned entry when the viewer
+                // does not tell us which file it is showing.
+                const displayedId = ko.unwrap(dc.file_id);
+                const entry =
+                    (displayedId &&
+                        (node || []).find(
+                            (e) => ko.unwrap(e?.file_id) === displayedId
+                        )) ||
+                    xyEntry(node);
+                fileOverrides = parseOverrides(
+                    ko.unwrap(entry?.parsingOverrides)
+                );
             }
             const baseConfig = this.selectedConfiguration?.config || {};
-            const effectiveConfig = { ...baseConfig, ...fileOverrides };
+            const effectiveConfig = expandStoredConfig({
+                ...baseConfig,
+                ...fileOverrides,
+            });
 
             const validation = XyParser.validateContent(text, {
                 xColumnMode: effectiveConfig.xColumnMode,
@@ -605,33 +819,27 @@ export default ko.components.register('xy-reader', {
             }
 
             try {
-                const parsedData = XyParser.parse(text, effectiveConfig);
+                // Transforms run on the parsed spectrum, never on the file. A
+                // reference-normalised FORS acquisition loses its reference and
+                // dark columns here, so the routing below sees only the series
+                // that are actually plotted.
+                const parsedData = applyTransforms(
+                    XyParser.parse(text, effectiveConfig),
+                    effectiveConfig
+                );
                 this.invalidDelimiter(false);
                 const assignments = this._columnAssignments;
-                const xMin = this._xRangeMin;
-                const xMax = this._xRangeMax;
-                const isGenerate = effectiveConfig.xColumnMode === 'generate';
-                const xColIdx = parseInt(effectiveConfig.xColumnIndex ?? 0, 10);
 
                 if (parsedData.ys) {
                     if (assignments && assignments.length > 0) {
+                        // Roles of the series that survived the chain, never of
+                        // the file's columns: a reference normalisation removes
+                        // series, and no arithmetic over columns recovers them.
+                        const roles = seriesRoles(parsedData, effectiveConfig);
                         const leftSeries = [];
                         const rightSeries = [];
                         parsedData.ys.forEach((yArr, i) => {
-                            // Map series index to file column index
-                            // In generate mode: all cols are Y → series i = file col i
-                            // In standard mode: X col is removed → rebuild original index
-                            let colIdx;
-                            if (isGenerate) {
-                                colIdx = i;
-                            } else {
-                                // Y series are file columns in order, skipping xColIdx
-                                colIdx = i < xColIdx ? i : i + 1;
-                            }
-                            const colAssign = assignments.find(
-                                (a) => a.columnIndex === colIdx
-                            );
-                            const role = colAssign ? colAssign.role : 'yLeft';
+                            const role = roles[i] || 'yLeft';
                             if (role === 'yRight') {
                                 rightSeries.push({
                                     value: [...parsedData.x],
@@ -666,30 +874,6 @@ export default ko.components.register('xy-reader', {
                     series.count.push(...parsedData.y);
                 }
 
-                // Apply spectral range filter
-                if (xMin !== undefined || xMax !== undefined) {
-                    const filtered = XyParser.filterXRange(
-                        series.value,
-                        series.count,
-                        xMin,
-                        xMax
-                    );
-                    series.value.length = 0;
-                    series.count.length = 0;
-                    series.value.push(...filtered.x);
-                    series.count.push(...filtered.y);
-                    if (series.multiSeries) {
-                        series.multiSeries = series.multiSeries.map((s) => {
-                            const f = XyParser.filterXRange(
-                                s.value,
-                                s.count,
-                                xMin,
-                                xMax
-                            );
-                            return { ...s, value: f.x, count: f.y };
-                        });
-                    }
-                }
             } catch (e) {
                 this.invalidDelimiter(true);
                 throw e;

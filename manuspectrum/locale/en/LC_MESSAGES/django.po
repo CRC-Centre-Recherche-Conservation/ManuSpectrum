@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 09:40-0500\n"
+"POT-Creation-Date: 2026-09-01 10:15-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -38,15 +38,28 @@ msgstr "Invalid URL format"
 msgid "Undefined"
 msgstr "Undefined"
 
-#: settings.py:420
+#: functions/xy_technique_config.py:213
+#, python-format
+msgid "Could not apply the XY configuration to tile %s"
+msgstr ""
+
+#: settings.py:121
+msgid "Term Matches"
+msgstr ""
+
+#: settings.py:127
+msgid "References"
+msgstr ""
+
+#: settings.py:460
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:457
+#: settings.py:497
 msgid "English"
 msgstr "English"
 
-#: settings.py:458
+#: settings.py:498
 msgid "French"
 msgstr ""
 
@@ -59,20 +72,16 @@ msgstr ""
 "heritage"
 
 #: templates/errors/400.htm:5
-#, fuzzy
-#| msgid "Access request"
 msgid "Bad request"
-msgstr "Access request"
+msgstr "Bad request"
 
 #: templates/errors/400.htm:6
 msgid "The server could not understand this request."
 msgstr ""
 
 #: templates/errors/400.htm:11
-#, fuzzy
-#| msgid "Error"
 msgid "Error 400"
-msgstr "Error"
+msgstr "Error 400"
 
 #: templates/errors/400.htm:13
 msgid "We couldn't read that request"
@@ -93,16 +102,12 @@ msgstr ""
 
 #: templates/errors/400.htm:19 templates/errors/403.htm:20
 #: templates/errors/404.htm:65
-#, fuzzy
-#| msgid "Meet the team"
 msgid "Contact the team"
-msgstr "Meet the team"
+msgstr "Contact the team"
 
 #: templates/errors/403.htm:5
-#, fuzzy
-#| msgid "Access request"
 msgid "Access restricted"
-msgstr "Access request"
+msgstr "Access restricted"
 
 #: templates/errors/403.htm:6
 msgid "This page requires an account or additional permissions."
@@ -129,20 +134,16 @@ msgid "Sign In"
 msgstr "Sign In"
 
 #: templates/errors/404.htm:14
-#, fuzzy
-#| msgid "Manifest not found"
 msgid "Page not found"
-msgstr "Manifest not found"
+msgstr "Page not found"
 
 #: templates/errors/404.htm:15
 msgid "This page does not exist or has moved."
 msgstr ""
 
 #: templates/errors/404.htm:20
-#, fuzzy
-#| msgid "Spectra and analysis data"
 msgid "Spectral analysis report"
-msgstr "Spectra and analysis data"
+msgstr "Spectral analysis report"
 
 #: templates/errors/404.htm:22
 msgid "Reflectance spectrum with no signal at 404 nanometres"
@@ -329,6 +330,7 @@ msgid "Sign Out"
 msgstr "Sign Out"
 
 #: templates/includes/ms_header.htm:77 templates/includes/ms_header.htm:111
+#: views/model_graph_service.py:121
 msgid "Language"
 msgstr ""
 
@@ -352,10 +354,8 @@ msgid "Close"
 msgstr "Close"
 
 #: templates/index.htm:226
-#, fuzzy
-#| msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
 msgid "ManuSpectrum — Spectral Analysis Plot"
-msgstr "ManuSpectrum — Physicochemical Analysis of Heritage"
+msgstr "ManuSpectrum — Spectral Analysis Plot"
 
 #: templates/index.htm:227
 msgid "interactive"
@@ -402,12 +402,6 @@ msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Thinking and modeling written cultural heritage materials"
 
 #: templates/index.htm:278
-#, fuzzy
-#| msgid ""
-#| "It is developed within Cluster 2 — “Consideration and searchability of "
-#| "materials-analysis data” — of the ANR Biblissima+ programme, at the "
-#| "Centre de Recherche sur la Conservation (CRC), in partnership with Huma-"
-#| "Num."
 msgid ""
 "ManuSpectrum was developed within Cluster 2 — “Consideration and "
 "searchability of materials analysis data” — of the ANR Biblissima+ "
@@ -415,9 +409,11 @@ msgid ""
 "physicochemical analysis data for manuscripts, inscriptions, seals and other "
 "heritage objects, in partnership with Huma-Num."
 msgstr ""
-"It is developed within Cluster 2 — “Consideration and searchability of "
-"materials-analysis data” — of the ANR Biblissima+ programme, at the Centre "
-"de Recherche sur la Conservation (CRC), in partnership with Huma-Num."
+"ManuSpectrum was developed within Cluster 2 — “Consideration and "
+"searchability of materials analysis data” — of the ANR Biblissima+ "
+"programme. This cluster aims to ensure the long-term archiving and reuse of "
+"physicochemical analysis data for manuscripts, inscriptions, seals and other "
+"heritage objects, in partnership with Huma-Num."
 
 #: templates/index.htm:281
 msgid ""
@@ -539,16 +535,12 @@ msgstr ""
 "spectroscopy"
 
 #: templates/index.htm:375
-#, fuzzy
-#| msgid ""
-#| "Ultraviolet hyperspectral imaging to reveal details invisible to the "
-#| "naked eye"
 msgid ""
 "A manuscript under ultraviolet light during hyperspectral imaging, revealing "
 "inks and retouches invisible to the naked eye"
 msgstr ""
-"Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
-"eye"
+"A manuscript under ultraviolet light during hyperspectral imaging, revealing "
+"inks and retouches invisible to the naked eye"
 
 #: templates/index.htm:377
 msgid "UV hyperspectral imaging"
@@ -579,16 +571,12 @@ msgid "Slide 1 of 3 — Macro-XRF scanning"
 msgstr ""
 
 #: templates/index.htm:397
-#, fuzzy
-#| msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgid "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
-msgstr "Fiber optic reflectance spectroscopy (FORS)"
+msgstr "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
 
 #: templates/index.htm:398
-#, fuzzy
-#| msgid "UV hyperspectral imaging"
 msgid "Slide 3 of 3 — UV hyperspectral imaging"
-msgstr "UV hyperspectral imaging"
+msgstr "Slide 3 of 3 — UV hyperspectral imaging"
 
 #: templates/index.htm:415
 msgid "What you can discover"
@@ -607,16 +595,12 @@ msgid "Spectra and analysis data"
 msgstr "Spectra and analysis data"
 
 #: templates/index.htm:425
-#, fuzzy
-#| msgid ""
-#| "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and "
-#| "other analysis results directly on the platform."
 msgid ""
 "Visualize and compare reference spectra and analysis datasets. Explore XRF, "
 "FTIR, Raman, and other analysis results directly on the platform."
 msgstr ""
-"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
-"analysis results directly on the platform."
+"Visualize and compare reference spectra and analysis datasets. Explore XRF, "
+"FTIR, Raman, and other analysis results directly on the platform."
 
 #: templates/index.htm:436
 msgid "IIIF Annotations"
@@ -659,20 +643,16 @@ msgid "Material Characterization"
 msgstr "Material Characterization"
 
 #: templates/index.htm:461
-#, fuzzy
-#| msgid ""
-#| "Explore the layers, materials, and chemical elements identified on "
-#| "written cultural heritage documents, with different levels of reliability "
-#| "and characterization."
 msgid ""
 "Explore the layers, materials and chemical elements identified on "
 "manuscripts, printed books and other written heritage — pigments, inks, "
 "binders, parchment and paper supports — with different levels of reliability "
 "and characterization."
 msgstr ""
-"Explore the layers, materials, and chemical elements identified on written "
-"cultural heritage documents, with different levels of reliability and "
-"characterization."
+"Explore the layers, materials and chemical elements identified on "
+"manuscripts, printed books and other written heritage — pigments, inks, "
+"binders, parchment and paper supports — with different levels of reliability "
+"and characterization."
 
 #: templates/index.htm:463
 msgid "Pigments"
@@ -760,17 +740,14 @@ msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Spectral band scanning and false-color composites via IIIF"
 
 #: templates/index.htm:547
-#, fuzzy
-#| msgid ""
-#| "Search by material, analysis technique, written cultural heritage object, "
-#| "or chemical element. Advanced filters available in the search interface."
 msgid ""
 "Search by material — a pigment, an ink, a support —, analysis technique, "
 "written cultural heritage object, or chemical element. Advanced filters "
 "available in the search interface."
 msgstr ""
-"Search by material, analysis technique, written cultural heritage object, or "
-"chemical element. Advanced filters available in the search interface."
+"Search by material — a pigment, an ink, a support —, analysis technique, "
+"written cultural heritage object, or chemical element. Advanced filters "
+"available in the search interface."
 
 #: templates/index.htm:560
 msgid "Search materials, techniques, objects..."
@@ -883,28 +860,32 @@ msgid "Data"
 msgstr "Data"
 
 #: templates/javascript.htm:26
-#: templates/views/components/plugins/importer-configuration.htm:117
+#: templates/views/components/plugins/importer-configuration.htm:147
 msgid "X Axis"
 msgstr "X Axis"
 
 #: templates/javascript.htm:27
-#: templates/views/components/plugins/importer-configuration.htm:135
+msgid "Point"
+msgstr ""
+
+#: templates/javascript.htm:28
+#: templates/views/components/plugins/importer-configuration.htm:154
 msgid "Y Axis"
 msgstr "Y Axis"
 
-#: templates/javascript.htm:28
+#: templates/javascript.htm:29
 msgid "Select a Transformation"
 msgstr "Select a Transformation"
 
-#: templates/javascript.htm:29
+#: templates/javascript.htm:30
 msgid "Select an Importer"
 msgstr "Select an Importer"
 
-#: templates/javascript.htm:30
+#: templates/javascript.htm:31
 msgid "Importer in Use"
 msgstr "Importer in Use"
 
-#: templates/javascript.htm:31
+#: templates/javascript.htm:32
 msgid ""
 "This importer is in use - it should be replaced in all files where it is "
 "used before deleting."
@@ -912,81 +893,81 @@ msgstr ""
 "This importer is in use - it should be replaced in all files where it is "
 "used before deleting."
 
-#: templates/javascript.htm:32
+#: templates/javascript.htm:33
 msgid "An error occurred while creating the manifest."
 msgstr "An error occurred while creating the manifest."
 
-#: templates/javascript.htm:33
+#: templates/javascript.htm:34
 msgid "Material"
 msgstr "Material"
 
-#: templates/javascript.htm:34
+#: templates/javascript.htm:35
 msgid "Layer"
 msgstr "Layer"
 
-#: templates/javascript.htm:35
+#: templates/javascript.htm:36
 msgid "Range"
 msgstr "Range"
 
-#: templates/javascript.htm:36
+#: templates/javascript.htm:37
 msgid "Lapis lazuli"
 msgstr "Lapis lazuli"
 
-#: templates/javascript.htm:37
+#: templates/javascript.htm:38
 msgid "Vermilion (HgS)"
 msgstr "Vermilion (HgS)"
 
-#: templates/javascript.htm:38
+#: templates/javascript.htm:39
 msgid "Gold leaf"
 msgstr "Gold leaf"
 
-#: templates/javascript.htm:39
+#: templates/javascript.htm:40
 msgid "Iron gall ink"
 msgstr "Iron gall ink"
 
-#: templates/javascript.htm:40
+#: templates/javascript.htm:41
 msgid "Pigment"
 msgstr "Pigment"
 
-#: templates/javascript.htm:41
+#: templates/javascript.htm:42
 msgid "Paint"
 msgstr "Paint"
 
-#: templates/javascript.htm:42
+#: templates/javascript.htm:43
 msgid "Gilding"
 msgstr "Gilding"
 
-#: templates/javascript.htm:43
+#: templates/javascript.htm:44
 msgid "Text"
 msgstr "Text"
 
-#: templates/javascript.htm:44
+#: templates/javascript.htm:45
 #: templates/views/components/plugins/file-configuration.htm:18
 msgid "Configuration"
 msgstr "Configuration"
 
-#: templates/javascript.htm:45
+#: templates/javascript.htm:46
 msgid "Biblissima Search"
 msgstr "Biblissima Search"
 
-#: templates/javascript.htm:46
+#: templates/javascript.htm:47
 msgid "Creation & Validation"
 msgstr "Creation & Validation"
 
-#: templates/javascript.htm:47
+#: templates/javascript.htm:48
 msgid "Search iconographic descriptors..."
 msgstr "Search iconographic descriptors..."
 
-#: templates/javascript.htm:48
+#: templates/javascript.htm:49
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:417
 msgid "Pending"
 msgstr "Pending"
 
-#: templates/javascript.htm:49
+#: templates/javascript.htm:50
 msgid "Creating..."
 msgstr "Creating..."
 
-#: templates/javascript.htm:50
+#: templates/javascript.htm:51
 #: templates/views/components/plugins/init-workflow.htm:52
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:402
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:597
@@ -994,66 +975,66 @@ msgstr "Creating..."
 msgid "Created"
 msgstr "Created"
 
-#: templates/javascript.htm:51
+#: templates/javascript.htm:52
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:412
 msgid "Error"
 msgstr "Error"
 
-#: templates/javascript.htm:52
+#: templates/javascript.htm:53
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:37
 msgid "Skipped"
 msgstr "Skipped"
 
-#: templates/javascript.htm:53
+#: templates/javascript.htm:54
 msgid "Duplicate"
 msgstr "Duplicate"
 
-#: templates/javascript.htm:54
+#: templates/javascript.htm:55
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:397
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:594
 #: templates/views/components/workflows/import-biblissima-workflow/import-biblissima-final-step.htm:31
 msgid "Linked"
 msgstr "Linked"
 
-#: templates/javascript.htm:55
+#: templates/javascript.htm:56
 msgid "Search existing resource..."
 msgstr "Search existing resource..."
 
-#: templates/javascript.htm:56
+#: templates/javascript.htm:57
 msgid "The Biblissima search failed. Please try again in a moment."
 msgstr "The Biblissima search failed. Please try again in a moment."
 
-#: templates/javascript.htm:57
+#: templates/javascript.htm:58
 msgid ""
 "Network error while querying Biblissima. Check your connection and try again."
 msgstr ""
 "Network error while querying Biblissima. Check your connection and try again."
 
-#: templates/javascript.htm:58
+#: templates/javascript.htm:59
 msgid "Connecting to Biblissima…"
 msgstr "Connecting to Biblissima…"
 
-#: templates/javascript.htm:59
+#: templates/javascript.htm:60
 msgid "Fetching manuscripts from the archive…"
 msgstr "Fetching manuscripts from the archive…"
 
-#: templates/javascript.htm:60
+#: templates/javascript.htm:61
 msgid "Enriching manuscript metadata…"
 msgstr "Enriching manuscript metadata…"
 
-#: templates/javascript.htm:61
+#: templates/javascript.htm:62
 msgid "Matching records…"
 msgstr "Matching records…"
 
-#: templates/javascript.htm:62
+#: templates/javascript.htm:63
 msgid "Still working — large searches may take up to 2 minutes"
 msgstr "Still working — large searches may take up to 2 minutes"
 
-#: templates/javascript.htm:63
+#: templates/javascript.htm:64
 msgid "Cart limit reached"
 msgstr "Cart limit reached"
 
-#: templates/javascript.htm:64
+#: templates/javascript.htm:65
 msgid ""
 "Too many results on this page for the remaining cart slots — reduce the page "
 "size or unselect some"
@@ -1061,195 +1042,195 @@ msgstr ""
 "Too many results on this page for the remaining cart slots — reduce the page "
 "size or unselect some"
 
-#: templates/javascript.htm:65
+#: templates/javascript.htm:66
 msgid "Paste a Biblissima QID (e.g. Q63633)"
 msgstr "Paste a Biblissima QID (e.g. Q63633)"
 
-#: templates/javascript.htm:66
+#: templates/javascript.htm:67
 msgid "No Biblissima entity matches this identifier"
 msgstr "No Biblissima entity matches this identifier"
 
-#: templates/javascript.htm:67 templates/javascript.htm:69
+#: templates/javascript.htm:68 templates/javascript.htm:70
 #: templates/views/components/widgets/biblissima-concept-widget.htm:72
 msgid "Manuscript"
 msgstr "Manuscript"
 
-#: templates/javascript.htm:68
+#: templates/javascript.htm:69
 msgid "Custom type"
 msgstr "Custom type"
 
-#: templates/javascript.htm:70
+#: templates/javascript.htm:71
 msgid "Illumination"
 msgstr "Illumination"
 
-#: templates/javascript.htm:71
+#: templates/javascript.htm:72
 msgid "Cannot create parent — no Biblissima QID"
 msgstr "Cannot create parent — no Biblissima QID"
 
-#: templates/javascript.htm:72
+#: templates/javascript.htm:73
 #, python-brace-format
 msgid "{n} resources created"
 msgstr "{n} resources created"
 
-#: templates/javascript.htm:73
+#: templates/javascript.htm:74
 #, python-brace-format
 msgid "{created} created · {failed} failed"
 msgstr "{created} created · {failed} failed"
 
-#: templates/javascript.htm:74
+#: templates/javascript.htm:75
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:139
 msgid "Retry all failed"
 msgstr "Retry all failed"
 
-#: templates/javascript.htm:75
+#: templates/javascript.htm:76
 msgid "Batch creation failed. Please retry."
 msgstr "Batch creation failed. Please retry."
 
-#: templates/javascript.htm:76
+#: templates/javascript.htm:77
 msgid "Search using French terms (e.g. dragon, vierge)..."
 msgstr "Search using French terms (e.g. dragon, vierge)..."
 
-#: templates/javascript.htm:77
+#: templates/javascript.htm:78
 msgid "Searching Biblissima..."
 msgstr "Searching Biblissima..."
 
-#: templates/javascript.htm:78
+#: templates/javascript.htm:79
 msgid "No results. Try French keywords or check the Biblissima portal."
 msgstr "No results. Try French keywords or check the Biblissima portal."
 
-#: templates/javascript.htm:79
+#: templates/javascript.htm:80
 msgid "Biblissima is temporarily unavailable - you can use manual entry."
 msgstr "Biblissima is temporarily unavailable - you can use manual entry."
 
-#: templates/javascript.htm:80
+#: templates/javascript.htm:81
 msgid "Type at least 2 characters..."
 msgstr "Type at least 2 characters..."
 
-#: templates/javascript.htm:81
+#: templates/javascript.htm:82
 msgid "EN: "
 msgstr "EN: "
 
-#: templates/javascript.htm:85
+#: templates/javascript.htm:86
 msgid "Please fill in all fields with a valid email."
 msgstr "Please fill in all fields with a valid email."
 
-#: templates/javascript.htm:86
+#: templates/javascript.htm:87
 msgid "Project submission"
 msgstr "Project submission"
 
-#: templates/javascript.htm:87
+#: templates/javascript.htm:88
 msgid "Access request"
 msgstr "Access request"
 
-#: templates/javascript.htm:88 templates/views/pages/contact.htm:92
+#: templates/javascript.htm:89 templates/views/pages/contact.htm:92
 msgid "Question"
 msgstr "Question"
 
-#: templates/javascript.htm:89 templates/views/pages/contact.htm:103
+#: templates/javascript.htm:90 templates/views/pages/contact.htm:103
 msgid "Message"
 msgstr "Message"
 
-#: templates/javascript.htm:90
+#: templates/javascript.htm:91
 #: templates/views/components/plugins/file-configuration.htm:17
 msgid "Name"
 msgstr "Name"
 
-#: templates/javascript.htm:91
+#: templates/javascript.htm:92
 msgid "Email"
 msgstr "Email"
 
-#: templates/javascript.htm:92 templates/views/pages/contact.htm:88
+#: templates/javascript.htm:93 templates/views/pages/contact.htm:88
 msgid "Reason"
 msgstr "Reason"
 
-#: templates/javascript.htm:93
+#: templates/javascript.htm:94
 msgid "Please enter your name."
 msgstr "Please enter your name."
 
-#: templates/javascript.htm:94
+#: templates/javascript.htm:95
 msgid "Please enter a valid email address."
 msgstr "Please enter a valid email address."
 
-#: templates/javascript.htm:95
+#: templates/javascript.htm:96
 msgid "Please write a message."
 msgstr "Please write a message."
 
-#: templates/javascript.htm:96
+#: templates/javascript.htm:97
 #, python-brace-format
 msgid "{n} characters left"
 msgstr "{n} characters left"
 
-#: templates/javascript.htm:97
+#: templates/javascript.htm:98
 msgid "Copied."
 msgstr "Copied."
 
-#: templates/javascript.htm:98
+#: templates/javascript.htm:99
 msgid "Copy failed — select the text and copy it manually."
 msgstr "Copy failed — select the text and copy it manually."
 
-#: templates/javascript.htm:99 templates/javascript.htm:114
+#: templates/javascript.htm:100 templates/javascript.htm:115
 #: templates/views/pages/graph-explorer.htm:198
 msgid "Fields"
 msgstr "Fields"
 
-#: templates/javascript.htm:100 templates/views/pages/graph-explorer.htm:83
+#: templates/javascript.htm:101 templates/views/pages/graph-explorer.htm:83
 msgid "Relations"
 msgstr "Relations"
 
-#: templates/javascript.htm:101
+#: templates/javascript.htm:102
 msgid "records"
 msgstr "records"
 
-#: templates/javascript.htm:102
+#: templates/javascript.htm:103
 msgid "field groups"
 msgstr "field groups"
 
-#: templates/javascript.htm:103
+#: templates/javascript.htm:104
 msgid "required"
 msgstr "required"
 
-#: templates/javascript.htm:104
+#: templates/javascript.htm:105
 msgid "→ target · ← source"
 msgstr "→ target · ← source"
 
-#: templates/javascript.htm:105
+#: templates/javascript.htm:106
 msgid "No relations"
 msgstr "No relations"
 
-#: templates/javascript.htm:106
+#: templates/javascript.htm:107
 msgid "The chart could not be loaded — reopen this tab to retry."
 msgstr ""
 
-#: templates/javascript.htm:107
+#: templates/javascript.htm:108
 #, python-brace-format
 msgid "data as of {date}"
 msgstr ""
 
-#: templates/javascript.htm:108
+#: templates/javascript.htm:109
 msgid "models"
 msgstr "models"
 
-#: templates/javascript.htm:109
+#: templates/javascript.htm:110
 msgid "relations"
 msgstr "relations"
 
-#: templates/javascript.htm:110
+#: templates/javascript.htm:111
 msgid "fields"
 msgstr "fields"
 
-#: templates/javascript.htm:111
+#: templates/javascript.htm:112
 msgid "datatypes"
 msgstr "datatypes"
 
-#: templates/javascript.htm:112
+#: templates/javascript.htm:113
 msgid "Fields by datatype"
 msgstr "Fields by datatype"
 
-#: templates/javascript.htm:113
+#: templates/javascript.htm:114
 msgid "Datatype (sorted by field count, descending)"
 msgstr "Datatype (sorted by field count, descending)"
 
-#: templates/javascript.htm:115
+#: templates/javascript.htm:116
 #, python-brace-format
 msgid ""
 "Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
@@ -1258,11 +1239,11 @@ msgstr ""
 "Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
 "sources, columns are targets."
 
-#: templates/javascript.htm:116
+#: templates/javascript.htm:117
 msgid "Source model, down; target model, across"
 msgstr "Source model, down; target model, across"
 
-#: templates/javascript.htm:117
+#: templates/javascript.htm:118
 msgid ""
 "Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
 "open the model."
@@ -1270,28 +1251,28 @@ msgstr ""
 "Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
 "open the model."
 
-#: templates/javascript.htm:118
+#: templates/javascript.htm:119
 msgid "same model"
 msgstr "same model"
 
-#: templates/javascript.htm:119
+#: templates/javascript.htm:120
 msgid "no relation"
 msgstr "no relation"
 
-#: templates/javascript.htm:120
+#: templates/javascript.htm:121
 msgid "1 relation"
 msgstr "1 relation"
 
-#: templates/javascript.htm:121
+#: templates/javascript.htm:122
 #, python-brace-format
 msgid "{n} relations"
 msgstr "{n} relations"
 
-#: templates/javascript.htm:122
+#: templates/javascript.htm:123
 msgid "No family selected — turn one back on to see the matrix."
 msgstr "No family selected — turn one back on to see the matrix."
 
-#: templates/javascript.htm:123
+#: templates/javascript.htm:124
 #, python-brace-format
 msgid ""
 "{model} and its {n} directly connected models, joined by {r} typed "
@@ -1302,39 +1283,39 @@ msgstr ""
 "relationships. Each curve is one relationship, labelled with its CIDOC-CRM "
 "property."
 
-#: templates/javascript.htm:124 templates/views/pages/graph-explorer.htm:159
+#: templates/javascript.htm:125 templates/views/pages/graph-explorer.htm:159
 msgid "Select a model to see it with its directly connected models."
 msgstr "Select a model to see it with its directly connected models."
 
-#: templates/javascript.htm:125
+#: templates/javascript.htm:126
 msgid "Circle size = published records"
 msgstr "Circle size = published records"
 
-#: templates/javascript.htm:126
+#: templates/javascript.htm:127
 msgid "Dashed outline = no records published yet"
 msgstr "Dashed outline = no records published yet"
 
-#: templates/javascript.htm:127 templates/views/pages/graph-explorer.htm:113
+#: templates/javascript.htm:128 templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Model"
 
-#: templates/javascript.htm:128
+#: templates/javascript.htm:129
 msgid "Family"
 msgstr "Family"
 
-#: templates/javascript.htm:129
+#: templates/javascript.htm:130
 msgid "Links"
 msgstr "Links"
 
-#: templates/javascript.htm:130
+#: templates/javascript.htm:131
 msgid "Outgoing"
 msgstr "Outgoing"
 
-#: templates/javascript.htm:131
+#: templates/javascript.htm:132
 msgid "Incoming"
 msgstr "Incoming"
 
-#: templates/javascript.htm:132
+#: templates/javascript.htm:133
 #, python-brace-format
 msgid ""
 "Every model with its outgoing and incoming typed relationships. {n} models, "
@@ -1343,42 +1324,42 @@ msgstr ""
 "Every model with its outgoing and incoming typed relationships. {n} models, "
 "{r} relationships."
 
-#: templates/javascript.htm:133
+#: templates/javascript.htm:134
 msgid "Filter fields…"
 msgstr "Filter fields…"
 
-#: templates/javascript.htm:134
+#: templates/javascript.htm:135
 msgid "Relation fields only"
 msgstr "Relation fields only"
 
-#: templates/javascript.htm:135
+#: templates/javascript.htm:136
 msgid "No field matches."
 msgstr "No field matches."
 
-#: templates/javascript.htm:136
+#: templates/javascript.htm:137
 #, python-brace-format
 msgid "{n} of {total}"
 msgstr "{n} of {total}"
 
-#: templates/javascript.htm:137
+#: templates/javascript.htm:138
 msgid "No model matches"
 msgstr "No model matches"
 
-#: templates/javascript.htm:138
+#: templates/javascript.htm:139
 #, python-brace-format
 msgid "{n} records published"
 msgstr "{n} records published"
 
-#: templates/javascript.htm:139
+#: templates/javascript.htm:140
 #, python-brace-format
 msgid "{n} models defined and open for deposit"
 msgstr "{n} models defined and open for deposit"
 
-#: templates/javascript.htm:140
+#: templates/javascript.htm:141
 msgid "No records published yet — model defined and open for deposit."
 msgstr "No records published yet — model defined and open for deposit."
 
-#: templates/javascript.htm:141
+#: templates/javascript.htm:142
 #, python-format, python-brace-format
 msgid ""
 "Every field in ManuSpectrum and every link between models: {fields} fields "
@@ -1389,29 +1370,29 @@ msgstr ""
 "across {models} models, {pct}%% of them bound to a published thesaurus "
 "rather than free text. Click any model to read its schema."
 
-#: templates/javascript.htm:142
+#: templates/javascript.htm:143
 #, python-brace-format
 msgid "of fields draw on a published thesaurus, not free text — {n} of {total}"
 msgstr ""
 "of fields draw on a published thesaurus, not free text — {n} of {total}"
 
-#: templates/javascript.htm:143
+#: templates/javascript.htm:144
 #, python-brace-format
 msgid "typed relationships across {models} interconnected models"
 msgstr "typed relationships across {models} interconnected models"
 
-#: templates/javascript.htm:144
-#, python-brace-format
-msgid ""
-"{nodegroups} field groups · {total} nodes ({data} of them data) · "
-"{properties} ontology properties · {thesauri} thesauri."
-msgstr ""
-"{nodegroups} field groups · {total} nodes ({data} of them data) · "
-"{properties} ontology properties · {thesauri} thesauri."
-
 #: templates/javascript.htm:145
 #, python-brace-format
 msgid ""
+"{nodegroups} field groups · {total} nodes ({data} of them data) · "
+"{properties} ontology properties · {thesauri} thesauri."
+msgstr ""
+"{nodegroups} field groups · {total} nodes ({data} of them data) · "
+"{properties} ontology properties · {thesauri} thesauri."
+
+#: templates/javascript.htm:146
+#, python-brace-format
+msgid ""
 "{models} independent models linked by {relations} typed CIDOC relationships "
 "— so a person recorded once as an analyst is the same record when they "
 "reappear as a manuscript's owner."
@@ -1420,155 +1401,338 @@ msgstr ""
 "— so a person recorded once as an analyst is the same record when they "
 "reappear as a manuscript's owner."
 
-#: templates/javascript.htm:149
+#: templates/javascript.htm:150
 #, python-brace-format
 msgid "No field, class or property matches “{q}”."
 msgstr "No field, class or property matches “{q}”."
 
-#: templates/javascript.htm:150
+#: templates/javascript.htm:151
 #, python-brace-format
 msgid "{n} of {total} fields"
 msgstr "{n} of {total} fields"
 
-#: templates/javascript.htm:151
+#: templates/javascript.htm:152
 #, python-brace-format
 msgid "{n} fields"
 msgstr "{n} fields"
 
-#: templates/javascript.htm:152
-#, fuzzy, python-brace-format
-#| msgid "{n} fields"
-msgid "{n} field"
-msgstr "{n} fields"
-
 #: templates/javascript.htm:153
-#, fuzzy, python-brace-format
-#| msgid "{n} fields · {m} groups"
-msgid "{n} fields · {m} group"
-msgstr "{n} fields · {m} groups"
+#, python-brace-format
+msgid "{n} field"
+msgstr "{n} field"
 
 #: templates/javascript.htm:154
+#, python-brace-format
+msgid "{n} fields · {m} group"
+msgstr "{n} fields · {m} group"
+
+#: templates/javascript.htm:155
 #, python-brace-format
 msgid "{n} fields · {m} groups"
 msgstr "{n} fields · {m} groups"
 
-#: templates/javascript.htm:155
+#: templates/javascript.htm:156
 msgid "Repeatable"
 msgstr "Repeatable"
 
-#: templates/javascript.htm:156
+#: templates/javascript.htm:157
 msgid "Once"
 msgstr "Once"
 
-#: templates/javascript.htm:157
+#: templates/javascript.htm:158
 msgid "Structural node — carries no data"
 msgstr "Structural node — carries no data"
 
-#: templates/javascript.htm:158
+#: templates/javascript.htm:159
 #, python-brace-format
 msgid "Links to {model}"
 msgstr "Links to {model}"
 
-#: templates/javascript.htm:159
+#: templates/javascript.htm:160
 #, python-brace-format
 msgid "View {model} →"
 msgstr "View {model} →"
 
-#: templates/javascript.htm:160
+#: templates/javascript.htm:161
 msgid "From parent"
 msgstr "From parent"
 
-#: templates/javascript.htm:161
+#: templates/javascript.htm:162
 msgid "View structure →"
 msgstr "View structure →"
 
-#: templates/javascript.htm:162
+#: templates/javascript.htm:163
 #, python-brace-format
 msgid "Showing {node} and below"
 msgstr "Showing {node} and below"
 
-#: templates/javascript.htm:163
+#: templates/javascript.htm:164
 #, python-brace-format
 msgid "← {model}"
 msgstr "← {model}"
 
-#: templates/javascript.htm:164
+#: templates/javascript.htm:165
 #, python-brace-format
 msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 msgstr "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 
-#: templates/javascript.htm:165
+#: templates/javascript.htm:166
 msgid "Common properties (P1, P2) are dimmed."
 msgstr "Common properties (P1, P2) are dimmed."
 
-#: templates/javascript.htm:166
+#: templates/javascript.htm:167
 msgid "Ring = field group · double ring = repeatable"
 msgstr "Ring = field group · double ring = repeatable"
 
-#: templates/javascript.htm:167
+#: templates/javascript.htm:168
 msgid "∗ = required"
 msgstr "∗ = required"
 
-#: templates/javascript.htm:168
+#: templates/javascript.htm:169
 msgid "CIDOC-CRM class"
 msgstr "CIDOC-CRM class"
 
-#: templates/javascript.htm:169 templates/javascript.htm:176
+#: templates/javascript.htm:170 templates/javascript.htm:177
 msgid "Path"
 msgstr "Path"
 
-#: templates/javascript.htm:170 templates/javascript.htm:182
+#: templates/javascript.htm:171 templates/javascript.htm:183
 msgid "Cardinality"
 msgstr "Cardinality"
 
-#: templates/javascript.htm:171 templates/javascript.htm:181
+#: templates/javascript.htm:172 templates/javascript.htm:182
 msgid "Required"
 msgstr "Required"
 
-#: templates/javascript.htm:172
+#: templates/javascript.htm:173
 msgid "Optional"
 msgstr "Optional"
 
-#: templates/javascript.htm:173
+#: templates/javascript.htm:174
 msgid "Controlled vocabulary"
 msgstr "Controlled vocabulary"
 
-#: templates/javascript.htm:174
+#: templates/javascript.htm:175
 msgid "See this relationship in the Network view"
 msgstr "See this relationship in the Network view"
 
-#: templates/javascript.htm:175 templates/views/pages/conceptual-model.htm:89
+#: templates/javascript.htm:176 templates/views/pages/conceptual-model.htm:89
 msgid "Field group"
 msgstr "Field group"
 
-#: templates/javascript.htm:177
+#: templates/javascript.htm:178
 msgid "Field"
 msgstr "Field"
 
-#: templates/javascript.htm:178 templates/views/pages/conceptual-model.htm:87
+#: templates/javascript.htm:179 templates/views/pages/conceptual-model.htm:87
 msgid "Datatype"
 msgstr "Datatype"
 
-#: templates/javascript.htm:179
+#: templates/javascript.htm:180
 msgid "CIDOC class"
 msgstr "CIDOC class"
 
-#: templates/javascript.htm:180
+#: templates/javascript.htm:181
 msgid "Property"
 msgstr "Property"
 
-#: templates/javascript.htm:183
+#: templates/javascript.htm:184
 msgid "Target"
 msgstr "Target"
 
-#: templates/javascript.htm:184
+#: templates/javascript.htm:185
 #, python-brace-format
 msgid "Every field of every model: {n} rows across {m} models."
 msgstr "Every field of every model: {n} rows across {m} models."
 
-#: templates/javascript.htm:185
+#: templates/javascript.htm:186
 msgid "Yes"
 msgstr "Yes"
+
+#: templates/javascript.htm:187
+msgid "How to combine them"
+msgstr "How to combine them"
+
+#: templates/javascript.htm:188
+msgid "Delete this configuration?"
+msgstr "Delete this configuration?"
+
+#: templates/javascript.htm:189
+#, python-brace-format
+msgid "“{name}” will be removed for everyone. This cannot be undone."
+msgstr ""
+
+#: templates/javascript.htm:190
+msgid "Protected configuration"
+msgstr "Protected configuration"
+
+#: templates/javascript.htm:191
+msgid "Configuration not saved"
+msgstr "Configuration not saved"
+
+#: templates/javascript.htm:192
+msgid ""
+"The server refused the change. Your edits are still on screen — copy "
+"anything you need before closing the panel."
+msgstr ""
+"The server refused the change. Your edits are still on screen — copy "
+"anything you need before closing the panel."
+
+#: templates/javascript.htm:193
+msgid "Viz"
+msgstr ""
+
+#: templates/javascript.htm:194
+msgid "As measured"
+msgstr ""
+
+#: templates/javascript.htm:195 templates/javascript.htm:217
+msgid "Pseudo-absorbance log10(1/R)"
+msgstr ""
+
+#: templates/javascript.htm:196
+msgid "Kubelka-Munk"
+msgstr ""
+
+#: templates/javascript.htm:197
+msgid "Normalised to maximum"
+msgstr ""
+
+#: templates/javascript.htm:198
+msgid "Normalised to total (TIC)"
+msgstr ""
+
+#: templates/javascript.htm:199
+msgid "First derivative"
+msgstr ""
+
+#: templates/javascript.htm:200
+msgid "Second derivative"
+msgstr ""
+
+#: templates/javascript.htm:201
+msgid "Divided by the white reference"
+msgstr ""
+
+#: templates/javascript.htm:202
+msgid "Smoothed"
+msgstr ""
+
+#: templates/javascript.htm:203
+msgid "Derivative"
+msgstr ""
+
+#: templates/javascript.htm:204
+msgid "Averaged into a single series"
+msgstr "Averaged into a single series"
+
+#: templates/javascript.htm:205
+msgid "window"
+msgstr "window"
+
+#: templates/javascript.htm:206
+msgid ""
+"These files use different configurations — the axes describe only one of "
+"them, and no view is offered."
+msgstr ""
+"These files use different configurations — the axes describe only one of "
+"them, and no view is offered."
+
+#: templates/javascript.htm:207
+msgid "normalised to max"
+msgstr "normalised to max"
+
+#: templates/javascript.htm:208
+msgid "normalised to area"
+msgstr "normalised to area"
+
+#: templates/javascript.htm:209
+msgid "smoothed"
+msgstr "smoothed"
+
+#: templates/javascript.htm:210
+msgid "derivative"
+msgstr "derivative"
+
+#: templates/javascript.htm:211
+#: templates/views/components/plugins/importer-configuration.htm:178
+msgid "Reverse the X axis"
+msgstr ""
+
+#: templates/javascript.htm:212
+msgid ""
+"Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
+"and XPS."
+msgstr ""
+
+#: templates/javascript.htm:213
+#: templates/views/components/plugins/importer-configuration.htm:252
+#: templates/views/pages/conceptual-model.htm:111
+msgid "Transformations"
+msgstr "Transformations"
+
+#: templates/javascript.htm:214
+msgid ""
+"Applied to the plotted spectrum, in order. The file itself is never modified."
+msgstr ""
+
+#: templates/javascript.htm:215
+msgid "Add a transformation"
+msgstr "Add a transformation"
+
+#: templates/javascript.htm:216
+msgid "Reference normalisation (S-D)/(W-D)"
+msgstr ""
+
+#: templates/javascript.htm:218
+msgid "Kubelka-Munk (1-R)^2/2R"
+msgstr ""
+
+#: templates/javascript.htm:219
+msgid "Normalise to maximum"
+msgstr ""
+
+#: templates/javascript.htm:220
+msgid "Normalise to total area (TIC)"
+msgstr ""
+
+#: templates/javascript.htm:221
+msgid "Smoothing (Savitzky-Golay)"
+msgstr ""
+
+#: templates/javascript.htm:222
+msgid "Derivative (Savitzky-Golay)"
+msgstr ""
+
+#: templates/javascript.htm:223
+msgid "Window"
+msgstr ""
+
+#: templates/javascript.htm:224
+msgid "Polynomial order"
+msgstr ""
+
+#: templates/javascript.htm:225
+msgid "Derivative order"
+msgstr ""
+
+#: templates/javascript.htm:226
+msgid ""
+"This transformation needs parameters you choose. It is never applied "
+"automatically."
+msgstr ""
+
+#: templates/javascript.htm:227
+msgid "White reference"
+msgstr ""
+
+#: templates/javascript.htm:228
+msgid "Dark current"
+msgstr ""
+
+#: templates/javascript.htm:229
+msgid "Configuration deduced from the analysis technique"
+msgstr ""
 
 #: templates/ms_base.htm:11 templates/ms_base.htm:28
 msgid ""
@@ -1604,11 +1768,21 @@ msgstr "If you didn't request this, you can safely ignore this email."
 msgid "Password reset — %(site_name)s"
 msgstr "Password reset — %(site_name)s"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:39
+#: templates/views/components/cards/file-renderers/afs-reader.htm:29
+#: templates/views/components/widgets/file-xy.htm:95
+msgid "Processing:"
+msgstr ""
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:31
+#: templates/views/components/widgets/file-xy.htm:97
+msgid "none applied"
+msgstr ""
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:45
 msgid "Config"
 msgstr "Config"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:48
+#: templates/views/components/cards/file-renderers/afs-reader.htm:54
 msgid "Chart Configuration"
 msgstr "Chart Configuration"
 
@@ -1625,30 +1799,42 @@ msgstr ""
 "per-file adjustments, use the Status tab."
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:27
-msgid "XY file(s) staged"
-msgstr "XY file(s) staged"
+msgid "XY file(s) selected"
+msgstr "XY file(s) selected"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:43
+#: templates/views/components/cards/file-renderers/xy-reader.htm:46
+#: templates/views/components/cards/file-renderers/xy-reader.htm:154
+msgid ""
+"Deduced from the analysis technique. Change it here if the technique is "
+"wrong."
+msgstr ""
+
+#: templates/views/components/cards/file-renderers/xy-reader.htm:47
+#: templates/views/components/cards/file-renderers/xy-reader.htm:155
+msgid "auto"
+msgstr ""
+
+#: templates/views/components/cards/file-renderers/xy-reader.htm:51
 msgid "No config"
 msgstr "No config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:68
+#: templates/views/components/cards/file-renderers/xy-reader.htm:78
 msgid "Apply to"
 msgstr "Apply to"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:68
-msgid "staged file(s)"
-msgstr "staged file(s)"
+#: templates/views/components/cards/file-renderers/xy-reader.htm:78
+msgid "selected file(s)"
+msgstr "selected file(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:72
+#: templates/views/components/cards/file-renderers/xy-reader.htm:82
 msgid "Applying..."
 msgstr "Applying..."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:94
+#: templates/views/components/cards/file-renderers/xy-reader.htm:104
 msgid "Files Status"
 msgstr "Files Status"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:99
+#: templates/views/components/cards/file-renderers/xy-reader.htm:109
 msgid ""
 "Check which files have a configuration applied. Select file(s) to customize "
 "parsing settings individually, overriding the shared config."
@@ -1656,45 +1842,45 @@ msgstr ""
 "Check which files have a configuration applied. Select file(s) to customize "
 "parsing settings individually, overriding the shared config."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:104
+#: templates/views/components/cards/file-renderers/xy-reader.htm:114
 msgid "No XY files found. Assign the XY renderer to files in the Manage tab."
 msgstr "No XY files found. Assign the XY renderer to files in the Manage tab."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:111
+#: templates/views/components/cards/file-renderers/xy-reader.htm:121
 msgid "file(s)"
 msgstr "file(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:113
+#: templates/views/components/cards/file-renderers/xy-reader.htm:123
 #: templates/views/components/plugins/file-configuration.htm:54
 msgid "selected"
 msgstr "selected"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:117
+#: templates/views/components/cards/file-renderers/xy-reader.htm:127
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:89
 msgid "All"
 msgstr "All"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:118
+#: templates/views/components/cards/file-renderers/xy-reader.htm:128
 msgid "None"
 msgstr "None"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:135
+#: templates/views/components/cards/file-renderers/xy-reader.htm:144
 msgid "Has custom parsing"
 msgstr "Has custom parsing"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:141
+#: templates/views/components/cards/file-renderers/xy-reader.htm:159
 msgid "none"
 msgstr "none"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:153
+#: templates/views/components/cards/file-renderers/xy-reader.htm:173
 msgid "Adjust parsing for"
 msgstr "Adjust parsing for"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:164
+#: templates/views/components/cards/file-renderers/xy-reader.htm:184
 msgid "Custom parsing:"
 msgstr "Custom parsing:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:168
+#: templates/views/components/cards/file-renderers/xy-reader.htm:188
 msgid ""
 "These settings override the shared config for the selected file(s) only. "
 "Choose 'Use config' to keep the shared config value."
@@ -1702,77 +1888,145 @@ msgstr ""
 "These settings override the shared config for the selected file(s) only. "
 "Choose 'Use config' to keep the shared config value."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:172
+#: templates/views/components/cards/file-renderers/xy-reader.htm:192
 msgid "Delimiter"
 msgstr "Delimiter"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:174
-#: templates/views/components/cards/file-renderers/xy-reader.htm:186
-#: templates/views/components/cards/file-renderers/xy-reader.htm:196
+#: templates/views/components/cards/file-renderers/xy-reader.htm:194
+#: templates/views/components/cards/file-renderers/xy-reader.htm:206
+#: templates/views/components/cards/file-renderers/xy-reader.htm:216
 msgid "Use config"
 msgstr "Use config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:175
-#: templates/views/components/cards/file-renderers/xy-reader.htm:187
-#: templates/views/components/plugins/importer-configuration.htm:33
-#: templates/views/components/plugins/importer-configuration.htm:97
+#: templates/views/components/cards/file-renderers/xy-reader.htm:195
+#: templates/views/components/cards/file-renderers/xy-reader.htm:207
+#: templates/views/components/plugins/importer-configuration.htm:84
+#: templates/views/components/plugins/importer-configuration.htm:104
 msgid "Auto-detect"
 msgstr "Auto-detect"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:176
-#: templates/views/components/plugins/importer-configuration.htm:99
+#: templates/views/components/cards/file-renderers/xy-reader.htm:196
+#: templates/views/components/plugins/importer-configuration.htm:105
 msgid "Comma"
 msgstr "Comma"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:177
+#: templates/views/components/cards/file-renderers/xy-reader.htm:197
 msgid "Tab"
 msgstr "Tab"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:178
+#: templates/views/components/cards/file-renderers/xy-reader.htm:198
 msgid "Other:"
 msgstr "Other:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:180
+#: templates/views/components/cards/file-renderers/xy-reader.htm:200
 msgid "Custom delimiter"
 msgstr "Custom delimiter"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:184
-#: templates/views/components/plugins/importer-configuration.htm:30
+#: templates/views/components/cards/file-renderers/xy-reader.htm:204
+#: templates/views/components/plugins/importer-configuration.htm:81
 msgid "Header"
 msgstr "Header"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:188
+#: templates/views/components/cards/file-renderers/xy-reader.htm:208
 msgid "Fixed lines:"
 msgstr "Fixed lines:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:190
+#: templates/views/components/cards/file-renderers/xy-reader.htm:210
 msgid "Number of lines"
 msgstr "Number of lines"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:194
-#: templates/views/components/plugins/importer-configuration.htm:41
+#: templates/views/components/cards/file-renderers/xy-reader.htm:214
+#: templates/views/components/plugins/importer-configuration.htm:92
 msgid "Footer"
 msgstr "Footer"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:197
+#: templates/views/components/cards/file-renderers/xy-reader.htm:217
 msgid "End of file"
 msgstr "End of file"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:198
+#: templates/views/components/cards/file-renderers/xy-reader.htm:218
 msgid "After text:"
 msgstr "After text:"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:200
+#: templates/views/components/cards/file-renderers/xy-reader.htm:220
 msgid "Footer text"
 msgstr "Footer text"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:205
+#: templates/views/components/cards/file-renderers/xy-reader.htm:225
 msgid "Reset to config"
 msgstr "Reset to config"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:209
+#: templates/views/components/cards/file-renderers/xy-reader.htm:229
 msgid "Apply & re-render"
 msgstr "Apply & re-render"
+
+#: templates/views/components/functions/xy-technique-config.htm:5
+msgid "Automatic XY viewer configuration"
+msgstr "Automatic XY viewer configuration"
+
+#: templates/views/components/functions/xy-technique-config.htm:7
+msgid ""
+"When an analysis records its technique, measurement\n"
+"            files uploaded to it receive a matching viewer configuration —\n"
+"            axis labels, units and axis direction. FTIR spectra, for "
+"instance,\n"
+"            are plotted on the conventional reversed wavenumber axis."
+msgstr ""
+
+#: templates/views/components/functions/xy-technique-config.htm:13
+msgid "A configuration chosen by hand is never modified."
+msgstr ""
+
+#: templates/views/components/functions/xy-technique-config.htm:14
+msgid ""
+"The mapping only fills files that have no\n"
+"            configuration yet. If an analysis records several techniques "
+"that\n"
+"            disagree, nothing is applied."
+msgstr ""
+
+#: templates/views/components/functions/xy-technique-config.htm:19
+msgid ""
+"The technique-to-preset table is maintained in\n"
+"            manuspectrum/constants/xy_presets.py."
+msgstr ""
+
+#: templates/views/components/functions/xy-technique-config.htm:26
+msgid "Triggered by"
+msgstr ""
+
+#: templates/views/components/ms-file-workbench.htm:20
+msgid "Additional metadata"
+msgstr "Additional metadata"
+
+#: templates/views/components/ms-file-workbench.htm:23
+#: templates/views/components/ms-file-workbench.htm:26
+msgid "Title"
+msgstr "Title"
+
+#: templates/views/components/ms-file-workbench.htm:31
+#: templates/views/components/ms-file-workbench.htm:37
+msgid "Alternative text"
+msgstr "Alternative text"
+
+#: templates/views/components/ms-file-workbench.htm:33
+msgid ""
+"Concise statement that assistive technology can pronounce to convey the "
+"meaning of the file"
+msgstr ""
+"Concise statement that assistive technology can pronounce to convey the "
+"meaning of the file"
+
+#: templates/views/components/ms-file-workbench.htm:41
+#: templates/views/components/ms-file-workbench.htm:44
+msgid "Attribution"
+msgstr "Attribution"
+
+#: templates/views/components/ms-file-workbench.htm:48
+#: templates/views/components/ms-file-workbench.htm:51
+#: templates/views/components/widgets/manifest-widget.htm:133
+msgid "Description"
+msgstr "Description"
 
 #: templates/views/components/plugins/file-configuration.htm:5
 msgid ""
@@ -1838,209 +2092,181 @@ msgstr "Importer Configurations"
 msgid "Define how to import your x/y data"
 msgstr "Define how to import your x/y data"
 
+#: templates/views/components/plugins/importer-configuration.htm:8
+msgid "Filter configurations..."
+msgstr "Filter configurations..."
+
 #: templates/views/components/plugins/importer-configuration.htm:11
+msgid "Clear the filter"
+msgstr "Clear the filter"
+
+#: templates/views/components/plugins/importer-configuration.htm:46
 msgid "Edit"
 msgstr "Edit"
 
-#: templates/views/components/plugins/importer-configuration.htm:12
+#: templates/views/components/plugins/importer-configuration.htm:49
+#: templates/views/components/plugins/importer-configuration.htm:51
+msgid ""
+"Part of the shared baseline: cannot be deleted, and only an administrator "
+"can edit it."
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:58
 msgid "Delete"
 msgstr "Delete"
 
-#: templates/views/components/plugins/importer-configuration.htm:17
-#: templates/views/components/plugins/importer-configuration.htm:21
+#: templates/views/components/plugins/importer-configuration.htm:64
+msgid "No configuration matches this filter."
+msgstr "No configuration matches this filter."
+
+#: templates/views/components/plugins/importer-configuration.htm:68
+#: templates/views/components/plugins/importer-configuration.htm:72
 msgid "Add Importer Configuration"
 msgstr "Add Importer Configuration"
 
-#: templates/views/components/plugins/importer-configuration.htm:24
+#: templates/views/components/plugins/importer-configuration.htm:75
 msgid "Importer Name"
 msgstr "Importer Name"
 
-#: templates/views/components/plugins/importer-configuration.htm:25
+#: templates/views/components/plugins/importer-configuration.htm:76
 msgid "Name of Importer"
 msgstr "Name of Importer"
 
-#: templates/views/components/plugins/importer-configuration.htm:26
+#: templates/views/components/plugins/importer-configuration.htm:77
 msgid "Importer Description"
 msgstr "Importer Description"
 
-#: templates/views/components/plugins/importer-configuration.htm:27
+#: templates/views/components/plugins/importer-configuration.htm:78
 msgid "Describe the Importer"
 msgstr "Describe the Importer"
 
-#: templates/views/components/plugins/importer-configuration.htm:31
+#: templates/views/components/plugins/importer-configuration.htm:82
 msgid "Define where your x/y data are found in the file"
 msgstr "Define where your x/y data are found in the file"
 
-#: templates/views/components/plugins/importer-configuration.htm:34
+#: templates/views/components/plugins/importer-configuration.htm:85
 msgid "File has a fixed header (constant number of lines)"
 msgstr "File has a fixed header (constant number of lines)"
 
-#: templates/views/components/plugins/importer-configuration.htm:35
+#: templates/views/components/plugins/importer-configuration.htm:86
 msgid "File header ends after specific text"
 msgstr "File header ends after specific text"
 
-#: templates/views/components/plugins/importer-configuration.htm:37
-#: templates/views/components/plugins/importer-configuration.htm:47
+#: templates/views/components/plugins/importer-configuration.htm:88
+#: templates/views/components/plugins/importer-configuration.htm:98
 msgid "Ending Text"
 msgstr "Ending Text"
 
-#: templates/views/components/plugins/importer-configuration.htm:38
+#: templates/views/components/plugins/importer-configuration.htm:89
 msgid "Number of Lines"
 msgstr "Number of Lines"
 
-#: templates/views/components/plugins/importer-configuration.htm:42
+#: templates/views/components/plugins/importer-configuration.htm:93
 msgid "Define where your x/y data end in the file"
 msgstr "Define where your x/y data end in the file"
 
-#: templates/views/components/plugins/importer-configuration.htm:44
+#: templates/views/components/plugins/importer-configuration.htm:95
 msgid "End of File"
 msgstr "End of File"
 
-#: templates/views/components/plugins/importer-configuration.htm:45
+#: templates/views/components/plugins/importer-configuration.htm:96
 msgid "File footer begins after specific text (consistent ending text)"
 msgstr "File footer begins after specific text (consistent ending text)"
 
-#: templates/views/components/plugins/importer-configuration.htm:50
-msgid "X Axis Source"
-msgstr "X Axis Source"
+#: templates/views/components/plugins/importer-configuration.htm:101
+msgid "Data Delimiter"
+msgstr "Data Delimiter"
 
-#: templates/views/components/plugins/importer-configuration.htm:51
-msgid "Define how the X axis values are determined"
-msgstr "Define how the X axis values are determined"
-
-#: templates/views/components/plugins/importer-configuration.htm:53
-msgid "From data (first column is X)"
-msgstr "From data (first column is X)"
-
-#: templates/views/components/plugins/importer-configuration.htm:54
-msgid "Generate from range (no X column in file)"
-msgstr "Generate from range (no X column in file)"
-
-#: templates/views/components/plugins/importer-configuration.htm:57
+#: templates/views/components/plugins/importer-configuration.htm:102
 msgid ""
-"The X axis will be evenly spaced between start and end values, based on the "
-"number of data rows."
+"What separates the columns. Auto-detect handles most instrument exports."
 msgstr ""
-"The X axis will be evenly spaced between start and end values, based on the "
-"number of data rows."
+"What separates the columns. Auto-detect handles most instrument exports."
 
-#: templates/views/components/plugins/importer-configuration.htm:60
-msgid "Start"
-msgstr "Start"
-
-#: templates/views/components/plugins/importer-configuration.htm:61
-msgid "e.g. -3500"
-msgstr "e.g. -3500"
-
-#: templates/views/components/plugins/importer-configuration.htm:65
-msgid "End"
-msgstr "End"
-
-#: templates/views/components/plugins/importer-configuration.htm:66
-msgid "e.g. 500"
-msgstr "e.g. 500"
-
-#: templates/views/components/plugins/importer-configuration.htm:73
-#: templates/views/pages/conceptual-model.htm:111
-msgid "Transformations"
-msgstr "Transformations"
-
-#: templates/views/components/plugins/importer-configuration.htm:74
-#, fuzzy
-#| msgid ""
-#| "If your file has multiple Y columns, they are displayed as separate "
-#| "series. Use \\"
-msgid ""
-"If your file has multiple Y columns, they are displayed as separate series. "
-"Use “mean” to average them into a single series instead."
-msgstr ""
-"If your file has multiple Y columns, they are displayed as separate series. "
-"Use \\"
-
-#: templates/views/components/plugins/importer-configuration.htm:93
-msgid "Data Column Delimiter"
-msgstr "Data Column Delimiter"
-
-#: templates/views/components/plugins/importer-configuration.htm:94
-msgid "The data delimiter must be a valid regular expression"
-msgstr "The data delimiter must be a valid regular expression"
-
-#: templates/views/components/plugins/importer-configuration.htm:95
-msgid "Define how the data are separated"
-msgstr "Define how the data are separated"
-
-#: templates/views/components/plugins/importer-configuration.htm:98
-msgid "Whitespace"
-msgstr "Whitespace"
-
-#: templates/views/components/plugins/importer-configuration.htm:100
+#: templates/views/components/plugins/importer-configuration.htm:106
 msgid "Pipe"
 msgstr "Pipe"
 
-#: templates/views/components/plugins/importer-configuration.htm:101
+#: templates/views/components/plugins/importer-configuration.htm:107
 #: templates/views/pages/contact.htm:93
 msgid "Other"
 msgstr "Other"
 
-#: templates/views/components/plugins/importer-configuration.htm:106
-msgid "Include Delimiter in Value"
-msgstr "Include Delimiter in Value"
+#: templates/views/components/plugins/importer-configuration.htm:111
+msgid "A single character"
+msgstr "A single character"
 
-#: templates/views/components/plugins/importer-configuration.htm:110
-msgid "Display/Charting"
-msgstr "Display/Charting"
+#: templates/views/components/plugins/importer-configuration.htm:116
+msgid "This delimiter cannot be used. Correct it to save the configuration."
+msgstr "This delimiter cannot be used. Correct it to save the configuration."
 
-#: templates/views/components/plugins/importer-configuration.htm:112
+#: templates/views/components/plugins/importer-configuration.htm:120
+msgid "X Axis Source"
+msgstr "X Axis Source"
+
+#: templates/views/components/plugins/importer-configuration.htm:121
+msgid "Define how the X axis values are determined"
+msgstr "Define how the X axis values are determined"
+
+#: templates/views/components/plugins/importer-configuration.htm:123
+msgid "From data (first column is X)"
+msgstr "From data (first column is X)"
+
+#: templates/views/components/plugins/importer-configuration.htm:124
+msgid "Intensities only (no X column in file)"
+msgstr "Intensities only (no X column in file)"
+
+#: templates/views/components/plugins/importer-configuration.htm:127
+msgid ""
+"Rows are plotted against their position — 1, 2, 3 … — and the X axis is "
+"labelled Point. Turning channels into a physical quantity needs the "
+"instrument's calibration, which the file conversion supplies."
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:132
 msgid "Chart Title"
 msgstr "Chart Title"
 
-#: templates/views/components/plugins/importer-configuration.htm:113
-msgid "Title"
-msgstr "Title"
+#: templates/views/components/plugins/importer-configuration.htm:134
+msgid "Title shown above the chart"
+msgstr "Title shown above the chart"
 
-#: templates/views/components/plugins/importer-configuration.htm:115
+#: templates/views/components/plugins/importer-configuration.htm:141
 msgid "X Axis Label"
 msgstr "X Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:126
-#: templates/views/components/plugins/importer-configuration.htm:144
-#: templates/views/components/plugins/importer-configuration.htm:224
-msgid "Presets..."
-msgstr "Presets..."
+#: templates/views/components/plugins/importer-configuration.htm:143
+msgid ""
+"Not used here: a file with no X column is plotted against row position, and "
+"the axis is labelled Point."
+msgstr ""
+"Not used here: a file with no X column is plotted against row position, and "
+"the axis is labelled Point."
 
-#: templates/views/components/plugins/importer-configuration.htm:133
+#: templates/views/components/plugins/importer-configuration.htm:152
 msgid "Y Axis Label"
 msgstr "Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:157
-msgid "Spectral Range"
-msgstr "Spectral Range"
-
-#: templates/views/components/plugins/importer-configuration.htm:160
-msgid "Limit the displayed X range. Leave empty for no limit."
-msgstr "Limit the displayed X range. Leave empty for no limit."
-
 #: templates/views/components/plugins/importer-configuration.htm:163
-msgid "Min X"
-msgstr "Min X"
+#: templates/views/components/plugins/importer-configuration.htm:238
+msgid "Presets..."
+msgstr "Presets..."
 
-#: templates/views/components/plugins/importer-configuration.htm:164
-msgid "e.g. 400"
-msgstr "e.g. 400"
+#: templates/views/components/plugins/importer-configuration.htm:175
+msgid "X Axis Direction"
+msgstr "X Axis Direction"
 
-#: templates/views/components/plugins/importer-configuration.htm:168
-msgid "Max X"
-msgstr "Max X"
+#: templates/views/components/plugins/importer-configuration.htm:180
+msgid ""
+"Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR "
+"and XPS."
+msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:169
-msgid "e.g. 4000"
-msgstr "e.g. 4000"
-
-#: templates/views/components/plugins/importer-configuration.htm:181
+#: templates/views/components/plugins/importer-configuration.htm:192
 msgid "Column Assignment"
 msgstr "Column Assignment"
 
-#: templates/views/components/plugins/importer-configuration.htm:184
+#: templates/views/components/plugins/importer-configuration.htm:196
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2048,28 +2274,51 @@ msgstr ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
 
-#: templates/views/components/plugins/importer-configuration.htm:189
+#: templates/views/components/plugins/importer-configuration.htm:202
 msgid "Column"
 msgstr "Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:207
+#: templates/views/components/plugins/importer-configuration.htm:220
 msgid "Add Column"
 msgstr "Add Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:213
+#: templates/views/components/plugins/importer-configuration.htm:226
 msgid "Right Y Axis Label"
 msgstr "Right Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:215
+#: templates/views/components/plugins/importer-configuration.htm:229
 msgid "Right Y Axis"
 msgstr "Right Y Axis"
 
-#: templates/views/components/plugins/importer-configuration.htm:237
+#: templates/views/components/plugins/importer-configuration.htm:253
+msgid ""
+"How the columns are combined into the quantity the Y axis names. The stored "
+"file is never modified."
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:258
+msgid "Plot each Y column as its own series"
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:263
+msgid "Average them into a single series"
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:269
+msgid "Divide by the reference column — R = (S−D)/(W−D)"
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:272
+msgid ""
+"Tag a column as “White reference” under Column Assignment to enable this."
+msgstr ""
+
+#: templates/views/components/plugins/importer-configuration.htm:278
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Cancel"
 
-#: templates/views/components/plugins/importer-configuration.htm:238
+#: templates/views/components/plugins/importer-configuration.htm:279
 msgid "Save"
 msgstr "Save"
 
@@ -2136,7 +2385,7 @@ msgid "Label"
 msgstr "Label"
 
 #: templates/views/components/widgets/biblissima-concept-widget.htm:31
-#: views/model_graph_service.py:114
+#: views/model_graph_service.py:115
 msgid "URL"
 msgstr "URL"
 
@@ -2203,15 +2452,19 @@ msgstr "Select all"
 msgid "Deselect all"
 msgstr "Deselect all"
 
-#: templates/views/components/widgets/file-xy.htm:49
+#: templates/views/components/widgets/file-xy.htm:48
+msgid "View:"
+msgstr "View:"
+
+#: templates/views/components/widgets/file-xy.htm:61
 msgid "Loading charts..."
 msgstr "Loading charts..."
 
-#: templates/views/components/widgets/file-xy.htm:57
+#: templates/views/components/widgets/file-xy.htm:69
 msgid "Unable to load chart data"
 msgstr "Unable to load chart data"
 
-#: templates/views/components/widgets/file-xy.htm:65
+#: templates/views/components/widgets/file-xy.htm:77
 msgid "Select files to display"
 msgstr "Select files to display"
 
@@ -2257,10 +2510,6 @@ msgstr "Return"
 #: templates/views/components/widgets/manifest-widget.htm:129
 msgid "Manifest title"
 msgstr "Manifest title"
-
-#: templates/views/components/widgets/manifest-widget.htm:133
-msgid "Description"
-msgstr "Description"
 
 #: templates/views/components/widgets/manifest-widget.htm:136
 msgid "Manifest description"
@@ -2779,18 +3028,12 @@ msgstr "Open project"
 
 #: templates/views/pages/conceptual-model.htm:5
 #: templates/views/pages/conceptual-model.htm:7
-#, fuzzy
-#| msgid ""
-#| "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci "
-#| "description of written cultural heritage, the analyses applied to it and "
-#| "the knowledge inferred from them."
 msgid ""
 "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
 "of written heritage, its analyses and the knowledge inferred from them."
 msgstr ""
 "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
-"of written cultural heritage, the analyses applied to it and the knowledge "
-"inferred from them."
+"of written heritage, its analyses and the knowledge inferred from them."
 
 #: templates/views/pages/conceptual-model.htm:14
 #: templates/views/pages/contact.htm:14
@@ -2880,10 +3123,8 @@ msgid ""
 msgstr ""
 
 #: templates/views/pages/conceptual-model.htm:85
-#, fuzzy
-#| msgid "AGORHA thesaurus"
 msgid "Thesaurus"
-msgstr "AGORHA thesaurus"
+msgstr "Thesaurus"
 
 #: templates/views/pages/conceptual-model.htm:86
 msgid ""
@@ -3105,12 +3346,6 @@ msgid "Submit a project or reach the team"
 msgstr "Submit a project or reach the team"
 
 #: templates/views/pages/contact.htm:35
-#, fuzzy
-#| msgid ""
-#| "Reading and downloading published data needs no account. If you want to "
-#| "<em>deposit</em> analysis data, tell us about your project — ManuSpectrum "
-#| "hosts data from partner laboratories and we open accounts case by case, "
-#| "usually within a week."
 msgid ""
 "Reading and downloading published data needs no account. If you want to "
 "<em>deposit</em> analysis data, tell us about your project — ManuSpectrum "
@@ -3119,8 +3354,8 @@ msgid ""
 msgstr ""
 "Reading and downloading published data needs no account. If you want to "
 "<em>deposit</em> analysis data, tell us about your project — ManuSpectrum "
-"hosts data from partner laboratories and we open accounts case by case, "
-"usually within a week."
+"hosts data from partner conservation and heritage science laboratories and "
+"we open accounts case by case, usually within a week."
 
 #: templates/views/pages/contact.htm:47
 msgid "Get in touch"
@@ -3247,10 +3482,8 @@ msgid ""
 msgstr ""
 
 #: templates/views/pages/graph-explorer.htm:68
-#, fuzzy
-#| msgid "Twelve models, four families"
 msgid "The four model families"
-msgstr "Twelve models, four families"
+msgstr "The four model families"
 
 #: templates/views/pages/graph-explorer.htm:69
 msgid ""
@@ -3415,22 +3648,14 @@ msgid "Research engineer, head of the Images service"
 msgstr "Research engineer, head of the Images service"
 
 #: templates/views/pages/team.htm:26 templates/views/pages/team.htm:144
-#, fuzzy
-#| msgid "Study engineer / web developer"
 msgid "Engineer / web developer"
-msgstr "Study engineer / web developer"
+msgstr "Engineer / web developer"
 
 #: templates/views/pages/team.htm:37
 msgid "The project & the people"
 msgstr "The project & the people"
 
 #: templates/views/pages/team.htm:49
-#, fuzzy
-#| msgid ""
-#| "ManuSpectrum archives, standardises and makes searchable the "
-#| "physicochemical analysis of written cultural heritage — manuscripts, "
-#| "printed books, inscriptions and more — so that reliable, interoperable "
-#| "data can be reused by people who did not run the measurements."
 msgid ""
 "ManuSpectrum archives, standardises and makes searchable the physicochemical "
 "analysis of written cultural heritage — manuscripts, printed books, "
@@ -3440,8 +3665,9 @@ msgid ""
 msgstr ""
 "ManuSpectrum archives, standardises and makes searchable the physicochemical "
 "analysis of written cultural heritage — manuscripts, printed books, "
-"inscriptions and more — so that reliable, interoperable data can be reused "
-"by people who did not run the measurements."
+"inscriptions and more — so that reliable, interoperable FAIR data can be "
+"reused by the heritage science community, far beyond those who ran the "
+"measurements."
 
 #: templates/views/pages/team.htm:57
 msgid ""
@@ -3616,92 +3842,177 @@ msgstr "Invalid response from the Biblissima portal."
 msgid "Unknown error while querying Biblissima."
 msgstr "Unknown error while querying Biblissima."
 
-#: views/model_graph_service.py:102
+#: views/model_graph_service.py:103
 msgid "String"
 msgstr ""
 
-#: views/model_graph_service.py:103
-#, fuzzy
-#| msgid "Conceptual Model"
-msgid "Concept"
-msgstr "Conceptual Model"
-
 #: views/model_graph_service.py:104
+msgid "Concept"
+msgstr "Concept"
+
+#: views/model_graph_service.py:105
 msgid "Concept List"
 msgstr ""
 
-#: views/model_graph_service.py:105
-#, fuzzy
-#| msgid "Resources"
-msgid "Resource Instance"
-msgstr "Resources"
-
 #: views/model_graph_service.py:106
+msgid "Resource Instance"
+msgstr "Resource Instance"
+
+#: views/model_graph_service.py:107
 msgid "Resource Instance List"
 msgstr ""
 
-#: views/model_graph_service.py:107
+#: views/model_graph_service.py:108
 msgid "Number"
 msgstr ""
 
-#: views/model_graph_service.py:108
+#: views/model_graph_service.py:109
 msgid "Date"
 msgstr ""
 
-#: views/model_graph_service.py:109
+#: views/model_graph_service.py:110
 msgid "Boolean"
 msgstr ""
 
-#: views/model_graph_service.py:110
+#: views/model_graph_service.py:111
 msgid "Domain Value"
 msgstr ""
 
-#: views/model_graph_service.py:111
+#: views/model_graph_service.py:112
 msgid "Domain Value List"
 msgstr ""
 
-#: views/model_graph_service.py:112
+#: views/model_graph_service.py:113
 msgid "GeoJSON Feature Collection"
 msgstr ""
 
-#: views/model_graph_service.py:113
-#, fuzzy
-#| msgid "Files"
+#: views/model_graph_service.py:114
 msgid "File List"
-msgstr "Files"
+msgstr "File List"
 
-#: views/model_graph_service.py:115
+#: views/model_graph_service.py:116
 msgid "Node Value"
 msgstr ""
 
-#: views/model_graph_service.py:116
-#, fuzzy
-#| msgid "IIIF Annotations"
-msgid "Annotation"
-msgstr "IIIF Annotations"
-
 #: views/model_graph_service.py:117
+msgid "Annotation"
+msgstr "Annotation"
+
+#: views/model_graph_service.py:118
 msgid "EDTF"
 msgstr ""
 
-#: views/model_graph_service.py:118
+#: views/model_graph_service.py:119
 msgid "Non-localized String"
 msgstr ""
 
-#: views/model_graph_service.py:119
+#: views/model_graph_service.py:120
 msgid "Reference"
 msgstr ""
 
-#: views/model_graph_service.py:120
-#, fuzzy
-#| msgid "IIIF manifest"
+#: views/model_graph_service.py:122
 msgid "IIIF Manifest"
-msgstr "IIIF manifest"
+msgstr "IIIF Manifest"
 
-#: views/renderer_config.py:38
+#: views/renderer_config.py:49
 msgid "<h1>Renderers do not exist</h1>"
 msgstr "<h1>Renderers do not exist</h1>"
 
-#: views/renderer_config.py:53
+#: views/renderer_config.py:104
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>Renderers config does not exist</h1>"
+
+#: views/renderer_config.py:129
+msgid ""
+"This configuration is part of the shared baseline and can only be edited by "
+"an administrator. Duplicate it to make your own."
+msgstr ""
+
+#: views/renderer_config.py:172
+msgid ""
+"This configuration is part of the shared baseline and cannot be deleted."
+msgstr ""
+
+#~ msgid ""
+#~ "The X axis will be evenly spaced between start and end values, based on "
+#~ "the number of data rows."
+#~ msgstr ""
+#~ "The X axis will be evenly spaced between start and end values, based on "
+#~ "the number of data rows."
+
+#~ msgid "Start"
+#~ msgstr "Start"
+
+#~ msgid "e.g. -3500"
+#~ msgstr "e.g. -3500"
+
+#~ msgid "End"
+#~ msgstr "End"
+
+#~ msgid "e.g. 500"
+#~ msgstr "e.g. 500"
+
+#~ msgid "Data Column Delimiter"
+#~ msgstr "Data Column Delimiter"
+
+#~ msgid "The data delimiter must be a valid regular expression"
+#~ msgstr "The data delimiter must be a valid regular expression"
+
+#~ msgid "Define how the data are separated"
+#~ msgstr "Define how the data are separated"
+
+#~ msgid "Whitespace"
+#~ msgstr "Whitespace"
+
+#~ msgid "Include Delimiter in Value"
+#~ msgstr "Include Delimiter in Value"
+
+#~ msgid "Display/Charting"
+#~ msgstr "Display/Charting"
+
+#~ msgid "Spectral Range"
+#~ msgstr "Spectral Range"
+
+#, fuzzy
+#~| msgid "Limit the displayed X range. Leave empty for no limit."
+#~ msgid ""
+#~ "Limit the displayed X range. Leave empty to show the whole acquired range."
+#~ msgstr "Limit the displayed X range. Leave empty for no limit."
+
+#~ msgid "Min X"
+#~ msgstr "Min X"
+
+#~ msgid "Max X"
+#~ msgstr "Max X"
+
+#~ msgid "e.g. 400"
+#~ msgstr "e.g. 400"
+
+#~ msgid "e.g. 4000"
+#~ msgstr "e.g. 4000"
+
+#, fuzzy
+#~| msgid ""
+#~| "If your file has multiple Y columns, they are displayed as separate "
+#~| "series. Use \\"
+#~ msgid ""
+#~ "If your file has multiple Y columns, they are displayed as separate "
+#~ "series. Use “mean” to average them into a single series instead."
+#~ msgstr ""
+#~ "If your file has multiple Y columns, they are displayed as separate "
+#~ "series. Use \\"
+
+#, fuzzy
+#~| msgid "Remove all"
+#~ msgid "Remove"
+#~ msgstr "Remove all"
+
+#, fuzzy
+#~| msgid "e.g. 500"
+#~ msgid "e.g. 9"
+#~ msgstr "e.g. 500"
+
+#, fuzzy
+#~| msgid "e.g. 500"
+#~ msgid "e.g. 2"
+#~ msgstr "e.g. 500"

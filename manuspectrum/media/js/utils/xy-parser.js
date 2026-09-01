@@ -245,13 +245,17 @@ const parse = (text, config) => {
             return { x: [], y: [] };
         }
 
+        // The generated axis is the position of the row in the file, and nothing
+        // else. Not the detector's channel number: MCAs number channels from
+        // zero, but the file never says how its instrument numbered them, so
+        // claiming it would be the same unbacked assertion as fabricating a
+        // physical abscissa — which this used to do, putting Fe Ka at 5.68 keV
+        // on an MCA export, between chromium and manganese.
+        //
+        // Hence one-based, like every other way of counting rows, and like the
+        // axis label "Point" already implies.
         const n = dataRows.length;
-        const xStart = parseFloat(config.xGenerateStart ?? 0);
-        const xEnd = parseFloat(config.xGenerateEnd ?? n - 1);
-        const genX = [];
-        for (let i = 0; i < n; i++) {
-            genX.push(n > 1 ? xStart + (i * (xEnd - xStart)) / (n - 1) : xStart);
-        }
+        const genX = Array.from({ length: n }, (_, i) => i + 1);
 
         const colCount = dataRows[0].length;
         const transform = config?.transformation ?? 'basic';
@@ -364,29 +368,8 @@ const parse = (text, config) => {
     return parsedData;
 };
 
-/**
- * Filters parallel X/Y arrays to only include points where X is within [min, max].
- * Both min and max are optional (undefined = no bound).
- */
-const filterXRange = (xArr, yArr, xMin, xMax) => {
-    if (xMin === undefined && xMax === undefined) return { x: xArr, y: yArr };
-    const x = [];
-    const y = [];
-    for (let i = 0; i < xArr.length; i++) {
-        if (
-            (xMin === undefined || xArr[i] >= xMin) &&
-            (xMax === undefined || xArr[i] <= xMax)
-        ) {
-            x.push(xArr[i]);
-            y.push(yArr[i]);
-        }
-    }
-    return { x, y };
-};
-
 export default {
     transformations,
     parse,
-    validateContent,
-    filterXRange
+    validateContent
 };

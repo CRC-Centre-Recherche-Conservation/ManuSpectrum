@@ -1,0 +1,34 @@
+{% load i18n %}
+
+<div class="xy-technique-config">
+    <div class="alert alert-info">
+        <h4>{% trans "Automatic XY viewer configuration" %}</h4>
+        <p>
+            {% blocktrans %}When an analysis records its technique, measurement
+            files uploaded to it receive a matching viewer configuration —
+            axis labels, units and axis direction. FTIR spectra, for instance,
+            are plotted on the conventional reversed wavenumber axis.{% endblocktrans %}
+        </p>
+        <p>
+            <strong>{% trans "A configuration chosen by hand is never modified." %}</strong>
+            {% blocktrans %}The mapping only fills files that have no
+            configuration yet. If an analysis records several techniques that
+            disagree, nothing is applied.{% endblocktrans %}
+        </p>
+        <p class="text-muted">
+            {% blocktrans %}The technique-to-preset table is maintained in
+            manuspectrum/constants/xy_presets.py.{% endblocktrans %}
+        </p>
+    </div>
+
+    <!-- ko if: triggeringNodegroups().length -->
+    <div class="form-group">
+        <label class="control-label">{% trans "Triggered by" %}</label>
+        <ul class="list-unstyled text-muted">
+            <!-- ko foreach: triggeringNodegroups -->
+            <li><code data-bind="text: $data"></code></li>
+            <!-- /ko -->
+        </ul>
+    </div>
+    <!-- /ko -->
+</div>

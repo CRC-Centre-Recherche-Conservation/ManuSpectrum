@@ -444,9 +444,8 @@ RENDERERS = [
 
 # THUMBNAIL
 SEARCH_THUMBNAILS = True
-THUMBNAIL_GENERATOR = "arches.app.utils.thumbnail_generator.ThumbnailGenerator"
-GENERATE_THUMBNAILS_ON_DEMAND = True
-MIN_FILE_SIZE_T0_GENERATE_THUMBNAIL = 150000  # 150kb
+THUMBNAIL_GENERATOR = None
+GENERATE_THUMBNAILS_ON_DEMAND = False
 
 # By setting RESTRICT_MEDIA_ACCESS to True, media file requests outside of Arches will checked against nodegroup permissions.
 RESTRICT_MEDIA_ACCESS = False
@@ -521,6 +520,16 @@ ES_MAPPING_MODIFIER_CLASSES = [
     "arches_controlled_lists.search.references_es_mapping_modifier.ReferencesEsMappingModifier"
 ]
 
+# Arches matches a file to a renderer on an EXACT extension match, or on a
+# wildcard MIME type like "text/*" (see FileListDataType.get_compatible_renderers).
+# An exact type such as "text/csv" is never compared against anything, so `ext`
+# does all the work here. Avoid a "text/*" wildcard: browsers mis-sniff binary
+# instrument files as text (.asd arrives as text/x-common-lisp), and the reader
+# would then be offered for files it cannot parse.
+#
+# `id` and `ext` are mirrored in manuspectrum.constants.xy_presets, which the
+# technique mapping reads. tests.test_xy_technique_config guards the two against
+# drifting apart.
 RENDERERS += [
     {
         "name": "xy-reader",
@@ -535,9 +544,23 @@ RENDERERS += [
     },
 ]
 
-FILE_TYPES += ["csv", "tsv"]
+FILE_TYPES += ["csv", "tsv", "txt"]
 
-XY_TEXT_FILE_FORMATS = ["csv", "tsv"]
+# The single text format the XY reader treats as canonical. Read server-side by
+# manuspectrum.functions.xy_technique_config to decide whether a saved file
+# should receive a renderer and a technique-derived configuration — Arches' own
+# matching only runs at upload time and only on an exact extension match, so it
+# never reaches a file created through the API or already in store.
+#
+# Deliberately a single entry, mirroring the renderer's `ext` above (guarded by
+# tests.test_xy_technique_config). Instrument exports that are not CSV — .asd
+# (ASD FieldSpec), .0 (Bruker OPUS), .mca (Amptek) — are converted upstream
+# rather than parsed here. Note .mca in particular could not share a preset even
+# if it were parsed: each file carries its own channel->energy calibration in
+# its header ("# Calibration1: 722 8,046"), so a shared config would label the
+# axis keV while plotting channel numbers.
+XY_TEXT_FILE_FORMATS = ["csv"]
+
 
 PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT), "pkg")
 

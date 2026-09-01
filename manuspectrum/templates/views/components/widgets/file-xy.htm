@@ -42,6 +42,18 @@
     </div>
     <!-- /ko -->
 
+    <!-- Reader's lens. Always opens on the base quantity. -->
+    <!-- ko if: showViewControl -->
+    <div class="xy-view-control">
+        <label for="xy-view-select">{% trans "View:" %}</label>
+        <select id="xy-view-select" class="form-control input-sm"
+                data-bind="options: availableViews,
+                           optionsText: 'label',
+                           optionsValue: 'key',
+                           value: selectedView"></select>
+    </div>
+    <!-- /ko -->
+
     <!-- Loading state -->
     <!-- ko if: allLoading() -->
     <div class="report-xy-chart-loading">
@@ -74,10 +86,16 @@
         titleSize: chartTitleSize,
         xAxisLabel: chartXAxisLabel,
         xAxisLabelSize: chartXAxisLabelSize,
-        yAxisLabel: chartYAxisLabel,
+        yAxisLabel: displayYAxisLabel,
         yAxisLabelSize: chartYAxisLabelSize,
-        yAxisRightLabel: chartYAxisRightLabel
+        yAxisRightLabel: chartYAxisRightLabel,
+        xReversed: chartXReversed
     }'></div>
+    <p class="xy-processing-note">
+        {% trans "Processing:" %}
+        <!-- ko if: processingNote --><span data-bind="text: processingNote"></span><!-- /ko -->
+        <!-- ko ifnot: processingNote --><span class="xy-processing-none">{% trans "none applied" %}</span><!-- /ko -->
+    </p>
     <!-- /ko -->
 
 </dd>

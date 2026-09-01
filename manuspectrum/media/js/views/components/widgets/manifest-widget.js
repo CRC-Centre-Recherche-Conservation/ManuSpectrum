@@ -1,6 +1,6 @@
 import ko from 'knockout';
 import $ from 'jquery';
-import Dropzone from 'dropzone'; // eslint-disable-line no-unused-vars
+import 'dropzone';  
 import uuid from 'uuid';
 import 'bindings/select2-query';
 import 'bindings/dropzone';

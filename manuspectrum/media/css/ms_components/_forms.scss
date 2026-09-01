@@ -6,10 +6,27 @@
 // Radio / checkbox row (icon + label on one line)
 .radio-row {
     display: flex;
-    align-items: center;
-    margin: 2px 0;
+    // Top, not centre: a label long enough to wrap — several of these run to
+    // two lines in a side panel — was centring its whole block against the
+    // radio, which left the dot floating beside the gap between the lines.
+    align-items: flex-start;
+    gap: 6px;
+    margin: 3px 0;
 
-    label { margin: 0 0 0 4px; }
+    input[type="radio"],
+    input[type="checkbox"] {
+        // Bootstrap's `input[type=radio] { margin: 4px 0 0 }` outranks any
+        // single class here, so the horizontal gap lives on the row. The 3px
+        // top nudge sits the dot on the first line's baseline.
+        flex-shrink: 0;
+        margin: 3px 0 0;
+    }
+
+    label {
+        margin: 0;
+        font-weight: normal;
+        line-height: 1.35;
+    }
 }
 
 // Vertical group of radio-rows
@@ -34,6 +51,7 @@
 }
 .input-row--wide {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
 }

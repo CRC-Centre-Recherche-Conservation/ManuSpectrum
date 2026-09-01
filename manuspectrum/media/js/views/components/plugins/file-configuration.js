@@ -4,7 +4,6 @@
 
 import ko from 'knockout';
 import arches from 'arches';
-import Cookies from 'js-cookie';
 import fileRenderers from 'file-renderers';
 import TileModel from 'models/tile';
 import xyParser from 'utils/xy-parser';
@@ -374,7 +373,7 @@ const vm = function(params) {
             var rawExtension;
             try {
                 rawExtension = ko.unwrap(file).split('.').pop();
-            } catch (error) {
+            } catch {
                 rawExtension = file.name ? ko.unwrap(file.name).split('.').pop() : undefined;
             }
             var rendererTypes = renderer.type ? renderer.type.split(',') : [];

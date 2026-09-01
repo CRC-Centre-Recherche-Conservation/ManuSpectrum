@@ -25,11 +25,24 @@
     flex-shrink: 0;
 }
 .importer-config-panel-body {
-    background-color: #fafafa;
     overflow-y: auto;
     flex: 1;
     min-height: 0;
     padding-bottom: 12px;
+
+    // Fifteen sections in a column that clips them: without a signal, a
+    // heading cut in half at the top edge reads as a broken render rather than
+    // as scrolled content. Same treatment as the configuration list.
+    //
+    // The base colour rides in the shorthand's last layer, never as a separate
+    // background-color: the shorthand resets it, and the two gradients fade
+    // towards it, so losing it leaves grey bands floating on nothing.
+    background:
+        linear-gradient(#fafafa 30%, hsl(0 0% 98% / 0)) top / 100% 16px no-repeat local,
+        linear-gradient(hsl(0 0% 98% / 0), #fafafa 70%) bottom / 100% 16px no-repeat local,
+        radial-gradient(farthest-side at 50% 0, hsl(0 0% 0% / 0.10), transparent) top / 100% 9px no-repeat scroll,
+        radial-gradient(farthest-side at 50% 100%, hsl(0 0% 0% / 0.10), transparent) bottom / 100% 9px no-repeat scroll
+        #fafafa;
 }
 .importer-config-footer {
     display: flex;
@@ -37,4 +50,261 @@
     border-top: 1px solid #ddd;
     flex-shrink: 0;
     padding: 6px;
+}
+
+// --- Reversed X axis -------------------------------------------------------
+.xy-reversed-row {
+    margin-top: 10px;
+}
+
+// --- Spacing that used to be inline ---------------------------------------
+// CLAUDE.md keeps style="" out of templates: a rule here can be overridden,
+// audited and reused, an attribute can only be found by grep.
+.xy-description-input {
+    height: 50px;
+}
+.xy-column-row {
+    margin-bottom: 4px;
+}
+.xy-column-label {
+    min-width: 75px;
+    margin: 0;
+}
+.xy-column-remove {
+    padding: 2px 6px;
+}
+.xy-add-column {
+    margin-top: 4px;
+}
+.xy-right-axis-row {
+    margin-top: 10px;
+}
+
+// A heading that toggles a section. It answers Enter and Space through Arches'
+// key-events-click bindings, so the focus ring has to be visible: a control
+// reachable by keyboard but invisible when focused is worse than one that is
+// not reachable at all, because nothing tells you where you are.
+.collapsible-header {
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: 2px solid #004577;
+        outline-offset: 2px;
+    }
+}
+
+// --- Transformations: the exclusive multi-Y question ---------------------
+// The third answer needs a column tagged as the reference; until one is, it is
+// disabled rather than hidden, so a curator can see the option exists and what
+// unlocks it.
+.xy-choice-unavailable label {
+    color: #999;
+}
+.xy-choice-hint {
+    margin-left: 22px;
+    font-style: italic;
+}
+
+// --- Description tooltip ---------------------------------------------------
+// The configuration list renders a description next to each name inside
+// .tooltiptext. Neither Arches nor this project ever styled that class, so the
+// description rendered inline and every seeded preset read as its own name
+// twice over. Hide it until the icon is hovered or focused.
+.tip {
+    position: relative;
+    display: inline-block;
+    margin-left: 5px;
+    color: #777;
+    cursor: help;
+
+    .tooltiptext {
+        position: absolute;
+        bottom: 125%;
+        left: 50%;
+        z-index: 10;
+        width: 230px;
+        margin-left: -115px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background-color: #222;
+        color: #fff;
+        font-size: 12px;
+        font-weight: normal;
+        line-height: 1.4;
+        text-align: left;
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.15s;
+
+        // Arrow pointing back down at the icon.
+        &::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border: 5px solid transparent;
+            border-top-color: #222;
+        }
+    }
+
+    &:hover .tooltiptext,
+    &:focus-within .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+}
+
+// A transform that cannot run yet: the step is inert until a column carries
+// the role it needs.
+.xy-transform-blocked {
+    margin-top: 8px;
+    padding: 6px 8px;
+    border-left: 3px solid #d9534f;
+    background-color: #fdf3f2;
+    color: #a94442;
+    font-size: 12px;
+    line-height: 1.4;
+
+    .fa {
+        margin-right: 4px;
+    }
+}
+
+// --- Configuration list: filter, scrolling, protection -------------------
+// The list had no height bound at all: with a few hundred configurations it
+// pushed the "Add Importer Configuration" button off the panel entirely.
+.importer-list-filter {
+    position: relative;
+    margin-bottom: 6px;
+
+    input {
+        width: 100%;
+        height: initial;
+        padding-right: 26px;
+    }
+}
+.importer-list-filter-clear {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    color: #999;
+    cursor: pointer;
+
+    &:hover {
+        color: #555;
+    }
+}
+.importer-list-container {
+    max-height: 320px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+
+    // Scrolling was silent: a row clipped mid-line at the top edge reads as a
+    // rendering fault rather than as "there is more above". These two gradients
+    // are painted on the scroll container and pinned to the viewport by
+    // background-attachment: local, so they appear only at the end you can
+    // still scroll towards, and disappear at the extremes.
+    background:
+        linear-gradient(#fff 30%, hsl(0 0% 100% / 0)) top / 100% 14px no-repeat local,
+        linear-gradient(hsl(0 0% 100% / 0), #fff 70%) bottom / 100% 14px no-repeat local,
+        radial-gradient(farthest-side at 50% 0, hsl(0 0% 0% / 0.09), transparent) top / 100% 8px no-repeat scroll,
+        radial-gradient(farthest-side at 50% 100%, hsl(0 0% 0% / 0.09), transparent) bottom / 100% 8px no-repeat scroll;
+}
+
+// One configuration. The radio, the name, then the actions — read left to
+// right, acted on from the right.
+//
+// The gap lives here rather than on the radio because Bootstrap's
+// `input[type="radio"] { margin: 4px 0 0 }` outranks any single class: a
+// margin on the input is silently discarded, which is how the radio came to sit
+// flush against the name it labels.
+.importer-list-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+
+    &:last-child {
+        border-bottom: 0;
+    }
+
+    &:hover {
+        background-color: #f6f8fa;
+    }
+
+    // The filled radio is a 6px dot; on a list of twelve near-identical names
+    // it is not enough to answer "which one am I using?" at a glance.
+    &.is-selected {
+        background-color: #eef4fa;
+        box-shadow: inset 3px 0 0 #004577;
+    }
+
+}
+
+// The clickable target: radio plus name, and the only part allowed to take the
+// leftover width. `min-width: 0` because a flex item defaults to
+// min-width: auto and would otherwise refuse to wrap, pushing the actions off
+// the row instead.
+.importer-list-target {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-weight: normal;
+    cursor: pointer;
+
+    input[type="radio"] {
+        flex-shrink: 0;
+        // Bootstrap's shorthand on the element outranks any single class, so
+        // the horizontal spacing is the row's gap; this only sits the dot on
+        // the first line's baseline.
+        margin: 3px 0 0;
+    }
+}
+.importer-list-name {
+    min-width: 0;
+    line-height: 1.35;
+}
+
+// Actions stay on one line whatever the name does, and stay quiet until the
+// row is under the cursor: they are available, not advertised.
+.importer-list-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 10px;
+    align-self: flex-start;
+    padding-top: 2px;
+    color: #999;
+
+    .fa {
+        cursor: pointer;
+    }
+
+    .fa-pencil:hover {
+        color: #004577;
+    }
+    .fa-trash:hover {
+        color: #a94442;
+    }
+}
+.importer-list-row:hover .importer-list-actions {
+    color: #666;
+}
+.importer-list-empty {
+    margin: 8px;
+    color: #777;
+    font-size: 12px;
+    font-style: italic;
+}
+// Replaces the bin on a seeded preset. Grey, not red: this is a statement of
+// fact, not a warning about something the curator did wrong.
+.importer-config-lock {
+    color: #999;
+    cursor: help;
 }

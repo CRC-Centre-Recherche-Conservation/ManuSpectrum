@@ -56,16 +56,35 @@ urlpatterns = [
     re_path(
         r"^renderer/(?P<renderer_id>[^\/]+)", RendererView.as_view(), name="renderer"
     ),
-    re_path(
-        r"^renderer_config/(?P<renderer_config_id>[^\/]+)",
+    # A UUID converter, not a catch-all segment. The two protections on a
+    # seeded preset are decided by comparing the captured value against
+    # canonical ids, while the row it names is resolved by a UUIDField that
+    # also accepts uppercase, hyphen-free, braced and urn:-prefixed spellings.
+    # A permissive pattern let those two disagree, and "7A1C…" skipped the
+    # guard while deleting the row it protects. Django's converter admits the
+    # canonical form only; anything else is a 404 before the view is reached.
+    # The frontend only ever echoes server-returned ids, so no client changes.
+    path(
+        "renderer_config/<uuid:renderer_config_id>",
         RendererConfigView.as_view(),
         name="renderer_config",
     ),
-    re_path(r"^renderer_config/", RendererConfigView.as_view(), name="renderer_config"),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # Anchored: without the ``$`` this pattern also swallowed every id the
+    # converter above rejects, so a malformed one fell through to the create
+    # branch and silently made a new configuration instead of failing.
+    re_path(
+        r"^renderer_config/$", RendererConfigView.as_view(), name="renderer_config"
+    ),
+]
 
-# Adds URL pattern to serve media files during development
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# NOTE: media serving is NOT mounted here. MEDIA_URL is "/files/", the same
+# prefix Arches uses for its own ``file_access`` route (files/<uuid>), and
+# static() registers a catch-all "^files/(?P<path>.*)$". Mounted at this point
+# it shadowed that route entirely — every /files/<uuid> request resolved to
+# django.views.static.serve, which looked for a file literally named <uuid> and
+# returned 404. That broke file downloads, thumbnails and the XY chart's fetch.
+# The mount now lives at the very bottom of this module, below the language
+# boundary and after include("arches.urls").
 
 urlpatterns.append(path("", include("arches_querysets.urls")))
 # arches_controlled_lists ships the Controlled List Manager plugin and the
@@ -355,3 +374,6 @@ urlpatterns.append(
         name="en-api-prefix-shim",
     )
 )
+
+
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
