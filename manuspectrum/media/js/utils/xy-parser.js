@@ -245,17 +245,17 @@ const parse = (text, config) => {
             return { x: [], y: [] };
         }
 
-        // The generated axis IS the row index — the channel number — and
-        // nothing else. It used to be interpolated between two values a curator
-        // typed, which fabricated an abscissa: on an MCA export the true axis
-        // runs from a negative offset to 47.6 keV, so the round numbers anyone
-        // would reach for put Fe Ka at 5.68 keV, between chromium and
-        // manganese. The reader saw a normal-looking chart naming the wrong
-        // element. Converting channels to a physical quantity needs the
-        // instrument's own calibration, which belongs to the conversion step,
-        // not to a shared configuration.
+        // The generated axis is the position of the row in the file, and nothing
+        // else. Not the detector's channel number: MCAs number channels from
+        // zero, but the file never says how its instrument numbered them, so
+        // claiming it would be the same unbacked assertion as fabricating a
+        // physical abscissa — which this used to do, putting Fe Ka at 5.68 keV
+        // on an MCA export, between chromium and manganese.
+        //
+        // Hence one-based, like every other way of counting rows, and like the
+        // axis label "Point" already implies.
         const n = dataRows.length;
-        const genX = Array.from({ length: n }, (_, i) => i);
+        const genX = Array.from({ length: n }, (_, i) => i + 1);
 
         const colCount = dataRows[0].length;
         const transform = config?.transformation ?? 'basic';
