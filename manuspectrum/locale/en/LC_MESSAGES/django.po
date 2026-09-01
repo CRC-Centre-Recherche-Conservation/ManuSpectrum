@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 10:03-0500\n"
+"POT-Creation-Date: 2026-09-01 09:55-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -38,7 +38,7 @@ msgstr "Invalid URL format"
 msgid "Undefined"
 msgstr "Undefined"
 
-#: functions/xy_technique_config.py:188
+#: functions/xy_technique_config.py:213
 #, python-format
 msgid "Could not apply the XY configuration to tile %s"
 msgstr ""
@@ -860,6 +860,7 @@ msgid "Data"
 msgstr "Data"
 
 #: templates/javascript.htm:26
+#: templates/views/components/plugins/importer-configuration.htm:147
 msgid "X Axis"
 msgstr "X Axis"
 
@@ -868,7 +869,7 @@ msgid "Point"
 msgstr ""
 
 #: templates/javascript.htm:28
-#: templates/views/components/plugins/importer-configuration.htm:105
+#: templates/views/components/plugins/importer-configuration.htm:154
 msgid "Y Axis"
 msgstr "Y Axis"
 
@@ -1565,11 +1566,11 @@ msgstr ""
 msgid "Protected configuration"
 msgstr "Protected configuration"
 
-#: templates/javascript.htm:190
+#: templates/javascript.htm:191
 msgid "Configuration not saved"
 msgstr "Configuration not saved"
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:192
 msgid ""
 "The server refused the change. Your edits are still on screen — copy "
 "anything you need before closing the panel."
@@ -1577,143 +1578,159 @@ msgstr ""
 "The server refused the change. Your edits are still on screen — copy "
 "anything you need before closing the panel."
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:193
 msgid "Viz"
 msgstr ""
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:194
 msgid "As measured"
 msgstr ""
 
-#: templates/javascript.htm:193 templates/javascript.htm:208
+#: templates/javascript.htm:195 templates/javascript.htm:217
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr ""
 
-#: templates/javascript.htm:194
+#: templates/javascript.htm:196
 msgid "Kubelka-Munk"
 msgstr ""
 
-#: templates/javascript.htm:195
+#: templates/javascript.htm:197
 msgid "Normalised to maximum"
 msgstr ""
 
-#: templates/javascript.htm:196
+#: templates/javascript.htm:198
 msgid "Normalised to total (TIC)"
 msgstr ""
 
-#: templates/javascript.htm:197
+#: templates/javascript.htm:199
 msgid "First derivative"
 msgstr ""
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:200
 msgid "Second derivative"
 msgstr ""
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:201
 msgid "Divided by the white reference"
 msgstr ""
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:202
 msgid "Smoothed"
 msgstr ""
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:203
 msgid "Derivative"
 msgstr ""
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:204
+msgid "Averaged into a single series"
+msgstr "Averaged into a single series"
+
+#: templates/javascript.htm:205
+msgid "window"
+msgstr "window"
+
+#: templates/javascript.htm:206
+msgid ""
+"These files use different configurations — the axes describe only one of "
+"them, and no view is offered."
+msgstr ""
+"These files use different configurations — the axes describe only one of "
+"them, and no view is offered."
+
+#: templates/javascript.htm:207
 msgid "normalised to max"
 msgstr "normalised to max"
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:208
 msgid "normalised to area"
 msgstr "normalised to area"
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:209
 msgid "smoothed"
 msgstr "smoothed"
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:210
 msgid "derivative"
 msgstr "derivative"
 
-#: templates/javascript.htm:202
-#: templates/views/components/plugins/importer-configuration.htm:129
+#: templates/javascript.htm:211
+#: templates/views/components/plugins/importer-configuration.htm:178
 msgid "Reverse the X axis"
 msgstr ""
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:212
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
 msgstr ""
 
-#: templates/javascript.htm:204
-#: templates/views/components/plugins/importer-configuration.htm:203
+#: templates/javascript.htm:213
+#: templates/views/components/plugins/importer-configuration.htm:252
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:214
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:215
 msgid "Add a transformation"
 msgstr "Add a transformation"
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:216
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr ""
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:218
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr ""
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:219
 msgid "Normalise to maximum"
 msgstr ""
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:220
 msgid "Normalise to total area (TIC)"
 msgstr ""
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:221
 msgid "Smoothing (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:222
 msgid "Derivative (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:223
 msgid "Window"
 msgstr ""
 
-#: templates/javascript.htm:215
+#: templates/javascript.htm:224
 msgid "Polynomial order"
 msgstr ""
 
-#: templates/javascript.htm:216
+#: templates/javascript.htm:225
 msgid "Derivative order"
 msgstr ""
 
-#: templates/javascript.htm:217
+#: templates/javascript.htm:226
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
 msgstr ""
 
-#: templates/javascript.htm:218
+#: templates/javascript.htm:227
 msgid "White reference"
 msgstr ""
 
-#: templates/javascript.htm:219
+#: templates/javascript.htm:228
 msgid "Dark current"
 msgstr ""
 
-#: templates/javascript.htm:220
+#: templates/javascript.htm:229
 msgid "Configuration deduced from the analysis technique"
 msgstr ""
 
@@ -1752,12 +1769,12 @@ msgid "Password reset — %(site_name)s"
 msgstr "Password reset — %(site_name)s"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:29
-#: templates/views/components/widgets/file-xy.htm:96
+#: templates/views/components/widgets/file-xy.htm:95
 msgid "Processing:"
 msgstr ""
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:31
-#: templates/views/components/widgets/file-xy.htm:98
+#: templates/views/components/widgets/file-xy.htm:97
 msgid "none applied"
 msgstr ""
 
@@ -1883,11 +1900,13 @@ msgstr "Use config"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:187
 #: templates/views/components/cards/file-renderers/xy-reader.htm:199
-#: templates/views/components/plugins/importer-configuration.htm:74
+#: templates/views/components/plugins/importer-configuration.htm:84
+#: templates/views/components/plugins/importer-configuration.htm:104
 msgid "Auto-detect"
 msgstr "Auto-detect"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:188
+#: templates/views/components/plugins/importer-configuration.htm:105
 msgid "Comma"
 msgstr "Comma"
 
@@ -1904,7 +1923,7 @@ msgid "Custom delimiter"
 msgstr "Custom delimiter"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:196
-#: templates/views/components/plugins/importer-configuration.htm:71
+#: templates/views/components/plugins/importer-configuration.htm:81
 msgid "Header"
 msgstr "Header"
 
@@ -1917,7 +1936,7 @@ msgid "Number of lines"
 msgstr "Number of lines"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:206
-#: templates/views/components/plugins/importer-configuration.htm:82
+#: templates/views/components/plugins/importer-configuration.htm:92
 msgid "Footer"
 msgstr "Footer"
 
@@ -1975,6 +1994,39 @@ msgstr ""
 #: templates/views/components/functions/xy-technique-config.htm:26
 msgid "Triggered by"
 msgstr ""
+
+#: templates/views/components/ms-file-workbench.htm:23
+msgid "Additional metadata"
+msgstr "Additional metadata"
+
+#: templates/views/components/ms-file-workbench.htm:26
+#: templates/views/components/ms-file-workbench.htm:29
+msgid "Title"
+msgstr "Title"
+
+#: templates/views/components/ms-file-workbench.htm:34
+#: templates/views/components/ms-file-workbench.htm:40
+msgid "Alternative text"
+msgstr "Alternative text"
+
+#: templates/views/components/ms-file-workbench.htm:36
+msgid ""
+"Concise statement that assistive technology can pronounce to convey the "
+"meaning of the file"
+msgstr ""
+"Concise statement that assistive technology can pronounce to convey the "
+"meaning of the file"
+
+#: templates/views/components/ms-file-workbench.htm:44
+#: templates/views/components/ms-file-workbench.htm:47
+msgid "Attribution"
+msgstr "Attribution"
+
+#: templates/views/components/ms-file-workbench.htm:51
+#: templates/views/components/ms-file-workbench.htm:54
+#: templates/views/components/widgets/manifest-widget.htm:133
+msgid "Description"
+msgstr "Description"
 
 #: templates/views/components/plugins/file-configuration.htm:5
 msgid ""
@@ -2048,125 +2100,173 @@ msgstr "Filter configurations..."
 msgid "Clear the filter"
 msgstr "Clear the filter"
 
-#: templates/views/components/plugins/importer-configuration.htm:38
+#: templates/views/components/plugins/importer-configuration.htm:46
 msgid "Edit"
 msgstr "Edit"
 
-#: templates/views/components/plugins/importer-configuration.htm:42
+#: templates/views/components/plugins/importer-configuration.htm:49
+#: templates/views/components/plugins/importer-configuration.htm:51
 msgid ""
 "Part of the shared baseline: cannot be deleted, and only an administrator "
 "can edit it."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:48
+#: templates/views/components/plugins/importer-configuration.htm:58
 msgid "Delete"
 msgstr "Delete"
 
-#: templates/views/components/plugins/importer-configuration.htm:54
+#: templates/views/components/plugins/importer-configuration.htm:64
 msgid "No configuration matches this filter."
 msgstr "No configuration matches this filter."
 
-#: templates/views/components/plugins/importer-configuration.htm:58
-#: templates/views/components/plugins/importer-configuration.htm:62
+#: templates/views/components/plugins/importer-configuration.htm:68
+#: templates/views/components/plugins/importer-configuration.htm:72
 msgid "Add Importer Configuration"
 msgstr "Add Importer Configuration"
 
-#: templates/views/components/plugins/importer-configuration.htm:65
+#: templates/views/components/plugins/importer-configuration.htm:75
 msgid "Importer Name"
 msgstr "Importer Name"
 
-#: templates/views/components/plugins/importer-configuration.htm:66
+#: templates/views/components/plugins/importer-configuration.htm:76
 msgid "Name of Importer"
 msgstr "Name of Importer"
 
-#: templates/views/components/plugins/importer-configuration.htm:67
+#: templates/views/components/plugins/importer-configuration.htm:77
 msgid "Importer Description"
 msgstr "Importer Description"
 
-#: templates/views/components/plugins/importer-configuration.htm:68
+#: templates/views/components/plugins/importer-configuration.htm:78
 msgid "Describe the Importer"
 msgstr "Describe the Importer"
 
-#: templates/views/components/plugins/importer-configuration.htm:72
+#: templates/views/components/plugins/importer-configuration.htm:82
 msgid "Define where your x/y data are found in the file"
 msgstr "Define where your x/y data are found in the file"
 
-#: templates/views/components/plugins/importer-configuration.htm:75
+#: templates/views/components/plugins/importer-configuration.htm:85
 msgid "File has a fixed header (constant number of lines)"
 msgstr "File has a fixed header (constant number of lines)"
 
-#: templates/views/components/plugins/importer-configuration.htm:76
+#: templates/views/components/plugins/importer-configuration.htm:86
 msgid "File header ends after specific text"
 msgstr "File header ends after specific text"
 
-#: templates/views/components/plugins/importer-configuration.htm:78
 #: templates/views/components/plugins/importer-configuration.htm:88
+#: templates/views/components/plugins/importer-configuration.htm:98
 msgid "Ending Text"
 msgstr "Ending Text"
 
-#: templates/views/components/plugins/importer-configuration.htm:79
+#: templates/views/components/plugins/importer-configuration.htm:89
 msgid "Number of Lines"
 msgstr "Number of Lines"
 
-#: templates/views/components/plugins/importer-configuration.htm:83
+#: templates/views/components/plugins/importer-configuration.htm:93
 msgid "Define where your x/y data end in the file"
 msgstr "Define where your x/y data end in the file"
 
-#: templates/views/components/plugins/importer-configuration.htm:85
+#: templates/views/components/plugins/importer-configuration.htm:95
 msgid "End of File"
 msgstr "End of File"
 
-#: templates/views/components/plugins/importer-configuration.htm:86
+#: templates/views/components/plugins/importer-configuration.htm:96
 msgid "File footer begins after specific text (consistent ending text)"
 msgstr "File footer begins after specific text (consistent ending text)"
 
-#: templates/views/components/plugins/importer-configuration.htm:91
+#: templates/views/components/plugins/importer-configuration.htm:101
+msgid "Data Delimiter"
+msgstr "Data Delimiter"
+
+#: templates/views/components/plugins/importer-configuration.htm:102
+msgid ""
+"What separates the columns. Auto-detect handles most instrument exports."
+msgstr ""
+"What separates the columns. Auto-detect handles most instrument exports."
+
+#: templates/views/components/plugins/importer-configuration.htm:106
+msgid "Pipe"
+msgstr "Pipe"
+
+#: templates/views/components/plugins/importer-configuration.htm:107
+#: templates/views/pages/contact.htm:93
+msgid "Other"
+msgstr "Other"
+
+#: templates/views/components/plugins/importer-configuration.htm:111
+msgid "A single character"
+msgstr "A single character"
+
+#: templates/views/components/plugins/importer-configuration.htm:116
+msgid "This delimiter cannot be used. Correct it to save the configuration."
+msgstr "This delimiter cannot be used. Correct it to save the configuration."
+
+#: templates/views/components/plugins/importer-configuration.htm:120
 msgid "X Axis Source"
 msgstr "X Axis Source"
 
-#: templates/views/components/plugins/importer-configuration.htm:92
+#: templates/views/components/plugins/importer-configuration.htm:121
 msgid "Define how the X axis values are determined"
 msgstr "Define how the X axis values are determined"
 
-#: templates/views/components/plugins/importer-configuration.htm:94
+#: templates/views/components/plugins/importer-configuration.htm:123
 msgid "From data (first column is X)"
 msgstr "From data (first column is X)"
 
-#: templates/views/components/plugins/importer-configuration.htm:95
+#: templates/views/components/plugins/importer-configuration.htm:124
 msgid "Intensities only (no X column in file)"
 msgstr "Intensities only (no X column in file)"
 
-#: templates/views/components/plugins/importer-configuration.htm:98
+#: templates/views/components/plugins/importer-configuration.htm:127
 msgid ""
 "Rows are plotted against their position — 1, 2, 3 … — and the X axis is "
 "labelled Point. Turning channels into a physical quantity needs the "
 "instrument's calibration, which the file conversion supplies."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:103
+#: templates/views/components/plugins/importer-configuration.htm:132
+msgid "Chart Title"
+msgstr "Chart Title"
+
+#: templates/views/components/plugins/importer-configuration.htm:134
+msgid "Title shown above the chart"
+msgstr "Title shown above the chart"
+
+#: templates/views/components/plugins/importer-configuration.htm:141
+msgid "X Axis Label"
+msgstr "X Axis Label"
+
+#: templates/views/components/plugins/importer-configuration.htm:143
+msgid ""
+"Not used here: a file with no X column is plotted against row position, and "
+"the axis is labelled Point."
+msgstr ""
+"Not used here: a file with no X column is plotted against row position, and "
+"the axis is labelled Point."
+
+#: templates/views/components/plugins/importer-configuration.htm:152
 msgid "Y Axis Label"
 msgstr "Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:114
-#: templates/views/components/plugins/importer-configuration.htm:189
+#: templates/views/components/plugins/importer-configuration.htm:163
+#: templates/views/components/plugins/importer-configuration.htm:238
 msgid "Presets..."
 msgstr "Presets..."
 
-#: templates/views/components/plugins/importer-configuration.htm:126
+#: templates/views/components/plugins/importer-configuration.htm:175
 msgid "X Axis Direction"
 msgstr "X Axis Direction"
 
-#: templates/views/components/plugins/importer-configuration.htm:131
+#: templates/views/components/plugins/importer-configuration.htm:180
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR "
 "and XPS."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:143
+#: templates/views/components/plugins/importer-configuration.htm:192
 msgid "Column Assignment"
 msgstr "Column Assignment"
 
-#: templates/views/components/plugins/importer-configuration.htm:147
+#: templates/views/components/plugins/importer-configuration.htm:196
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2174,51 +2274,51 @@ msgstr ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
 
-#: templates/views/components/plugins/importer-configuration.htm:153
+#: templates/views/components/plugins/importer-configuration.htm:202
 msgid "Column"
 msgstr "Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:171
+#: templates/views/components/plugins/importer-configuration.htm:220
 msgid "Add Column"
 msgstr "Add Column"
 
-#: templates/views/components/plugins/importer-configuration.htm:177
+#: templates/views/components/plugins/importer-configuration.htm:226
 msgid "Right Y Axis Label"
 msgstr "Right Y Axis Label"
 
-#: templates/views/components/plugins/importer-configuration.htm:180
+#: templates/views/components/plugins/importer-configuration.htm:229
 msgid "Right Y Axis"
 msgstr "Right Y Axis"
 
-#: templates/views/components/plugins/importer-configuration.htm:204
+#: templates/views/components/plugins/importer-configuration.htm:253
 msgid ""
 "How the columns are combined into the quantity the Y axis names. The stored "
 "file is never modified."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:209
+#: templates/views/components/plugins/importer-configuration.htm:258
 msgid "Plot each Y column as its own series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:214
+#: templates/views/components/plugins/importer-configuration.htm:263
 msgid "Average them into a single series"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:220
+#: templates/views/components/plugins/importer-configuration.htm:269
 msgid "Divide by the reference column — R = (S−D)/(W−D)"
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:223
+#: templates/views/components/plugins/importer-configuration.htm:272
 msgid ""
 "Tag a column as “White reference” under Column Assignment to enable this."
 msgstr ""
 
-#: templates/views/components/plugins/importer-configuration.htm:229
+#: templates/views/components/plugins/importer-configuration.htm:278
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Cancel"
 
-#: templates/views/components/plugins/importer-configuration.htm:230
+#: templates/views/components/plugins/importer-configuration.htm:279
 msgid "Save"
 msgstr "Save"
 
@@ -2356,15 +2456,15 @@ msgstr "Deselect all"
 msgid "View:"
 msgstr "View:"
 
-#: templates/views/components/widgets/file-xy.htm:62
+#: templates/views/components/widgets/file-xy.htm:61
 msgid "Loading charts..."
 msgstr "Loading charts..."
 
-#: templates/views/components/widgets/file-xy.htm:70
+#: templates/views/components/widgets/file-xy.htm:69
 msgid "Unable to load chart data"
 msgstr "Unable to load chart data"
 
-#: templates/views/components/widgets/file-xy.htm:78
+#: templates/views/components/widgets/file-xy.htm:77
 msgid "Select files to display"
 msgstr "Select files to display"
 
@@ -2410,10 +2510,6 @@ msgstr "Return"
 #: templates/views/components/widgets/manifest-widget.htm:129
 msgid "Manifest title"
 msgstr "Manifest title"
-
-#: templates/views/components/widgets/manifest-widget.htm:133
-msgid "Description"
-msgstr "Description"
 
 #: templates/views/components/widgets/manifest-widget.htm:136
 msgid "Manifest description"
@@ -3302,10 +3398,6 @@ msgstr "Submit a project"
 msgid "Request an account / access"
 msgstr "Request an account / access"
 
-#: templates/views/pages/contact.htm:93
-msgid "Other"
-msgstr "Other"
-
 #: templates/views/pages/contact.htm:113
 msgid "Open my email app"
 msgstr "Open my email app"
@@ -3822,72 +3914,24 @@ msgstr ""
 msgid "IIIF Manifest"
 msgstr "IIIF Manifest"
 
-#: views/renderer_config.py:48
+#: views/renderer_config.py:49
 msgid "<h1>Renderers do not exist</h1>"
 msgstr "<h1>Renderers do not exist</h1>"
 
-#: views/renderer_config.py:98
+#: views/renderer_config.py:104
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>Renderers config does not exist</h1>"
 
-#: views/renderer_config.py:114
+#: views/renderer_config.py:129
 msgid ""
 "This configuration is part of the shared baseline and can only be edited by "
 "an administrator. Duplicate it to make your own."
 msgstr ""
 
-#: views/renderer_config.py:157
+#: views/renderer_config.py:172
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Data Delimiter"
-msgstr "Data Delimiter"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "What separates the columns. Auto-detect handles most instrument exports."
-msgstr "What separates the columns. Auto-detect handles most instrument exports."
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Pipe"
-msgstr "Pipe"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "A single character"
-msgstr "A single character"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "This delimiter cannot be used. Correct it to save the configuration."
-msgstr "This delimiter cannot be used. Correct it to save the configuration."
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Chart Title"
-msgstr "Chart Title"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Title shown above the chart"
-msgstr "Title shown above the chart"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "X Axis Label"
-msgstr "X Axis Label"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
-msgstr "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
-
-#: templates/javascript.htm
-msgid "Averaged into a single series"
-msgstr "Averaged into a single series"
-
-#: templates/javascript.htm
-msgid "window"
-msgstr "window"
-
-#: templates/javascript.htm
-msgid "These files use different configurations — the axes describe only one of them, and no view is offered."
-msgstr "These files use different configurations — the axes describe only one of them, and no view is offered."
 
 #~ msgid ""
 #~ "The X axis will be evenly spaced between start and end values, based on "
@@ -3925,9 +3969,6 @@ msgstr "These files use different configurations — the axes describe only one 
 
 #~ msgid "Display/Charting"
 #~ msgstr "Display/Charting"
-
-#~ msgid "Title"
-#~ msgstr "Title"
 
 #~ msgid "Spectral Range"
 #~ msgstr "Spectral Range"

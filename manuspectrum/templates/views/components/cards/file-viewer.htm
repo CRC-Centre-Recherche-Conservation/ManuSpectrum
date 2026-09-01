@@ -1,0 +1,15 @@
+{% extends "views/components/cards/file-viewer.htm" %}
+
+{% comment %}
+Points the File Viewer card at the workbench that carries the file metadata
+fields (see ms-file-workbench.htm).
+
+`manuspectrum/templates` is reachable both through TEMPLATES["DIRS"] and as an
+app directory, so this template is found twice and extends itself once before
+reaching the Arches one. A block that replaces rather than appends survives
+that; a block that appends to its parent would emit its content twice.
+{% endcomment %}
+
+{% block form %}
+{% include "views/components/ms-file-workbench.htm" %}
+{% endblock form %}

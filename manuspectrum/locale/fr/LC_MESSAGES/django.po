@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 10:03-0500\n"
+"POT-Creation-Date: 2026-09-01 09:55-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -36,7 +36,7 @@ msgstr "Format d'URL invalide"
 msgid "Undefined"
 msgstr "Indéfini"
 
-#: functions/xy_technique_config.py:188
+#: functions/xy_technique_config.py:213
 #, python-format
 msgid "Could not apply the XY configuration to tile %s"
 msgstr "Impossible d'appliquer la configuration XY à la tuile %s"
@@ -895,6 +895,7 @@ msgid "Data"
 msgstr "Données"
 
 #: templates/javascript.htm:26
+#: templates/views/components/plugins/importer-configuration.htm:147
 msgid "X Axis"
 msgstr "Axe X"
 
@@ -903,7 +904,7 @@ msgid "Point"
 msgstr "Point"
 
 #: templates/javascript.htm:28
-#: templates/views/components/plugins/importer-configuration.htm:105
+#: templates/views/components/plugins/importer-configuration.htm:154
 msgid "Y Axis"
 msgstr "Axe Y"
 
@@ -1617,84 +1618,100 @@ msgstr ""
 msgid "Protected configuration"
 msgstr "Configuration protégée"
 
-#: templates/javascript.htm:190
+#: templates/javascript.htm:191
 msgid "Configuration not saved"
 msgstr "Configuration non enregistrée"
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:192
 msgid ""
 "The server refused the change. Your edits are still on screen — copy "
 "anything you need before closing the panel."
 msgstr ""
-"Le serveur a refusé la modification. Vos changements sont toujours à "
-"l'écran — copiez ce dont vous avez besoin avant de fermer le panneau."
+"Le serveur a refusé la modification. Vos changements sont toujours à l'écran "
+"— copiez ce dont vous avez besoin avant de fermer le panneau."
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:193
 msgid "Viz"
 msgstr "Viz"
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:194
 msgid "As measured"
 msgstr "Tel que mesuré"
 
-#: templates/javascript.htm:193 templates/javascript.htm:208
+#: templates/javascript.htm:195 templates/javascript.htm:217
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr "Pseudo-absorbance log10(1/R)"
 
-#: templates/javascript.htm:194
+#: templates/javascript.htm:196
 msgid "Kubelka-Munk"
 msgstr "Kubelka-Munk"
 
-#: templates/javascript.htm:195
+#: templates/javascript.htm:197
 msgid "Normalised to maximum"
 msgstr "Normalisé au maximum"
 
-#: templates/javascript.htm:196
+#: templates/javascript.htm:198
 msgid "Normalised to total (TIC)"
 msgstr "Normalisé au total (TIC)"
 
-#: templates/javascript.htm:197
+#: templates/javascript.htm:199
 msgid "First derivative"
 msgstr "Dérivée première"
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:200
 msgid "Second derivative"
 msgstr "Dérivée seconde"
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:201
 msgid "Divided by the white reference"
 msgstr "Divisé par la référence blanche"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:202
 msgid "Smoothed"
 msgstr "Lissé"
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:203
 msgid "Derivative"
 msgstr "Dérivée"
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:204
+msgid "Averaged into a single series"
+msgstr "Moyennées en une seule série"
+
+#: templates/javascript.htm:205
+msgid "window"
+msgstr "fenêtre"
+
+#: templates/javascript.htm:206
+msgid ""
+"These files use different configurations — the axes describe only one of "
+"them, and no view is offered."
+msgstr ""
+"Ces fichiers utilisent des configurations différentes — les axes n'en "
+"décrivent qu'une, et aucune vue n'est proposée."
+
+#: templates/javascript.htm:207
 msgid "normalised to max"
 msgstr "normalisé au maximum"
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:208
 msgid "normalised to area"
 msgstr "normalisé à l'aire"
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:209
 msgid "smoothed"
 msgstr "lissé"
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:210
 msgid "derivative"
 msgstr "dérivée"
 
-#: templates/javascript.htm:202
-#: templates/views/components/plugins/importer-configuration.htm:129
+#: templates/javascript.htm:211
+#: templates/views/components/plugins/importer-configuration.htm:178
 msgid "Reverse the X axis"
 msgstr "Inverser l'axe X"
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:212
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
@@ -1702,60 +1719,60 @@ msgstr ""
 "Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
 "cm-1), la RMN et l'XPS."
 
-#: templates/javascript.htm:204
-#: templates/views/components/plugins/importer-configuration.htm:203
+#: templates/javascript.htm:213
+#: templates/views/components/plugins/importer-configuration.htm:252
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:214
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 "Appliquées au spectre tracé, dans l'ordre. Le fichier lui-même n'est jamais "
 "modifié."
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:215
 msgid "Add a transformation"
 msgstr "Ajouter une transformation"
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:216
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr "Normalisation par référence (S-D)/(B-D)"
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:218
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr "Kubelka-Munk (1-R)^2/2R"
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:219
 msgid "Normalise to maximum"
 msgstr "Normaliser au maximum"
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:220
 msgid "Normalise to total area (TIC)"
 msgstr "Normaliser à l'aire totale (TIC)"
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:221
 msgid "Smoothing (Savitzky-Golay)"
 msgstr "Lissage (Savitzky-Golay)"
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:222
 msgid "Derivative (Savitzky-Golay)"
 msgstr "Dérivée (Savitzky-Golay)"
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:223
 msgid "Window"
 msgstr "Fenêtre"
 
-#: templates/javascript.htm:215
+#: templates/javascript.htm:224
 msgid "Polynomial order"
 msgstr "Ordre du polynôme"
 
-#: templates/javascript.htm:216
+#: templates/javascript.htm:225
 msgid "Derivative order"
 msgstr "Ordre de la dérivée"
 
-#: templates/javascript.htm:217
+#: templates/javascript.htm:226
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
@@ -1763,15 +1780,15 @@ msgstr ""
 "Cette transformation dépend de paramètres que vous choisissez. Elle n'est "
 "jamais appliquée automatiquement."
 
-#: templates/javascript.htm:218
+#: templates/javascript.htm:227
 msgid "White reference"
 msgstr "Référence blanche"
 
-#: templates/javascript.htm:219
+#: templates/javascript.htm:228
 msgid "Dark current"
 msgstr "Courant d'obscurité"
 
-#: templates/javascript.htm:220
+#: templates/javascript.htm:229
 msgid "Configuration deduced from the analysis technique"
 msgstr "Configuration déduite de la technique d'analyse"
 
@@ -1811,12 +1828,12 @@ msgid "Password reset — %(site_name)s"
 msgstr "Réinitialisation du mot de passe — %(site_name)s"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:29
-#: templates/views/components/widgets/file-xy.htm:96
+#: templates/views/components/widgets/file-xy.htm:95
 msgid "Processing:"
 msgstr "Traitement :"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:31
-#: templates/views/components/widgets/file-xy.htm:98
+#: templates/views/components/widgets/file-xy.htm:97
 msgid "none applied"
 msgstr "aucun"
 
@@ -1948,11 +1965,13 @@ msgstr "Utiliser la config"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:187
 #: templates/views/components/cards/file-renderers/xy-reader.htm:199
-#: templates/views/components/plugins/importer-configuration.htm:74
+#: templates/views/components/plugins/importer-configuration.htm:84
+#: templates/views/components/plugins/importer-configuration.htm:104
 msgid "Auto-detect"
 msgstr "Détection automatique"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:188
+#: templates/views/components/plugins/importer-configuration.htm:105
 msgid "Comma"
 msgstr "Virgule"
 
@@ -1969,7 +1988,7 @@ msgid "Custom delimiter"
 msgstr "Délimiteur personnalisé"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:196
-#: templates/views/components/plugins/importer-configuration.htm:71
+#: templates/views/components/plugins/importer-configuration.htm:81
 msgid "Header"
 msgstr "En-tête"
 
@@ -1982,7 +2001,7 @@ msgid "Number of lines"
 msgstr "Nombre de lignes"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:206
-#: templates/views/components/plugins/importer-configuration.htm:82
+#: templates/views/components/plugins/importer-configuration.htm:92
 msgid "Footer"
 msgstr "Pied de page"
 
@@ -2052,6 +2071,39 @@ msgstr ""
 #: templates/views/components/functions/xy-technique-config.htm:26
 msgid "Triggered by"
 msgstr "Déclenchée par"
+
+#: templates/views/components/ms-file-workbench.htm:23
+msgid "Additional metadata"
+msgstr "Métadonnées complémentaires"
+
+#: templates/views/components/ms-file-workbench.htm:26
+#: templates/views/components/ms-file-workbench.htm:29
+msgid "Title"
+msgstr "Titre"
+
+#: templates/views/components/ms-file-workbench.htm:34
+#: templates/views/components/ms-file-workbench.htm:40
+msgid "Alternative text"
+msgstr "Texte alternatif"
+
+#: templates/views/components/ms-file-workbench.htm:36
+msgid ""
+"Concise statement that assistive technology can pronounce to convey the "
+"meaning of the file"
+msgstr ""
+"Énoncé concis que les technologies d'assistance peuvent prononcer pour "
+"transmettre le sens du fichier"
+
+#: templates/views/components/ms-file-workbench.htm:44
+#: templates/views/components/ms-file-workbench.htm:47
+msgid "Attribution"
+msgstr "Attribution"
+
+#: templates/views/components/ms-file-workbench.htm:51
+#: templates/views/components/ms-file-workbench.htm:54
+#: templates/views/components/widgets/manifest-widget.htm:133
+msgid "Description"
+msgstr "Description"
 
 #: templates/views/components/plugins/file-configuration.htm:5
 msgid ""
@@ -2128,11 +2180,12 @@ msgstr "Filtrer les configurations…"
 msgid "Clear the filter"
 msgstr "Effacer le filtre"
 
-#: templates/views/components/plugins/importer-configuration.htm:38
+#: templates/views/components/plugins/importer-configuration.htm:46
 msgid "Edit"
 msgstr "Modifier"
 
-#: templates/views/components/plugins/importer-configuration.htm:42
+#: templates/views/components/plugins/importer-configuration.htm:49
+#: templates/views/components/plugins/importer-configuration.htm:51
 msgid ""
 "Part of the shared baseline: cannot be deleted, and only an administrator "
 "can edit it."
@@ -2140,87 +2193,117 @@ msgstr ""
 "Fait partie du socle commun : non supprimable, et modifiable par un "
 "administrateur uniquement."
 
-#: templates/views/components/plugins/importer-configuration.htm:48
+#: templates/views/components/plugins/importer-configuration.htm:58
 msgid "Delete"
 msgstr "Supprimer"
 
-#: templates/views/components/plugins/importer-configuration.htm:54
+#: templates/views/components/plugins/importer-configuration.htm:64
 msgid "No configuration matches this filter."
 msgstr "Aucune configuration ne correspond à ce filtre."
 
-#: templates/views/components/plugins/importer-configuration.htm:58
-#: templates/views/components/plugins/importer-configuration.htm:62
+#: templates/views/components/plugins/importer-configuration.htm:68
+#: templates/views/components/plugins/importer-configuration.htm:72
 msgid "Add Importer Configuration"
 msgstr "Ajouter une configuration d'importation"
 
-#: templates/views/components/plugins/importer-configuration.htm:65
+#: templates/views/components/plugins/importer-configuration.htm:75
 msgid "Importer Name"
 msgstr "Nom de l'importateur"
 
-#: templates/views/components/plugins/importer-configuration.htm:66
+#: templates/views/components/plugins/importer-configuration.htm:76
 msgid "Name of Importer"
 msgstr "Nom de l'importateur"
 
-#: templates/views/components/plugins/importer-configuration.htm:67
+#: templates/views/components/plugins/importer-configuration.htm:77
 msgid "Importer Description"
 msgstr "Description de l'importateur"
 
-#: templates/views/components/plugins/importer-configuration.htm:68
+#: templates/views/components/plugins/importer-configuration.htm:78
 msgid "Describe the Importer"
 msgstr "Décrire l'importateur"
 
-#: templates/views/components/plugins/importer-configuration.htm:72
+#: templates/views/components/plugins/importer-configuration.htm:82
 msgid "Define where your x/y data are found in the file"
 msgstr "Définissez où vos données x/y se trouvent dans le fichier"
 
-#: templates/views/components/plugins/importer-configuration.htm:75
+#: templates/views/components/plugins/importer-configuration.htm:85
 msgid "File has a fixed header (constant number of lines)"
 msgstr "Le fichier a un en-tête fixe (nombre constant de lignes)"
 
-#: templates/views/components/plugins/importer-configuration.htm:76
+#: templates/views/components/plugins/importer-configuration.htm:86
 msgid "File header ends after specific text"
 msgstr "L'en-tête du fichier se termine après un texte spécifique"
 
-#: templates/views/components/plugins/importer-configuration.htm:78
 #: templates/views/components/plugins/importer-configuration.htm:88
+#: templates/views/components/plugins/importer-configuration.htm:98
 msgid "Ending Text"
 msgstr "Texte de fin"
 
-#: templates/views/components/plugins/importer-configuration.htm:79
+#: templates/views/components/plugins/importer-configuration.htm:89
 msgid "Number of Lines"
 msgstr "Nombre de lignes"
 
-#: templates/views/components/plugins/importer-configuration.htm:83
+#: templates/views/components/plugins/importer-configuration.htm:93
 msgid "Define where your x/y data end in the file"
 msgstr "Définissez où vos données x/y se terminent dans le fichier"
 
-#: templates/views/components/plugins/importer-configuration.htm:85
+#: templates/views/components/plugins/importer-configuration.htm:95
 msgid "End of File"
 msgstr "Fin du fichier"
 
-#: templates/views/components/plugins/importer-configuration.htm:86
+#: templates/views/components/plugins/importer-configuration.htm:96
 msgid "File footer begins after specific text (consistent ending text)"
 msgstr ""
 "Le pied de page du fichier commence après un texte spécifique (texte de fin "
 "constant)"
 
-#: templates/views/components/plugins/importer-configuration.htm:91
+#: templates/views/components/plugins/importer-configuration.htm:101
+msgid "Data Delimiter"
+msgstr "Séparateur de colonnes"
+
+#: templates/views/components/plugins/importer-configuration.htm:102
+msgid ""
+"What separates the columns. Auto-detect handles most instrument exports."
+msgstr ""
+"Ce qui sépare les colonnes. La détection automatique convient à la plupart "
+"des exports d'instruments."
+
+#: templates/views/components/plugins/importer-configuration.htm:106
+msgid "Pipe"
+msgstr "Barre verticale"
+
+#: templates/views/components/plugins/importer-configuration.htm:107
+#: templates/views/pages/contact.htm:93
+msgid "Other"
+msgstr "Autre"
+
+#: templates/views/components/plugins/importer-configuration.htm:111
+msgid "A single character"
+msgstr "Un seul caractère"
+
+#: templates/views/components/plugins/importer-configuration.htm:116
+msgid "This delimiter cannot be used. Correct it to save the configuration."
+msgstr ""
+"Ce séparateur est inutilisable. Corrigez-le pour pouvoir enregistrer la "
+"configuration."
+
+#: templates/views/components/plugins/importer-configuration.htm:120
 msgid "X Axis Source"
 msgstr "Source de l'axe X"
 
-#: templates/views/components/plugins/importer-configuration.htm:92
+#: templates/views/components/plugins/importer-configuration.htm:121
 msgid "Define how the X axis values are determined"
 msgstr "Définir comment les valeurs de l'axe X sont déterminées"
 
-#: templates/views/components/plugins/importer-configuration.htm:94
+#: templates/views/components/plugins/importer-configuration.htm:123
 msgid "From data (first column is X)"
 msgstr "Depuis les données (première colonne = X)"
 
-#: templates/views/components/plugins/importer-configuration.htm:95
+#: templates/views/components/plugins/importer-configuration.htm:124
 msgid "Intensities only (no X column in file)"
 msgstr "Intensités seules (aucune colonne X dans le fichier)"
 
-#: templates/views/components/plugins/importer-configuration.htm:98
+#: templates/views/components/plugins/importer-configuration.htm:127
 msgid ""
 "Rows are plotted against their position — 1, 2, 3 … — and the X axis is "
 "labelled Point. Turning channels into a physical quantity needs the "
@@ -2230,20 +2313,40 @@ msgstr ""
 "le libellé Point. Convertir des canaux en grandeur physique demande la "
 "calibration de l'instrument, que la conversion du fichier fournit."
 
-#: templates/views/components/plugins/importer-configuration.htm:103
+#: templates/views/components/plugins/importer-configuration.htm:132
+msgid "Chart Title"
+msgstr "Titre du graphique"
+
+#: templates/views/components/plugins/importer-configuration.htm:134
+msgid "Title shown above the chart"
+msgstr "Titre affiché au-dessus du graphique"
+
+#: templates/views/components/plugins/importer-configuration.htm:141
+msgid "X Axis Label"
+msgstr "Libellé de l'axe X"
+
+#: templates/views/components/plugins/importer-configuration.htm:143
+msgid ""
+"Not used here: a file with no X column is plotted against row position, and "
+"the axis is labelled Point."
+msgstr ""
+"Sans objet ici : un fichier sans colonne X est tracé selon la position des "
+"lignes, et l'axe est libellé Point."
+
+#: templates/views/components/plugins/importer-configuration.htm:152
 msgid "Y Axis Label"
 msgstr "Libellé de l'axe Y"
 
-#: templates/views/components/plugins/importer-configuration.htm:114
-#: templates/views/components/plugins/importer-configuration.htm:189
+#: templates/views/components/plugins/importer-configuration.htm:163
+#: templates/views/components/plugins/importer-configuration.htm:238
 msgid "Presets..."
 msgstr "Préréglages..."
 
-#: templates/views/components/plugins/importer-configuration.htm:126
+#: templates/views/components/plugins/importer-configuration.htm:175
 msgid "X Axis Direction"
 msgstr "Sens de l'axe X"
 
-#: templates/views/components/plugins/importer-configuration.htm:131
+#: templates/views/components/plugins/importer-configuration.htm:180
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR "
 "and XPS."
@@ -2251,11 +2354,11 @@ msgstr ""
 "Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
 "cm⁻¹), la RMN et l'XPS."
 
-#: templates/views/components/plugins/importer-configuration.htm:143
+#: templates/views/components/plugins/importer-configuration.htm:192
 msgid "Column Assignment"
 msgstr "Assignation des colonnes"
 
-#: templates/views/components/plugins/importer-configuration.htm:147
+#: templates/views/components/plugins/importer-configuration.htm:196
 msgid ""
 "Define which data columns map to X, Y (left axis), or Y (right axis). Leave "
 "empty to use the default: column 1 = X, remaining = Y left."
@@ -2264,23 +2367,23 @@ msgstr ""
 "(axe droit). Laisser vide pour le comportement par défaut : colonne 1 = X, "
 "les autres = Y gauche."
 
-#: templates/views/components/plugins/importer-configuration.htm:153
+#: templates/views/components/plugins/importer-configuration.htm:202
 msgid "Column"
 msgstr "Colonne"
 
-#: templates/views/components/plugins/importer-configuration.htm:171
+#: templates/views/components/plugins/importer-configuration.htm:220
 msgid "Add Column"
 msgstr "Ajouter une colonne"
 
-#: templates/views/components/plugins/importer-configuration.htm:177
+#: templates/views/components/plugins/importer-configuration.htm:226
 msgid "Right Y Axis Label"
 msgstr "Libellé de l'axe Y droit"
 
-#: templates/views/components/plugins/importer-configuration.htm:180
+#: templates/views/components/plugins/importer-configuration.htm:229
 msgid "Right Y Axis"
 msgstr "Axe Y droit"
 
-#: templates/views/components/plugins/importer-configuration.htm:204
+#: templates/views/components/plugins/importer-configuration.htm:253
 msgid ""
 "How the columns are combined into the quantity the Y axis names. The stored "
 "file is never modified."
@@ -2288,31 +2391,31 @@ msgstr ""
 "Comment les colonnes sont combinées pour produire la grandeur nommée par "
 "l'axe Y. Le fichier stocké n'est jamais modifié."
 
-#: templates/views/components/plugins/importer-configuration.htm:209
+#: templates/views/components/plugins/importer-configuration.htm:258
 msgid "Plot each Y column as its own series"
 msgstr "Tracer chaque colonne Y comme une série distincte"
 
-#: templates/views/components/plugins/importer-configuration.htm:214
+#: templates/views/components/plugins/importer-configuration.htm:263
 msgid "Average them into a single series"
 msgstr "Les moyenner en une seule série"
 
-#: templates/views/components/plugins/importer-configuration.htm:220
+#: templates/views/components/plugins/importer-configuration.htm:269
 msgid "Divide by the reference column — R = (S−D)/(W−D)"
 msgstr "Diviser par la colonne de référence — R = (S−D)/(W−D)"
 
-#: templates/views/components/plugins/importer-configuration.htm:223
+#: templates/views/components/plugins/importer-configuration.htm:272
 msgid ""
 "Tag a column as “White reference” under Column Assignment to enable this."
 msgstr ""
 "Marquez une colonne comme « Référence blanche » dans l'affectation des "
 "colonnes pour activer cette option."
 
-#: templates/views/components/plugins/importer-configuration.htm:229
+#: templates/views/components/plugins/importer-configuration.htm:278
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Annuler"
 
-#: templates/views/components/plugins/importer-configuration.htm:230
+#: templates/views/components/plugins/importer-configuration.htm:279
 msgid "Save"
 msgstr "Enregistrer"
 
@@ -2450,15 +2553,15 @@ msgstr "Tout désélectionner"
 msgid "View:"
 msgstr "Affichage :"
 
-#: templates/views/components/widgets/file-xy.htm:62
+#: templates/views/components/widgets/file-xy.htm:61
 msgid "Loading charts..."
 msgstr "Chargement des graphiques..."
 
-#: templates/views/components/widgets/file-xy.htm:70
+#: templates/views/components/widgets/file-xy.htm:69
 msgid "Unable to load chart data"
 msgstr "Impossible de charger les données du graphique"
 
-#: templates/views/components/widgets/file-xy.htm:78
+#: templates/views/components/widgets/file-xy.htm:77
 msgid "Select files to display"
 msgstr "Sélectionnez les fichiers à afficher"
 
@@ -2504,10 +2607,6 @@ msgstr "Retour"
 #: templates/views/components/widgets/manifest-widget.htm:129
 msgid "Manifest title"
 msgstr "Titre du manifeste"
-
-#: templates/views/components/widgets/manifest-widget.htm:133
-msgid "Description"
-msgstr "Description"
 
 #: templates/views/components/widgets/manifest-widget.htm:136
 msgid "Manifest description"
@@ -3431,10 +3530,6 @@ msgstr "Soumettre un projet"
 msgid "Request an account / access"
 msgstr "Demander un compte / un accès"
 
-#: templates/views/pages/contact.htm:93
-msgid "Other"
-msgstr "Autre"
-
 #: templates/views/pages/contact.htm:113
 msgid "Open my email app"
 msgstr "Ouvrir mon application e-mail"
@@ -3983,15 +4078,15 @@ msgstr "Référence"
 msgid "IIIF Manifest"
 msgstr "Manifeste IIIF"
 
-#: views/renderer_config.py:48
+#: views/renderer_config.py:49
 msgid "<h1>Renderers do not exist</h1>"
 msgstr "<h1>Les rendus n'existent pas</h1>"
 
-#: views/renderer_config.py:98
+#: views/renderer_config.py:104
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 
-#: views/renderer_config.py:114
+#: views/renderer_config.py:129
 msgid ""
 "This configuration is part of the shared baseline and can only be edited by "
 "an administrator. Duplicate it to make your own."
@@ -3999,60 +4094,12 @@ msgstr ""
 "Cette configuration fait partie du socle commun et ne peut être modifiée que "
 "par un administrateur. Dupliquez-la pour créer la vôtre."
 
-#: views/renderer_config.py:157
+#: views/renderer_config.py:172
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
 "Cette configuration fait partie du socle commun et ne peut pas être "
 "supprimée."
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Data Delimiter"
-msgstr "Séparateur de colonnes"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "What separates the columns. Auto-detect handles most instrument exports."
-msgstr "Ce qui sépare les colonnes. La détection automatique convient à la plupart des exports d'instruments."
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Pipe"
-msgstr "Barre verticale"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "A single character"
-msgstr "Un seul caractère"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "This delimiter cannot be used. Correct it to save the configuration."
-msgstr "Ce séparateur est inutilisable. Corrigez-le pour pouvoir enregistrer la configuration."
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Chart Title"
-msgstr "Titre du graphique"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Title shown above the chart"
-msgstr "Titre affiché au-dessus du graphique"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "X Axis Label"
-msgstr "Libellé de l'axe X"
-
-#: templates/views/components/plugins/importer-configuration.htm
-msgid "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point."
-msgstr "Sans objet ici : un fichier sans colonne X est tracé selon la position des lignes, et l'axe est libellé Point."
-
-#: templates/javascript.htm
-msgid "Averaged into a single series"
-msgstr "Moyennées en une seule série"
-
-#: templates/javascript.htm
-msgid "window"
-msgstr "fenêtre"
-
-#: templates/javascript.htm
-msgid "These files use different configurations — the axes describe only one of them, and no view is offered."
-msgstr "Ces fichiers utilisent des configurations différentes — les axes n'en décrivent qu'une, et aucune vue n'est proposée."
 
 #~ msgid "These look like percentages, not the 0-1 ratio the axis names."
 #~ msgstr ""
@@ -4116,9 +4163,6 @@ msgstr "Ces fichiers utilisent des configurations différentes — les axes n'en
 
 #~ msgid "Display/Charting"
 #~ msgstr "Affichage / Graphique"
-
-#~ msgid "Title"
-#~ msgstr "Titre"
 
 #~ msgid "Spectral Range"
 #~ msgstr "Gamme spectrale"
