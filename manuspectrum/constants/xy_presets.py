@@ -480,7 +480,6 @@ TECHNIQUE_PRESETS = {
     "f021c6c2-9b1c-3b14-b4d0-20e7be2e1c7d": "ftir",  # 61314 — Spectrométrie moyen infrarouge
     "86b42db2-bf11-3adf-98a3-8dcb12b493c3": "ftir",  # 61316 — SEIRA
     "8efe4d7b-5b84-344d-b514-0643d5ae1c5b": "ftir",  # 61251 — Spectrométrie d'absorption dans l'infrarouge
-    "64ea26a1-99e3-3418-ad92-0725f96f20f4": "ftir",  # 61238 — Réflectométrie infrarouge
     # Unresolved acronym: no scope note, no English label, no attestation in
     # the literature. Left on the absorbance default rather than guessed at;
     # the thesaurus owner is the only route to certainty. Zero analyses use it.
@@ -496,6 +495,10 @@ TECHNIQUE_PRESETS = {
     "0855e4dc-795c-31e4-a050-d2101e0f1c06": "ftir_reflection",  # 61311 — absorption réflexion
     "e0a4fb46-d619-3f19-be79-c688e727e27e": "ftir_reflection",  # 61312 — … par modulation de polarisation
     "6c81f4fc-15a1-35fe-9082-cad955c18793": "ftir_reflection",  # 61313 — MicroIRRS
+    # Reflectometry is a reflection measurement whatever term sits above it,
+    # so the file holds a reflectance. It was on the absorbance preset, which
+    # inverts how every band reads.
+    "64ea26a1-99e3-3418-ad92-0725f96f20f4": "ftir_reflection",  # 61238 — Réflectométrie infrarouge
     # Deliberately unmapped, and why — an absence has to be a decision:
     #   61073 / 61233 / 61329  infrared microscopies. Run in transmission, ATR
     #       or reflection depending on the accessory, and the term says which
