@@ -4,7 +4,6 @@
 
 import arches from 'arches';
 import ko from 'knockout';
-import $ from 'jquery';
 import Cookies from 'js-cookie';
 import AlertViewModel from 'viewmodels/alert';
 import {
@@ -246,12 +245,15 @@ const vm = function (params) {
             return;
         }
         try {
-            const valueRegex =
-                newDelimiter.length < 2
-                    ? new RegExp(`[${newDelimiter}\\s]+`)
-                    : new RegExp(`${newDelimiter}`);
+            // Built only to be thrown by: an unparsable delimiter is what
+            // invalidDelimiter reports, and nothing reads the expression.
+            if (newDelimiter.length < 2) {
+                new RegExp(`[${newDelimiter}\\s]+`);
+            } else {
+                new RegExp(`${newDelimiter}`);
+            }
             this.invalidDelimiter(false);
-        } catch (e) {
+        } catch {
             this.invalidDelimiter(true);
         }
     });

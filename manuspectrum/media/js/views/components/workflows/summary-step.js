@@ -8,7 +8,6 @@ import geojsonExtent from 'geojson-extent';
 import L from 'leaflet';
 import MapComponentViewModel from 'views/components/map';
 import selectFeatureLayersFactory from 'views/components/cards/select-feature-layers';
-import AlertViewModel from 'viewmodels/alert';
 import 'bindings/leaflet';
 
 const viewModel = function(params) {
@@ -36,7 +35,7 @@ const viewModel = function(params) {
     this.getResourceValue = function(obj, attrs, missingValue = 'none') {
         try {
             return attrs.reduce(function index(obj, i) { return obj[i]; }, obj) || missingValue;
-        } catch (e) {
+        } catch {
             return missingValue;
         }
     };

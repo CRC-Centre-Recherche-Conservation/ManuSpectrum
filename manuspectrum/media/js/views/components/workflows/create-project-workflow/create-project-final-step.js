@@ -79,7 +79,7 @@ const viewModel = function(params) {
                         value: self.getResourceValue(statement, ['Type of statement', '@display_value'])
                     }
                 })) || [];
-            } catch (e) {
+            } catch {
                 self.reportVals.statements = [];
             }
             const foundStatement = self.reportVals.statements.find((statement) => {

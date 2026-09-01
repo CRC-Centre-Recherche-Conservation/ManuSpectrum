@@ -2,10 +2,8 @@
 // GPL-3.0 license
 // https://github.com/archesproject/arches-for-science
 
-import $ from 'jquery';
 import _ from 'underscore';
 import ko from 'knockout';
-import koMapping from 'knockout-mapping';
 import uuid from 'uuid';
 import arches from 'arches';
 import addThingsStepTemplate from 'templates/views/components/workflows/create-project-workflow/add-things-step.htm';
@@ -54,15 +52,12 @@ const viewModel = function(params) {
         self.updateSearchResults(self.termFilter());
     });
 
-    const limit = 7;
     this.projectResourceId = ko.observable();
     this.studiedObjectsTileId = ko.observable();
     this.reportDataLoading = ko.observable(ko.unwrap(params.loading));
-    let projectName;
 
     if (params.projectStepData) {
         const projectStepData = params.projectStepData;
-        projectName = projectStepData.name?.value;
         this.projectResourceId(projectStepData.projectResourceId);
     } else if (params.resourceid) {
         this.projectResourceId(params.resourceid);

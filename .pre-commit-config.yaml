@@ -16,14 +16,19 @@ repos:
     hooks:
       - id: prettier
         name: prettier
-        entry: npm run prettier:fix
+        entry: npx prettier --write
         language: system
-        files: manuspectrum/src
+        # Deliberately NOT media/js: that tree has never been formatted, and
+        # running Prettier over it would rewrite 58 files for no behaviour
+        # change. ESLint covers it for the defects that matter.
+        files: ^manuspectrum/src/
       - id: eslint
         name: eslint
-        entry: npm run eslint:fix
+        # npx, not `npm run`: npm swallows the filenames pre-commit appends,
+        # so the hook used to lint nothing even when it did fire.
+        entry: npx eslint --fix
         language: system
-        files: manuspectrum/src
+        files: ^manuspectrum/(src|media/js)/.*\.(js|ts|vue)$
       - id: typescript
         name: typescript
         entry: bash -c 'npm run ts:check'

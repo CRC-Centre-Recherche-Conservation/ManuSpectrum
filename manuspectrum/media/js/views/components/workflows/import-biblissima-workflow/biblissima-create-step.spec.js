@@ -13,7 +13,7 @@
  * toward the coverage gate (coverage.include targets manuspectrum/src/).
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // ---- Module-level mocks (hoisted by vi.mock before imports) ----------------
 
@@ -596,7 +596,7 @@ describe('biblissima-create-step', () => {
             vm.batchSummary({ created: 0, failed: 1 });
 
             // Spy on createAll to prevent actual network calls
-            const spy = vi.spyOn(vm, 'createAll').mockResolvedValue(undefined);
+            vi.spyOn(vm, 'createAll').mockResolvedValue(undefined);
 
             vm.retryAllFailed();
 

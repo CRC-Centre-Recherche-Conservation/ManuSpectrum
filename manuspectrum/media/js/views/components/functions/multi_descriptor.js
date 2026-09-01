@@ -1,10 +1,7 @@
-import $ from 'jquery';
 import _ from 'underscore';
 import arches from 'arches';
 import ko from 'knockout';
-import koMapping from 'knockout-mapping';
-import ListView from 'views/list';
-import PrimaryDescriptorsView from 'views/components/functions/primary-descriptors';
+import 'views/components/functions/primary-descriptors';
 import multiDescriptor from 'templates/views/components/functions/multi_descriptor.htm';
 import 'bindings/select2-query';
 
@@ -25,7 +22,7 @@ export default ko.components.register('views/components/functions/multi_descript
             const regex = /<(.*?)>/g;
             const aliases = [...initialValue.matchAll(regex)].map(matchObj => matchObj[1]);
             return self.graph.nodes.filter(n => aliases.includes(n.alias)).map(n => n.nodeid);
-        }
+        };
 
         this.selectedNodes = {
             name: ko.observableArray(
@@ -66,7 +63,7 @@ export default ko.components.register('views/components/functions/multi_descript
                         return {
                             id: node.nodeid,
                             text: node.alias,
-                        }
+                        };
                     }),
                 });
             }
@@ -76,9 +73,9 @@ export default ko.components.register('views/components/functions/multi_descript
             ([observableName, observable]) => {
                 observable.subscribe(actions => {
                     actions.forEach(action => {
-                        self.updateTemplate(action.value, action.status, observableName)
-                    })
-                }, this, 'arrayChange')
+                        self.updateTemplate(action.value, action.status, observableName);
+                    });
+                }, this, 'arrayChange');
             }
         );
 

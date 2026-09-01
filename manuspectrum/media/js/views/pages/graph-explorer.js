@@ -1676,7 +1676,7 @@ class StructureView {
         let h = Math.max(slots, 1) * ROW_PITCH + pad + FRAME_PAD_Y;
 
         if (typeof svg.getBBox === "function") {
-            let box = null;
+            let box;
             try {
                 box = svg.getBBox();
             } catch {
