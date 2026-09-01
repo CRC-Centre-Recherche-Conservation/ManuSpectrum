@@ -43,7 +43,7 @@ msgstr "Impossible d'appliquer la configuration XY à la tuile %s"
 
 #: settings.py:121
 msgid "Term Matches"
-msgstr ""
+msgstr "Correspondances de termes"
 
 #: settings.py:127
 msgid "References"

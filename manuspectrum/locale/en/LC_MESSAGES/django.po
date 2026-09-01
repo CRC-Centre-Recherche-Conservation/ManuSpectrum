@@ -72,20 +72,16 @@ msgstr ""
 "heritage"
 
 #: templates/errors/400.htm:5
-#, fuzzy
-#| msgid "Access request"
 msgid "Bad request"
-msgstr "Access request"
+msgstr "Bad request"
 
 #: templates/errors/400.htm:6
 msgid "The server could not understand this request."
 msgstr ""
 
 #: templates/errors/400.htm:11
-#, fuzzy
-#| msgid "Error"
 msgid "Error 400"
-msgstr "Error"
+msgstr "Error 400"
 
 #: templates/errors/400.htm:13
 msgid "We couldn't read that request"
@@ -106,16 +102,12 @@ msgstr ""
 
 #: templates/errors/400.htm:19 templates/errors/403.htm:20
 #: templates/errors/404.htm:65
-#, fuzzy
-#| msgid "Meet the team"
 msgid "Contact the team"
-msgstr "Meet the team"
+msgstr "Contact the team"
 
 #: templates/errors/403.htm:5
-#, fuzzy
-#| msgid "Access request"
 msgid "Access restricted"
-msgstr "Access request"
+msgstr "Access restricted"
 
 #: templates/errors/403.htm:6
 msgid "This page requires an account or additional permissions."
@@ -142,20 +134,16 @@ msgid "Sign In"
 msgstr "Sign In"
 
 #: templates/errors/404.htm:14
-#, fuzzy
-#| msgid "Manifest not found"
 msgid "Page not found"
-msgstr "Manifest not found"
+msgstr "Page not found"
 
 #: templates/errors/404.htm:15
 msgid "This page does not exist or has moved."
 msgstr ""
 
 #: templates/errors/404.htm:20
-#, fuzzy
-#| msgid "Spectra and analysis data"
 msgid "Spectral analysis report"
-msgstr "Spectra and analysis data"
+msgstr "Spectral analysis report"
 
 #: templates/errors/404.htm:22
 msgid "Reflectance spectrum with no signal at 404 nanometres"
@@ -366,10 +354,8 @@ msgid "Close"
 msgstr "Close"
 
 #: templates/index.htm:226
-#, fuzzy
-#| msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
 msgid "ManuSpectrum — Spectral Analysis Plot"
-msgstr "ManuSpectrum — Physicochemical Analysis of Heritage"
+msgstr "ManuSpectrum — Spectral Analysis Plot"
 
 #: templates/index.htm:227
 msgid "interactive"
@@ -416,12 +402,6 @@ msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Thinking and modeling written cultural heritage materials"
 
 #: templates/index.htm:278
-#, fuzzy
-#| msgid ""
-#| "It is developed within Cluster 2 — “Consideration and searchability of "
-#| "materials-analysis data” — of the ANR Biblissima+ programme, at the "
-#| "Centre de Recherche sur la Conservation (CRC), in partnership with Huma-"
-#| "Num."
 msgid ""
 "ManuSpectrum was developed within Cluster 2 — “Consideration and "
 "searchability of materials analysis data” — of the ANR Biblissima+ "
@@ -429,9 +409,11 @@ msgid ""
 "physicochemical analysis data for manuscripts, inscriptions, seals and other "
 "heritage objects, in partnership with Huma-Num."
 msgstr ""
-"It is developed within Cluster 2 — “Consideration and searchability of "
-"materials-analysis data” — of the ANR Biblissima+ programme, at the Centre "
-"de Recherche sur la Conservation (CRC), in partnership with Huma-Num."
+"ManuSpectrum was developed within Cluster 2 — “Consideration and "
+"searchability of materials analysis data” — of the ANR Biblissima+ "
+"programme. This cluster aims to ensure the long-term archiving and reuse of "
+"physicochemical analysis data for manuscripts, inscriptions, seals and other "
+"heritage objects, in partnership with Huma-Num."
 
 #: templates/index.htm:281
 msgid ""
@@ -553,16 +535,12 @@ msgstr ""
 "spectroscopy"
 
 #: templates/index.htm:375
-#, fuzzy
-#| msgid ""
-#| "Ultraviolet hyperspectral imaging to reveal details invisible to the "
-#| "naked eye"
 msgid ""
 "A manuscript under ultraviolet light during hyperspectral imaging, revealing "
 "inks and retouches invisible to the naked eye"
 msgstr ""
-"Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
-"eye"
+"A manuscript under ultraviolet light during hyperspectral imaging, revealing "
+"inks and retouches invisible to the naked eye"
 
 #: templates/index.htm:377
 msgid "UV hyperspectral imaging"
@@ -593,16 +571,12 @@ msgid "Slide 1 of 3 — Macro-XRF scanning"
 msgstr ""
 
 #: templates/index.htm:397
-#, fuzzy
-#| msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgid "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
-msgstr "Fiber optic reflectance spectroscopy (FORS)"
+msgstr "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
 
 #: templates/index.htm:398
-#, fuzzy
-#| msgid "UV hyperspectral imaging"
 msgid "Slide 3 of 3 — UV hyperspectral imaging"
-msgstr "UV hyperspectral imaging"
+msgstr "Slide 3 of 3 — UV hyperspectral imaging"
 
 #: templates/index.htm:415
 msgid "What you can discover"
@@ -621,16 +595,12 @@ msgid "Spectra and analysis data"
 msgstr "Spectra and analysis data"
 
 #: templates/index.htm:425
-#, fuzzy
-#| msgid ""
-#| "Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and "
-#| "other analysis results directly on the platform."
 msgid ""
 "Visualize and compare reference spectra and analysis datasets. Explore XRF, "
 "FTIR, Raman, and other analysis results directly on the platform."
 msgstr ""
-"Visualize and compare reference spectra. Explore XRF, FTIR, Raman, and other "
-"analysis results directly on the platform."
+"Visualize and compare reference spectra and analysis datasets. Explore XRF, "
+"FTIR, Raman, and other analysis results directly on the platform."
 
 #: templates/index.htm:436
 msgid "IIIF Annotations"
@@ -673,20 +643,16 @@ msgid "Material Characterization"
 msgstr "Material Characterization"
 
 #: templates/index.htm:461
-#, fuzzy
-#| msgid ""
-#| "Explore the layers, materials, and chemical elements identified on "
-#| "written cultural heritage documents, with different levels of reliability "
-#| "and characterization."
 msgid ""
 "Explore the layers, materials and chemical elements identified on "
 "manuscripts, printed books and other written heritage — pigments, inks, "
 "binders, parchment and paper supports — with different levels of reliability "
 "and characterization."
 msgstr ""
-"Explore the layers, materials, and chemical elements identified on written "
-"cultural heritage documents, with different levels of reliability and "
-"characterization."
+"Explore the layers, materials and chemical elements identified on "
+"manuscripts, printed books and other written heritage — pigments, inks, "
+"binders, parchment and paper supports — with different levels of reliability "
+"and characterization."
 
 #: templates/index.htm:463
 msgid "Pigments"
@@ -774,17 +740,14 @@ msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Spectral band scanning and false-color composites via IIIF"
 
 #: templates/index.htm:547
-#, fuzzy
-#| msgid ""
-#| "Search by material, analysis technique, written cultural heritage object, "
-#| "or chemical element. Advanced filters available in the search interface."
 msgid ""
 "Search by material — a pigment, an ink, a support —, analysis technique, "
 "written cultural heritage object, or chemical element. Advanced filters "
 "available in the search interface."
 msgstr ""
-"Search by material, analysis technique, written cultural heritage object, or "
-"chemical element. Advanced filters available in the search interface."
+"Search by material — a pigment, an ink, a support —, analysis technique, "
+"written cultural heritage object, or chemical element. Advanced filters "
+"available in the search interface."
 
 #: templates/index.htm:560
 msgid "Search materials, techniques, objects..."
@@ -1453,16 +1416,14 @@ msgid "{n} fields"
 msgstr "{n} fields"
 
 #: templates/javascript.htm:153
-#, fuzzy, python-brace-format
-#| msgid "{n} fields"
+#, python-brace-format
 msgid "{n} field"
-msgstr "{n} fields"
+msgstr "{n} field"
 
 #: templates/javascript.htm:154
-#, fuzzy, python-brace-format
-#| msgid "{n} fields · {m} groups"
+#, python-brace-format
 msgid "{n} fields · {m} group"
-msgstr "{n} fields · {m} groups"
+msgstr "{n} fields · {m} group"
 
 #: templates/javascript.htm:155
 #, python-brace-format
@@ -1588,16 +1549,12 @@ msgid "Yes"
 msgstr "Yes"
 
 #: templates/javascript.htm:187
-#, fuzzy
-#| msgid "How to cite"
 msgid "How to combine them"
-msgstr "How to cite"
+msgstr "How to combine them"
 
 #: templates/javascript.htm:188
-#, fuzzy
-#| msgid "Chart Configuration"
 msgid "Delete this configuration?"
-msgstr "Chart Configuration"
+msgstr "Delete this configuration?"
 
 #: templates/javascript.htm:189
 #, python-brace-format
@@ -1605,10 +1562,8 @@ msgid "“{name}” will be removed for everyone. This cannot be undone."
 msgstr ""
 
 #: templates/javascript.htm:190
-#, fuzzy
-#| msgid "Chart Configuration"
 msgid "Protected configuration"
-msgstr "Chart Configuration"
+msgstr "Protected configuration"
 
 #: templates/javascript.htm:190
 msgid "Configuration not saved"
@@ -1705,10 +1660,8 @@ msgid ""
 msgstr ""
 
 #: templates/javascript.htm:206
-#, fuzzy
-#| msgid "Select a Transformation"
 msgid "Add a transformation"
-msgstr "Select a Transformation"
+msgstr "Add a transformation"
 
 #: templates/javascript.htm:207
 msgid "Reference normalisation (S-D)/(W-D)"
@@ -1829,10 +1782,8 @@ msgstr ""
 "per-file adjustments, use the Status tab."
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:27
-#, fuzzy
-#| msgid "XY file(s) staged"
 msgid "XY file(s) selected"
-msgstr "XY file(s) staged"
+msgstr "XY file(s) selected"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:44
 #: templates/views/components/cards/file-renderers/xy-reader.htm:148
@@ -1855,10 +1806,8 @@ msgid "Apply to"
 msgstr "Apply to"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:74
-#, fuzzy
-#| msgid "staged file(s)"
 msgid "selected file(s)"
-msgstr "staged file(s)"
+msgstr "selected file(s)"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:78
 msgid "Applying..."
@@ -1993,10 +1942,8 @@ msgid "Apply & re-render"
 msgstr "Apply & re-render"
 
 #: templates/views/components/functions/xy-technique-config.htm:5
-#, fuzzy
-#| msgid "Add Importer Configuration"
 msgid "Automatic XY viewer configuration"
-msgstr "Add Importer Configuration"
+msgstr "Automatic XY viewer configuration"
 
 #: templates/views/components/functions/xy-technique-config.htm:7
 msgid ""
@@ -2094,10 +2041,8 @@ msgid "Define how to import your x/y data"
 msgstr "Define how to import your x/y data"
 
 #: templates/views/components/plugins/importer-configuration.htm:8
-#, fuzzy
-#| msgid "Importer Configurations"
 msgid "Filter configurations..."
-msgstr "Importer Configurations"
+msgstr "Filter configurations..."
 
 #: templates/views/components/plugins/importer-configuration.htm:11
 msgid "Clear the filter"
@@ -2118,10 +2063,8 @@ msgid "Delete"
 msgstr "Delete"
 
 #: templates/views/components/plugins/importer-configuration.htm:54
-#, fuzzy
-#| msgid "No result matches the current filter."
 msgid "No configuration matches this filter."
-msgstr "No result matches the current filter."
+msgstr "No configuration matches this filter."
 
 #: templates/views/components/plugins/importer-configuration.htm:58
 #: templates/views/components/plugins/importer-configuration.htm:62
@@ -2190,10 +2133,8 @@ msgid "From data (first column is X)"
 msgstr "From data (first column is X)"
 
 #: templates/views/components/plugins/importer-configuration.htm:95
-#, fuzzy
-#| msgid "Generate from range (no X column in file)"
 msgid "Intensities only (no X column in file)"
-msgstr "Generate from range (no X column in file)"
+msgstr "Intensities only (no X column in file)"
 
 #: templates/views/components/plugins/importer-configuration.htm:98
 msgid ""
@@ -2212,10 +2153,8 @@ msgid "Presets..."
 msgstr "Presets..."
 
 #: templates/views/components/plugins/importer-configuration.htm:126
-#, fuzzy
-#| msgid "X Axis Source"
 msgid "X Axis Direction"
-msgstr "X Axis Source"
+msgstr "X Axis Direction"
 
 #: templates/views/components/plugins/importer-configuration.htm:131
 msgid ""
@@ -2414,10 +2353,8 @@ msgid "Deselect all"
 msgstr "Deselect all"
 
 #: templates/views/components/widgets/file-xy.htm:48
-#, fuzzy
-#| msgid "View"
 msgid "View:"
-msgstr "View"
+msgstr "View:"
 
 #: templates/views/components/widgets/file-xy.htm:54
 msgid "Changes how the spectrum is shown. The stored file is never modified."
@@ -2999,18 +2936,12 @@ msgstr "Open project"
 
 #: templates/views/pages/conceptual-model.htm:5
 #: templates/views/pages/conceptual-model.htm:7
-#, fuzzy
-#| msgid ""
-#| "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci "
-#| "description of written cultural heritage, the analyses applied to it and "
-#| "the knowledge inferred from them."
 msgid ""
 "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
 "of written heritage, its analyses and the knowledge inferred from them."
 msgstr ""
 "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
-"of written cultural heritage, the analyses applied to it and the knowledge "
-"inferred from them."
+"of written heritage, its analyses and the knowledge inferred from them."
 
 #: templates/views/pages/conceptual-model.htm:14
 #: templates/views/pages/contact.htm:14
@@ -3100,10 +3031,8 @@ msgid ""
 msgstr ""
 
 #: templates/views/pages/conceptual-model.htm:85
-#, fuzzy
-#| msgid "AGORHA thesaurus"
 msgid "Thesaurus"
-msgstr "AGORHA thesaurus"
+msgstr "Thesaurus"
 
 #: templates/views/pages/conceptual-model.htm:86
 msgid ""
@@ -3325,12 +3254,6 @@ msgid "Submit a project or reach the team"
 msgstr "Submit a project or reach the team"
 
 #: templates/views/pages/contact.htm:35
-#, fuzzy
-#| msgid ""
-#| "Reading and downloading published data needs no account. If you want to "
-#| "<em>deposit</em> analysis data, tell us about your project — ManuSpectrum "
-#| "hosts data from partner laboratories and we open accounts case by case, "
-#| "usually within a week."
 msgid ""
 "Reading and downloading published data needs no account. If you want to "
 "<em>deposit</em> analysis data, tell us about your project — ManuSpectrum "
@@ -3339,8 +3262,8 @@ msgid ""
 msgstr ""
 "Reading and downloading published data needs no account. If you want to "
 "<em>deposit</em> analysis data, tell us about your project — ManuSpectrum "
-"hosts data from partner laboratories and we open accounts case by case, "
-"usually within a week."
+"hosts data from partner conservation and heritage science laboratories and "
+"we open accounts case by case, usually within a week."
 
 #: templates/views/pages/contact.htm:47
 msgid "Get in touch"
@@ -3471,10 +3394,8 @@ msgid ""
 msgstr ""
 
 #: templates/views/pages/graph-explorer.htm:68
-#, fuzzy
-#| msgid "Twelve models, four families"
 msgid "The four model families"
-msgstr "Twelve models, four families"
+msgstr "The four model families"
 
 #: templates/views/pages/graph-explorer.htm:69
 msgid ""
@@ -3639,22 +3560,14 @@ msgid "Research engineer, head of the Images service"
 msgstr "Research engineer, head of the Images service"
 
 #: templates/views/pages/team.htm:26 templates/views/pages/team.htm:144
-#, fuzzy
-#| msgid "Study engineer / web developer"
 msgid "Engineer / web developer"
-msgstr "Study engineer / web developer"
+msgstr "Engineer / web developer"
 
 #: templates/views/pages/team.htm:37
 msgid "The project & the people"
 msgstr "The project & the people"
 
 #: templates/views/pages/team.htm:49
-#, fuzzy
-#| msgid ""
-#| "ManuSpectrum archives, standardises and makes searchable the "
-#| "physicochemical analysis of written cultural heritage — manuscripts, "
-#| "printed books, inscriptions and more — so that reliable, interoperable "
-#| "data can be reused by people who did not run the measurements."
 msgid ""
 "ManuSpectrum archives, standardises and makes searchable the physicochemical "
 "analysis of written cultural heritage — manuscripts, printed books, "
@@ -3664,8 +3577,9 @@ msgid ""
 msgstr ""
 "ManuSpectrum archives, standardises and makes searchable the physicochemical "
 "analysis of written cultural heritage — manuscripts, printed books, "
-"inscriptions and more — so that reliable, interoperable data can be reused "
-"by people who did not run the measurements."
+"inscriptions and more — so that reliable, interoperable FAIR data can be "
+"reused by the heritage science community, far beyond those who ran the "
+"measurements."
 
 #: templates/views/pages/team.htm:57
 msgid ""
@@ -3845,20 +3759,16 @@ msgid "String"
 msgstr ""
 
 #: views/model_graph_service.py:104
-#, fuzzy
-#| msgid "Conceptual Model"
 msgid "Concept"
-msgstr "Conceptual Model"
+msgstr "Concept"
 
 #: views/model_graph_service.py:105
 msgid "Concept List"
 msgstr ""
 
 #: views/model_graph_service.py:106
-#, fuzzy
-#| msgid "Resources"
 msgid "Resource Instance"
-msgstr "Resources"
+msgstr "Resource Instance"
 
 #: views/model_graph_service.py:107
 msgid "Resource Instance List"
@@ -3889,20 +3799,16 @@ msgid "GeoJSON Feature Collection"
 msgstr ""
 
 #: views/model_graph_service.py:114
-#, fuzzy
-#| msgid "Files"
 msgid "File List"
-msgstr "Files"
+msgstr "File List"
 
 #: views/model_graph_service.py:116
 msgid "Node Value"
 msgstr ""
 
 #: views/model_graph_service.py:117
-#, fuzzy
-#| msgid "IIIF Annotations"
 msgid "Annotation"
-msgstr "IIIF Annotations"
+msgstr "Annotation"
 
 #: views/model_graph_service.py:118
 msgid "EDTF"
@@ -3917,10 +3823,8 @@ msgid "Reference"
 msgstr ""
 
 #: views/model_graph_service.py:122
-#, fuzzy
-#| msgid "IIIF manifest"
 msgid "IIIF Manifest"
-msgstr "IIIF manifest"
+msgstr "IIIF Manifest"
 
 #: views/renderer_config.py:48
 msgid "<h1>Renderers do not exist</h1>"
