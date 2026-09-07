@@ -363,9 +363,8 @@ XY_PRESETS = {
     # One preset for every mass spectrum. There used to be two — "MALDI-TOF"
     # and "Mass spectrometry" — carrying axis labels identical to the
     # character. They cost more than the duplication: an analysis tagged with
-    # both a specific and a generic mass-spectrometry term made
-    # config_id_for_techniques see two keys and return None, so the file got no
-    # configuration at all. The guard is right to refuse a real disagreement;
+    # both a specific and a generic mass-spectrometry term resolved to two
+    # configurations, so the file got none at all. The guard is right to refuse a real disagreement;
     # here there was nothing to disagree about.
     #
     # Named for the measurement, not the instrument: the technique that carries
@@ -643,23 +642,9 @@ def merge_seed_owned_keys(stored, incoming):
     return {**incoming, **preserved}
 
 
-def preset_for_technique(list_item_id):
-    """Return the preset dict for a controlled-list item id, or ``None``."""
-    key = TECHNIQUE_PRESETS.get(str(list_item_id))
-    return XY_PRESETS.get(key) if key else None
-
-
-def config_id_for_techniques(list_item_ids):
-    """Resolve a set of technique ids to a single RendererConfig id.
-
-    The technique node is ``multiValue``, so an analysis may legitimately carry
-    several techniques. Returns the shared config id when every mapped
-    technique agrees, and ``None`` when they disagree or when none is mapped —
-    guessing between conflicting techniques would silently mislabel the axes.
-    """
-    keys = {
-        TECHNIQUE_PRESETS[str(i)] for i in list_item_ids if str(i) in TECHNIQUE_PRESETS
-    }
-    if len(keys) != 1:
-        return None
-    return XY_PRESETS[keys.pop()]["config_id"]
+#: Technique item id -> ``RendererConfig`` id, the projection the SQL trigger
+#: is generated from (see ``manuspectrum/sql_config.py``).
+TECHNIQUE_CONFIG_IDS = {
+    item_id: XY_PRESETS[preset_key]["config_id"]
+    for item_id, preset_key in TECHNIQUE_PRESETS.items()
+}
