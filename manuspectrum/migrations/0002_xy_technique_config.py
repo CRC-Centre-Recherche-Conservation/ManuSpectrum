@@ -21,7 +21,6 @@ from django.db import migrations
 from manuspectrum.constants.xy_presets import (
     ANALYSIS_GRAPH_ID,
     DATA_FILE_NODEGROUP_ID,
-    TECHNIQUE_NODEGROUP_ID,
     XY_PRESETS,
     XY_RENDERER_ID,
 )
@@ -59,7 +58,7 @@ def register_function(apps, schema_editor):
     FunctionXGraph = apps.get_model("models", "FunctionXGraph")
     GraphModel = apps.get_model("models", "GraphModel")
 
-    triggering = [TECHNIQUE_NODEGROUP_ID, DATA_FILE_NODEGROUP_ID]
+    triggering = [DATA_FILE_NODEGROUP_ID]
 
     Function.objects.update_or_create(
         functionid=FUNCTION_ID,
