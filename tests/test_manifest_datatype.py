@@ -11,6 +11,7 @@ import uuid
 from unittest.mock import MagicMock, Mock, patch, call
 
 from django.test import TestCase, override_settings
+from django.utils import translation
 import requests
 
 from manuspectrum.utils.http import UnsafeURLError
@@ -494,6 +495,13 @@ class TestManifestValidation(TestCase):
     """Tests for the validate method."""
 
     def setUp(self):
+        # These assert on English message text. The datatype is called
+        # directly, outside a request, so it inherits whatever language the
+        # last client call activated — LocaleMiddleware activates and never
+        # deactivates, and every page URL now carries a language.
+        translation.activate("en")
+        self.addCleanup(translation.deactivate)
+
         with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
             from manuspectrum.datatypes.manifest import ManifestDataType

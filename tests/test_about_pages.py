@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.template import Context, Template
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
@@ -35,12 +36,16 @@ class AboutRoutingTests(TestCase):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
     def test_index_htm_redirects_permanently_to_root(self):
-        # SEO: /index.htm duplicated / — it must 301 (and keep query strings).
-        resp = self.client.get("/index.htm")
-        self.assertEqual(resp.status_code, 301)
-        self.assertEqual(resp["Location"], "/")
-        resp = self.client.get("/index.htm?q=1")
-        self.assertEqual(resp["Location"], "/?q=1")
+        # SEO: /index.htm duplicates the root. Like every page it lives under
+        # a language prefix, and redirects permanently to the root of its own
+        # language. A bare /index.htm reaches the same place through
+        # LocaleMiddleware's negotiation redirect first; what matters is where
+        # the chain ends and that the query string survives.
+        self.assertEqual(self.client.get("/en/index.htm")["Location"], "/en/")
+        self.assertEqual(self.client.get("/fr/index.htm")["Location"], "/fr/")
+
+        chain = self.client.get("/index.htm?q=1", follow=True)
+        self.assertEqual(chain.redirect_chain[-1], ("/en/?q=1", 301))
 
 
 # ArchesTestRunner forces debug_mode=True, and Django serves its technical 404
@@ -54,7 +59,7 @@ class ErrorPageTests(TestCase):
         resp = self.client.get("/this-page-does-not-exist")
         self.assertEqual(resp.status_code, 404)
         self.assertContains(resp, "ManuSpectrum", status_code=404)
-        self.assertContains(resp, 'href="/"', status_code=404)
+        self.assertContains(resp, 'href="/en/"', status_code=404)
         self.assertNotContains(resp, "/index.html", status_code=404)
         self.assertContains(resp, 'name="robots" content="noindex"', status_code=404)
 
@@ -123,52 +128,78 @@ class SitemapTests(TestCase):
         self.assertIn('hreflang="x-default"', xml)
 
 
-class FrenchRoutingTests(TestCase):
-    """prefix_default_language=False: EN stays unprefixed, FR lives at /fr/."""
+class LanguagePrefixRoutingTests(TestCase):
+    """Every page URL carries its language; unprefixed paths are negotiated."""
 
-    def test_english_urls_stay_unprefixed(self):
-        self.assertEqual(reverse("about-team"), "/about/team")
+    def test_pages_live_under_a_language_prefix(self):
+        self.assertEqual(reverse("about-team"), "/en/about/team")
+        for prefix, tag in (("/en", "en"), ("/fr", "fr")):
+            resp = self.client.get(f"{prefix}/about/team")
+            self.assertEqual(resp.status_code, 200)
+            self.assertContains(resp, f'lang="{tag}"')
+
+    def test_unprefixed_page_redirects_to_the_default_language(self):
         resp = self.client.get("/about/team")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "/en/about/team")
+
+    def test_unprefixed_page_honours_the_accept_language_header(self):
+        resp = self.client.get("/about/team", HTTP_ACCEPT_LANGUAGE="fr-FR,fr;q=0.9")
+        self.assertEqual(resp["Location"], "/fr/about/team")
+
+    def test_unprefixed_page_honours_the_language_cookie(self):
+        # The explicit choice made through the switcher outranks the header.
+        self.client.cookies[settings.LANGUAGE_COOKIE_NAME] = "fr"
+        resp = self.client.get("/about/team", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9")
+        self.assertEqual(resp["Location"], "/fr/about/team")
+
+    def test_a_prefix_in_the_path_outranks_the_cookie(self):
+        # A shared link must open in the language it names.
+        self.client.cookies[settings.LANGUAGE_COOKIE_NAME] = "fr"
+        resp = self.client.get("/en/about/team")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'lang="en"')
 
-    def test_french_twin_serves_french(self):
-        resp = self.client.get("/fr/about/team")
-        self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'lang="fr"')
-
-    def test_en_prefix_does_not_exist(self):
-        # With prefix_default_language=False there must be no /en/ tree —
-        # a working /en/ twin would be duplicate content.
-        self.assertEqual(self.client.get("/en/about/team").status_code, 404)
-
-    def test_en_api_prefix_redirects_without_losing_the_method(self):
-        # Counterpart to the rule above, and the reason it stops at pages:
+    def test_arches_application_urls_resolve_under_en(self):
         # generateArchesURL() fills {language_code} from the document's lang,
-        # so every Vue app shipped by an Arches application asks for
-        # /en/api/... on an English page. Without this alias the i18n bootstrap
-        # 404s and createVueApplication() throws before mounting anything.
-        resp = self.client.get("/en/api/get_frontend_i18n_data")
-        self.assertEqual(resp.status_code, 308)
-        self.assertEqual(resp["Location"], "/api/get_frontend_i18n_data")
+        # so every Vue app shipped by an Arches application asks for /en/api/…
+        # on an English page. Those are now real URLs, which is why the
+        # redirect shim that used to rewrite them is gone.
+        self.assertEqual(
+            self.client.get("/en/api/get_frontend_i18n_data").status_code, 200
+        )
 
-        # 308 rather than 301/302 so writes stay writes: a browser rewrites the
-        # latter to GET, silently turning an API write into a read.
-        posted = self.client.post("/en/api/get_frontend_i18n_data")
-        self.assertEqual(posted.status_code, 308)
+    def test_project_machine_endpoints_stay_unprefixed(self):
+        # The project's own machine endpoints sit below the language boundary,
+        # so the bare path resolves and LocaleMiddleware never sees the 404 it
+        # would rewrite. Arches core routes are deliberately NOT re-registered
+        # that way: upstream wraps its whole URLconf, and following it is what
+        # keeps installing an Arches application from becoming URL surgery.
+        resource_id = "11111111-1111-4111-8111-111111111111"
+        for name, args in (
+            ("iiif-v3-annotation-collection", [resource_id]),
+            ("iiif-v2-annotation", [resource_id]),
+            ("biblissima-suggest", []),
+            ("biblissima-search", []),
+        ):
+            url = reverse(name, args=args)
+            self.assertFalse(
+                url.startswith("/en/") or url.startswith("/fr/"),
+                f"{name} reversed to a language-prefixed URL: {url}",
+            )
 
-        # The query string has to survive, or paginated/filtered calls break.
-        with_query = self.client.get("/en/api/get_frontend_i18n_data?page=2")
-        self.assertEqual(with_query["Location"], "/api/get_frontend_i18n_data?page=2")
+    def test_robots_and_sitemap_stay_unprefixed(self):
+        self.assertEqual(self.client.get("/robots.txt").status_code, 200)
+        self.assertEqual(self.client.get("/sitemap.xml").status_code, 200)
 
     def test_hreflang_alternates_on_about_pages(self):
-        html = self.client.get("/about/team").content.decode()
+        html = self.client.get("/en/about/team").content.decode()
         self.assertIn('hreflang="fr"', html)
         self.assertIn("/fr/about/team", html)
         self.assertIn('hreflang="x-default"', html)
 
     def test_language_switcher_rendered_with_crawlable_links(self):
-        html = self.client.get("/about/team").content.decode()
+        html = self.client.get("/en/about/team").content.decode()
         self.assertIn("ms-lang-switch", html)
         self.assertIn('href="http://testserver/fr/about/team"', html)
 
@@ -198,10 +229,9 @@ class FrenchRoutingTests(TestCase):
                 )
 
     def test_language_switcher_round_trip(self):
-        # Regression: set_language must live INSIDE i18n_patterns. Unprefixed,
-        # the request was forced to English (prefix_default_language=False),
-        # translate_url Resolver404'd on the /fr/ referer, and switching back
-        # to English bounced users to the same French page.
+        # set_language lives INSIDE i18n_patterns: translate_url() runs with
+        # the REQUEST's language, so the post has to carry the language it is
+        # switching away from.
         resp = self.client.post(
             "/fr/i18n/setlang/",
             {"language": "en"},
@@ -212,37 +242,38 @@ class FrenchRoutingTests(TestCase):
         self.assertNotIn("/fr/", resp["Location"])
 
         resp = self.client.post(
-            "/i18n/setlang/",
+            "/en/i18n/setlang/",
             {"language": "fr"},
-            HTTP_REFERER="http://testserver/about/team",
+            HTTP_REFERER="http://testserver/en/about/team",
         )
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/fr/about/team", resp["Location"])
 
-    def test_robots_blocks_french_app_routes(self):
+    def test_robots_blocks_app_routes_in_every_language(self):
         body = self.client.get("/robots.txt").content.decode()
-        self.assertIn("Disallow: /fr/search", body)
-        self.assertIn("Disallow: /fr/graph/", body)
+        for path in ("/search", "/en/search", "/fr/search", "/en/graph/"):
+            self.assertIn(f"Disallow: {path}", body)
 
-    def test_every_disallow_has_a_french_twin(self):
-        # Regression: /fr/renderer/ and /fr/renderer_config/ were the two
-        # missing twins. Assert the invariant for the whole file instead of
-        # a hand-picked subset, so a new rule can't reintroduce the gap.
+    def test_every_disallow_has_both_language_twins(self):
+        # Robots rules match by path prefix from the root, so /search does not
+        # cover /en/search. Assert the invariant for the whole file instead of
+        # a hand-picked subset, so a new rule cannot reintroduce the gap.
         body = self.client.get("/robots.txt").content.decode()
         rules = [
             line[len("Disallow:") :].strip()
             for line in body.splitlines()
             if line.startswith("Disallow:")
         ]
+        prefixes = tuple(f"/{code}/" for code, _label in settings.LANGUAGES)
         for path in rules:
-            if path.startswith("/fr/") or path == "/api/":
-                # /api/ is language-neutral (registered below the i18n wrap).
+            if path.startswith(prefixes):
                 continue
-            self.assertIn(
-                f"/fr{path}",
-                rules,
-                f"robots.txt: {path} has no /fr/ twin",
-            )
+            for code, _label in settings.LANGUAGES:
+                self.assertIn(
+                    f"/{code}{path}",
+                    rules,
+                    f"robots.txt: {path} has no /{code}/ twin",
+                )
 
 
 class ContactPageTests(TestCase):

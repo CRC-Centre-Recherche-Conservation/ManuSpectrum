@@ -1,7 +1,6 @@
 from django.conf import settings
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
-from django.http import HttpResponsePermanentRedirect
 from django.urls import include, path, re_path
 from django.views.generic import RedirectView, TemplateView
 
@@ -52,28 +51,6 @@ urlpatterns = [
         ),
         name="password_reset",
     ),
-    re_path(
-        r"^renderer/(?P<renderer_id>[^\/]+)", RendererView.as_view(), name="renderer"
-    ),
-    # A UUID converter, not a catch-all segment. The two protections on a
-    # seeded preset are decided by comparing the captured value against
-    # canonical ids, while the row it names is resolved by a UUIDField that
-    # also accepts uppercase, hyphen-free, braced and urn:-prefixed spellings.
-    # A permissive pattern let those two disagree, and "7A1C…" skipped the
-    # guard while deleting the row it protects. Django's converter admits the
-    # canonical form only; anything else is a 404 before the view is reached.
-    # The frontend only ever echoes server-returned ids, so no client changes.
-    path(
-        "renderer_config/<uuid:renderer_config_id>",
-        RendererConfigView.as_view(),
-        name="renderer_config",
-    ),
-    # Anchored: without the ``$`` this pattern also swallowed every id the
-    # converter above rejects, so a malformed one fell through to the create
-    # branch and silently made a new configuration instead of failing.
-    re_path(
-        r"^renderer_config/$", RendererConfigView.as_view(), name="renderer_config"
-    ),
 ]
 
 # NOTE: media is NOT served from this URLconf, at this or any other point.
@@ -106,9 +83,9 @@ handler500 = "arches.app.views.main.custom_500"
 urlpatterns.append(path("", include("arches.urls")))
 
 ### Manuspectrum URL — public About pages. Registered BEFORE the i18n wrap so
-### they get language-prefixed routes (/fr/about/team) like the rest of the UI.
-### API endpoints, robots.txt and sitemap.xml stay below the wrap on purpose:
-### they are language-neutral URLs.
+### they get language-prefixed routes (/en/about/team, /fr/about/team) like the
+### rest of the UI. API endpoints, robots.txt and sitemap.xml stay below the
+### wrap on purpose: they are language-neutral URLs.
 for _slug, _name, _tpl in [
     ("about/model", "about-model", "views/pages/conceptual-model.htm"),
     ("about/explorer", "about-explorer", "views/pages/graph-explorer.htm"),
@@ -120,54 +97,61 @@ for _slug, _name, _tpl in [
     )
 
 ### Model-graph API: wrapped too, so the URL carries the language
-### (/api/model-graph = EN, /fr/api/model-graph = FR). With
-### prefix_default_language=False Django forces the default language on any
-### unprefixed URL — a cookie can never select FR outside the wrap, so the
-### language MUST live in the path. Templates reverse {% url 'model-graph' %}
-### per request language, so consumers pick the right one for free.
+### (/en/api/model-graph, /fr/api/model-graph). Its payload is localised, so
+### the language belongs in the path rather than in per-request negotiation —
+### two languages, two cache keys, two URLs. Templates reverse
+### {% url 'model-graph' %} per request language, so consumers pick the right
+### one for free.
 urlpatterns.append(
     path("api/model-graph", ModelGraphView.as_view(), name="model-graph")
 )
 
 if settings.ROOT_URLCONF == __name__:
     # set_language must live INSIDE i18n_patterns: Django's view calls
-    # translate_url() with the REQUEST's active language, and with
-    # prefix_default_language=False an unprefixed /i18n/setlang request is
-    # forced to English — resolve('/fr/…') then Resolver404s inside
-    # translate_url and switching back to English silently no-ops (the
-    # switcher bounced users back to the French page). Wrapped, the Arches
-    # switcher posts to /fr/i18n/setlang from French pages and the request
-    # carries its language.
+    # translate_url() with the REQUEST's active language, so the request has to
+    # carry the language it is switching AWAY from. Wrapped, the Arches
+    # switcher posts to /fr/i18n/setlang from French pages and to
+    # /en/i18n/setlang from English ones.
     urlpatterns.append(path("i18n/", include("django.conf.urls.i18n")))
 
     if settings.SHOW_LANGUAGE_SWITCH is True:
-        # prefix_default_language=False: English keeps its historical
-        # unprefixed URLs (/, /about/team — already indexed and linked),
-        # French gets /fr/…. LocaleMiddleware 302s a fr-cookie visitor from
-        # an unprefixed URL to its /fr/ twin.
+        # Every URL under the wrap carries its language: /en/about/team,
+        # /fr/about/team, and no bare twin. An unprefixed path 404s inside the
+        # wrap; LocaleMiddleware then redirects it to the prefixed URL for the
+        # language it negotiates — the django_language cookie first, then the
+        # Accept-Language header, then LANGUAGE_CODE. A prefix already in the
+        # path always wins, so a shared link keeps its language.
+        #
+        # That redirect is a 302 and must stay one: its target depends on the
+        # request, which is why Django patches Vary: Accept-Language, Cookie
+        # onto it. A 301 is cached by the browser for good, so a visitor who
+        # once arrived with a French browser would keep landing on /fr/ after
+        # switching the site to English — the request would never reach the
+        # server again.
         #
         # ┌───────────────────────────────────────────────────────────────────┐
         # │ OPS / SECURITY — verify BEFORE deploying with French enabled.      │
-        # │ Wrapping ALL routes means every Arches path now also resolves      │
-        # │ under /fr/ : /fr/admin/, /fr/rdm/, /fr/graph/, /fr/plugins/ …      │
+        # │ Wrapping ALL routes means every Arches path resolves ONLY under a  │
+        # │ language prefix: /en/admin/, /fr/admin/, /en/rdm/, /fr/graph/ …    │
         # │ Django auth is INTACT (these still 302 to the login), so this is   │
         # │ NOT an app-level bypass. BUT if the edge (nginx / WAF / reverse    │
         # │ proxy) restricts admin or internal tooling by PATH PREFIX          │
         # │ — e.g. `location /admin/ { allow 10.0.0.0/8; deny all; }` —        │
-        # │ the /fr/ twins slip past that rule.                               │
-        # │ Action: make the edge ACLs match the language prefix too, e.g.     │
-        # │   location ~ ^/(fr/)?admin/  { … }                                 │
+        # │ that rule now matches NOTHING and guards nothing.                  │
+        # │ Action: make the edge ACLs match the language prefix, e.g.         │
+        # │   location ~ ^/(en|fr)/admin/  { … }                               │
         # │ (regex, or duplicate the location blocks). Tracked as GH issue.    │
         # └───────────────────────────────────────────────────────────────────┘
-        urlpatterns = i18n_patterns(*urlpatterns, prefix_default_language=False)
+        urlpatterns = i18n_patterns(*urlpatterns, prefix_default_language=True)
 
 # ============================================================================
 # LANGUAGE BOUNDARY — everything appended BELOW this line sits OUTSIDE
-# i18n_patterns and is therefore language-NEUTRAL (one URL, no /fr/ twin,
-# active language forced to English by prefix_default_language=False).
-# Correct for machine endpoints: Biblissima proxy, IIIF, robots.txt,
-# sitemap.xml. Anything a HUMAN reads in a language (pages, or APIs whose
-# payload is localised like model-graph) must be registered ABOVE the wrap.
+# i18n_patterns and is therefore language-NEUTRAL: one URL, no /en/ or /fr/
+# twin, and no redirect either — the path resolves, so LocaleMiddleware never
+# sees the 404 it would rewrite. Correct for machine endpoints: Biblissima
+# proxy, IIIF, robots.txt, sitemap.xml. Anything a HUMAN reads in a language
+# (pages, or APIs whose payload is localised like model-graph) must be
+# registered ABOVE the wrap.
 # ============================================================================
 
 ### Manuspectrum URL - Biblissima proxy
@@ -309,6 +293,41 @@ urlpatterns.append(
     )
 )
 
+### Renderer metadata and XY renderer configuration.
+###
+### Language-neutral: nothing here is cached, and the only translated strings
+### are error messages, which LocaleMiddleware still resolves from the cookie
+### or the Accept-Language header on an unprefixed path. Above the wrap these
+### take POST and DELETE, and a bare write would be answered with a redirect
+### that a browser replays as a GET — a silent no-op instead of a 403.
+### Localised payloads that ARE cached, like model-graph, stay above the wrap
+### so the language keys the cache.
+urlpatterns += [
+    re_path(
+        r"^renderer/(?P<renderer_id>[^\/]+)", RendererView.as_view(), name="renderer"
+    ),
+    # A UUID converter, not a catch-all segment. The two protections on a
+    # seeded preset are decided by comparing the captured value against
+    # canonical ids, while the row it names is resolved by a UUIDField that
+    # also accepts uppercase, hyphen-free, braced and urn:-prefixed spellings.
+    # A permissive pattern let those two disagree, and "7A1C…" skipped the
+    # guard while deleting the row it protects. Django's converter admits the
+    # canonical form only; anything else is a 404 before the view is reached.
+    # The frontend only ever echoes server-returned ids, so no client changes.
+    path(
+        "renderer_config/<uuid:renderer_config_id>",
+        RendererConfigView.as_view(),
+        name="renderer_config",
+    ),
+    # Anchored: without the ``$`` this pattern also swallowed every id the
+    # converter above rejects, so a malformed one fell through to the create
+    # branch and silently made a new configuration instead of failing.
+    re_path(
+        r"^renderer_config/$", RendererConfigView.as_view(), name="renderer_config"
+    ),
+]
+
+
 ### SEO — robots.txt & sitemap.xml
 
 sitemaps = {
@@ -329,51 +348,5 @@ urlpatterns.append(
         sitemap,
         {"sitemaps": sitemaps},
         name="django.contrib.sitemaps.views.sitemap",
-    )
-)
-
-
-### /en/api/ compatibility shim — required by the Vue components that Arches
-### applications ship (arches_vue_components, arches_controlled_lists).
-###
-### `generateArchesURL()` resolves routes from frontend_configuration/urls.json,
-### where 413 of the 442 entries carry a `{language_code}` placeholder, and
-### fills it from `document.documentElement.lang`. On an English page that
-### yields `/en/…`, which prefix_default_language=False never serves: English
-### lives on the unprefixed URLs. The fetch 404s and createVueApplication()
-### throws "Not Found" before it can mount, so every Vue app dies in English
-### while working in French. Today exactly one call is affected —
-### `arches:get_frontend_i18n_data`, the i18n bootstrap — because the
-### controlled-list APIs go through `arches.urls.*`, which Django reverses
-### server-side and therefore resolves per language correctly.
-###
-### Scoped to `api/` deliberately: `test_en_prefix_does_not_exist` pins the
-### rule that no /en/ PAGE twin may exist (duplicate content). Machine
-### endpoints are not indexed content, so aliasing them does not weaken that,
-### and the prefix stays scoped rather than needing a new entry each time an
-### Arches application calls another API this way.
-###
-### 308, not 301/302: browsers rewrite the latter to GET, which would quietly
-### turn write APIs into reads. 308 preserves method and body.
-###
-### Registered BELOW the language boundary on purpose — this alias must stay
-### language-neutral, or it would gain a nonsensical /fr/en/ twin.
-class HttpResponsePermanentRedirectPreservingMethod(HttpResponsePermanentRedirect):
-    status_code = 308
-
-
-def _strip_redundant_en_prefix(request, remainder):
-    target = "/api/" + remainder
-    query_string = request.META.get("QUERY_STRING")
-    if query_string:
-        target = f"{target}?{query_string}"
-    return HttpResponsePermanentRedirectPreservingMethod(target)
-
-
-urlpatterns.append(
-    re_path(
-        r"^en/api/(?P<remainder>.*)$",
-        _strip_redundant_en_prefix,
-        name="en-api-prefix-shim",
     )
 )
