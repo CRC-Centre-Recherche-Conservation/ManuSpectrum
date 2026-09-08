@@ -399,11 +399,16 @@ CELERY_BEAT_SCHEDULE = {
         "task": "arches.app.tasks.delete_file",
         "schedule": CELERY_SEARCH_EXPORT_CHECK,
     },
-    "notification": {
-        "task": "arches.app.tasks.message",
-        "schedule": CELERY_SEARCH_EXPORT_CHECK,
-        "args": ("Celery Beat is Running",),
-    },
+    # Off: arches.app.tasks.message is `def message(arg): return arg`. It
+    # notifies nothing and costs one broker round-trip plus an INSERT and an
+    # UPDATE in django_celery_results_taskresult every hour to log a constant
+    # string. As a heartbeat it is only worth re-enabling with
+    # "options": {"ignore_result": True}, which drops the database writes.
+    # "notification": {
+    #     "task": "arches.app.tasks.message",
+    #     "schedule": CELERY_SEARCH_EXPORT_CHECK,
+    #     "args": ("Celery Beat is Running",),
+    # },
 }
 
 # Set to True if you want to send celery tasks to the broker without being able to detect celery.
