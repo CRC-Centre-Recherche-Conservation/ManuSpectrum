@@ -114,6 +114,13 @@ class OutboundFetchBudgetTests(SimpleTestCase):
     def test_budget_is_versioned(self):
         self.assertIsInstance(project_settings.SSRF_TIMEOUT, int)
         self.assertIsInstance(project_settings.SSRF_MAX_REDIRECTS, int)
+        self.assertIsInstance(project_settings.SSRF_MAX_RESPONSE_BYTES, int)
+
+    def test_the_guard_is_closed_by_default(self):
+        # A host that wants loopback targets opens them in settings_local.py;
+        # the versioned file never ships the guard open, and nothing derives it
+        # from DEBUG.
+        self.assertIs(project_settings.SSRF_ALLOW_PRIVATE, False)
 
 
 class MediaExposureTests(SimpleTestCase):
