@@ -7,6 +7,7 @@ Usage:
     python manage.py test manuspectrum.tests.test_manifest_datatype
 """
 
+import socket
 import uuid
 from unittest.mock import MagicMock, Mock, patch, call
 
@@ -15,6 +16,21 @@ from django.utils import translation
 import requests
 
 from manuspectrum.utils.http import UnsafeURLError
+
+
+def resolves_publicly():
+    """Patch the guard's resolver so a test URL is reachable without DNS.
+
+    The guard runs on every import path now, so a test whose subject is the
+    import — not the guard — has to say where its host resolves. Tests that
+    ARE about the guard use literal addresses and leave the resolver alone.
+    """
+    return patch(
+        "manuspectrum.utils.http.socket.getaddrinfo",
+        return_value=[
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ],
+    )
 
 
 class ManifestTestData:
@@ -1135,7 +1151,8 @@ class TestPreTileSave(TestCase):
         mock_created.url = f"/manifest/{created_globalid}"
         mock_manifest_model.objects.create.return_value = mock_created
 
-        self.datatype.pre_tile_save(tile, nodeid)
+        with resolves_publicly():
+            self.datatype.pre_tile_save(tile, nodeid)
 
         mock_manifest_model.objects.create.assert_called_once()
         create_kwargs = mock_manifest_model.objects.create.call_args[1]
@@ -1246,7 +1263,8 @@ class TestSSRF_RedirectBlocked(TestCase):
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_fetch.return_value = mock_response
 
-        self.datatype.pre_tile_save(tile, nodeid)
+        with resolves_publicly():
+            self.datatype.pre_tile_save(tile, nodeid)
 
         mock_fetch.assert_called_once_with("https://evil.com/ssrf-redirect")
 
@@ -1263,13 +1281,11 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
 
             self.datatype = ManifestDataType()
 
-    @override_settings(DEBUG=False)
+    @override_settings(SSRF_ALLOW_PRIVATE=False)
     @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_blocks_private_ip_in_prod(
-        self, mock_manifest_model, mock_fetch
-    ):
-        """In production the SSRF guard blocks private IPs (e.g. 192.168.1.1).
+    def test_pre_tile_save_blocks_private_ip(self, mock_manifest_model, mock_fetch):
+        """The SSRF guard blocks private IPs (e.g. 192.168.1.1).
 
         The strict regex matches dotted IPs, but assert_url_is_safe() resolves
         the host and rejects the non-public address before any fetch happens.
@@ -1288,13 +1304,11 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
             self.datatype.pre_tile_save(tile, nodeid)
         mock_fetch.assert_not_called()
 
-    @override_settings(DEBUG=False)
+    @override_settings(SSRF_ALLOW_PRIVATE=False)
     @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_blocks_cloud_metadata_in_prod(
-        self, mock_manifest_model, mock_fetch
-    ):
-        """In production the SSRF guard blocks the cloud-metadata endpoint.
+    def test_pre_tile_save_blocks_cloud_metadata(self, mock_manifest_model, mock_fetch):
+        """The SSRF guard blocks the cloud-metadata endpoint.
 
         169.254.169.254 passes the strict regex (dots in char class) but is a
         link-local address, so assert_url_is_safe() rejects it before fetching.
@@ -1312,13 +1326,11 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
             self.datatype.pre_tile_save(tile, nodeid)
         mock_fetch.assert_not_called()
 
-    @override_settings(DEBUG=False)
+    @override_settings(SSRF_ALLOW_PRIVATE=False)
     @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_blocks_localhost_in_prod(
-        self, mock_manifest_model, mock_fetch
-    ):
-        """pre_tile_save() must reject localhost URLs in production."""
+    def test_pre_tile_save_blocks_localhost(self, mock_manifest_model, mock_fetch):
+        """pre_tile_save() must reject localhost URLs."""
         nodeid = str(uuid.uuid4())
         tile = MagicMock()
         tile.data = {nodeid: "http://localhost:6379/"}
@@ -1327,7 +1339,7 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_filter_none.first.return_value = None
         mock_manifest_model.objects.filter.return_value = mock_filter_none
 
-        # In prod, localhost resolves to a loopback address → SSRF guard raises.
+        # localhost resolves to a loopback address → SSRF guard raises.
         with self.assertRaises(UnsafeURLError):
             self.datatype.pre_tile_save(tile, nodeid)
         mock_fetch.assert_not_called()
@@ -1351,6 +1363,7 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_response.json.return_value = ManifestTestData.VALID_V3
         mock_fetch.return_value = mock_response
 
-        self.datatype.pre_tile_save(tile, nodeid)
+        with resolves_publicly():
+            self.datatype.pre_tile_save(tile, nodeid)
 
         mock_fetch.assert_called_once()
