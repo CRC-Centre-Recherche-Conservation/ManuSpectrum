@@ -20,12 +20,17 @@ class ManuspectrumConfig(AppConfig):
         self._check_contact_email_config()
 
     def _check_async_indexing_config(self):
-        """Drop BIBLISSIMA_ASYNC_INDEXING when the indexing task is missing.
+        """Turn BIBLISSIMA_ASYNC_INDEXING off in this process when the task is missing.
 
-        A tripwire, not the mechanism: ``manuspectrum/__init__.py`` imports the
-        Celery app, so registration has already happened by the time ``ready()``
-        runs. Clearing the flag keeps callers on the synchronous path rather
-        than queueing messages no worker would consume.
+        ``manuspectrum/__init__.py`` imports the Celery app, so the tasks module
+        is loaded well before ``ready()`` runs; what is left to catch here is
+        ``manuspectrum.index_resources`` being renamed or removed. Nothing is
+        written to disk — the flag is cleared in memory, for this process only,
+        so callers index synchronously instead of queueing messages no worker
+        would consume.
+
+        Whether a *worker* is alive is a distributed fact this cannot see; the
+        ``.delay()`` try/except in ``_defer_indexing`` covers that.
         """
         if not getattr(settings, "BIBLISSIMA_ASYNC_INDEXING", False):
             return
