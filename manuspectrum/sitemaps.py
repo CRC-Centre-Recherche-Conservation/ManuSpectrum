@@ -12,13 +12,16 @@ class StaticSitemap(Sitemap):
 
     `home` (/index.htm) is deliberately absent: it duplicates `root` and now
     301-redirects to it (see urls.py). i18n + alternates emit one <url> per
-    language with xhtml:link hreflang entries — the most reliable hreflang
-    channel (x_default falls back to LANGUAGE_CODE, i.e. English).
+    language with xhtml:link hreflang entries.
+
+    No x-default here: Django builds it by stripping the language prefix,
+    which under prefix_default_language=True is a URL that only redirects.
+    The pages emit their own x-default in <head>, pointing at /en/.
     """
 
     i18n = True
     alternates = True
-    x_default = True
+    x_default = False
 
     def items(self):
         return ["root", "about-model", "about-explorer", "about-team", "about-contact"]
@@ -40,7 +43,7 @@ class DocumentSitemap(Sitemap):
     changefreq = "monthly"
     i18n = True
     alternates = True
-    x_default = True
+    x_default = False
 
     def items(self):
         return Resource.objects.filter(graph_id=DOCUMENT_GRAPH_ID).values_list(

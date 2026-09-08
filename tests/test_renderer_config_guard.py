@@ -174,13 +174,18 @@ class ConfigIdRoutingTests(SimpleTestCase):
         match = resolve("/renderer_config/")
         self.assertIsNone(match.kwargs.get("renderer_config_id"))
 
-    def test_the_route_carries_the_language_in_its_path(self):
-        # Registering it above the wrap gives it a French twin. Stated here so
-        # that moving it across the boundary shows up as a failing test rather
-        # than as a 404 somebody meets in production.
-        with translation.override("fr"):
-            match = resolve(f"/fr/renderer_config/{self.SEEDED}")
-            self.assertEqual(str(match.kwargs["renderer_config_id"]), self.SEEDED)
+    def test_the_route_is_language_neutral(self):
+        # Below the language boundary on purpose: this route takes POST and
+        # DELETE, and a bare write to a wrapped route is answered with a
+        # redirect that a browser replays as a GET — a silent no-op instead of
+        # a 403. Nothing here is cached, and the translated error messages
+        # still follow the cookie. Stated here so that moving it back across
+        # the boundary shows up as a failing test rather than as a silent
+        # no-op somebody meets in production.
+        match = resolve(f"/renderer_config/{self.SEEDED}")
+        self.assertEqual(str(match.kwargs["renderer_config_id"]), self.SEEDED)
+        with self.assertRaises(Resolver404):
+            resolve(f"/fr/renderer_config/{self.SEEDED}")
 
 
 class ConfigurationSaveBodyTests(SimpleTestCase):

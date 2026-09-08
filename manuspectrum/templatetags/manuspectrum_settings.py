@@ -10,9 +10,9 @@ def translated_page_url(context, lang_code):
     """Absolute URL of the current page in *lang_code*.
 
     Feeds the hreflang alternates and the header language switcher. Uses
-    django.urls.translate_url, which understands i18n_patterns (including
-    prefix_default_language=False, where 'en' URLs carry no prefix). Query
-    strings are dropped on purpose — alternates must mirror the canonical.
+    django.urls.translate_url, which understands i18n_patterns and swaps one
+    language prefix for another. Query strings are dropped on purpose —
+    alternates must mirror the canonical.
 
     SECURITY (open redirect): do NOT pass a request path to
     build_absolute_uri() as its `location` arg. A path beginning with

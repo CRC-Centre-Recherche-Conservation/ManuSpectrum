@@ -456,10 +456,10 @@ class ModelGraphCachingTests(TestCase):
     @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
     @mock.patch("manuspectrum.views.model_graph.build_model_graph")
     def test_language_isolation_of_cache_and_etag(self, m_build, _fp):
-        # The route sits inside i18n_patterns (prefix_default_language=False):
-        # the language is carried by the URL, never by a cookie.
+        # The route sits inside i18n_patterns: the language is carried by the
+        # URL, never by a cookie.
         m_build.return_value = self.PAYLOAD
-        etag_en = self.client.get("/api/model-graph")["ETag"]
+        etag_en = self.client.get("/en/api/model-graph")["ETag"]
 
         resp_fr = self.client.get("/fr/api/model-graph")
         self.assertNotEqual(etag_en, resp_fr["ETag"])

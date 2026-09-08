@@ -55,7 +55,9 @@ const viewModel = function(params) {
         tags: true,
 
         ajax: {
-            url: '/iiifmanifest',
+            // Reversed per language: every Arches route lives under a prefix,
+            // and a bare path would cost a redirect on each keystroke.
+            url: arches.urls.iiifmanifest,
             dataType: 'json',
             delay: 250,
             data: function(params) {
@@ -145,6 +147,9 @@ const viewModel = function(params) {
     self.loadManifestFromId = function(manifestId) {
         self.loading(true);
         self.manifestError(false);
+        // Language-neutral on purpose: this value is written to the tile and
+        // read back by ManifestDataType, which stores manifests as bare
+        // /manifest/{uuid}. Do not swap it for a reversed URL.
         var manifestPath = '/manifest/' + manifestId;
         self.manifestUrl(manifestPath);
         self.manifestId(manifestId);

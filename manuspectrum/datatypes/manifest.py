@@ -30,9 +30,17 @@ class FailParsingManifestIIIF(Exception):
     pass
 
 
-# Local IIIF manifest reference: /manifest/{uuid4}, optionally absolute.
+# Local IIIF manifest reference: /manifest/{uuid4}, optionally absolute and
+# optionally language-prefixed. Tiles store the bare path, but every Arches
+# route lives under a language prefix, so /en/manifest/{uuid} is the URL a
+# curator copies out of the address bar and pastes back in.
+_LANGUAGE_PREFIX_RE = "|".join(
+    re.escape(code) for code, _label in django_settings.LANGUAGES
+)
 _LOCAL_MANIFEST_RE = re.compile(
-    r"^(?:https?://[^/]+)?/manifest/"
+    r"^(?:https?://[^/]+)?"
+    r"(?:/(?:" + _LANGUAGE_PREFIX_RE + r"))?"
+    r"/manifest/"
     r"(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
     re.IGNORECASE,
 )

@@ -969,6 +969,9 @@ const viewModel = function(params) {
         self.dependenciesResolved(true);
     };
 
+    // Reversed per language by Arches; a bare /resource/<id> would redirect.
+    this.resourceEditorUrl = arches.urls.resource_editor;
+
     this._makeDep = (label, type, graphId, parentKey, locationKey) => ({
         key: label,
         type: type,
