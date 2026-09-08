@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.conf.urls.static import static
 from django.conf.urls.i18n import i18n_patterns
 from django.contrib.sitemaps.views import sitemap
 from django.http import HttpResponsePermanentRedirect
@@ -77,14 +76,18 @@ urlpatterns = [
     ),
 ]
 
-# NOTE: media serving is NOT mounted here. MEDIA_URL is "/files/", the same
-# prefix Arches uses for its own ``file_access`` route (files/<uuid>), and
-# static() registers a catch-all "^files/(?P<path>.*)$". Mounted at this point
-# it shadowed that route entirely — every /files/<uuid> request resolved to
-# django.views.static.serve, which looked for a file literally named <uuid> and
-# returned 404. That broke file downloads, thumbnails and the XY chart's fetch.
-# The mount now lives at the very bottom of this module, below the language
-# boundary and after include("arches.urls").
+# NOTE: media is NOT served from this URLconf, at this or any other point.
+# MEDIA_URL is "/files/", the same prefix as Arches' own ``file_access`` route
+# (files/<uuid>), and django.conf.urls.static.static() registers a catch-all
+# "^files/(?P<path>.*)$" rooted at MEDIA_ROOT. Mounted above the Arches
+# include it shadows that route entirely — every /files/<uuid> download becomes
+# a 404 on a file literally named <uuid>.
+#
+# Not mounting it here does not remove the catch-all: arches_controlled_lists
+# (urls.py:106) registers the same one under DEBUG, and MEDIA_ROOT is still the
+# Python package — see the KNOWN EXPOSURE note in settings.py. Arches serves
+# media through files/<uuid>, which resolves the path from the database and
+# honours RESTRICT_MEDIA_ACCESS; a front-end alias bypasses both.
 
 urlpatterns.append(path("", include("arches_querysets.urls")))
 # arches_controlled_lists ships the Controlled List Manager plugin and the
@@ -374,6 +377,3 @@ urlpatterns.append(
         name="en-api-prefix-shim",
     )
 )
-
-
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

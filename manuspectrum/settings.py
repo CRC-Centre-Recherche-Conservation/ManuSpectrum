@@ -31,20 +31,47 @@ SEARCH_COMPONENT_LOCATIONS.append("manuspectrum.search_components")
 LOCALE_PATHS.insert(0, os.path.join(APP_ROOT, "locale"))
 
 FILE_TYPE_CHECKING = "lenient"
+
+# Upload whitelist, enforced by arches.app.utils.file_validator for the
+# file-list datatype and for the ETL importers alike. The validator tests the
+# SNIFFED type when the bytes carry a signature and falls back to the declared
+# extension otherwise, so an archive is accepted as long as "zip" is listed
+# here whatever it is named, and removing "zip" also disables the .zip mode of
+# the Branch/Tile Excel importers.
+#
+# Instrument exports carry no signature and are admitted by extension. They are
+# the raw formats the project ingests; XY_TEXT_FILE_FORMATS below names the one
+# the reader parses.
+#
+# This is the ONLY definition. settings_local.py may extend it
+# (FILE_TYPES += [...]) but must never reassign it.
 FILE_TYPES = [
+    # images
     "bmp",
     "gif",
-    "jpg",
     "jpeg",
-    "json",
-    "pdf",
+    "jpg",
     "png",
     "psd",
-    "rtf",
     "tif",
     "tiff",
+    # documents
+    "md",
+    "pdf",
+    "rtf",
     "xlsx",
+    # structured text
     "csv",
+    "json",
+    "tsv",
+    "txt",
+    # instrument exports
+    "0",
+    "asd",
+    "h5",
+    "hdf5",
+    "mca",
+    # archives
     "zip",
 ]
 
@@ -52,16 +79,19 @@ FILENAME_GENERATOR = "arches.app.utils.storage_filename_generator.generate_filen
 UPLOADED_FILES_DIR = "uploadedfiles"
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-7q$l+ji@$gmfe=^5v3%3y!)=5%g8$d06zzx%t+6)vv$3+&2(f!"
+# The fallback is a development value, published in this repository. Any host
+# reachable from outside MUST set MANUSPECTRUM_SECRET_KEY in the environment.
+# Rotating it invalidates every session cookie and password-reset token.
+SECRET_KEY = os.environ.get(
+    "MANUSPECTRUM_SECRET_KEY",
+    "django-insecure-7q$l+ji@$gmfe=^5v3%3y!)=5%g8$d06zzx%t+6)vv$3+&2(f!",
+)
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ROOT_URLCONF = "manuspectrum.urls"
-ROOT_HOSTCONF = "manuspectrum.hosts"
-
-DEFAULT_HOST = "manuspectrum"
 
 # Modify this line as needed for your project to connect to elasticsearch with a password that you generate
 ELASTICSEARCH_CONNECTION_OPTIONS = {
@@ -152,6 +182,12 @@ DATABASES = {
         "NAME": "manuspectrum",
         "OPTIONS": {
             "sslmode": "disable",
+            # The only server-side cursors in the project (.iterator(): full
+            # reindex, bulk deletion, management-command backfills) are always
+            # consumed to the end, so the planner should optimise total cost
+            # rather than time to first row. Running behind pgbouncer in
+            # transaction mode requires DISABLE_SERVER_SIDE_CURSORS = True and
+            # makes this setting moot.
             "options": "-c cursor_tuple_fraction=1",
         },
         "PASSWORD": "postgis",
@@ -163,8 +199,6 @@ DATABASES = {
     }
 }
 
-SEARCH_THUMBNAILS = False
-
 INSTALLED_APPS = (
     "webpack_loader",
     "django.contrib.auth",
@@ -174,7 +208,6 @@ INSTALLED_APPS = (
     "django.contrib.staticfiles",
     "django.contrib.sitemaps",
     "django.contrib.gis",
-    "django_hosts",
     "arches",
     "arches.app.models",
     "arches.management",
@@ -219,14 +252,6 @@ MIDDLEWARE = [
     # "silk.middleware.SilkyMiddleware",
 ]
 
-MIDDLEWARE.insert(  # this must resolve to first MIDDLEWARE entry
-    0, "django_hosts.middleware.HostsRequestMiddleware"
-)
-
-MIDDLEWARE.append(  # this must resolve last MIDDLEWARE entry
-    "django_hosts.middleware.HostsResponseMiddleware"
-)
-
 STATICFILES_DIRS = build_staticfiles_dirs(app_root=APP_ROOT)
 
 TEMPLATES = build_templates_config(
@@ -253,6 +278,33 @@ WSGI_APPLICATION = "manuspectrum.wsgi.application"
 MEDIA_URL = "/files/"
 
 # Absolute filesystem path to the directory that will hold user-uploaded files.
+#
+# MEDIA_ROOT is the PARENT of UPLOADED_FILES_DIR, never the upload directory
+# itself: stored paths are relative and already carry the prefix
+# ("uploadedfiles/<name>", produced by FILENAME_GENERATOR). Moving the root
+# means moving the directory with it; the paths in the `files` table stay
+# valid, so there is no data migration.
+#
+# KNOWN EXPOSURE, to close before a public deployment. It resolves to the
+# Python package, which also holds settings.py and arches.log. Its subtree
+# carries data too: Arches stages BulkDataManager exports under archestemp/
+# (upload_to="archestemp", so always under MEDIA_ROOT) and those archives hold
+# whole resource-data exports.
+# django.conf.urls.static.static() mounts MEDIA_ROOT as a raw file tree under
+# /files/<path> whenever DEBUG is on, and arches_controlled_lists.urls:106
+# registers that mount independently of this project; a front-end
+# `location /files/ { alias ...; }` reproduces it without DEBUG. Whatever
+# serves MEDIA_ROOT therefore serves the source tree.
+#
+# Closing it takes DEBUG=False AND moving the root out of the package:
+#
+#     MEDIA_ROOT = os.path.join(os.path.dirname(APP_ROOT), "var")
+#     mv manuspectrum/uploadedfiles manuspectrum/archestemp ../var/
+#
+# plus the matching .gitignore paths and a recreated Cantaloupe container —
+# its bind mount holds the old inode, so the image server keeps working until
+# it restarts and then serves an empty directory. Full procedure in
+# settings_local.py (PRODUCTION CHECKLIST).
 MEDIA_ROOT = os.path.join(APP_ROOT)
 
 # URL prefix for static files.
@@ -319,14 +371,23 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 15728640
 SESSION_COOKIE_NAME = "manuspectrum"
 
 # For more info on configuring your cache: https://docs.djangoproject.com/en/2.2/topics/cache/
+#
+# Redis database allocation, shared with CELERY_BROKER_URL below:
+#   0 = Celery broker   1 = default cache   2 = permission checker
+#
+# This is the ONLY definition. settings_local.py may point an entry at another
+# host or index, but must never reassign the dict.
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": "redis://localhost:6379/1",
     },
+    # Arches stores a pickled CachedObjectPermissionChecker here on nearly
+    # every request. On a database backend that is a write and a read of a
+    # pickled blob in PostgreSQL, through a raw cursor, per request.
     "user_permission": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "user_permission_cache",
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://localhost:6379/2",
     },
 }
 
@@ -417,7 +478,9 @@ CELERY_BEAT_SCHEDULE = {
 # way of monitoring celery so you can detect the background task not being available.
 CELERY_CHECK_ONLY_INSPECT_BROKER = False
 
-CANTALOUPE_DIR = os.path.join(ROOT_DIR, UPLOADED_FILES_DIR)
+# The image root the IIIF image server reads, bind-mounted into the Cantaloupe
+# container as /imageroot. Derived from MEDIA_ROOT so the two cannot drift.
+CANTALOUPE_DIR = os.path.join(MEDIA_ROOT, UPLOADED_FILES_DIR)
 CANTALOUPE_HTTP_ENDPOINT = "http://localhost:8182/"
 
 ACCESSIBILITY_MODE = False
@@ -448,7 +511,14 @@ RENDERERS = [
 ]
 
 # THUMBNAIL
+# Search results fetch a thumbnail from each resource's IIIF manifest; set to
+# False to stop those outbound fetches. Unrelated to THUMBNAIL_GENERATOR below.
 SEARCH_THUMBNAILS = True
+
+# Deliberately None. Arches' ThumbnailGenerator is abstract and its
+# make_thumbnail() always raises NotImplementedError, so naming it here costs a
+# row insert plus a full copy of the file to a temp file on every /files/<uuid>
+# request before failing, and logs a traceback each time.
 THUMBNAIL_GENERATOR = None
 GENERATE_THUMBNAILS_ON_DEMAND = False
 
@@ -549,8 +619,6 @@ RENDERERS += [
     },
 ]
 
-FILE_TYPES += ["csv", "tsv", "txt"]
-
 # The single text format the XY reader treats as canonical. Read server-side by
 # manuspectrum.functions.xy_technique_config to decide whether a saved file
 # should receive a renderer and a technique-derived configuration — Arches' own
@@ -568,6 +636,18 @@ XY_TEXT_FILE_FORMATS = ["csv"]
 
 
 PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT), "pkg")
+
+
+# ---------------------------------------------------------------------------
+# Outbound HTTP
+# ---------------------------------------------------------------------------
+# Budget for a single outbound fetch: timeout in seconds, and the number of
+# redirects followed before the request is refused. Belongs next to the guard
+# it describes rather than in a per-host file, where a missing value reads as
+# hardening that is not applied. manuspectrum.utils.http does not consume them
+# yet: it refuses redirects outright and carries its own (10, 45) timeout pair.
+SSRF_TIMEOUT = 10
+SSRF_MAX_REDIRECTS = 5
 
 
 # ---------------------------------------------------------------------------
