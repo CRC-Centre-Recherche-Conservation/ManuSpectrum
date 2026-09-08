@@ -125,7 +125,10 @@ class SitemapTests(TestCase):
         xml = self.client.get("/sitemap.xml").content.decode()
         self.assertIn("/fr/about/team", xml)
         self.assertIn('hreflang="fr"', xml)
-        self.assertIn('hreflang="x-default"', xml)
+
+    def test_sitemap_has_no_bare_x_default_url(self):
+        xml = self.client.get("/sitemap.xml").content.decode()
+        self.assertNotIn('hreflang="x-default"', xml)
 
 
 class LanguagePrefixRoutingTests(TestCase):
