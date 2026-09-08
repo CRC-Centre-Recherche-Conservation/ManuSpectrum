@@ -1,13 +1,64 @@
 import logging
-import requests
 
 from arches.app.utils.search_thumbnail_fetcher import SearchThumbnailFetcher
 from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
+from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import CanvasIIIF, BBoxCalculator
 
 logger = logging.getLogger(__name__)
+
+# The shared session asks for JSON-LD (it exists for manifests); an image
+# request has to say what it is actually after.
+_IMAGE_HEADERS = {"Accept": "image/*,*/*;q=0.8"}
+
+# Leading bytes of the formats a IIIF Image API server answers with. WebP is
+# not here: its marker sits at offset 8, and _sniff_image_type handles it.
+_IMAGE_SIGNATURES = (
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+    (b"II*\x00", "image/tiff"),
+    (b"MM\x00*", "image/tiff"),
+    (b"\x00\x00\x00\x0cjP  \r\n\x87\n", "image/jp2"),
+)
+
+
+def _sniff_image_type(content):
+    """The image type *content* actually is, or None."""
+    for signature, content_type in _IMAGE_SIGNATURES:
+        if content.startswith(signature):
+            return content_type
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _image_payload(response):
+    """``(bytes, content_type)`` for a usable image answer, or None.
+
+    A thumbnail is relayed to the browser under this site's own origin, so
+    what an image server sends is only accepted once its first bytes are an
+    image format, and it is served as the format they name — never as whatever
+    the provider (or whatever answered in its place) declared. A declared
+    non-image type is refused outright: that is an error page, not a thumbnail.
+    """
+    if response.status_code != 200:
+        logger.warning(
+            "Thumbnail fetch returned %s for %s", response.status_code, response.url
+        )
+        return None
+    declared = (response.headers.get("Content-Type") or "").split(";")[0].strip()
+    if declared and not declared.lower().startswith("image/"):
+        logger.warning("Refusing %r thumbnail from %s", declared, response.url)
+        return None
+    content_type = _sniff_image_type(response.content)
+    if content_type is None:
+        logger.warning("Refusing thumbnail from %s: not an image", response.url)
+        return None
+    return (response.content, content_type)
 
 
 @SearchThumbnailFetcherFactory.register("72ac748a-7368-41e7-9f54-99be41319fac")
@@ -55,12 +106,7 @@ class ManifestThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            resp = requests.get(thumbnail_url, timeout=10)
-            if resp.status_code != 200:
-                return None
-
-            content_type = resp.headers.get("Content-Type", "image/jpeg")
-            return (resp.content, content_type)
+            return _image_payload(safe_fetch(thumbnail_url, headers=_IMAGE_HEADERS))
 
         except Exception as e:
             logger.error(
@@ -144,12 +190,7 @@ class ComponentThumbnailFetcher(SearchThumbnailFetcher):
             # IIIF Image API request (region -> full size -> rotation 0 -> default.jpg)
             thumb_url = f"{canvas_service_url}/{x},{y},{w},{h}/full/0/default.jpg"
 
-            resp = requests.get(thumb_url, timeout=10)
-            if resp.status_code != 200:
-                logger.warning(f"Failed to fetch thumbnail from {thumb_url}")
-                return None
-
-            return (resp.content, "image/jpeg")
+            return _image_payload(safe_fetch(thumb_url, headers=_IMAGE_HEADERS))
 
         except Exception as e:
             logger.error(
@@ -197,13 +238,13 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
 
         if not retrieve:
             try:
-                has_manifest = TileModel.objects.filter(
+                if TileModel.objects.filter(
                     resourceinstance=self.resource, nodegroup__node__datatype="manifest"
-                ).exists()
-                has_annotations = VwAnnotation.objects.filter(
+                ).exists():
+                    return True
+                return VwAnnotation.objects.filter(
                     resourceinstance=self.resource
                 ).exists()
-                return has_manifest or has_annotations
             except Exception as e:
                 logger.error(f"Error checking thumbnail existence: {e}")
                 return False
@@ -226,12 +267,11 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
                 if manifest_data:
                     thumb_url = CanvasIIIF.get_thumbnail_url(manifest_data)
                     if thumb_url:
-                        resp = requests.get(thumb_url, timeout=10)
-                        if resp.status_code == 200:
-                            return (
-                                resp.content,
-                                resp.headers.get("Content-Type", "image/jpeg"),
-                            )
+                        payload = _image_payload(
+                            safe_fetch(thumb_url, headers=_IMAGE_HEADERS)
+                        )
+                        if payload:
+                            return payload
 
             # 2) Fallback: annotation-based (Point or Polygon)
             annotation = VwAnnotation.objects.filter(
@@ -285,12 +325,7 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
             x, y, w, h = bbox
             thumb_url = f"{canvas_service_url}/{x},{y},{w},{h}/full/0/default.jpg"
 
-            resp = requests.get(thumb_url, timeout=10)
-            if resp.status_code != 200:
-                logger.warning(f"Failed to fetch thumbnail from {thumb_url}")
-                return None
-
-            return (resp.content, "image/jpeg")
+            return _image_payload(safe_fetch(thumb_url, headers=_IMAGE_HEADERS))
 
         except Exception as e:
             logger.error(

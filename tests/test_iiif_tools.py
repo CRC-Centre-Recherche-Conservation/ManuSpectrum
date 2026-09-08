@@ -13,7 +13,8 @@ Locks down the two helpers the IIIF layer leans on:
   from ``scale = 2 ** zoom``.
 
 No network: the two functions that call out (``fetch_manifest`` and
-``get_image_service_dimensions``) are exercised with ``requests.get`` patched.
+``get_image_service_dimensions``) go through ``manuspectrum.utils.http``, whose
+guarded fetch helpers are patched in the module under test.
 
 Usage:
     python manage.py test tests.test_iiif_tools --settings="tests.test_settings"
@@ -21,8 +22,10 @@ Usage:
 
 from unittest.mock import MagicMock, patch
 
+from django.core.cache import cache
 from django.test import SimpleTestCase
 
+from manuspectrum.utils.http import UnsafeURLError
 from manuspectrum.utils.iiif_tools import BBoxCalculator, CanvasIIIF
 
 V2_CONTEXT = "http://iiif.io/api/presentation/2/context.json"
@@ -148,47 +151,98 @@ class DetectVersionTests(SimpleTestCase):
     def test_missing_context_falls_back_to_v2(self):
         self.assertEqual(CanvasIIIF.detect_version({"items": []}), 2)
 
-    def test_list_context_is_not_inspected_and_falls_back_to_v2(self):
-        """Characterisation, not endorsement: a list ``@context`` is valid v3.
-
-        ``"presentation/3" in ctx`` is a substring test on a string but an
-        element-equality test on a list, so this manifest is read as v2 and
-        every later lookup goes to ``sequences`` and finds nothing. Flip this
-        test when the detection is fixed.
-        """
+    def test_list_context_is_detected_as_v3(self):
+        """A list ``@context`` is valid v3 and common with extensions."""
         manifest = {
             "@context": [
                 "http://www.w3.org/ns/anno.jsonld",
                 V3_CONTEXT,
             ]
         }
+        self.assertEqual(CanvasIIIF.detect_version(manifest), 3)
+
+    def test_list_context_without_a_v3_entry_stays_v2(self):
+        manifest = {"@context": ["http://www.w3.org/ns/anno.jsonld", V2_CONTEXT]}
         self.assertEqual(CanvasIIIF.detect_version(manifest), 2)
 
 
 class FetchManifestTests(SimpleTestCase):
-    @patch("manuspectrum.utils.iiif_tools.requests.get")
-    def test_returns_parsed_json_on_200(self, mock_get):
-        mock_get.return_value = MagicMock(
+    """The fetch goes through the guarded helper, and its answer is cached."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    @patch("manuspectrum.utils.iiif_tools.fetch_iiif_manifest")
+    def test_returns_parsed_json_on_200(self, mock_fetch):
+        mock_fetch.return_value = MagicMock(
             status_code=200, **{"json.return_value": {"@context": V3_CONTEXT}}
         )
 
         result = CanvasIIIF.fetch_manifest("https://example.org/manifest")
 
         self.assertEqual(result, {"@context": V3_CONTEXT})
-        mock_get.assert_called_once_with("https://example.org/manifest", timeout=10)
+        mock_fetch.assert_called_once_with("https://example.org/manifest")
 
-    @patch("manuspectrum.utils.iiif_tools.requests.get")
-    def test_returns_none_on_non_200(self, mock_get):
-        mock_get.return_value = MagicMock(status_code=404)
+    @patch("manuspectrum.utils.iiif_tools.fetch_iiif_manifest")
+    def test_returns_none_on_non_200(self, mock_fetch):
+        mock_fetch.return_value = MagicMock(status_code=404)
 
         self.assertIsNone(CanvasIIIF.fetch_manifest("https://example.org/gone"))
 
     @patch(
-        "manuspectrum.utils.iiif_tools.requests.get",
+        "manuspectrum.utils.iiif_tools.fetch_iiif_manifest",
         side_effect=OSError("connection reset"),
     )
-    def test_returns_none_when_request_raises(self, mock_get):
+    def test_returns_none_when_request_raises(self, mock_fetch):
         self.assertIsNone(CanvasIIIF.fetch_manifest("https://example.org/manifest"))
+
+    @patch(
+        "manuspectrum.utils.iiif_tools.fetch_iiif_manifest",
+        side_effect=UnsafeURLError("resolves to 127.0.0.1"),
+    )
+    def test_returns_none_when_the_url_is_refused_by_the_guard(self, mock_fetch):
+        self.assertIsNone(CanvasIIIF.fetch_manifest("http://127.0.0.1/manifest"))
+
+    def test_an_empty_url_is_not_fetched(self):
+        with patch("manuspectrum.utils.iiif_tools.fetch_iiif_manifest") as mock_fetch:
+            self.assertIsNone(CanvasIIIF.fetch_manifest(""))
+            mock_fetch.assert_not_called()
+
+    @patch("manuspectrum.utils.iiif_tools.fetch_iiif_manifest")
+    def test_a_second_call_is_served_from_the_cache(self, mock_fetch):
+        mock_fetch.return_value = MagicMock(
+            status_code=200, **{"json.return_value": {"@context": V3_CONTEXT}}
+        )
+
+        first = CanvasIIIF.fetch_manifest("https://example.org/manifest")
+        second = CanvasIIIF.fetch_manifest("https://example.org/manifest")
+
+        self.assertEqual(first, second)
+        mock_fetch.assert_called_once()
+
+    @patch("manuspectrum.utils.iiif_tools.fetch_iiif_manifest")
+    def test_a_failure_is_not_cached(self, mock_fetch):
+        mock_fetch.return_value = MagicMock(status_code=502)
+
+        CanvasIIIF.fetch_manifest("https://example.org/manifest")
+        CanvasIIIF.fetch_manifest("https://example.org/manifest")
+
+        self.assertEqual(mock_fetch.call_count, 2)
+
+    @patch("manuspectrum.utils.iiif_tools.fetch_iiif_manifest")
+    def test_two_urls_do_not_share_an_entry(self, mock_fetch):
+        mock_fetch.side_effect = [
+            MagicMock(status_code=200, **{"json.return_value": {"id": "a"}}),
+            MagicMock(status_code=200, **{"json.return_value": {"id": "b"}}),
+        ]
+
+        self.assertEqual(
+            CanvasIIIF.fetch_manifest("https://example.org/a"), {"id": "a"}
+        )
+        self.assertEqual(
+            CanvasIIIF.fetch_manifest("https://example.org/b"), {"id": "b"}
+        )
 
 
 class ThumbnailV3Tests(SimpleTestCase):
@@ -510,7 +564,7 @@ class CanvasDimensionsTests(SimpleTestCase):
 
 
 class ImageServiceDimensionsTests(SimpleTestCase):
-    @patch("manuspectrum.utils.iiif_tools.requests.get")
+    @patch("manuspectrum.utils.iiif_tools.safe_fetch")
     def test_reads_width_and_height_from_info_json(self, mock_get):
         mock_get.return_value = MagicMock(
             status_code=200, **{"json.return_value": {"width": 4096, "height": 2731}}
@@ -519,9 +573,18 @@ class ImageServiceDimensionsTests(SimpleTestCase):
         result = CanvasIIIF.get_image_service_dimensions(P1_SERVICE)
 
         self.assertEqual(result, (4096, 2731))
-        mock_get.assert_called_once_with(f"{P1_SERVICE}/info.json", timeout=10)
+        mock_get.assert_called_once_with(f"{P1_SERVICE}/info.json")
 
-    @patch("manuspectrum.utils.iiif_tools.requests.get")
+    @patch(
+        "manuspectrum.utils.iiif_tools.safe_fetch",
+        side_effect=UnsafeURLError("resolves to 169.254.169.254"),
+    )
+    def test_a_refused_url_falls_back_to_defaults(self, mock_get):
+        self.assertEqual(
+            CanvasIIIF.get_image_service_dimensions(P1_SERVICE), (1000, 1000)
+        )
+
+    @patch("manuspectrum.utils.iiif_tools.safe_fetch")
     def test_incomplete_payload_falls_back_to_defaults(self, mock_get):
         mock_get.return_value = MagicMock(
             status_code=200, **{"json.return_value": {"width": 4096}}
@@ -531,7 +594,7 @@ class ImageServiceDimensionsTests(SimpleTestCase):
             CanvasIIIF.get_image_service_dimensions(P1_SERVICE), (1000, 1000)
         )
 
-    @patch("manuspectrum.utils.iiif_tools.requests.get")
+    @patch("manuspectrum.utils.iiif_tools.safe_fetch")
     def test_non_200_falls_back_to_defaults(self, mock_get):
         mock_get.return_value = MagicMock(status_code=503)
 
@@ -540,7 +603,7 @@ class ImageServiceDimensionsTests(SimpleTestCase):
         )
 
     @patch(
-        "manuspectrum.utils.iiif_tools.requests.get",
+        "manuspectrum.utils.iiif_tools.safe_fetch",
         side_effect=OSError("connection reset"),
     )
     def test_request_failure_falls_back_to_defaults(self, mock_get):

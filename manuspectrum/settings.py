@@ -641,13 +641,33 @@ PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT), "pkg")
 # ---------------------------------------------------------------------------
 # Outbound HTTP
 # ---------------------------------------------------------------------------
-# Budget for a single outbound fetch: timeout in seconds, and the number of
-# redirects followed before the request is refused. Belongs next to the guard
-# it describes rather than in a per-host file, where a missing value reads as
-# hardening that is not applied. manuspectrum.utils.http does not consume them
-# yet: it refuses redirects outright and carries its own (10, 45) timeout pair.
+# Budget and policy for a single outbound fetch, consumed by
+# manuspectrum.utils.http.safe_fetch — the one path every project fetch of an
+# external URL goes through.
+#
+# SSRF_TIMEOUT is the per-fetch connect/read budget in seconds (manifest reads
+# keep a longer read half: a provider builds them on the fly).
+# SSRF_MAX_REDIRECTS bounds a chain whose every hop is re-checked against the
+# guard; the hops themselves are never handed to requests.
+# SSRF_MAX_RESPONSE_BYTES caps the DECOMPRESSED body, which is what a
+# decompression bomb spends.
+# SSRF_ALLOW_PRIVATE opens the guard to loopback/private targets. It is NOT
+# derived from DEBUG: a developer running a local IIIF server sets it in
+# settings_local.py, and nothing else can open the guard by accident.
 SSRF_TIMEOUT = 10
 SSRF_MAX_REDIRECTS = 5
+SSRF_MAX_RESPONSE_BYTES = 25 * 1024 * 1024
+SSRF_ALLOW_PRIVATE = False
+
+# How long a fetched IIIF manifest stays in the cache. Manifests are versioned
+# documents that change when a library re-digitises a codex; a day of staleness
+# costs nothing next to re-fetching one per search result.
+IIIF_MANIFEST_CACHE_TTL = 60 * 60 * 24
+
+# max-age advertised on a search thumbnail. Each miss costs a manifest fetch
+# plus an image fetch from the provider, so the browser and any intermediary
+# must be told the answer keeps.
+SEARCH_THUMBNAIL_MAX_AGE = 60 * 60 * 24
 
 
 # ---------------------------------------------------------------------------

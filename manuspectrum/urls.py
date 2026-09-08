@@ -31,6 +31,7 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationViewV2,
 )
 from manuspectrum.views.model_graph import ModelGraphView
+from manuspectrum.views.thumbnail import CachedThumbnailView
 
 urlpatterns = [
     # SEO: Arches serves the homepage at both "/" and "/index.htm" (names
@@ -50,6 +51,17 @@ urlpatterns = [
             html_email_template_name="registration/password_reset_email_html.html",
         ),
         name="password_reset",
+    ),
+    # Search thumbnails: the Arches route, answered by the caching subclass.
+    # Registered before the app includes so it wins both resolution and
+    # {% url 'thumbnail' %}. That is also why it sits above the language
+    # boundary although its bytes are language-neutral: the core route it
+    # supersedes is itself inside the wrap, and a language-neutral
+    # registration would not win the reversal the templates use.
+    re_path(
+        r"^thumbnail/(?P<resource_id>%s)$" % settings.UUID_REGEX,
+        CachedThumbnailView.as_view(),
+        name="thumbnail",
     ),
 ]
 

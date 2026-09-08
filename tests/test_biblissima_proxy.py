@@ -27,6 +27,7 @@ Usage:
 
 import json
 import os
+import socket
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -36,6 +37,23 @@ from django.test import RequestFactory, TestCase
 from manuspectrum.views import biblissima_proxy as bp
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "biblissima")
+
+
+def _resolve_every_host_publicly(testcase):
+    """Keep the SSRF guard real and the DNS lookup it makes offline.
+
+    A manifest URL comes from Wikibase, i.e. a third party, so the resolver
+    checks it before the fetch. What the guard decides is locked in
+    tests/test_http.py; here it must simply not touch the network.
+    """
+    patcher = patch(
+        "manuspectrum.utils.http.socket.getaddrinfo",
+        return_value=[
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ],
+    )
+    patcher.start()
+    testcase.addCleanup(patcher.stop)
 
 
 def _read_fixture(name):
@@ -62,6 +80,27 @@ def _make_response(json_data=None, status_code=200, text=""):
         resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=resp)
     else:
         resp.raise_for_status.return_value = None
+    return resp
+
+
+def _address(ip):
+    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 443))]
+
+
+def _resolving_to(ip, then=None):
+    """Patch the SSRF guard's resolver: first host to *ip*, next one to *then*."""
+    target = "manuspectrum.utils.http.socket.getaddrinfo"
+    if then is None:
+        return patch(target, return_value=_address(ip))
+    return patch(target, side_effect=[_address(ip), _address(then)])
+
+
+def _redirect_to(location):
+    """A 302 as ``safe_fetch`` reads one, before any body is touched."""
+    resp = MagicMock()
+    resp.status_code = 302
+    resp.is_redirect = True
+    resp.headers = {"Location": location}
     return resp
 
 
@@ -809,6 +848,7 @@ class ParseManuscriptIlluminationsTests(TestCase):
 
 class FetchCanvasDimensionsTests(TestCase):
     def setUp(self):
+        _resolve_every_host_publicly(self)
         cache.clear()
 
     def tearDown(self):
@@ -851,6 +891,33 @@ class FetchCanvasDimensionsTests(TestCase):
 
     def test_returns_empty_for_no_url(self):
         self.assertEqual(bp._fetch_canvas_dimensions("", "1r", MagicMock()), {})
+
+    def test_a_manifest_url_inside_the_network_is_never_fetched(self):
+        # The URL comes from Wikibase; a value naming an internal address is a
+        # request this server would make on a third party's behalf.
+        session = MagicMock()
+
+        with _resolving_to("169.254.169.254"):
+            result = bp._fetch_canvas_dimensions(
+                "https://metadata.example/latest/meta-data/", "1r", session
+            )
+
+        self.assertEqual(result, {})
+        session.get.assert_not_called()
+
+    def test_a_manifest_redirecting_inside_the_network_is_not_followed(self):
+        # The guard has to hold on every hop: a public URL answering 302 to the
+        # metadata service is the bypass a check on the first URL alone misses.
+        session = MagicMock()
+        session.get.return_value = _redirect_to("http://metadata.example/latest/")
+
+        with _resolving_to("93.184.216.34", then="169.254.169.254"):
+            result = bp._fetch_canvas_dimensions(
+                "https://public.example/manifest.json", "1r", session
+            )
+
+        self.assertEqual(result, {})
+        self.assertEqual(session.get.call_count, 1)
 
     def test_returns_empty_when_fetch_fails(self):
         session = MagicMock()
@@ -918,6 +985,7 @@ class FetchCanvasDimensionsTimeoutTests(TestCase):
     tuple, while the shared session keeps its retry policy for Wikibase calls."""
 
     def setUp(self):
+        _resolve_every_host_publicly(self)
         cache.clear()
 
     def tearDown(self):
@@ -1145,6 +1213,7 @@ class FetchCanvasDimensionsRealManifestTests(TestCase):
     MANIFEST_URL = "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/manifest.json"
 
     def setUp(self):
+        _resolve_every_host_publicly(self)
         cache.clear()
         self.manifest = _read_json_fixture("manifest_btv1b8455927r.json")
 
