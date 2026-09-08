@@ -69,8 +69,10 @@ export default ko.components.register('xy-reader', {
         this.selectedConfig = params.selectedConfig || ko.observable();
         this.selectedFile = params.selectedFile || ko.observable();
         this.selectedConfiguration = undefined;
-        AfsInstrumentViewModel.apply(this, [params]);
+        // Before the base viewmodel runs: AfsInstrumentViewModel subscribes to
+        // the seven chart-formatting observables and pushes them here.
         this.disposables = [];
+        AfsInstrumentViewModel.apply(this, [params]);
 
         // One file per tile is the rule here: Arches' file workbench creates a
         // fresh tile per dropped file, and its getUrl() only reads a tile whose

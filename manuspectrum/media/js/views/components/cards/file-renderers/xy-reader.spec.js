@@ -85,12 +85,14 @@ vi.mock('utils/renderer-cache', async (importOriginal) => {
 });
 
 // Stands in for viewmodels/afs-instrument, which webpack aliases and vitest
-// stubs out. Only its state contract matters here: it hangs every chart
-// observable off `params.state` so sibling instances share them, and it kicks
-// off an AJAX render we do not want in a unit test.
+// stubs out. Two parts of its contract matter here: it hangs every chart
+// observable off `params.state` so sibling instances share them, and it pushes
+// the subscriptions it takes on them into the consumer's `disposables`. It also
+// kicks off an AJAX render we do not want in a unit test.
 vi.mock('viewmodels/afs-instrument', () => ({
     default: function AfsInstrumentViewModel(params) {
         this.params = params;
+        this.disposables = this.disposables || [];
         this.loading = ko.observable(true);
         this.commonData = params.state;
         this.fileViewer = params.fileViewer;
@@ -122,6 +124,11 @@ vi.mock('viewmodels/afs-instrument', () => ({
         this.yAxisRightLabel = this.commonData.yAxisRightLabel;
         this.seriesData = this.commonData.seriesData;
         this.seriesStyles = this.commonData.seriesStyles;
+
+        // Stands for the seven subscriptions the real viewmodel takes on the
+        // shared state to mirror the chart formatting into localStorage.
+        this._baseSubscription = this.chartTitle.subscribe(() => {});
+        this.disposables.push(this._baseSubscription);
 
         this.render = vi.fn();
     },
@@ -200,6 +207,13 @@ describe('xy-reader chart display state', () => {
         chartVm = new XyReaderViewModel(params('render'));
         panelVm = new XyReaderViewModel(params('tab-contents'));
         await flush();
+    });
+
+    it('keeps the subscriptions the base viewmodel registered', () => {
+        // `this.disposables` is declared before the base viewmodel is applied,
+        // because AfsInstrumentViewModel pushes into it while it runs.
+        expect(chartVm.disposables).toContain(chartVm._baseSubscription);
+        expect(panelVm.disposables).toContain(panelVm._baseSubscription);
     });
 
     it('starts both instances on the configuration stored on the file', () => {

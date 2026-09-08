@@ -14,6 +14,9 @@ import 'bindings/plotly';
 */
 const AfsInstrumentViewModel = function(params) {
     this.params = params;
+    // Consumers apply this viewmodel to their own `this`; own the array here so
+    // the subscriptions below survive whatever order the consumer builds in.
+    this.disposables = this.disposables || [];
     this.fileType = 'text/plain';
     this.url = "";
     this.type = "";
@@ -75,12 +78,9 @@ const AfsInstrumentViewModel = function(params) {
     };
 
     _.each(chartFormattingDetails, (val, key) => {
-        const sub = val.subscribe((val) => {
+        this.disposables.push(val.subscribe((val) => {
             localStore.setItem(renderer + key, val);
-        });
-        if (this.disposables) {
-            this.disposables.push(sub);
-        }
+        }));
     });
 
     this.render = () => {
