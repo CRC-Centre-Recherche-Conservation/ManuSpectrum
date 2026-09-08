@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 10:15-0500\n"
+"POT-Creation-Date: 2026-09-08 05:00-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -38,16 +38,11 @@ msgstr "Invalid URL format"
 msgid "Undefined"
 msgstr "Undefined"
 
-#: functions/xy_technique_config.py:213
-#, python-format
-msgid "Could not apply the XY configuration to tile %s"
-msgstr ""
-
-#: settings.py:121
+#: settings.py:116
 msgid "Term Matches"
 msgstr ""
 
-#: settings.py:127
+#: settings.py:122
 msgid "References"
 msgstr ""
 
@@ -942,7 +937,6 @@ msgid "Text"
 msgstr "Text"
 
 #: templates/javascript.htm:45
-#: templates/views/components/plugins/file-configuration.htm:18
 msgid "Configuration"
 msgstr "Configuration"
 
@@ -1131,7 +1125,6 @@ msgid "Message"
 msgstr "Message"
 
 #: templates/javascript.htm:91
-#: templates/views/components/plugins/file-configuration.htm:17
 msgid "Name"
 msgstr "Name"
 
@@ -1851,7 +1844,6 @@ msgid "file(s)"
 msgstr "file(s)"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:123
-#: templates/views/components/plugins/file-configuration.htm:54
 msgid "selected"
 msgstr "selected"
 
@@ -2027,62 +2019,6 @@ msgstr "Attribution"
 #: templates/views/components/widgets/manifest-widget.htm:133
 msgid "Description"
 msgstr "Description"
-
-#: templates/views/components/plugins/file-configuration.htm:5
-msgid ""
-"Specify how to process the data files for viewing.  Any additional files "
-"(such as images) will be automatically displayed if possible."
-msgstr ""
-"Specify how to process the data files for viewing.  Any additional files "
-"(such as images) will be automatically displayed if possible."
-
-#: templates/views/components/plugins/file-configuration.htm:7
-msgid "Data Files"
-msgstr "Data Files"
-
-#: templates/views/components/plugins/file-configuration.htm:9
-msgid "Additional Files"
-msgstr "Additional Files"
-
-#: templates/views/components/plugins/file-configuration.htm:54
-msgid "files"
-msgstr "files"
-
-#: templates/views/components/plugins/file-configuration.htm:54
-msgid "file"
-msgstr "file"
-
-#: templates/views/components/plugins/file-configuration.htm:55
-msgid "Select All"
-msgstr "Select All"
-
-#: templates/views/components/plugins/file-configuration.htm:55
-msgid "Deselect All"
-msgstr "Deselect All"
-
-#: templates/views/components/plugins/file-configuration.htm:73
-msgid "Import Preview"
-msgstr "Import Preview"
-
-#: templates/views/components/plugins/file-configuration.htm:86
-msgid "Selected Files"
-msgstr "Selected Files"
-
-#: templates/views/components/plugins/file-configuration.htm:90
-msgid "Select an importer configuration on the right to apply to all files"
-msgstr "Select an importer configuration on the right to apply to all files"
-
-#: templates/views/components/plugins/file-configuration.htm:91
-msgid "Apply Importer to Selected Files"
-msgstr "Apply Importer to Selected Files"
-
-#: templates/views/components/plugins/file-configuration.htm:94
-msgid "File Preview"
-msgstr "File Preview"
-
-#: templates/views/components/plugins/file-configuration.htm:96
-msgid "This file type cannot be previewed."
-msgstr "This file type cannot be previewed."
 
 #: templates/views/components/plugins/importer-configuration.htm:4
 msgid "Importer Configurations"
@@ -3932,6 +3868,49 @@ msgstr ""
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
+
+#~ msgid ""
+#~ "Specify how to process the data files for viewing.  Any additional files "
+#~ "(such as images) will be automatically displayed if possible."
+#~ msgstr ""
+#~ "Specify how to process the data files for viewing.  Any additional files "
+#~ "(such as images) will be automatically displayed if possible."
+
+#~ msgid "Data Files"
+#~ msgstr "Data Files"
+
+#~ msgid "Additional Files"
+#~ msgstr "Additional Files"
+
+#~ msgid "files"
+#~ msgstr "files"
+
+#~ msgid "file"
+#~ msgstr "file"
+
+#~ msgid "Select All"
+#~ msgstr "Select All"
+
+#~ msgid "Deselect All"
+#~ msgstr "Deselect All"
+
+#~ msgid "Import Preview"
+#~ msgstr "Import Preview"
+
+#~ msgid "Selected Files"
+#~ msgstr "Selected Files"
+
+#~ msgid "Select an importer configuration on the right to apply to all files"
+#~ msgstr "Select an importer configuration on the right to apply to all files"
+
+#~ msgid "Apply Importer to Selected Files"
+#~ msgstr "Apply Importer to Selected Files"
+
+#~ msgid "File Preview"
+#~ msgstr "File Preview"
+
+#~ msgid "This file type cannot be previewed."
+#~ msgstr "This file type cannot be previewed."
 
 #~ msgid ""
 #~ "The X axis will be evenly spaced between start and end values, based on "

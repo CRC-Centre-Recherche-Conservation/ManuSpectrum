@@ -35,7 +35,6 @@ version = "0.0.1"
 [dependency-groups]
 dev = [
     "livereload",
-    "sst",
     "coverage",
     "django-silk==5.1.0",
     "pre-commit==3.8.0",

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 10:15-0500\n"
+"POT-Creation-Date: 2026-09-08 05:00-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -36,16 +36,11 @@ msgstr "Format d'URL invalide"
 msgid "Undefined"
 msgstr "Indéfini"
 
-#: functions/xy_technique_config.py:213
-#, python-format
-msgid "Could not apply the XY configuration to tile %s"
-msgstr "Impossible d'appliquer la configuration XY à la tuile %s"
-
-#: settings.py:121
+#: settings.py:116
 msgid "Term Matches"
 msgstr "Correspondances de termes"
 
-#: settings.py:127
+#: settings.py:122
 msgid "References"
 msgstr "Références"
 
@@ -977,7 +972,6 @@ msgid "Text"
 msgstr "Texte"
 
 #: templates/javascript.htm:45
-#: templates/views/components/plugins/file-configuration.htm:18
 msgid "Configuration"
 msgstr "Configuration"
 
@@ -1174,7 +1168,6 @@ msgid "Message"
 msgstr "Message"
 
 #: templates/javascript.htm:91
-#: templates/views/components/plugins/file-configuration.htm:17
 msgid "Name"
 msgstr "Nom"
 
@@ -1915,7 +1908,6 @@ msgid "file(s)"
 msgstr "fichier(s)"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:123
-#: templates/views/components/plugins/file-configuration.htm:54
 msgid "selected"
 msgstr "sélectionné(s)"
 
@@ -2104,65 +2096,6 @@ msgstr "Attribution"
 #: templates/views/components/widgets/manifest-widget.htm:133
 msgid "Description"
 msgstr "Description"
-
-#: templates/views/components/plugins/file-configuration.htm:5
-msgid ""
-"Specify how to process the data files for viewing.  Any additional files "
-"(such as images) will be automatically displayed if possible."
-msgstr ""
-"Spécifiez comment traiter les fichiers de données pour la visualisation. "
-"Tout fichier supplémentaire (comme les images) sera automatiquement affiché "
-"si possible."
-
-#: templates/views/components/plugins/file-configuration.htm:7
-msgid "Data Files"
-msgstr "Fichiers de données"
-
-#: templates/views/components/plugins/file-configuration.htm:9
-msgid "Additional Files"
-msgstr "Fichiers supplémentaires"
-
-#: templates/views/components/plugins/file-configuration.htm:54
-msgid "files"
-msgstr "fichiers"
-
-#: templates/views/components/plugins/file-configuration.htm:54
-msgid "file"
-msgstr "fichier"
-
-#: templates/views/components/plugins/file-configuration.htm:55
-msgid "Select All"
-msgstr "Tout sélectionner"
-
-#: templates/views/components/plugins/file-configuration.htm:55
-msgid "Deselect All"
-msgstr "Tout désélectionner"
-
-#: templates/views/components/plugins/file-configuration.htm:73
-msgid "Import Preview"
-msgstr "Aperçu de l'importation"
-
-#: templates/views/components/plugins/file-configuration.htm:86
-msgid "Selected Files"
-msgstr "Fichiers sélectionnés"
-
-#: templates/views/components/plugins/file-configuration.htm:90
-msgid "Select an importer configuration on the right to apply to all files"
-msgstr ""
-"Sélectionnez une configuration d'importation à droite pour l'appliquer à "
-"tous les fichiers"
-
-#: templates/views/components/plugins/file-configuration.htm:91
-msgid "Apply Importer to Selected Files"
-msgstr "Appliquer l'importateur aux fichiers sélectionnés"
-
-#: templates/views/components/plugins/file-configuration.htm:94
-msgid "File Preview"
-msgstr "Aperçu du fichier"
-
-#: templates/views/components/plugins/file-configuration.htm:96
-msgid "This file type cannot be previewed."
-msgstr "Ce type de fichier ne peut pas être prévisualisé."
 
 #: templates/views/components/plugins/importer-configuration.htm:4
 msgid "Importer Configurations"
@@ -4100,6 +4033,56 @@ msgid ""
 msgstr ""
 "Cette configuration fait partie du socle commun et ne peut pas être "
 "supprimée."
+
+#, python-format
+#~ msgid "Could not apply the XY configuration to tile %s"
+#~ msgstr "Impossible d'appliquer la configuration XY à la tuile %s"
+
+#~ msgid ""
+#~ "Specify how to process the data files for viewing.  Any additional files "
+#~ "(such as images) will be automatically displayed if possible."
+#~ msgstr ""
+#~ "Spécifiez comment traiter les fichiers de données pour la visualisation. "
+#~ "Tout fichier supplémentaire (comme les images) sera automatiquement "
+#~ "affiché si possible."
+
+#~ msgid "Data Files"
+#~ msgstr "Fichiers de données"
+
+#~ msgid "Additional Files"
+#~ msgstr "Fichiers supplémentaires"
+
+#~ msgid "files"
+#~ msgstr "fichiers"
+
+#~ msgid "file"
+#~ msgstr "fichier"
+
+#~ msgid "Select All"
+#~ msgstr "Tout sélectionner"
+
+#~ msgid "Deselect All"
+#~ msgstr "Tout désélectionner"
+
+#~ msgid "Import Preview"
+#~ msgstr "Aperçu de l'importation"
+
+#~ msgid "Selected Files"
+#~ msgstr "Fichiers sélectionnés"
+
+#~ msgid "Select an importer configuration on the right to apply to all files"
+#~ msgstr ""
+#~ "Sélectionnez une configuration d'importation à droite pour l'appliquer à "
+#~ "tous les fichiers"
+
+#~ msgid "Apply Importer to Selected Files"
+#~ msgstr "Appliquer l'importateur aux fichiers sélectionnés"
+
+#~ msgid "File Preview"
+#~ msgstr "Aperçu du fichier"
+
+#~ msgid "This file type cannot be previewed."
+#~ msgstr "Ce type de fichier ne peut pas être prévisualisé."
 
 #~ msgid "These look like percentages, not the 0-1 ratio the axis names."
 #~ msgstr ""
