@@ -341,7 +341,7 @@ class ModelGraphViewTests(TestCase):
 
 from django.test import override_settings
 
-from manuspectrum.views.model_graph import PAYLOAD_VERSION
+from manuspectrum.views.model_graph import PAYLOAD_VERSION, graph_fingerprint
 from manuspectrum.views.model_graph_service import draft_state_ids
 
 
@@ -497,3 +497,78 @@ class PayloadEnrichmentTests(TestCase):
             self.assertEqual(str(DATATYPE_LABELS["manifest"]), "Manifeste IIIF")
         with translation.override("en"):
             self.assertEqual(str(DATATYPE_LABELS["string"]), "String")
+
+
+def _fingerprint_tables(graph_rows, resource_count, concept_count):
+    """Stand-ins for the three managers ``graph_fingerprint`` reads.
+
+    It imports them inside its own body, so the patch has to land on
+    ``arches.app.models.models``.
+    """
+    graph_model = mock.Mock()
+    graph_model.objects.filter.return_value.values_list.return_value = graph_rows
+
+    resource_instance = mock.Mock()
+    resource_instance.objects.count.return_value = resource_count
+
+    concept = mock.Mock()
+    concept.objects.count.return_value = concept_count
+
+    return mock.patch.multiple(
+        "arches.app.models.models",
+        GraphModel=graph_model,
+        ResourceInstance=resource_instance,
+        Concept=concept,
+    )
+
+
+class GraphFingerprintTests(SimpleTestCase):
+    """What the cache key is allowed to notice.
+
+    The fingerprint is the only thing standing between a republished graph and
+    a stale public payload, and it is recomputed on every request — so it must
+    move for a republish, a record and a concept, and must not move for
+    anything else.
+    """
+
+    ROWS = [("g1", "p1"), ("g2", "p2")]
+
+    def fingerprint(self, rows=None, resources=3, concepts=7):
+        with _fingerprint_tables(
+            self.ROWS if rows is None else rows, resources, concepts
+        ):
+            return graph_fingerprint()
+
+    def test_is_stable_for_unchanged_data(self):
+        self.assertEqual(self.fingerprint(), self.fingerprint())
+
+    def test_ignores_the_order_rows_come_back_in(self):
+        self.assertEqual(
+            self.fingerprint(rows=[("g1", "p1"), ("g2", "p2")]),
+            self.fingerprint(rows=[("g2", "p2"), ("g1", "p1")]),
+        )
+
+    def test_moves_when_a_graph_is_republished(self):
+        self.assertNotEqual(
+            self.fingerprint(rows=[("g1", "p1")]),
+            self.fingerprint(rows=[("g1", "p2")]),
+        )
+
+    def test_moves_when_a_graph_is_added(self):
+        self.assertNotEqual(
+            self.fingerprint(rows=[("g1", "p1")]),
+            self.fingerprint(rows=[("g1", "p1"), ("g2", "p2")]),
+        )
+
+    def test_moves_when_a_record_is_created_or_deleted(self):
+        self.assertNotEqual(
+            self.fingerprint(resources=3), self.fingerprint(resources=4)
+        )
+
+    def test_moves_when_a_concept_is_created_or_deleted(self):
+        self.assertNotEqual(self.fingerprint(concepts=7), self.fingerprint(concepts=8))
+
+    def test_is_a_hex_digest(self):
+        digest = self.fingerprint()
+        self.assertEqual(len(digest), 32)
+        self.assertTrue(all(c in "0123456789abcdef" for c in digest), digest)
