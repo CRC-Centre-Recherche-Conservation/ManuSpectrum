@@ -40,13 +40,81 @@ function generateConfig(): Promise<UserConfig> {
             alias[`@/${archesApplicationName}`] = path.join(archesApplicationPath, 'src', archesApplicationName);
         }
 
+        // Webpack builds an alias for every file under media/js from its path
+        // relative to that directory (see `javascriptRelativeFilepathToAbsoluteFilepathLookup`
+        // in webpack/webpack.common.js), which is how the KnockoutJS side writes
+        // `import { createForceGraph } from 'utils/force-graph'`. It searches the
+        // project first and falls back to the Arches core tree, so `utils/dispose`
+        // (core) and `utils/xy-transforms` (ours) both resolve from the same
+        // prefix — reproduce that here rather than aliasing a single directory.
+        const mediaJsRoots = [
+            path.join(parsedData['APP_ROOT'], 'media', 'js'),
+            path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js'),
+        ];
+        const resolveMediaJs = (source: string) => {
+            for (const root of mediaJsRoots) {
+                for (const candidate of [
+                    path.join(root, source),
+                    path.join(root, `${source}.js`),
+                    path.join(root, source, 'index.js'),
+                ]) {
+                    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                        return candidate;
+                    }
+                }
+            }
+            return undefined;
+        };
+
+        // Virtual-module plugin: resolves webpack-specific import aliases
+        // (bindings/, viewmodels/, templates/) that are not in node_modules.
+        // The empty stub is sufficient because vi.mock() in spec files
+        // replaces these modules before any code runs.
+        //
+        // `enforce: 'pre'` so bare media/js specifiers are resolved here rather
+        // than by a directory alias, which cannot search two roots.
+        const webpackCompatStubs = {
+            name: 'webpack-compat-stubs',
+            enforce: 'pre' as const,
+            resolveId(source: string) {
+                if (
+                    source.startsWith('bindings/') ||
+                    source.startsWith('viewmodels/') ||
+                    (source.startsWith('templates/') && source.endsWith('.htm'))
+                ) {
+                    return '\0' + source;
+                }
+                if (source.startsWith('utils/') || source.startsWith('views/')) {
+                    return resolveMediaJs(source);
+                }
+            },
+            load(id: string) {
+                if (
+                    id.startsWith('\0bindings/') ||
+                    id.startsWith('\0viewmodels/') ||
+                    (id.startsWith('\0templates/') && id.endsWith('.htm'))
+                ) {
+                    return 'export default {};';
+                }
+            },
+        };
+
         resolve({
-            plugins: [vue() as any],
+            plugins: [vue() as any, webpackCompatStubs],
             test: {
                 alias: alias,
                 coverage: {
-                    include: [path.join(parsedData['APP_RELATIVE_PATH'], 'src', path.sep)],
-                    exclude: exclude,
+                    // src/ (Vue) plus the public-pages KnockoutJS-era code that
+                    // actually carries specs (utils/, views/pages/). Deliberately
+                    // NOT all of media/js: pulling in the untested legacy tree
+                    // (bindings, widgets, workflows…) would crater the ratio and
+                    // trip CI's "no coverage decrease" gate for every branch.
+                    include: [
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'src', path.sep),
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'utils', path.sep),
+                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'views', 'pages', path.sep),
+                    ],
+                    exclude: [...exclude, '**/*.spec.js'],
                     reporter: [
                         ['clover', { 'file': 'coverage.xml' }],
                         'text',

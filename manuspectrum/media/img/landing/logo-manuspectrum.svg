@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 95">
+  <defs>
+    <linearGradient id="spectral-bar" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#dc3545"/>
+      <stop offset="20%" stop-color="#e67e22"/>
+      <stop offset="40%" stop-color="#f0b429"/>
+      <stop offset="60%" stop-color="#10b981"/>
+      <stop offset="80%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="glow-blue" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="glow-red" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#dc3545" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#dc3545" stop-opacity="0.07"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Y-axis (plot spirit) -->
+  <line x1="40" y1="82" x2="40" y2="4" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+  <line x1="37" y1="82" x2="40" y2="82" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+  <line x1="37" y1="43" x2="40" y2="43" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+  <line x1="37" y1="4" x2="40" y2="4" stroke="#1a1a2e" stroke-width="0.7" opacity="0.22"/>
+  <text x="34" y="85" text-anchor="end" fill="#1a1a2e" font-family="'Sora', system-ui, sans-serif" font-size="8" opacity="0.30">0</text>
+  <text x="34" y="7" text-anchor="end" fill="#1a1a2e" font-family="'Sora', system-ui, sans-serif" font-size="8" opacity="0.30">1</text>
+
+  <!-- "MANU" text (drawn first, curves will overlay) -->
+  <text x="124" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">MANU</text>
+
+  <!-- Peak 1 (blue) — starts at spectral bar origin, small peak before M, flat under MANU, big peak for S, ends above PE -->
+  <path d="M 40,82 C 50,82 65,45 78,45 C 86,45 100,82 132,81 C 205,81 228,79 245,72 C 253,68 259,68 267,72 C 275,78 280,80 288,74 C 308,40 330,8 342,6 C 354,6 390,38 452,34 L 40,82 Z" fill="url(#glow-blue)"/>
+  <path d="M 40,82 C 50,82 65,45 78,45 C 86,45 100,82 132,81 C 205,81 228,79 245,72 C 253,68 259,68 267,72 C 275,78 280,80 288,74 C 308,40 330,8 342,6 C 354,6 390,38 452,34"
+        fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Peak 2 (red) — starts at spectral bar origin, small peak before M, flat under MANU, big peak for S, ends above PE -->
+  <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 210,81 232,78 250,70 C 258,66 264,66 272,70 C 280,77 285,79 292,72 C 314,38 340,12 358,10 C 366,10 390,36 400,34 C 404,32 408,22 412,22 C 416,22 420,34 458,32 L 40,82 Z" fill="url(#glow-red)"/>
+  <path d="M 40,82 C 54,82 72,50 86,50 C 94,50 108,82 142,81 C 210,81 232,78 250,70 C 258,66 264,66 272,70 C 280,77 285,79 292,72 C 314,38 340,12 358,10 C 366,10 390,36 400,34 C 404,32 408,22 412,22 C 416,22 420,34 458,32"
+        fill="none" stroke="#dc3545" stroke-width="2" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- "PECTRUM" text (drawn last, overlays descending curves) -->
+  <text x="345" y="65" fill="#1a1a2e" font-family="Georgia, 'Cormorant Garamond', serif" font-size="44" font-weight="300" letter-spacing="5">PECTRUM</text>
+
+  <!-- Spectral bar -->
+  <rect x="40" y="82" width="580" height="3" rx="1.5" fill="url(#spectral-bar)"/>
+</svg>

@@ -1,0 +1,227 @@
+{% load i18n %}
+
+<div class="bbma-summary-step"
+     data-bind="css: { 'bbma-summary-step--has-issues': hasIssues() }">
+
+    <!-- Top status rail (2px accent line, color shifts on issues) -->
+    <span class="bbma-summary-rail" aria-hidden="true"></span>
+
+    <article class="bbma-summary-card"
+             data-bind="css: { 'bbma-summary-card--has-issues': hasIssues() }">
+
+        <!-- Hero: title + status pill -->
+        <header class="bbma-summary-hero">
+            <h2 class="bbma-summary-title">{% trans "Import complete" %}</h2>
+            <span class="bbma-summary-pill">
+                <span class="bbma-summary-pill-dot" aria-hidden="true"></span>
+                <!-- ko ifnot: hasIssues -->{% trans "Done" %}<!-- /ko -->
+                <!-- ko if: hasIssues -->{% trans "With issues" %}<!-- /ko -->
+            </span>
+        </header>
+
+        <!-- Metric ribbon: hairline-divided cells, no boxes -->
+        <dl class="bbma-summary-metrics">
+            <div class="bbma-summary-metric bbma-summary-metric--primary">
+                <dd class="bbma-summary-metric-value" data-bind="text: createdCount"></dd>
+                <dt class="bbma-summary-metric-label">{% trans "Created" %}</dt>
+            </div>
+            <!-- ko if: hasLinked -->
+            <div class="bbma-summary-metric">
+                <dd class="bbma-summary-metric-value" data-bind="text: linkedCount"></dd>
+                <dt class="bbma-summary-metric-label">{% trans "Linked" %}</dt>
+            </div>
+            <!-- /ko -->
+            <!-- ko if: skippedCount() > 0 -->
+            <div class="bbma-summary-metric bbma-summary-metric--muted">
+                <dd class="bbma-summary-metric-value" data-bind="text: skippedCount"></dd>
+                <dt class="bbma-summary-metric-label">{% trans "Skipped" %}</dt>
+            </div>
+            <!-- /ko -->
+            <!-- ko if: errorCount() > 0 -->
+            <div class="bbma-summary-metric bbma-summary-metric--alert">
+                <dd class="bbma-summary-metric-value" data-bind="text: errorCount"></dd>
+                <dt class="bbma-summary-metric-label">{% trans "Errors" %}</dt>
+            </div>
+            <!-- /ko -->
+            <div class="bbma-summary-metric bbma-summary-metric--type">
+                <dd class="bbma-summary-metric-value bbma-summary-metric-value--text"
+                    data-bind="text: resourceTypeLabel"></dd>
+                <dt class="bbma-summary-metric-label">{% trans "Type" %}</dt>
+            </div>
+        </dl>
+
+        <!-- Draft state notice — newly created resources land in the
+             Arches "Draft" lifecycle state and need to be reviewed +
+             flipped to "Active" before they're considered published. -->
+        <!-- ko if: hasCreated -->
+        <aside class="bbma-summary-draft-notice" role="note">
+            <i class="fa fa-info-circle bbma-summary-draft-notice-icon" aria-hidden="true"></i>
+            <div class="bbma-summary-draft-notice-text">
+                <strong>{% trans "Resources are saved as Draft." %}</strong>
+                {% blocktrans trimmed %}
+                Open each one to verify the data, fill in anything that
+                couldn't be fetched from Biblissima, then click
+                <strong>Make Active</strong> on the resource page to publish it.
+                Drafts stay editable; only Active resources are surfaced
+                across the rest of the application.
+                {% endblocktrans %}
+            </div>
+        </aside>
+        <!-- /ko -->
+
+        <!-- Created resources list -->
+        <!-- ko if: hasCreated -->
+        <section class="bbma-summary-section">
+            <header class="bbma-summary-section-head">
+                <h3 class="bbma-summary-section-title">{% trans "Created resources" %}</h3>
+                <span class="bbma-summary-section-count" data-bind="text: createdCount"></span>
+            </header>
+
+            <ul class="bbma-summary-list">
+                <!-- ko foreach: visibleCreatedResources -->
+                <li class="bbma-summary-row">
+                    <a class="bbma-summary-row-link"
+                       target="_blank"
+                       data-bind="attr: {href: $parent.resourceUrl($data.resourceId)}">
+
+                        <span class="bbma-summary-row-thumb">
+                            <!-- ko if: $data.thumbnail -->
+                            <img loading="lazy"
+                                 data-bind="attr: {src: $data.thumbnail, alt: $parent.resourceDisplayLabel($data)}, thumbFallback: true">
+                            <!-- /ko -->
+                            <!-- ko ifnot: $data.thumbnail -->
+                            <span class="bbma-summary-row-thumb-fallback" aria-hidden="true">
+                                <i class="fa fa-file-text-o"></i>
+                            </span>
+                            <!-- /ko -->
+                        </span>
+
+                        <span class="bbma-summary-row-body">
+                            <span class="bbma-summary-row-label"
+                                  data-bind="text: $parent.resourceDisplayLabel($data)"></span>
+                            <!-- ko if: $parent.resourceCaption($data) -->
+                            <span class="bbma-summary-row-caption"
+                                  data-bind="text: $parent.resourceCaption($data)"></span>
+                            <!-- /ko -->
+                        </span>
+
+                        <span class="bbma-summary-row-arrow" aria-hidden="true">
+                            <i class="fa fa-angle-right"></i>
+                        </span>
+                    </a>
+                </li>
+                <!-- /ko -->
+            </ul>
+
+            <!-- Show-more toggle: only renders when there are hidden entries -->
+            <!-- ko if: createdHiddenCount() > 0 || createdExpanded() -->
+            <button type="button"
+                    class="bbma-summary-more"
+                    data-bind="click: toggleCreatedExpanded">
+                <!-- ko ifnot: createdExpanded -->
+                <i class="fa fa-angle-down"></i>
+                {% trans "Show" %}
+                <span data-bind="text: createdHiddenCount"></span>
+                {% trans "more" %}
+                <!-- /ko -->
+                <!-- ko if: createdExpanded -->
+                <i class="fa fa-angle-up"></i>
+                {% trans "Collapse" %}
+                <!-- /ko -->
+            </button>
+            <!-- /ko -->
+        </section>
+        <!-- /ko -->
+
+        <!-- Linked resources list -->
+        <!-- ko if: hasLinked -->
+        <section class="bbma-summary-section bbma-summary-section--secondary">
+            <header class="bbma-summary-section-head">
+                <h3 class="bbma-summary-section-title">{% trans "Linked to existing resources" %}</h3>
+                <span class="bbma-summary-section-count" data-bind="text: linkedCount"></span>
+            </header>
+
+            <ul class="bbma-summary-list bbma-summary-list--linked">
+                <!-- ko foreach: visibleLinkedResources -->
+                <li class="bbma-summary-row bbma-summary-row--compact">
+                    <a class="bbma-summary-row-link"
+                       target="_blank"
+                       data-bind="attr: {href: $parent.resourceUrl($data.resourceId)}">
+
+                        <span class="bbma-summary-row-glyph" aria-hidden="true">
+                            <i class="fa fa-link"></i>
+                        </span>
+
+                        <span class="bbma-summary-row-body">
+                            <span class="bbma-summary-row-label"
+                                  data-bind="text: $data.displayname || $data.biblissimaLabel || $data.resourceId"></span>
+                            <!-- ko if: $data.shelfmark -->
+                            <span class="bbma-summary-row-caption"
+                                  data-bind="text: $data.shelfmark"></span>
+                            <!-- /ko -->
+                        </span>
+
+                        <span class="bbma-summary-row-arrow" aria-hidden="true">
+                            <i class="fa fa-angle-right"></i>
+                        </span>
+                    </a>
+                </li>
+                <!-- /ko -->
+            </ul>
+
+            <!-- ko if: linkedHiddenCount() > 0 || linkedExpanded() -->
+            <button type="button"
+                    class="bbma-summary-more"
+                    data-bind="click: toggleLinkedExpanded">
+                <!-- ko ifnot: linkedExpanded -->
+                <i class="fa fa-angle-down"></i>
+                {% trans "Show" %}
+                <span data-bind="text: linkedHiddenCount"></span>
+                {% trans "more" %}
+                <!-- /ko -->
+                <!-- ko if: linkedExpanded -->
+                <i class="fa fa-angle-up"></i>
+                {% trans "Collapse" %}
+                <!-- /ko -->
+            </button>
+            <!-- /ko -->
+        </section>
+        <!-- /ko -->
+
+        <!-- Issues notice -->
+        <!-- ko if: hasIssues -->
+        <aside class="bbma-summary-notice">
+            <i class="fa fa-info-circle bbma-summary-notice-icon"></i>
+            <div class="bbma-summary-notice-text">
+                <!-- ko if: skippedCount() > 0 -->
+                <span data-bind="text: skippedCount"></span>
+                {% trans "skipped" %}
+                <!-- /ko -->
+                <!-- ko if: skippedCount() > 0 && errorCount() > 0 -->
+                <span class="bbma-summary-notice-sep">·</span>
+                <!-- /ko -->
+                <!-- ko if: errorCount() > 0 -->
+                <span data-bind="text: errorCount"></span>
+                {% trans "errors" %}
+                <!-- /ko -->
+                <span class="bbma-summary-notice-aside">{% trans "See step 3 for details." %}</span>
+            </div>
+        </aside>
+        <!-- /ko -->
+
+        <!-- Footer CTA: text-link with hairline rule -->
+        <!-- ko if: projectName && projectUrl -->
+        <footer class="bbma-summary-footer">
+            <a class="bbma-summary-cta"
+               target="_blank"
+               data-bind="attr: {href: projectUrl}">
+                <span class="bbma-summary-cta-eyebrow">{% trans "Open project" %}</span>
+                <span class="bbma-summary-cta-name" data-bind="text: projectName"></span>
+                <span class="bbma-summary-cta-arrow" aria-hidden="true">
+                    <i class="fa fa-long-arrow-right"></i>
+                </span>
+            </a>
+        </footer>
+        <!-- /ko -->
+    </article>
+</div>

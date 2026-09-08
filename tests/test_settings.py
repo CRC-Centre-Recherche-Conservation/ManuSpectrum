@@ -43,23 +43,19 @@ DATABASES = {
         "PASSWORD": "postgis",
         "PORT": "5432",
         "POSTGIS_TEMPLATE": "template_postgis",
-        "TEST": {
-            "CHARSET": None,
-            "COLLATION": None,
-            "MIRROR": None,
-            "NAME": None
-        },
+        "TEST": {"CHARSET": None, "COLLATION": None, "MIRROR": None, "NAME": None},
         "TIME_ZONE": None,
-        "USER": "postgres"
+        "USER": "postgres",
     }
 }
 
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "test-cache",
     },
     "user_permission": {
-        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "user_permission_cache",
     },
 }
@@ -68,11 +64,23 @@ LOGGING["loggers"]["arches"]["level"] = "ERROR"
 
 ELASTICSEARCH_PREFIX = "test"
 
+ELASTICSEARCH_HOSTS = [
+    {
+        "scheme": os.environ.get("ES_SCHEME", "https"),
+        "host": "localhost",
+        "port": 9200,
+    }
+]
+
 TEST_RUNNER = "arches.test.runner.ArchesTestRunner"
 SILENCED_SYSTEM_CHECKS.append(
     "arches.W001",  # Cache backend does not support rate-limiting
 )
 
-ELASTICSEARCH_HOSTS = [
-    {"scheme": "http", "host": "localhost", "port": ELASTICSEARCH_HTTP_PORT}
-]
+# Disable manifest fetch rate-limiting in tests (no real time.sleep).
+MANIFEST_FETCH_RATE_LIMITS = {}
+
+# The suite asserts on the synchronous indexing path and must not depend on the
+# developer's settings_local.py, nor enqueue real messages on the broker. Tests
+# covering the async path turn it on with override_settings.
+BIBLISSIMA_ASYNC_INDEXING = False

@@ -1,0 +1,225 @@
+{
+  "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/manifest.json",
+  "label": "BnF. Département des Manuscrits. Latin 40",
+  "attribution": "Bibliothèque nationale de France",
+  "license": "https://gallica.bnf.fr/html/und/conditions-dutilisation-des-contenus-de-gallica",
+  "logo": "https://gallica.bnf.fr/mbImage/logos/logo-bnf.png",
+  "related": "https://gallica.bnf.fr/ark:/12148/btv1b8455927r",
+  "seeAlso": [
+    "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b8455927r"
+  ],
+  "description": "Biblia sacra",
+  "metadata": [
+    {
+      "label": "Repository",
+      "value": ""
+    },
+    {
+      "label": "Digitised by",
+      "value": "Bibliothèque nationale de France"
+    },
+    {
+      "label": "Source Images",
+      "value": "https://gallica.bnf.fr/ark:/12148/btv1b8455927r"
+    },
+    {
+      "label": "Metadata Source",
+      "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b8455927r"
+    },
+    {
+      "label": "Shelfmark",
+      "value": "Bibliothèque nationale de France. Département des Manuscrits. Latin 40"
+    },
+    {
+      "label": "Title",
+      "value": "Biblia sacra"
+    },
+    {
+      "label": "Date",
+      "value": "1250-1275"
+    },
+    {
+      "label": "Language",
+      "value": "latin"
+    },
+    {
+      "label": "Format",
+      "value": "Naples. - Ecriture gothique. Copié par Johensis cf colophon au f. 432 « Explicit expliceat ludere scriptor eat. Johensis ». Ce même copiste a signé deux autres ouvrages commandés par Manfred : la Bible Vat. Lat. 36 (f. 494v) et un exemplaire, exécuté entre 1258 et 1266, du traité de Pietro da Eboli sur les Bains de Pouzzoles, Ms 1474 de la Biblioteca Angelica à Rome (f. 19). Sur la formule du colophon, voir les travaux de Lucien Reynhout, 2006. - Enluminé par le Maître de la Bible de Manfred cf Latin 10428. Initiales en couleur à filigranes en épi, ou historiées sur fond d'or à antennes. - Toutes les enluminures de ce manuscrit ont été décrites et indexées dans la base Mandragore. - F. 463v : Notes sur la Bible, XVe siècle.Un croquis marginal représentant le Christ a été ajouté au f. 423v par l'auteur de l'annontation du f. 223. - 47 cahiers, précédés d'une garde volante en parchemin et suivis par une garde volante en parchemin folioté f. 463, trois gardes volantes en papier puis une garde volante en parchemin : 17 cahiers de 10 feuillets (1-170), 1 cahier de 6 feuillets (171-176), 5 cahiers de 10 feuillets (177-226), 1 cahier de 7 feuillets (227-233) composé initialement de 4 feuillets (227, 231, 232, 233, la ficelle étant entre 231 et 232) dans lequel ont été insérés 3 feuillets (228-230), 10 cahiers de 10 feuillets (231-333), 1 cahier de 11 feuillets (334-344), 1 cahier de 10 feuillets (345-354), 1 cahier de 8 feuillets (355-362), 1 cahier de 9 feuillets (363-371), traces en fond de cahier d'un feuillet découpé entre le f. 366 et 367, 5 cahiers de 10 feuillets (372-421), 1 cahier de 12 feuillets (422-433), 2 cahiers de 10 feuillets (433-453), 1 cahier de 8 feuillets (454-461), 1 feuillet (462), 1 garde volante parchemin (463).Absence de réclames. Deux systèmes de signatures, l'un alpha-numérique à la mine de plomb, l'autre à l'encre rouge. Chaque cahier est également numéroté en chiffres romains à l'encre rouge sur le dernier feuillet, en bordure inférieure. Présence d'une croix à la mine de plomb sur le premier feuillet de la deuxième moitié de chaque cahier. Traces d'annototations à l'intention du rubricateur, par exemple au f. 100v, se lit XVI (le début « X » est manquant car les feuillets ont été rognés en gouttière) pour le chapitre XXVI. Subsistent également des lettres d'attente de petite taille à l'intention du rubricateur, par exemple au f. 101v, l'initiale C, au f. 105v, l'initiale F, au f. 177v, l'initiale T, au f. 190, l'initiale M. - Parchemin. - 463 ff. - 255 × 180 mm (just. 172 × 120 mm). - Reliure XVIIIe siècle en maroquin rouge aux armes royales. - Estampille de la Bibliothèque royale (Ancien Régime), avant 1735, modèle identique à Josserand-Bruno 268 type 5"
+    },
+    {
+      "label": "Creator",
+      "value": "Maître de la Bible de Manfred"
+    },
+    {
+      "label": "Relation",
+      "value": "Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc61846j"
+    },
+    {
+      "label": "Type",
+      "value": "Manuscrit"
+    },
+    {
+      "label": "Place",
+      "value": "Lieu de copie : Naples"
+    }
+  ],
+  "sequences": [
+    {
+      "canvases": [
+        {
+          "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f1",
+          "label": "plat supérieur",
+          "height": 4510,
+          "width": 3290,
+          "images": [
+            {
+              "motivation": "sc:painting",
+              "on": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f1",
+              "resource": {
+                "format": "image/jpeg",
+                "service": {
+                  "profile": "http://library.stanford.edu/iiif/image-api/1.1/compliance.html#level2",
+                  "@context": "http://iiif.io/api/image/1/context.json",
+                  "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f1"
+                },
+                "height": 4510,
+                "width": 3290,
+                "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f1/full/full/0/native.jpg",
+                "@type": "dctypes:Image"
+              },
+              "@type": "oa:Annotation"
+            }
+          ],
+          "thumbnail": {
+            "@id": "https://gallica.bnf.fr/ark:/12148/btv1b8455927r/f1.thumbnail"
+          },
+          "@type": "sc:Canvas"
+        },
+        {
+          "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f648",
+          "label": "322v",
+          "height": 4132,
+          "width": 2891,
+          "images": [
+            {
+              "motivation": "sc:painting",
+              "on": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f648",
+              "resource": {
+                "format": "image/jpeg",
+                "service": {
+                  "profile": "http://library.stanford.edu/iiif/image-api/1.1/compliance.html#level2",
+                  "@context": "http://iiif.io/api/image/1/context.json",
+                  "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f648"
+                },
+                "height": 4132,
+                "width": 2891,
+                "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f648/full/full/0/native.jpg",
+                "@type": "dctypes:Image"
+              },
+              "@type": "oa:Annotation"
+            }
+          ],
+          "thumbnail": {
+            "@id": "https://gallica.bnf.fr/ark:/12148/btv1b8455927r/f648.thumbnail"
+          },
+          "@type": "sc:Canvas"
+        },
+        {
+          "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f649",
+          "label": "323r",
+          "height": 4234,
+          "width": 2977,
+          "images": [
+            {
+              "motivation": "sc:painting",
+              "on": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f649",
+              "resource": {
+                "format": "image/jpeg",
+                "service": {
+                  "profile": "http://library.stanford.edu/iiif/image-api/1.1/compliance.html#level2",
+                  "@context": "http://iiif.io/api/image/1/context.json",
+                  "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f649"
+                },
+                "height": 4234,
+                "width": 2977,
+                "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f649/full/full/0/native.jpg",
+                "@type": "dctypes:Image"
+              },
+              "@type": "oa:Annotation"
+            }
+          ],
+          "thumbnail": {
+            "@id": "https://gallica.bnf.fr/ark:/12148/btv1b8455927r/f649.thumbnail"
+          },
+          "@type": "sc:Canvas"
+        },
+        {
+          "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f650",
+          "label": "323v",
+          "height": 4132,
+          "width": 2891,
+          "images": [
+            {
+              "motivation": "sc:painting",
+              "on": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f650",
+              "resource": {
+                "format": "image/jpeg",
+                "service": {
+                  "profile": "http://library.stanford.edu/iiif/image-api/1.1/compliance.html#level2",
+                  "@context": "http://iiif.io/api/image/1/context.json",
+                  "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f650"
+                },
+                "height": 4132,
+                "width": 2891,
+                "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f650/full/full/0/native.jpg",
+                "@type": "dctypes:Image"
+              },
+              "@type": "oa:Annotation"
+            }
+          ],
+          "thumbnail": {
+            "@id": "https://gallica.bnf.fr/ark:/12148/btv1b8455927r/f650.thumbnail"
+          },
+          "@type": "sc:Canvas"
+        },
+        {
+          "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f651",
+          "label": "324r",
+          "height": 4198,
+          "width": 2931,
+          "images": [
+            {
+              "motivation": "sc:painting",
+              "on": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/canvas/f651",
+              "resource": {
+                "format": "image/jpeg",
+                "service": {
+                  "profile": "http://library.stanford.edu/iiif/image-api/1.1/compliance.html#level2",
+                  "@context": "http://iiif.io/api/image/1/context.json",
+                  "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f651"
+                },
+                "height": 4198,
+                "width": 2931,
+                "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/f651/full/full/0/native.jpg",
+                "@type": "dctypes:Image"
+              },
+              "@type": "oa:Annotation"
+            }
+          ],
+          "thumbnail": {
+            "@id": "https://gallica.bnf.fr/ark:/12148/btv1b8455927r/f651.thumbnail"
+          },
+          "@type": "sc:Canvas"
+        }
+      ],
+      "label": "Current Page Order",
+      "@type": "sc:Sequence",
+      "@id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/sequence/default"
+    }
+  ],
+  "thumbnail": {
+    "@id": "https://gallica.bnf.fr/ark:/12148/btv1b8455927r.thumbnail"
+  },
+  "@type": "sc:Manifest",
+  "@context": "http://iiif.io/api/presentation/2/context.json"
+}

@@ -1,0 +1,23 @@
+// Biblissima concept autocomplete widget
+.biblissima-concept-widget {
+    .biblissima-manual-toggle {
+        display: inline-block;
+        margin: 6px 0 2px;
+        font-size: 12px;
+    }
+
+    .biblissima-concept-help {
+        margin-top: 6px;
+    }
+
+    .label {
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+}
+
+// Dropdown rows are rendered in a select2 container attached to <body>,
+// outside the widget's scope.
+.biblissima-en-badge {
+    margin-left: 6px;
+}

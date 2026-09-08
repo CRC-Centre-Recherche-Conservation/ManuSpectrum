@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- Overrides Arches core errors/500.htm. DELIBERATELY self-contained: no
+     render_bundle, no includes, no i18n machinery, inline styles only (the
+     documented exception to the no-inline-style rule, same rationale as email
+     templates) — a 500 page that depends on the broken application can crash
+     while rendering the incident it is supposed to explain. Bilingual text is
+     hardcoded for the same reason. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Server error — ManuSpectrum</title>
+    <style>
+        body { margin: 0; font-family: Georgia, 'Times New Roman', serif; background: #faf9f7; color: #1a1a2e;
+               display: flex; min-height: 100vh; align-items: center; justify-content: center; text-align: center; }
+        .box { padding: 40px 24px; max-width: 620px; }
+        .brand { font-size: 1.05rem; letter-spacing: 0.24em; text-transform: uppercase; }
+        .bar { height: 3px; width: 120px; margin: 22px auto; border-radius: 2px;
+               background: linear-gradient(90deg, #dc3545, #e67e22, #f0b429, #10b981, #3b82f6, #8b5cf6); }
+        .code { font-size: 5.5rem; line-height: 1; margin: 0.2em 0; }
+        h1 { font-size: 1.5rem; font-weight: 400; margin: 0 0 6px; }
+        p { color: #55556b; line-height: 1.6; margin: 8px 0; }
+        a { color: #1a1a2e; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <div class="brand">ManuSpectrum</div>
+        <div class="bar"></div>
+        <div class="code" aria-hidden="true">500</div>
+        <h1>Instrument malfunction / Une erreur est survenue</h1>
+        <p>Our instruments hit an unexpected error and are recalibrating. The team has been notified — please try again in a few minutes.</p>
+        <p>Le serveur a rencontré une erreur inattendue et se recalibre. Réessayez dans quelques minutes.</p>
+        <p><a href="/">Back to the homepage / Retour à l'accueil</a></p>
+    </div>
+</body>
+</html>

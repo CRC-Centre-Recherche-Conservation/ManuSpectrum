@@ -1,0 +1,283 @@
+{% load i18n %}
+<div class="importer-configuration">
+    <div data-bind="visible: showImporterList">
+        <h4 class="file-config-header">{% trans "Importer Configurations" %}</h4>
+        <h5 class="file-config-instructions">{% trans "Define how to import your x/y data" %}</h5>
+        <div class="importer-list-filter">
+            <input type="text" class="form-control"
+                   placeholder="{% trans 'Filter configurations...' %}"
+                   data-bind="textInput: configFilter">
+            <span class="importer-list-filter-clear" role="button" tabindex="0"
+                  aria-label="{% trans 'Clear the filter' %}"
+                  data-bind="onEnterkeyClick, onSpaceClick,
+                             visible: configFilter().length > 0, click: function() { configFilter(''); }">
+                <i class="fa fa-times-circle"></i>
+            </span>
+        </div>
+
+        <div class="importer-list-container">
+            <!-- ko foreach: {data: filteredConfigs, as: 'configuration' } -->
+            <div class="importer-list-row"
+                 data-bind="css: { 'is-selected': $parent.selectedConfiguration() === configuration.configid }">
+                <!-- The label wraps only the radio and the name. Putting the
+                     actions inside it too would make a click on the pencil
+                     select the configuration as well, since activating a label
+                     activates its control whatever the child does. -->
+                <label class="importer-list-target">
+                    <input type="radio" name="selectedConfiguration"
+                           data-bind="checked: $parent.selectedConfiguration, value: configuration.configid">
+                    <span class="importer-list-name" data-bind="text: configuration.name"></span>
+                </label>
+                <span class="importer-list-actions">
+                    <!-- The two tips carry no action: they are focusable only so
+                         the keyboard can reach the tooltip, which .tip reveals on
+                         :focus-within. Announcing them as buttons named them as
+                         something to press, and named them nothing at all. -->
+                    <!-- ko if: configuration.description -->
+                    <span class="tip" tabindex="0"
+                          data-bind="attr: { 'aria-label': configuration.description }">
+                        <i class="fa fa-info-circle"></i>
+                        <span class="tooltiptext" data-bind="text: configuration.description"></span>
+                    </span>
+                    <!-- /ko -->
+                    <i class="fa fa-pencil" role="button" tabindex="0"
+                       data-bind="onEnterkeyClick, onSpaceClick,
+                                  click: () => { $parent.loadConfiguration(configuration); }"
+                       title="{% trans 'Edit' %}" aria-label="{% trans 'Edit' %}"></i>
+                    <!-- ko if: configuration.protected -->
+                    <span class="tip importer-config-lock" tabindex="0"
+                          aria-label="{% trans 'Part of the shared baseline: cannot be deleted, and only an administrator can edit it.' %}">
+                        <i class="fa fa-lock"></i>
+                        <span class="tooltiptext">{% trans "Part of the shared baseline: cannot be deleted, and only an administrator can edit it." %}</span>
+                    </span>
+                    <!-- /ko -->
+                    <!-- ko ifnot: configuration.protected -->
+                    <i class="fa fa-trash" role="button" tabindex="0"
+                       data-bind="onEnterkeyClick, onSpaceClick,
+                                  click: () => { $parent.deleteConfiguration(configuration); }"
+                       title="{% trans 'Delete' %}" aria-label="{% trans 'Delete' %}"></i>
+                    <!-- /ko -->
+                </span>
+            </div>
+            <!-- /ko -->
+            <!-- ko if: noConfigMatches -->
+            <p class="importer-list-empty">{% trans "No configuration matches this filter." %}</p>
+            <!-- /ko -->
+        </div>
+
+        <button class="btn btn-primary" type="button" data-bind="click: startNewConfiguration">{% trans "Add Importer Configuration" %}</button>
+    </div>
+    <div class="importer-config-panel-wrapper" data-bind="visible: showConfigurationPanel">
+        <div class="importer-config-panel-inner">
+        <div class="importer-config-panel-header">{% trans "Add Importer Configuration" %}</div>
+        <div class="importer-config-panel-body">
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Importer Name" %}</h4>
+                <input type="text" name="configurationName" data-bind="textInput: configurationName" placeholder="{% trans 'Name of Importer' %}">
+                <h4 class="file-config-header">{% trans "Importer Description" %}</h4>
+                <textarea class="xy-description-input" type="text" name="configurationDescription" data-bind="textInput: configurationDescription" placeholder="{% trans 'Describe the Importer' %}"></textarea>
+            </div>
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Header" %}</h4>
+                <h5 class="file-config-instructions">{% trans "Define where your x/y data are found in the file" %}</h5>
+                <div class="radio-group">
+                    <div class="radio-row"><input id="header-config-none" type="radio" name="headerConfig" value="none" data-bind="checked: headerConfig"><label for="header-config-none">{% trans "Auto-detect" %}</label></div>
+                    <div class="radio-row"><input id="header-config-fixed" type="radio" name="headerConfig" value="fixed" data-bind="checked: headerConfig"><label for="header-config-fixed">{% trans "File has a fixed header (constant number of lines)" %}</label></div>
+                    <div class="radio-row"><input id="header-config-delimited" type="radio" name="headerConfig" value="delimited" data-bind="checked: headerConfig"><label for="header-config-delimited">{% trans "File header ends after specific text" %}</label></div>
+                </div>
+                <input type="text" name="headerDelimiter" data-bind="visible: headerConfig()=='delimited', textInput: headerDelimiter" placeholder="{% trans 'Ending Text' %}">
+                <input type="text" name="headerFixedLines" data-bind="visible: headerConfig()=='fixed', textInput: headerFixedLines" placeholder="{% trans 'Number of Lines' %}">
+            </div>
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Footer" %}</h4>
+                <h5 class="file-config-instructions">{% trans "Define where your x/y data end in the file" %}</h5>
+                <div class="radio-group">
+                    <div class="radio-row"><input id="footer-config-none" type="radio" name="footerConfig" value="none" data-bind="checked: footerConfig"><label for="footer-config-none">{% trans "End of File" %}</label></div>
+                    <div class="radio-row"><input id="footer-config-delimited" type="radio" name="footerConfig" value="delimited" data-bind="checked: footerConfig"><label for="footer-config-delimited">{% trans "File footer begins after specific text (consistent ending text)" %}</label></div>
+                </div>
+                <input type="text" name="headerDelimiter" data-bind="visible: footerConfig()=='delimited', textInput: footerDelimiter" placeholder="{% trans 'Ending Text' %}">
+            </div>
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Data Delimiter" %}</h4>
+                <h5 class="file-config-instructions">{% trans "What separates the columns. Auto-detect handles most instrument exports." %}</h5>
+                <div class="radio-group">
+                    <div class="radio-row"><input id="delimiter-auto" type="radio" name="dataDelimiterRadio" value="auto" data-bind="checked: dataDelimiterRadio"><label for="delimiter-auto">{% trans "Auto-detect" %}</label></div>
+                    <div class="radio-row"><input id="delimiter-comma" type="radio" name="dataDelimiterRadio" value="," data-bind="checked: dataDelimiterRadio"><label for="delimiter-comma">{% trans "Comma" %}</label></div>
+                    <div class="radio-row"><input id="delimiter-pipe" type="radio" name="dataDelimiterRadio" value="|" data-bind="checked: dataDelimiterRadio"><label for="delimiter-pipe">{% trans "Pipe" %}</label></div>
+                    <div class="radio-row"><input id="delimiter-other" type="radio" name="dataDelimiterRadio" value="other" data-bind="checked: dataDelimiterRadio"><label for="delimiter-other">{% trans "Other" %}</label></div>
+                </div>
+                <input type="text" name="dataDelimiter"
+                       data-bind="visible: dataDelimiterRadio() === 'other', textInput: dataDelimiter"
+                       placeholder="{% trans 'A single character' %}">
+                <!-- Without this field a configuration whose delimiter cannot be
+                     read disabled Save, and the only control that could repair
+                     it was gone — the configuration was uneditable for good. -->
+                <!-- ko if: invalidDelimiter -->
+                <p class="text-danger">{% trans "This delimiter cannot be used. Correct it to save the configuration." %}</p>
+                <!-- /ko -->
+            </div>
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "X Axis Source" %}</h4>
+                <h5 class="file-config-instructions">{% trans "Define how the X axis values are determined" %}</h5>
+                <div class="radio-group">
+                    <div class="radio-row"><input id="x-mode-data" type="radio" name="xColumnMode" value="data" data-bind="checked: xColumnMode"><label for="x-mode-data">{% trans "From data (first column is X)" %}</label></div>
+                    <div class="radio-row"><input id="x-mode-generate" type="radio" name="xColumnMode" value="generate" data-bind="checked: xColumnMode"><label for="x-mode-generate">{% trans "Intensities only (no X column in file)" %}</label></div>
+                </div>
+                <!-- ko if: xColumnMode() === 'generate' -->
+                <h5 class="file-config-instructions">{% trans "Rows are plotted against their position — 1, 2, 3 … — and the X axis is labelled Point. Turning channels into a physical quantity needs the instrument's calibration, which the file conversion supplies." %}</h5>
+                <!-- /ko -->
+            </div>
+
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Chart Title" %}</h4>
+                <input type="text" name="chartTitle" data-bind="textInput: chartTitle"
+                       placeholder="{% trans 'Title shown above the chart' %}">
+            </div>
+
+            <!-- Its own section rather than a field under "X Axis Source": the
+                 source and the label are different questions, and a heading
+                 must not carry a control about something else. -->
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "X Axis Label" %}</h4>
+                <!-- ko if: xColumnMode() === 'generate' -->
+                <h5 class="file-config-instructions">{% trans "Not used here: a file with no X column is plotted against row position, and the axis is labelled Point." %}</h5>
+                <!-- /ko -->
+                <!-- ko ifnot: xColumnMode() === 'generate' -->
+                <input type="text" name="xAxisLabel" data-bind="textInput: xAxisLabel"
+                       placeholder="{% trans 'X Axis' %}">
+                <!-- /ko -->
+            </div>
+
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Y Axis Label" %}</h4>
+                <div class="input-row">
+                    <input type="text" placeholder="{% trans "Y Axis" %}" name="yAxisLabel"
+                           data-bind="textInput: yAxisLabel" class="flex-1">
+                    <select class="preset-select"
+                            data-bind="event: { change: function(data, event) {
+                                if (event.target.value) {
+                                    yAxisLabel(event.target.value);
+                                    event.target.selectedIndex = 0;
+                                }
+                            } }">
+                        <option value="">{% trans "Presets..." %}</option>
+                        <!-- ko foreach: yAxisPresets -->
+                        <option data-bind="value: value, text: text"></option>
+                        <!-- /ko -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Its own section: a heading reading "Y Axis Label" was carrying
+                 a control about the X axis, which is the one thing a heading
+                 must not do. -->
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "X Axis Direction" %}</h4>
+                <div class="radio-row xy-reversed-row">
+                    <input id="xy-x-reversed" type="checkbox" data-bind="checked: xReversed">
+                    <label for="xy-x-reversed">{% trans "Reverse the X axis" %}</label>
+                </div>
+                <h5 class="file-config-instructions">{% trans "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm⁻¹), NMR and XPS." %}</h5>
+            </div>
+
+            <!-- Column Assignment (collapsible) -->
+            <div class="importer-config-panel">
+                <h4 class="file-config-header collapsible-header"
+                    tabindex="0" role="button"
+                    data-bind="onEnterkeyClick, onSpaceClick,
+                               click: function() { showColumnAssignment(!showColumnAssignment()); },
+                               attr: { 'aria-expanded': showColumnAssignment().toString(),
+                                       'aria-controls': 'importer-column-assignment' }">
+                    <i class="fa chevron-icon" data-bind="css: { 'fa-chevron-right': !showColumnAssignment(), 'fa-chevron-down': showColumnAssignment() }"></i>
+                    {% trans "Column Assignment" %}
+                </h4>
+                <div id="importer-column-assignment">
+                <!-- ko if: showColumnAssignment -->
+                <h5 class="file-config-instructions">{% trans "Define which data columns map to X, Y (left axis), or Y (right axis). Leave empty to use the default: column 1 = X, remaining = Y left." %}</h5>
+
+                <!-- ko foreach: columnAssignments -->
+                <div class="input-row xy-column-row">
+                    <label class="text-sm xy-column-label"
+                           data-bind="attr: { for: 'xy-column-role-' + ko.unwrap(columnIndex) }">
+                        {% trans "Column" %} <span data-bind="text: ko.unwrap(columnIndex) + 1"></span>
+                    </label>
+                    <select class="flex-1"
+                            data-bind="attr: { id: 'xy-column-role-' + ko.unwrap(columnIndex) },
+                                       options: $parent.columnRoleOptions,
+                                       optionsText: 'text',
+                                       optionsValue: 'value',
+                                       value: role">
+                    </select>
+                    <button class="btn btn-xs btn-danger xy-column-remove"
+                            data-bind="click: $parent.removeColumnAssignment">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <!-- /ko -->
+
+                <button class="btn btn-xs btn-default xy-add-column"
+                        data-bind="click: addColumnAssignment">
+                    <i class="fa fa-plus"></i> {% trans "Add Column" %}
+                </button>
+
+                <!-- Right Y Axis Label -->
+                <!-- ko if: hasYRightColumn -->
+                <div class="xy-right-axis-row">
+                    <label class="input-label-sm" for="xy-y-right-label">{% trans "Right Y Axis Label" %}</label>
+                    <div class="input-row">
+                        <input type="text" id="xy-y-right-label"
+                               placeholder="{% trans "Right Y Axis" %}"
+                               data-bind="textInput: yAxisRightLabel" class="flex-1">
+                        <select class="preset-select"
+                                data-bind="event: { change: function(data, event) {
+                                    if (event.target.value) {
+                                        yAxisRightLabel(event.target.value);
+                                        event.target.selectedIndex = 0;
+                                    }
+                                } }">
+                            <option value="">{% trans "Presets..." %}</option>
+                            <!-- ko foreach: yAxisPresets -->
+                            <option data-bind="value: value, text: text"></option>
+                            <!-- /ko -->
+                        </select>
+                    </div>
+                </div>
+                <!-- /ko -->
+                <!-- /ko -->
+                </div>
+            </div>
+
+            <!-- Transformations: one exclusive answer, right below the roles it depends on -->
+            <div class="importer-config-panel">
+                <h4 class="file-config-header">{% trans "Transformations" %}</h4>
+                <h5 class="file-config-instructions">{% trans "How the columns are combined into the quantity the Y axis names. The stored file is never modified." %}</h5>
+
+                <div class="radio-row">
+                    <input id="multi-y-separate" type="radio" name="multiYHandling"
+                           data-bind="checked: multiYHandling, checkedValue: MULTI_Y_SEPARATE">
+                    <label for="multi-y-separate">{% trans "Plot each Y column as its own series" %}</label>
+                </div>
+                <div class="radio-row">
+                    <input id="multi-y-mean" type="radio" name="multiYHandling"
+                           data-bind="checked: multiYHandling, checkedValue: MULTI_Y_MEAN">
+                    <label for="multi-y-mean">{% trans "Average them into a single series" %}</label>
+                </div>
+                <div class="radio-row" data-bind="css: { 'xy-choice-unavailable': !referenceColumnDeclared() }">
+                    <input id="multi-y-reference" type="radio" name="multiYHandling"
+                           data-bind="checked: multiYHandling, checkedValue: MULTI_Y_REFERENCE,
+                                      enable: referenceColumnDeclared">
+                    <label for="multi-y-reference">{% trans "Divide by the reference column — R = (S−D)/(W−D)" %}</label>
+                </div>
+                <!-- ko ifnot: referenceColumnDeclared -->
+                <p class="file-config-instructions xy-choice-hint">{% trans "Tag a column as “White reference” under Column Assignment to enable this." %}</p>
+                <!-- /ko -->
+            </div>
+        </div>
+        <div class="importer-config-footer">
+            <div class="flex-1"></div>
+            <button class="btn btn-danger" type="button" data-bind="click: cancelConfigEdit">{% trans "Cancel" %}</button>
+            <button class="btn btn-success" type="button" data-bind="disable: invalidDelimiter, click: saveConfigEdit">{% trans "Save" %}</button>
+        </div>
+        </div>
+    </div>
+</div>

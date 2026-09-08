@@ -1,0 +1,30 @@
+<!-- Arches for Science -->
+<!-- GPL-3.0 license -->
+<!-- https://github.com/archesproject/arches-for-science -->
+
+{% load i18n %}
+<div>
+    <div style="padding: 35px 60px 0px;">
+        <div class="widget-input-label">{% trans "Project Name" %}*</div>
+        <div data-bind="component: {
+            name: 'text-widget',
+            params: {
+                config: {label: ''},
+                renderContext: 'workflow',
+                value: nameValue,
+            }
+        }"></div>
+    </div>
+    <div style="padding: 25px 60px 0px;">
+        <div class="widget-input-label">{% trans "Type of Project" %}*</div>
+        <div data-bind="component: {
+            name: 'concept-radio-widget',
+            params: {
+                node: {config: {rdmCollection: projectEventTypeRdmCollection }},
+                config: {label: ''},
+                renderContext: 'workflow',
+                value: typeValue,
+            }
+        }"></div>
+    </div>
+</div>

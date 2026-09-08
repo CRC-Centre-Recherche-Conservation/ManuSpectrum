@@ -1,0 +1,73 @@
+{% load i18n static %}
+<footer class="ms-footer">
+    <div class="ms-container">
+        <div class="spectral-line"></div>
+
+        <div class="ms-footer-inner">
+            <div class="ms-footer-brand">
+                <div class="ms-footer-brand-name">ManuSpectrum</div>
+                <p class="ms-footer-brand-desc">
+                    {% trans "Interoperable database for physicochemical analysis of written cultural heritage materials. A Biblissima+ cluster project." %}
+                </p>
+            </div>
+
+            <div class="ms-footer-links">
+                <div class="ms-footer-col">
+                    <h4>{% trans "Platform" %}</h4>
+                    <ul>
+                        <li><a href="{% url 'search_home' %}">{% trans "Search" %}</a></li>
+                        {% if user.username == 'anonymous' %}
+                            <li><a href="{% url 'auth' %}?next={% url 'root' %}">{% trans "Sign In" %}</a></li>
+                        {% else %}
+                            <li><a href="{% url 'user_profile_manager' %}">{% trans "My Profile" %}</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="ms-footer-col">
+                    <h4>{% trans "About" %}</h4>
+                    <ul>
+                        <li><a href="{% url 'about-model' %}">{% trans "Conceptual Model" %}</a></li>
+                        <li><a href="{% url 'about-explorer' %}">{% trans "Graph Explorer" %}</a></li>
+                        <li><a href="{% url 'about-team' %}">{% trans "About & Team" %}</a></li>
+                        <li><a href="{% url 'about-contact' %}">{% trans "Contact" %}</a></li>
+                    </ul>
+                </div>
+                <div class="ms-footer-col">
+                    <h4>{% trans "Resources" %}</h4>
+                    <ul>
+                        <li><a href="https://biblissima.fr" target="_blank" rel="noopener">Biblissima+</a></li>
+                        <li><a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches Project</a></li>
+                        <li><a href="https://iiif.io" target="_blank" rel="noopener">IIIF</a></li>
+                    </ul>
+                </div>
+                <div class="ms-footer-col">
+                    <h4>{% trans "Standards" %}</h4>
+                    <ul>
+                        <li><a href="https://www.cidoc-crm.org" target="_blank" rel="noopener">CIDOC-CRM</a></li>
+                        <li><a href="https://www.getty.edu/research/tools/vocabularies/aat/" target="_blank" rel="noopener">AAT Getty</a></li>
+                        <li><a href="https://thesaurus.inha.fr/thesaurus/" target="_blank" rel="noopener">AGORHA</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <p class="ms-footer-anr">
+            {% trans "This work has benefited from state aid managed by the Agence Nationale de la Recherche under the Investissements d'avenir programme, reference ANR-21-ESRE-0005 (Biblissima+)." %}
+        </p>
+
+        <div class="ms-footer-bottom">
+            <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "All rights reserved" %}</p>
+            <div class="ms-footer-opensource">
+                <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener">
+                    <i class="fa-brands fa-github"></i> {% trans "Source code" %}
+                </a>
+                <span class="ms-footer-separator">·</span>
+                <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/LICENSE" target="_blank" rel="noopener">
+                    {% trans "GPL-3.0 License" %}
+                </a>
+                <span class="ms-footer-separator">·</span>
+                <span class="ms-footer-arches">{% blocktrans %}Powered by <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>{% endblocktrans %}</span>
+            </div>
+        </div>
+    </div>
+</footer>

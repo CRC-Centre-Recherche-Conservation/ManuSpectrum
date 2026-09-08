@@ -29,3 +29,11 @@ frontend_configuration
 # Packaging
 build/
 dist/
+
+# Manuspectrum (other)
+*.csv
+CLAUDE.md
+agents_*.md
+.claude/
+docs/
+docs_claude/

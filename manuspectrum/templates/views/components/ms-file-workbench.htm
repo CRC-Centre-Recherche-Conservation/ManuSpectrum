@@ -1,0 +1,58 @@
+{% extends "views/components/file-workbench.htm" %}
+{% load i18n %}
+
+{% comment %}
+Adds the file metadata fields to the File Viewer side panel.
+
+The panel renders every widget of the card for the selected file except the
+file-list one, which it skips on the assumption that the workbench replaces it.
+That widget is where Arches keeps title, attribution, description and alt text,
+so on a card using this component they have no editor at all.
+{% endcomment %}
+
+{% block form_widgets %}
+{{ block.super }}
+<!-- ko foreach: { data: card.tiles(), as: 'tile' } -->
+<!-- ko if: $parent.getUrl(tile) && tile.selected() -->
+<!-- ko foreach: { data: ko.unwrap(tile.data[$parent.fileListNodeId]) || [], as: 'entry' } -->
+<!-- ko if: entry.title && entry.title['{{ LANGUAGE_CODE }}'] -->
+<form class="widgets ms-file-metadata">
+    <h5 class="ms-file-metadata-title">{% trans "Additional metadata" %}</h5>
+
+    <div class="ms-file-metadata-field">
+        <label>{% trans "Title" %}</label>
+        <input type="text" class="form-control"
+            data-bind="textInput: entry.title['{{ LANGUAGE_CODE }}'].value,
+                attr: {'aria-label': '{% trans "Title" %}'}">
+    </div>
+
+    <div class="ms-file-metadata-field">
+        <label>
+            {% trans "Alternative text" %}
+            <i class="fa fa-question-circle text-muted" data-toggle="tooltip"
+                title="{% trans "Concise statement that assistive technology can pronounce to convey the meaning of the file" %}"></i>
+        </label>
+        <input type="text" class="form-control"
+            data-bind="textInput: entry.altText['{{ LANGUAGE_CODE }}'].value,
+                attr: {'aria-label': '{% trans "Alternative text" %}'}">
+    </div>
+
+    <div class="ms-file-metadata-field">
+        <label>{% trans "Attribution" %}</label>
+        <input type="text" class="form-control"
+            data-bind="textInput: entry.attribution['{{ LANGUAGE_CODE }}'].value,
+                attr: {'aria-label': '{% trans "Attribution" %}'}">
+    </div>
+
+    <div class="ms-file-metadata-field">
+        <label>{% trans "Description" %}</label>
+        <textarea class="form-control" rows="2"
+            data-bind="textInput: entry.description['{{ LANGUAGE_CODE }}'].value,
+                attr: {'aria-label': '{% trans "Description" %}'}"></textarea>
+    </div>
+</form>
+<!-- /ko -->
+<!-- /ko -->
+<!-- /ko -->
+<!-- /ko -->
+{% endblock form_widgets %}

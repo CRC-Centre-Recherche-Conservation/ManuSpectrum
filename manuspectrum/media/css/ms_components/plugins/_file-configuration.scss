@@ -1,0 +1,90 @@
+// ============================================
+// File Configuration Plugin
+// ============================================
+
+.file-configuration {
+    display: flex;
+    height: 100%;
+}
+.uploaded-files {
+    width: calc(39.3% - 4px);
+    min-width: 493px;
+    padding: 10px;
+}
+.file-button-spacer {
+    margin: 0 5px;
+}
+.file-list-container {
+    max-height: calc(100% - 143px);
+}
+.file-list-table-wrapper {
+    border: 1px solid #ddd;
+    width: 100%;
+    padding: 0 7px;
+    z-index: 1;
+    height: 100%;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+.file-cell-flex {
+    display: flex;
+    align-items: center;
+}
+.file-icon {
+    margin: 0 5px;
+    cursor: pointer;
+}
+.file-checkbox {
+    margin: 0 5px 0 0;
+}
+.file-name-cell {
+    padding: 1px 5px;
+    min-height: 39px;
+    align-items: center;
+    display: flex;
+    cursor: pointer;
+    flex: 1;
+}
+.file-config-cell {
+    padding: 8px;
+    cursor: pointer;
+}
+.resizer {
+    cursor: col-resize;
+    min-width: 12px;
+    background: #fcfcfc;
+    border-right: 1px solid #eee;
+    border-left: 1px solid #ddd;
+}
+.active-files {
+    width: calc(33.3% - 4px);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 10px 20px 20px;
+    z-index: 10;
+}
+.code-mirror-border {
+    border: 1px solid #ddd;
+}
+.parsing-preview {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+.importer-panel {
+    width: calc(27.3% - 4px);
+    max-width: 470px;
+    margin: 10px 20px;
+}
+.table-tools-container {
+    position: relative;
+    top: -35px;
+    left: 6px;
+    max-width: 266px;
+}
+.file-no-preview {
+    border: 1px solid #ddd;
+    padding: 10px;
+    background-color: #fdfdfd;
+}

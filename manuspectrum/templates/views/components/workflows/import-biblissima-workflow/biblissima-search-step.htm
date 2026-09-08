@@ -1,0 +1,419 @@
+{% load i18n %}
+
+<div class="biblissima-search-step">
+    <!-- Search panel -->
+    <div class="biblissima-search-panel">
+        <div class="biblissima-search-controls">
+            <div class="biblissima-search-bar">
+                <!-- ko if: isDocument -->
+                <div class="bbma-search-input-wrap">
+                    <i class="fa fa-search bbma-search-icon"></i>
+                    <input type="text" class="form-control"
+                           placeholder="{% trans 'Shelfmark, title, institution...' %}"
+                           data-bind="textInput: manuscriptQuery,
+                                      event: {keypress: function(d, e) { if (e.keyCode === 13) { search(); } return true; }}">
+                </div>
+                <!-- /ko -->
+                <!-- ko if: isComponent -->
+                <!-- Tabs: By descriptor / By manuscript -->
+                <div class="bbma-search-tabs">
+                    <button class="btn btn-xs" data-bind="click: function(){ componentSearchMode('descriptor'); },
+                                                          css: {'btn-primary': componentSearchMode() === 'descriptor', 'btn-default': componentSearchMode() !== 'descriptor'}">
+                        <i class="fa fa-tags"></i> {% trans "By descriptor" %}
+                    </button>
+                    <button class="btn btn-xs" data-bind="click: function(){ componentSearchMode('manuscript'); },
+                                                          css: {'btn-primary': componentSearchMode() === 'manuscript', 'btn-default': componentSearchMode() !== 'manuscript'}">
+                        <i class="fa fa-book"></i> {% trans "By manuscript" %}
+                    </button>
+                </div>
+                <!-- ko if: componentSearchMode() === 'descriptor' -->
+                <select data-bind="select2Query: {select2Config: descriptorSelectConfig}" style="width: 100%;"></select>
+                <!-- /ko -->
+                <!-- ko if: componentSearchMode() === 'manuscript' -->
+                <select data-bind="select2Query: {select2Config: manuscriptComponentSelectConfig}" style="width: 100%;"></select>
+                <!-- /ko -->
+                <!-- /ko -->
+            </div>
+
+            <div class="biblissima-search-actions">
+                <button class="btn btn-primary"
+                        data-bind="click: function(){ search(); },
+                                   disable: (isDocument ? manuscriptQuery().length < 3 : selectedDescriptors().length === 0) || searching(),
+                                   visible: !(isComponent && componentSearchMode() === 'manuscript')">
+                    <!-- ko if: searching -->
+                    <i class="fa fa-spinner fa-spin"></i>
+                    <!-- /ko -->
+                    <!-- ko ifnot: searching -->
+                    <i class="fa fa-search"></i>
+                    <!-- /ko -->
+                    {% trans "Search" %}
+                </button>
+                <button class="btn btn-default" data-bind="click: toggleFilters, css: {'active': showFilters()}"
+                        title="{% trans 'Advanced filters' %}">
+                    <i class="fa fa-sliders"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Collapsible filters panel -->
+        <!-- ko if: showFilters -->
+        <div class="biblissima-filters-panel">
+            <div class="bbma-filters-row">
+                <!-- Date range (only for Component/Descriptor — IIIF results have dates) -->
+                <!-- ko if: isComponent && componentSearchMode() === 'descriptor' -->
+                <div class="biblissima-filter-group bbma-filter-date">
+                    <label>{% trans "Date range" %}</label>
+                    <div class="biblissima-date-range">
+                        <div class="d-flex gap-6" style="align-items: center;">
+                            <input type="number" class="form-control input-sm biblissima-date-input"
+                                   data-bind="value: dateFrom" min="-2000" max="1850">
+                            <div class="biblissima-slider-wrapper biblissima-nouislider"
+                                 data-bind="sliderInit: initSlider"></div>
+                            <input type="number" class="form-control input-sm biblissima-date-input"
+                                   data-bind="value: dateTo" min="-2000" max="1850">
+                        </div>
+                        <div class="text-center text-muted" style="font-size: 11px; margin-top: 4px;"
+                             data-bind="text: dateRangeLabel()"></div>
+                    </div>
+                </div>
+                <!-- /ko -->
+
+                <!-- Results per page -->
+                <div class="biblissima-filter-group bbma-filter-pagesize">
+                    <label>{% trans "Results per page" %}</label>
+                    <select class="form-control input-sm" data-bind="value: pageSize" style="width: auto;">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="0">{% trans "All" %}</option>
+                    </select>
+                </div>
+
+                <!-- Direct identifier -->
+                <div class="biblissima-filter-group bbma-filter-id">
+                    <label>{% trans "Add by Biblissima identifier" %}</label>
+                    <div class="d-flex gap-6">
+                        <input type="text" class="form-control input-sm" style="flex: 1;"
+                               data-bind="textInput: directIdentifier,
+                                          attr: { placeholder: isComponent ? 'Q63633 or ark:/43093/ifdata...' : 'Q63633 or https://data.biblissima.fr/entity/Q63633' },
+                                          event: {keypress: function(d, e) { if (e.keyCode === 13) { addByIdentifier(); } return true; }}">
+                        <button class="btn btn-sm btn-default"
+                                data-bind="click: addByIdentifier, disable: !directIdentifier() || addingDirect()">
+                            <!-- ko if: addingDirect -->
+                            <i class="fa fa-spinner fa-spin"></i>
+                            <!-- /ko -->
+                            <!-- ko ifnot: addingDirect -->
+                            <i class="fa fa-plus"></i>
+                            <!-- /ko -->
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- /ko -->
+
+        <!-- Results count bar -->
+        <!-- ko if: hasSearched -->
+        <div class="biblissima-search-meta">
+            <span class="bbma-results-count">
+                <!-- ko if: selectedManuscriptLabel -->
+                <i class="fa fa-book"></i>
+                <strong data-bind="text: selectedManuscriptLabel()"></strong> &mdash;
+                <!-- /ko -->
+                <!-- ko if: textFilterActive() || dateRangeActive() -->
+                <strong data-bind="text: totalResults()"></strong>
+                <span class="text-muted">
+                    / <span data-bind="text: totalUnfilteredResults()"></span>
+                </span>
+                {% trans "results" %}
+                <!-- /ko -->
+                <!-- ko ifnot: textFilterActive() || dateRangeActive() -->
+                <strong data-bind="text: totalResults()"></strong> {% trans "results" %}
+                <!-- /ko -->
+                <!-- ko if: dateRangeActive -->
+                <span class="bbma-date-badge" data-bind="text: dateRangeLabel()"></span>
+                <!-- /ko -->
+            </span>
+
+            <!-- Inline text filter — always visible once results land. -->
+            <!-- ko if: searchResults().length > 0 -->
+            <div class="bbma-text-filter">
+                <i class="fa fa-filter bbma-text-filter-icon"></i>
+                <input type="text"
+                       class="form-control input-sm bbma-text-filter-input"
+                       placeholder="{% trans 'Filter results…' %}"
+                       data-bind="textInput: textFilter">
+                <!-- ko if: textFilterActive -->
+                <button type="button"
+                        class="btn btn-link btn-xs bbma-text-filter-clear"
+                        title="{% trans 'Clear filter' %}"
+                        data-bind="click: clearTextFilter">
+                    <i class="fa fa-times"></i>
+                </button>
+                <!-- /ko -->
+            </div>
+            <!-- /ko -->
+
+            <!-- ko if: totalResults() > 0 -->
+            <button class="btn btn-xs btn-default"
+                    data-bind="click: addAllVisible,
+                               disable: !canAddAllVisible(),
+                               attr: { title: addAllVisibleTooltip() }">
+                <i class="fa fa-plus"></i> {% trans "Add all visible" %}
+            </button>
+            <!-- /ko -->
+        </div>
+        <!-- /ko -->
+    </div>
+
+    <!-- Results + Cart layout -->
+    <div class="biblissima-search-body">
+        <!-- Results column -->
+        <div class="biblissima-results-column">
+            <!-- Loading state: info banner + skeleton cards -->
+            <!-- ko if: searching -->
+            <div class="biblissima-loading-state">
+                <div class="biblissima-loading-banner">
+                    <div class="biblissima-loading-pulse">
+                        <span class="biblissima-pulse-dot"></span>
+                    </div>
+                    <div class="biblissima-loading-text">
+                        <div class="biblissima-loading-message" data-bind="text: loadingMessage"></div>
+                        <!-- ko if: loadingShowReassurance() -->
+                        <div class="biblissima-loading-hint">
+                            {% trans "Biblissima can be slow for large searches. You can keep this tab open." %}
+                        </div>
+                        <!-- /ko -->
+                    </div>
+                    <div class="biblissima-loading-timer">
+                        <span class="biblissima-timer-label">{% trans "Elapsed" %}</span>
+                        <span class="biblissima-timer-value" data-bind="text: loadingElapsedDisplay"></span>
+                    </div>
+                </div>
+
+                <div class="biblissima-loading-sweep">
+                    <div class="biblissima-loading-sweep-fill"></div>
+                </div>
+
+                <div class="biblissima-skeleton-grid">
+                    <!-- ko foreach: [1, 2, 3, 4, 5] -->
+                    <div class="biblissima-skeleton-card">
+                        <div class="biblissima-skeleton-thumb shimmer"></div>
+                        <div class="biblissima-skeleton-body">
+                            <div class="biblissima-skeleton-line shimmer skeleton-line-title"></div>
+                            <div class="biblissima-skeleton-line shimmer skeleton-line-meta"></div>
+                            <div class="biblissima-skeleton-line shimmer skeleton-line-meta-short"></div>
+                            <div class="biblissima-skeleton-chips">
+                                <span class="biblissima-skeleton-chip shimmer"></span>
+                                <span class="biblissima-skeleton-chip shimmer"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- /ko -->
+                </div>
+            </div>
+            <!-- /ko -->
+
+            <!-- ko ifnot: searching -->
+
+            <!-- Error state -->
+            <!-- ko if: searchError() -->
+            <div class="alert alert-danger" style="margin: 12px;">
+                <i class="fa fa-exclamation-triangle"></i>
+                <span data-bind="text: searchError"></span>
+            </div>
+            <!-- /ko -->
+
+            <!-- Empty state: no search yet -->
+            <!-- ko if: !hasSearched() && !searchError() -->
+            <div class="bbma-empty-state">
+                <i class="fa fa-search"></i>
+                <!-- ko if: isDocument -->
+                <p>{% trans "Search by shelfmark, title, or institution to find manuscripts on Biblissima." %}</p>
+                <!-- /ko -->
+                <!-- ko if: isComponent -->
+                <p>{% trans "Select iconographic descriptors and click Search to find illuminations." %}</p>
+                <!-- /ko -->
+            </div>
+            <!-- /ko -->
+
+            <!-- Empty state: no results -->
+            <!-- ko if: hasSearched() && searchResults().length === 0 -->
+            <div class="bbma-empty-state">
+                <i class="fa fa-inbox"></i>
+                <p>{% trans "No results found. Try different search terms." %}</p>
+            </div>
+            <!-- /ko -->
+
+            <!-- Empty state: results exist but the text/date filter narrowed to zero -->
+            <!-- ko if: searchResults().length > 0 && filteredResults().length === 0 -->
+            <div class="bbma-empty-state">
+                <i class="fa fa-filter"></i>
+                <p>{% trans "No result matches the current filter." %}</p>
+                <button class="btn btn-sm btn-default"
+                        data-bind="click: clearTextFilter, visible: textFilterActive">
+                    <i class="fa fa-times"></i> {% trans "Clear filter" %}
+                </button>
+            </div>
+            <!-- /ko -->
+
+            <!-- Progressive loading bar (pages 2..N streaming in) -->
+            <!-- ko if: isProgressiveLoading() -->
+            <div class="biblissima-progress-bar">
+                <div class="biblissima-progress-label">
+                    <i class="fa fa-spinner fa-spin"></i>
+                    <span>
+                        {% trans "Loading results" %}:
+                        <strong data-bind="text: loadingProgress().loaded"></strong>
+                        / <span data-bind="text: loadingProgress().total"></span>
+                        <small>
+                            ({% trans "page" %}
+                            <span data-bind="text: loadingProgress().loadedPages"></span>
+                            / <span data-bind="text: loadingProgress().totalPages"></span>)
+                        </small>
+                    </span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped active"
+                         role="progressbar"
+                         data-bind="style: { width: loadingProgressPercent() + '%' }">
+                    </div>
+                </div>
+            </div>
+            <!-- /ko -->
+
+            <!-- Results grid -->
+            <!-- ko if: searchResults().length > 0 -->
+            <div class="biblissima-results-grid">
+                <!-- ko foreach: pagedResults -->
+                <div class="biblissima-result-card"
+                     data-bind="click: $parent.toggleCartItem, css: {'selected-instance': $parent.isInCart($data)()}">
+
+                    <!-- ko if: thumbnail -->
+                    <div class="biblissima-result-thumb">
+                        <img data-bind="attr: {src: thumbnail, alt: label}, thumbFallback: true" loading="lazy">
+                    </div>
+                    <!-- /ko -->
+                    <!-- ko ifnot: thumbnail -->
+                    <div class="biblissima-result-thumb bbma-no-thumb">
+                        <i class="fa fa-file-text-o"></i>
+                    </div>
+                    <!-- /ko -->
+
+                    <div class="biblissima-result-info">
+                        <div class="biblissima-result-title" data-bind="text: legend || label"></div>
+
+                        <!-- ko if: shelfmark -->
+                        <div class="biblissima-result-meta">
+                            <i class="fa fa-bookmark-o"></i> <span data-bind="text: shelfmark"></span>
+                        </div>
+                        <!-- /ko -->
+                        <!-- ko if: manifestUrl -->
+                        <div class="biblissima-result-meta bbma-meta-iiif">
+                            <i class="fa fa-file-image-o"></i> {% trans "IIIF" %}
+                        </div>
+                        <!-- /ko -->
+                        <!-- ko if: collectionLabel -->
+                        <div class="biblissima-result-meta">
+                            <i class="fa fa-university"></i> <span data-bind="text: collectionLabel"></span>
+                        </div>
+                        <!-- /ko -->
+                        <!-- ko if: manuscript && folio -->
+                        <div class="biblissima-result-meta">
+                            <span data-bind="text: manuscript"></span>
+                            <span> &mdash; f.<span data-bind="text: folio"></span></span>
+                        </div>
+                        <!-- /ko -->
+                        <!-- ko if: date -->
+                        <div class="biblissima-result-meta">
+                            <span data-bind="text: date"></span>
+                            <!-- ko if: location -->
+                             &mdash; <span data-bind="text: location"></span>
+                            <!-- /ko -->
+                        </div>
+                        <!-- /ko -->
+                        <!-- ko if: descriptors && descriptors.length > 0 -->
+                        <div class="biblissima-result-tags">
+                            <!-- ko foreach: descriptors -->
+                            <span class="bbma-tag" data-bind="text: $data"></span>
+                            <!-- /ko -->
+                        </div>
+                        <!-- /ko -->
+                    </div>
+                    <div class="biblissima-result-check">
+                        <!-- ko if: $parent.isInCart($data)() -->
+                        <i class="fa fa-check-circle"></i>
+                        <!-- /ko -->
+                        <!-- ko ifnot: $parent.isInCart($data)() -->
+                        <i class="fa fa-circle-o"></i>
+                        <!-- /ko -->
+                    </div>
+                </div>
+                <!-- /ko -->
+            </div>
+
+            <!-- Pagination -->
+            <!-- ko if: totalPages() > 1 -->
+            <div class="biblissima-pagination">
+                <button class="btn btn-sm btn-default" data-bind="click: prevPage, disable: currentPage() <= 1">
+                    <i class="fa fa-chevron-left"></i>
+                </button>
+                <span class="bbma-page-indicator" data-bind="text: currentPage() + ' / ' + totalPages()"></span>
+                <button class="btn btn-sm btn-default" data-bind="click: nextPage, disable: currentPage() >= totalPages()">
+                    <i class="fa fa-chevron-right"></i>
+                </button>
+            </div>
+            <!-- /ko -->
+            <!-- /ko -->
+            <!-- /ko -->
+        </div>
+
+        <!-- Cart column -->
+        <div class="biblissima-cart-column">
+            <div class="biblissima-cart-header">
+                <h4>
+                    <i class="fa fa-shopping-basket"></i>
+                    {% trans "Selection" %}
+                    <span class="badge" data-bind="css: { 'text-danger': cartIsFull }">
+                        <span data-bind="text: cartCount()"></span> / <span data-bind="text: cartMax"></span>
+                    </span>
+                </h4>
+                <!-- ko if: cartCount() > 0 -->
+                <button class="btn btn-xs btn-link text-danger" data-bind="click: clearCart">
+                    <i class="fa fa-trash-o"></i> {% trans "Clear" %}
+                </button>
+                <!-- /ko -->
+            </div>
+            <div class="biblissima-cart-body">
+                <!-- ko if: cartCount() === 0 -->
+                <div class="bbma-cart-empty">
+                    <i class="fa fa-hand-pointer-o"></i>
+                    <p>{% trans "Click on results to add them to your selection." %}</p>
+                </div>
+                <!-- /ko -->
+                <!-- ko foreach: cart -->
+                <div class="biblissima-cart-item">
+                    <!-- ko if: thumbnail -->
+                    <div class="biblissima-cart-item-thumb">
+                        <img data-bind="attr: {src: thumbnail}, thumbFallback: true" loading="lazy">
+                    </div>
+                    <!-- /ko -->
+                    <!-- ko ifnot: thumbnail -->
+                    <div class="biblissima-cart-item-thumb bbma-no-thumb-sm">
+                        <i class="fa fa-file-text-o"></i>
+                    </div>
+                    <!-- /ko -->
+                    <div class="biblissima-cart-item-info">
+                        <div class="biblissima-cart-item-title" data-bind="text: legend || label"></div>
+                        <div class="biblissima-cart-item-meta" data-bind="text: shelfmark || manuscript"></div>
+                    </div>
+                    <button class="btn btn-xs btn-link bbma-cart-remove" data-bind="click: $parent.removeFromCart">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <!-- /ko -->
+            </div>
+        </div>
+    </div>
+</div>
