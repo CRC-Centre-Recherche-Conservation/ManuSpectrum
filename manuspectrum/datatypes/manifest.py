@@ -47,9 +47,10 @@ def get_local_hosts():
     """Hostnames that identify THIS server, for local-manifest detection.
 
     Seeded from ``settings.PUBLIC_SERVER_ADDRESS`` (the canonical public URL)
-    plus ``ALLOWED_HOSTS`` defensively. django_hosts leaves ``ALLOWED_HOSTS``
-    empty in production, so ``PUBLIC_SERVER_ADDRESS`` MUST be set per environment
-    for absolute self-URLs to be recognised. Returns bare lowercased hostnames.
+    plus ``ALLOWED_HOSTS`` defensively. ``ALLOWED_HOSTS`` may legitimately be
+    empty on a given host, so ``PUBLIC_SERVER_ADDRESS`` MUST be set per
+    environment for absolute self-URLs to be recognised. Returns bare
+    lowercased hostnames.
     """
     hosts = set()
     public = urlparse(getattr(django_settings, "PUBLIC_SERVER_ADDRESS", "") or "")
