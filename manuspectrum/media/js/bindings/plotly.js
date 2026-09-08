@@ -8,10 +8,19 @@ import ko from 'knockout';
 // see graph-explorer.js for the bundle-choice rationale.
 import Plotly from 'plotly.js-cartesian-dist';
 
+// Each mount needs its own resize namespace, or disposing one chart detaches
+// another's handler.
+let instanceCount = 0;
+
 const plotlyBinding = {
     init(element, valueAccessor) {
         const config = ko.unwrap(valueAccessor());
         const useTracesMode = typeof config.traces === 'function';
+        const resizeEvent = 'resize.plotlyBinding' + ++instanceCount;
+        // The observables driving the chart (`params.state`, the per-node chart
+        // registry) outlive the DOM node, so every subscription taken here has
+        // to come back at dispose.
+        const subscriptions = [];
 
         let traces;
         if (useTracesMode) {
@@ -170,54 +179,54 @@ const plotlyBinding = {
             }]
         };
 
-        document.addEventListener('fullscreenchange', () => {
+        const onFullscreenChange = () => {
             if (!document.fullscreenElement && element.isConnected) {
                 element.style.background = '';
                 layout.width = element._savedWidth || $(element).parent().width() - 2;
                 layout.height = element._savedHeight || 450;
                 Plotly.relayout(element, layout);
             }
-        });
+        };
 
         Plotly.newPlot(element, traces, layout, chartConfig);
 
-        $(window).on('resize.plotlyBinding', () => {
+        $(window).on(resizeEvent, () => {
             layout.width = $(element).width() - 2;
             Plotly.relayout(element, layout);
         });
 
-        config.title.subscribe(val => {
+        subscriptions.push(config.title.subscribe(val => {
             layout.title.text = val;
             Plotly.relayout(element, layout);
-        });
+        }));
 
-        config.titleSize.subscribe(val => {
+        subscriptions.push(config.titleSize.subscribe(val => {
             layout.title.font.size = val;
             Plotly.relayout(element, layout);
-        });
+        }));
 
-        config.xAxisLabel.subscribe(val => {
+        subscriptions.push(config.xAxisLabel.subscribe(val => {
             layout.xaxis.title.text = val;
             Plotly.relayout(element, layout);
-        });
+        }));
 
-        config.xAxisLabelSize.subscribe(val => {
+        subscriptions.push(config.xAxisLabelSize.subscribe(val => {
             layout.xaxis.title.font.size = val;
             Plotly.relayout(element, layout);
-        });
+        }));
 
-        config.yAxisLabel.subscribe(val => {
+        subscriptions.push(config.yAxisLabel.subscribe(val => {
             layout.yaxis.title.text = val;
             Plotly.relayout(element, layout);
-        });
+        }));
 
-        config.yAxisLabelSize.subscribe(val => {
+        subscriptions.push(config.yAxisLabelSize.subscribe(val => {
             layout.yaxis.title.font.size = val;
             Plotly.relayout(element, layout);
-        });
+        }));
 
         if (config.yAxisRightLabel && ko.isObservable(config.yAxisRightLabel)) {
-            config.yAxisRightLabel.subscribe((val) => {
+            subscriptions.push(config.yAxisRightLabel.subscribe((val) => {
                 if (val) {
                     if (!layout.yaxis2) {
                         layout.yaxis2 = {
@@ -237,15 +246,15 @@ const plotlyBinding = {
                     delete layout.yaxis2;
                 }
                 Plotly.relayout(element, layout);
-            });
+            }));
         }
 
         if (useTracesMode) {
-            config.traces.subscribe(newTraces => {
+            subscriptions.push(config.traces.subscribe(newTraces => {
                 Plotly.react(element, newTraces || [], layout, chartConfig);
-            });
+            }));
         } else {
-            config.seriesStyles.subscribe(val => {
+            subscriptions.push(config.seriesStyles.subscribe(val => {
                 if (val.length >= 1) {
                     val.forEach(style => {
                         let traceIndices = [];
@@ -263,9 +272,9 @@ const plotlyBinding = {
                         }
                     });
                 }
-            });
+            }));
 
-            config.seriesData.subscribe(val => {
+            subscriptions.push(config.seriesData.subscribe(val => {
                 val.forEach(series => {
                     if (series.status === 'added') {
                         const style = config.seriesStyles().find(
@@ -293,11 +302,21 @@ const plotlyBinding = {
                         });
                     }
                 });
-            }, this, 'arrayChange');
+            }, this, 'arrayChange'));
         }
 
+        // Registered last, next to the teardown that removes it: nothing above
+        // can fire it, and an exception before this point leaves no listener on
+        // `document` to strand.
+        document.addEventListener('fullscreenchange', onFullscreenChange);
+
         ko.utils.domNodeDisposal.addDisposeCallback(element, () => {
-            $(window).off('resize.plotlyBinding');
+            $(window).off(resizeEvent);
+            document.removeEventListener('fullscreenchange', onFullscreenChange);
+            subscriptions.forEach(subscription => subscription.dispose());
+            // Releases the traces and Plotly's own back reference on the node;
+            // removing the node alone keeps both.
+            Plotly.purge(element);
         });
     }
 };
