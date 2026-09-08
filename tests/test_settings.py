@@ -79,3 +79,8 @@ SILENCED_SYSTEM_CHECKS.append(
 
 # Disable manifest fetch rate-limiting in tests (no real time.sleep).
 MANIFEST_FETCH_RATE_LIMITS = {}
+
+# The suite asserts on the synchronous indexing path and must not depend on the
+# developer's settings_local.py, nor enqueue real messages on the broker. Tests
+# covering the async path turn it on with override_settings.
+BIBLISSIMA_ASYNC_INDEXING = False
