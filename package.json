@@ -36,7 +36,7 @@
     },
     "devDependencies": {
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.1.4",
-        "webpack": "^5.97.1"
+        "webpack": "^5.110.3"
     },
     "nodeModulesPaths": {},
     "overrides": {
