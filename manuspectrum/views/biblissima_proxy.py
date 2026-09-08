@@ -79,7 +79,12 @@ from manuspectrum.utils.dates import (
     parse_century,
     parse_historical_date,
 )
-from manuspectrum.utils.http import get_user_agent
+from manuspectrum.utils.http import (
+    UnsafeURLError,
+    assert_url_is_safe,
+    get_user_agent,
+    safe_fetch,
+)
 from manuspectrum.views.permissions import EDITOR_GROUPS
 
 logger = logging.getLogger(__name__)
@@ -223,18 +228,29 @@ def _biblissima_slot():
         _biblissima_semaphore.release()
 
 
-def _bib_request(session, url, **kwargs):
+def _bib_request(session, url, *, guarded=False, **kwargs):
     """Wrapper around session.get bounding concurrency and recording metrics.
 
     The session's HTTPAdapter already handles Retry-After and transient 5xx/429
     retries with backoff, so this wrapper only counts the final response that
     reaches the caller. Retries inside the adapter are invisible here by design
     (otherwise we'd double-count them).
+
+    ``guarded=True`` sends the call through ``utils.http.safe_fetch`` instead:
+    required whenever the URL is a third party's rather than one of the
+    settings-pinned Biblissima hosts, because only that path re-checks the SSRF
+    guard on each redirect hop and caps the body it reads. Its per-host
+    throttle is off here — a slot of the concurrency semaphore is already held
+    for the whole call, and sleeping inside one would serialise the enrichment
+    pool behind a single provider.
     """
     with _biblissima_slot():
         _incr_stat("requests_total", 1)
         try:
-            resp = session.get(url, **kwargs)
+            if guarded:
+                resp = safe_fetch(url, session=session, throttle=False, **kwargs)
+            else:
+                resp = session.get(url, **kwargs)
         except Exception:
             _incr_stat("errors_total", 1)
             raise
@@ -244,6 +260,24 @@ def _bib_request(session, url, **kwargs):
     elif 500 <= status < 600:
         _incr_stat("responses_5xx", 1)
     return resp
+
+
+def _annotation_targets_are_safe(canvas_url, manifest_url):
+    """True when both URLs of an annotation may be fetched later.
+
+    The ``canvas`` and ``manifest`` properties of a stored annotation are
+    dereferenced by this server (thumbnail fetchers, IIIF annotation views) and
+    by every viewer that opens the resource, so a scraped value that names an
+    internal address must not be written into a tile in the first place. Same
+    guard as the fetch path, applied one step earlier.
+    """
+    for url in (canvas_url, manifest_url):
+        try:
+            assert_url_is_safe(url)
+        except UnsafeURLError as exc:
+            logger.warning("Skipping annotation with unusable target %s: %s", url, exc)
+            return False
+    return True
 
 
 def _biblissima_upstream_error(exc, context):
@@ -2141,15 +2175,24 @@ def _fetch_canvas_dimensions(manifest_url, folio, session=None):
     # rather than blocking this request for minutes. The read timeout stays
     # generous for large-but-reachable manifests. A caller may still pass an
     # explicit session (e.g. in tests) to override.
+    #
+    # The URL is the one Wikibase gives for the manuscript (P196), i.e. a third
+    # party's string reaching an outbound GET, so the fetch is guarded: the SSRF
+    # check covers the redirect chain, not only the URL we were handed, and the
+    # body is read under a cap. A rejection degrades to {} like any other failure.
     try:
         resp = _bib_request(
             session or _get_besteffort_session(),
             manifest_url,
+            guarded=True,
             headers={"Accept": "application/ld+json, application/json"},
             timeout=(IIIF_CONNECT_TIMEOUT, IIIF_REQUEST_TIMEOUT),
         )
         resp.raise_for_status()
         manifest = resp.json()
+    except UnsafeURLError as exc:
+        logger.warning("Refusing Biblissima manifest URL %s: %s", manifest_url, exc)
+        return {}
     except Exception as exc:
         logger.warning("Biblissima manifest fetch failed for %s: %s", manifest_url, exc)
         return {}
@@ -3804,7 +3847,11 @@ class BiblissimaCreateResourceView(View):
             or bbma_data.get("imageUrl")
         )
         manifest_url = bbma_data.get("manifestUrl")
-        if canvas_url and manifest_url:
+        if (
+            canvas_url
+            and manifest_url
+            and _annotation_targets_are_safe(canvas_url, manifest_url)
+        ):
             width = int(bbma_data.get("canvasWidth") or 0) or 4000
             height = int(bbma_data.get("canvasHeight") or 0) or 5000
 

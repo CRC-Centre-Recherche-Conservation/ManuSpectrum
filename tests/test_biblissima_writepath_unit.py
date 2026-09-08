@@ -32,6 +32,7 @@ Run:
         tests.test_biblissima_writepath_unit --settings="tests.test_settings"
 """
 
+import socket
 import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -194,6 +195,23 @@ _STUB_REFERENCE = {
 }
 
 
+def _resolve_every_host_publicly(testcase):
+    """Keep the SSRF guard real and the DNS lookup it makes offline.
+
+    The component builder checks the annotation's canvas/manifest URLs before
+    writing them, which resolves their host. What the guard decides is locked
+    in tests/test_http.py; here it must simply not touch the network.
+    """
+    patcher = patch(
+        "manuspectrum.utils.http.socket.getaddrinfo",
+        return_value=[
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ],
+    )
+    patcher.start()
+    testcase.addCleanup(patcher.stop)
+
+
 def _stub_concept_resolution(testcase):
     """Builder tests exercise tile shape, not concept resolution, and run with no
     controlled lists loaded. `_concept_list` now fails loudly on an unresolvable
@@ -230,6 +248,7 @@ class SortorderSiblingTests(TestCase):
 
     def setUp(self):
         _stub_concept_resolution(self)
+        _resolve_every_host_publicly(self)
         cache.clear()
 
     def tearDown(self):
@@ -636,6 +655,7 @@ class NestedTileFKOrderingTests(TestCase):
 
     def setUp(self):
         _stub_concept_resolution(self)
+        _resolve_every_host_publicly(self)
         cache.clear()
 
     def tearDown(self):
@@ -731,6 +751,56 @@ class NestedTileFKOrderingTests(TestCase):
 #   unconditionally uses ``fallback_tx = default_transaction_id`` when one is
 #   supplied — the single-tx_id invariant is therefore a characterization of
 #   current behaviour: no code change is required.
+
+
+class AnnotationTargetGuardTests(TestCase):
+    """The annotation's canvas/manifest URLs are dereferenced by this server
+    (thumbnail fetchers, IIIF annotation views) and by every viewer that opens
+    the resource, so a scraped URL naming an internal address must not reach a
+    tile in the first place.
+    """
+
+    def setUp(self):
+        _stub_concept_resolution(self)
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _build(self, resolved_ip):
+        from manuspectrum.views.biblissima_proxy import COMP_LOCATION_DOC_NG
+
+        view = _make_builder_view()
+        with patch(
+            "manuspectrum.utils.http.socket.getaddrinfo",
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", (resolved_ip, 443))
+            ],
+        ):
+            view._create_component_tiles(
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                _make_minimal_component_data(),
+                deps={"parentDocument": str(uuid.uuid4())},
+                concepts={},
+                created_deps={},
+            )
+        return view, [
+            t for t in view._tile_buffer if str(t.nodegroup_id) == COMP_LOCATION_DOC_NG
+        ]
+
+    def test_a_public_target_is_written_as_an_annotation(self):
+        view, location_tiles = self._build("93.184.216.34")
+
+        self.assertEqual(len(location_tiles), 1)
+
+    def test_a_target_inside_the_network_writes_no_annotation(self):
+        view, location_tiles = self._build("169.254.169.254")
+
+        self.assertEqual(location_tiles, [])
+        # The rest of the resource is still built: one unusable annotation does
+        # not cost the illumination its identifiers, statements or production.
+        self.assertTrue(view._tile_buffer)
 
 
 class BufferIsolationTests(TestCase):
