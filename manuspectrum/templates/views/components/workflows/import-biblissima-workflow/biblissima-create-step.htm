@@ -648,7 +648,7 @@
                             <strong data-bind="text: existingLabel()"></strong>
                         </div>
                         <a class="btn btn-xs btn-link"
-                           data-bind="attr: { href: '/resource/' + existingId() }"
+                           data-bind="attr: { href: $component.resourceEditorUrl + existingId() }"
                            target="_blank"
                            title="{% trans 'View' %}">
                             <i class="fa fa-external-link"></i>
