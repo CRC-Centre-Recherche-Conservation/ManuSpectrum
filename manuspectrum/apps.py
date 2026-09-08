@@ -20,17 +20,12 @@ class ManuspectrumConfig(AppConfig):
         self._check_contact_email_config()
 
     def _check_async_indexing_config(self):
-        """Verify Celery task registration when BIBLISSIMA_ASYNC_INDEXING=True.
+        """Drop BIBLISSIMA_ASYNC_INDEXING when the indexing task is missing.
 
-        If the task ``manuspectrum.index_resources`` is not in the Celery
-        registry (e.g. because a worker was started before ``tasks.py``
-        existed, or autodiscover failed), silently drop the flag so callers
-        always fall back to synchronous indexing rather than queueing messages
-        that no worker will ever process.
-
-        This check runs at process startup (Django ``ready()``) so the failure
-        mode is surfaced in the server logs immediately instead of silently at
-        the first create request.
+        A tripwire, not the mechanism: ``manuspectrum/__init__.py`` imports the
+        Celery app, so registration has already happened by the time ``ready()``
+        runs. Clearing the flag keeps callers on the synchronous path rather
+        than queueing messages no worker would consume.
         """
         if not getattr(settings, "BIBLISSIMA_ASYNC_INDEXING", False):
             return
