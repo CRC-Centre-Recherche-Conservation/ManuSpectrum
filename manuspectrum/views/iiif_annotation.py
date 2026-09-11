@@ -3,7 +3,6 @@ IIIF Annotation & collection API
 """
 
 from collections import defaultdict
-from functools import lru_cache
 import logging
 import zlib
 import orjson
@@ -213,7 +212,6 @@ class IIIFAnnotationMixin:
         cache.set(cache_key, canvas_id, timeout=self.CACHE_TIMEOUT)
         return canvas_id
 
-    @lru_cache(maxsize=256)
     def _get_canvas_dimensions(self, canvas_uri: str):
         """
         Retrieve canvas width/height from the IIIF infrastructure.

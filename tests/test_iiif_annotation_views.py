@@ -237,6 +237,21 @@ class TestIIIFAnnotationMixin(TestCase):
 
         self.assertEqual(result, (1000, 1500))
 
+    def test_canvas_dimensions_are_not_memoised_on_the_method(self):
+        method = type(self.mixin)._get_canvas_dimensions
+        self.assertFalse(hasattr(method, "cache_info"))
+
+    @patch("manuspectrum.views.iiif_annotation.cache")
+    def test_canvas_dimensions_come_from_the_shared_cache_on_every_call(
+        self, mock_cache
+    ):
+        mock_cache.get.return_value = (640, 480)
+
+        self.mixin._get_canvas_dimensions("https://example.org/iiif/img")
+        self.mixin._get_canvas_dimensions("https://example.org/iiif/img")
+
+        self.assertEqual(mock_cache.get.call_count, 2)
+
     def test_convert_geojson_to_iiif_target_with_geometry(self):
         """Should convert geometry to xywh fragment."""
         annotation = {
