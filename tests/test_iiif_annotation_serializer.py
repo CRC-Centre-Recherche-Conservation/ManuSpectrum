@@ -1012,3 +1012,64 @@ class TestSerializerStateIsPerInstance(TestCase):
 
         self.assertTrue(observed["holder"])
         self.assertFalse(observed["fresh"])
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestV2BatchInheritsBase(TestCase):
+    def test_v2_batch_output_equals_per_item_v2_output(self):
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializerV2,
+        )
+
+        items = [
+            {
+                "target": "https://example.org/canvas/1#xywh=0,0,10,10",
+                "resource_id": "11111111-1111-4111-8111-111111111111",
+                "canvas_uri": "https://example.org/canvas/1",
+                "manifest_url": None,
+            },
+            {
+                "target": "https://example.org/canvas/2#xywh=5,5,10,10",
+                "resource_id": "22222222-2222-4222-8222-222222222222",
+                "canvas_uri": "https://example.org/canvas/2",
+                "manifest_url": None,
+            },
+        ]
+
+        with (
+            patch.object(
+                IIIFAnnotationSerializerV2, "_prefetch_all_data", return_value=None
+            ),
+            patch.object(
+                IIIFAnnotationSerializerV2, "_get_resource_tiles", return_value={}
+            ),
+            patch.object(
+                IIIFAnnotationSerializerV2,
+                "_resolve_resource_multilingual",
+                return_value={"labels": {"en": "Analysis"}},
+            ),
+        ):
+            batched = IIIFAnnotationSerializerV2().batch_to_representation(items)
+            single = [
+                IIIFAnnotationSerializerV2().to_representation(
+                    i["target"],
+                    i["resource_id"],
+                    canvas_uri=i["canvas_uri"],
+                    manifest_url=i["manifest_url"],
+                )
+                for i in items
+            ]
+
+        self.assertEqual(batched, single)
+        self.assertEqual(batched[0]["@context"], IIIFAnnotationSerializerV2.V2_CONTEXT)
+
+    def test_v2_batch_is_the_inherited_method(self):
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializer,
+            IIIFAnnotationSerializerV2,
+        )
+
+        self.assertIs(
+            IIIFAnnotationSerializerV2.batch_to_representation,
+            IIIFAnnotationSerializer.batch_to_representation,
+        )

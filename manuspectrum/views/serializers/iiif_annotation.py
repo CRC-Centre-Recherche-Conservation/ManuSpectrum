@@ -861,18 +861,6 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
 
     V2_CONTEXT = "http://iiif.io/api/presentation/2/context.json"
 
-    # Mapping of v3 types to v2 types
-    TYPE_MAPPING = {
-        "Annotation": "oa:Annotation",
-        "Canvas": "sc:Canvas",
-        "Manifest": "sc:Manifest",
-        "SpecificResource": "oa:SpecificResource",
-        "FragmentSelector": "oa:FragmentSelector",
-        "Dataset": "dctypes:Dataset",
-        "Text": "dctypes:Text",
-        "TextualBody": "cnt:ContentAsText",
-    }
-
     # ----------------------------------------------------------------------
     # V2 conversion helpers
     # ----------------------------------------------------------------------
@@ -904,11 +892,6 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
                 elif isinstance(values, str):
                     return values
         return str(label_v3)
-
-    @classmethod
-    def _convert_type_to_v2(cls, type_v3: str) -> str:
-        """Convert v3 type to v2 prefixed type."""
-        return cls.TYPE_MAPPING.get(type_v3, type_v3)
 
     @classmethod
     def _convert_metadata_to_v2(cls, metadata_v3: list) -> list:
@@ -1181,38 +1164,3 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
             annotation["seeAlso"] = see_also
 
         return annotation
-
-    def batch_to_representation(self, annotations_data: List[Dict]) -> List[Dict]:
-        """
-        Process multiple annotations in batch to optimize queries (v2 format).
-
-        Args:
-            annotations_data: List of dicts with 'target', 'resource_id',
-                              and optionally 'canvas_uri' and 'manifest_url'
-
-        Returns:
-            List of IIIF v2 annotation representations
-        """
-        resource_ids = [
-            a["resource_id"] for a in annotations_data if a.get("resource_id")
-        ]
-
-        self._batch_mode = True
-        try:
-            self._prefetch_all_data(resource_ids)
-
-            results: List[dict] = []
-            for anno_data in annotations_data:
-                results.append(
-                    self.to_representation(
-                        anno_data["target"],
-                        anno_data["resource_id"],
-                        canvas_uri=anno_data.get("canvas_uri"),
-                        manifest_url=anno_data.get("manifest_url"),
-                    )
-                )
-        finally:
-            self._batch_mode = False
-            self._clear_caches()
-
-        return results
