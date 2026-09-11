@@ -1346,3 +1346,120 @@ class TestGetCanvasPageNumbers(TestCase):
         self.assertIsNotNone(page_num)
         self.assertGreaterEqual(page_num, 1)
         self.assertLessEqual(page_num, 10001)
+
+
+class TestUnexpectedErrorsAreNotEchoed(TestCase):
+    SECRET = "postgres://user:hunter2@db/manuspectrum"
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _assert_generic_500(self, response, logs):
+        self.assertEqual(response.status_code, 500)
+        body = response.content.decode()
+        self.assertIn('"internal_error"', body)
+        self.assertNotIn(self.SECRET, body)
+        self.assertTrue(
+            any(self.SECRET in line for line in logs.output),
+            "the traceback must reach the server log",
+        )
+
+    @patch("manuspectrum.views.iiif_annotation.ResourceInstance")
+    def test_v3_collection(self, mock_ri):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
+
+        mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_ri.objects.select_related.return_value.get.side_effect = RuntimeError(
+            self.SECRET
+        )
+        with self.assertLogs(
+            "manuspectrum.views.iiif_annotation", level="ERROR"
+        ) as logs:
+            response = IIIFAnnotationCollectionView().get(
+                self.factory.get("/iiif/annotation-collection/x"), uuid.uuid4()
+            )
+        self._assert_generic_500(response, logs)
+
+    @patch("manuspectrum.views.iiif_annotation.ResourceInstance")
+    def test_v3_page(self, mock_ri):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationPageView
+
+        mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_ri.objects.select_related.return_value.get.side_effect = RuntimeError(
+            self.SECRET
+        )
+        with self.assertLogs(
+            "manuspectrum.views.iiif_annotation", level="ERROR"
+        ) as logs:
+            response = IIIFAnnotationPageView().get(
+                self.factory.get("/iiif/annotation-collection/x/page-1"),
+                uuid.uuid4(),
+                1,
+            )
+        self._assert_generic_500(response, logs)
+
+    @patch("manuspectrum.views.iiif_annotation.Resource")
+    def test_v3_annotation(self, mock_resource):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationView
+
+        mock_resource.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_resource.objects.get.side_effect = RuntimeError(self.SECRET)
+        with self.assertLogs(
+            "manuspectrum.views.iiif_annotation", level="ERROR"
+        ) as logs:
+            response = IIIFAnnotationView().get(
+                self.factory.get("/iiif/annotation/x"), uuid.uuid4()
+            )
+        self._assert_generic_500(response, logs)
+
+    @patch("manuspectrum.views.iiif_annotation.ResourceInstance")
+    def test_v2_collection(self, mock_ri):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionViewV2
+
+        mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_ri.objects.select_related.return_value.get.side_effect = RuntimeError(
+            self.SECRET
+        )
+        with self.assertLogs(
+            "manuspectrum.views.iiif_annotation", level="ERROR"
+        ) as logs:
+            response = IIIFAnnotationCollectionViewV2().get(
+                self.factory.get("/iiif/v2/annotation-collection/x"), uuid.uuid4()
+            )
+        self._assert_generic_500(response, logs)
+
+    @patch("manuspectrum.views.iiif_annotation.ResourceInstance")
+    def test_v2_page(self, mock_ri):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationPageViewV2
+
+        mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_ri.objects.select_related.return_value.get.side_effect = RuntimeError(
+            self.SECRET
+        )
+        with self.assertLogs(
+            "manuspectrum.views.iiif_annotation", level="ERROR"
+        ) as logs:
+            response = IIIFAnnotationPageViewV2().get(
+                self.factory.get("/iiif/v2/annotation-collection/x/page-1"),
+                uuid.uuid4(),
+                1,
+            )
+        self._assert_generic_500(response, logs)
+
+    @patch("manuspectrum.views.iiif_annotation.Resource")
+    def test_v2_annotation(self, mock_resource):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationViewV2
+
+        mock_resource.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_resource.objects.get.side_effect = RuntimeError(self.SECRET)
+        with self.assertLogs(
+            "manuspectrum.views.iiif_annotation", level="ERROR"
+        ) as logs:
+            response = IIIFAnnotationViewV2().get(
+                self.factory.get("/iiif/v2/annotation/x"), uuid.uuid4()
+            )
+        self._assert_generic_500(response, logs)

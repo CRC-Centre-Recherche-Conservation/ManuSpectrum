@@ -327,8 +327,8 @@ class IIIFAnnotationMixin:
                         "analysis_label": props.get("label") or "",
                     }
                 )
-            except Exception as e:  # pragma: no cover
-                logger.error(f"Error parsing annotation: {e}")
+            except Exception:  # pragma: no cover
+                logger.exception("Error parsing annotation")
         return annotations
 
 
@@ -396,9 +396,9 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating collection: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating collection")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
     def _get_related_analyses(self, resource: ResourceInstance) -> list[Resource]:
         """
@@ -625,9 +625,9 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating IIIF page: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating IIIF page")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
 
 # ======================================================================================
@@ -667,9 +667,9 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
         except Resource.DoesNotExist:
             return JsonResponse({"error": "Annotation not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating annotation: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating annotation")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
 
 # ======================================================================================
@@ -720,9 +720,9 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating v2 collection: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating v2 collection")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
     def _build_layer(self, resource: ResourceInstance, grouped_annos: dict) -> dict:
         """Build a sc:Layer structure referencing all AnnotationLists."""
@@ -831,9 +831,9 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating v2 IIIF page: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating v2 IIIF page")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
 
 class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
@@ -870,9 +870,9 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
 
         except Resource.DoesNotExist:
             return JsonResponse({"error": "Annotation not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating v2 annotation: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating v2 annotation")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
 
 # ======================================================================================
@@ -968,8 +968,8 @@ def invalidate_on_vwannotation_change(sender, instance: VwAnnotation, **kwargs):
     try:
         analysis_uuid = instance.resourceinstance_id
         _invalidate_for_analysis_id(analysis_uuid)
-    except Exception as e:  # pragma: no cover
-        logger.error(f"Cache invalidation (VwAnnotation) failed: {e}")
+    except Exception:  # pragma: no cover
+        logger.exception("Cache invalidation (VwAnnotation) failed")
 
 
 @receiver([post_save, post_delete], sender=ResourceXResource)
@@ -1015,5 +1015,5 @@ def invalidate_on_relation_change(sender, instance: ResourceXResource, **kwargs)
                 _delete_page_patterns(doc_id, "v3")
                 _delete_page_patterns(doc_id, "v2")
 
-    except Exception as e:  # pragma: no cover
-        logger.error(f"Cache invalidation (ResourceXResource) failed: {e}")
+    except Exception:  # pragma: no cover
+        logger.exception("Cache invalidation (ResourceXResource) failed")
