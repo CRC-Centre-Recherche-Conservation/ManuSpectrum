@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 from django.core.cache import cache
 from django.http import HttpResponse
-from django.test import TestCase, RequestFactory, override_settings
+from django.test import Client, TestCase, RequestFactory, override_settings
 
 # =============================================================================
 # CACHE UTILITIES TESTS
@@ -392,6 +392,13 @@ class TestIIIFAnnotationCollectionView(TestCase):
         self.view = IIIFAnnotationCollectionView()
         cache.clear()
 
+        guard = patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def tearDown(self):
         cache.clear()
 
@@ -416,6 +423,7 @@ class TestIIIFAnnotationCollectionView(TestCase):
 
         with patch.object(self.view, "_get_related_analyses", return_value=[]):
             request = self.factory.get("/iiif/annotation-collection/123/")
+            request.user = MagicMock()
             response = self.view.get(request, uuid.uuid4())
 
         self.assertEqual(response.status_code, 404)
@@ -523,6 +531,13 @@ class TestIIIFAnnotationView(TestCase):
         self.view = IIIFAnnotationView()
         cache.clear()
 
+        guard = patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def tearDown(self):
         cache.clear()
 
@@ -545,6 +560,7 @@ class TestIIIFAnnotationView(TestCase):
         mock_resource.objects.get.return_value = mock_res
 
         request = self.factory.get("/iiif/annotation/123/")
+        request.user = MagicMock()
         response = self.view.get(request, uuid.uuid4())
 
         self.assertEqual(response.status_code, 400)
@@ -580,6 +596,7 @@ class TestIIIFAnnotationView(TestCase):
                 )
 
                 request = self.factory.get("/iiif/annotation/123/")
+                request.user = MagicMock()
                 response = self.view.get(request, resource_id)
 
         self.assertEqual(response.status_code, 200)
@@ -596,6 +613,7 @@ class TestIIIFAnnotationView(TestCase):
 
         with patch.object(self.view, "_get_annotations_from_analyses", return_value=[]):
             request = self.factory.get("/iiif/annotation/123/")
+            request.user = MagicMock()
             response = self.view.get(request, resource_id)
 
         self.assertEqual(response.status_code, 404)
@@ -733,6 +751,13 @@ class TestIIIFAnnotationPageView(TestCase):
         self.view = IIIFAnnotationPageView()
         cache.clear()
 
+        guard = patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def tearDown(self):
         cache.clear()
 
@@ -771,6 +796,7 @@ class TestIIIFAnnotationPageView(TestCase):
                 return_value={"canvas1": [{"id": "a1"}]},
             ):
                 request = self.factory.get("/iiif/annotation-collection/123/page-99")
+                request.user = MagicMock()
                 response = self.view.get(request, uuid.uuid4(), 99)
 
         self.assertEqual(response.status_code, 404)
@@ -1355,6 +1381,13 @@ class TestUnexpectedErrorsAreNotEchoed(TestCase):
         self.factory = RequestFactory()
         cache.clear()
 
+        guard = patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def tearDown(self):
         cache.clear()
 
@@ -1463,3 +1496,127 @@ class TestUnexpectedErrorsAreNotEchoed(TestCase):
                 self.factory.get("/iiif/v2/annotation/x"), uuid.uuid4()
             )
         self._assert_generic_500(response, logs)
+
+
+class TestReadGuard(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    @patch(
+        "manuspectrum.views.iiif_annotation.user_can_read_resource", return_value=False
+    )
+    @patch("manuspectrum.views.iiif_annotation.IIIFAnnotationSerializer")
+    @patch("manuspectrum.views.iiif_annotation.ResourceInstance")
+    def test_v3_collection_refuses_an_unreadable_resource(
+        self, mock_ri, mock_serializer, mock_guard
+    ):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
+
+        mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        resource = MagicMock()
+        mock_ri.objects.select_related.return_value.get.return_value = resource
+        request = self.factory.get("/iiif/annotation-collection/x")
+        request.user = MagicMock()
+
+        response = IIIFAnnotationCollectionView().get(request, uuid.uuid4())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('"forbidden"', response.content.decode())
+        mock_guard.assert_called_once_with(request.user, resource=resource)
+        mock_serializer.return_value.batch_to_representation.assert_not_called()
+
+    @patch(
+        "manuspectrum.views.iiif_annotation.user_can_read_resource", return_value=False
+    )
+    @patch("manuspectrum.views.iiif_annotation.Resource")
+    def test_v3_annotation_refuses_an_unreadable_resource(self, mock_resource, _):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationView
+
+        mock_resource.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_resource.objects.get.return_value = MagicMock()
+
+        request = self.factory.get("/iiif/annotation/x")
+        request.user = MagicMock()
+        response = IIIFAnnotationView().get(request, uuid.uuid4())
+
+        self.assertEqual(response.status_code, 403)
+
+    @patch(
+        "manuspectrum.views.iiif_annotation.user_can_read_resource", return_value=False
+    )
+    @patch("manuspectrum.views.iiif_annotation.ResourceInstance")
+    def test_v2_page_refuses_an_unreadable_resource(self, mock_ri, _):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationPageViewV2
+
+        mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_ri.objects.select_related.return_value.get.return_value = MagicMock()
+
+        request = self.factory.get("/iiif/v2/annotation-collection/x/page-1")
+        request.user = MagicMock()
+        response = IIIFAnnotationPageViewV2().get(request, uuid.uuid4(), 1)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_refusal_is_not_cached(self):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
+
+        resource_id = uuid.uuid4()
+        with (
+            patch(
+                "manuspectrum.views.iiif_annotation.user_can_read_resource",
+                return_value=False,
+            ),
+            patch("manuspectrum.views.iiif_annotation.ResourceInstance") as mock_ri,
+        ):
+            mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+            mock_ri.objects.select_related.return_value.get.return_value = MagicMock()
+            request = self.factory.get("/iiif/annotation-collection/x")
+            request.user = MagicMock()
+            IIIFAnnotationCollectionView().get(request, resource_id)
+
+        self.assertIsNone(cache.get(f"iiif_v3_collection_{resource_id}"))
+
+    @patch(
+        "manuspectrum.views.iiif_annotation.user_can_read_resource", return_value=False
+    )
+    @patch("manuspectrum.views.iiif_annotation.ResourceInstance")
+    def test_a_cached_payload_is_not_served_when_the_guard_refuses(
+        self, mock_ri, mock_guard
+    ):
+        from manuspectrum.views.iiif_annotation import (
+            IIIFAnnotationCollectionView,
+            cached_json_response,
+        )
+
+        resource_id = uuid.uuid4()
+        cached_json_response(
+            f"iiif_v3_collection_{resource_id}", {"type": "AnnotationCollection"}, 60
+        )
+
+        mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        mock_ri.objects.select_related.return_value.get.return_value = MagicMock()
+        request = self.factory.get("/iiif/annotation-collection/x")
+        request.user = MagicMock()
+
+        response = IIIFAnnotationCollectionView().get(request, resource_id)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("AnnotationCollection", response.content.decode())
+
+
+class TestAnonymousStillReadsPublicIIIF(TestCase):
+    def test_anonymous_gets_404_not_403_on_a_missing_resource(self):
+        response = Client().get(f"/iiif/v3/annotation-collection/{uuid.uuid4()}")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("Resource not found", response.content.decode())
+
+    def test_anonymous_request_user_is_the_arches_anonymous_row(self):
+        from django.contrib.auth.models import User
+
+        anonymous = User.objects.get(username="anonymous")
+        self.assertTrue(anonymous.is_authenticated)

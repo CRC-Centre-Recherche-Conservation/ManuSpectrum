@@ -18,6 +18,7 @@ from django.db.models import Q
 
 from arches.app.models.models import ResourceInstance, ResourceXResource, VwAnnotation
 from arches.app.models.resource import Resource
+from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.views.serializers.iiif_annotation import (
     IIIFAnnotationSerializer,
@@ -94,6 +95,19 @@ class IIIFAnnotationMixin:
     ANALYSIS_GRAPH_ID = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
     DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
     COMPONENT_GRAPH_ID = "d47595b4-f8a6-419c-8f33-b388206280c4"
+
+    def _forbid_unless_readable(self, request, resource):
+        """403 for a resource the caller may not read, else ``None``.
+
+        Runs after the lookup and before the cache read, so neither a refusal
+        nor a payload for a resource the caller may not read is ever served
+        from the public cache key. Anonymous visitors reach here as the
+        ``anonymous`` database user (``SetAnonymousUser``), whose read rights
+        come from the Guest group.
+        """
+        if user_can_read_resource(request.user, resource=resource):
+            return None
+        return JsonResponse({"error": "forbidden"}, status=403)
 
     def _get_display_name(self, resource: ResourceInstance):
         if hasattr(resource, "displayname"):
@@ -350,14 +364,18 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id):
         cache_key = f"iiif_v3_collection_{resource_id}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             resource = ResourceInstance.objects.select_related("graph").get(
                 resourceinstanceid=resource_id
             )
+            forbidden = self._forbid_unless_readable(request, resource)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
 
             analyses = self._get_related_analyses(resource)
             if not analyses:
@@ -553,14 +571,18 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id, page_num: int):
         cache_key = f"iiif_v3_page_{resource_id}_{page_num}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             resource = ResourceInstance.objects.select_related("graph").get(
                 resourceinstanceid=resource_id
             )
+            forbidden = self._forbid_unless_readable(request, resource)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
 
             collection_view = IIIFAnnotationCollectionView()
             analyses = collection_view._get_related_analyses(resource)
@@ -644,12 +666,16 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id):
         cache_key = f"iiif_v3_annotation_{resource_id}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             analysis = Resource.objects.get(resourceinstanceid=resource_id)
+            forbidden = self._forbid_unless_readable(request, analysis)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
             if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
                 return JsonResponse(
                     {"error": "Resource is not an Analysis"}, status=400
@@ -690,14 +716,18 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id):
         cache_key = f"iiif_v2_collection_{resource_id}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             resource = ResourceInstance.objects.select_related("graph").get(
                 resourceinstanceid=resource_id
             )
+            forbidden = self._forbid_unless_readable(request, resource)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
 
             # Reuse v3 logic for fetching analyses
             collection_view = IIIFAnnotationCollectionView()
@@ -772,14 +802,18 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id, page_num: int):
         cache_key = f"iiif_v2_page_{resource_id}_{page_num}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             resource = ResourceInstance.objects.select_related("graph").get(
                 resourceinstanceid=resource_id
             )
+            forbidden = self._forbid_unless_readable(request, resource)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
 
             collection_view = IIIFAnnotationCollectionView()
             analyses = collection_view._get_related_analyses(resource)
@@ -845,12 +879,16 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id):
         cache_key = f"iiif_v2_annotation_{resource_id}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             analysis = Resource.objects.get(resourceinstanceid=resource_id)
+            forbidden = self._forbid_unless_readable(request, analysis)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
             if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
                 return JsonResponse(
                     {"error": "Resource is not an Analysis"}, status=400
