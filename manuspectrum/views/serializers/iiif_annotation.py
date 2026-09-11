@@ -49,26 +49,31 @@ class IIIFAnnotationSerializer:
         "dataset_uri": "eae46252-7bf0-11ef-b1e5-dd514ecd97bc",
     }
 
-    # caches batch
-    _batch_mode: bool = False
-    _concept_cache: Dict[str, dict] = {}
-    _resource_cache: Dict[str, dict] = {}
-    _manifest_cache: Dict[str, dict] = {}  # url -> {"label": ...}
-    _tiles_cache: Dict[str, dict] = {}
+    def __init__(self):
+        """One serializer per request.
+
+        The batch flag and the four lookup caches are request-scoped: they
+        are filled by ``batch_to_representation`` and must never be shared
+        between two requests served by the same process.
+        """
+        self._batch_mode: bool = False
+        self._concept_cache: Dict[str, dict] = {}
+        self._resource_cache: Dict[str, dict] = {}
+        self._manifest_cache: Dict[str, dict] = {}  # url -> {"label": ...}
+        self._tiles_cache: Dict[str, dict] = {}
 
     # ----------------------------------------------------------------------
     # Data extraction helpers
     # ----------------------------------------------------------------------
 
-    @classmethod
-    def _get_resource_tiles(cls, resource_id: str) -> dict:
+    def _get_resource_tiles(self, resource_id: str) -> dict:
         """
         Returns the tiles of a resource:
         - In batch mode: data comes from _tiles_cache (0 queries)
         - Outside batch mode: a single targeted query.
         """
-        if resource_id in cls._tiles_cache:
-            return cls._tiles_cache[resource_id]
+        if resource_id in self._tiles_cache:
+            return self._tiles_cache[resource_id]
 
         tiles_qs = Tile.objects.filter(resourceinstance_id=resource_id).values(
             "resourceinstance_id", "data"
@@ -81,7 +86,7 @@ class IIIFAnnotationSerializer:
                 if value is not None:
                     data[node_id] = value
 
-        cls._tiles_cache[resource_id] = data
+        self._tiles_cache[resource_id] = data
         return data
 
     @classmethod
@@ -97,21 +102,20 @@ class IIIFAnnotationSerializer:
     # Concept and resource resolution
     # ----------------------------------------------------------------------
 
-    @classmethod
-    def _resolve_concept_multilingual(cls, concept_valueid: str) -> dict:
+    def _resolve_concept_multilingual(self, concept_valueid: str) -> dict:
         """
         Resolve a concept value to multilingual labels with URI.
         Returns: {"uri": "...", "labels": {"en": "label", "fr": "étiquette"}}
         """
-        if concept_valueid in cls._concept_cache:
-            return cls._concept_cache[concept_valueid]
+        if concept_valueid in self._concept_cache:
+            return self._concept_cache[concept_valueid]
 
-        if cls._batch_mode:
+        if self._batch_mode:
             result = {
-                "uri": f"{cls.base_url}rdm/concepts/values/{concept_valueid}",
+                "uri": f"{self.base_url}rdm/concepts/values/{concept_valueid}",
                 "labels": {"en": str(concept_valueid)},
             }
-            cls._concept_cache[concept_valueid] = result
+            self._concept_cache[concept_valueid] = result
             return result
 
         # Single mode (annotation only)
@@ -132,45 +136,44 @@ class IIIFAnnotationSerializer:
                     labels[lang] = val
                 concept_id = v.get("concept__conceptid")
                 if concept_id and not uri:
-                    uri = f"{cls.base_url}rdm/concepts/{concept_id}"
+                    uri = f"{self.base_url}rdm/concepts/{concept_id}"
 
             result = {
-                "uri": uri or f"{cls.base_url}rdm/concepts/values/{concept_valueid}",
+                "uri": uri or f"{self.base_url}rdm/concepts/values/{concept_valueid}",
                 "labels": labels or {"en": str(concept_valueid)},
             }
-            cls._concept_cache[concept_valueid] = result
+            self._concept_cache[concept_valueid] = result
             return result
 
         except Exception as e:
             logger.warning(f"Concept resolution failed for {concept_valueid}: {e}")
             result = {
-                "uri": f"{cls.base_url}rdm/concepts/values/{concept_valueid}",
+                "uri": f"{self.base_url}rdm/concepts/values/{concept_valueid}",
                 "labels": {"en": str(concept_valueid)},
             }
-            cls._concept_cache[concept_valueid] = result
+            self._concept_cache[concept_valueid] = result
             return result
 
-    @classmethod
-    def _resolve_resource_multilingual(cls, resource_id: str) -> dict:
+    def _resolve_resource_multilingual(self, resource_id: str) -> dict:
         """
         Resolve a resource instance to multilingual labels with URI.
         Returns: {"uri": "...", "labels": {"en": "label", "fr": "étiquette"}}
         """
-        if resource_id in cls._resource_cache:
-            return cls._resource_cache[resource_id]
+        if resource_id in self._resource_cache:
+            return self._resource_cache[resource_id]
 
-        if cls._batch_mode:
+        if self._batch_mode:
             result = {
-                "uri": f"{cls.base_url}resources/{resource_id}",
+                "uri": f"{self.base_url}resources/{resource_id}",
                 "labels": {"en": str(resource_id)},
             }
-            cls._resource_cache[resource_id] = result
+            self._resource_cache[resource_id] = result
             return result
 
         # "single" mode
         try:
             resource = Resource.objects.get(resourceinstanceid=resource_id)
-            uri = f"{cls.base_url}resources/{resource_id}"
+            uri = f"{self.base_url}resources/{resource_id}"
 
             displayname = (
                 resource.displayname()
@@ -187,7 +190,7 @@ class IIIFAnnotationSerializer:
                 labels = {"en": str(displayname)}
 
             result = {"uri": uri, "labels": labels}
-            cls._resource_cache[resource_id] = result
+            self._resource_cache[resource_id] = result
             return result
 
         except Resource.DoesNotExist:
@@ -196,18 +199,17 @@ class IIIFAnnotationSerializer:
             logger.warning(f"Resource resolution failed for {resource_id}: {e}")
 
         result = {
-            "uri": f"{cls.base_url}resources/{resource_id}",
+            "uri": f"{self.base_url}resources/{resource_id}",
             "labels": {"en": str(resource_id)},
         }
-        cls._resource_cache[resource_id] = result
+        self._resource_cache[resource_id] = result
         return result
 
     # ----------------------------------------------------------------------
     # Batch processing methods
     # ----------------------------------------------------------------------
 
-    @classmethod
-    def batch_to_representation(cls, annotations_data: List[Dict]) -> List[Dict]:
+    def batch_to_representation(self, annotations_data: List[Dict]) -> List[Dict]:
         """
         Process multiple annotations in batch to optimize queries.
 
@@ -222,14 +224,14 @@ class IIIFAnnotationSerializer:
             a["resource_id"] for a in annotations_data if a.get("resource_id")
         ]
 
-        cls._batch_mode = True
+        self._batch_mode = True
         try:
-            cls._prefetch_all_data(resource_ids)
+            self._prefetch_all_data(resource_ids)
 
             results: List[dict] = []
             for anno_data in annotations_data:
                 results.append(
-                    cls.to_representation(
+                    self.to_representation(
                         anno_data["target"],
                         anno_data["resource_id"],
                         canvas_uri=anno_data.get("canvas_uri"),
@@ -238,13 +240,12 @@ class IIIFAnnotationSerializer:
                 )
         finally:
             # clean for future request
-            cls._batch_mode = False
-            cls._clear_caches()
+            self._batch_mode = False
+            self._clear_caches()
 
         return results
 
-    @classmethod
-    def _prefetch_all_data(cls, resource_ids: List[str]):
+    def _prefetch_all_data(self, resource_ids: List[str]):
         """Prefetch all needed data in minimal queries."""
         if not resource_ids:
             return
@@ -264,15 +265,15 @@ class IIIFAnnotationSerializer:
                 if value is not None:
                     tiles_by_resource[rid][node_id] = value
 
-        cls._tiles_cache = tiles_by_resource
+        self._tiles_cache = tiles_by_resource
 
         # 2. Collect IDs of concepts, resources, manifests
         all_concept_ids: set[str] = set()
         all_referenced_resource_ids: set[str] = set()
         all_manifest_urls: set[str] = set()
 
-        technique_node = cls.DATATYPE_NODES["technique"]
-        manifest_node = cls.DATATYPE_NODES["manifest"]
+        technique_node = self.DATATYPE_NODES["technique"]
+        manifest_node = self.DATATYPE_NODES["manifest"]
 
         for rid, tile_data in tiles_by_resource.items():
             # Technics(concepts)
@@ -283,14 +284,14 @@ class IIIFAnnotationSerializer:
 
             # Resources
             for field in ["instrument", "component_observed", "project", "researchers"]:
-                node = cls.DATATYPE_NODES.get(field)
+                node = self.DATATYPE_NODES.get(field)
                 if not node or node not in tile_data or not tile_data[node]:
                     continue
                 values = tile_data[node]
                 if not isinstance(values, list):
                     values = [values]
                 for v in values:
-                    res_id = cls._extract_resource_id(v)
+                    res_id = self._extract_resource_id(v)
                     if res_id:
                         all_referenced_resource_ids.add(res_id)
 
@@ -300,18 +301,17 @@ class IIIFAnnotationSerializer:
 
         # 3. Batch load of concepts
         if all_concept_ids:
-            cls._batch_load_concepts(list(all_concept_ids))
+            self._batch_load_concepts(list(all_concept_ids))
 
         # 4. Batch load of resources
         if all_referenced_resource_ids:
-            cls._batch_load_resources(list(all_referenced_resource_ids))
+            self._batch_load_resources(list(all_referenced_resource_ids))
 
         # 5. Batch load of manifests
         if all_manifest_urls:
-            cls._batch_load_manifests(list(all_manifest_urls))
+            self._batch_load_manifests(list(all_manifest_urls))
 
-    @classmethod
-    def _batch_load_concepts(cls, concept_ids: List[str]):
+    def _batch_load_concepts(self, concept_ids: List[str]):
         """Load all concepts and their translations in one query."""
         values = (
             Value.objects.filter(valueid__in=concept_ids)
@@ -331,28 +331,27 @@ class IIIFAnnotationSerializer:
 
             concept_id = v.get("concept__conceptid")
             if concept_id and not concepts_data[vid]["uri"]:
-                concepts_data[vid]["uri"] = f"{cls.base_url}rdm/concepts/{concept_id}"
+                concepts_data[vid]["uri"] = f"{self.base_url}rdm/concepts/{concept_id}"
 
         for cid in concept_ids:
             if cid not in concepts_data:
                 concepts_data[cid] = {
-                    "uri": f"{cls.base_url}rdm/concepts/values/{cid}",
+                    "uri": f"{self.base_url}rdm/concepts/values/{cid}",
                     "labels": {"en": str(cid)},
                 }
             elif not concepts_data[cid]["uri"]:
-                concepts_data[cid]["uri"] = f"{cls.base_url}rdm/concepts/values/{cid}"
+                concepts_data[cid]["uri"] = f"{self.base_url}rdm/concepts/values/{cid}"
 
-        cls._concept_cache = concepts_data
+        self._concept_cache = concepts_data
 
-    @classmethod
-    def _batch_load_resources(cls, resource_ids: List[str]):
+    def _batch_load_resources(self, resource_ids: List[str]):
         """Load all resources in one query."""
         resources = Resource.objects.filter(resourceinstanceid__in=resource_ids)
 
         cache_data: Dict[str, dict] = {}
         for resource in resources:
             rid = str(resource.resourceinstanceid)
-            uri = f"{cls.base_url}resources/{rid}"
+            uri = f"{self.base_url}resources/{rid}"
 
             displayname = (
                 resource.displayname()
@@ -376,14 +375,13 @@ class IIIFAnnotationSerializer:
         for rid in resource_ids:
             if rid not in cache_data:
                 cache_data[rid] = {
-                    "uri": f"{cls.base_url}resources/{rid}",
+                    "uri": f"{self.base_url}resources/{rid}",
                     "labels": {"en": str(rid)},
                 }
 
-        cls._resource_cache = cache_data
+        self._resource_cache = cache_data
 
-    @classmethod
-    def _batch_load_manifests(cls, manifest_urls: List[str]):
+    def _batch_load_manifests(self, manifest_urls: List[str]):
         """Load all manifests in one query, handling both full URLs and relative paths."""
         from urllib.parse import urlparse
 
@@ -407,15 +405,14 @@ class IIIFAnnotationSerializer:
             if full_url not in cache and relative_path in cache:
                 cache[full_url] = cache[relative_path]
 
-        cls._manifest_cache = cache
+        self._manifest_cache = cache
 
-    @classmethod
-    def _clear_caches(cls):
+    def _clear_caches(self):
         """Clear all batch caches."""
-        cls._concept_cache.clear()
-        cls._resource_cache.clear()
-        cls._manifest_cache.clear()
-        cls._tiles_cache.clear()
+        self._concept_cache.clear()
+        self._resource_cache.clear()
+        self._manifest_cache.clear()
+        self._tiles_cache.clear()
 
     # ----------------------------------------------------------------------
     # Value & label helpers
@@ -438,8 +435,7 @@ class IIIFAnnotationSerializer:
     # IIIF Body, Metadata, and SeeAlso builders
     # ----------------------------------------------------------------------
 
-    @classmethod
-    def _build_body(cls, tiles_data: dict) -> dict | list:
+    def _build_body(self, tiles_data: dict) -> dict | list:
         """
         Builds the IIIF `body` based on the available datatype nodes.
 
@@ -449,17 +445,17 @@ class IIIFAnnotationSerializer:
         bodies: List[dict] = []
 
         # 1) Manifest(s)
-        manifest_body = cls._build_manifest_body(tiles_data)
+        manifest_body = self._build_manifest_body(tiles_data)
         if manifest_body:
             bodies.append(manifest_body)
 
         # 2) Dataset files (can be multiple)
-        file_bodies = cls._build_file_bodies(tiles_data)
+        file_bodies = self._build_file_bodies(tiles_data)
         bodies.extend(file_bodies)
 
         # 3) Fallback: TextualBody if no other body found
         if not bodies:
-            name_node = cls.DATATYPE_NODES.get("name")
+            name_node = self.DATATYPE_NODES.get("name")
             value = "No data available"
             if name_node and name_node in tiles_data:
                 name_data = tiles_data[name_node]
@@ -481,10 +477,9 @@ class IIIFAnnotationSerializer:
         # Return single object if only one, list if multiple (cleaner JSON output)
         return bodies[0] if len(bodies) == 1 else bodies
 
-    @classmethod
-    def _build_manifest_body(cls, tiles_data: dict) -> dict | None:
+    def _build_manifest_body(self, tiles_data: dict) -> dict | None:
         """Build a Manifest body if present in tiles data."""
-        manifest_node = cls.DATATYPE_NODES.get("manifest")
+        manifest_node = self.DATATYPE_NODES.get("manifest")
         if not manifest_node or manifest_node not in tiles_data:
             return None
 
@@ -492,11 +487,11 @@ class IIIFAnnotationSerializer:
         if not manifest_url:
             return None
 
-        full_url = cls._to_full_manifest_url(manifest_url)
+        full_url = self._to_full_manifest_url(manifest_url)
 
         # Check cache first
-        if manifest_url in cls._manifest_cache:
-            manifest_resource = cls._manifest_cache[manifest_url]
+        if manifest_url in self._manifest_cache:
+            manifest_resource = self._manifest_cache[manifest_url]
             label = manifest_resource["label"]
             return {
                 "id": full_url,
@@ -506,7 +501,7 @@ class IIIFAnnotationSerializer:
             }
 
         # Outside batch, fallback: try exact URL then relative path
-        if not cls._batch_mode:
+        if not self._batch_mode:
             from urllib.parse import urlparse
 
             urls_to_try = [manifest_url]
@@ -582,15 +577,14 @@ class IIIFAnnotationSerializer:
     # Metadata helpers
     # ----------------------------------------------------------------------
 
-    @classmethod
-    def _format_metadata_value(cls, raw_value, field_key: str) -> dict:
+    def _format_metadata_value(self, raw_value, field_key: str) -> dict:
         """Format a metadata field according to its data type."""
         # Concept lists
         if field_key == "technique":
             if isinstance(raw_value, list):
                 all_labels: Dict[str, List[str]] = {}
                 for concept_id in raw_value:
-                    concept_data = cls._resolve_concept_multilingual(str(concept_id))
+                    concept_data = self._resolve_concept_multilingual(str(concept_id))
                     for lang, label in concept_data["labels"].items():
                         all_labels.setdefault(lang, []).append(
                             f"{label} ({concept_data['uri']})"
@@ -602,9 +596,9 @@ class IIIFAnnotationSerializer:
             all_labels: Dict[str, List[str]] = {}
             items = raw_value if isinstance(raw_value, list) else [raw_value]
             for item in items:
-                resource_id = cls._extract_resource_id(item)
+                resource_id = self._extract_resource_id(item)
                 if resource_id:
-                    res_data = cls._resolve_resource_multilingual(resource_id)
+                    res_data = self._resolve_resource_multilingual(resource_id)
                     for lang, label in res_data["labels"].items():
                         all_labels.setdefault(lang, []).append(
                             f"{label} ({res_data['uri']})"
@@ -616,9 +610,9 @@ class IIIFAnnotationSerializer:
             all_names: Dict[str, List[str]] = {}
             items = raw_value if isinstance(raw_value, list) else [raw_value]
             for item in items:
-                resource_id = cls._extract_resource_id(item)
+                resource_id = self._extract_resource_id(item)
                 if resource_id:
-                    res_data = cls._resolve_resource_multilingual(resource_id)
+                    res_data = self._resolve_resource_multilingual(resource_id)
                     for lang, label in res_data["labels"].items():
                         all_names.setdefault(lang, []).append(label)
             if all_names:
@@ -641,8 +635,7 @@ class IIIFAnnotationSerializer:
 
         return {"en": [str(raw_value)]}
 
-    @classmethod
-    def _build_metadata(cls, tiles_data: dict) -> list:
+    def _build_metadata(self, tiles_data: dict) -> list:
         """Builds the IIIF `metadata` section."""
         metadata: List[dict] = []
 
@@ -656,10 +649,10 @@ class IIIFAnnotationSerializer:
         }
 
         for field, label in fields.items():
-            node = cls.DATATYPE_NODES.get(field)
+            node = self.DATATYPE_NODES.get(field)
             if node and node in tiles_data and tiles_data[node]:
                 try:
-                    formatted_value = cls._format_metadata_value(
+                    formatted_value = self._format_metadata_value(
                         tiles_data[node], field
                     )
                     metadata.append(
@@ -672,7 +665,7 @@ class IIIFAnnotationSerializer:
                     logger.warning(f"Failed to format metadata field '{field}': {e}")
 
         # Instrumental metadata
-        meta_node = cls.DATATYPE_NODES.get("metadata_fields")
+        meta_node = self.DATATYPE_NODES.get("metadata_fields")
         if meta_node and meta_node in tiles_data:
             instr_data = tiles_data[meta_node]
             if isinstance(instr_data, dict):
@@ -795,9 +788,8 @@ class IIIFAnnotationSerializer:
     # Public API
     # ----------------------------------------------------------------------
 
-    @classmethod
     def to_representation(
-        cls,
+        self,
         target: str,
         resource_id: str,
         canvas_uri: str | None = None,
@@ -816,11 +808,11 @@ class IIIFAnnotationSerializer:
             dict: A IIIF Presentation API v3 compliant annotation.
         """
         # Build structured target
-        structured_target = cls._build_target(target, canvas_uri, manifest_url)
+        structured_target = self._build_target(target, canvas_uri, manifest_url)
 
         annotation: dict = {
             "@context": "http://iiif.io/api/presentation/3/context.json",
-            "id": f"{cls.base_url_iiif}/v3/annotation/{resource_id}",
+            "id": f"{self.base_url_iiif}/v3/annotation/{resource_id}",
             "type": "Annotation",
             "motivation": "supplementing",
             "target": structured_target,
@@ -835,19 +827,19 @@ class IIIFAnnotationSerializer:
             }
             return annotation
 
-        tiles_data = cls._get_resource_tiles(resource_id)
+        tiles_data = self._get_resource_tiles(resource_id)
 
-        label_node = cls.DATATYPE_NODES.get("name")
+        label_node = self.DATATYPE_NODES.get("name")
         if label_node and label_node in tiles_data:
-            annotation["label"] = cls._get_localized_string(tiles_data[label_node])
+            annotation["label"] = self._get_localized_string(tiles_data[label_node])
 
-        annotation["body"] = cls._build_body(tiles_data)
+        annotation["body"] = self._build_body(tiles_data)
 
-        metadata = cls._build_metadata(tiles_data)
+        metadata = self._build_metadata(tiles_data)
         if metadata:
             annotation["metadata"] = metadata
 
-        see_also = cls._build_see_also(tiles_data, resource_id)
+        see_also = self._build_see_also(tiles_data, resource_id)
         if see_also:
             annotation["seeAlso"] = see_also
 
@@ -937,8 +929,7 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
     # V2 Body builder (resource)
     # ----------------------------------------------------------------------
 
-    @classmethod
-    def _build_body_v2(cls, tiles_data: dict) -> dict | list:
+    def _build_body_v2(self, tiles_data: dict) -> dict | list:
         """
         Builds the IIIF v2 `resource` based on the available datatype nodes.
         Converts v3 body structure to v2 resource structure.
@@ -946,17 +937,17 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
         bodies: List[dict] = []
 
         # 1) Manifest(s)
-        manifest_body = cls._build_manifest_body_v2(tiles_data)
+        manifest_body = self._build_manifest_body_v2(tiles_data)
         if manifest_body:
             bodies.append(manifest_body)
 
         # 2) Dataset files (can be multiple)
-        file_bodies = cls._build_file_bodies_v2(tiles_data)
+        file_bodies = self._build_file_bodies_v2(tiles_data)
         bodies.extend(file_bodies)
 
         # 3) Fallback: TextualBody if no other body found
         if not bodies:
-            name_node = cls.DATATYPE_NODES.get("name")
+            name_node = self.DATATYPE_NODES.get("name")
             value = "No data available"
             if name_node and name_node in tiles_data:
                 name_data = tiles_data[name_node]
@@ -976,10 +967,9 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
 
         return bodies[0] if len(bodies) == 1 else bodies
 
-    @classmethod
-    def _build_manifest_body_v2(cls, tiles_data: dict) -> dict | None:
+    def _build_manifest_body_v2(self, tiles_data: dict) -> dict | None:
         """Build a Manifest resource body in v2 format."""
-        manifest_node = cls.DATATYPE_NODES.get("manifest")
+        manifest_node = self.DATATYPE_NODES.get("manifest")
         if not manifest_node or manifest_node not in tiles_data:
             return None
 
@@ -987,11 +977,11 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
         if not manifest_url:
             return None
 
-        full_url = cls._to_full_manifest_url(manifest_url)
+        full_url = self._to_full_manifest_url(manifest_url)
 
         # Check cache first
-        if manifest_url in cls._manifest_cache:
-            manifest_resource = cls._manifest_cache[manifest_url]
+        if manifest_url in self._manifest_cache:
+            manifest_resource = self._manifest_cache[manifest_url]
             label = manifest_resource["label"]
             return {
                 "@id": full_url,
@@ -1001,7 +991,7 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
             }
 
         # Outside batch, fallback: try exact URL then relative path
-        if not cls._batch_mode:
+        if not self._batch_mode:
             from urllib.parse import urlparse
 
             urls_to_try = [manifest_url]
@@ -1135,9 +1125,8 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
     # Public API
     # ----------------------------------------------------------------------
 
-    @classmethod
     def to_representation(
-        cls,
+        self,
         target: str,
         resource_id: str,
         canvas_uri: str | None = None,
@@ -1156,11 +1145,11 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
             dict: A IIIF Presentation API v2 compliant annotation (Open Annotation).
         """
         # Build v2 target (on)
-        on_target = cls._build_target_v2(target, canvas_uri, manifest_url)
+        on_target = self._build_target_v2(target, canvas_uri, manifest_url)
 
         annotation: dict = {
-            "@context": cls.V2_CONTEXT,
-            "@id": f"{cls.base_url_iiif}/v2/annotation/{resource_id}",
+            "@context": self.V2_CONTEXT,
+            "@id": f"{self.base_url_iiif}/v2/annotation/{resource_id}",
             "@type": "oa:Annotation",
             "motivation": "oa:commenting",
             "on": on_target,
@@ -1174,27 +1163,26 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
             }
             return annotation
 
-        tiles_data = cls._get_resource_tiles(resource_id)
+        tiles_data = self._get_resource_tiles(resource_id)
 
-        label_node = cls.DATATYPE_NODES.get("name")
+        label_node = self.DATATYPE_NODES.get("name")
         if label_node and label_node in tiles_data:
-            label_v3 = cls._get_localized_string(tiles_data[label_node])
-            annotation["label"] = cls._convert_label_to_v2(label_v3)
+            label_v3 = self._get_localized_string(tiles_data[label_node])
+            annotation["label"] = self._convert_label_to_v2(label_v3)
 
-        annotation["resource"] = cls._build_body_v2(tiles_data)
+        annotation["resource"] = self._build_body_v2(tiles_data)
 
-        metadata_v3 = cls._build_metadata(tiles_data)
+        metadata_v3 = self._build_metadata(tiles_data)
         if metadata_v3:
-            annotation["metadata"] = cls._convert_metadata_to_v2(metadata_v3)
+            annotation["metadata"] = self._convert_metadata_to_v2(metadata_v3)
 
-        see_also = cls._build_see_also_v2(tiles_data, resource_id)
+        see_also = self._build_see_also_v2(tiles_data, resource_id)
         if see_also:
             annotation["seeAlso"] = see_also
 
         return annotation
 
-    @classmethod
-    def batch_to_representation(cls, annotations_data: List[Dict]) -> List[Dict]:
+    def batch_to_representation(self, annotations_data: List[Dict]) -> List[Dict]:
         """
         Process multiple annotations in batch to optimize queries (v2 format).
 
@@ -1209,14 +1197,14 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
             a["resource_id"] for a in annotations_data if a.get("resource_id")
         ]
 
-        cls._batch_mode = True
+        self._batch_mode = True
         try:
-            cls._prefetch_all_data(resource_ids)
+            self._prefetch_all_data(resource_ids)
 
             results: List[dict] = []
             for anno_data in annotations_data:
                 results.append(
-                    cls.to_representation(
+                    self.to_representation(
                         anno_data["target"],
                         anno_data["resource_id"],
                         canvas_uri=anno_data.get("canvas_uri"),
@@ -1224,7 +1212,7 @@ class IIIFAnnotationSerializerV2(IIIFAnnotationSerializer):
                     )
                 )
         finally:
-            cls._batch_mode = False
-            cls._clear_caches()
+            self._batch_mode = False
+            self._clear_caches()
 
         return results

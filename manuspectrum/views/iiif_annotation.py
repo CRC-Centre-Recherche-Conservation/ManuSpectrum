@@ -383,7 +383,7 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
                     canvas_mapping.setdefault(canvas_uri, []).append(idx)
 
             # Batch serialize all annotations
-            serialized = IIIFAnnotationSerializer.batch_to_representation(
+            serialized = IIIFAnnotationSerializer().batch_to_representation(
                 all_annotation_data
             )
 
@@ -589,7 +589,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
             annotation_data = [self._build_annotation_payload(a) for a in annos]
 
-            items = IIIFAnnotationSerializer.batch_to_representation(annotation_data)
+            items = IIIFAnnotationSerializer().batch_to_representation(annotation_data)
 
             collection_id = f"{self.base_url}/v3/annotation-collection/{resource_id}"
             page_id = f"{collection_id}/page-{page_num}"
@@ -663,7 +663,7 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
             anno = annos[0]  # 1 analysis -> 1 annotation
             payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
-            iiif_annotation = IIIFAnnotationSerializer.to_representation(**payload)
+            iiif_annotation = IIIFAnnotationSerializer().to_representation(**payload)
 
             return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
 
@@ -809,7 +809,9 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
             annotation_data = [self._build_annotation_payload(a) for a in annos]
 
             # Use v2 serializer
-            items = IIIFAnnotationSerializerV2.batch_to_representation(annotation_data)
+            items = IIIFAnnotationSerializerV2().batch_to_representation(
+                annotation_data
+            )
 
             layer_id = f"{self.base_url}/v2/annotation-collection/{resource_id}"
             list_id = f"{layer_id}/page-{page_num}"
@@ -864,7 +866,7 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
             payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
 
             # Use v2 serializer
-            iiif_annotation = IIIFAnnotationSerializerV2.to_representation(**payload)
+            iiif_annotation = IIIFAnnotationSerializerV2().to_representation(**payload)
 
             return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
 

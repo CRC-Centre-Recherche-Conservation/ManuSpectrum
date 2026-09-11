@@ -547,7 +547,7 @@ class TestIIIFAnnotationView(TestCase):
         mock_res.resourceinstanceid = resource_id
         mock_resource.objects.get.return_value = mock_res
 
-        mock_serializer.to_representation.return_value = {
+        mock_serializer.return_value.to_representation.return_value = {
             "@context": "http://iiif.io/api/presentation/3/context.json",
             "type": "Annotation",
         }

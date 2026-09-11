@@ -22,9 +22,7 @@ class TestIIIFAnnotationSerializerSetup(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializer()
 
 
 @override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
@@ -36,9 +34,7 @@ class TestToRepresentation(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializer()
 
     def test_basic_annotation_structure(self):
         """Annotation should have required IIIF v3 fields."""
@@ -120,9 +116,7 @@ class TestBuildBody(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializer()
 
     @patch("manuspectrum.views.serializers.iiif_annotation.IIIFManifest")
     def test_body_with_manifest(self, mock_manifest_model):
@@ -213,9 +207,7 @@ class TestBuildMetadata(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializer()
 
     def test_metadata_with_acquisition_date(self):
         """Metadata should include acquisition date when present."""
@@ -279,8 +271,7 @@ class TestBuildSeeAlso(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
-        self.serializer._clear_caches()
+        self.serializer = IIIFAnnotationSerializer()
 
     def test_see_also_always_includes_report(self):
         """seeAlso should always include link to analysis report."""
@@ -318,9 +309,7 @@ class TestBatchProcessing(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializer()
 
     @patch("manuspectrum.views.serializers.iiif_annotation.Tile")
     @patch("manuspectrum.views.serializers.iiif_annotation.Value")
@@ -395,8 +384,7 @@ class TestPrefetchMethods(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
-        self.serializer._clear_caches()
+        self.serializer = IIIFAnnotationSerializer()
 
     @patch("manuspectrum.views.serializers.iiif_annotation.Tile")
     def test_prefetch_tiles(self, mock_tile):
@@ -490,7 +478,7 @@ class TestCacheManagement(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
+        self.serializer = IIIFAnnotationSerializer()
 
     def test_clear_caches(self):
         """_clear_caches should empty all cache dictionaries."""
@@ -516,7 +504,7 @@ class TestGetLocalizedString(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
+        self.serializer = IIIFAnnotationSerializer()
 
     def test_localized_string_from_dict(self):
         """Should extract localized strings from language dict."""
@@ -553,9 +541,7 @@ class TestFormatMetadataValue(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializer()
 
     def test_format_acquisition_date(self):
         """Acquisition date should be formatted as simple string."""
@@ -620,7 +606,7 @@ class TestExtractResourceId(TestCase):
             IIIFAnnotationSerializer,
         )
 
-        self.serializer = IIIFAnnotationSerializer
+        self.serializer = IIIFAnnotationSerializer()
 
     def test_extract_from_dict(self):
         """Should extract resourceId from dict."""
@@ -659,9 +645,7 @@ class TestIIIFAnnotationSerializerV2Setup(TestCase):
             IIIFAnnotationSerializerV2,
         )
 
-        self.serializer = IIIFAnnotationSerializerV2
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializerV2()
 
 
 @override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
@@ -673,9 +657,7 @@ class TestV2ToRepresentation(TestCase):
             IIIFAnnotationSerializerV2,
         )
 
-        self.serializer = IIIFAnnotationSerializerV2
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializerV2()
 
     def test_v2_basic_annotation_structure(self):
         """V2 Annotation should have required IIIF v2 fields."""
@@ -761,7 +743,7 @@ class TestV2ConvertLabelToV2(TestCase):
             IIIFAnnotationSerializerV2,
         )
 
-        self.serializer = IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2()
 
     def test_convert_v3_label_dict_to_string(self):
         """Should convert v3 label dict to simple string."""
@@ -806,9 +788,7 @@ class TestV2BuildBodyV2(TestCase):
             IIIFAnnotationSerializerV2,
         )
 
-        self.serializer = IIIFAnnotationSerializerV2
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializerV2()
 
     @patch("manuspectrum.views.serializers.iiif_annotation.IIIFManifest")
     def test_v2_body_with_manifest(self, mock_manifest_model):
@@ -865,7 +845,7 @@ class TestV2BuildTargetV2(TestCase):
             IIIFAnnotationSerializerV2,
         )
 
-        self.serializer = IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2()
 
     def test_v2_target_with_fragment_returns_string(self):
         """V2 'on' should be simple URI string with fragment."""
@@ -897,7 +877,7 @@ class TestV2ConvertMetadataToV2(TestCase):
             IIIFAnnotationSerializerV2,
         )
 
-        self.serializer = IIIFAnnotationSerializerV2
+        self.serializer = IIIFAnnotationSerializerV2()
 
     def test_convert_metadata_to_v2_format(self):
         """Should convert v3 metadata format to v2 simple format."""
@@ -929,9 +909,7 @@ class TestV2BatchProcessing(TestCase):
             IIIFAnnotationSerializerV2,
         )
 
-        self.serializer = IIIFAnnotationSerializerV2
-        self.serializer._clear_caches()
-        self.serializer._batch_mode = False
+        self.serializer = IIIFAnnotationSerializerV2()
 
     @patch("manuspectrum.views.serializers.iiif_annotation.Tile")
     @patch("manuspectrum.views.serializers.iiif_annotation.Value")
@@ -969,3 +947,68 @@ class TestV2BatchProcessing(TestCase):
             self.assertEqual(
                 result["@context"], "http://iiif.io/api/presentation/2/context.json"
             )
+
+
+class TestSerializerStateIsPerInstance(TestCase):
+    def test_caches_live_on_the_instance_not_the_class(self):
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializer,
+        )
+
+        first = IIIFAnnotationSerializer()
+        second = IIIFAnnotationSerializer()
+        first._concept_cache["c1"] = {"labels": {"en": "x"}}
+        first._batch_mode = True
+
+        self.assertEqual(second._concept_cache, {})
+        self.assertFalse(second._batch_mode)
+        for name in (
+            "_batch_mode",
+            "_concept_cache",
+            "_resource_cache",
+            "_manifest_cache",
+            "_tiles_cache",
+        ):
+            self.assertFalse(hasattr(IIIFAnnotationSerializer, name), name)
+
+    def test_v2_instance_state_is_independent_of_v3(self):
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializer,
+            IIIFAnnotationSerializerV2,
+        )
+
+        v3 = IIIFAnnotationSerializer()
+        v2 = IIIFAnnotationSerializerV2()
+        v3._tiles_cache["r1"] = {"n": "v"}
+
+        self.assertEqual(v2._tiles_cache, {})
+
+    def test_batch_mode_does_not_leak_between_instances_under_threads(self):
+        import threading
+
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializer,
+        )
+
+        observed = {}
+        gate = threading.Event()
+
+        def hold_batch_mode():
+            s = IIIFAnnotationSerializer()
+            s._batch_mode = True
+            gate.set()
+            observed["holder"] = s._batch_mode
+
+        def read_fresh():
+            gate.wait(timeout=2)
+            observed["fresh"] = IIIFAnnotationSerializer()._batch_mode
+
+        t1 = threading.Thread(target=hold_batch_mode)
+        t2 = threading.Thread(target=read_fresh)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        self.assertTrue(observed["holder"])
+        self.assertFalse(observed["fresh"])
