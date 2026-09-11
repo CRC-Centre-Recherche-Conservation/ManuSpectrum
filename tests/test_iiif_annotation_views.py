@@ -1607,6 +1607,49 @@ class TestReadGuard(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertNotIn("AnnotationCollection", response.content.decode())
 
+    def test_refusal_of_an_unauthenticated_caller_is_logged(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+
+        request = self.factory.get("/iiif/annotation-collection/x")
+        request.user = AnonymousUser()
+
+        with (
+            patch(
+                "manuspectrum.views.iiif_annotation.user_can_read_resource",
+                return_value=False,
+            ),
+            self.assertLogs(
+                "manuspectrum.views.iiif_annotation", level="WARNING"
+            ) as logs,
+        ):
+            response = IIIFAnnotationMixin()._forbid_unless_readable(
+                request, MagicMock(resourceinstanceid="r1")
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("unauthenticated", "\n".join(logs.output))
+
+    def test_refusal_of_an_authenticated_caller_is_not_logged(self):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+
+        request = self.factory.get("/iiif/annotation-collection/x")
+        request.user = MagicMock(is_authenticated=True)
+
+        with (
+            patch(
+                "manuspectrum.views.iiif_annotation.user_can_read_resource",
+                return_value=False,
+            ),
+            self.assertNoLogs("manuspectrum.views.iiif_annotation", level="WARNING"),
+        ):
+            response = IIIFAnnotationMixin()._forbid_unless_readable(
+                request, MagicMock(resourceinstanceid="r1")
+            )
+
+        self.assertEqual(response.status_code, 403)
+
 
 class TestAnonymousStillReadsPublicIIIF(TestCase):
     def test_anonymous_gets_404_not_403_on_a_missing_resource(self):
@@ -1615,8 +1658,24 @@ class TestAnonymousStillReadsPublicIIIF(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertIn("Resource not found", response.content.decode())
 
-    def test_anonymous_request_user_is_the_arches_anonymous_row(self):
-        from django.contrib.auth.models import User
+    def test_middleware_installs_the_arches_anonymous_row_on_the_request(self):
+        response = Client().get(f"/iiif/v3/annotation-collection/{uuid.uuid4()}")
 
-        anonymous = User.objects.get(username="anonymous")
-        self.assertTrue(anonymous.is_authenticated)
+        user = response.wsgi_request.user
+        self.assertTrue(user.is_authenticated)
+        self.assertEqual(user.username, "anonymous")
+
+    def test_guard_lets_the_anonymous_row_read_a_resource(self):
+        from arches.app.models.models import ResourceInstance
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+
+        response = Client().get(f"/iiif/v3/annotation-collection/{uuid.uuid4()}")
+        resource = ResourceInstance.objects.first()
+        if resource is None:
+            self.skipTest("no resource instance in the test database")
+
+        self.assertIsNone(
+            IIIFAnnotationMixin()._forbid_unless_readable(
+                response.wsgi_request, resource
+            )
+        )

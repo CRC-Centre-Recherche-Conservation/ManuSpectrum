@@ -52,6 +52,9 @@ def cached_json_response(
 
     resp = HttpResponse(payload, content_type="application/json")
     resp["ETag"] = etag
+    # `public` is only correct while no resource is restricted: the read guard
+    # runs inside the view, and a shared HTTP cache cannot run it. Decision D1
+    # (issue #72) switches this to `private` when object permissions arrive.
     resp["Cache-Control"] = "public, max-age=3600"
     return resp
 
@@ -76,6 +79,7 @@ def get_cached_response(cache_key: str) -> HttpResponse | None:
     resp = HttpResponse(payload, content_type="application/json")
     if etag:
         resp["ETag"] = etag
+    # Same coupling as in cached_json_response.
     resp["Cache-Control"] = "public, max-age=3600"
     return resp
 
@@ -107,6 +111,12 @@ class IIIFAnnotationMixin:
         """
         if user_can_read_resource(request.user, resource=resource):
             return None
+        if not request.user.is_authenticated:
+            logger.warning(
+                "IIIF read refused for an unauthenticated request on %s; "
+                "SetAnonymousUser did not install the anonymous user",
+                getattr(resource, "resourceinstanceid", resource),
+            )
         return JsonResponse({"error": "forbidden"}, status=403)
 
     def _get_display_name(self, resource: ResourceInstance):

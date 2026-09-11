@@ -239,7 +239,6 @@ class IIIFAnnotationSerializer:
                     )
                 )
         finally:
-            # clean for future request
             self._batch_mode = False
             self._clear_caches()
 
