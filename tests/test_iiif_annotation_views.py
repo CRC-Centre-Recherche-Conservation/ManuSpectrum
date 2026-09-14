@@ -1552,6 +1552,7 @@ class TestReadGuard(TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertIn('"forbidden"', response.content.decode())
+        self.assertEqual(response["Cache-Control"], "private, no-store")
         mock_guard.assert_called_once_with(request.user, resource=resource)
         mock_serializer.return_value.batch_to_representation.assert_not_called()
 
@@ -1778,17 +1779,21 @@ class TestChildPermissionHelpers(TestCase):
 
     def test_is_public_payload_is_false_when_the_caller_saw_fewer_analyses(self):
         resource = MagicMock(resourceinstanceid="doc")
+        user = MagicMock(username="someone")
 
         with patch(
             "manuspectrum.views.iiif_annotation.user_can_read_resource",
             return_value=True,
         ):
             self.assertFalse(
-                self.mixin._is_public_payload(resource, [self.a, self.b], [self.a])
+                self.mixin._is_public_payload(
+                    user, resource, [self.a, self.b], [self.a]
+                )
             )
 
     def test_is_public_payload_is_true_when_the_caller_saw_every_analysis(self):
         resource = MagicMock(resourceinstanceid="doc")
+        user = MagicMock(username="someone")
 
         with patch(
             "manuspectrum.views.iiif_annotation.user_can_read_resource",
@@ -1796,9 +1801,23 @@ class TestChildPermissionHelpers(TestCase):
         ):
             self.assertTrue(
                 self.mixin._is_public_payload(
-                    resource, [self.a, self.b], [self.a, self.b]
+                    user, resource, [self.a, self.b], [self.a, self.b]
                 )
             )
+
+    def test_is_public_payload_trusts_the_anonymous_caller_without_a_second_pass(self):
+        resource = MagicMock(resourceinstanceid="doc")
+        user = MagicMock(username="anonymous")
+        guard = MagicMock()
+
+        with patch("manuspectrum.views.iiif_annotation.user_can_read_resource", guard):
+            self.assertTrue(
+                self.mixin._is_public_payload(
+                    user, resource, [self.a, self.b], [self.a, self.b]
+                )
+            )
+
+        guard.assert_not_called()
 
 
 class TestChildPermissionsInViews(TestCase):
@@ -2039,6 +2058,7 @@ class TestChildPermissionsInViews(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertIn("No analyses found", response.content.decode())
+        self.assertEqual(response["Cache-Control"], "private, no-store")
 
     def test_single_annotation_of_a_restricted_analysis_is_private(self):
         from manuspectrum.views.iiif_annotation import IIIFAnnotationView

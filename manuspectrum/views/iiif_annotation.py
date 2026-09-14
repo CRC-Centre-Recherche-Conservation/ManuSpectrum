@@ -86,6 +86,13 @@ def get_cached_response(cache_key: str) -> HttpResponse | None:
     return resp
 
 
+def _private_json(data: dict, status: int) -> JsonResponse:
+    """A reader-dependent answer that no shared cache may store."""
+    resp = JsonResponse(data, status=status)
+    resp["Cache-Control"] = "private, no-store"
+    return resp
+
+
 # ======================================================================================
 # Mixin with shared helpers
 # ======================================================================================
@@ -119,7 +126,7 @@ class IIIFAnnotationMixin:
                 "SetAnonymousUser did not install the anonymous user",
                 getattr(resource, "resourceinstanceid", resource),
             )
-        return JsonResponse({"error": "forbidden"}, status=403)
+        return _private_json({"error": "forbidden"}, 403)
 
     def _readable_by(self, user, resources):
         """The subset of *resources* that *user* may read, in the same order.
@@ -145,21 +152,29 @@ class IIIFAnnotationMixin:
         return all(user_can_read_resource(anonymous, resource=r) for r in resources)
 
     def _readable_analyses(self, user, resource):
-        """(the analyses *user* may read, every analysis related to *resource*)."""
+        """Return (the analyses *user* may read, every analysis related to *resource*).
+
+        The related set comes from
+        IIIFAnnotationCollectionView._get_related_analyses on a fresh view.
+        """
         related = IIIFAnnotationCollectionView()._get_related_analyses(resource)
         return self._readable_by(user, related), related
 
-    def _is_public_payload(self, resource, related, analyses):
+    def _is_public_payload(self, user, resource, related, analyses):
         """True iff this payload is what the anonymous reader would get.
 
         Covers every related analysis, readable or not: a restricted sibling
         makes the payload reader-dependent. The length check covers the
         reverse case, a resource the anonymous row may read but this caller
-        may not, whose shorter payload must not reach the shared key.
+        may not, whose shorter payload must not reach the shared key. An
+        anonymous caller is the public reader itself: the guard and the filter
+        it just passed are the decision.
         """
-        return len(analyses) == len(related) and self._public_for_anonymous(
-            [resource, *related]
-        )
+        if len(analyses) != len(related):
+            return False
+        if getattr(user, "username", None) == "anonymous":
+            return True
+        return self._public_for_anonymous([resource, *related])
 
     def _get_display_name(self, resource: ResourceInstance):
         if hasattr(resource, "displayname"):
@@ -427,9 +442,9 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
             analyses, related = self._readable_analyses(request.user, resource)
             if not analyses:
-                return JsonResponse({"error": "No analyses found"}, status=404)
+                return _private_json({"error": "No analyses found"}, 404)
 
-            public = self._is_public_payload(resource, related, analyses)
+            public = self._is_public_payload(request.user, resource, related, analyses)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
@@ -638,9 +653,9 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
             analyses, related = self._readable_analyses(request.user, resource)
             if not analyses:
-                return JsonResponse({"error": "No analyses found"}, status=404)
+                return _private_json({"error": "No analyses found"}, 404)
 
-            public = self._is_public_payload(resource, related, analyses)
+            public = self._is_public_payload(request.user, resource, related, analyses)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
@@ -661,7 +676,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
                     break
 
             if not canvas_uri:
-                return JsonResponse({"error": "Page not found"}, status=404)
+                return _private_json({"error": "Page not found"}, 404)
 
             annos = grouped[canvas_uri]
 
@@ -792,9 +807,9 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
 
             analyses, related = self._readable_analyses(request.user, resource)
             if not analyses:
-                return JsonResponse({"error": "No analyses found"}, status=404)
+                return _private_json({"error": "No analyses found"}, 404)
 
-            public = self._is_public_payload(resource, related, analyses)
+            public = self._is_public_payload(request.user, resource, related, analyses)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
@@ -881,9 +896,9 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
 
             analyses, related = self._readable_analyses(request.user, resource)
             if not analyses:
-                return JsonResponse({"error": "No analyses found"}, status=404)
+                return _private_json({"error": "No analyses found"}, 404)
 
-            public = self._is_public_payload(resource, related, analyses)
+            public = self._is_public_payload(request.user, resource, related, analyses)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
@@ -904,7 +919,7 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
                     break
 
             if not canvas_uri:
-                return JsonResponse({"error": "Page not found"}, status=404)
+                return _private_json({"error": "Page not found"}, 404)
 
             annos = grouped[canvas_uri]
 
