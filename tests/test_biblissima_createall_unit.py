@@ -587,6 +587,7 @@ class DanglingProjectTests(CreateAllBase):
         self.mock_index.assert_called_once()
         # The valid project is linked for its survivor.
         self.mock_link.assert_called_once()
+        self.assertEqual(self.mock_link.call_args.args[3].username, "importer")
 
     def test_non_string_project_reported_failed(self):
         # FIX I-2: a non-string (numeric/array) project value must NOT slip past

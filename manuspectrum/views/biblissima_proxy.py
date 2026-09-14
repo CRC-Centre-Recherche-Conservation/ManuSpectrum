@@ -2586,10 +2586,10 @@ class BiblissimaCreateResourceView(View):
     Editor's write is authoritative at once, and their edit log names the
     requesting user. The project link (``_link_to_project``,
     ``_link_to_project_batch``) and ``BiblissimaAddAltNameView`` save through
-    ``Tile.save()`` without a user: provisional edits do not apply there
-    either, and their edit-log rows carry no user. Passing a user to those
-    saves would make them provisional edits for a non-reviewer. The endpoints
-    are restricted to ``EDITOR_GROUPS``.
+    ``Tile.save()`` without a user, so provisional edits do not apply there
+    either; ``_attribute_tile_save`` then names the requesting user on the
+    edit-log rows those saves wrote. The endpoints are restricted to
+    ``EDITOR_GROUPS``.
     """
 
     # Graph ID mapping for all supported resource types
@@ -2823,7 +2823,7 @@ class BiblissimaCreateResourceView(View):
             # The project link writes a tile on the project through
             # Tile.save(), after the flush of this resource's own tiles.
             if project_id:
-                self._link_to_project(resource_id, project_id, transaction_id)
+                self._link_to_project(resource_id, project_id, transaction_id, user)
 
         # The project tile is saved with index=False, so the project is
         # re-indexed here with the new resource.
@@ -3054,6 +3054,35 @@ class BiblissimaCreateResourceView(View):
         self._validate_tiles(tiles, nodes_by_id, factory)
         self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
 
+    @staticmethod
+    def _editlog_user_fields(user):
+        """``EditLog`` user columns for *user*: a null id and empty names when
+        *user* is ``None``."""
+        return {
+            "userid": (
+                str(user.id) if user is not None and getattr(user, "id", None) else None
+            ),
+            "user_username": getattr(user, "username", "") or "",
+            "user_firstname": getattr(user, "first_name", "") or "",
+            "user_lastname": getattr(user, "last_name", "") or "",
+            "user_email": getattr(user, "email", "") or "",
+        }
+
+    def _attribute_tile_save(self, tileid, transaction_id, user):
+        """Name *user* on the edit-log rows a user-less ``Tile.save()`` wrote.
+
+        Biblissima calls ``Tile.save()`` without a user: for a user who is not
+        a resource reviewer, Arches would store the write as a provisional
+        edit. Arches then records an empty user id; this replaces it on the
+        rows of *tileid* under *transaction_id*. Call it inside the
+        transaction of the save.
+        """
+        from arches.app.models.models import EditLog
+
+        EditLog.objects.filter(
+            transactionid=transaction_id, tileinstanceid=str(tileid), userid=""
+        ).update(**self._editlog_user_fields(user))
+
     def _write_editlog(self, tiles, resource, user, tx_id):
         """Build one ``EditLog`` row per tile and bulk-insert them.
 
@@ -3067,13 +3096,7 @@ class BiblissimaCreateResourceView(View):
 
         displayname = resource.displayname()
 
-        user_id = (
-            str(user.id) if user is not None and getattr(user, "id", None) else None
-        )
-        user_username = getattr(user, "username", "") or ""
-        user_firstname = getattr(user, "first_name", "") or ""
-        user_lastname = getattr(user, "last_name", "") or ""
-        user_email = getattr(user, "email", "") or ""
+        user_fields = self._editlog_user_fields(user)
 
         now = timezone.now()
         fallback_tx = tx_id or uuid.uuid4()
@@ -3090,11 +3113,7 @@ class BiblissimaCreateResourceView(View):
                 newvalue=t.data,
                 oldvalue={},
                 timestamp=now,
-                userid=user_id,
-                user_username=user_username,
-                user_firstname=user_firstname,
-                user_lastname=user_lastname,
-                user_email=user_email,
+                **user_fields,
                 note="resource creation",
             )
             for t in tiles
@@ -3919,7 +3938,7 @@ class BiblissimaCreateResourceView(View):
                 parenttile=item_feature_tile,
             )
 
-    def _link_to_project(self, resource_id, project_id, transaction_id):
+    def _link_to_project(self, resource_id, project_id, transaction_id, user):
         """Add the created resource to the project's Studied Objects.
 
         Locks the project's ResourceInstance row (``select_for_update``) for the
@@ -3928,6 +3947,9 @@ class BiblissimaCreateResourceView(View):
         tile (a lock on the not-yet-existing Tile row would protect nothing).
         MUST run inside a transaction — callers wrap it in
         ``transaction.atomic()``.
+
+        The tile is saved under *transaction_id* (a fresh one when ``None``)
+        and the edit is attributed to *user* through ``_attribute_tile_save``.
         """
         # Validate project_id is a proper UUID
         try:
@@ -3937,6 +3959,7 @@ class BiblissimaCreateResourceView(View):
             return
 
         project_id = str(project_uuid)
+        transaction_id = transaction_id or uuid.uuid4()
 
         # Serialize concurrent linkers on the project row itself. A missing
         # project means the link target is gone — skip rather than raise a
@@ -3977,7 +4000,8 @@ class BiblissimaCreateResourceView(View):
             # inline here (default index=True) runs a synchronous ES write inside
             # _create_resource's atomic() -> a transient ES outage would raise
             # and roll back the freshly-created resource (500 on a good create).
-            existing.save(index=False)
+            existing.save(index=False, transaction_id=transaction_id)
+            self._attribute_tile_save(existing.tileid, transaction_id, user)
         else:
             # Direct Tile.save() — this writes one tile on the *project*
             # (a different resource than the one being created), and
@@ -3992,9 +4016,8 @@ class BiblissimaCreateResourceView(View):
                 data={PROJECT_STUDIED_OBJECTS_NODE: [new_ref]},
                 sortorder=0,
             )
-            if transaction_id:
-                tile.transaction_id = transaction_id
-            tile.save(index=False)
+            tile.save(index=False, transaction_id=transaction_id)
+            self._attribute_tile_save(tile.tileid, transaction_id, user)
 
     def _bulk_create_resources(self, graph_id, n, user, ids=None):
         """Bulk-create ``n`` ResourceInstance rows for the given graph in one INSERT.
@@ -4061,7 +4084,7 @@ class BiblissimaCreateResourceView(View):
         ResourceInstance.objects.bulk_create(instances)
         return [inst.resourceinstanceid for inst in instances]
 
-    def _link_to_project_batch(self, created_ids, project_id, tx_id):
+    def _link_to_project_batch(self, created_ids, project_id, tx_id, user):
         """Link a batch of newly-created resources to the project's Studied Objects
         tile in a single locked read-modify-write.
 
@@ -4079,6 +4102,8 @@ class BiblissimaCreateResourceView(View):
         buffer) because the project is a different resource needing its own
         descriptor refresh, and ``_flush_tile_buffer`` only handles the
         resource currently being imported.
+
+        The edit is attributed to *user* through ``_attribute_tile_save``.
         """
         # Lock the project ROW first so concurrent batches serialise even when
         # the studied-objects tile does not exist yet: a select_for_update on the
@@ -4093,6 +4118,7 @@ class BiblissimaCreateResourceView(View):
         if project_row is None:
             logger.warning("Project %s does not exist; skipping batch link", project_id)
             return
+        tx_id = tx_id or uuid.uuid4()
 
         existing = (
             Tile.objects.select_for_update()
@@ -4122,6 +4148,7 @@ class BiblissimaCreateResourceView(View):
                     present_ids.add(ref["resourceId"])
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
             existing.save(index=False, transaction_id=tx_id)
+            self._attribute_tile_save(existing.tileid, tx_id, user)
         else:
             tile = Tile(
                 tileid=uuid.uuid4(),
@@ -4131,6 +4158,7 @@ class BiblissimaCreateResourceView(View):
                 sortorder=0,
             )
             tile.save(index=False, transaction_id=tx_id)
+            self._attribute_tile_save(tile.tileid, tx_id, user)
 
     def _resource_instance_ref(self, resource_id):
         """Build a resource-instance reference for a single resource.
@@ -4407,7 +4435,9 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                         if project_id:
                             by_project.setdefault(str(project_id), []).append(rid)
                     for project_id, ids in by_project.items():
-                        self._link_to_project_batch(ids, project_id, batch_tx)
+                        self._link_to_project_batch(
+                            ids, project_id, batch_tx, request.user
+                        )
             except Exception:
                 # ANY Pass-2 failure rolls this atomic back -> no survivor
                 # committed -> unattributed 500 (Hole 1). Manifests imported in
@@ -4431,6 +4461,8 @@ class BiblissimaAddAltNameView(View):
 
     def post(self, request):
         import json
+
+        from django.db import transaction
 
         try:
             body = json.loads(request.body)
@@ -4479,7 +4511,10 @@ class BiblissimaAddAltNameView(View):
                 },
                 sortorder=0,
             )
-            tile.save(index=False)
+            transaction_id = uuid.uuid4()
+            with transaction.atomic():
+                tile.save(index=False, transaction_id=transaction_id)
+                creator._attribute_tile_save(tile.tileid, transaction_id, request.user)
 
             # Route through the defer seam (post-commit; honors
             # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
@@ -4559,7 +4594,7 @@ class BiblissimaLinkToProjectView(View):
             return JsonResponse({"error": "Invalid UUID"}, status=400)
 
         # Reuse the helper on BiblissimaCreateResourceView so the dedup logic
-        # stays in a single place. transaction_id is None for ad-hoc links.
+        # stays in a single place. An ad-hoc link gets a transaction id of its own.
         # _link_to_project takes a select_for_update row lock, so it MUST run
         # inside a transaction.
         creator = BiblissimaCreateResourceView()
@@ -4569,6 +4604,7 @@ class BiblissimaLinkToProjectView(View):
                     resource_id,
                     project_id,
                     transaction_id=None,
+                    user=request.user,
                 )
         except Exception:
             logger.exception(

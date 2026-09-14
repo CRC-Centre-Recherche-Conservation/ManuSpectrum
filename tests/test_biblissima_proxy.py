@@ -1969,9 +1969,10 @@ class LinkToProjectIdempotenceTests(TestCase):
             ]
         }
         mock_tile.objects.filter.return_value.first.return_value = existing
+        user = MagicMock(name="user")
 
         view = BiblissimaCreateResourceView()
-        view._link_to_project(rid, pid, transaction_id=None)
+        view._link_to_project(rid, pid, transaction_id=None, user=user)
 
         # The tile data must still contain exactly one ref.
         self.assertEqual(
@@ -1981,9 +1982,14 @@ class LinkToProjectIdempotenceTests(TestCase):
         )
         existing.save.assert_not_called()
 
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCreateResourceView._attribute_tile_save"
+    )
     @patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
     @patch("manuspectrum.views.biblissima_proxy.Tile")
-    def test_appends_when_resource_not_yet_linked(self, mock_tile, mock_ri):
+    def test_appends_when_resource_not_yet_linked(
+        self, mock_tile, mock_ri, mock_attribute
+    ):
         from manuspectrum.views.biblissima_proxy import (
             BiblissimaCreateResourceView,
             PROJECT_STUDIED_OBJECTS_NODE,
@@ -1991,6 +1997,7 @@ class LinkToProjectIdempotenceTests(TestCase):
 
         rid = "11111111-1111-1111-1111-111111111111"
         pid = "22222222-2222-2222-2222-222222222222"
+        user = MagicMock(name="user")
 
         # The project row exists and is locked (select_for_update).
         mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value = (
@@ -2002,7 +2009,7 @@ class LinkToProjectIdempotenceTests(TestCase):
         mock_tile.objects.filter.return_value.first.return_value = existing
 
         view = BiblissimaCreateResourceView()
-        view._link_to_project(rid, pid, transaction_id=None)
+        view._link_to_project(rid, pid, transaction_id=None, user=user)
 
         self.assertEqual(len(existing.data[PROJECT_STUDIED_OBJECTS_NODE]), 1)
         self.assertEqual(
@@ -2013,7 +2020,12 @@ class LinkToProjectIdempotenceTests(TestCase):
         # synchronous ES write never runs inside _create_resource's atomic()
         # (a transient ES outage would otherwise roll back a good create). The
         # project is re-indexed post-commit via _create_resource's defer set.
-        existing.save.assert_called_once_with(index=False)
+        existing.save.assert_called_once()
+        save_kwargs = existing.save.call_args.kwargs
+        self.assertIs(save_kwargs["index"], False)
+        mock_attribute.assert_called_once_with(
+            existing.tileid, save_kwargs["transaction_id"], user
+        )
 
     @patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
     @patch("manuspectrum.views.biblissima_proxy.Tile")
@@ -2029,9 +2041,10 @@ class LinkToProjectIdempotenceTests(TestCase):
         mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value = (
             None
         )
+        user = MagicMock(name="user")
 
         view = BiblissimaCreateResourceView()
-        view._link_to_project(rid, pid, transaction_id=None)
+        view._link_to_project(rid, pid, transaction_id=None, user=user)
 
         # No tile read/write happens for a missing project.
         mock_tile.objects.filter.assert_not_called()
@@ -2058,6 +2071,7 @@ class BiblissimaLinkToProjectViewTests(TestCase):
             data=body,
             content_type="application/json",
         )
+        req.user = MagicMock()
         view = BiblissimaLinkToProjectView()
         resp = view.post(req)
         self.assertEqual(resp.status_code, 200)
@@ -2085,6 +2099,7 @@ class BiblissimaLinkToProjectViewTests(TestCase):
             data=body,
             content_type="application/json",
         )
+        req.user = MagicMock()
         view = BiblissimaLinkToProjectView()
         resp = view.post(req)
         self.assertEqual(resp.status_code, 200)

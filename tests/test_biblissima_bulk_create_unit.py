@@ -35,6 +35,8 @@ from unittest.mock import MagicMock, call, patch
 
 from django.test import TestCase
 
+from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
 # ---------------------------------------------------------------------------
 # Patch targets
 # ---------------------------------------------------------------------------
@@ -305,6 +307,12 @@ class LinkToProjectBatchTests(TestCase):
         (
             self.mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value
         ) = MagicMock(name="project_row")
+        attribute_patcher = patch.object(
+            BiblissimaCreateResourceView, "_attribute_tile_save"
+        )
+        self.mock_attribute = attribute_patcher.start()
+        self.addCleanup(attribute_patcher.stop)
+        self.user = MagicMock(name="user")
 
     # -----------------------------------------------------------------------
     # Helper: make a mock existing tile
@@ -340,7 +348,7 @@ class LinkToProjectBatchTests(TestCase):
         self._setup_tile_query(MockTile, self._existing_tile())
 
         view = _make_view()
-        view._link_to_project_batch([uuid.uuid4()], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([uuid.uuid4()], PROJECT_ID, TX_ID, self.user)
 
         MockTile.objects.select_for_update.assert_called()
 
@@ -355,7 +363,7 @@ class LinkToProjectBatchTests(TestCase):
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
-        view._link_to_project_batch([pre_existing_id], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([pre_existing_id], PROJECT_ID, TX_ID, self.user)
 
         saved_data = existing.data[PROJECT_STUDIED_OBJECTS_NODE]
         ids_in_tile = [ref["resourceId"] for ref in saved_data]
@@ -374,7 +382,7 @@ class LinkToProjectBatchTests(TestCase):
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
-        view._link_to_project_batch([new_id_a, new_id_b], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([new_id_a, new_id_b], PROJECT_ID, TX_ID, self.user)
 
         saved_data = existing.data[PROJECT_STUDIED_OBJECTS_NODE]
         ids_in_tile = {ref["resourceId"] for ref in saved_data}
@@ -391,7 +399,7 @@ class LinkToProjectBatchTests(TestCase):
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
-        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID, self.user)
 
         existing.save.assert_called_once_with(index=False, transaction_id=TX_ID)
 
@@ -409,7 +417,7 @@ class LinkToProjectBatchTests(TestCase):
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
-        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, tx)
+        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, tx, self.user)
 
         existing.save.assert_called_once_with(index=False, transaction_id=tx)
         # The inert attribute assignment must be gone (it was the bug).
@@ -427,7 +435,7 @@ class LinkToProjectBatchTests(TestCase):
 
         rid = str(uuid.uuid4())
         view = _make_view()
-        view._link_to_project_batch([rid], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([rid], PROJECT_ID, TX_ID, self.user)
 
         MockTile.assert_called_once()
         new_tile_mock.save.assert_called_once_with(index=False, transaction_id=TX_ID)
@@ -445,7 +453,7 @@ class LinkToProjectBatchTests(TestCase):
         ) = None
 
         view = _make_view()
-        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID, self.user)
 
         MockTile.objects.select_for_update.assert_not_called()
         MockTile.assert_not_called()
@@ -462,7 +470,7 @@ class LinkToProjectBatchTests(TestCase):
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
-        view._link_to_project_batch([old_id, new_id], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([old_id, new_id], PROJECT_ID, TX_ID, self.user)
 
         saved_data = existing.data[PROJECT_STUDIED_OBJECTS_NODE]
         ids_in_tile = [ref["resourceId"] for ref in saved_data]
@@ -477,15 +485,16 @@ class LinkToProjectBatchTests(TestCase):
     # B.8 — tx_id=None: existing tile NOT tagged, save still called
     # -----------------------------------------------------------------------
     @patch(PATCH_TILE)
-    def test_tx_id_none_passes_none_transaction(self, MockTile):
-        """When tx_id=None on an existing tile, save is still called once with
-        ``transaction_id=None`` (Arches then assigns a default uuid), and the
-        inert attribute is never set on the tile."""
+    def test_tx_id_none_saves_under_a_fresh_transaction(self, MockTile):
+        """When tx_id=None, the tile is saved under a fresh transaction id, which
+        the attribution then uses; the inert attribute is never set on the tile."""
         existing = self._existing_tile()
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
-        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, tx_id=None)
+        view._link_to_project_batch(
+            [str(uuid.uuid4())], PROJECT_ID, tx_id=None, user=self.user
+        )
 
         # The inert `existing.transaction_id = tx_id` assignment is gone, so
         # "transaction_id" must not appear in the mock's __dict__.
@@ -494,7 +503,12 @@ class LinkToProjectBatchTests(TestCase):
             existing.__dict__,
             msg="transaction_id must not be assigned as an attribute",
         )
-        existing.save.assert_called_once_with(index=False, transaction_id=None)
+        existing.save.assert_called_once()
+        transaction_id = existing.save.call_args.kwargs["transaction_id"]
+        self.assertIsInstance(transaction_id, uuid.UUID)
+        self.mock_attribute.assert_called_once_with(
+            existing.tileid, transaction_id, self.user
+        )
 
     # -----------------------------------------------------------------------
     # B.9 — new tile (no existing): tagged with tx_id
@@ -509,7 +523,7 @@ class LinkToProjectBatchTests(TestCase):
         MockTile.return_value = new_tile_mock
 
         view = _make_view()
-        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([str(uuid.uuid4())], PROJECT_ID, TX_ID, self.user)
 
         new_tile_mock.save.assert_called_once_with(index=False, transaction_id=TX_ID)
         # The inert attribute assignment must be gone (it was the bug).
@@ -527,7 +541,7 @@ class LinkToProjectBatchTests(TestCase):
         self._setup_tile_query(MockTile, existing)
 
         view = _make_view()
-        view._link_to_project_batch([new_id], PROJECT_ID, TX_ID)
+        view._link_to_project_batch([new_id], PROJECT_ID, TX_ID, self.user)
 
         saved_data = existing.data[PROJECT_STUDIED_OBJECTS_NODE]
         self.assertEqual(len(saved_data), 1)

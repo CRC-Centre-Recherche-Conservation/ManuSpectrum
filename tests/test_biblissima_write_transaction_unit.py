@@ -253,3 +253,23 @@ class DependencyCreateRecordsItsCreatorTests(WriteTransactionHarness):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.editlog_users, [self.user])
+
+
+class UnitaryCreateAttributesTheProjectLinkTests(WriteTransactionHarness):
+    def test_the_project_link_receives_the_requesting_user(self):
+        project_id = str(uuid.uuid4())
+        self.mock_ri.objects.filter.return_value.values_list.return_value = [project_id]
+
+        self.view._create_resource(
+            graph_id="graph-fake",
+            resource_type="Document",
+            transaction_id=None,
+            bbma_data={"label": "Latin 40"},
+            dependencies={"project": project_id},
+            concept_mappings={},
+            user=self.user,
+        )
+
+        BiblissimaCreateResourceView._link_to_project.assert_called_once_with(
+            self.rid, project_id, None, self.user
+        )
