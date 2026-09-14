@@ -121,6 +121,29 @@ class IIIFAnnotationMixin:
             )
         return JsonResponse({"error": "forbidden"}, status=403)
 
+    def _readable_by(self, user, resources):
+        """The subset of *resources* that *user* may read, in the same order.
+
+        Instance permissions are Arches' own: a resource with no explicit
+        grant falls back to the reader's nodegroup rights, a resource with a
+        grant is readable only by the users and groups named on it.
+        """
+        return [r for r in resources if user_can_read_resource(user, resource=r)]
+
+    def _public_for_anonymous(self, resources):
+        """True iff the Arches ``anonymous`` user may read every resource.
+
+        This is the reader `SetAnonymousUser` installs on an unauthenticated
+        request, so it decides whether a payload is the same for everyone.
+        Without that row nothing is public.
+        """
+        from django.contrib.auth.models import User
+
+        anonymous = User.objects.filter(username="anonymous").first()
+        if anonymous is None:
+            return False
+        return all(user_can_read_resource(anonymous, resource=r) for r in resources)
+
     def _get_display_name(self, resource: ResourceInstance):
         if hasattr(resource, "displayname"):
             displayname = resource.displayname

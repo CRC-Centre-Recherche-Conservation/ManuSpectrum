@@ -1705,3 +1705,73 @@ class TestAnonymousStillReadsPublicIIIF(TestCase):
                 response.wsgi_request, resource
             )
         )
+
+
+class TestChildPermissionHelpers(TestCase):
+    def setUp(self):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+
+        self.mixin = IIIFAnnotationMixin()
+        self.user = MagicMock(is_authenticated=True)
+        self.a = MagicMock(resourceinstanceid="a")
+        self.b = MagicMock(resourceinstanceid="b")
+
+    def test_readable_by_keeps_only_resources_the_user_may_read(self):
+        def decide(user, resource=None):
+            return resource is self.a
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            side_effect=decide,
+        ):
+            kept = self.mixin._readable_by(self.user, [self.a, self.b])
+
+        self.assertEqual(kept, [self.a])
+
+    def test_readable_by_preserves_order(self):
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        ):
+            kept = self.mixin._readable_by(self.user, [self.b, self.a])
+
+        self.assertEqual(kept, [self.b, self.a])
+
+    def test_public_for_anonymous_is_true_when_every_resource_is_readable(self):
+        from django.contrib.auth.models import User
+
+        anonymous = User.objects.get(username="anonymous")
+        seen = []
+
+        def decide(user, resource=None):
+            seen.append(user)
+            return True
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            side_effect=decide,
+        ):
+            self.assertTrue(self.mixin._public_for_anonymous([self.a, self.b]))
+
+        self.assertEqual(seen, [anonymous, anonymous])
+
+    def test_public_for_anonymous_is_false_when_one_resource_is_restricted(self):
+        def decide(user, resource=None):
+            return resource is self.a
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            side_effect=decide,
+        ):
+            self.assertFalse(self.mixin._public_for_anonymous([self.a, self.b]))
+
+    def test_public_for_anonymous_is_false_without_the_anonymous_row(self):
+        from django.contrib.auth.models import User
+
+        User.objects.filter(username="anonymous").delete()
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        ):
+            self.assertFalse(self.mixin._public_for_anonymous([self.a]))
