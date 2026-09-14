@@ -20,11 +20,14 @@ Two surface areas:
   but the endpoints are generic: they take a ``resourceType`` + payload
   and don't assume a specific UI flow.
 
-Outbound HTTP all goes through ``_build_biblissima_session()`` +
-``_bib_request()``, which share a module-level concurrency semaphore and
-force ``Accept-Language: fr`` so that scraped portal field labels
-(``Type :``, ``Lieu de fabrication :``, …) always match our French field
-map regardless of the end-user's browser locale.
+Outbound HTTP goes through ``_bib_request()`` on a session built by
+``_build_biblissima_session()``; the search view and the enrichment use the
+process-wide ``_get_biblissima_session()``. ``_bib_request()`` holds a slot of
+a concurrency semaphore that is per worker process: a request that waits
+longer than ``BIBLISSIMA_SLOT_TIMEOUT`` for a slot gets ``BiblissimaBusy``,
+answered 503. Sessions force ``Accept-Language: fr`` so that scraped portal
+field labels (``Type :``, ``Lieu de fabrication :``, …) always match our
+French field map regardless of the end-user's browser locale.
 
 ## Attention points for devs
 
@@ -1279,7 +1282,7 @@ def _enrich_canvases(canvases, session=None):
     Only the manuscripts referenced by the given canvases are resolved, which
     makes it cheap to call on a page slice rather than on the whole result set.
     A manuscript record is cached only when its lookup, its candidate entities
-    and its author and nature entities all resolved.
+    up to the matching one and its author and nature entities all resolved.
 
     *session* (default: the shared session) serves the caller-thread batch
     calls and is not closed here; the CirrusSearch pool uses one session per
@@ -1327,6 +1330,7 @@ def _enrich_canvases(canvases, session=None):
     # search returns the correct entity in the top results, and the
     # Phase 2d ``portalHash == ark_hash`` filter rejects any false
     # positive — so reconciliation is done without scraping.
+
     # requests.Session is not thread-safe: each pool thread gets its own,
     # closed once the pool has finished.
     thread_local = threading.local()
@@ -1413,21 +1417,26 @@ def _enrich_canvases(canvases, session=None):
 
     # Phase 2d: match each manuscript to its QID via portalHash, and
     # collect both author and nature (P2) QIDs for the batch fetch.
+    # A candidate absent from the batch marks the manuscript incomplete only
+    # when it comes before the match or is the match; with no match, every
+    # candidate counts.
     author_qids = set()
     nature_qids = set()
     for ark_hash, candidate_qids in candidates_by_ark_hash.items():
-        if any(qid not in entities_by_qid for qid in candidate_qids):
-            incomplete.add(ark_hash)
         ms_data = {}
-        for qid in candidate_qids:
+        examined_qids = candidate_qids
+        for position, qid in enumerate(candidate_qids):
             entity = entities_by_qid.get(qid)
             if entity and entity.get("portalHash") == ark_hash:
+                examined_qids = candidate_qids[: position + 1]
                 ms_data = dict(entity)
                 if ms_data.get("author"):
                     author_qids.add(ms_data["author"])
                 if ms_data.get("documentNatureQid"):
                     nature_qids.add(ms_data["documentNatureQid"])
                 break
+        if any(qid not in entities_by_qid for qid in examined_qids):
+            incomplete.add(ark_hash)
         resolved_manuscripts[ark_hash] = ms_data
 
     # Phase 2e: batch-fetch authors and natures together (single round-trip).
@@ -2812,10 +2821,13 @@ class BiblissimaCreateResourceView(View):
 
         Dependency checks, tile building and staging (validation and
         ``pre_tile_save``, which may fetch a IIIF manifest over HTTP) run
-        before any transaction opens. The resource row, its tiles, their edit
-        log and the project link are then written in one
-        ``transaction.atomic()``; a failure rolls all of them back.
-        Elasticsearch indexing runs after the commit.
+        before any transaction opens. A IIIF manifest imported by
+        ``pre_tile_save`` is committed on its own and stays if the create then
+        fails. The resource row, its tiles, their edit log and the project
+        link are then written in one ``transaction.atomic()``; a failure rolls
+        all of them back. Elasticsearch indexing runs after the commit. A
+        missing *transaction_id* is replaced by a fresh one shared by every
+        edit-log row of the create.
 
         Tiles are buffered and flushed via two bulk INSERTs (tiles +
         edit_log) plus a single ``save_descriptors`` UPDATE on the
@@ -2828,6 +2840,7 @@ class BiblissimaCreateResourceView(View):
         from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
 
+        transaction_id = transaction_id or uuid.uuid4()
         self._tile_buffer = []
 
         valid_dep_ids = self._precollect_valid_dep_ids([{"dependencies": dependencies}])
@@ -4285,10 +4298,11 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         ]}
 
     Integration task (Phase 3.4). Inherits ALL write-path primitives from
-    :class:`BiblissimaCreateResourceView` (``_validate_tiles``, ``_run_hook``, ``_write_editlog``, the tile builders,
-    ``_batch_save_descriptors``, ``_bulk_create_resources``,
-    ``_link_to_project_batch``) — nothing is redefined, so a patch on the base
-    class is observed here.
+    :class:`BiblissimaCreateResourceView`: ``_stage_tiles`` for Pass 1 (it runs
+    ``_validate_tiles`` and ``_run_hook``), ``_run_hook``, ``_write_editlog``,
+    the tile builders, ``_batch_save_descriptors``, ``_bulk_create_resources``
+    and ``_link_to_project_batch``. Nothing is redefined, so a patch on the
+    base class is observed here.
 
     Two passes, best effort
     -----------------------
@@ -4498,7 +4512,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                         )
             except Exception:
                 # ANY Pass-2 failure rolls this atomic back -> no survivor
-                # committed -> unattributed 500 (Hole 1). Manifests imported in
+                # committed -> unattributed 500. Manifests imported in
                 # Pass 1 remain (benign/dedupable).
                 logger.exception("Biblissima batch creation failed")
                 return JsonResponse({"error": "Batch creation failed"}, status=500)

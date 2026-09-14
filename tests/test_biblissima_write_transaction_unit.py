@@ -1,7 +1,7 @@
 """Where the Biblissima write paths run relative to the DB transaction.
 
 ``transaction.atomic`` is replaced by a context manager that records when it is
-open; the primitives record whether they ran inside it. No DB, no network.
+open; the primitives record whether they ran inside it. No network.
 
 Run:
     /home/rayondemiel/venv/bin/python manage.py test \\
@@ -47,6 +47,7 @@ class WriteTransactionHarness(TestCase):
         self.events = []
         self.in_transaction = False
         self.editlog_users = []
+        self.editlog_transactions = []
         self.user = SimpleNamespace(
             id=7, username="editor", first_name="", last_name="", email=""
         )
@@ -92,6 +93,7 @@ class WriteTransactionHarness(TestCase):
         def write_editlog(tiles, resource, user, tx_id):
             self.events.append(("editlog", self.in_transaction))
             self.editlog_users.append(user)
+            self.editlog_transactions.append(tx_id)
 
         self._start(
             patch.object(
@@ -175,7 +177,11 @@ class UnitaryCreateStagesBeforeTheTransactionTests(WriteTransactionHarness):
     def test_the_flush_reuses_the_graph_read_for_staging(self):
         self._create_document()
 
-        self.resource.set_serialized_graph.assert_called_once_with({"nodes": []})
+        self.resource.set_serialized_graph.assert_called_once()
+        self.assertIs(
+            self.resource.set_serialized_graph.call_args.args[0],
+            self.mock_resource_cls.return_value.get_serialized_graph.return_value,
+        )
 
 
 class DependencyCreateStagesBeforeTheTransactionTests(WriteTransactionHarness):
@@ -198,7 +204,8 @@ class DependencyCreateStagesBeforeTheTransactionTests(WriteTransactionHarness):
     def test_a_failing_hook_opens_no_transaction_and_writes_no_row(self):
         self._fail_pre_tile_save()
 
-        response = self._create_person()
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", level="ERROR"):
+            response = self._create_person()
 
         self.assertEqual(response.status_code, 500)
         self.assertNotIn("atomic:enter", self.events)
@@ -256,10 +263,8 @@ class DependencyCreateRecordsItsCreatorTests(WriteTransactionHarness):
 
 
 class UnitaryCreateAttributesTheProjectLinkTests(WriteTransactionHarness):
-    def test_the_project_link_receives_the_requesting_user(self):
-        project_id = str(uuid.uuid4())
+    def _create_document_in_project(self, project_id):
         self.mock_ri.objects.filter.return_value.values_list.return_value = [project_id]
-
         self.view._create_resource(
             graph_id="graph-fake",
             resource_type="Document",
@@ -270,6 +275,22 @@ class UnitaryCreateAttributesTheProjectLinkTests(WriteTransactionHarness):
             user=self.user,
         )
 
-        BiblissimaCreateResourceView._link_to_project.assert_called_once_with(
-            self.rid, project_id, None, self.user
-        )
+    def test_the_project_link_receives_the_requesting_user(self):
+        project_id = str(uuid.uuid4())
+
+        self._create_document_in_project(project_id)
+
+        BiblissimaCreateResourceView._link_to_project.assert_called_once()
+        args = BiblissimaCreateResourceView._link_to_project.call_args.args
+        self.assertEqual(args[:2], (self.rid, project_id))
+        self.assertIsInstance(args[2], uuid.UUID)
+        self.assertIs(args[3], self.user)
+
+    def test_a_create_without_transaction_id_logs_every_row_under_one_transaction(
+        self,
+    ):
+        self._create_document_in_project(str(uuid.uuid4()))
+
+        link_args = BiblissimaCreateResourceView._link_to_project.call_args.args
+        self.assertIsInstance(link_args[2], uuid.UUID)
+        self.assertEqual(self.editlog_transactions, [link_args[2]])

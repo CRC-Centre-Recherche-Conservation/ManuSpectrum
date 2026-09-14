@@ -482,7 +482,7 @@ class LinkToProjectBatchTests(TestCase):
         )
 
     # -----------------------------------------------------------------------
-    # B.8 — tx_id=None: existing tile NOT tagged, save still called
+    # B.8 — tx_id=None: saved under a fresh transaction, attributed
     # -----------------------------------------------------------------------
     @patch(PATCH_TILE)
     def test_tx_id_none_saves_under_a_fresh_transaction(self, MockTile):
