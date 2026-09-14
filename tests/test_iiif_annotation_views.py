@@ -125,6 +125,32 @@ class TestCachedJsonResponse(TestCase):
         # Data should still be cached
         self.assertIsNotNone(cache.get("test_key"))
 
+    def test_non_public_payload_is_not_written_to_the_cache(self):
+        from manuspectrum.views.iiif_annotation import cached_json_response
+
+        cached_json_response("restricted_key", {"a": 1}, public=False)
+
+        self.assertIsNone(cache.get("restricted_key"))
+        self.assertIsNone(cache.get("restricted_key__etag"))
+
+    def test_non_public_payload_is_marked_private_and_not_stored(self):
+        from manuspectrum.views.iiif_annotation import cached_json_response
+
+        response = cached_json_response("restricted_key", {"a": 1}, public=False)
+
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertIn("ETag", response)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'{"a":1}')
+
+    def test_public_payload_keeps_the_shared_cache_header(self):
+        from manuspectrum.views.iiif_annotation import cached_json_response
+
+        response = cached_json_response("public_key", {"a": 1})
+
+        self.assertEqual(response["Cache-Control"], "public, max-age=3600")
+        self.assertIsNotNone(cache.get("public_key"))
+
 
 class TestGetCachedResponse(TestCase):
     """Tests for get_cached_response function."""

@@ -38,23 +38,25 @@ def _cache_etag_key(cache_key: str) -> str:
 
 
 def cached_json_response(
-    cache_key: str, data: dict, timeout: int = 3600
+    cache_key: str, data: dict, timeout: int = 3600, *, public: bool = True
 ) -> HttpResponse:
-    """
-    Store or refresh compressed JSON in Redis and build an HTTP response with ETag.
+    """Serialize *data* and build the HTTP response with an ETag.
+
+    A public payload (the same for every reader) is stored in Redis under
+    *cache_key* and advertised to shared HTTP caches. A non-public payload is
+    never stored: the shared cache key is per resource, not per reader, and a
+    shared HTTP cache cannot run the read guard.
     """
     payload = orjson.dumps(data)
-    compressed = zlib.compress(payload)
     etag = hashlib.md5(payload).hexdigest()
-
-    cache.set(cache_key, compressed, timeout)
-    cache.set(_cache_etag_key(cache_key), etag, timeout)
-
     resp = HttpResponse(payload, content_type="application/json")
     resp["ETag"] = etag
-    # `public` is only correct while no resource is restricted: the read guard
-    # runs inside the view, and a shared HTTP cache cannot run it. Decision D1
-    # (issue #72) switches this to `private` when object permissions arrive.
+    if not public:
+        resp["Cache-Control"] = "private, no-store"
+        return resp
+    compressed = zlib.compress(payload)
+    cache.set(cache_key, compressed, timeout)
+    cache.set(_cache_etag_key(cache_key), etag, timeout)
     resp["Cache-Control"] = "public, max-age=3600"
     return resp
 
@@ -79,7 +81,7 @@ def get_cached_response(cache_key: str) -> HttpResponse | None:
     resp = HttpResponse(payload, content_type="application/json")
     if etag:
         resp["ETag"] = etag
-    # Same coupling as in cached_json_response.
+    # Only public payloads reach the shared cache; see cached_json_response.
     resp["Cache-Control"] = "public, max-age=3600"
     return resp
 
