@@ -243,3 +243,13 @@ class CreateAllStagesBeforeTheTransactionTests(WriteTransactionHarness):
             self.events.index("atomic:enter"),
         )
         self.assertIn(("post_tile_save", True), self.events)
+
+
+class DependencyCreateRecordsItsCreatorTests(WriteTransactionHarness):
+    def test_the_edit_log_names_the_requesting_user(self):
+        response = self.view.post(
+            self._request({"resourceType": "Group", "biblissimaData": {"label": "BnF"}})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.editlog_users, [self.user])

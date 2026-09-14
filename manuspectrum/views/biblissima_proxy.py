@@ -2580,6 +2580,16 @@ class BiblissimaCreateResourceView(View):
     (see ``_stage_tiles``); the writes themselves run in one
     ``transaction.atomic()``. ES indexing is deferred until after the commit
     — a rollback therefore leaves no orphan ES docs.
+
+    The created resource's own tiles are bulk-inserted, not saved through
+    ``Tile.save()``: Arches provisional edits do not apply to them, a Resource
+    Editor's write is authoritative at once, and their edit log names the
+    requesting user. The project link (``_link_to_project``,
+    ``_link_to_project_batch``) and ``BiblissimaAddAltNameView`` save through
+    ``Tile.save()`` without a user: provisional edits do not apply there
+    either, and their edit-log rows carry no user. Passing a user to those
+    saves would make them provisional edits for a non-reviewer. The endpoints
+    are restricted to ``EDITOR_GROUPS``.
     """
 
     # Graph ID mapping for all supported resource types
@@ -2613,7 +2623,9 @@ class BiblissimaCreateResourceView(View):
 
         # Dependency types (Place/Group/Person): lightweight creation with just a name
         if resource_type in ("Place", "Group", "Person"):
-            return self._create_dependency_resource(graph_id, resource_type, bbma_data)
+            return self._create_dependency_resource(
+                graph_id, resource_type, bbma_data, request.user
+            )
 
         try:
             resource_id, created_deps = self._create_resource(
@@ -2642,8 +2654,11 @@ class BiblissimaCreateResourceView(View):
             }
         )
 
-    def _create_dependency_resource(self, graph_id, resource_type, bbma_data):
-        """Create a Place/Group/Person resource with name and relationships."""
+    def _create_dependency_resource(self, graph_id, resource_type, bbma_data, user):
+        """Create a Place/Group/Person resource with its name and relationships.
+
+        The edit log attributes the created tiles to *user*.
+        """
         from django.db import transaction
         from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
@@ -2706,7 +2721,7 @@ class BiblissimaCreateResourceView(View):
                 )
                 resource.set_serialized_graph(serialized_graph)
                 self._flush_tile_buffer(
-                    resource, user=None, default_transaction_id=None
+                    resource, user=user, default_transaction_id=None
                 )
 
             # Route through the defer seam (post-commit; honors
