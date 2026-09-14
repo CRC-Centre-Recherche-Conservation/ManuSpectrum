@@ -125,6 +125,32 @@ class TestCachedJsonResponse(TestCase):
         # Data should still be cached
         self.assertIsNotNone(cache.get("test_key"))
 
+    def test_non_public_payload_is_not_written_to_the_cache(self):
+        from manuspectrum.views.iiif_annotation import cached_json_response
+
+        cached_json_response("restricted_key", {"a": 1}, public=False)
+
+        self.assertIsNone(cache.get("restricted_key"))
+        self.assertIsNone(cache.get("restricted_key__etag"))
+
+    def test_non_public_payload_is_marked_private_and_not_stored(self):
+        from manuspectrum.views.iiif_annotation import cached_json_response
+
+        response = cached_json_response("restricted_key", {"a": 1}, public=False)
+
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertIn("ETag", response)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'{"a":1}')
+
+    def test_public_payload_keeps_the_shared_cache_header(self):
+        from manuspectrum.views.iiif_annotation import cached_json_response
+
+        response = cached_json_response("public_key", {"a": 1})
+
+        self.assertEqual(response["Cache-Control"], "public, max-age=3600")
+        self.assertIsNotNone(cache.get("public_key"))
+
 
 class TestGetCachedResponse(TestCase):
     """Tests for get_cached_response function."""
@@ -421,7 +447,7 @@ class TestIIIFAnnotationCollectionView(TestCase):
         mock_resource = MagicMock()
         mock_ri.objects.select_related.return_value.get.return_value = mock_resource
 
-        with patch.object(self.view, "_get_related_analyses", return_value=[]):
+        with patch.object(type(self.view), "_get_related_analyses", return_value=[]):
             request = self.factory.get("/iiif/annotation-collection/123/")
             request.user = MagicMock()
             response = self.view.get(request, uuid.uuid4())
@@ -1526,6 +1552,7 @@ class TestReadGuard(TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertIn('"forbidden"', response.content.decode())
+        self.assertEqual(response["Cache-Control"], "private, no-store")
         mock_guard.assert_called_once_with(request.user, resource=resource)
         mock_serializer.return_value.batch_to_representation.assert_not_called()
 
@@ -1679,3 +1706,410 @@ class TestAnonymousStillReadsPublicIIIF(TestCase):
                 response.wsgi_request, resource
             )
         )
+
+
+class TestChildPermissionHelpers(TestCase):
+    def setUp(self):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+
+        self.mixin = IIIFAnnotationMixin()
+        self.user = MagicMock(is_authenticated=True)
+        self.a = MagicMock(resourceinstanceid="a")
+        self.b = MagicMock(resourceinstanceid="b")
+
+    def test_readable_by_keeps_only_resources_the_user_may_read(self):
+        def decide(user, resource=None):
+            return resource is self.a
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            side_effect=decide,
+        ):
+            kept = self.mixin._readable_by(self.user, [self.a, self.b])
+
+        self.assertEqual(kept, [self.a])
+
+    def test_readable_by_preserves_order(self):
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        ):
+            kept = self.mixin._readable_by(self.user, [self.b, self.a])
+
+        self.assertEqual(kept, [self.b, self.a])
+
+    def test_public_for_anonymous_is_true_when_every_resource_is_readable(self):
+        from django.contrib.auth.models import User
+
+        anonymous = User.objects.get(username="anonymous")
+        seen = []
+
+        def decide(user, resource=None):
+            seen.append(user)
+            return True
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            side_effect=decide,
+        ):
+            self.assertTrue(self.mixin._public_for_anonymous([self.a, self.b]))
+
+        self.assertEqual(seen, [anonymous, anonymous])
+
+    def test_public_for_anonymous_is_false_when_one_resource_is_restricted(self):
+        def decide(user, resource=None):
+            return resource is self.a
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            side_effect=decide,
+        ):
+            self.assertFalse(self.mixin._public_for_anonymous([self.a, self.b]))
+
+    def test_public_for_anonymous_is_false_without_the_anonymous_row(self):
+        from django.contrib.auth.models import User
+
+        User.objects.filter(username="anonymous").delete()
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        ):
+            self.assertFalse(self.mixin._public_for_anonymous([self.a]))
+
+    def test_is_public_payload_is_false_when_the_caller_saw_fewer_analyses(self):
+        resource = MagicMock(resourceinstanceid="doc")
+        user = MagicMock(username="someone")
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        ):
+            self.assertFalse(
+                self.mixin._is_public_payload(
+                    user, resource, [self.a, self.b], [self.a]
+                )
+            )
+
+    def test_is_public_payload_is_true_when_the_caller_saw_every_analysis(self):
+        resource = MagicMock(resourceinstanceid="doc")
+        user = MagicMock(username="someone")
+
+        with patch(
+            "manuspectrum.views.iiif_annotation.user_can_read_resource",
+            return_value=True,
+        ):
+            self.assertTrue(
+                self.mixin._is_public_payload(
+                    user, resource, [self.a, self.b], [self.a, self.b]
+                )
+            )
+
+    def test_is_public_payload_trusts_the_anonymous_caller_without_a_second_pass(self):
+        resource = MagicMock(resourceinstanceid="doc")
+        user = MagicMock(username="anonymous")
+        guard = MagicMock()
+
+        with patch("manuspectrum.views.iiif_annotation.user_can_read_resource", guard):
+            self.assertTrue(
+                self.mixin._is_public_payload(
+                    user, resource, [self.a, self.b], [self.a, self.b]
+                )
+            )
+
+        guard.assert_not_called()
+
+
+class TestChildPermissionsInViews(TestCase):
+    """Three combinations: everything public; public document with one
+    restricted analysis; restricted document."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        cache.clear()
+        self.resource_id = uuid.uuid4()
+        self.document = MagicMock(resourceinstanceid=self.resource_id)
+        self.public_analysis = MagicMock(resourceinstanceid="pub")
+        self.private_analysis = MagicMock(resourceinstanceid="priv")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _collection_get(self, user, readable):
+        """Run the v3 collection view with permissions defined by *readable*.
+
+        *readable* maps a resource to the set of users that may read it;
+        the anonymous row reads whatever is listed under "anonymous".
+        """
+        from django.contrib.auth.models import User
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
+
+        anonymous = User.objects.get(username="anonymous")
+
+        def decide(u, resource=None):
+            allowed = readable.get(resource, set())
+            key = "anonymous" if u == anonymous else u
+            return key in allowed
+
+        request = self.factory.get("/iiif/v3/annotation-collection/x")
+        request.user = user
+        view = IIIFAnnotationCollectionView()
+        with (
+            patch(
+                "manuspectrum.views.iiif_annotation.user_can_read_resource",
+                side_effect=decide,
+            ),
+            patch("manuspectrum.views.iiif_annotation.ResourceInstance") as mock_ri,
+            patch.object(
+                IIIFAnnotationCollectionView,
+                "_get_related_analyses",
+                return_value=[self.public_analysis, self.private_analysis],
+            ),
+            patch.object(
+                view,
+                "_get_annotations_from_analyses",
+                side_effect=lambda analyses: [
+                    {
+                        "canvas": "https://example.org/c1",
+                        "id": a.resourceinstanceid,
+                        "geometry": {},
+                        "properties": {},
+                        "manifest": None,
+                        "analysis_id": a.resourceinstanceid,
+                        "analysis_label": "",
+                    }
+                    for a in analyses
+                ],
+            ),
+            patch.object(
+                view,
+                "_build_annotation_payload",
+                side_effect=lambda a: {"target": "t", "resource_id": a["id"]},
+            ),
+            patch(
+                "manuspectrum.views.iiif_annotation.IIIFAnnotationSerializer"
+            ) as mock_serializer,
+            patch.object(
+                view,
+                "_build_annotation_collection",
+                side_effect=lambda resource, grouped: {
+                    "type": "AnnotationCollection",
+                    "analyses": sorted(
+                        a["resource_id"] for items in grouped.values() for a in items
+                    ),
+                },
+            ),
+        ):
+            mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+            mock_ri.objects.select_related.return_value.get.return_value = self.document
+            mock_serializer.return_value.batch_to_representation.side_effect = (
+                lambda payloads: payloads
+            )
+            return view.get(request, self.resource_id)
+
+    def test_everything_public_is_cached_and_public(self):
+        reader = MagicMock(is_authenticated=True)
+        readable = {
+            self.document: {"anonymous", reader},
+            self.public_analysis: {"anonymous", reader},
+            self.private_analysis: {"anonymous", reader},
+        }
+
+        response = self._collection_get(reader, readable)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "public, max-age=3600")
+        self.assertIsNotNone(cache.get(f"iiif_v3_collection_{self.resource_id}"))
+        self.assertIn(b'"analyses":["priv","pub"]', response.content)
+
+        again = self._collection_get(reader, readable)
+
+        self.assertEqual(again["Cache-Control"], "public, max-age=3600")
+        self.assertEqual(again["ETag"], response["ETag"])
+        self.assertEqual(again.content, response.content)
+
+    def test_public_document_with_a_restricted_analysis_is_private_and_filtered(self):
+        team = MagicMock(is_authenticated=True)
+        stranger = MagicMock(is_authenticated=True)
+        readable = {
+            self.document: {"anonymous", team, stranger},
+            self.public_analysis: {"anonymous", team, stranger},
+            self.private_analysis: {team},
+        }
+
+        for_stranger = self._collection_get(stranger, readable)
+        for_team = self._collection_get(team, readable)
+
+        self.assertEqual(for_stranger.status_code, 200)
+        self.assertIn(b'"analyses":["pub"]', for_stranger.content)
+        self.assertEqual(for_stranger["Cache-Control"], "private, no-store")
+        self.assertIn(b'"analyses":["priv","pub"]', for_team.content)
+        self.assertEqual(for_team["Cache-Control"], "private, no-store")
+        self.assertIsNone(cache.get(f"iiif_v3_collection_{self.resource_id}"))
+
+    def _v2_collection_get(self, user, readable):
+        """Run the v2 collection view with permissions defined by *readable*."""
+        from django.contrib.auth.models import User
+        from manuspectrum.views.iiif_annotation import (
+            IIIFAnnotationCollectionView,
+            IIIFAnnotationCollectionViewV2,
+        )
+
+        anonymous = User.objects.get(username="anonymous")
+
+        def decide(u, resource=None):
+            allowed = readable.get(resource, set())
+            key = "anonymous" if u == anonymous else u
+            return key in allowed
+
+        request = self.factory.get("/iiif/v2/annotation-collection/x")
+        request.user = user
+        view = IIIFAnnotationCollectionViewV2()
+        with (
+            patch(
+                "manuspectrum.views.iiif_annotation.user_can_read_resource",
+                side_effect=decide,
+            ),
+            patch("manuspectrum.views.iiif_annotation.ResourceInstance") as mock_ri,
+            patch.object(
+                IIIFAnnotationCollectionView,
+                "_get_related_analyses",
+                return_value=[self.public_analysis, self.private_analysis],
+            ),
+            patch.object(
+                view,
+                "_get_annotations_from_analyses",
+                side_effect=lambda analyses: [
+                    {
+                        "canvas": "https://example.org/c1",
+                        "id": a.resourceinstanceid,
+                        "geometry": {},
+                        "properties": {},
+                        "manifest": None,
+                        "analysis_id": a.resourceinstanceid,
+                        "analysis_label": "",
+                    }
+                    for a in analyses
+                ],
+            ),
+            patch.object(
+                view,
+                "_build_layer",
+                side_effect=lambda resource, grouped: {
+                    "@type": "sc:Layer",
+                    "analyses": sorted(
+                        a["id"] for items in grouped.values() for a in items
+                    ),
+                },
+            ),
+        ):
+            mock_ri.DoesNotExist = type("DoesNotExist", (Exception,), {})
+            mock_ri.objects.select_related.return_value.get.return_value = self.document
+            return view.get(request, self.resource_id)
+
+    def test_v2_public_document_with_a_restricted_analysis_is_private_and_filtered(
+        self,
+    ):
+        team = MagicMock(is_authenticated=True)
+        stranger = MagicMock(is_authenticated=True)
+        readable = {
+            self.document: {"anonymous", team, stranger},
+            self.public_analysis: {"anonymous", team, stranger},
+            self.private_analysis: {team},
+        }
+
+        response = self._v2_collection_get(stranger, readable)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'"analyses":["pub"]', response.content)
+        self.assertNotIn(b"priv", response.content)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertIsNone(cache.get(f"iiif_v2_collection_{self.resource_id}"))
+
+    def test_reader_refused_on_a_public_analysis_does_not_poison_the_shared_cache(self):
+        stranger = MagicMock(is_authenticated=True)
+        readable = {
+            self.document: {"anonymous", stranger},
+            self.public_analysis: {"anonymous", stranger},
+            self.private_analysis: {"anonymous"},
+        }
+
+        response = self._collection_get(stranger, readable)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'"analyses":["pub"]', response.content)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertIsNone(cache.get(f"iiif_v3_collection_{self.resource_id}"))
+
+    def test_restricted_document_is_refused_before_anything_else(self):
+        stranger = MagicMock(is_authenticated=True)
+        readable = {self.document: set(), self.public_analysis: {stranger}}
+
+        response = self._collection_get(stranger, readable)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIsNone(cache.get(f"iiif_v3_collection_{self.resource_id}"))
+
+    def test_reader_with_no_readable_analysis_gets_404(self):
+        stranger = MagicMock(is_authenticated=True)
+        readable = {self.document: {stranger, "anonymous"}}
+
+        response = self._collection_get(stranger, readable)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("No analyses found", response.content.decode())
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    def test_single_annotation_of_a_restricted_analysis_is_private(self):
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationView
+
+        team = MagicMock(is_authenticated=True)
+        analysis = MagicMock(resourceinstanceid=self.resource_id)
+        analysis.graph_id = IIIFAnnotationView.ANALYSIS_GRAPH_ID
+
+        def decide(u, resource=None):
+            return u is team  # the anonymous row may not read it
+
+        request = self.factory.get("/iiif/v3/annotation/x")
+        request.user = team
+        view = IIIFAnnotationView()
+        with (
+            patch(
+                "manuspectrum.views.iiif_annotation.user_can_read_resource",
+                side_effect=decide,
+            ),
+            patch("manuspectrum.views.iiif_annotation.Resource") as mock_resource,
+            patch.object(
+                view,
+                "_get_annotations_from_analyses",
+                return_value=[
+                    {
+                        "canvas": "https://example.org/c1",
+                        "id": "x",
+                        "geometry": {},
+                        "properties": {},
+                        "manifest": None,
+                        "analysis_id": "x",
+                        "analysis_label": "",
+                    }
+                ],
+            ),
+            patch.object(
+                view,
+                "_build_annotation_payload",
+                return_value={"target": "t", "resource_id": "x"},
+            ),
+            patch(
+                "manuspectrum.views.iiif_annotation.IIIFAnnotationSerializer"
+            ) as mock_serializer,
+        ):
+            mock_resource.DoesNotExist = type("DoesNotExist", (Exception,), {})
+            mock_resource.objects.get.return_value = analysis
+            mock_serializer.return_value.to_representation.return_value = {
+                "type": "Annotation"
+            }
+            response = view.get(request, self.resource_id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertIsNone(cache.get(f"iiif_v3_annotation_{self.resource_id}"))

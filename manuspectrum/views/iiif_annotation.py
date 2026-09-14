@@ -38,23 +38,25 @@ def _cache_etag_key(cache_key: str) -> str:
 
 
 def cached_json_response(
-    cache_key: str, data: dict, timeout: int = 3600
+    cache_key: str, data: dict, timeout: int = 3600, *, public: bool = True
 ) -> HttpResponse:
-    """
-    Store or refresh compressed JSON in Redis and build an HTTP response with ETag.
+    """Serialize *data* and build the HTTP response with an ETag.
+
+    A public payload (the same for every reader) is stored in Redis under
+    *cache_key* and advertised to shared HTTP caches. A non-public payload is
+    never stored: the shared cache key is per resource, not per reader, and a
+    shared HTTP cache cannot run the read guard.
     """
     payload = orjson.dumps(data)
-    compressed = zlib.compress(payload)
     etag = hashlib.md5(payload).hexdigest()
-
-    cache.set(cache_key, compressed, timeout)
-    cache.set(_cache_etag_key(cache_key), etag, timeout)
-
     resp = HttpResponse(payload, content_type="application/json")
     resp["ETag"] = etag
-    # `public` is only correct while no resource is restricted: the read guard
-    # runs inside the view, and a shared HTTP cache cannot run it. Decision D1
-    # (issue #72) switches this to `private` when object permissions arrive.
+    if not public:
+        resp["Cache-Control"] = "private, no-store"
+        return resp
+    compressed = zlib.compress(payload)
+    cache.set(cache_key, compressed, timeout)
+    cache.set(_cache_etag_key(cache_key), etag, timeout)
     resp["Cache-Control"] = "public, max-age=3600"
     return resp
 
@@ -79,8 +81,15 @@ def get_cached_response(cache_key: str) -> HttpResponse | None:
     resp = HttpResponse(payload, content_type="application/json")
     if etag:
         resp["ETag"] = etag
-    # Same coupling as in cached_json_response.
+    # Only public payloads reach the shared cache; see cached_json_response.
     resp["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+def _private_json(data: dict, status: int) -> JsonResponse:
+    """A reader-dependent answer that no shared cache may store."""
+    resp = JsonResponse(data, status=status)
+    resp["Cache-Control"] = "private, no-store"
     return resp
 
 
@@ -117,7 +126,55 @@ class IIIFAnnotationMixin:
                 "SetAnonymousUser did not install the anonymous user",
                 getattr(resource, "resourceinstanceid", resource),
             )
-        return JsonResponse({"error": "forbidden"}, status=403)
+        return _private_json({"error": "forbidden"}, 403)
+
+    def _readable_by(self, user, resources):
+        """The subset of *resources* that *user* may read, in the same order.
+
+        Instance permissions are Arches' own: a resource with no explicit
+        grant falls back to the reader's nodegroup rights, a resource with a
+        grant is readable only by the users and groups named on it.
+        """
+        return [r for r in resources if user_can_read_resource(user, resource=r)]
+
+    def _public_for_anonymous(self, resources):
+        """True iff the Arches ``anonymous`` user may read every resource.
+
+        This is the reader `SetAnonymousUser` installs on an unauthenticated
+        request, so it decides whether a payload is the same for everyone.
+        Without that row nothing is public.
+        """
+        from django.contrib.auth.models import User
+
+        anonymous = User.objects.filter(username="anonymous").first()
+        if anonymous is None:
+            return False
+        return all(user_can_read_resource(anonymous, resource=r) for r in resources)
+
+    def _readable_analyses(self, user, resource):
+        """Return (the analyses *user* may read, every analysis related to *resource*).
+
+        The related set comes from
+        IIIFAnnotationCollectionView._get_related_analyses on a fresh view.
+        """
+        related = IIIFAnnotationCollectionView()._get_related_analyses(resource)
+        return self._readable_by(user, related), related
+
+    def _is_public_payload(self, user, resource, related, analyses):
+        """True iff this payload is what the anonymous reader would get.
+
+        Covers every related analysis, readable or not: a restricted sibling
+        makes the payload reader-dependent. The length check covers the
+        reverse case, a resource the anonymous row may read but this caller
+        may not, whose shorter payload must not reach the shared key. An
+        anonymous caller is the public reader itself: the guard and the filter
+        it just passed are the decision.
+        """
+        if len(analyses) != len(related):
+            return False
+        if getattr(user, "username", None) == "anonymous":
+            return True
+        return self._public_for_anonymous([resource, *related])
 
     def _get_display_name(self, resource: ResourceInstance):
         if hasattr(resource, "displayname"):
@@ -383,13 +440,15 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            cached = get_cached_response(cache_key)
-            if cached:
-                return cached
-
-            analyses = self._get_related_analyses(resource)
+            analyses, related = self._readable_analyses(request.user, resource)
             if not analyses:
-                return JsonResponse({"error": "No analyses found"}, status=404)
+                return _private_json({"error": "No analyses found"}, 404)
+
+            public = self._is_public_payload(request.user, resource, related, analyses)
+            if public:
+                cached = get_cached_response(cache_key)
+                if cached:
+                    return cached
 
             annotations = self._get_annotations_from_analyses(analyses)
             if not annotations:
@@ -420,7 +479,9 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
             collection = self._build_annotation_collection(resource, grouped_serialized)
 
-            return cached_json_response(cache_key, collection, self.CACHE_TIMEOUT)
+            return cached_json_response(
+                cache_key, collection, self.CACHE_TIMEOUT, public=public
+            )
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
@@ -590,15 +651,17 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            cached = get_cached_response(cache_key)
-            if cached:
-                return cached
+            analyses, related = self._readable_analyses(request.user, resource)
+            if not analyses:
+                return _private_json({"error": "No analyses found"}, 404)
+
+            public = self._is_public_payload(request.user, resource, related, analyses)
+            if public:
+                cached = get_cached_response(cache_key)
+                if cached:
+                    return cached
 
             collection_view = IIIFAnnotationCollectionView()
-            analyses = collection_view._get_related_analyses(resource)
-            if not analyses:
-                return JsonResponse({"error": "No analyses found"}, status=404)
-
             annotations = self._get_annotations_from_analyses(analyses)
             grouped = collection_view._group_by_canvas(annotations)
 
@@ -613,7 +676,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
                     break
 
             if not canvas_uri:
-                return JsonResponse({"error": "Page not found"}, status=404)
+                return _private_json({"error": "Page not found"}, 404)
 
             annos = grouped[canvas_uri]
 
@@ -653,7 +716,9 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
                     f"{collection_id}/page-{sorted_page_nums[current_idx - 1]}"
                 )
 
-            return cached_json_response(cache_key, page, self.CACHE_TIMEOUT)
+            return cached_json_response(
+                cache_key, page, self.CACHE_TIMEOUT, public=public
+            )
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
@@ -683,9 +748,12 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            cached = get_cached_response(cache_key)
-            if cached:
-                return cached
+            public = self._public_for_anonymous([analysis])
+            if public:
+                cached = get_cached_response(cache_key)
+                if cached:
+                    return cached
+
             if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
                 return JsonResponse(
                     {"error": "Resource is not an Analysis"}, status=400
@@ -699,7 +767,9 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
             payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
             iiif_annotation = IIIFAnnotationSerializer().to_representation(**payload)
 
-            return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
+            return cached_json_response(
+                cache_key, iiif_annotation, self.CACHE_TIMEOUT, public=public
+            )
 
         except Resource.DoesNotExist:
             return JsonResponse({"error": "Annotation not found"}, status=404)
@@ -735,15 +805,15 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            cached = get_cached_response(cache_key)
-            if cached:
-                return cached
-
-            # Reuse v3 logic for fetching analyses
-            collection_view = IIIFAnnotationCollectionView()
-            analyses = collection_view._get_related_analyses(resource)
+            analyses, related = self._readable_analyses(request.user, resource)
             if not analyses:
-                return JsonResponse({"error": "No analyses found"}, status=404)
+                return _private_json({"error": "No analyses found"}, 404)
+
+            public = self._is_public_payload(request.user, resource, related, analyses)
+            if public:
+                cached = get_cached_response(cache_key)
+                if cached:
+                    return cached
 
             annotations = self._get_annotations_from_analyses(analyses)
             if not annotations:
@@ -751,12 +821,15 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
                     {"error": "No annotations found for analyses"}, status=404
                 )
 
+            collection_view = IIIFAnnotationCollectionView()
             grouped_annos = collection_view._group_by_canvas(annotations)
 
             # Build v2 Layer structure
             layer = self._build_layer(resource, grouped_annos)
 
-            return cached_json_response(cache_key, layer, self.CACHE_TIMEOUT)
+            return cached_json_response(
+                cache_key, layer, self.CACHE_TIMEOUT, public=public
+            )
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
@@ -821,15 +894,17 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            cached = get_cached_response(cache_key)
-            if cached:
-                return cached
+            analyses, related = self._readable_analyses(request.user, resource)
+            if not analyses:
+                return _private_json({"error": "No analyses found"}, 404)
+
+            public = self._is_public_payload(request.user, resource, related, analyses)
+            if public:
+                cached = get_cached_response(cache_key)
+                if cached:
+                    return cached
 
             collection_view = IIIFAnnotationCollectionView()
-            analyses = collection_view._get_related_analyses(resource)
-            if not analyses:
-                return JsonResponse({"error": "No analyses found"}, status=404)
-
             annotations = self._get_annotations_from_analyses(analyses)
             grouped = collection_view._group_by_canvas(annotations)
 
@@ -844,7 +919,7 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
                     break
 
             if not canvas_uri:
-                return JsonResponse({"error": "Page not found"}, status=404)
+                return _private_json({"error": "Page not found"}, 404)
 
             annos = grouped[canvas_uri]
 
@@ -871,7 +946,9 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
                 },
             }
 
-            return cached_json_response(cache_key, annotation_list, self.CACHE_TIMEOUT)
+            return cached_json_response(
+                cache_key, annotation_list, self.CACHE_TIMEOUT, public=public
+            )
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
@@ -896,9 +973,12 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            cached = get_cached_response(cache_key)
-            if cached:
-                return cached
+            public = self._public_for_anonymous([analysis])
+            if public:
+                cached = get_cached_response(cache_key)
+                if cached:
+                    return cached
+
             if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
                 return JsonResponse(
                     {"error": "Resource is not an Analysis"}, status=400
@@ -914,7 +994,9 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
             # Use v2 serializer
             iiif_annotation = IIIFAnnotationSerializerV2().to_representation(**payload)
 
-            return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
+            return cached_json_response(
+                cache_key, iiif_annotation, self.CACHE_TIMEOUT, public=public
+            )
 
         except Resource.DoesNotExist:
             return JsonResponse({"error": "Annotation not found"}, status=404)
