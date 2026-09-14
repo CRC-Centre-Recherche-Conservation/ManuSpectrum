@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 05:00-0500\n"
+"POT-Creation-Date: 2026-09-14 05:43-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -16,19 +16,19 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: datatypes/manifest.py:167
+#: datatypes/manifest.py:176
 msgid "Manifest must have a URL or ID"
 msgstr "Le manifeste doit avoir une URL ou un identifiant"
 
-#: datatypes/manifest.py:184
+#: datatypes/manifest.py:193
 msgid "Manifest ID does not exist"
 msgstr "L'identifiant du manifeste n'existe pas"
 
-#: datatypes/manifest.py:197
+#: datatypes/manifest.py:206
 msgid "Manifest not found"
 msgstr "Manifeste introuvable"
 
-#: datatypes/manifest.py:209
+#: datatypes/manifest.py:218
 msgid "Invalid URL format"
 msgstr "Format d'URL invalide"
 
@@ -36,23 +36,23 @@ msgstr "Format d'URL invalide"
 msgid "Undefined"
 msgstr "Indéfini"
 
-#: settings.py:116
+#: settings.py:151
 msgid "Term Matches"
 msgstr "Correspondances de termes"
 
-#: settings.py:122
+#: settings.py:157
 msgid "References"
 msgstr "Références"
 
-#: settings.py:460
+#: settings.py:535
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:497
+#: settings.py:572
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:498
+#: settings.py:573
 msgid "French"
 msgstr "Français"
 
@@ -3908,21 +3908,28 @@ msgstr ""
 "License v3. La consultation et le téléchargement des données publiées ne "
 "nécessitent aucun compte."
 
-#: views/biblissima_proxy.py:257
+#: views/biblissima_proxy.py:306
+msgid ""
+"Too many Biblissima requests are in progress. Please try again in a moment."
+msgstr ""
+"Trop de requêtes Biblissima sont en cours. Veuillez réessayer dans un "
+"instant."
+
+#: views/biblissima_proxy.py:319
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "Le portail Biblissima n'a pas répondu à temps. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:268
+#: views/biblissima_proxy.py:330
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Impossible de joindre le portail Biblissima. Vérifiez votre connexion et "
 "réessayez."
 
-#: views/biblissima_proxy.py:281
+#: views/biblissima_proxy.py:343
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -3931,11 +3938,11 @@ msgstr ""
 "Le portail Biblissima a renvoyé une erreur (%(status)s). Veuillez réessayer "
 "dans un instant."
 
-#: views/biblissima_proxy.py:292
+#: views/biblissima_proxy.py:354
 msgid "Invalid response from the Biblissima portal."
 msgstr "Réponse invalide du portail Biblissima."
 
-#: views/biblissima_proxy.py:300
+#: views/biblissima_proxy.py:362
 msgid "Unknown error while querying Biblissima."
 msgstr "Erreur inconnue lors de la requête Biblissima."
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 05:00-0500\n"
+"POT-Creation-Date: 2026-09-14 05:43-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,19 +18,19 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: datatypes/manifest.py:167
+#: datatypes/manifest.py:176
 msgid "Manifest must have a URL or ID"
 msgstr "Manifest must have a URL or ID"
 
-#: datatypes/manifest.py:184
+#: datatypes/manifest.py:193
 msgid "Manifest ID does not exist"
 msgstr "Manifest ID does not exist"
 
-#: datatypes/manifest.py:197
+#: datatypes/manifest.py:206
 msgid "Manifest not found"
 msgstr "Manifest not found"
 
-#: datatypes/manifest.py:209
+#: datatypes/manifest.py:218
 msgid "Invalid URL format"
 msgstr "Invalid URL format"
 
@@ -38,23 +38,23 @@ msgstr "Invalid URL format"
 msgid "Undefined"
 msgstr "Undefined"
 
-#: settings.py:116
+#: settings.py:151
 msgid "Term Matches"
 msgstr ""
 
-#: settings.py:122
+#: settings.py:157
 msgid "References"
 msgstr ""
 
-#: settings.py:460
+#: settings.py:535
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:497
+#: settings.py:572
 msgid "English"
 msgstr "English"
 
-#: settings.py:498
+#: settings.py:573
 msgid "French"
 msgstr ""
 
@@ -3748,20 +3748,26 @@ msgstr ""
 "The platform's source code is published under the GNU General Public License "
 "v3. Reading and downloading published data needs no account."
 
+#: views/biblissima_proxy.py:306
+msgid ""
+"Too many Biblissima requests are in progress. Please try again in a moment."
+msgstr ""
+"Too many Biblissima requests are in progress. Please try again in a moment."
+
 # Biblissima search & workflow — added in the progressive-loading refactor
-#: views/biblissima_proxy.py:257
+#: views/biblissima_proxy.py:319
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 
-#: views/biblissima_proxy.py:268
+#: views/biblissima_proxy.py:330
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 
-#: views/biblissima_proxy.py:281
+#: views/biblissima_proxy.py:343
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -3770,11 +3776,11 @@ msgstr ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
 "moment."
 
-#: views/biblissima_proxy.py:292
+#: views/biblissima_proxy.py:354
 msgid "Invalid response from the Biblissima portal."
 msgstr "Invalid response from the Biblissima portal."
 
-#: views/biblissima_proxy.py:300
+#: views/biblissima_proxy.py:362
 msgid "Unknown error while querying Biblissima."
 msgstr "Unknown error while querying Biblissima."
 

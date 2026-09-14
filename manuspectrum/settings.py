@@ -698,10 +698,13 @@ BIBLISSIMA_PORTAL_REQUEST_TIMEOUT = 30
 # ~138 s when api.irht.cnrs.fr was unreachable).
 BIBLISSIMA_IIIF_CONNECT_TIMEOUT = 5
 
-# Maximum concurrent outbound HTTP calls to Biblissima across the whole
-# Django process — keeps us a good API citizen when many users import
-# at once.
+# Maximum concurrent outbound HTTP calls to Biblissima per worker process
+# (each gunicorn worker holds its own limit).
 BIBLISSIMA_CONCURRENCY_LIMIT = 12
+
+# Whole seconds a request waits for a Biblissima concurrency slot before
+# answering 503; also sent as Retry-After.
+BIBLISSIMA_SLOT_TIMEOUT = 15
 
 # 24h Django-cache TTL for resolved Wikibase entities and manuscript
 # enrichment results.

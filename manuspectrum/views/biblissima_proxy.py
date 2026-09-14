@@ -20,11 +20,14 @@ Two surface areas:
   but the endpoints are generic: they take a ``resourceType`` + payload
   and don't assume a specific UI flow.
 
-Outbound HTTP all goes through ``_build_biblissima_session()`` +
-``_bib_request()``, which share a module-level concurrency semaphore and
-force ``Accept-Language: fr`` so that scraped portal field labels
-(``Type :``, ``Lieu de fabrication :``, …) always match our French field
-map regardless of the end-user's browser locale.
+Outbound HTTP goes through ``_bib_request()`` on a session built by
+``_build_biblissima_session()``; the search view and the enrichment use the
+process-wide ``_get_biblissima_session()``. ``_bib_request()`` holds a slot of
+a concurrency semaphore that is per worker process: a request that waits
+longer than ``BIBLISSIMA_SLOT_TIMEOUT`` for a slot gets ``BiblissimaBusy``,
+answered 503. Sessions force ``Accept-Language: fr`` so that scraped portal
+field labels (``Type :``, ``Lieu de fabrication :``, …) always match our
+French field map regardless of the end-user's browser locale.
 
 ## Attention points for devs
 
@@ -111,6 +114,7 @@ IIIF_REQUEST_TIMEOUT = settings.BIBLISSIMA_IIIF_REQUEST_TIMEOUT
 IIIF_CONNECT_TIMEOUT = settings.BIBLISSIMA_IIIF_CONNECT_TIMEOUT
 PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
 _BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
+_BIBLISSIMA_SLOT_TIMEOUT = settings.BIBLISSIMA_SLOT_TIMEOUT
 _BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
 
 
@@ -188,15 +192,34 @@ def _get_besteffort_session():
     return _besteffort_session
 
 
+_biblissima_session = None
+_biblissima_session_lock = threading.Lock()
+
+
+def _get_biblissima_session():
+    """Lazily build and cache the process-wide session with the default retry
+    policy (thread-safe). Callers never close it."""
+    global _biblissima_session
+    if _biblissima_session is None:
+        with _biblissima_session_lock:
+            if _biblissima_session is None:
+                _biblissima_session = _build_biblissima_session()
+    return _biblissima_session
+
+
 # ---------------------------------------------------------------------------
 # Concurrency control & monitoring for outbound Biblissima calls
 # ---------------------------------------------------------------------------
 
-# Module-level semaphore bounds how many concurrent HTTP calls to Biblissima
-# can run across the whole Django process, regardless of how many users hit
-# the proxy at the same time. Sized via _BIBLISSIMA_CONCURRENCY_LIMIT in
-# biblissima_constants to stay a good API citizen.
+# Bounds concurrent outbound calls to Biblissima per worker process: every
+# gunicorn worker holds its own semaphore, so the upstream sees at most
+# _BIBLISSIMA_CONCURRENCY_LIMIT × workers calls at once.
 _biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
+
+
+class BiblissimaBusy(Exception):
+    """No concurrency slot freed up within ``_BIBLISSIMA_SLOT_TIMEOUT``."""
+
 
 # Lightweight counters for observing upstream health via /api/biblissima/stats.
 _biblissima_stats = {
@@ -205,6 +228,7 @@ _biblissima_stats = {
     "responses_429": 0,
     "responses_5xx": 0,
     "errors_total": 0,
+    "slot_timeouts": 0,
     "cache_hits": 0,
     "cache_misses": 0,
 }
@@ -218,10 +242,16 @@ def _incr_stat(key, delta=1):
 
 @contextmanager
 def _biblissima_slot():
-    """Acquire one concurrency slot for an outbound Biblissima call."""
-    _biblissima_semaphore.acquire()
-    _incr_stat("requests_in_flight", 1)
+    """Hold one concurrency slot for an outbound Biblissima call.
+
+    Waits at most ``_BIBLISSIMA_SLOT_TIMEOUT`` seconds, then raises
+    ``BiblissimaBusy``. Once acquired, the slot is released on every exit.
+    """
+    if not _biblissima_semaphore.acquire(timeout=_BIBLISSIMA_SLOT_TIMEOUT):
+        _incr_stat("slot_timeouts", 1)
+        raise BiblissimaBusy()
     try:
+        _incr_stat("requests_in_flight", 1)
         yield
     finally:
         _incr_stat("requests_in_flight", -1)
@@ -281,7 +311,20 @@ def _annotation_targets_are_safe(canvas_url, manifest_url):
 
 
 def _biblissima_upstream_error(exc, context):
-    """Map a requests exception to a JSON error response with a user-facing message."""
+    """Map an outbound-call exception to a JSON error response with a user-facing message."""
+    if isinstance(exc, BiblissimaBusy):
+        logger.warning("%s: no Biblissima slot free", context)
+        response = JsonResponse(
+            {
+                "error": "busy",
+                "message": _(
+                    "Too many Biblissima requests are in progress. Please try again in a moment."
+                ),
+            },
+            status=503,
+        )
+        response["Retry-After"] = str(_BIBLISSIMA_SLOT_TIMEOUT)
+        return response
     if isinstance(exc, requests.exceptions.Timeout):
         logger.warning("%s timed out", context)
         return JsonResponse(
@@ -1238,95 +1281,113 @@ def _enrich_canvases(canvases, session=None):
 
     Only the manuscripts referenced by the given canvases are resolved, which
     makes it cheap to call on a page slice rather than on the whole result set.
+    A manuscript record is cached only when its lookup, its candidate entities
+    up to the matching one and its author and nature entities all resolved.
+
+    *session* (default: the shared session) serves the caller-thread batch
+    calls and is not closed here; the CirrusSearch pool uses one session per
+    thread.
     """
     if not canvases:
         return
 
-    owned_session = session is None
-    if owned_session:
-        session = _build_biblissima_session()
+    session = session or _get_biblissima_session()
 
-    try:
-        # Phase 1: collect unique manuscripts. The "name" we keep here is the
-        # query string used to look up the manuscript in Wikibase later — we
-        # extract the institution+shelfmark context from the canvas label
-        # (e.g. "Paris, Arsenal, 12") rather than the bare ``manuscript``
-        # field which is often just the shelfmark fragment.
-        unique_manuscripts = {}
-        for canvas in canvases:
-            ms_ark = canvas.get("manuscriptArk")
-            if not ms_ark:
-                continue
-            ark_hash = ms_ark.replace("ark:/43093/", "")
-            if ark_hash and ark_hash not in unique_manuscripts:
-                unique_manuscripts[ark_hash] = _extract_ms_search_query(canvas)
+    # Phase 1: collect unique manuscripts. The "name" we keep here is the
+    # query string used to look up the manuscript in Wikibase later — we
+    # extract the institution+shelfmark context from the canvas label
+    # (e.g. "Paris, Arsenal, 12") rather than the bare ``manuscript``
+    # field which is often just the shelfmark fragment.
+    unique_manuscripts = {}
+    for canvas in canvases:
+        ms_ark = canvas.get("manuscriptArk")
+        if not ms_ark:
+            continue
+        ark_hash = ms_ark.replace("ark:/43093/", "")
+        if ark_hash and ark_hash not in unique_manuscripts:
+            unique_manuscripts[ark_hash] = _extract_ms_search_query(canvas)
 
-        resolved_manuscripts = {}
-        to_resolve = {}
+    resolved_manuscripts = {}
+    to_resolve = {}
 
-        # Phase 2a: Django cache lookup per manuscript
-        for ark_hash, ms_name in unique_manuscripts.items():
-            cached = cache.get(
-                _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash)
+    # Phase 2a: Django cache lookup per manuscript
+    for ark_hash, ms_name in unique_manuscripts.items():
+        cached = cache.get(_BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash))
+        if cached is not None:
+            resolved_manuscripts[ark_hash] = cached
+            _incr_stat("cache_hits", 1)
+        else:
+            to_resolve[ark_hash] = ms_name
+            _incr_stat("cache_misses", 1)
+
+    # Phase 2b: parallel CirrusSearch fulltext lookup for uncached
+    # manuscripts. We use ``action=query&list=search`` rather than
+    # ``wbsearchentities`` because the latter only matches against
+    # labels/aliases as a prefix and silently returns garbage for the
+    # bare-shelfmark labels that the IIIF manifest provides ("12",
+    # "579"). The richer ``ms_name`` extracted from the canvas label
+    # (e.g. "Paris, Arsenal, 12") is distinctive enough that fulltext
+    # search returns the correct entity in the top results, and the
+    # Phase 2d ``portalHash == ark_hash`` filter rejects any false
+    # positive — so reconciliation is done without scraping.
+
+    # requests.Session is not thread-safe: each pool thread gets its own,
+    # closed once the pool has finished.
+    thread_local = threading.local()
+    thread_sessions = []
+    thread_sessions_lock = threading.Lock()
+
+    def _thread_session():
+        thread_session = getattr(thread_local, "session", None)
+        if thread_session is None:
+            thread_session = thread_local.session = _build_biblissima_session()
+            with thread_sessions_lock:
+                thread_sessions.append(thread_session)
+        return thread_session
+
+    def _search_candidates(item):
+        ark_hash, ms_name = item
+        if not ms_name:
+            return ark_hash, [], None
+        try:
+            resp = _bib_request(
+                _thread_session(),
+                BIBLISSIMA_WIKIBASE,
+                params={
+                    "action": "query",
+                    "list": "search",
+                    "srsearch": ms_name,
+                    "srnamespace": 120,
+                    "format": "json",
+                    "srlimit": 5,
+                },
+                timeout=REQUEST_TIMEOUT,
             )
-            if cached is not None:
-                resolved_manuscripts[ark_hash] = cached
-                _incr_stat("cache_hits", 1)
-            else:
-                to_resolve[ark_hash] = ms_name
-                _incr_stat("cache_misses", 1)
+            resp.raise_for_status()
+            hits = resp.json().get("query", {}).get("search", [])
+            qids = []
+            for hit in hits:
+                title = hit.get("title", "")
+                qid = title.split(":")[-1] if ":" in title else title
+                if qid:
+                    qids.append(qid)
+            return ark_hash, qids, None
+        except Exception as exc:
+            logger.debug(
+                "[biblissima.parent-resolver] Wikibase CirrusSearch lookup "
+                "failed for manuscript=%r: %s",
+                ms_name,
+                exc,
+                exc_info=True,
+            )
+            return ark_hash, [], ms_name
 
-        # Phase 2b: parallel CirrusSearch fulltext lookup for uncached
-        # manuscripts. We use ``action=query&list=search`` rather than
-        # ``wbsearchentities`` because the latter only matches against
-        # labels/aliases as a prefix and silently returns garbage for the
-        # bare-shelfmark labels that the IIIF manifest provides ("12",
-        # "579"). The richer ``ms_name`` extracted from the canvas label
-        # (e.g. "Paris, Arsenal, 12") is distinctive enough that fulltext
-        # search returns the correct entity in the top results, and the
-        # Phase 2d ``portalHash == ark_hash`` filter rejects any false
-        # positive — so reconciliation is done without scraping.
-        def _search_candidates(item):
-            ark_hash, ms_name = item
-            if not ms_name:
-                return ark_hash, [], None
-            try:
-                resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "query",
-                        "list": "search",
-                        "srsearch": ms_name,
-                        "srnamespace": 120,
-                        "format": "json",
-                        "srlimit": 5,
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                resp.raise_for_status()
-                hits = resp.json().get("query", {}).get("search", [])
-                qids = []
-                for hit in hits:
-                    title = hit.get("title", "")
-                    qid = title.split(":")[-1] if ":" in title else title
-                    if qid:
-                        qids.append(qid)
-                return ark_hash, qids, None
-            except Exception as exc:
-                logger.debug(
-                    "[biblissima.parent-resolver] Wikibase CirrusSearch lookup "
-                    "failed for manuscript=%r: %s",
-                    ms_name,
-                    exc,
-                    exc_info=True,
-                )
-                return ark_hash, [], ms_name
-
-        candidates_by_ark_hash = {}
-        cirrus_failures = []
-        if to_resolve:
-            max_workers = min(6, len(to_resolve))
+    candidates_by_ark_hash = {}
+    cirrus_failures = []
+    incomplete = set()
+    if to_resolve:
+        max_workers = min(6, len(to_resolve))
+        try:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 for ark_hash, candidate_qids, failure in executor.map(
                     _search_candidates, to_resolve.items()
@@ -1334,150 +1395,159 @@ def _enrich_canvases(canvases, session=None):
                     candidates_by_ark_hash[ark_hash] = candidate_qids
                     if failure:
                         cirrus_failures.append(failure)
-            if cirrus_failures:
-                logger.warning(
-                    "[biblissima.parent-resolver] Wikibase CirrusSearch failed "
-                    "for %d/%d manuscripts (graceful fallback applied; "
-                    "common causes: rate-limit, timeout, 5xx). Sample: %s",
-                    len(cirrus_failures),
-                    len(to_resolve),
-                    cirrus_failures[:3],
-                )
+                        incomplete.add(ark_hash)
+        finally:
+            for thread_session in thread_sessions:
+                thread_session.close()
+        if cirrus_failures:
+            logger.warning(
+                "[biblissima.parent-resolver] Wikibase CirrusSearch failed "
+                "for %d/%d manuscripts (graceful fallback applied; "
+                "common causes: rate-limit, timeout, 5xx). Sample: %s",
+                len(cirrus_failures),
+                len(to_resolve),
+                cirrus_failures[:3],
+            )
 
-        # Phase 2c: batch-fetch all candidate entities in one go
-        all_candidate_qids = list(
-            {qid for qids in candidates_by_ark_hash.values() for qid in qids}
-        )
-        entities_by_qid = _batch_get_wikibase_entities(
-            all_candidate_qids, session=session
-        )
+    # Phase 2c: batch-fetch all candidate entities in one go
+    all_candidate_qids = list(
+        {qid for qids in candidates_by_ark_hash.values() for qid in qids}
+    )
+    entities_by_qid = _batch_get_wikibase_entities(all_candidate_qids, session=session)
 
-        # Phase 2d: match each manuscript to its QID via portalHash, and
-        # collect both author and nature (P2) QIDs for the batch fetch.
-        author_qids = set()
-        nature_qids = set()
-        for ark_hash, candidate_qids in candidates_by_ark_hash.items():
-            ms_data = {}
-            for qid in candidate_qids:
-                entity = entities_by_qid.get(qid)
-                if entity and entity.get("portalHash") == ark_hash:
-                    ms_data = dict(entity)
-                    if ms_data.get("author"):
-                        author_qids.add(ms_data["author"])
-                    if ms_data.get("documentNatureQid"):
-                        nature_qids.add(ms_data["documentNatureQid"])
-                    break
-            resolved_manuscripts[ark_hash] = ms_data
+    # Phase 2d: match each manuscript to its QID via portalHash, and
+    # collect both author and nature (P2) QIDs for the batch fetch.
+    # A candidate absent from the batch marks the manuscript incomplete only
+    # when it comes before the match or is the match; with no match, every
+    # candidate counts.
+    author_qids = set()
+    nature_qids = set()
+    for ark_hash, candidate_qids in candidates_by_ark_hash.items():
+        ms_data = {}
+        examined_qids = candidate_qids
+        for position, qid in enumerate(candidate_qids):
+            entity = entities_by_qid.get(qid)
+            if entity and entity.get("portalHash") == ark_hash:
+                examined_qids = candidate_qids[: position + 1]
+                ms_data = dict(entity)
+                if ms_data.get("author"):
+                    author_qids.add(ms_data["author"])
+                if ms_data.get("documentNatureQid"):
+                    nature_qids.add(ms_data["documentNatureQid"])
+                break
+        if any(qid not in entities_by_qid for qid in examined_qids):
+            incomplete.add(ark_hash)
+        resolved_manuscripts[ark_hash] = ms_data
 
-        # Phase 2e: batch-fetch authors and natures together (single round-trip).
-        # Cached natures (which is most of them — Biblissima only uses ~5
-        # distinct nature concepts) hit the Django cache and don't go to
-        # Biblissima at all.
-        secondary_qids = list(author_qids | nature_qids)
-        secondaries_by_qid = (
-            _batch_get_wikibase_entities(secondary_qids, session=session)
-            if secondary_qids
-            else {}
-        )
+    # Phase 2e: batch-fetch authors and natures together (single round-trip).
+    # Cached natures (which is most of them — Biblissima only uses ~5
+    # distinct nature concepts) hit the Django cache and don't go to
+    # Biblissima at all.
+    secondary_qids = list(author_qids | nature_qids)
+    secondaries_by_qid = (
+        _batch_get_wikibase_entities(secondary_qids, session=session)
+        if secondary_qids
+        else {}
+    )
 
-        # Phase 2f: attach author and nature labels, pre-resolve the Arches
-        # Document-Type valueid once per manuscript, and persist newly-resolved
-        # manuscripts to cache so subsequent enrichments are zero-cost. Doing
-        # the type resolution here (vs. per-canvas in phase 3) avoids calling
-        # the resolver N times for an N-page manuscript with identical nature
-        # label across canvases.
-        for ark_hash in to_resolve:
-            ms_data = resolved_manuscripts.get(ark_hash, {})
-            if ms_data:
-                author_qid = ms_data.get("author")
-                if author_qid and author_qid in secondaries_by_qid:
-                    author = secondaries_by_qid[author_qid]
-                    ms_data["authorLabel"] = author.get("label", "")
-                    ms_data["authorQid"] = author_qid
-                nature_qid = ms_data.get("documentNatureQid")
-                if nature_qid and nature_qid in secondaries_by_qid:
-                    nature = secondaries_by_qid[nature_qid]
-                    ms_data["documentNatureLabel"] = nature.get("label", "") or None
-                type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
-                    ms_data.get("documentNatureLabel")
-                )
-                ms_data["documentTypeConceptId"] = type_concept_id
-                ms_data["documentTypeIsFallback"] = type_is_fallback
+    # Phase 2f: attach author and nature labels, pre-resolve the Arches
+    # Document-Type valueid once per manuscript, and persist newly-resolved
+    # manuscripts to cache so subsequent enrichments are zero-cost. Doing
+    # the type resolution here (vs. per-canvas in phase 3) avoids calling
+    # the resolver N times for an N-page manuscript with identical nature
+    # label across canvases.
+    for ark_hash in to_resolve:
+        ms_data = resolved_manuscripts.get(ark_hash, {})
+        if ms_data:
+            author_qid = ms_data.get("author")
+            if author_qid and author_qid in secondaries_by_qid:
+                author = secondaries_by_qid[author_qid]
+                ms_data["authorLabel"] = author.get("label", "")
+                ms_data["authorQid"] = author_qid
+            elif author_qid:
+                incomplete.add(ark_hash)
+            nature_qid = ms_data.get("documentNatureQid")
+            if nature_qid and nature_qid in secondaries_by_qid:
+                nature = secondaries_by_qid[nature_qid]
+                ms_data["documentNatureLabel"] = nature.get("label", "") or None
+            elif nature_qid:
+                incomplete.add(ark_hash)
+            type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
+                ms_data.get("documentNatureLabel")
+            )
+            ms_data["documentTypeConceptId"] = type_concept_id
+            ms_data["documentTypeIsFallback"] = type_is_fallback
+        if ark_hash not in incomplete:
             cache.set(
                 _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
                 ms_data,
                 _BIBLISSIMA_CACHE_TTL,
             )
 
-        # Phase 2g: resolve collection chains (location + parent institution)
-        # for each unique collection QID, so downstream consumers get
-        # collectionLabel / locationLabel / parentInstitutionLabel.
-        collection_data = {}
-        collection_qids = {
-            ms.get("collection")
-            for ms in resolved_manuscripts.values()
-            if ms.get("collection")
-        }
-        for coll_qid in collection_qids:
-            try:
-                collection_data[coll_qid] = _resolve_collection(
-                    coll_qid, session=session
-                )
-            except Exception:
-                logger.warning("Collection resolution failed for %s", coll_qid)
+    # Phase 2g: resolve collection chains (location + parent institution)
+    # for each unique collection QID, so downstream consumers get
+    # collectionLabel / locationLabel / parentInstitutionLabel.
+    collection_data = {}
+    collection_qids = {
+        ms.get("collection")
+        for ms in resolved_manuscripts.values()
+        if ms.get("collection")
+    }
+    for coll_qid in collection_qids:
+        try:
+            collection_data[coll_qid] = _resolve_collection(coll_qid, session=session)
+        except Exception:
+            logger.warning("Collection resolution failed for %s", coll_qid)
 
-        # Phase 3: decorate every canvas from the resolved manuscript map.
-        # All manuscript-level fields that downstream consumers need (dep
-        # resolution for Places/Groups, identifier creation, etc.) must be
-        # copied here — _illuminationToResult in the search-step JS reads
-        # entityData.* for the manuscript scrape path, but the IIIF
-        # descriptor search path gets its data entirely from this enrichment.
-        for canvas in canvases:
-            ms_ark = canvas.get("manuscriptArk")
-            if not ms_ark:
-                continue
-            ark_hash = ms_ark.replace("ark:/43093/", "")
-            ms_data = resolved_manuscripts.get(ark_hash) or {}
-            # Prefer the full Wikibase entity label (e.g. "Paris. Bibliothèque
-            # de l'Arsenal, 12") over the raw IIIF metadata value, which is
-            # often just the shelfmark fragment ("12") for Arsenal/BnF
-            # manifests where Biblissima only inlines the shelfmark text in
-            # the <a>Manuscrit</a> link.
-            if ms_data.get("label"):
-                canvas["manuscript"] = ms_data["label"]
-            canvas["manifestUrl"] = ms_data.get("manifestUrl")
-            canvas["authorLabel"] = ms_data.get("authorLabel")
-            canvas["authorQid"] = ms_data.get("authorQid")
-            canvas["biblissimaQid"] = ms_data.get("biblissimaQid")
-            canvas["shelfmark"] = ms_data.get("shelfmark")
-            canvas["mandragoreId"] = ms_data.get("mandragoreId")
-            # Institution / location chain from the collection resolution.
-            coll_qid = ms_data.get("collection")
-            coll = collection_data.get(coll_qid) or {} if coll_qid else {}
-            canvas["collectionLabel"] = coll.get("ownerLabel", "")
-            canvas["collectionQid"] = coll.get("ownerQid", "")
-            canvas["locationLabel"] = coll.get("locationLabel", "")
-            canvas["locationQid"] = coll.get("locationQid", "")
-            canvas["geonamesId"] = coll.get("geonamesId", "")
-            canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
-            canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
-            # Document Type — pre-resolved once in phase 2f for fresh manuscripts;
-            # for cache-hit manuscripts that pre-date this change we resolve here
-            # as a one-time fallback. Falls back to MANUSCRIT with
-            # is_fallback=True if the nature label is missing or unknown.
-            canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
-            if "documentTypeConceptId" in ms_data:
-                canvas["documentTypeConceptId"] = ms_data["documentTypeConceptId"]
-                canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
-            else:
-                type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
-                    ms_data.get("documentNatureLabel")
-                )
-                canvas["documentTypeConceptId"] = type_concept_id
-                canvas["documentTypeIsFallback"] = type_is_fallback
-    finally:
-        if owned_session:
-            session.close()
+    # Phase 3: decorate every canvas from the resolved manuscript map.
+    # All manuscript-level fields that downstream consumers need (dep
+    # resolution for Places/Groups, identifier creation, etc.) must be
+    # copied here — _illuminationToResult in the search-step JS reads
+    # entityData.* for the manuscript scrape path, but the IIIF
+    # descriptor search path gets its data entirely from this enrichment.
+    for canvas in canvases:
+        ms_ark = canvas.get("manuscriptArk")
+        if not ms_ark:
+            continue
+        ark_hash = ms_ark.replace("ark:/43093/", "")
+        ms_data = resolved_manuscripts.get(ark_hash) or {}
+        # Prefer the full Wikibase entity label (e.g. "Paris. Bibliothèque
+        # de l'Arsenal, 12") over the raw IIIF metadata value, which is
+        # often just the shelfmark fragment ("12") for Arsenal/BnF
+        # manifests where Biblissima only inlines the shelfmark text in
+        # the <a>Manuscrit</a> link.
+        if ms_data.get("label"):
+            canvas["manuscript"] = ms_data["label"]
+        canvas["manifestUrl"] = ms_data.get("manifestUrl")
+        canvas["authorLabel"] = ms_data.get("authorLabel")
+        canvas["authorQid"] = ms_data.get("authorQid")
+        canvas["biblissimaQid"] = ms_data.get("biblissimaQid")
+        canvas["shelfmark"] = ms_data.get("shelfmark")
+        canvas["mandragoreId"] = ms_data.get("mandragoreId")
+        # Institution / location chain from the collection resolution.
+        coll_qid = ms_data.get("collection")
+        coll = collection_data.get(coll_qid) or {} if coll_qid else {}
+        canvas["collectionLabel"] = coll.get("ownerLabel", "")
+        canvas["collectionQid"] = coll.get("ownerQid", "")
+        canvas["locationLabel"] = coll.get("locationLabel", "")
+        canvas["locationQid"] = coll.get("locationQid", "")
+        canvas["geonamesId"] = coll.get("geonamesId", "")
+        canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
+        canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
+        # Document Type — pre-resolved once in phase 2f for fresh manuscripts;
+        # for cache-hit manuscripts that pre-date this change we resolve here
+        # as a one-time fallback. Falls back to MANUSCRIT with
+        # is_fallback=True if the nature label is missing or unknown.
+        canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
+        if "documentTypeConceptId" in ms_data:
+            canvas["documentTypeConceptId"] = ms_data["documentTypeConceptId"]
+            canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
+        else:
+            type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
+                ms_data.get("documentNatureLabel")
+            )
+            canvas["documentTypeConceptId"] = type_concept_id
+            canvas["documentTypeIsFallback"] = type_is_fallback
 
 
 def _normalize_descriptors(descriptors):
@@ -1573,27 +1643,24 @@ class BiblissimaSearchView(View):
             descriptors_key=descriptors_key
         )
 
-        session = _build_biblissima_session()
-        try:
-            all_canvases = cache.get(raw_cache_key)
-            if all_canvases is None:
-                try:
-                    all_canvases = _fetch_biblissima_canvases(desc_hashes, session)
-                except Exception as exc:
-                    return _biblissima_upstream_error(exc, "Biblissima IIIF search")
-                cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
+        session = _get_biblissima_session()
+        all_canvases = cache.get(raw_cache_key)
+        if all_canvases is None:
+            try:
+                all_canvases = _fetch_biblissima_canvases(desc_hashes, session)
+            except Exception as exc:
+                return _biblissima_upstream_error(exc, "Biblissima IIIF search")
+            cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
 
-            total = len(all_canvases)
-            total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
+        total = len(all_canvases)
+        total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
 
-            start = (page - 1) * page_size
-            end = start + page_size
-            page_canvases = all_canvases[start:end]
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_canvases = all_canvases[start:end]
 
-            # Enrich in place on the slice we're about to return.
-            _enrich_canvases(page_canvases, session=session)
-        finally:
-            session.close()
+        # Enrich in place on the slice we're about to return.
+        _enrich_canvases(page_canvases, session=session)
 
         return JsonResponse(
             {
@@ -2576,9 +2643,20 @@ class BiblissimaCreateResourceView(View):
     - ``Document`` → ``_create_document_tiles``.
     - ``Component`` → ``_create_component_tiles``.
 
-    Tile writes run inside a single ``transaction.atomic()``. ES indexing is
-    deferred until after the DB transaction commits — a rollback therefore
-    leaves no orphan ES docs.
+    Validation and ``pre_tile_save`` run before the write transaction opens
+    (see ``_stage_tiles``); the writes themselves run in one
+    ``transaction.atomic()``. ES indexing is deferred until after the commit
+    — a rollback therefore leaves no orphan ES docs.
+
+    The created resource's own tiles are bulk-inserted, not saved through
+    ``Tile.save()``: Arches provisional edits do not apply to them, a Resource
+    Editor's write is authoritative at once, and their edit log names the
+    requesting user. The project link (``_link_to_project``,
+    ``_link_to_project_batch``) and ``BiblissimaAddAltNameView`` save through
+    ``Tile.save()`` without a user, so provisional edits do not apply there
+    either; ``_attribute_tile_save`` then names the requesting user on the
+    edit-log rows those saves wrote. The endpoints are restricted to
+    ``EDITOR_GROUPS``.
     """
 
     # Graph ID mapping for all supported resource types
@@ -2612,7 +2690,9 @@ class BiblissimaCreateResourceView(View):
 
         # Dependency types (Place/Group/Person): lightweight creation with just a name
         if resource_type in ("Place", "Group", "Person"):
-            return self._create_dependency_resource(graph_id, resource_type, bbma_data)
+            return self._create_dependency_resource(
+                graph_id, resource_type, bbma_data, request.user
+            )
 
         try:
             resource_id, created_deps = self._create_resource(
@@ -2641,9 +2721,13 @@ class BiblissimaCreateResourceView(View):
             }
         )
 
-    def _create_dependency_resource(self, graph_id, resource_type, bbma_data):
-        """Create a Place/Group/Person resource with name and relationships."""
+    def _create_dependency_resource(self, graph_id, resource_type, bbma_data, user):
+        """Create a Place/Group/Person resource with its name and relationships.
+
+        The edit log attributes the created tiles to *user*.
+        """
         from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
 
         label = (bbma_data.get("label") or "").strip()
@@ -2655,54 +2739,56 @@ class BiblissimaCreateResourceView(View):
         location_id = bbma_data.get("location")
 
         try:
-            with transaction.atomic():
-                self._tile_buffer = []
-                resource_instance = ResourceInstance(graph_id=graph_id)
-                resource_instance.save()
-                resource_id = resource_instance.resourceinstanceid
+            self._tile_buffer = []
+            resource_instance = ResourceInstance(graph_id=graph_id)
+            resource_id = resource_instance.resourceinstanceid
 
-                # Name tile
+            # Name tile
+            self._create_tile(
+                name_conf["ng"],
+                resource_id,
+                {
+                    name_conf["label"]: self._i18n_string(label),
+                    name_conf["language"]: self._concept_list([CONCEPT_FRENCH]),
+                    name_conf["type"]: self._concept_list([CONCEPT_PREFERRED_TERMS]),
+                },
+            )
+
+            # Group: Member of (parent group)
+            if resource_type == "Group" and member_of_id:
                 self._create_tile(
-                    name_conf["ng"],
+                    GROUP_MEMBER_OF_NG,
                     resource_id,
                     {
-                        name_conf["label"]: self._i18n_string(label),
-                        name_conf["language"]: self._concept_list([CONCEPT_FRENCH]),
-                        name_conf["type"]: self._concept_list(
-                            [CONCEPT_PREFERRED_TERMS]
-                        ),
+                        GROUP_MEMBER_OF_NODE: self._resource_instance_ref(member_of_id),
                     },
                 )
 
-                # Group: Member of (parent group)
-                if resource_type == "Group" and member_of_id:
-                    self._create_tile(
-                        GROUP_MEMBER_OF_NG,
-                        resource_id,
-                        {
-                            GROUP_MEMBER_OF_NODE: self._resource_instance_ref(
-                                member_of_id
-                            ),
-                        },
-                    )
+            # Group: Location (place)
+            if resource_type == "Group" and location_id:
+                self._create_tile(
+                    GROUP_LOCATION_NG,
+                    resource_id,
+                    {
+                        GROUP_LOCATION_NODE: self._resource_instance_list(location_id),
+                    },
+                )
 
-                # Group: Location (place)
-                if resource_type == "Group" and location_id:
-                    self._create_tile(
-                        GROUP_LOCATION_NG,
-                        resource_id,
-                        {
-                            GROUP_LOCATION_NODE: self._resource_instance_list(
-                                location_id
-                            ),
-                        },
-                    )
+            serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
+            self._stage_tiles(
+                self._tile_buffer,
+                self._nodes_by_id(serialized_graph),
+                DataTypeFactory(),
+            )
 
+            with transaction.atomic():
+                resource_instance.save()
                 resource = Resource.objects.select_related("graph__publication").get(
                     pk=resource_id
                 )
+                resource.set_serialized_graph(serialized_graph)
                 self._flush_tile_buffer(
-                    resource, user=None, default_transaction_id=None
+                    resource, user=user, default_transaction_id=None
                 )
 
             # Route through the defer seam (post-commit; honors
@@ -2733,9 +2819,15 @@ class BiblissimaCreateResourceView(View):
     ):
         """Create a resource with all its tiles from Biblissima data.
 
-        Wrapped in a DB transaction — if anything fails, everything rolls back.
-        Elasticsearch indexing is deferred until after all DB writes succeed,
-        so a rollback leaves no orphan documents in ES.
+        Dependency checks, tile building and staging (validation and
+        ``pre_tile_save``, which may fetch a IIIF manifest over HTTP) run
+        before any transaction opens. A IIIF manifest imported by
+        ``pre_tile_save`` is committed on its own and stays if the create then
+        fails. The resource row, its tiles, their edit log and the project
+        link are then written in one ``transaction.atomic()``; a failure rolls
+        all of them back. Elasticsearch indexing runs after the commit. A
+        missing *transaction_id* is replaced by a fresh one shared by every
+        edit-log row of the create.
 
         Tiles are buffered and flushed via two bulk INSERTs (tiles +
         edit_log) plus a single ``save_descriptors`` UPDATE on the
@@ -2745,80 +2837,67 @@ class BiblissimaCreateResourceView(View):
         for a single Component create against ~30-50 with this path.
         """
         from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
 
-        with transaction.atomic():
-            self._tile_buffer = []
+        transaction_id = transaction_id or uuid.uuid4()
+        self._tile_buffer = []
 
-            # Dangling-dependency guard (parity with BiblissimaCreateAllView
-            # Pass 1): a dependency — or the project — referencing a
-            # since-deleted resource would otherwise commit a dangling
-            # resource_x_resource row as a successful "created" (strict=False in
-            # _validate_tiles does NOT catch it). Verify existence up front; a
-            # bad ref raises ValueError, surfaced by the caller as a clean 400.
-            valid_dep_ids = self._precollect_valid_dep_ids(
-                [{"dependencies": dependencies}]
+        valid_dep_ids = self._precollect_valid_dep_ids([{"dependencies": dependencies}])
+        self._assert_deps_exist(dependencies, valid_dep_ids)
+        project_id = dependencies.get("project")
+        if project_id:
+            if not isinstance(project_id, str):
+                raise ValueError(
+                    f"Project {project_id!r} is not a valid resource id; "
+                    "cannot link."
+                )
+            if project_id.strip() and project_id.strip() not in valid_dep_ids:
+                raise ValueError(f"Project {project_id} does not exist; cannot link.")
+
+        created_deps = {"places": {}, "persons": {}, "groups": {}}
+        resource_instance = ResourceInstance(graph_id=graph_id)
+        resource_id = resource_instance.resourceinstanceid
+
+        if resource_type == "Document":
+            self._create_document_tiles(
+                resource_id,
+                transaction_id,
+                bbma_data,
+                dependencies,
+                concept_mappings,
+                created_deps,
             )
-            self._assert_deps_exist(dependencies, valid_dep_ids)
-            project_id = dependencies.get("project")
-            if project_id:
-                if not isinstance(project_id, str):
-                    raise ValueError(
-                        f"Project {project_id!r} is not a valid resource id; "
-                        "cannot link."
-                    )
-                if project_id.strip() and project_id.strip() not in valid_dep_ids:
-                    raise ValueError(
-                        f"Project {project_id} does not exist; cannot link."
-                    )
+        else:
+            self._create_component_tiles(
+                resource_id,
+                transaction_id,
+                bbma_data,
+                dependencies,
+                concept_mappings,
+                created_deps,
+            )
 
-            created_deps = {"places": {}, "persons": {}, "groups": {}}
-            resource_instance = ResourceInstance(graph_id=graph_id)
+        serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
+        self._stage_tiles(
+            self._tile_buffer, self._nodes_by_id(serialized_graph), DataTypeFactory()
+        )
+
+        with transaction.atomic():
             resource_instance.save()
-            resource_id = resource_instance.resourceinstanceid
-
-            if resource_type == "Document":
-                self._create_document_tiles(
-                    resource_id,
-                    transaction_id,
-                    bbma_data,
-                    dependencies,
-                    concept_mappings,
-                    created_deps,
-                )
-            else:
-                self._create_component_tiles(
-                    resource_id,
-                    transaction_id,
-                    bbma_data,
-                    dependencies,
-                    concept_mappings,
-                    created_deps,
-                )
-
             resource = Resource.objects.select_related("graph__publication").get(
                 pk=resource_id
             )
+            resource.set_serialized_graph(serialized_graph)
             self._flush_tile_buffer(resource, user, transaction_id)
 
-            # Linking to a project writes a tile on a *different* resource
-            # (the project) and must refresh the project's descriptors.
-            # Run it after the buffer flush so it goes through the
-            # standard Tile.save() path on its own resource. project_id was
-            # resolved and existence-checked by the guard above.
+            # The project link writes a tile on the project through
+            # Tile.save(), after the flush of this resource's own tiles.
             if project_id:
-                self._link_to_project(resource_id, project_id, transaction_id)
+                self._link_to_project(resource_id, project_id, transaction_id, user)
 
-        # Schedule ES indexing to run after the DB transaction commits.
-        # The on_commit wrapper inside _defer_indexing guarantees that a
-        # rollback never enqueues an indexing job for data that no longer
-        # exists. With BIBLISSIMA_ASYNC_INDEXING=False (the default), this
-        # is behaviourally identical to the previous inline resource.index()
-        # call but runs strictly post-commit.
-        #
-        # When the resource was linked to a project, the project's tile was
-        # written with index=False (I-3), so the project must be re-indexed
-        # here too — otherwise its ES doc's studied_objects stays stale.
+        # The project tile is saved with index=False, so the project is
+        # re-indexed here with the new resource.
         index_ids = [str(resource_id)]
         if project_id:
             index_ids.append(str(project_id))
@@ -3028,6 +3107,53 @@ class BiblissimaCreateResourceView(View):
                 else:
                     method(tile, nodeid)
 
+    @staticmethod
+    def _nodes_by_id(serialized_graph):
+        """Nodes of a serialized graph keyed by their id as a string."""
+        return {str(n["nodeid"]): n for n in (serialized_graph or {}).get("nodes", [])}
+
+    def _stage_tiles(self, tiles, nodes_by_id, factory):
+        """Validate *tiles* and run their ``pre_tile_save`` hooks.
+
+        Runs before the write transaction opens, never inside it:
+        ``pre_tile_save`` on a IIIF manifest node fetches the manifest over
+        HTTP, with retries and a per-host throttle, and a transaction held
+        open meanwhile keeps its connection and row locks. Writes nothing to
+        the resource tables. Raises what the validators and hooks raise
+        (``TileValidationError``, ``requests.HTTPError``, ``UnsafeURLError``…).
+        """
+        self._validate_tiles(tiles, nodes_by_id, factory)
+        self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
+
+    @staticmethod
+    def _editlog_user_fields(user):
+        """``EditLog`` user columns for *user*: a null id and empty names when
+        *user* is ``None``."""
+        return {
+            "userid": (
+                str(user.id) if user is not None and getattr(user, "id", None) else None
+            ),
+            "user_username": getattr(user, "username", "") or "",
+            "user_firstname": getattr(user, "first_name", "") or "",
+            "user_lastname": getattr(user, "last_name", "") or "",
+            "user_email": getattr(user, "email", "") or "",
+        }
+
+    def _attribute_tile_save(self, tileid, transaction_id, user):
+        """Name *user* on the edit-log rows a user-less ``Tile.save()`` wrote.
+
+        Biblissima calls ``Tile.save()`` without a user: for a user who is not
+        a resource reviewer, Arches would store the write as a provisional
+        edit. Arches then records an empty user id; this replaces it on the
+        rows of *tileid* under *transaction_id*. Call it inside the
+        transaction of the save.
+        """
+        from arches.app.models.models import EditLog
+
+        EditLog.objects.filter(
+            transactionid=transaction_id, tileinstanceid=str(tileid), userid=""
+        ).update(**self._editlog_user_fields(user))
+
     def _write_editlog(self, tiles, resource, user, tx_id):
         """Build one ``EditLog`` row per tile and bulk-insert them.
 
@@ -3041,13 +3167,7 @@ class BiblissimaCreateResourceView(View):
 
         displayname = resource.displayname()
 
-        user_id = (
-            str(user.id) if user is not None and getattr(user, "id", None) else None
-        )
-        user_username = getattr(user, "username", "") or ""
-        user_firstname = getattr(user, "first_name", "") or ""
-        user_lastname = getattr(user, "last_name", "") or ""
-        user_email = getattr(user, "email", "") or ""
+        user_fields = self._editlog_user_fields(user)
 
         now = timezone.now()
         fallback_tx = tx_id or uuid.uuid4()
@@ -3064,11 +3184,7 @@ class BiblissimaCreateResourceView(View):
                 newvalue=t.data,
                 oldvalue={},
                 timestamp=now,
-                userid=user_id,
-                user_username=user_username,
-                user_firstname=user_firstname,
-                user_lastname=user_lastname,
-                user_email=user_email,
+                **user_fields,
                 note="resource creation",
             )
             for t in tiles
@@ -3117,17 +3233,13 @@ class BiblissimaCreateResourceView(View):
         """Persist ``self._tile_buffer`` in two bulk INSERTs and refresh
         descriptors once.
 
-        Thin orchestrator: captures and resets the buffer, builds the shared
-        ``DataTypeFactory`` and ``nodes_by_id`` lookup, then delegates to the
-        three reusable primitives in order:
+        The buffer must already have gone through ``_stage_tiles``, before the
+        transaction this method runs in was opened. Steps, in order:
 
-        1. ``_validate_tiles`` — Tier-2 validate-net (raises
-           ``TileValidationError`` on any ERROR before any DB write).
-        2. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
-        3. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
-        4. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
-        5. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
-        6. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+        1. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
+        2. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
+        3. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        4. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
 
         After this method, ``self._tile_buffer`` is reset to an empty
         list — any further ``_create_tile`` call inside the same
@@ -3142,24 +3254,13 @@ class BiblissimaCreateResourceView(View):
         if not tiles:
             return
 
-        # Reuse the published graph that ``select_related`` already
-        # fetched on ``resource`` (see _create_resource): one in-memory
-        # dict shared by validate, pre_tile_save, and post_tile_save
-        # for the whole batch. Using ``resource.get_serialized_graph()``
-        # avoids the extra ``Node.objects.filter(graph_id=...)`` SQL
-        # round-trip a fresh ``Node`` queryset would cost.
         factory = DataTypeFactory()
-        serialized_graph = resource.get_serialized_graph() or {}
-        nodes_by_id = {str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])}
+        nodes_by_id = self._nodes_by_id(resource.get_serialized_graph())
 
-        self._validate_tiles(tiles, nodes_by_id, factory)
-        self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
         TileModel.objects.bulk_create(tiles)
         self._run_hook(tiles, nodes_by_id, factory, "post_tile_save")
         # MultiDescriptor reads tiles via TileModel.objects.filter(...) —
-        # so it sees the rows just inserted. save_descriptors also calls
-        # super().save() on the resource, which is the single UPDATE
-        # replacing the N updates the per-tile path would emit.
+        # so it sees the rows just inserted.
         resource.save_descriptors()
         self._write_editlog(tiles, resource, user, default_transaction_id)
 
@@ -3908,7 +4009,7 @@ class BiblissimaCreateResourceView(View):
                 parenttile=item_feature_tile,
             )
 
-    def _link_to_project(self, resource_id, project_id, transaction_id):
+    def _link_to_project(self, resource_id, project_id, transaction_id, user):
         """Add the created resource to the project's Studied Objects.
 
         Locks the project's ResourceInstance row (``select_for_update``) for the
@@ -3917,6 +4018,9 @@ class BiblissimaCreateResourceView(View):
         tile (a lock on the not-yet-existing Tile row would protect nothing).
         MUST run inside a transaction — callers wrap it in
         ``transaction.atomic()``.
+
+        The tile is saved under *transaction_id* (a fresh one when ``None``)
+        and the edit is attributed to *user* through ``_attribute_tile_save``.
         """
         # Validate project_id is a proper UUID
         try:
@@ -3926,6 +4030,7 @@ class BiblissimaCreateResourceView(View):
             return
 
         project_id = str(project_uuid)
+        transaction_id = transaction_id or uuid.uuid4()
 
         # Serialize concurrent linkers on the project row itself. A missing
         # project means the link target is gone — skip rather than raise a
@@ -3966,7 +4071,8 @@ class BiblissimaCreateResourceView(View):
             # inline here (default index=True) runs a synchronous ES write inside
             # _create_resource's atomic() -> a transient ES outage would raise
             # and roll back the freshly-created resource (500 on a good create).
-            existing.save(index=False)
+            existing.save(index=False, transaction_id=transaction_id)
+            self._attribute_tile_save(existing.tileid, transaction_id, user)
         else:
             # Direct Tile.save() — this writes one tile on the *project*
             # (a different resource than the one being created), and
@@ -3981,9 +4087,8 @@ class BiblissimaCreateResourceView(View):
                 data={PROJECT_STUDIED_OBJECTS_NODE: [new_ref]},
                 sortorder=0,
             )
-            if transaction_id:
-                tile.transaction_id = transaction_id
-            tile.save(index=False)
+            tile.save(index=False, transaction_id=transaction_id)
+            self._attribute_tile_save(tile.tileid, transaction_id, user)
 
     def _bulk_create_resources(self, graph_id, n, user, ids=None):
         """Bulk-create ``n`` ResourceInstance rows for the given graph in one INSERT.
@@ -4050,7 +4155,7 @@ class BiblissimaCreateResourceView(View):
         ResourceInstance.objects.bulk_create(instances)
         return [inst.resourceinstanceid for inst in instances]
 
-    def _link_to_project_batch(self, created_ids, project_id, tx_id):
+    def _link_to_project_batch(self, created_ids, project_id, tx_id, user):
         """Link a batch of newly-created resources to the project's Studied Objects
         tile in a single locked read-modify-write.
 
@@ -4068,6 +4173,8 @@ class BiblissimaCreateResourceView(View):
         buffer) because the project is a different resource needing its own
         descriptor refresh, and ``_flush_tile_buffer`` only handles the
         resource currently being imported.
+
+        The edit is attributed to *user* through ``_attribute_tile_save``.
         """
         # Lock the project ROW first so concurrent batches serialise even when
         # the studied-objects tile does not exist yet: a select_for_update on the
@@ -4082,6 +4189,7 @@ class BiblissimaCreateResourceView(View):
         if project_row is None:
             logger.warning("Project %s does not exist; skipping batch link", project_id)
             return
+        tx_id = tx_id or uuid.uuid4()
 
         existing = (
             Tile.objects.select_for_update()
@@ -4111,6 +4219,7 @@ class BiblissimaCreateResourceView(View):
                     present_ids.add(ref["resourceId"])
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
             existing.save(index=False, transaction_id=tx_id)
+            self._attribute_tile_save(existing.tileid, tx_id, user)
         else:
             tile = Tile(
                 tileid=uuid.uuid4(),
@@ -4120,6 +4229,7 @@ class BiblissimaCreateResourceView(View):
                 sortorder=0,
             )
             tile.save(index=False, transaction_id=tx_id)
+            self._attribute_tile_save(tile.tileid, tx_id, user)
 
     def _resource_instance_ref(self, resource_id):
         """Build a resource-instance reference for a single resource.
@@ -4188,44 +4298,43 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         ]}
 
     Integration task (Phase 3.4). Inherits ALL write-path primitives from
-    :class:`BiblissimaCreateResourceView` (``_validate_tiles``, ``_run_hook``, ``_write_editlog``, the tile builders,
-    ``_batch_save_descriptors``, ``_bulk_create_resources``,
-    ``_link_to_project_batch``) — nothing is redefined, so a patch on the base
-    class is observed here.
+    :class:`BiblissimaCreateResourceView`: ``_stage_tiles`` for Pass 1 (it runs
+    ``_validate_tiles`` and ``_run_hook``), ``_run_hook``, ``_write_editlog``,
+    the tile builders, ``_batch_save_descriptors``, ``_bulk_create_resources``
+    and ``_link_to_project_batch``. Nothing is redefined, so a patch on the
+    base class is observed here.
 
-    Two-pass, best-effort algorithm
-    -------------------------------
-    Everything runs inside ONE outer ``transaction.atomic()``; ES indexing is
-    strictly AFTER it commits (``ATOMIC_REQUESTS=False`` in this project, so the
-    post-``with`` reindex is genuinely post-commit and a rollback leaves no
-    orphan ES docs).
+    Two passes, best effort
+    -----------------------
+    * **Pass 1 — per item, no transaction.** Dependency and project existence
+      checks (``_assert_deps_exist``), tile building, then ``_stage_tiles``:
+      validation and ``pre_tile_save``, which fetches IIIF manifests over
+      HTTP. A failing item is reported ``"failed"`` and its staged tiles are
+      dropped from the shared buffer (``del self._tile_buffer[start:]``).
+      Nothing is written to the resource tables: resource ids are generated
+      here and their rows are inserted in Pass 2. A manifest imported by
+      ``pre_tile_save`` is committed on its own and stays if its item fails.
 
-    * **Pass 1 — per item, in a nested ``atomic()`` SAVEPOINT.** The per-item
-      ``try/except`` is placed AROUND the ``with`` block, so an exception
-      triggers ``ROLLBACK TO SAVEPOINT`` for just that item and the loop
-      continues. A dependency-existence pre-pass (``_assert_deps_exist``) runs
-      *before* the resourceinstance is created, so a dangling relationship
-      becomes a clean ``"failed"`` instead of a silently committed
-      ``resource_x_resource`` row with a NULL ``to_graphid``. On failure the
-      item's staged tiles are dropped from the shared buffer
-      (``del self._tile_buffer[start:]``) so no residue reaches Pass 2.
+    * **Pass 2 — survivors only, one ``transaction.atomic()``.** One
+      ``_bulk_create_resources`` with the survivor ids, one
+      ``TileModel.bulk_create``, the ``post_tile_save`` replay, one
+      ``_batch_save_descriptors``, one ``_write_editlog`` per survivor under a
+      single ``batch_tx``, then ``_link_to_project_batch`` per distinct
+      project.
 
-    * **Pass 2 — survivors only, still inside the outer atomic.** One
-      ``TileModel.bulk_create`` of all survivor tiles, one
-      ``post_tile_save`` replay, one ``_batch_save_descriptors``, one
-      ``_write_editlog`` per survivor under a single ``batch_tx``, then a
-      grouped ``_link_to_project_batch`` per distinct project.
+    Pass 1 stays outside any transaction: ``pre_tile_save`` can hold a request
+    for minutes on a slow IIIF host. ES indexing is scheduled after Pass 2
+    commits (``ATOMIC_REQUESTS`` is off), so a rollback leaves no orphan ES
+    document.
 
-    Contract holes closed
-    ---------------------
-    * **Hole 1 — Pass 2 is documented all-or-nothing.** Any Pass-2 exception
-      rolls the whole outer atomic back and returns HTTP 500
-      ``{"error": "Batch creation failed"}`` with no per-survivor attribution.
-      Because Hole 2 removes the only *data-driven* Pass-2 failure mode
-      (dangling R2R), a remaining Pass-2 exception is genuine infrastructure
-      failure where an unattributed 500 is acceptable. Per-survivor Pass-2
-      savepoints are a deferred hardening.
-    * **Hole 2 — dangling resource-instance deps.** ``_validate_tiles`` runs
+    Failure contract
+    ----------------
+    * **Pass 2 is all-or-nothing.** Any Pass-2 exception rolls the whole pass
+      back and the view answers HTTP 500 ``{"error": "Batch creation failed"}``
+      with no per-survivor attribution. Pass 1 removes the only data-driven
+      Pass-2 failure (a dangling relationship), so what remains is an
+      infrastructure failure.
+    * **Dangling resource-instance deps.** ``_validate_tiles`` runs
       ``strict=False`` and would let a stale dep UUID commit as ``"created"``.
       The batched ``_precollect_valid_dep_ids`` + per-item ``_assert_deps_exist``
       turn a missing dep into a Pass-1 ``"failed"``.
@@ -4273,13 +4382,10 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
             valid_dep_ids = self._precollect_valid_dep_ids(items)
             factory = DataTypeFactory()
 
-            # Hoist the serialized-graph -> nodes_by_id ONCE: all items share one
-            # graph. Mirror how _flush_tile_buffer derives nodes_by_id (via a
-            # Resource bound to the graph), so validate / hooks reuse one dict.
-            serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
-            nodes_by_id = {
-                str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])
-            }
+            # One graph per call: nodes are looked up once for the whole batch.
+            nodes_by_id = self._nodes_by_id(
+                Resource(graph_id=graph_id).get_serialized_graph()
+            )
         except Exception:
             logger.exception("Biblissima batch pre-pass failed")
             return JsonResponse({"error": "Invalid batch payload"}, status=400)
@@ -4340,11 +4446,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                 builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
                 item_tiles = self._tile_buffer[start:]
 
-                self._validate_tiles(item_tiles, nodes_by_id, factory)
-                # pre_tile_save = IIIF manifest fetch; can raise
-                # requests.HTTPError / UnsafeURLError / FailParsingManifestIIIF /
-                # TileValidationError. Runs here, OUTSIDE the transaction.
-                self._run_hook(item_tiles, nodes_by_id, factory, "pre_tile_save")
+                self._stage_tiles(item_tiles, nodes_by_id, factory)
             except Exception as exc:
                 # Drop this item's staged tiles so no residue reaches Pass 2 and
                 # report it failed. No DB rollback needed — nothing was written
@@ -4405,10 +4507,12 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                         if project_id:
                             by_project.setdefault(str(project_id), []).append(rid)
                     for project_id, ids in by_project.items():
-                        self._link_to_project_batch(ids, project_id, batch_tx)
+                        self._link_to_project_batch(
+                            ids, project_id, batch_tx, request.user
+                        )
             except Exception:
                 # ANY Pass-2 failure rolls this atomic back -> no survivor
-                # committed -> unattributed 500 (Hole 1). Manifests imported in
+                # committed -> unattributed 500. Manifests imported in
                 # Pass 1 remain (benign/dedupable).
                 logger.exception("Biblissima batch creation failed")
                 return JsonResponse({"error": "Batch creation failed"}, status=500)
@@ -4429,6 +4533,8 @@ class BiblissimaAddAltNameView(View):
 
     def post(self, request):
         import json
+
+        from django.db import transaction
 
         try:
             body = json.loads(request.body)
@@ -4477,7 +4583,10 @@ class BiblissimaAddAltNameView(View):
                 },
                 sortorder=0,
             )
-            tile.save(index=False)
+            transaction_id = uuid.uuid4()
+            with transaction.atomic():
+                tile.save(index=False, transaction_id=transaction_id)
+                creator._attribute_tile_save(tile.tileid, transaction_id, request.user)
 
             # Route through the defer seam (post-commit; honors
             # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
@@ -4557,7 +4666,7 @@ class BiblissimaLinkToProjectView(View):
             return JsonResponse({"error": "Invalid UUID"}, status=400)
 
         # Reuse the helper on BiblissimaCreateResourceView so the dedup logic
-        # stays in a single place. transaction_id is None for ad-hoc links.
+        # stays in a single place. An ad-hoc link gets a transaction id of its own.
         # _link_to_project takes a select_for_update row lock, so it MUST run
         # inside a transaction.
         creator = BiblissimaCreateResourceView()
@@ -4567,6 +4676,7 @@ class BiblissimaLinkToProjectView(View):
                     resource_id,
                     project_id,
                     transaction_id=None,
+                    user=request.user,
                 )
         except Exception:
             logger.exception(
