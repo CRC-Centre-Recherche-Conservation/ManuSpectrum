@@ -374,9 +374,13 @@ const viewModel = function(params) {
         try {
             const resp = await fetch(`/api/biblissima/illumination/${hash}`);
             if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                const notFound =
+                    data.error === 'upstream_error' && data.status === 404;
                 self.searchError(
-                    arches.translations.biblissimaIdentifierNotFound ||
-                        'No Biblissima entity matches this identifier'
+                    (!notFound && data.message) ||
+                        arches.translations.biblissimaIdentifierNotFound ||
+                        'No Biblissima entity matches this identifier',
                 );
                 return;
             }
