@@ -111,6 +111,7 @@ IIIF_REQUEST_TIMEOUT = settings.BIBLISSIMA_IIIF_REQUEST_TIMEOUT
 IIIF_CONNECT_TIMEOUT = settings.BIBLISSIMA_IIIF_CONNECT_TIMEOUT
 PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
 _BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
+_BIBLISSIMA_SLOT_TIMEOUT = settings.BIBLISSIMA_SLOT_TIMEOUT
 _BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
 
 
@@ -192,11 +193,15 @@ def _get_besteffort_session():
 # Concurrency control & monitoring for outbound Biblissima calls
 # ---------------------------------------------------------------------------
 
-# Module-level semaphore bounds how many concurrent HTTP calls to Biblissima
-# can run across the whole Django process, regardless of how many users hit
-# the proxy at the same time. Sized via _BIBLISSIMA_CONCURRENCY_LIMIT in
-# biblissima_constants to stay a good API citizen.
+# Bounds concurrent outbound calls to Biblissima per worker process: every
+# gunicorn worker holds its own semaphore, so the upstream sees at most
+# _BIBLISSIMA_CONCURRENCY_LIMIT × workers calls at once.
 _biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
+
+
+class BiblissimaBusy(Exception):
+    """No concurrency slot freed up within ``_BIBLISSIMA_SLOT_TIMEOUT``."""
+
 
 # Lightweight counters for observing upstream health via /api/biblissima/stats.
 _biblissima_stats = {
@@ -205,6 +210,7 @@ _biblissima_stats = {
     "responses_429": 0,
     "responses_5xx": 0,
     "errors_total": 0,
+    "slot_timeouts": 0,
     "cache_hits": 0,
     "cache_misses": 0,
 }
@@ -218,10 +224,16 @@ def _incr_stat(key, delta=1):
 
 @contextmanager
 def _biblissima_slot():
-    """Acquire one concurrency slot for an outbound Biblissima call."""
-    _biblissima_semaphore.acquire()
-    _incr_stat("requests_in_flight", 1)
+    """Hold one concurrency slot for an outbound Biblissima call.
+
+    Waits at most ``_BIBLISSIMA_SLOT_TIMEOUT`` seconds, then raises
+    ``BiblissimaBusy``. Once acquired, the slot is released on every exit.
+    """
+    if not _biblissima_semaphore.acquire(timeout=_BIBLISSIMA_SLOT_TIMEOUT):
+        _incr_stat("slot_timeouts", 1)
+        raise BiblissimaBusy()
     try:
+        _incr_stat("requests_in_flight", 1)
         yield
     finally:
         _incr_stat("requests_in_flight", -1)
@@ -281,7 +293,20 @@ def _annotation_targets_are_safe(canvas_url, manifest_url):
 
 
 def _biblissima_upstream_error(exc, context):
-    """Map a requests exception to a JSON error response with a user-facing message."""
+    """Map an outbound-call exception to a JSON error response with a user-facing message."""
+    if isinstance(exc, BiblissimaBusy):
+        logger.warning("%s: no Biblissima slot free", context)
+        response = JsonResponse(
+            {
+                "error": "busy",
+                "message": _(
+                    "Too many Biblissima requests are in progress. Please try again in a moment."
+                ),
+            },
+            status=503,
+        )
+        response["Retry-After"] = str(_BIBLISSIMA_SLOT_TIMEOUT)
+        return response
     if isinstance(exc, requests.exceptions.Timeout):
         logger.warning("%s timed out", context)
         return JsonResponse(
@@ -1238,6 +1263,8 @@ def _enrich_canvases(canvases, session=None):
 
     Only the manuscripts referenced by the given canvases are resolved, which
     makes it cheap to call on a page slice rather than on the whole result set.
+    A manuscript record is cached only when its lookup, its candidate entities
+    and its author and nature entities all resolved.
     """
     if not canvases:
         return
@@ -1325,6 +1352,7 @@ def _enrich_canvases(canvases, session=None):
 
         candidates_by_ark_hash = {}
         cirrus_failures = []
+        incomplete = set()
         if to_resolve:
             max_workers = min(6, len(to_resolve))
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -1334,6 +1362,7 @@ def _enrich_canvases(canvases, session=None):
                     candidates_by_ark_hash[ark_hash] = candidate_qids
                     if failure:
                         cirrus_failures.append(failure)
+                        incomplete.add(ark_hash)
             if cirrus_failures:
                 logger.warning(
                     "[biblissima.parent-resolver] Wikibase CirrusSearch failed "
@@ -1357,6 +1386,8 @@ def _enrich_canvases(canvases, session=None):
         author_qids = set()
         nature_qids = set()
         for ark_hash, candidate_qids in candidates_by_ark_hash.items():
+            if any(qid not in entities_by_qid for qid in candidate_qids):
+                incomplete.add(ark_hash)
             ms_data = {}
             for qid in candidate_qids:
                 entity = entities_by_qid.get(qid)
@@ -1394,20 +1425,25 @@ def _enrich_canvases(canvases, session=None):
                     author = secondaries_by_qid[author_qid]
                     ms_data["authorLabel"] = author.get("label", "")
                     ms_data["authorQid"] = author_qid
+                elif author_qid:
+                    incomplete.add(ark_hash)
                 nature_qid = ms_data.get("documentNatureQid")
                 if nature_qid and nature_qid in secondaries_by_qid:
                     nature = secondaries_by_qid[nature_qid]
                     ms_data["documentNatureLabel"] = nature.get("label", "") or None
+                elif nature_qid:
+                    incomplete.add(ark_hash)
                 type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
                     ms_data.get("documentNatureLabel")
                 )
                 ms_data["documentTypeConceptId"] = type_concept_id
                 ms_data["documentTypeIsFallback"] = type_is_fallback
-            cache.set(
-                _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
-                ms_data,
-                _BIBLISSIMA_CACHE_TTL,
-            )
+            if ark_hash not in incomplete:
+                cache.set(
+                    _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
+                    ms_data,
+                    _BIBLISSIMA_CACHE_TTL,
+                )
 
         # Phase 2g: resolve collection chains (location + parent institution)
         # for each unique collection QID, so downstream consumers get
