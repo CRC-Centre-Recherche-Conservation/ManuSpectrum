@@ -3,7 +3,6 @@ IIIF Annotation & collection API
 """
 
 from collections import defaultdict
-from functools import lru_cache
 import logging
 import zlib
 import orjson
@@ -19,6 +18,7 @@ from django.db.models import Q
 
 from arches.app.models.models import ResourceInstance, ResourceXResource, VwAnnotation
 from arches.app.models.resource import Resource
+from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.views.serializers.iiif_annotation import (
     IIIFAnnotationSerializer,
@@ -52,6 +52,9 @@ def cached_json_response(
 
     resp = HttpResponse(payload, content_type="application/json")
     resp["ETag"] = etag
+    # `public` is only correct while no resource is restricted: the read guard
+    # runs inside the view, and a shared HTTP cache cannot run it. Decision D1
+    # (issue #72) switches this to `private` when object permissions arrive.
     resp["Cache-Control"] = "public, max-age=3600"
     return resp
 
@@ -76,6 +79,7 @@ def get_cached_response(cache_key: str) -> HttpResponse | None:
     resp = HttpResponse(payload, content_type="application/json")
     if etag:
         resp["ETag"] = etag
+    # Same coupling as in cached_json_response.
     resp["Cache-Control"] = "public, max-age=3600"
     return resp
 
@@ -95,6 +99,25 @@ class IIIFAnnotationMixin:
     ANALYSIS_GRAPH_ID = "60c85aba-f079-45bc-997f-21cdd4f77b6d"
     DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
     COMPONENT_GRAPH_ID = "d47595b4-f8a6-419c-8f33-b388206280c4"
+
+    def _forbid_unless_readable(self, request, resource):
+        """403 for a resource the caller may not read, else ``None``.
+
+        Runs after the lookup and before the cache read, so neither a refusal
+        nor a payload for a resource the caller may not read is ever served
+        from the public cache key. Anonymous visitors reach here as the
+        ``anonymous`` database user (``SetAnonymousUser``), whose read rights
+        come from the Guest group.
+        """
+        if user_can_read_resource(request.user, resource=resource):
+            return None
+        if not request.user.is_authenticated:
+            logger.warning(
+                "IIIF read refused for an unauthenticated request on %s; "
+                "SetAnonymousUser did not install the anonymous user",
+                getattr(resource, "resourceinstanceid", resource),
+            )
+        return JsonResponse({"error": "forbidden"}, status=403)
 
     def _get_display_name(self, resource: ResourceInstance):
         if hasattr(resource, "displayname"):
@@ -213,7 +236,6 @@ class IIIFAnnotationMixin:
         cache.set(cache_key, canvas_id, timeout=self.CACHE_TIMEOUT)
         return canvas_id
 
-    @lru_cache(maxsize=256)
     def _get_canvas_dimensions(self, canvas_uri: str):
         """
         Retrieve canvas width/height from the IIIF infrastructure.
@@ -329,8 +351,8 @@ class IIIFAnnotationMixin:
                         "analysis_label": props.get("label") or "",
                     }
                 )
-            except Exception as e:  # pragma: no cover
-                logger.error(f"Error parsing annotation: {e}")
+            except Exception:  # pragma: no cover
+                logger.exception("Error parsing annotation")
         return annotations
 
 
@@ -352,14 +374,18 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id):
         cache_key = f"iiif_v3_collection_{resource_id}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             resource = ResourceInstance.objects.select_related("graph").get(
                 resourceinstanceid=resource_id
             )
+            forbidden = self._forbid_unless_readable(request, resource)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
 
             analyses = self._get_related_analyses(resource)
             if not analyses:
@@ -383,7 +409,7 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
                     canvas_mapping.setdefault(canvas_uri, []).append(idx)
 
             # Batch serialize all annotations
-            serialized = IIIFAnnotationSerializer.batch_to_representation(
+            serialized = IIIFAnnotationSerializer().batch_to_representation(
                 all_annotation_data
             )
 
@@ -398,9 +424,9 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating collection: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating collection")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
     def _get_related_analyses(self, resource: ResourceInstance) -> list[Resource]:
         """
@@ -555,14 +581,18 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id, page_num: int):
         cache_key = f"iiif_v3_page_{resource_id}_{page_num}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             resource = ResourceInstance.objects.select_related("graph").get(
                 resourceinstanceid=resource_id
             )
+            forbidden = self._forbid_unless_readable(request, resource)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
 
             collection_view = IIIFAnnotationCollectionView()
             analyses = collection_view._get_related_analyses(resource)
@@ -589,7 +619,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
             annotation_data = [self._build_annotation_payload(a) for a in annos]
 
-            items = IIIFAnnotationSerializer.batch_to_representation(annotation_data)
+            items = IIIFAnnotationSerializer().batch_to_representation(annotation_data)
 
             collection_id = f"{self.base_url}/v3/annotation-collection/{resource_id}"
             page_id = f"{collection_id}/page-{page_num}"
@@ -627,9 +657,9 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating IIIF page: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating IIIF page")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
 
 # ======================================================================================
@@ -646,12 +676,16 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id):
         cache_key = f"iiif_v3_annotation_{resource_id}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             analysis = Resource.objects.get(resourceinstanceid=resource_id)
+            forbidden = self._forbid_unless_readable(request, analysis)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
             if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
                 return JsonResponse(
                     {"error": "Resource is not an Analysis"}, status=400
@@ -663,15 +697,15 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
             anno = annos[0]  # 1 analysis -> 1 annotation
             payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
-            iiif_annotation = IIIFAnnotationSerializer.to_representation(**payload)
+            iiif_annotation = IIIFAnnotationSerializer().to_representation(**payload)
 
             return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
 
         except Resource.DoesNotExist:
             return JsonResponse({"error": "Annotation not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating annotation: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating annotation")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
 
 # ======================================================================================
@@ -692,14 +726,18 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id):
         cache_key = f"iiif_v2_collection_{resource_id}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             resource = ResourceInstance.objects.select_related("graph").get(
                 resourceinstanceid=resource_id
             )
+            forbidden = self._forbid_unless_readable(request, resource)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
 
             # Reuse v3 logic for fetching analyses
             collection_view = IIIFAnnotationCollectionView()
@@ -722,9 +760,9 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating v2 collection: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating v2 collection")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
     def _build_layer(self, resource: ResourceInstance, grouped_annos: dict) -> dict:
         """Build a sc:Layer structure referencing all AnnotationLists."""
@@ -774,14 +812,18 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id, page_num: int):
         cache_key = f"iiif_v2_page_{resource_id}_{page_num}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             resource = ResourceInstance.objects.select_related("graph").get(
                 resourceinstanceid=resource_id
             )
+            forbidden = self._forbid_unless_readable(request, resource)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
 
             collection_view = IIIFAnnotationCollectionView()
             analyses = collection_view._get_related_analyses(resource)
@@ -809,7 +851,9 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
             annotation_data = [self._build_annotation_payload(a) for a in annos]
 
             # Use v2 serializer
-            items = IIIFAnnotationSerializerV2.batch_to_representation(annotation_data)
+            items = IIIFAnnotationSerializerV2().batch_to_representation(
+                annotation_data
+            )
 
             layer_id = f"{self.base_url}/v2/annotation-collection/{resource_id}"
             list_id = f"{layer_id}/page-{page_num}"
@@ -831,9 +875,9 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
 
         except ResourceInstance.DoesNotExist:
             return JsonResponse({"error": "Resource not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating v2 IIIF page: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating v2 IIIF page")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
 
 class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
@@ -845,12 +889,16 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
 
     def get(self, request, resource_id):
         cache_key = f"iiif_v2_annotation_{resource_id}"
-        cached = get_cached_response(cache_key)
-        if cached:
-            return cached
 
         try:
             analysis = Resource.objects.get(resourceinstanceid=resource_id)
+            forbidden = self._forbid_unless_readable(request, analysis)
+            if forbidden:
+                return forbidden
+
+            cached = get_cached_response(cache_key)
+            if cached:
+                return cached
             if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
                 return JsonResponse(
                     {"error": "Resource is not an Analysis"}, status=400
@@ -864,15 +912,15 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
             payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
 
             # Use v2 serializer
-            iiif_annotation = IIIFAnnotationSerializerV2.to_representation(**payload)
+            iiif_annotation = IIIFAnnotationSerializerV2().to_representation(**payload)
 
             return cached_json_response(cache_key, iiif_annotation, self.CACHE_TIMEOUT)
 
         except Resource.DoesNotExist:
             return JsonResponse({"error": "Annotation not found"}, status=404)
-        except Exception as e:  # pragma: no cover
-            logger.error(f"Error generating v2 annotation: {e}")
-            return JsonResponse({"error": str(e)}, status=500)
+        except Exception:
+            logger.exception("Error generating v2 annotation")
+            return JsonResponse({"error": "internal_error"}, status=500)
 
 
 # ======================================================================================
@@ -968,8 +1016,8 @@ def invalidate_on_vwannotation_change(sender, instance: VwAnnotation, **kwargs):
     try:
         analysis_uuid = instance.resourceinstance_id
         _invalidate_for_analysis_id(analysis_uuid)
-    except Exception as e:  # pragma: no cover
-        logger.error(f"Cache invalidation (VwAnnotation) failed: {e}")
+    except Exception:  # pragma: no cover
+        logger.exception("Cache invalidation (VwAnnotation) failed")
 
 
 @receiver([post_save, post_delete], sender=ResourceXResource)
@@ -1015,5 +1063,5 @@ def invalidate_on_relation_change(sender, instance: ResourceXResource, **kwargs)
                 _delete_page_patterns(doc_id, "v3")
                 _delete_page_patterns(doc_id, "v2")
 
-    except Exception as e:  # pragma: no cover
-        logger.error(f"Cache invalidation (ResourceXResource) failed: {e}")
+    except Exception:  # pragma: no cover
+        logger.exception("Cache invalidation (ResourceXResource) failed")
