@@ -2576,9 +2576,10 @@ class BiblissimaCreateResourceView(View):
     - ``Document`` → ``_create_document_tiles``.
     - ``Component`` → ``_create_component_tiles``.
 
-    Tile writes run inside a single ``transaction.atomic()``. ES indexing is
-    deferred until after the DB transaction commits — a rollback therefore
-    leaves no orphan ES docs.
+    Validation and ``pre_tile_save`` run before the write transaction opens
+    (see ``_stage_tiles``); the writes themselves run in one
+    ``transaction.atomic()``. ES indexing is deferred until after the commit
+    — a rollback therefore leaves no orphan ES docs.
     """
 
     # Graph ID mapping for all supported resource types
@@ -2644,6 +2645,7 @@ class BiblissimaCreateResourceView(View):
     def _create_dependency_resource(self, graph_id, resource_type, bbma_data):
         """Create a Place/Group/Person resource with name and relationships."""
         from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
 
         label = (bbma_data.get("label") or "").strip()
@@ -2655,52 +2657,54 @@ class BiblissimaCreateResourceView(View):
         location_id = bbma_data.get("location")
 
         try:
-            with transaction.atomic():
-                self._tile_buffer = []
-                resource_instance = ResourceInstance(graph_id=graph_id)
-                resource_instance.save()
-                resource_id = resource_instance.resourceinstanceid
+            self._tile_buffer = []
+            resource_instance = ResourceInstance(graph_id=graph_id)
+            resource_id = resource_instance.resourceinstanceid
 
-                # Name tile
+            # Name tile
+            self._create_tile(
+                name_conf["ng"],
+                resource_id,
+                {
+                    name_conf["label"]: self._i18n_string(label),
+                    name_conf["language"]: self._concept_list([CONCEPT_FRENCH]),
+                    name_conf["type"]: self._concept_list([CONCEPT_PREFERRED_TERMS]),
+                },
+            )
+
+            # Group: Member of (parent group)
+            if resource_type == "Group" and member_of_id:
                 self._create_tile(
-                    name_conf["ng"],
+                    GROUP_MEMBER_OF_NG,
                     resource_id,
                     {
-                        name_conf["label"]: self._i18n_string(label),
-                        name_conf["language"]: self._concept_list([CONCEPT_FRENCH]),
-                        name_conf["type"]: self._concept_list(
-                            [CONCEPT_PREFERRED_TERMS]
-                        ),
+                        GROUP_MEMBER_OF_NODE: self._resource_instance_ref(member_of_id),
                     },
                 )
 
-                # Group: Member of (parent group)
-                if resource_type == "Group" and member_of_id:
-                    self._create_tile(
-                        GROUP_MEMBER_OF_NG,
-                        resource_id,
-                        {
-                            GROUP_MEMBER_OF_NODE: self._resource_instance_ref(
-                                member_of_id
-                            ),
-                        },
-                    )
+            # Group: Location (place)
+            if resource_type == "Group" and location_id:
+                self._create_tile(
+                    GROUP_LOCATION_NG,
+                    resource_id,
+                    {
+                        GROUP_LOCATION_NODE: self._resource_instance_list(location_id),
+                    },
+                )
 
-                # Group: Location (place)
-                if resource_type == "Group" and location_id:
-                    self._create_tile(
-                        GROUP_LOCATION_NG,
-                        resource_id,
-                        {
-                            GROUP_LOCATION_NODE: self._resource_instance_list(
-                                location_id
-                            ),
-                        },
-                    )
+            serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
+            self._stage_tiles(
+                self._tile_buffer,
+                self._nodes_by_id(serialized_graph),
+                DataTypeFactory(),
+            )
 
+            with transaction.atomic():
+                resource_instance.save()
                 resource = Resource.objects.select_related("graph__publication").get(
                     pk=resource_id
                 )
+                resource.set_serialized_graph(serialized_graph)
                 self._flush_tile_buffer(
                     resource, user=None, default_transaction_id=None
                 )
@@ -2733,9 +2737,12 @@ class BiblissimaCreateResourceView(View):
     ):
         """Create a resource with all its tiles from Biblissima data.
 
-        Wrapped in a DB transaction — if anything fails, everything rolls back.
-        Elasticsearch indexing is deferred until after all DB writes succeed,
-        so a rollback leaves no orphan documents in ES.
+        Dependency checks, tile building and staging (validation and
+        ``pre_tile_save``, which may fetch a IIIF manifest over HTTP) run
+        before any transaction opens. The resource row, its tiles, their edit
+        log and the project link are then written in one
+        ``transaction.atomic()``; a failure rolls all of them back.
+        Elasticsearch indexing runs after the commit.
 
         Tiles are buffered and flushed via two bulk INSERTs (tiles +
         edit_log) plus a single ``save_descriptors`` UPDATE on the
@@ -2745,80 +2752,66 @@ class BiblissimaCreateResourceView(View):
         for a single Component create against ~30-50 with this path.
         """
         from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
 
-        with transaction.atomic():
-            self._tile_buffer = []
+        self._tile_buffer = []
 
-            # Dangling-dependency guard (parity with BiblissimaCreateAllView
-            # Pass 1): a dependency — or the project — referencing a
-            # since-deleted resource would otherwise commit a dangling
-            # resource_x_resource row as a successful "created" (strict=False in
-            # _validate_tiles does NOT catch it). Verify existence up front; a
-            # bad ref raises ValueError, surfaced by the caller as a clean 400.
-            valid_dep_ids = self._precollect_valid_dep_ids(
-                [{"dependencies": dependencies}]
+        valid_dep_ids = self._precollect_valid_dep_ids([{"dependencies": dependencies}])
+        self._assert_deps_exist(dependencies, valid_dep_ids)
+        project_id = dependencies.get("project")
+        if project_id:
+            if not isinstance(project_id, str):
+                raise ValueError(
+                    f"Project {project_id!r} is not a valid resource id; "
+                    "cannot link."
+                )
+            if project_id.strip() and project_id.strip() not in valid_dep_ids:
+                raise ValueError(f"Project {project_id} does not exist; cannot link.")
+
+        created_deps = {"places": {}, "persons": {}, "groups": {}}
+        resource_instance = ResourceInstance(graph_id=graph_id)
+        resource_id = resource_instance.resourceinstanceid
+
+        if resource_type == "Document":
+            self._create_document_tiles(
+                resource_id,
+                transaction_id,
+                bbma_data,
+                dependencies,
+                concept_mappings,
+                created_deps,
             )
-            self._assert_deps_exist(dependencies, valid_dep_ids)
-            project_id = dependencies.get("project")
-            if project_id:
-                if not isinstance(project_id, str):
-                    raise ValueError(
-                        f"Project {project_id!r} is not a valid resource id; "
-                        "cannot link."
-                    )
-                if project_id.strip() and project_id.strip() not in valid_dep_ids:
-                    raise ValueError(
-                        f"Project {project_id} does not exist; cannot link."
-                    )
+        else:
+            self._create_component_tiles(
+                resource_id,
+                transaction_id,
+                bbma_data,
+                dependencies,
+                concept_mappings,
+                created_deps,
+            )
 
-            created_deps = {"places": {}, "persons": {}, "groups": {}}
-            resource_instance = ResourceInstance(graph_id=graph_id)
+        serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
+        self._stage_tiles(
+            self._tile_buffer, self._nodes_by_id(serialized_graph), DataTypeFactory()
+        )
+
+        with transaction.atomic():
             resource_instance.save()
-            resource_id = resource_instance.resourceinstanceid
-
-            if resource_type == "Document":
-                self._create_document_tiles(
-                    resource_id,
-                    transaction_id,
-                    bbma_data,
-                    dependencies,
-                    concept_mappings,
-                    created_deps,
-                )
-            else:
-                self._create_component_tiles(
-                    resource_id,
-                    transaction_id,
-                    bbma_data,
-                    dependencies,
-                    concept_mappings,
-                    created_deps,
-                )
-
             resource = Resource.objects.select_related("graph__publication").get(
                 pk=resource_id
             )
+            resource.set_serialized_graph(serialized_graph)
             self._flush_tile_buffer(resource, user, transaction_id)
 
-            # Linking to a project writes a tile on a *different* resource
-            # (the project) and must refresh the project's descriptors.
-            # Run it after the buffer flush so it goes through the
-            # standard Tile.save() path on its own resource. project_id was
-            # resolved and existence-checked by the guard above.
+            # The project link writes a tile on the project through
+            # Tile.save(), after the flush of this resource's own tiles.
             if project_id:
                 self._link_to_project(resource_id, project_id, transaction_id)
 
-        # Schedule ES indexing to run after the DB transaction commits.
-        # The on_commit wrapper inside _defer_indexing guarantees that a
-        # rollback never enqueues an indexing job for data that no longer
-        # exists. With BIBLISSIMA_ASYNC_INDEXING=False (the default), this
-        # is behaviourally identical to the previous inline resource.index()
-        # call but runs strictly post-commit.
-        #
-        # When the resource was linked to a project, the project's tile was
-        # written with index=False (I-3), so the project must be re-indexed
-        # here too — otherwise its ES doc's studied_objects stays stale.
+        # The project tile is saved with index=False, so the project is
+        # re-indexed here with the new resource.
         index_ids = [str(resource_id)]
         if project_id:
             index_ids.append(str(project_id))
@@ -3028,6 +3021,24 @@ class BiblissimaCreateResourceView(View):
                 else:
                     method(tile, nodeid)
 
+    @staticmethod
+    def _nodes_by_id(serialized_graph):
+        """Nodes of a serialized graph keyed by their id as a string."""
+        return {str(n["nodeid"]): n for n in (serialized_graph or {}).get("nodes", [])}
+
+    def _stage_tiles(self, tiles, nodes_by_id, factory):
+        """Validate *tiles* and run their ``pre_tile_save`` hooks.
+
+        Runs before the write transaction opens, never inside it:
+        ``pre_tile_save`` on a IIIF manifest node fetches the manifest over
+        HTTP, with retries and a per-host throttle, and a transaction held
+        open meanwhile keeps its connection and row locks. Writes nothing to
+        the resource tables. Raises what the validators and hooks raise
+        (``TileValidationError``, ``requests.HTTPError``, ``UnsafeURLError``…).
+        """
+        self._validate_tiles(tiles, nodes_by_id, factory)
+        self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
+
     def _write_editlog(self, tiles, resource, user, tx_id):
         """Build one ``EditLog`` row per tile and bulk-insert them.
 
@@ -3117,17 +3128,13 @@ class BiblissimaCreateResourceView(View):
         """Persist ``self._tile_buffer`` in two bulk INSERTs and refresh
         descriptors once.
 
-        Thin orchestrator: captures and resets the buffer, builds the shared
-        ``DataTypeFactory`` and ``nodes_by_id`` lookup, then delegates to the
-        three reusable primitives in order:
+        The buffer must already have gone through ``_stage_tiles``, before the
+        transaction this method runs in was opened. Steps, in order:
 
-        1. ``_validate_tiles`` — Tier-2 validate-net (raises
-           ``TileValidationError`` on any ERROR before any DB write).
-        2. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
-        3. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
-        4. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
-        5. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
-        6. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+        1. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
+        2. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
+        3. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        4. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
 
         After this method, ``self._tile_buffer`` is reset to an empty
         list — any further ``_create_tile`` call inside the same
@@ -3142,24 +3149,13 @@ class BiblissimaCreateResourceView(View):
         if not tiles:
             return
 
-        # Reuse the published graph that ``select_related`` already
-        # fetched on ``resource`` (see _create_resource): one in-memory
-        # dict shared by validate, pre_tile_save, and post_tile_save
-        # for the whole batch. Using ``resource.get_serialized_graph()``
-        # avoids the extra ``Node.objects.filter(graph_id=...)`` SQL
-        # round-trip a fresh ``Node`` queryset would cost.
         factory = DataTypeFactory()
-        serialized_graph = resource.get_serialized_graph() or {}
-        nodes_by_id = {str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])}
+        nodes_by_id = self._nodes_by_id(resource.get_serialized_graph())
 
-        self._validate_tiles(tiles, nodes_by_id, factory)
-        self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
         TileModel.objects.bulk_create(tiles)
         self._run_hook(tiles, nodes_by_id, factory, "post_tile_save")
         # MultiDescriptor reads tiles via TileModel.objects.filter(...) —
-        # so it sees the rows just inserted. save_descriptors also calls
-        # super().save() on the resource, which is the single UPDATE
-        # replacing the N updates the per-tile path would emit.
+        # so it sees the rows just inserted.
         resource.save_descriptors()
         self._write_editlog(tiles, resource, user, default_transaction_id)
 
@@ -4193,39 +4189,37 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
     ``_link_to_project_batch``) — nothing is redefined, so a patch on the base
     class is observed here.
 
-    Two-pass, best-effort algorithm
-    -------------------------------
-    Everything runs inside ONE outer ``transaction.atomic()``; ES indexing is
-    strictly AFTER it commits (``ATOMIC_REQUESTS=False`` in this project, so the
-    post-``with`` reindex is genuinely post-commit and a rollback leaves no
-    orphan ES docs).
+    Two passes, best effort
+    -----------------------
+    * **Pass 1 — per item, no transaction.** Dependency and project existence
+      checks (``_assert_deps_exist``), tile building, then ``_stage_tiles``:
+      validation and ``pre_tile_save``, which fetches IIIF manifests over
+      HTTP. A failing item is reported ``"failed"`` and its staged tiles are
+      dropped from the shared buffer (``del self._tile_buffer[start:]``).
+      Nothing is written to the resource tables: resource ids are generated
+      here and their rows are inserted in Pass 2. A manifest imported by
+      ``pre_tile_save`` is committed on its own and stays if its item fails.
 
-    * **Pass 1 — per item, in a nested ``atomic()`` SAVEPOINT.** The per-item
-      ``try/except`` is placed AROUND the ``with`` block, so an exception
-      triggers ``ROLLBACK TO SAVEPOINT`` for just that item and the loop
-      continues. A dependency-existence pre-pass (``_assert_deps_exist``) runs
-      *before* the resourceinstance is created, so a dangling relationship
-      becomes a clean ``"failed"`` instead of a silently committed
-      ``resource_x_resource`` row with a NULL ``to_graphid``. On failure the
-      item's staged tiles are dropped from the shared buffer
-      (``del self._tile_buffer[start:]``) so no residue reaches Pass 2.
+    * **Pass 2 — survivors only, one ``transaction.atomic()``.** One
+      ``_bulk_create_resources`` with the survivor ids, one
+      ``TileModel.bulk_create``, the ``post_tile_save`` replay, one
+      ``_batch_save_descriptors``, one ``_write_editlog`` per survivor under a
+      single ``batch_tx``, then ``_link_to_project_batch`` per distinct
+      project.
 
-    * **Pass 2 — survivors only, still inside the outer atomic.** One
-      ``TileModel.bulk_create`` of all survivor tiles, one
-      ``post_tile_save`` replay, one ``_batch_save_descriptors``, one
-      ``_write_editlog`` per survivor under a single ``batch_tx``, then a
-      grouped ``_link_to_project_batch`` per distinct project.
+    Pass 1 stays outside any transaction: ``pre_tile_save`` can hold a request
+    for minutes on a slow IIIF host. ES indexing is scheduled after Pass 2
+    commits (``ATOMIC_REQUESTS`` is off), so a rollback leaves no orphan ES
+    document.
 
-    Contract holes closed
-    ---------------------
-    * **Hole 1 — Pass 2 is documented all-or-nothing.** Any Pass-2 exception
-      rolls the whole outer atomic back and returns HTTP 500
-      ``{"error": "Batch creation failed"}`` with no per-survivor attribution.
-      Because Hole 2 removes the only *data-driven* Pass-2 failure mode
-      (dangling R2R), a remaining Pass-2 exception is genuine infrastructure
-      failure where an unattributed 500 is acceptable. Per-survivor Pass-2
-      savepoints are a deferred hardening.
-    * **Hole 2 — dangling resource-instance deps.** ``_validate_tiles`` runs
+    Failure contract
+    ----------------
+    * **Pass 2 is all-or-nothing.** Any Pass-2 exception rolls the whole pass
+      back and the view answers HTTP 500 ``{"error": "Batch creation failed"}``
+      with no per-survivor attribution. Pass 1 removes the only data-driven
+      Pass-2 failure (a dangling relationship), so what remains is an
+      infrastructure failure.
+    * **Dangling resource-instance deps.** ``_validate_tiles`` runs
       ``strict=False`` and would let a stale dep UUID commit as ``"created"``.
       The batched ``_precollect_valid_dep_ids`` + per-item ``_assert_deps_exist``
       turn a missing dep into a Pass-1 ``"failed"``.
@@ -4273,13 +4267,10 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
             valid_dep_ids = self._precollect_valid_dep_ids(items)
             factory = DataTypeFactory()
 
-            # Hoist the serialized-graph -> nodes_by_id ONCE: all items share one
-            # graph. Mirror how _flush_tile_buffer derives nodes_by_id (via a
-            # Resource bound to the graph), so validate / hooks reuse one dict.
-            serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
-            nodes_by_id = {
-                str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])
-            }
+            # One graph per call: nodes are looked up once for the whole batch.
+            nodes_by_id = self._nodes_by_id(
+                Resource(graph_id=graph_id).get_serialized_graph()
+            )
         except Exception:
             logger.exception("Biblissima batch pre-pass failed")
             return JsonResponse({"error": "Invalid batch payload"}, status=400)
@@ -4340,11 +4331,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                 builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
                 item_tiles = self._tile_buffer[start:]
 
-                self._validate_tiles(item_tiles, nodes_by_id, factory)
-                # pre_tile_save = IIIF manifest fetch; can raise
-                # requests.HTTPError / UnsafeURLError / FailParsingManifestIIIF /
-                # TileValidationError. Runs here, OUTSIDE the transaction.
-                self._run_hook(item_tiles, nodes_by_id, factory, "pre_tile_save")
+                self._stage_tiles(item_tiles, nodes_by_id, factory)
             except Exception as exc:
                 # Drop this item's staged tiles so no residue reaches Pass 2 and
                 # report it failed. No DB rollback needed — nothing was written

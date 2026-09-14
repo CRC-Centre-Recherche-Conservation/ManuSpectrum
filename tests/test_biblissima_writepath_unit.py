@@ -848,36 +848,21 @@ class BufferIsolationTests(TestCase):
     @patch(PATCH_EDITLOG)
     @patch(PATCH_TILEMODEL)
     @patch(PATCH_FACTORY)
-    def test_flush_resets_buffer_before_validation(
+    def test_flush_resets_buffer_even_when_the_insert_raises(
         self, MockFactory, MockTileModel, MockEditLog
     ):
-        """Even when _flush_tile_buffer raises (e.g. TileValidationError),
-        the buffer is already reset at the very start of the method, so
-        a subsequent call on the same view sees an empty buffer."""
-        from arches.app.models.tile import TileValidationError
+        from django.db import IntegrityError
 
-        concept_dt = _concept_dt_mock()
-        concept_dt.validate.return_value = [{"type": "ERROR", "message": "bad"}]
-        other_dt = _other_dt_mock()
-        _patch_factory(MockFactory, concept_dt, other_dt)
-        MockTileModel.objects.bulk_create.return_value = []
-        MockEditLog.objects.bulk_create.return_value = []
+        _patch_factory(MockFactory, _concept_dt_mock(), _other_dt_mock())
+        MockTileModel.objects.bulk_create.side_effect = IntegrityError("duplicate")
+        view = _make_view_with_tiles([_make_tile(data={TEXT_NODE_ID: {"en": "x"}})])
 
-        # Seed garbage from a prior "request"
-        stale_tile = _make_tile(data={CONCEPT_NODE_ID: ABSENT_CONCEPT_UUID})
-        view = _make_view_with_tiles([stale_tile])
-        resource = _make_resource()
+        with self.assertRaises(IntegrityError):
+            view._flush_tile_buffer(
+                _make_resource(), user=None, default_transaction_id=None
+            )
 
-        with self.assertRaises(TileValidationError):
-            view._flush_tile_buffer(resource, user=None, default_transaction_id=None)
-
-        # After the exception, the buffer must still be empty — stale tiles
-        # cannot survive into a future call.
-        self.assertEqual(
-            view._tile_buffer,
-            [],
-            "_tile_buffer must be [] even after _flush_tile_buffer raises",
-        )
+        self.assertEqual(view._tile_buffer, [])
 
     def test_create_resource_resets_buffer_documented_contract(self):
         """Characterization: the source of _create_resource at line 2519
@@ -890,8 +875,7 @@ class BufferIsolationTests(TestCase):
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
 
         src = inspect.getsource(BiblissimaCreateResourceView._create_resource)
-        # The very first statement inside ``with transaction.atomic():``
-        # must be the buffer reset.
+        # The buffer reset precedes tile building.
         self.assertIn(
             "self._tile_buffer = []",
             src,
@@ -1733,11 +1717,8 @@ class OrchestratorDelegationTests(TestCase):
     @patch(PATCH_TILEMODEL)
     @patch(PATCH_FACTORY)
     def test_delegation_order_and_argument_threading(self, MockFactory, MockTileModel):
-        """Exact call order: collect → validate → run_hook(pre) →
-        bulk_create → run_hook(post) → save_descriptors → write_editlog.
-        The set returned by _collect_valid_concepts flows into _validate_tiles;
-        the same nodes_by_id and factory go to both _run_hook calls;
-        default_transaction_id is forwarded to _write_editlog as tx_id."""
+        """Exact call order: bulk_create → run_hook(post) → save_descriptors →
+        write_editlog. Validation and pre_tile_save belong to _stage_tiles."""
         from unittest.mock import MagicMock
 
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
@@ -1768,56 +1749,23 @@ class OrchestratorDelegationTests(TestCase):
         ):
             view._flush_tile_buffer(resource, user=None, default_transaction_id=tx_id)
 
-        # 1 — Call order (4 entries: validate, run_hook×2, write_editlog)
         call_names = [c[0] for c in mgr.mock_calls]
-        self.assertEqual(
-            call_names,
-            ["validate", "run_hook", "run_hook", "write_editlog"],
-            f"Unexpected call order: {call_names}",
-        )
+        self.assertEqual(call_names, ["run_hook", "write_editlog"])
+        validate_mock.assert_not_called()
+        MockTileModel.objects.bulk_create.assert_called_once_with([tile])
 
-        # 2 — _validate_tiles receives (tiles, nodes_by_id, factory)
-        validate_args = validate_mock.call_args[0]
-        self.assertEqual(validate_args[0], [tile])
-        nodes_by_id_arg = validate_args[1]
-        self.assertIsInstance(nodes_by_id_arg, dict)
+        post_args = run_hook_mock.call_args[0]
+        self.assertEqual(post_args[0], [tile])
+        self.assertIsInstance(post_args[1], dict)
+        self.assertIs(post_args[2], mock_factory_inst)
+        self.assertEqual(post_args[3], "post_tile_save")
 
-        # 3 — The SAME nodes_by_id object flows to validate and the hooks
-        self.assertIs(validate_args[1], nodes_by_id_arg, "nodes_by_id must be threaded")
-        run_hook_calls = run_hook_mock.call_args_list
-        self.assertIs(
-            run_hook_calls[0][0][1], nodes_by_id_arg, "pre_tile_save nodes_by_id"
-        )
-        self.assertIs(
-            run_hook_calls[1][0][1], nodes_by_id_arg, "post_tile_save nodes_by_id"
-        )
-
-        # 4 — The factory instance returned by DataTypeFactory() is threaded
-        self.assertIs(
-            validate_args[2], mock_factory_inst, "factory threaded to validate"
-        )
-        self.assertIs(
-            run_hook_calls[0][0][2], mock_factory_inst, "factory to pre_tile_save"
-        )
-        self.assertIs(
-            run_hook_calls[1][0][2], mock_factory_inst, "factory to post_tile_save"
-        )
-
-        # 5 — _run_hook receives correct method_name as last arg
-        self.assertEqual(run_hook_calls[0][0][3], "pre_tile_save")
-        self.assertEqual(run_hook_calls[1][0][3], "post_tile_save")
-
-        # 7 — _write_editlog receives (tiles, resource, user, default_transaction_id)
         write_args = write_mock.call_args[0]
         self.assertEqual(write_args[0], [tile])
         self.assertIs(write_args[1], resource)
-        self.assertIsNone(write_args[2])  # user=None
+        self.assertIsNone(write_args[2])
         self.assertEqual(str(write_args[3]), tx_id)
 
-        # 8 — resource.save_descriptors is invoked exactly once by the
-        # orchestrator (between run_hook(post) and write_editlog per the
-        # documented order); pin it so a regression that drops or duplicates
-        # the per-resource descriptor refresh is caught.
         resource.save_descriptors.assert_called_once()
 
     @patch(PATCH_TILEMODEL)
