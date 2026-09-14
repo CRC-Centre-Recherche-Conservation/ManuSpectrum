@@ -189,6 +189,21 @@ def _get_besteffort_session():
     return _besteffort_session
 
 
+_biblissima_session = None
+_biblissima_session_lock = threading.Lock()
+
+
+def _get_biblissima_session():
+    """Lazily build and cache the process-wide session with the default retry
+    policy (thread-safe). Callers never close it."""
+    global _biblissima_session
+    if _biblissima_session is None:
+        with _biblissima_session_lock:
+            if _biblissima_session is None:
+                _biblissima_session = _build_biblissima_session()
+    return _biblissima_session
+
+
 # ---------------------------------------------------------------------------
 # Concurrency control & monitoring for outbound Biblissima calls
 # ---------------------------------------------------------------------------
@@ -1265,96 +1280,110 @@ def _enrich_canvases(canvases, session=None):
     makes it cheap to call on a page slice rather than on the whole result set.
     A manuscript record is cached only when its lookup, its candidate entities
     and its author and nature entities all resolved.
+
+    *session* (default: the shared session) serves the caller-thread batch
+    calls and is not closed here; the CirrusSearch pool uses one session per
+    thread.
     """
     if not canvases:
         return
 
-    owned_session = session is None
-    if owned_session:
-        session = _build_biblissima_session()
+    session = session or _get_biblissima_session()
 
-    try:
-        # Phase 1: collect unique manuscripts. The "name" we keep here is the
-        # query string used to look up the manuscript in Wikibase later — we
-        # extract the institution+shelfmark context from the canvas label
-        # (e.g. "Paris, Arsenal, 12") rather than the bare ``manuscript``
-        # field which is often just the shelfmark fragment.
-        unique_manuscripts = {}
-        for canvas in canvases:
-            ms_ark = canvas.get("manuscriptArk")
-            if not ms_ark:
-                continue
-            ark_hash = ms_ark.replace("ark:/43093/", "")
-            if ark_hash and ark_hash not in unique_manuscripts:
-                unique_manuscripts[ark_hash] = _extract_ms_search_query(canvas)
+    # Phase 1: collect unique manuscripts. The "name" we keep here is the
+    # query string used to look up the manuscript in Wikibase later — we
+    # extract the institution+shelfmark context from the canvas label
+    # (e.g. "Paris, Arsenal, 12") rather than the bare ``manuscript``
+    # field which is often just the shelfmark fragment.
+    unique_manuscripts = {}
+    for canvas in canvases:
+        ms_ark = canvas.get("manuscriptArk")
+        if not ms_ark:
+            continue
+        ark_hash = ms_ark.replace("ark:/43093/", "")
+        if ark_hash and ark_hash not in unique_manuscripts:
+            unique_manuscripts[ark_hash] = _extract_ms_search_query(canvas)
 
-        resolved_manuscripts = {}
-        to_resolve = {}
+    resolved_manuscripts = {}
+    to_resolve = {}
 
-        # Phase 2a: Django cache lookup per manuscript
-        for ark_hash, ms_name in unique_manuscripts.items():
-            cached = cache.get(
-                _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash)
+    # Phase 2a: Django cache lookup per manuscript
+    for ark_hash, ms_name in unique_manuscripts.items():
+        cached = cache.get(_BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash))
+        if cached is not None:
+            resolved_manuscripts[ark_hash] = cached
+            _incr_stat("cache_hits", 1)
+        else:
+            to_resolve[ark_hash] = ms_name
+            _incr_stat("cache_misses", 1)
+
+    # Phase 2b: parallel CirrusSearch fulltext lookup for uncached
+    # manuscripts. We use ``action=query&list=search`` rather than
+    # ``wbsearchentities`` because the latter only matches against
+    # labels/aliases as a prefix and silently returns garbage for the
+    # bare-shelfmark labels that the IIIF manifest provides ("12",
+    # "579"). The richer ``ms_name`` extracted from the canvas label
+    # (e.g. "Paris, Arsenal, 12") is distinctive enough that fulltext
+    # search returns the correct entity in the top results, and the
+    # Phase 2d ``portalHash == ark_hash`` filter rejects any false
+    # positive — so reconciliation is done without scraping.
+    # requests.Session is not thread-safe: each pool thread gets its own,
+    # closed once the pool has finished.
+    thread_local = threading.local()
+    thread_sessions = []
+    thread_sessions_lock = threading.Lock()
+
+    def _thread_session():
+        thread_session = getattr(thread_local, "session", None)
+        if thread_session is None:
+            thread_session = thread_local.session = _build_biblissima_session()
+            with thread_sessions_lock:
+                thread_sessions.append(thread_session)
+        return thread_session
+
+    def _search_candidates(item):
+        ark_hash, ms_name = item
+        if not ms_name:
+            return ark_hash, [], None
+        try:
+            resp = _bib_request(
+                _thread_session(),
+                BIBLISSIMA_WIKIBASE,
+                params={
+                    "action": "query",
+                    "list": "search",
+                    "srsearch": ms_name,
+                    "srnamespace": 120,
+                    "format": "json",
+                    "srlimit": 5,
+                },
+                timeout=REQUEST_TIMEOUT,
             )
-            if cached is not None:
-                resolved_manuscripts[ark_hash] = cached
-                _incr_stat("cache_hits", 1)
-            else:
-                to_resolve[ark_hash] = ms_name
-                _incr_stat("cache_misses", 1)
+            resp.raise_for_status()
+            hits = resp.json().get("query", {}).get("search", [])
+            qids = []
+            for hit in hits:
+                title = hit.get("title", "")
+                qid = title.split(":")[-1] if ":" in title else title
+                if qid:
+                    qids.append(qid)
+            return ark_hash, qids, None
+        except Exception as exc:
+            logger.debug(
+                "[biblissima.parent-resolver] Wikibase CirrusSearch lookup "
+                "failed for manuscript=%r: %s",
+                ms_name,
+                exc,
+                exc_info=True,
+            )
+            return ark_hash, [], ms_name
 
-        # Phase 2b: parallel CirrusSearch fulltext lookup for uncached
-        # manuscripts. We use ``action=query&list=search`` rather than
-        # ``wbsearchentities`` because the latter only matches against
-        # labels/aliases as a prefix and silently returns garbage for the
-        # bare-shelfmark labels that the IIIF manifest provides ("12",
-        # "579"). The richer ``ms_name`` extracted from the canvas label
-        # (e.g. "Paris, Arsenal, 12") is distinctive enough that fulltext
-        # search returns the correct entity in the top results, and the
-        # Phase 2d ``portalHash == ark_hash`` filter rejects any false
-        # positive — so reconciliation is done without scraping.
-        def _search_candidates(item):
-            ark_hash, ms_name = item
-            if not ms_name:
-                return ark_hash, [], None
-            try:
-                resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "query",
-                        "list": "search",
-                        "srsearch": ms_name,
-                        "srnamespace": 120,
-                        "format": "json",
-                        "srlimit": 5,
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                resp.raise_for_status()
-                hits = resp.json().get("query", {}).get("search", [])
-                qids = []
-                for hit in hits:
-                    title = hit.get("title", "")
-                    qid = title.split(":")[-1] if ":" in title else title
-                    if qid:
-                        qids.append(qid)
-                return ark_hash, qids, None
-            except Exception as exc:
-                logger.debug(
-                    "[biblissima.parent-resolver] Wikibase CirrusSearch lookup "
-                    "failed for manuscript=%r: %s",
-                    ms_name,
-                    exc,
-                    exc_info=True,
-                )
-                return ark_hash, [], ms_name
-
-        candidates_by_ark_hash = {}
-        cirrus_failures = []
-        incomplete = set()
-        if to_resolve:
-            max_workers = min(6, len(to_resolve))
+    candidates_by_ark_hash = {}
+    cirrus_failures = []
+    incomplete = set()
+    if to_resolve:
+        max_workers = min(6, len(to_resolve))
+        try:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 for ark_hash, candidate_qids, failure in executor.map(
                     _search_candidates, to_resolve.items()
@@ -1363,157 +1392,153 @@ def _enrich_canvases(canvases, session=None):
                     if failure:
                         cirrus_failures.append(failure)
                         incomplete.add(ark_hash)
-            if cirrus_failures:
-                logger.warning(
-                    "[biblissima.parent-resolver] Wikibase CirrusSearch failed "
-                    "for %d/%d manuscripts (graceful fallback applied; "
-                    "common causes: rate-limit, timeout, 5xx). Sample: %s",
-                    len(cirrus_failures),
-                    len(to_resolve),
-                    cirrus_failures[:3],
-                )
+        finally:
+            for thread_session in thread_sessions:
+                thread_session.close()
+        if cirrus_failures:
+            logger.warning(
+                "[biblissima.parent-resolver] Wikibase CirrusSearch failed "
+                "for %d/%d manuscripts (graceful fallback applied; "
+                "common causes: rate-limit, timeout, 5xx). Sample: %s",
+                len(cirrus_failures),
+                len(to_resolve),
+                cirrus_failures[:3],
+            )
 
-        # Phase 2c: batch-fetch all candidate entities in one go
-        all_candidate_qids = list(
-            {qid for qids in candidates_by_ark_hash.values() for qid in qids}
-        )
-        entities_by_qid = _batch_get_wikibase_entities(
-            all_candidate_qids, session=session
-        )
+    # Phase 2c: batch-fetch all candidate entities in one go
+    all_candidate_qids = list(
+        {qid for qids in candidates_by_ark_hash.values() for qid in qids}
+    )
+    entities_by_qid = _batch_get_wikibase_entities(all_candidate_qids, session=session)
 
-        # Phase 2d: match each manuscript to its QID via portalHash, and
-        # collect both author and nature (P2) QIDs for the batch fetch.
-        author_qids = set()
-        nature_qids = set()
-        for ark_hash, candidate_qids in candidates_by_ark_hash.items():
-            if any(qid not in entities_by_qid for qid in candidate_qids):
+    # Phase 2d: match each manuscript to its QID via portalHash, and
+    # collect both author and nature (P2) QIDs for the batch fetch.
+    author_qids = set()
+    nature_qids = set()
+    for ark_hash, candidate_qids in candidates_by_ark_hash.items():
+        if any(qid not in entities_by_qid for qid in candidate_qids):
+            incomplete.add(ark_hash)
+        ms_data = {}
+        for qid in candidate_qids:
+            entity = entities_by_qid.get(qid)
+            if entity and entity.get("portalHash") == ark_hash:
+                ms_data = dict(entity)
+                if ms_data.get("author"):
+                    author_qids.add(ms_data["author"])
+                if ms_data.get("documentNatureQid"):
+                    nature_qids.add(ms_data["documentNatureQid"])
+                break
+        resolved_manuscripts[ark_hash] = ms_data
+
+    # Phase 2e: batch-fetch authors and natures together (single round-trip).
+    # Cached natures (which is most of them — Biblissima only uses ~5
+    # distinct nature concepts) hit the Django cache and don't go to
+    # Biblissima at all.
+    secondary_qids = list(author_qids | nature_qids)
+    secondaries_by_qid = (
+        _batch_get_wikibase_entities(secondary_qids, session=session)
+        if secondary_qids
+        else {}
+    )
+
+    # Phase 2f: attach author and nature labels, pre-resolve the Arches
+    # Document-Type valueid once per manuscript, and persist newly-resolved
+    # manuscripts to cache so subsequent enrichments are zero-cost. Doing
+    # the type resolution here (vs. per-canvas in phase 3) avoids calling
+    # the resolver N times for an N-page manuscript with identical nature
+    # label across canvases.
+    for ark_hash in to_resolve:
+        ms_data = resolved_manuscripts.get(ark_hash, {})
+        if ms_data:
+            author_qid = ms_data.get("author")
+            if author_qid and author_qid in secondaries_by_qid:
+                author = secondaries_by_qid[author_qid]
+                ms_data["authorLabel"] = author.get("label", "")
+                ms_data["authorQid"] = author_qid
+            elif author_qid:
                 incomplete.add(ark_hash)
-            ms_data = {}
-            for qid in candidate_qids:
-                entity = entities_by_qid.get(qid)
-                if entity and entity.get("portalHash") == ark_hash:
-                    ms_data = dict(entity)
-                    if ms_data.get("author"):
-                        author_qids.add(ms_data["author"])
-                    if ms_data.get("documentNatureQid"):
-                        nature_qids.add(ms_data["documentNatureQid"])
-                    break
-            resolved_manuscripts[ark_hash] = ms_data
+            nature_qid = ms_data.get("documentNatureQid")
+            if nature_qid and nature_qid in secondaries_by_qid:
+                nature = secondaries_by_qid[nature_qid]
+                ms_data["documentNatureLabel"] = nature.get("label", "") or None
+            elif nature_qid:
+                incomplete.add(ark_hash)
+            type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
+                ms_data.get("documentNatureLabel")
+            )
+            ms_data["documentTypeConceptId"] = type_concept_id
+            ms_data["documentTypeIsFallback"] = type_is_fallback
+        if ark_hash not in incomplete:
+            cache.set(
+                _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
+                ms_data,
+                _BIBLISSIMA_CACHE_TTL,
+            )
 
-        # Phase 2e: batch-fetch authors and natures together (single round-trip).
-        # Cached natures (which is most of them — Biblissima only uses ~5
-        # distinct nature concepts) hit the Django cache and don't go to
-        # Biblissima at all.
-        secondary_qids = list(author_qids | nature_qids)
-        secondaries_by_qid = (
-            _batch_get_wikibase_entities(secondary_qids, session=session)
-            if secondary_qids
-            else {}
-        )
+    # Phase 2g: resolve collection chains (location + parent institution)
+    # for each unique collection QID, so downstream consumers get
+    # collectionLabel / locationLabel / parentInstitutionLabel.
+    collection_data = {}
+    collection_qids = {
+        ms.get("collection")
+        for ms in resolved_manuscripts.values()
+        if ms.get("collection")
+    }
+    for coll_qid in collection_qids:
+        try:
+            collection_data[coll_qid] = _resolve_collection(coll_qid, session=session)
+        except Exception:
+            logger.warning("Collection resolution failed for %s", coll_qid)
 
-        # Phase 2f: attach author and nature labels, pre-resolve the Arches
-        # Document-Type valueid once per manuscript, and persist newly-resolved
-        # manuscripts to cache so subsequent enrichments are zero-cost. Doing
-        # the type resolution here (vs. per-canvas in phase 3) avoids calling
-        # the resolver N times for an N-page manuscript with identical nature
-        # label across canvases.
-        for ark_hash in to_resolve:
-            ms_data = resolved_manuscripts.get(ark_hash, {})
-            if ms_data:
-                author_qid = ms_data.get("author")
-                if author_qid and author_qid in secondaries_by_qid:
-                    author = secondaries_by_qid[author_qid]
-                    ms_data["authorLabel"] = author.get("label", "")
-                    ms_data["authorQid"] = author_qid
-                elif author_qid:
-                    incomplete.add(ark_hash)
-                nature_qid = ms_data.get("documentNatureQid")
-                if nature_qid and nature_qid in secondaries_by_qid:
-                    nature = secondaries_by_qid[nature_qid]
-                    ms_data["documentNatureLabel"] = nature.get("label", "") or None
-                elif nature_qid:
-                    incomplete.add(ark_hash)
-                type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
-                    ms_data.get("documentNatureLabel")
-                )
-                ms_data["documentTypeConceptId"] = type_concept_id
-                ms_data["documentTypeIsFallback"] = type_is_fallback
-            if ark_hash not in incomplete:
-                cache.set(
-                    _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
-                    ms_data,
-                    _BIBLISSIMA_CACHE_TTL,
-                )
-
-        # Phase 2g: resolve collection chains (location + parent institution)
-        # for each unique collection QID, so downstream consumers get
-        # collectionLabel / locationLabel / parentInstitutionLabel.
-        collection_data = {}
-        collection_qids = {
-            ms.get("collection")
-            for ms in resolved_manuscripts.values()
-            if ms.get("collection")
-        }
-        for coll_qid in collection_qids:
-            try:
-                collection_data[coll_qid] = _resolve_collection(
-                    coll_qid, session=session
-                )
-            except Exception:
-                logger.warning("Collection resolution failed for %s", coll_qid)
-
-        # Phase 3: decorate every canvas from the resolved manuscript map.
-        # All manuscript-level fields that downstream consumers need (dep
-        # resolution for Places/Groups, identifier creation, etc.) must be
-        # copied here — _illuminationToResult in the search-step JS reads
-        # entityData.* for the manuscript scrape path, but the IIIF
-        # descriptor search path gets its data entirely from this enrichment.
-        for canvas in canvases:
-            ms_ark = canvas.get("manuscriptArk")
-            if not ms_ark:
-                continue
-            ark_hash = ms_ark.replace("ark:/43093/", "")
-            ms_data = resolved_manuscripts.get(ark_hash) or {}
-            # Prefer the full Wikibase entity label (e.g. "Paris. Bibliothèque
-            # de l'Arsenal, 12") over the raw IIIF metadata value, which is
-            # often just the shelfmark fragment ("12") for Arsenal/BnF
-            # manifests where Biblissima only inlines the shelfmark text in
-            # the <a>Manuscrit</a> link.
-            if ms_data.get("label"):
-                canvas["manuscript"] = ms_data["label"]
-            canvas["manifestUrl"] = ms_data.get("manifestUrl")
-            canvas["authorLabel"] = ms_data.get("authorLabel")
-            canvas["authorQid"] = ms_data.get("authorQid")
-            canvas["biblissimaQid"] = ms_data.get("biblissimaQid")
-            canvas["shelfmark"] = ms_data.get("shelfmark")
-            canvas["mandragoreId"] = ms_data.get("mandragoreId")
-            # Institution / location chain from the collection resolution.
-            coll_qid = ms_data.get("collection")
-            coll = collection_data.get(coll_qid) or {} if coll_qid else {}
-            canvas["collectionLabel"] = coll.get("ownerLabel", "")
-            canvas["collectionQid"] = coll.get("ownerQid", "")
-            canvas["locationLabel"] = coll.get("locationLabel", "")
-            canvas["locationQid"] = coll.get("locationQid", "")
-            canvas["geonamesId"] = coll.get("geonamesId", "")
-            canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
-            canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
-            # Document Type — pre-resolved once in phase 2f for fresh manuscripts;
-            # for cache-hit manuscripts that pre-date this change we resolve here
-            # as a one-time fallback. Falls back to MANUSCRIT with
-            # is_fallback=True if the nature label is missing or unknown.
-            canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
-            if "documentTypeConceptId" in ms_data:
-                canvas["documentTypeConceptId"] = ms_data["documentTypeConceptId"]
-                canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
-            else:
-                type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
-                    ms_data.get("documentNatureLabel")
-                )
-                canvas["documentTypeConceptId"] = type_concept_id
-                canvas["documentTypeIsFallback"] = type_is_fallback
-    finally:
-        if owned_session:
-            session.close()
+    # Phase 3: decorate every canvas from the resolved manuscript map.
+    # All manuscript-level fields that downstream consumers need (dep
+    # resolution for Places/Groups, identifier creation, etc.) must be
+    # copied here — _illuminationToResult in the search-step JS reads
+    # entityData.* for the manuscript scrape path, but the IIIF
+    # descriptor search path gets its data entirely from this enrichment.
+    for canvas in canvases:
+        ms_ark = canvas.get("manuscriptArk")
+        if not ms_ark:
+            continue
+        ark_hash = ms_ark.replace("ark:/43093/", "")
+        ms_data = resolved_manuscripts.get(ark_hash) or {}
+        # Prefer the full Wikibase entity label (e.g. "Paris. Bibliothèque
+        # de l'Arsenal, 12") over the raw IIIF metadata value, which is
+        # often just the shelfmark fragment ("12") for Arsenal/BnF
+        # manifests where Biblissima only inlines the shelfmark text in
+        # the <a>Manuscrit</a> link.
+        if ms_data.get("label"):
+            canvas["manuscript"] = ms_data["label"]
+        canvas["manifestUrl"] = ms_data.get("manifestUrl")
+        canvas["authorLabel"] = ms_data.get("authorLabel")
+        canvas["authorQid"] = ms_data.get("authorQid")
+        canvas["biblissimaQid"] = ms_data.get("biblissimaQid")
+        canvas["shelfmark"] = ms_data.get("shelfmark")
+        canvas["mandragoreId"] = ms_data.get("mandragoreId")
+        # Institution / location chain from the collection resolution.
+        coll_qid = ms_data.get("collection")
+        coll = collection_data.get(coll_qid) or {} if coll_qid else {}
+        canvas["collectionLabel"] = coll.get("ownerLabel", "")
+        canvas["collectionQid"] = coll.get("ownerQid", "")
+        canvas["locationLabel"] = coll.get("locationLabel", "")
+        canvas["locationQid"] = coll.get("locationQid", "")
+        canvas["geonamesId"] = coll.get("geonamesId", "")
+        canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
+        canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
+        # Document Type — pre-resolved once in phase 2f for fresh manuscripts;
+        # for cache-hit manuscripts that pre-date this change we resolve here
+        # as a one-time fallback. Falls back to MANUSCRIT with
+        # is_fallback=True if the nature label is missing or unknown.
+        canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
+        if "documentTypeConceptId" in ms_data:
+            canvas["documentTypeConceptId"] = ms_data["documentTypeConceptId"]
+            canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
+        else:
+            type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
+                ms_data.get("documentNatureLabel")
+            )
+            canvas["documentTypeConceptId"] = type_concept_id
+            canvas["documentTypeIsFallback"] = type_is_fallback
 
 
 def _normalize_descriptors(descriptors):
@@ -1609,27 +1634,24 @@ class BiblissimaSearchView(View):
             descriptors_key=descriptors_key
         )
 
-        session = _build_biblissima_session()
-        try:
-            all_canvases = cache.get(raw_cache_key)
-            if all_canvases is None:
-                try:
-                    all_canvases = _fetch_biblissima_canvases(desc_hashes, session)
-                except Exception as exc:
-                    return _biblissima_upstream_error(exc, "Biblissima IIIF search")
-                cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
+        session = _get_biblissima_session()
+        all_canvases = cache.get(raw_cache_key)
+        if all_canvases is None:
+            try:
+                all_canvases = _fetch_biblissima_canvases(desc_hashes, session)
+            except Exception as exc:
+                return _biblissima_upstream_error(exc, "Biblissima IIIF search")
+            cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
 
-            total = len(all_canvases)
-            total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
+        total = len(all_canvases)
+        total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
 
-            start = (page - 1) * page_size
-            end = start + page_size
-            page_canvases = all_canvases[start:end]
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_canvases = all_canvases[start:end]
 
-            # Enrich in place on the slice we're about to return.
-            _enrich_canvases(page_canvases, session=session)
-        finally:
-            session.close()
+        # Enrich in place on the slice we're about to return.
+        _enrich_canvases(page_canvases, session=session)
 
         return JsonResponse(
             {

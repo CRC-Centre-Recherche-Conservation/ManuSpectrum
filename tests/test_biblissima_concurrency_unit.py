@@ -8,6 +8,7 @@ Run:
 
 import json
 import threading
+import time
 from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
@@ -16,6 +17,7 @@ from django.test import RequestFactory, TestCase
 from manuspectrum.views import biblissima_proxy as bp
 
 DESCRIPTORS_A = "desc" + "a" * 40
+DESCRIPTORS_B = "desc" + "b" * 40
 
 
 class ConcurrencyTestCase(TestCase):
@@ -170,3 +172,81 @@ class EnrichmentCacheTests(ConcurrencyTestCase):
         bp._enrich_canvases(self.canvases, session=MagicMock())
 
         self.assertEqual(self._cached_record()["authorLabel"], "Jean Fouquet")
+
+
+class SharedSessionTests(ConcurrencyTestCase):
+    def setUp(self):
+        super().setUp()
+        self._start(patch.object(bp, "_biblissima_session", None))
+
+    def test_the_shared_session_is_built_once(self):
+        self.assertIs(bp._get_biblissima_session(), bp._get_biblissima_session())
+
+    def test_the_shared_session_keeps_the_retry_policy(self):
+        retries = bp._get_biblissima_session().get_adapter("https://x/").max_retries
+
+        self.assertEqual(retries.connect, 2)
+
+    def test_the_search_view_reuses_the_shared_session_across_requests(self):
+        seen = []
+
+        def fetch(desc_hashes, session):
+            seen.append(session)
+            return []
+
+        self._start(patch.object(bp, "_fetch_biblissima_canvases", side_effect=fetch))
+        self._start(patch.object(bp, "_enrich_canvases"))
+
+        for descriptors in (DESCRIPTORS_A, DESCRIPTORS_B):
+            request = RequestFactory().get(
+                "/api/biblissima/search", {"descriptors": descriptors}
+            )
+            self.assertEqual(bp.BiblissimaSearchView().get(request).status_code, 200)
+
+        self.assertEqual(len(seen), 2)
+        self.assertIs(seen[0], seen[1])
+        self.assertIs(seen[0], bp._get_biblissima_session())
+
+
+class EnrichmentPoolSessionTests(ConcurrencyTestCase):
+    def test_each_pool_thread_uses_its_own_session_and_closes_it(self):
+        built = []
+        used = []
+        used_lock = threading.Lock()
+
+        def build(retry=None):
+            session = MagicMock(name=f"thread-session-{len(built)}")
+            built.append(session)
+            return session
+
+        def bib_request(session, url, **kwargs):
+            time.sleep(0.05)
+            with used_lock:
+                used.append((threading.get_ident(), session))
+            response = MagicMock()
+            response.json.return_value = {"query": {"search": []}}
+            return response
+
+        self._start(patch.object(bp, "_build_biblissima_session", side_effect=build))
+        self._start(patch.object(bp, "_bib_request", side_effect=bib_request))
+        self._start(patch.object(bp, "_batch_get_wikibase_entities", return_value={}))
+        caller_session = MagicMock(name="caller-session")
+        canvases = [
+            {"manuscriptArk": f"ark:/43093/mdata{i:040d}", "manuscript": f"Latin {i}"}
+            for i in range(6)
+        ]
+
+        bp._enrich_canvases(canvases, session=caller_session)
+
+        self.assertEqual(len(used), 6)
+        self.assertNotIn(caller_session, [session for _, session in used])
+        sessions_by_thread = {}
+        for ident, session in used:
+            sessions_by_thread.setdefault(ident, set()).add(id(session))
+        self.assertGreater(len(sessions_by_thread), 1)
+        for session_ids in sessions_by_thread.values():
+            self.assertEqual(len(session_ids), 1)
+        self.assertEqual(len(built), len(sessions_by_thread))
+        for session in built:
+            session.close.assert_called_once()
+        caller_session.close.assert_not_called()
