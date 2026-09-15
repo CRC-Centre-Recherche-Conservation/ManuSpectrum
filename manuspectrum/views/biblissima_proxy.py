@@ -1676,6 +1676,7 @@ def _fetch_biblissima_canvases(desc_hashes, session):
 _DEFAULT_SEARCH_PAGE_SIZE = 50
 _MAX_SEARCH_PAGE_SIZE = 200
 _MAX_SEARCH_DESCRIPTORS = 5
+_MAX_CHECK_DUPLICATES_ITEMS = 200
 
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
@@ -1773,6 +1774,13 @@ class BiblissimaCheckDuplicatesView(View):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         items = body.get("items", [])
+        if not isinstance(items, list):
+            return JsonResponse({"error": "items must be a list"}, status=400)
+        if len(items) > _MAX_CHECK_DUPLICATES_ITEMS:
+            return JsonResponse(
+                {"error": "too many items", "max": _MAX_CHECK_DUPLICATES_ITEMS},
+                status=400,
+            )
         graph_id = body.get("graphId", DOCUMENT_GRAPH_ID)
 
         if not items:
@@ -1783,12 +1791,12 @@ class BiblissimaCheckDuplicatesView(View):
         se = SearchEngineInstance
 
         # ---------------------------------------------------------------------------
-        # Strategy 1 — hoist corpus load to O(1) in len(items)
+        # Strategy 1 — identifier matching through an atom index
         #
-        # id_ng / id_node depend only on graph_id, not on any individual item.
-        # Load the entire identifier-tile corpus ONCE before the items loop and
-        # keep it as an in-memory list of (tile_value, rid) pairs.  The per-item
-        # loop then matches search_tokens against this list with no DB call.
+        # id_ng / id_node depend only on graph_id, so the whole identifier-tile
+        # corpus loads ONCE into a dict mapping each atom of a tile value to the
+        # rows carrying it. A per-item match is then a handful of dict lookups
+        # keyed by the atoms of its own tokens, with no DB call.
         # ---------------------------------------------------------------------------
         id_ng = (
             DOC_IDENTIFIER_NG if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_NG
@@ -1798,7 +1806,8 @@ class BiblissimaCheckDuplicatesView(View):
             if graph_id == DOCUMENT_GRAPH_ID
             else COMP_IDENTIFIER_VALUE
         )
-        tile_index = []  # list of (tile_value: str, rid: str)
+        atom_index: dict = {}  # atom -> list of (tile_value: str, rid: str)
+        corpus_pos: dict = {}  # rid -> rank of the resource's first corpus row
         try:
             # Use ``TileModel`` + ``.values_list`` (NOT the arches proxy ``Tile``):
             # the proxy's ``__init__`` unconditionally calls
@@ -1822,7 +1831,10 @@ class BiblissimaCheckDuplicatesView(View):
                 except Exception:
                     continue
                 if tv:
-                    tile_index.append((tv, str(rid)))
+                    rid_s = str(rid)
+                    corpus_pos.setdefault(rid_s, len(corpus_pos))
+                    for atom in self._identifier_atoms(tv):
+                        atom_index.setdefault(atom, []).append((tv, rid_s))
         except Exception:
             logger.warning("Tile identifier corpus load failed for graph %s", graph_id)
 
@@ -1830,7 +1842,8 @@ class BiblissimaCheckDuplicatesView(View):
         # Collect all rids matched by strategy 1 across all items so we can
         # resolve their displaynames in a single batched query after the loop.
         matched_rids: set = set()
-        # Per-item list of (rid, tile_value) hits in corpus-iteration order.
+        # Per-item list of (rid, tile_value) hits, ordered by the corpus rank
+        # of each matched resource's first row.
         per_item_id_hits: list = [[] for _ in items]
         # Parallel state structure: avoids mutating caller-supplied input dicts.
         # Each slot holds (seen_ids, label, shelfmark, ark_id) for item[idx].
@@ -1844,40 +1857,42 @@ class BiblissimaCheckDuplicatesView(View):
 
             seen_ids: set = set()
 
-            # Strategy 1: match search_tokens against the in-memory tile_index.
+            # Strategy 1: probe the atom index with the atoms of each token.
             # Build all possible search tokens from Biblissima data.
+            # Client data is unchecked, and only a string has atoms: a token
+            # of any other type is dropped rather than compared.
             search_tokens: set = set()
-            if ark_id:
+            if isinstance(ark_id, str) and ark_id:
                 search_tokens.add(ark_id)
                 # Hash without ark: prefix
                 ark_hash = ark_id.replace("ark:/43093/", "")
                 if ark_hash != ark_id:
                     search_tokens.add(ark_hash)
-            if qid:
+            if isinstance(qid, str) and qid:
                 search_tokens.add(qid)
                 # Also match full URL form used in Arches identifiers
                 search_tokens.add(f"https://data.biblissima.fr/entity/{qid}")
 
             portal_hash = item.get("portalHash", "")
-            if portal_hash:
+            if isinstance(portal_hash, str) and portal_hash:
                 search_tokens.add(portal_hash)
                 search_tokens.add(f"ark:/43093/{portal_hash}")
 
             manifest_url = item.get("manifestUrl", "")
-            if manifest_url:
+            if isinstance(manifest_url, str) and manifest_url:
                 search_tokens.add(manifest_url)
 
-            if search_tokens:
-                for tile_value, rid in tile_index:
+            token_atoms: set = set()
+            for t in search_tokens:
+                token_atoms |= self._identifier_atoms(t)
+            for atom in sorted(token_atoms):
+                for tile_value, rid in atom_index.get(atom, ()):
                     if rid in seen_ids:
                         continue
-                    if any(
-                        t == tile_value or t in tile_value or tile_value in t
-                        for t in search_tokens
-                    ):
-                        seen_ids.add(rid)
-                        per_item_id_hits[idx].append((rid, tile_value))
-                        matched_rids.add(rid)
+                    seen_ids.add(rid)
+                    per_item_id_hits[idx].append((rid, tile_value))
+                    matched_rids.add(rid)
+            per_item_id_hits[idx].sort(key=lambda hit: corpus_pos[hit[0]])
 
             # Stash per-item state in parallel structure (not in the input dict).
             item_state[idx] = (seen_ids, label, shelfmark, ark_id)
@@ -1903,7 +1918,8 @@ class BiblissimaCheckDuplicatesView(View):
             suggestions: list = []
             seen_ids, label, shelfmark, ark_id = item_state[idx]
 
-            # Identifier suggestions (strategy 1) — in corpus-iteration order.
+            # Identifier suggestions (strategy 1) — by corpus rank of the
+            # matched resource's first row.
             for rid, tile_value in per_item_id_hits[idx]:
                 suggestions.append(
                     {
@@ -1947,6 +1963,24 @@ class BiblissimaCheckDuplicatesView(View):
             )
 
         return JsonResponse({"results": results})
+
+    @staticmethod
+    def _identifier_atoms(value):
+        """The comparable forms of an identifier.
+
+        Two identifiers match when they share an atom: the whole string, the
+        hash of an ARK (``ark:/43093/<hash>``, also inside a portal URL), or a
+        QID standing alone, or after a slash and before the end, a slash, ``?``
+        or ``#``. A QID inside free text is not an atom, and partial strings
+        never match: ``Q12`` is not ``Q123``.
+        """
+        atoms = {value}
+        for hash_ in _ARK_RE.findall(value):
+            atoms.add(hash_)
+        qid = re.search(r"(?:^|/)(Q\d+)(?:[/?#]|$)", value)
+        if qid:
+            atoms.add(qid.group(1))
+        return atoms
 
     @staticmethod
     def _extract_tile_value(raw_value):
