@@ -1717,8 +1717,9 @@ class OrchestratorDelegationTests(TestCase):
     @patch(PATCH_TILEMODEL)
     @patch(PATCH_FACTORY)
     def test_delegation_order_and_argument_threading(self, MockFactory, MockTileModel):
-        """Exact call order: bulk_create → run_hook(post) → save_descriptors →
-        write_editlog. Validation and pre_tile_save belong to _stage_tiles."""
+        """Exact call order: bulk_create → run_hook(post) →
+        run_hook(after_update_all) → save_descriptors → write_editlog.
+        Validation and pre_tile_save belong to _stage_tiles."""
         from unittest.mock import MagicMock
 
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
@@ -1750,15 +1751,20 @@ class OrchestratorDelegationTests(TestCase):
             view._flush_tile_buffer(resource, user=None, default_transaction_id=tx_id)
 
         call_names = [c[0] for c in mgr.mock_calls]
-        self.assertEqual(call_names, ["run_hook", "write_editlog"])
+        self.assertEqual(call_names, ["run_hook", "run_hook", "write_editlog"])
         validate_mock.assert_not_called()
         MockTileModel.objects.bulk_create.assert_called_once_with([tile])
 
-        post_args = run_hook_mock.call_args[0]
+        post_args = run_hook_mock.call_args_list[0][0]
         self.assertEqual(post_args[0], [tile])
         self.assertIsInstance(post_args[1], dict)
         self.assertIs(post_args[2], mock_factory_inst)
         self.assertEqual(post_args[3], "post_tile_save")
+
+        refresh_args = run_hook_mock.call_args_list[1][0]
+        self.assertEqual(refresh_args[0], [tile])
+        self.assertIs(refresh_args[2], mock_factory_inst)
+        self.assertEqual(refresh_args[3], "after_update_all")
 
         write_args = write_mock.call_args[0]
         self.assertEqual(write_args[0], [tile])
@@ -1930,6 +1936,31 @@ class RunHookTests(TestCase):
         view._run_hook(tiles, self._nodes(), factory, "pre_tile_save")
 
         self.assertEqual(dt.pre_tile_save.call_count, 2)
+
+    def test_after_update_all_called_with_the_tile_once_per_datatype_per_tile(self):
+        from unittest.mock import call
+
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        dt = _other_dt_mock()
+        factory = MagicMock()
+        factory.get_instance.return_value = dt
+        nodes = {
+            TEXT_NODE_ID: {"nodeid": TEXT_NODE_ID, "datatype": "string"},
+            CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "string"},
+        }
+        tiles = [
+            _make_tile(data={TEXT_NODE_ID: {"en": "a"}, CONCEPT_NODE_ID: {"en": "b"}}),
+            _make_tile(data={TEXT_NODE_ID: {"en": "c"}, CONCEPT_NODE_ID: {"en": "d"}}),
+        ]
+        view = BiblissimaCreateResourceView()
+
+        view._run_hook(tiles, nodes, factory, "after_update_all")
+
+        self.assertEqual(
+            dt.after_update_all.call_args_list,
+            [call(tile=tiles[0]), call(tile=tiles[1])],
+        )
 
 
 # ---------------------------------------------------------------------------

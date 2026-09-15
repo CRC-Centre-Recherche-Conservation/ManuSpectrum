@@ -2779,6 +2779,8 @@ class BiblissimaCreateResourceView(View):
     def _create_dependency_resource(self, graph_id, resource_type, bbma_data, user):
         """Create a Place/Group/Person resource with its name and relationships.
 
+        A Place given ``biblissimaQid`` also receives its GeoNames identifier
+        and point when Wikibase has them (``_stage_place_geo``, best-effort).
         The edit log attributes the created tiles to *user*.
         """
         from django.db import transaction
@@ -2830,11 +2832,13 @@ class BiblissimaCreateResourceView(View):
                 )
 
             serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
-            self._stage_tiles(
-                self._tile_buffer,
-                self._nodes_by_id(serialized_graph),
-                DataTypeFactory(),
-            )
+            nodes_by_id = self._nodes_by_id(serialized_graph)
+            factory = DataTypeFactory()
+            self._stage_tiles(self._tile_buffer, nodes_by_id, factory)
+            if resource_type == "Place":
+                self._stage_place_geo(
+                    resource_id, bbma_data.get("biblissimaQid"), nodes_by_id, factory
+                )
 
             with transaction.atomic():
                 resource_instance.save()
@@ -3145,20 +3149,30 @@ class BiblissimaCreateResourceView(View):
           ``/manifest/{globalid}`` so Mirador can serve external manifests.
         - ``post_tile_save``: R2R relationship creation via the Arches SQL
           function that populates ``resource_x_resource``.
+        - ``after_update_all``: called as ``method(tile=tile)``, once per
+          datatype of a tile; the geojson datatype refreshes
+          ``geojson_geometries`` from it.
 
         ``method_name`` is intentionally the last argument so that Task 3.4
         can call ``_run_hook(tiles, nodes_by_id, factory, "pre_tile_save")``
         with a consistent, reusable signature.
         """
         for tile in tiles:
+            replayed_datatypes = set()
             for nodeid in list(tile.data.keys()):
                 node = nodes_by_id.get(str(nodeid))
                 if node is None:
                     continue
+                if method_name == "after_update_all":
+                    if node["datatype"] in replayed_datatypes:
+                        continue
+                    replayed_datatypes.add(node["datatype"])
                 datatype = factory.get_instance(node["datatype"])
                 method = getattr(datatype, method_name)
                 if method_name == "post_tile_save":
                     method(tile, nodeid, request=None)
+                elif method_name == "after_update_all":
+                    method(tile=tile)
                 else:
                     method(tile, nodeid)
 
@@ -3179,6 +3193,106 @@ class BiblissimaCreateResourceView(View):
         """
         self._validate_tiles(tiles, nodes_by_id, factory)
         self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
+
+    def _place_geo_tiles(self, resource_id, geo, parts):
+        """Buffer the GeoNames tiles of *geo* on a Place, for the *parts* named.
+
+        ``identifier``: value ``https://www.geonames.org/<id>/``, source
+        Geonames, type record identifier. ``location``: a FeatureCollection
+        holding one WGS84 Point in "Literal location". A part *geo* has no
+        value for is not buffered. Each tile carries its part name as
+        ``_mspectrum_place_part``. Returns the names of the parts buffered.
+        """
+        buffered = []
+        if "identifier" in parts and geo.get("geonamesId"):
+            tile = self._create_tile(
+                PLACE_IDENTIFIER_NG,
+                resource_id,
+                {
+                    PLACE_IDENTIFIER_VALUE: self._i18n_string(
+                        f"https://www.geonames.org/{geo['geonamesId']}/"
+                    ),
+                    PLACE_IDENTIFIER_SOURCE: self._concept_list(
+                        [CONCEPT_SOURCE_GEONAMES]
+                    ),
+                    PLACE_IDENTIFIER_TYPE: self._concept_list([CONCEPT_RECORD_ID]),
+                },
+            )
+            tile._mspectrum_place_part = "identifier"
+            buffered.append("identifier")
+        if (
+            "location" in parts
+            and geo.get("latitude") is not None
+            and geo.get("longitude") is not None
+        ):
+            tile = self._create_tile(
+                PLACE_LITERAL_LOCATION_NG,
+                resource_id,
+                {
+                    PLACE_LITERAL_LOCATION_NODE: {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "Point",
+                                    "coordinates": [geo["longitude"], geo["latitude"]],
+                                },
+                                "properties": {"nodeId": PLACE_LITERAL_LOCATION_NODE},
+                            }
+                        ],
+                    }
+                },
+            )
+            tile._mspectrum_place_part = "location"
+            buffered.append("location")
+        return buffered
+
+    def _stage_place_geo(
+        self,
+        resource_id,
+        place_qid,
+        nodes_by_id,
+        factory,
+        parts=("identifier", "location"),
+    ):
+        """Append the staged GeoNames tiles of *place_qid* to the tile buffer.
+
+        Best-effort, part by part. Wikibase is read once; when it cannot be
+        read, nothing is appended. When a concept cannot be resolved or
+        staging refuses a part's tile, that part is removed from the buffer
+        and the other parts stay. An empty *place_qid* fetches nothing.
+        Returns the names of the parts appended; see ``_place_geo_tiles``.
+        """
+        if not place_qid:
+            return []
+        try:
+            geo = _get_place_geo(place_qid)
+        except Exception:
+            logger.warning(
+                "GeoNames data of place %s not fetched", place_qid, exc_info=True
+            )
+            return []
+        if not geo:
+            return []
+        appended = []
+        for part in parts:
+            start = len(self._tile_buffer)
+            try:
+                buffered = self._place_geo_tiles(resource_id, geo, (part,))
+                self._stage_tiles(self._tile_buffer[start:], nodes_by_id, factory)
+            except Exception:
+                logger.warning(
+                    "GeoNames %s of place %s not staged",
+                    part,
+                    place_qid,
+                    exc_info=True,
+                )
+                del self._tile_buffer[start:]
+                continue
+            appended.extend(buffered)
+        return appended
 
     @staticmethod
     def _editlog_user_fields(user):
@@ -3293,8 +3407,10 @@ class BiblissimaCreateResourceView(View):
 
         1. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
         2. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
-        3. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
-        4. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+        3. ``_run_hook(…, "after_update_all")`` — refreshes
+           ``geojson_geometries``, the table Arches map layers read.
+        4. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        5. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
 
         After this method, ``self._tile_buffer`` is reset to an empty
         list — any further ``_create_tile`` call inside the same
@@ -3314,6 +3430,7 @@ class BiblissimaCreateResourceView(View):
 
         TileModel.objects.bulk_create(tiles)
         self._run_hook(tiles, nodes_by_id, factory, "post_tile_save")
+        self._run_hook(tiles, nodes_by_id, factory, "after_update_all")
         # MultiDescriptor reads tiles via TileModel.objects.filter(...) —
         # so it sees the rows just inserted.
         resource.save_descriptors()
