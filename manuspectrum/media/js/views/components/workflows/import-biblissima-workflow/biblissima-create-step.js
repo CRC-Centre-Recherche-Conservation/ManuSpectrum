@@ -854,16 +854,22 @@ const viewModel = function(params) {
         const deps = [];
         const seen = new Set();
 
-        const addDep = (key, type, graphId, parentKey, locationKey) => {
+        const addDep = (key, type, graphId, parentKey, locationKey, biblissimaQid) => {
             const mapKey = `${type}:${key}`;
-            if (seen.has(mapKey)) return null;
+            if (seen.has(mapKey)) {
+                const known = deps.find((d) => `${d.type}:${d.key}` === mapKey);
+                if (known && !known.biblissimaQid && biblissimaQid) {
+                    known.biblissimaQid = biblissimaQid;
+                }
+                return null;
+            }
             seen.add(mapKey);
             const reused = existing.get(mapKey);
             if (reused) {
                 deps.push(reused);
                 return null; // already has an action, don't re-check
             }
-            const dep = self._makeDep(key, type, graphId, parentKey, locationKey);
+            const dep = self._makeDep(key, type, graphId, parentKey, locationKey, biblissimaQid);
             deps.push(dep);
             return dep; // new dep → needs duplicate check
         };
@@ -896,7 +902,7 @@ const viewModel = function(params) {
             const productionPlace = self.isComponent ? (item.location || "") : "";
 
             if (ownerPlace && ownerPlace !== "Origine inconnue") {
-                const d = addDep(ownerPlace, "Place", PLACE_GRAPH_ID);
+                const d = addDep(ownerPlace, "Place", PLACE_GRAPH_ID, null, null, item.locationQid);
                 if (d) newDeps.push(d);
             }
             if (
@@ -972,10 +978,12 @@ const viewModel = function(params) {
     // Reversed per language by Arches; a bare /resource/<id> would redirect.
     this.resourceEditorUrl = arches.urls.resource_editor;
 
-    this._makeDep = (label, type, graphId, parentKey, locationKey) => ({
+    this._makeDep = (label, type, graphId, parentKey, locationKey, biblissimaQid) => ({
         key: label,
         type: type,
         graphId: graphId,
+        // Wikibase QID of a Place, which carries its GeoNames id and coordinates.
+        biblissimaQid: biblissimaQid || null,
         label: ko.observable(label),
         // search | has_suggestions | pending_confirm | use_existing | create | creating | created
         action: ko.observable('search'),
@@ -1073,6 +1081,7 @@ const viewModel = function(params) {
                         label: dep.key,
                         memberOf: memberOfId,
                         location: locationId,
+                        biblissimaQid: dep.biblissimaQid,
                     },
                 }),
             });
@@ -1113,6 +1122,7 @@ const viewModel = function(params) {
                     resourceId: dep.existingId(),
                     graphId: dep.graphId,
                     label: dep.key,
+                    biblissimaQid: dep.biblissimaQid,
                 }),
             });
         } catch (err) {
