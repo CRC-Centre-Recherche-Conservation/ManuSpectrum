@@ -165,6 +165,18 @@ class UnitaryCreateStagesBeforeTheTransactionTests(WriteTransactionHarness):
         self.assertIn(("post_tile_save", True), self.events)
         self.assertIn(("editlog", True), self.events)
 
+    def test_after_update_all_is_replayed_on_the_flushed_tiles_inside_it(self):
+        self._create_document()
+
+        self.assertLess(
+            self.events.index(("post_tile_save", True)),
+            self.events.index(("after_update_all", True)),
+        )
+        replayed = {
+            call.args[3]: call.args[0] for call in self.mock_run_hook.call_args_list
+        }
+        self.assertIs(replayed["after_update_all"], replayed["post_tile_save"])
+
     def test_a_failing_manifest_fetch_opens_no_transaction_and_writes_no_row(self):
         self._fail_pre_tile_save()
 

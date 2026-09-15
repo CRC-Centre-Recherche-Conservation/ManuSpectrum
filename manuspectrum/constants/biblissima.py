@@ -24,6 +24,7 @@ import re
 # ---------------------------------------------------------------------------
 _BIBLISSIMA_ENTITY_CACHE_KEY = "biblissima:wikibase:entity:{qid}"
 _BIBLISSIMA_MANUSCRIPT_CACHE_KEY = "biblissima:wikibase:manuscript:{ark_hash}"
+_BIBLISSIMA_PLACE_GEO_CACHE_KEY = "biblissima:wikibase:place-geo:{qid}"
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +42,10 @@ P354 = "P354"  # auteur
 P201 = "P201"  # localisation (place)
 P169 = "P169"  # partie de (parent institution)
 P123 = "P123"  # identifiant Geonames
+P276 = "P276"  # coordonnées géographiques
+
+# Globe of Earth coordinates in a Wikibase globe-coordinate value.
+_EARTH_GLOBE = "http://www.wikidata.org/entity/Q2"
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +189,10 @@ PLACE_IDENTIFIER_VALUE = "e7bf9153-7024-11ef-8753-0575b5bada34"
 PLACE_IDENTIFIER_SOURCE = "e7bf9154-7024-11ef-8753-0575b5bada34"
 PLACE_IDENTIFIER_TYPE = "e7bf9155-7024-11ef-8753-0575b5bada34"
 
+# "Literal location" (geojson-feature-collection) is its own nodegroup, cardinality 1.
+PLACE_LITERAL_LOCATION_NG = "288758de-7026-11ef-8753-0575b5bada34"
+PLACE_LITERAL_LOCATION_NODE = "288758de-7026-11ef-8753-0575b5bada34"
+
 
 # ---------------------------------------------------------------------------
 # Group — nodegroups & nodes
@@ -256,6 +265,7 @@ CONCEPT_RECORD_ID = "e10752d3-d8fa-47cb-92f9-dd7277dfc97a"
 CONCEPT_SOURCE_BIBLISSIMA = "39124989-dfb1-4e2a-9d1a-4bff0827ed71"
 CONCEPT_SOURCE_MANDRAGORE = "3b78627a-c751-43df-b427-73e1dd11ec38"
 CONCEPT_SOURCE_BNF = "bd1fa4c5-c7e7-45d2-b58c-e5f54a1da34d"
+CONCEPT_SOURCE_GEONAMES = "9f436703-91f9-48f0-a949-bcff9eb5b85b"
 CONCEPT_DESCRIPTION = "9a51d30b-48e8-4f94-9344-cd2bb1d4b33a"
 # Statement type for "Texte" (work).
 CONCEPT_IDENTIFICATION = "d2a8104a-312a-4f1d-acb7-3ecb1335e2fc"
@@ -357,11 +367,15 @@ BIBLISSIMA_DOCUMENT_TYPE_LABELS = {
 # fragments scraped from Biblissima.
 _ARK_RE = re.compile(r"ark:/43093/(\w+)")
 
+# A Wikibase item id.
+_QID_RE = re.compile(r"Q\d+")
+
 
 __all__ = [
     # Cache key templates (TTL is in Django settings)
     "_BIBLISSIMA_ENTITY_CACHE_KEY",
     "_BIBLISSIMA_MANUSCRIPT_CACHE_KEY",
+    "_BIBLISSIMA_PLACE_GEO_CACHE_KEY",
     # Wikibase property IDs
     "P2",
     "P129",
@@ -375,6 +389,8 @@ __all__ = [
     "P201",
     "P169",
     "P123",
+    "P276",
+    "_EARTH_GLOBE",
     # Arches graph UUIDs
     "DOCUMENT_GRAPH_ID",
     "COMPONENT_GRAPH_ID",
@@ -476,6 +492,8 @@ __all__ = [
     "PLACE_IDENTIFIER_VALUE",
     "PLACE_IDENTIFIER_SOURCE",
     "PLACE_IDENTIFIER_TYPE",
+    "PLACE_LITERAL_LOCATION_NG",
+    "PLACE_LITERAL_LOCATION_NODE",
     # Group NG/nodes
     "GROUP_NAME_NG",
     "GROUP_NAME_LABEL",
@@ -509,6 +527,7 @@ __all__ = [
     "CONCEPT_SOURCE_BIBLISSIMA",
     "CONCEPT_SOURCE_MANDRAGORE",
     "CONCEPT_SOURCE_BNF",
+    "CONCEPT_SOURCE_GEONAMES",
     "CONCEPT_DESCRIPTION",
     "CONCEPT_IDENTIFICATION",
     "CONCEPT_INSCRIPTIONS",
@@ -526,4 +545,5 @@ __all__ = [
     "BIBLISSIMA_DOCUMENT_TYPE_LABELS",
     # Misc
     "_ARK_RE",
+    "_QID_RE",
 ]

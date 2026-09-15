@@ -187,9 +187,9 @@ const makeRawItem = (overrides = {}) => ({
  * background async init (resolveDependencies + checkDuplicates) so that
  * subsequent test fetch stubs intercept only what the test cares about.
  */
-const makeViewModel = async (items = [], resourceType = 'Document') => {
+const makeViewModel = async (items = [], resourceType = 'Document', initFetch = null) => {
     // Generic stub for the background init calls (check-duplicates etc.)
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
+    vi.stubGlobal('fetch', initFetch || vi.fn().mockImplementation(() =>
         Promise.resolve({
             ok: true,
             json: () => Promise.resolve({ results: [], resourceId: null }),
@@ -675,6 +675,140 @@ describe('biblissima-create-step', () => {
 
             expect(vm.unresolvedDepsLabel(item)).toBe('');
             expect(vm.canCreateItem(item)).toBe(true);
+        });
+    });
+
+    describe('Place dependency QID', () => {
+        const placeDep = (vm) => vm.dependencies().find((d) => d.type === 'Place');
+
+        const stubPost = () => {
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ resourceId: 'place-1', displayname: 'Paris (France)' }),
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            return fetchMock;
+        };
+
+        const bodyOf = (fetchMock, url) => {
+            const call = fetchMock.mock.calls.find(([u]) => u === url);
+            return JSON.parse(call[1].body);
+        };
+
+        const highPlaceMatch = (displayname) => vi.fn().mockImplementation((url, init) => {
+            const label = url === '/api/biblissima/check-duplicates'
+                ? JSON.parse(init.body).items[0]?.label
+                : null;
+            const results = label === 'Paris (France)'
+                ? [{ index: 0, suggestions: [{ resourceId: 'place-1', displayname, confidence: 'high' }] }]
+                : [];
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ results, resourceId: null }) });
+        });
+
+        it('sends the QID when an automatic match has the same name up to case and spaces', async () => {
+            const fetchMock = highPlaceMatch('  paris  (france) ');
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends the QID when an automatic match spells the same name in decomposed Unicode', async () => {
+            const fetchMock = highPlaceMatch('Paris (France)'.normalize('NFD'));
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('links without a QID, instead of failing, when the match has no textual name', async () => {
+            const fetchMock = highPlaceMatch(42);
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBeNull();
+        });
+
+        it('sends a null QID when an automatic match has another name', async () => {
+            const fetchMock = highPlaceMatch('Paris');
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            const body = bodyOf(fetchMock, '/api/biblissima/add-alt-name');
+            expect(body.label).toBe('Paris (France)');
+            expect(body.biblissimaQid).toBeNull();
+        });
+
+        it('sends the QID when the user picks a match with another name', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const fetchMock = stubPost();
+
+            vm.useExistingDep(placeDep(vm), { resourceId: 'place-1', displayname: 'Paris' });
+
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('carries the Wikibase QID of the item location', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+
+            expect(placeDep(vm).biblissimaQid).toBe('Q27392');
+        });
+
+        it('takes the QID of a later item when the first one has none', async () => {
+            const vm = await makeViewModel([
+                makeRawItem({ locationQid: '' }),
+                makeRawItem({ arkId: 'ark:/12345/other', locationQid: 'Q27392' }),
+            ]);
+
+            expect(placeDep(vm).biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends the QID when the Place is created', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const dep = placeDep(vm);
+            dep.action('create');
+            const fetchMock = stubPost();
+
+            await vm.createDependency(dep);
+
+            const body = bodyOf(fetchMock, '/api/biblissima/create-resource');
+            expect(body.biblissimaData.biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends the QID when the Place is linked', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const dep = placeDep(vm);
+            dep.existingId('place-1');
+            const fetchMock = stubPost();
+
+            await vm._addAltName(dep);
+
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('leaves the production place of a Component without a QID', async () => {
+            const vm = await makeViewModel([
+                makeRawItem({ location: 'Naples (Campanie, Italie)', locationQid: 'Q27392' }),
+            ], 'Component');
+            const placeByKey = (key) => vm.dependencies().find((d) => d.type === 'Place' && d.key === key);
+
+            expect(placeByKey('Naples (Campanie, Italie)').biblissimaQid).toBeNull();
+            expect(placeByKey('Paris (France)').biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends a null QID when a Group is created', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const dep = vm.dependencies().find((d) => d.type === 'Group');
+            dep.action('create');
+            const fetchMock = stubPost();
+
+            await vm.createDependency(dep);
+
+            const groupBody = fetchMock.mock.calls
+                .filter(([u]) => u === '/api/biblissima/create-resource')
+                .map(([, init]) => JSON.parse(init.body))
+                .find((body) => body.resourceType === 'Group');
+            expect(groupBody.biblissimaData.biblissimaQid).toBeNull();
         });
     });
 });

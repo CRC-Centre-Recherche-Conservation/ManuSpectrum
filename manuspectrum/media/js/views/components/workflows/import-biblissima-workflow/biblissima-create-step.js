@@ -119,6 +119,9 @@ const BIBLISSIMA_TYPE_LABELS = {
     'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4': 'Enluminure',
 };
 
+const normaliseLabel = (label) => String(label ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+const sameLabel = (a, b) => normaliseLabel(a) === normaliseLabel(b);
+
 const viewModel = function(params) {
     const self = this;
 
@@ -854,16 +857,22 @@ const viewModel = function(params) {
         const deps = [];
         const seen = new Set();
 
-        const addDep = (key, type, graphId, parentKey, locationKey) => {
+        const addDep = (key, type, graphId, parentKey, locationKey, biblissimaQid) => {
             const mapKey = `${type}:${key}`;
-            if (seen.has(mapKey)) return null;
+            if (seen.has(mapKey)) {
+                const known = deps.find((d) => `${d.type}:${d.key}` === mapKey);
+                if (known && !known.biblissimaQid && biblissimaQid) {
+                    known.biblissimaQid = biblissimaQid;
+                }
+                return null;
+            }
             seen.add(mapKey);
             const reused = existing.get(mapKey);
             if (reused) {
                 deps.push(reused);
                 return null; // already has an action, don't re-check
             }
-            const dep = self._makeDep(key, type, graphId, parentKey, locationKey);
+            const dep = self._makeDep(key, type, graphId, parentKey, locationKey, biblissimaQid);
             deps.push(dep);
             return dep; // new dep → needs duplicate check
         };
@@ -896,7 +905,7 @@ const viewModel = function(params) {
             const productionPlace = self.isComponent ? (item.location || "") : "";
 
             if (ownerPlace && ownerPlace !== "Origine inconnue") {
-                const d = addDep(ownerPlace, "Place", PLACE_GRAPH_ID);
+                const d = addDep(ownerPlace, "Place", PLACE_GRAPH_ID, null, null, item.locationQid);
                 if (d) newDeps.push(d);
             }
             if (
@@ -953,7 +962,8 @@ const viewModel = function(params) {
                         dep.action('use_existing');
                         dep.existingId(best.resourceId);
                         dep.existingLabel(best.displayname || dep.key);
-                        self._addAltName(dep);
+                        // An automatic match sends the place QID only when both names are the same.
+                        self._addAltName(dep, { withQid: sameLabel(dep.key, best.displayname) });
                     } else {
                         dep.action('has_suggestions');
                     }
@@ -972,10 +982,12 @@ const viewModel = function(params) {
     // Reversed per language by Arches; a bare /resource/<id> would redirect.
     this.resourceEditorUrl = arches.urls.resource_editor;
 
-    this._makeDep = (label, type, graphId, parentKey, locationKey) => ({
+    this._makeDep = (label, type, graphId, parentKey, locationKey, biblissimaQid) => ({
         key: label,
         type: type,
         graphId: graphId,
+        // Wikibase QID of a Place, which carries its GeoNames id and coordinates.
+        biblissimaQid: biblissimaQid || null,
         label: ko.observable(label),
         // search | has_suggestions | pending_confirm | use_existing | create | creating | created
         action: ko.observable('search'),
@@ -1073,6 +1085,7 @@ const viewModel = function(params) {
                         label: dep.key,
                         memberOf: memberOfId,
                         location: locationId,
+                        biblissimaQid: dep.biblissimaQid,
                     },
                 }),
             });
@@ -1100,7 +1113,7 @@ const viewModel = function(params) {
     };
 
     // Add Biblissima label as alt name to existing resource (non-blocking)
-    this._addAltName = async (dep) => {
+    this._addAltName = async (dep, { withQid = true } = {}) => {
         if (!dep.existingId() || !dep.key) return;
         try {
             await fetch('/api/biblissima/add-alt-name', {
@@ -1113,6 +1126,7 @@ const viewModel = function(params) {
                     resourceId: dep.existingId(),
                     graphId: dep.graphId,
                     label: dep.key,
+                    biblissimaQid: withQid ? dep.biblissimaQid : null,
                 }),
             });
         } catch (err) {

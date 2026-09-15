@@ -58,6 +58,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from html import unescape
+from urllib.parse import urlencode
 
 import requests
 from lxml import html as lxml_html
@@ -587,12 +588,105 @@ def _batch_get_wikibase_entities(qids, session=None):
     return results
 
 
+def _fetch_wikibase_claims(qid, session=None):
+    """Claims of one Wikibase entity, read through the guarded fetch.
+
+    Returns ``{}`` for an entity Wikibase marks missing or that has no claims.
+    Raises ``ValueError`` for an answer that carries an ``error`` or no
+    ``entities``, ``HTTPError`` for an error status, and what the fetch raises
+    (``BiblissimaBusy``, ``UnsafeURLError``, ``requests`` errors).
+    """
+    query = urlencode(
+        {"action": "wbgetentities", "ids": qid, "format": "json", "props": "claims"}
+    )
+    resp = _bib_request(
+        session or _get_biblissima_session(),
+        f"{BIBLISSIMA_WIKIBASE}?{query}",
+        guarded=True,
+        timeout=REQUEST_TIMEOUT,
+    )
+    resp.raise_for_status()
+    payload = resp.json()
+    if not isinstance(payload, dict) or "error" in payload or "entities" not in payload:
+        error = payload.get("error") if isinstance(payload, dict) else None
+        code = error.get("code") if isinstance(error, dict) else error
+        raise ValueError(f"Wikibase answered no entities for {qid}: {code}")
+    return payload["entities"].get(qid, {}).get("claims", {})
+
+
+def _place_geo_from_claims(claims):
+    """GeoNames id (P123) and coordinates (P276) found in a place's claims.
+
+    Returns ``{"geonamesId", "latitude", "longitude"}``. Deprecated statements
+    are skipped. The id is the first P123 value made of ASCII digits; the
+    coordinates are the first P276 value on the Earth globe whose latitude and
+    longitude are numbers (not booleans) within [-90, 90] and [-180, 180]. A
+    value not found is ``None``.
+    """
+    geonames_id = None
+    for claim in claims.get(P123, []):
+        if claim.get("rank") == "deprecated":
+            continue
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+", value.strip()):
+            geonames_id = value.strip()
+            break
+
+    latitude = longitude = None
+    for claim in claims.get(P276, []):
+        if claim.get("rank") == "deprecated":
+            continue
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if not isinstance(value, dict):
+            continue
+        lat, lon = value.get("latitude"), value.get("longitude")
+        if (
+            (value.get("globe") or _EARTH_GLOBE) == _EARTH_GLOBE
+            and isinstance(lat, (int, float))
+            and not isinstance(lat, bool)
+            and isinstance(lon, (int, float))
+            and not isinstance(lon, bool)
+            and -90 <= lat <= 90
+            and -180 <= lon <= 180
+        ):
+            latitude, longitude = float(lat), float(lon)
+            break
+
+    return {"geonamesId": geonames_id, "latitude": latitude, "longitude": longitude}
+
+
+def _get_place_geo(place_qid, session=None):
+    """GeoNames id and coordinates of a Wikibase place; see ``_place_geo_from_claims``.
+
+    The result is cached for ``BIBLISSIMA_CACHE_TTL``. Returns ``None`` for a
+    malformed QID or when the claims could not be fetched; that is not cached.
+    """
+    if not _QID_RE.fullmatch(place_qid or ""):
+        return None
+    cache_key = _BIBLISSIMA_PLACE_GEO_CACHE_KEY.format(qid=place_qid)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        claims = _fetch_wikibase_claims(place_qid, session=session)
+    except Exception as exc:
+        logger.warning("Claims of place %s could not be fetched: %s", place_qid, exc)
+        return None
+
+    result = _place_geo_from_claims(claims)
+    cache.set(cache_key, result, _BIBLISSIMA_CACHE_TTL)
+    return result
+
+
 def _resolve_collection(collection_qid, session=None):
     """Resolve a Biblissima collection entity into owner + location data.
 
-    Follows the chain: collection → P201 (localisation) → place with Geonames ID
-                        collection → P169 (partie de) → parent institution
-    Returns dict with ownerLabel, ownerQid, locationLabel, locationQid, geonamesId.
+    Follows the chain: collection → P201 (localisation) → place, whose GeoNames
+    id comes from ``_get_place_geo``; collection → P169 (partie de) → parent
+    institution. Claims are read with ``_fetch_wikibase_claims``.
+    Returns dict with ownerLabel, ownerQid, locationLabel, locationQid, geonamesId,
+    parentInstitutionLabel, parentInstitutionQid.
     """
     if not collection_qid:
         return {}
@@ -606,23 +700,8 @@ def _resolve_collection(collection_qid, session=None):
         "ownerQid": collection_qid,
     }
 
-    s = session or requests
-    coll_claims = {}
     try:
-        resp = s.get(
-            BIBLISSIMA_WIKIBASE,
-            params={
-                "action": "wbgetentities",
-                "ids": collection_qid,
-                "format": "json",
-                "languages": "fr|en",
-                "props": "claims",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        entity = resp.json().get("entities", {}).get(collection_qid, {})
-        coll_claims = entity.get("claims", {})
+        coll_claims = _fetch_wikibase_claims(collection_qid, session=session)
     except Exception:
         logger.warning("Failed to fetch collection claims for %s", collection_qid)
         return result
@@ -642,33 +721,9 @@ def _resolve_collection(collection_qid, session=None):
             if loc_entity:
                 result["locationLabel"] = loc_entity.get("label", "")
                 result["locationQid"] = loc_qid
-
-                # Get Geonames ID from the place entity
-                try:
-                    loc_resp = s.get(
-                        BIBLISSIMA_WIKIBASE,
-                        params={
-                            "action": "wbgetentities",
-                            "ids": loc_qid,
-                            "format": "json",
-                            "props": "claims",
-                        },
-                        timeout=REQUEST_TIMEOUT,
-                    )
-                    loc_resp.raise_for_status()
-                    loc_data = loc_resp.json().get("entities", {}).get(loc_qid, {})
-                    geo_claims = loc_data.get("claims", {}).get(P123, [])
-                    if geo_claims:
-                        geo_val = (
-                            geo_claims[0]
-                            .get("mainsnak", {})
-                            .get("datavalue", {})
-                            .get("value")
-                        )
-                        if geo_val:
-                            result["geonamesId"] = str(geo_val)
-                except Exception:
-                    pass
+                geo = _get_place_geo(loc_qid, session=session)
+                if geo and geo["geonamesId"]:
+                    result["geonamesId"] = geo["geonamesId"]
 
     # P169 = partie de (parent institution) — for the top-level owner
     parent_claims = coll_claims.get(P169, [])
@@ -2724,6 +2779,8 @@ class BiblissimaCreateResourceView(View):
     def _create_dependency_resource(self, graph_id, resource_type, bbma_data, user):
         """Create a Place/Group/Person resource with its name and relationships.
 
+        A Place given ``biblissimaQid`` also receives its GeoNames identifier
+        and point when Wikibase has them (``_stage_place_geo``, best-effort).
         The edit log attributes the created tiles to *user*.
         """
         from django.db import transaction
@@ -2775,11 +2832,13 @@ class BiblissimaCreateResourceView(View):
                 )
 
             serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
-            self._stage_tiles(
-                self._tile_buffer,
-                self._nodes_by_id(serialized_graph),
-                DataTypeFactory(),
-            )
+            nodes_by_id = self._nodes_by_id(serialized_graph)
+            factory = DataTypeFactory()
+            self._stage_tiles(self._tile_buffer, nodes_by_id, factory)
+            if resource_type == "Place":
+                self._stage_place_geo(
+                    resource_id, bbma_data.get("biblissimaQid"), nodes_by_id, factory
+                )
 
             with transaction.atomic():
                 resource_instance.save()
@@ -3081,29 +3140,38 @@ class BiblissimaCreateResourceView(View):
                         raise TileValidationError(err.get("message", ""))
 
     def _run_hook(self, tiles, nodes_by_id, factory, method_name):
-        """Replay ``pre_tile_save`` / ``post_tile_save`` for every (tile, node).
+        """Replay a datatype hook the bulk write skips, named by *method_name*.
 
-        Mirrors the side effects that ``Tile.save()`` would run around the
-        ``bulk_create``:
+        ``pre_tile_save`` / ``post_tile_save`` run for every (tile, node), as
+        ``Tile.save()`` runs them:
 
         - ``pre_tile_save``: IIIF manifest import rewrites the URL to
           ``/manifest/{globalid}`` so Mirador can serve external manifests.
         - ``post_tile_save``: R2R relationship creation via the Arches SQL
           function that populates ``resource_x_resource``.
 
-        ``method_name`` is intentionally the last argument so that Task 3.4
-        can call ``_run_hook(tiles, nodes_by_id, factory, "pre_tile_save")``
-        with a consistent, reusable signature.
+        ``after_update_all`` is called as ``method(tile=tile)``, once per
+        datatype of a tile. ``Tile.after_update_all()`` calls it once per
+        node of the nodegroup; the hook only receives the tile, so a datatype
+        present on several nodes would do the same work several times (the
+        geojson datatype refreshes ``geojson_geometries`` for the whole tile).
         """
         for tile in tiles:
+            replayed_datatypes = set()
             for nodeid in list(tile.data.keys()):
                 node = nodes_by_id.get(str(nodeid))
                 if node is None:
                     continue
+                if method_name == "after_update_all":
+                    if node["datatype"] in replayed_datatypes:
+                        continue
+                    replayed_datatypes.add(node["datatype"])
                 datatype = factory.get_instance(node["datatype"])
                 method = getattr(datatype, method_name)
                 if method_name == "post_tile_save":
                     method(tile, nodeid, request=None)
+                elif method_name == "after_update_all":
+                    method(tile=tile)
                 else:
                     method(tile, nodeid)
 
@@ -3124,6 +3192,216 @@ class BiblissimaCreateResourceView(View):
         """
         self._validate_tiles(tiles, nodes_by_id, factory)
         self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
+
+    def _place_geo_tiles(self, resource_id, geo, parts):
+        """Buffer the GeoNames tiles of *geo* on a Place, for the *parts* named.
+
+        ``identifier``: value ``https://www.geonames.org/<id>/``, source
+        Geonames, type record identifier. ``location``: a FeatureCollection
+        holding one WGS84 Point in "Literal location". A part *geo* has no
+        value for is not buffered. Each tile carries its part name as
+        ``_mspectrum_place_part``. Returns the names of the parts buffered.
+        """
+        buffered = []
+        if "identifier" in parts and geo.get("geonamesId"):
+            tile = self._create_tile(
+                PLACE_IDENTIFIER_NG,
+                resource_id,
+                {
+                    PLACE_IDENTIFIER_VALUE: self._i18n_string(
+                        f"https://www.geonames.org/{geo['geonamesId']}/"
+                    ),
+                    PLACE_IDENTIFIER_SOURCE: self._concept_list(
+                        [CONCEPT_SOURCE_GEONAMES]
+                    ),
+                    PLACE_IDENTIFIER_TYPE: self._concept_list([CONCEPT_RECORD_ID]),
+                },
+            )
+            tile._mspectrum_place_part = "identifier"
+            buffered.append("identifier")
+        if (
+            "location" in parts
+            and geo.get("latitude") is not None
+            and geo.get("longitude") is not None
+        ):
+            tile = self._create_tile(
+                PLACE_LITERAL_LOCATION_NG,
+                resource_id,
+                {
+                    PLACE_LITERAL_LOCATION_NODE: {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "Point",
+                                    "coordinates": [geo["longitude"], geo["latitude"]],
+                                },
+                                "properties": {"nodeId": PLACE_LITERAL_LOCATION_NODE},
+                            }
+                        ],
+                    }
+                },
+            )
+            tile._mspectrum_place_part = "location"
+            buffered.append("location")
+        return buffered
+
+    def _stage_place_geo(
+        self,
+        resource_id,
+        place_qid,
+        nodes_by_id,
+        factory,
+        parts=("identifier", "location"),
+    ):
+        """Append the staged GeoNames tiles of *place_qid* to the tile buffer.
+
+        Best-effort, part by part. Wikibase is read once; when it cannot be
+        read, nothing is appended. When a concept cannot be resolved or
+        staging refuses a part's tile, that part is removed from the buffer
+        and the other parts stay. An empty *place_qid* fetches nothing.
+        Returns the names of the parts appended; see ``_place_geo_tiles``.
+        """
+        if not place_qid:
+            return []
+        try:
+            geo = _get_place_geo(place_qid)
+        except Exception:
+            logger.warning(
+                "GeoNames data of place %s not fetched", place_qid, exc_info=True
+            )
+            return []
+        if not geo:
+            return []
+        appended = []
+        for part in parts:
+            start = len(self._tile_buffer)
+            try:
+                buffered = self._place_geo_tiles(resource_id, geo, (part,))
+                self._stage_tiles(self._tile_buffer[start:], nodes_by_id, factory)
+            except Exception:
+                logger.warning(
+                    "GeoNames %s of place %s not staged",
+                    part,
+                    place_qid,
+                    exc_info=True,
+                )
+                del self._tile_buffer[start:]
+                continue
+            appended.extend(buffered)
+        return appended
+
+    @staticmethod
+    def _missing_place_geo_parts(resource_id):
+        """The GeoNames parts a Place has no tile for, among ``identifier`` and ``location``.
+
+        ``identifier`` is present when an Identifier tile has the Geonames
+        source; ``location`` when a "Literal location" tile exists (its card
+        holds a single tile).
+        """
+        tiles = TileModel.objects.filter(resourceinstance_id=resource_id)
+        missing = []
+        if not tiles.filter(
+            nodegroup_id=PLACE_IDENTIFIER_NG,
+            data__contains={
+                PLACE_IDENTIFIER_SOURCE: [
+                    {"labels": [{"list_item_id": CONCEPT_SOURCE_GEONAMES}]}
+                ]
+            },
+        ).exists():
+            missing.append("identifier")
+        if not tiles.filter(nodegroup_id=PLACE_LITERAL_LOCATION_NG).exists():
+            missing.append("location")
+        return missing
+
+    def _enrich_existing_place(self, resource_id, place_qid, user):
+        """Add to an existing Place the GeoNames parts of *place_qid* it lacks.
+
+        A *place_qid* that is not a Wikibase item id adds nothing and queries
+        nothing. Only the missing parts Wikibase has a value for are staged
+        (``identifier``: a GeoNames id; ``location``: a latitude and a
+        longitude); when none remains, or Wikibase cannot be read, nothing is
+        added and the graph is not loaded.
+
+        The tiles are staged before the transaction. Inside it the resource row
+        is locked and the missing parts are read again, so a part added by a
+        concurrent enrichment of the same Place is not written twice. Each added
+        tile takes as ``sortorder`` the highest one the resource holds in its
+        nodegroup plus one, or 0 when it holds none
+        (``TileModel.set_next_sort_order``). The edit log names *user*; indexing
+        follows the commit. Best-effort: a failure is logged and adds nothing.
+        Returns the names of the parts added.
+        """
+        from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
+        from arches.app.models.resource import Resource
+
+        if not isinstance(place_qid, str) or not _QID_RE.fullmatch(place_qid):
+            return []
+        try:
+            if not ResourceInstance.objects.filter(
+                pk=resource_id, graph_id=PLACE_GRAPH_ID
+            ).exists():
+                return []
+            missing = self._missing_place_geo_parts(resource_id)
+            if not missing:
+                return []
+            geo = _get_place_geo(place_qid)
+            if not geo:
+                return []
+            has_value = {
+                "identifier": bool(geo.get("geonamesId")),
+                "location": geo.get("latitude") is not None
+                and geo.get("longitude") is not None,
+            }
+            missing = [part for part in missing if has_value[part]]
+            if not missing:
+                return []
+            self._tile_buffer = []
+            serialized_graph = (
+                Resource(graph_id=PLACE_GRAPH_ID).get_serialized_graph() or {}
+            )
+            staged = self._stage_place_geo(
+                resource_id,
+                place_qid,
+                self._nodes_by_id(serialized_graph),
+                DataTypeFactory(),
+                parts=missing,
+            )
+            if not staged:
+                return []
+            with transaction.atomic():
+                list(
+                    ResourceInstance.objects.select_for_update()
+                    .filter(pk=resource_id)
+                    .values_list("pk", flat=True)
+                )
+                still_missing = self._missing_place_geo_parts(resource_id)
+                self._tile_buffer = [
+                    t
+                    for t in self._tile_buffer
+                    if t._mspectrum_place_part in still_missing
+                ]
+                added = [t._mspectrum_place_part for t in self._tile_buffer]
+                if added:
+                    for tile in self._tile_buffer:
+                        tile.set_next_sort_order()
+                    resource = Resource.objects.select_related(
+                        "graph__publication"
+                    ).get(pk=resource_id)
+                    resource.set_serialized_graph(serialized_graph)
+                    self._flush_tile_buffer(resource, user, uuid.uuid4())
+            if added:
+                self._defer_indexing(resource_ids=[str(resource_id)])
+            return added
+        except Exception:
+            logger.warning(
+                "GeoNames data not added to place %s", resource_id, exc_info=True
+            )
+            self._tile_buffer = []
+            return []
 
     @staticmethod
     def _editlog_user_fields(user):
@@ -3238,8 +3516,10 @@ class BiblissimaCreateResourceView(View):
 
         1. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
         2. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
-        3. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
-        4. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+        3. ``_run_hook(…, "after_update_all")`` — refreshes
+           ``geojson_geometries``, the table Arches map layers read.
+        4. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        5. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
 
         After this method, ``self._tile_buffer`` is reset to an empty
         list — any further ``_create_tile`` call inside the same
@@ -3259,6 +3539,7 @@ class BiblissimaCreateResourceView(View):
 
         TileModel.objects.bulk_create(tiles)
         self._run_hook(tiles, nodes_by_id, factory, "post_tile_save")
+        self._run_hook(tiles, nodes_by_id, factory, "after_update_all")
         # MultiDescriptor reads tiles via TileModel.objects.filter(...) —
         # so it sees the rows just inserted.
         resource.save_descriptors()
@@ -4529,7 +4810,12 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaAddAltNameView(View):
-    """Add a Biblissima label as alternative name to an existing resource."""
+    """Add a Biblissima label as alternative name to an existing resource.
+
+    A Place given ``biblissimaQid`` also receives the GeoNames identifier and
+    point it lacks (``_enrich_existing_place``), whether or not the name was
+    already present; the answer lists them under ``placeGeo``.
+    """
 
     def post(self, request):
         import json
@@ -4551,51 +4837,71 @@ class BiblissimaAddAltNameView(View):
             )
 
         name_conf = DEP_NAME_CONFIG[graph_id]
-
-        # Check if this name already exists on the resource
-        existing_tiles = Tile.objects.filter(
-            nodegroup_id=name_conf["ng"],
-            resourceinstance_id=resource_id,
-        )
-        for tile in existing_tiles:
-            existing_label = tile.data.get(name_conf["label"], {})
-            for lang_data in existing_label.values():
-                if (
-                    isinstance(lang_data, dict)
-                    and lang_data.get("value", "").strip().lower() == label.lower()
-                ):
-                    return JsonResponse(
-                        {"status": "already_exists", "message": "Name already present"}
-                    )
-
         creator = BiblissimaCreateResourceView()
-        try:
-            tile = Tile(
-                tileid=uuid.uuid4(),
+
+        already_present = any(
+            isinstance(lang_data, dict)
+            and lang_data.get("value", "").strip().lower() == label.lower()
+            for tile in Tile.objects.filter(
                 nodegroup_id=name_conf["ng"],
                 resourceinstance_id=resource_id,
-                data={
-                    name_conf["label"]: creator._i18n_string(label),
-                    name_conf["language"]: creator._concept_list([CONCEPT_FRENCH]),
-                    name_conf["type"]: creator._concept_list(
-                        [CONCEPT_ALTERNATE_TITLES]
-                    ),
-                },
-                sortorder=0,
             )
-            transaction_id = uuid.uuid4()
-            with transaction.atomic():
-                tile.save(index=False, transaction_id=transaction_id)
-                creator._attribute_tile_save(tile.tileid, transaction_id, request.user)
+            for lang_data in tile.data.get(name_conf["label"], {}).values()
+        )
 
-            # Route through the defer seam (post-commit; honors
-            # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
-            creator._defer_indexing(resource_ids=[str(resource_id)])
-        except Exception:
-            logger.exception("Failed to add alt name to resource %s", resource_id)
-            return JsonResponse({"error": "Failed to add alternative name"}, status=500)
+        if not already_present:
+            try:
+                tile = Tile(
+                    tileid=uuid.uuid4(),
+                    nodegroup_id=name_conf["ng"],
+                    resourceinstance_id=resource_id,
+                    data={
+                        name_conf["label"]: creator._i18n_string(label),
+                        name_conf["language"]: creator._concept_list([CONCEPT_FRENCH]),
+                        name_conf["type"]: creator._concept_list(
+                            [CONCEPT_ALTERNATE_TITLES]
+                        ),
+                    },
+                    sortorder=0,
+                )
+                transaction_id = uuid.uuid4()
+                with transaction.atomic():
+                    tile.save(index=False, transaction_id=transaction_id)
+                    creator._attribute_tile_save(
+                        tile.tileid, transaction_id, request.user
+                    )
 
-        return JsonResponse({"status": "added", "message": "Alternative name added"})
+                # Route through the defer seam (post-commit; honors
+                # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
+                creator._defer_indexing(resource_ids=[str(resource_id)])
+            except Exception:
+                logger.exception("Failed to add alt name to resource %s", resource_id)
+                return JsonResponse(
+                    {"error": "Failed to add alternative name"}, status=500
+                )
+
+        place_geo = []
+        place_qid = body.get("biblissimaQid")
+        if graph_id == PLACE_GRAPH_ID and place_qid:
+            place_geo = creator._enrich_existing_place(
+                resource_id, place_qid, request.user
+            )
+
+        if already_present:
+            return JsonResponse(
+                {
+                    "status": "already_exists",
+                    "message": "Name already present",
+                    "placeGeo": place_geo,
+                }
+            )
+        return JsonResponse(
+            {
+                "status": "added",
+                "message": "Alternative name added",
+                "placeGeo": place_geo,
+            }
+        )
 
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
