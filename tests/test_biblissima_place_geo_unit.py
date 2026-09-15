@@ -17,6 +17,15 @@ import requests
 from django.core.cache import cache
 from django.test import TestCase
 
+from arches.app.models.models import (
+    GraphModel,
+    Language,
+    NodeGroup,
+    ResourceInstance,
+    TileModel,
+)
+from arches_controlled_lists.models import List, ListItem, ListItemValue
+
 from manuspectrum.views import biblissima_proxy as bp
 from tests.test_biblissima_write_transaction_unit import (
     PATCH_TILEMODEL,
@@ -368,6 +377,119 @@ class PlaceLiteralLocationDatatypeTests(TestCase):
         self.assertEqual(feature_id, str(uuid.UUID(feature_id)))
         self.assertEqual(
             tile.data[bp.PLACE_LITERAL_LOCATION_NODE]["features"][0]["id"], feature_id
+        )
+
+
+class MissingPlaceGeoPartsDatabaseTests(TestCase):
+    """The presence query, against tiles the import itself writes.
+
+    The identifier check is a JSONB containment on the reference value the
+    controlled-lists library serialises; these tests build that value through
+    the real ``ListItem`` so a change of shape in the library is caught here.
+    A test run never loads the package: the Place graph, the two nodegroups
+    and the two list items are created below.
+    """
+
+    LIFECYCLE_ID = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
+    OTHER_SOURCE = "0a4c3d2e-5f6a-4b7c-8d9e-0f1a2b3c4d5e"
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.graph = GraphModel.objects.create(
+            graphid=bp.PLACE_GRAPH_ID,
+            name="Place",
+            isresource=True,
+            is_active=True,
+            slug="place-geo-parts-tests",
+            resource_instance_lifecycle_id=cls.LIFECYCLE_ID,
+        )
+        NodeGroup.objects.create(nodegroupid=bp.PLACE_IDENTIFIER_NG, cardinality="n")
+        NodeGroup.objects.create(
+            nodegroupid=bp.PLACE_LITERAL_LOCATION_NG, cardinality="1"
+        )
+        Language.objects.get_or_create(
+            code="en",
+            defaults={"name": "en", "default_direction": "ltr", "scope": "system"},
+        )
+        sources = List.objects.create(id=uuid.uuid4(), name="Source")
+        for sortorder, (item_id, label) in enumerate(
+            (
+                (bp.CONCEPT_SOURCE_GEONAMES, "Geonames"),
+                (bp.CONCEPT_RECORD_ID, "Record identifier"),
+                (cls.OTHER_SOURCE, "Another source"),
+            )
+        ):
+            item = ListItem.objects.create(
+                id=item_id,
+                uri=f"https://example.org/{item_id}",
+                list=sources,
+                sortorder=sortorder,
+            )
+            ListItemValue.objects.create(
+                id=uuid.uuid4(),
+                list_item=item,
+                valuetype_id="prefLabel",
+                language_id="en",
+                value=label,
+            )
+
+    def setUp(self):
+        self.rid = str(ResourceInstance.objects.create(graph=self.graph).pk)
+        self.view = View()
+        self.view._tile_buffer = []
+
+    def _write(self, parts):
+        self.view._place_geo_tiles(self.rid, PARIS_GEO, parts)
+        TileModel.objects.bulk_create(self.view._tile_buffer)
+        self.view._tile_buffer = []
+
+    def test_a_place_without_tiles_lacks_both_parts(self):
+        self.assertEqual(
+            View._missing_place_geo_parts(self.rid), ["identifier", "location"]
+        )
+
+    def test_the_identifier_the_import_writes_counts_as_present(self):
+        self._write(("identifier",))
+
+        self.assertEqual(View._missing_place_geo_parts(self.rid), ["location"])
+
+    def test_the_location_the_import_writes_counts_as_present(self):
+        self._write(("location",))
+
+        self.assertEqual(View._missing_place_geo_parts(self.rid), ["identifier"])
+
+    def test_a_place_with_both_parts_lacks_nothing(self):
+        self._write(("identifier", "location"))
+
+        self.assertEqual(View._missing_place_geo_parts(self.rid), [])
+
+    def test_an_identifier_from_another_source_does_not_count(self):
+        self.view._create_tile(
+            bp.PLACE_IDENTIFIER_NG,
+            self.rid,
+            {
+                bp.PLACE_IDENTIFIER_VALUE: self.view._i18n_string("VIAF 123"),
+                bp.PLACE_IDENTIFIER_SOURCE: self.view._concept_list(
+                    [self.OTHER_SOURCE]
+                ),
+                bp.PLACE_IDENTIFIER_TYPE: self.view._concept_list(
+                    [bp.CONCEPT_RECORD_ID]
+                ),
+            },
+        )
+        TileModel.objects.bulk_create(self.view._tile_buffer)
+
+        self.assertEqual(
+            View._missing_place_geo_parts(self.rid), ["identifier", "location"]
+        )
+
+    def test_another_place_s_tiles_do_not_count(self):
+        other = str(ResourceInstance.objects.create(graph=self.graph).pk)
+        self.view._place_geo_tiles(other, PARIS_GEO, ("identifier", "location"))
+        TileModel.objects.bulk_create(self.view._tile_buffer)
+
+        self.assertEqual(
+            View._missing_place_geo_parts(self.rid), ["identifier", "location"]
         )
 
 
