@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 05:43-0500\n"
+"POT-Creation-Date: 2026-09-15 10:31-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3748,26 +3748,26 @@ msgstr ""
 "The platform's source code is published under the GNU General Public License "
 "v3. Reading and downloading published data needs no account."
 
-#: views/biblissima_proxy.py:306
+#: views/biblissima_proxy.py:324
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 msgstr ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 
 # Biblissima search & workflow — added in the progressive-loading refactor
-#: views/biblissima_proxy.py:319
+#: views/biblissima_proxy.py:337
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 
-#: views/biblissima_proxy.py:330
+#: views/biblissima_proxy.py:348
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 
-#: views/biblissima_proxy.py:343
+#: views/biblissima_proxy.py:361
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -3776,13 +3776,26 @@ msgstr ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
 "moment."
 
-#: views/biblissima_proxy.py:354
+#: views/biblissima_proxy.py:372
 msgid "Invalid response from the Biblissima portal."
 msgstr "Invalid response from the Biblissima portal."
 
-#: views/biblissima_proxy.py:362
+#: views/biblissima_proxy.py:380
 msgid "Unknown error while querying Biblissima."
 msgstr "Unknown error while querying Biblissima."
+
+#: views/biblissima_proxy.py:1724
+#, python-format
+msgid "Select at most %(max)s descriptors."
+msgstr "Select at most %(max)s descriptors."
+
+#: views/biblissima_proxy.py:1733
+msgid "The descriptor list is malformed."
+msgstr "The descriptor list is malformed."
+
+#: views/biblissima_proxy.py:2291
+msgid "The manuscript identifier is malformed."
+msgstr "The manuscript identifier is malformed."
 
 #: views/model_graph_service.py:103
 msgid "String"
