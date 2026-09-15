@@ -5,7 +5,8 @@ fingerprint so it is not re-run on every request. When any resource graph
 is republished — or when resources/concepts are added or removed — the
 fingerprint changes and the cache is bypassed automatically. A 24h TTL is
 only a backstop in case the fingerprint never changes but the cache backend
-still needs an eviction horizon.
+still needs an eviction horizon. Only the latest entry per language is kept;
+a miss is built by one worker while other callers wait briefly for it.
 """
 
 import hashlib
@@ -18,6 +19,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.gzip import gzip_page
 
+from manuspectrum.utils.cache import get_or_build
 from manuspectrum.views.model_graph_service import build_model_graph
 
 logger = logging.getLogger(__name__)
@@ -31,7 +33,8 @@ CACHE_TTL = 60 * 60 * 24  # 24h backstop; fingerprint busts earlier on republish
 # doesn't have.
 # v4: slugs, localized widget labels, RDM collection labels, generated_at.
 # v5: datatype chart labels localized (were English on FR pages).
-PAYLOAD_VERSION = 5
+# v6: French card and widget labels loaded into the graphs (i18n loadmessages).
+PAYLOAD_VERSION = 6
 
 # The fingerprint tracks (graphid, publication) plus the resource and concept
 # table sizes, so it moves on republish AND when records/concepts are added or
@@ -60,6 +63,20 @@ def graph_fingerprint():
     ).hexdigest()  # noqa: S324 (non-security fingerprint)
 
 
+def _retire_previous_entry(language, cache_key):
+    """Keep one live payload per language.
+
+    The fingerprint moves on every record or concept change; a pointer key
+    names the current entry and the one it replaces is deleted.
+    """
+    pointer = f"ms:model-graph:v{PAYLOAD_VERSION}:{language}:current"
+    previous = cache.get(pointer)
+    if previous != cache_key:
+        if previous:
+            cache.delete(previous)
+        cache.set(pointer, cache_key, CACHE_TTL)
+
+
 @method_decorator(gzip_page, name="dispatch")
 class ModelGraphView(View):
     """Public, cached JSON introspection of the resource models for the Graph Explorer."""
@@ -79,10 +96,11 @@ class ModelGraphView(View):
                 return resp
 
             cache_key = f"ms:model-graph:v{PAYLOAD_VERSION}:{language}:{fingerprint}"
-            payload = cache.get(cache_key)
-            if payload is None:
-                payload = build_model_graph(language)
-                cache.set(cache_key, payload, CACHE_TTL)
+            payload = get_or_build(
+                cache_key, lambda: build_model_graph(language), CACHE_TTL
+            )
+            if payload is not None:
+                _retire_previous_entry(language, cache_key)
             resp = JsonResponse(payload)
             resp["Cache-Control"] = "public, max-age=3600"
             resp["ETag"] = etag

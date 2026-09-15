@@ -78,6 +78,7 @@ from arches.app.models.tile import Tile
 from arches_controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
+from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.dates import (
     CENTURY_MAPPING,
     parse_century,
@@ -117,6 +118,7 @@ PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
 _BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
 _BIBLISSIMA_SLOT_TIMEOUT = settings.BIBLISSIMA_SLOT_TIMEOUT
 _BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
+_BIBLISSIMA_RAW_CACHE_TTL = settings.BIBLISSIMA_RAW_CACHE_TTL
 
 
 def _build_biblissima_session(retry=None):
@@ -495,8 +497,9 @@ def _extract_entity_props(qid, raw_entity):
 def _get_wikibase_entity(qid, session=None):
     """Fetch a single Wikibase entity and extract relevant properties.
 
-    Results are cached in the Django cache for 24h keyed by QID, so repeated
-    lookups across requests hit the cache instead of Biblissima.
+    Cached for ``BIBLISSIMA_CACHE_TTL`` by QID; a miss is fetched by one
+    worker while concurrent callers wait for its result. ``None`` on failure,
+    never cached.
     """
     cache_key = _BIBLISSIMA_ENTITY_CACHE_KEY.format(qid=qid)
     cached = cache.get(cache_key)
@@ -505,29 +508,28 @@ def _get_wikibase_entity(qid, session=None):
         return cached
     _incr_stat("cache_misses", 1)
 
-    s = session or _build_biblissima_session()
-    try:
-        resp = _bib_request(
-            s,
-            BIBLISSIMA_WIKIBASE,
-            params={
-                "action": "wbgetentities",
-                "ids": qid,
-                "format": "json",
-                "languages": "fr|en",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        raw = resp.json().get("entities", {}).get(qid, {})
-    except Exception:
-        logger.warning("Failed to fetch Wikibase entity %s", qid)
-        return None
+    def fetch():
+        s = session or _build_biblissima_session()
+        try:
+            resp = _bib_request(
+                s,
+                BIBLISSIMA_WIKIBASE,
+                params={
+                    "action": "wbgetentities",
+                    "ids": qid,
+                    "format": "json",
+                    "languages": "fr|en",
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            raw = resp.json().get("entities", {}).get(qid, {})
+        except Exception:
+            logger.warning("Failed to fetch Wikibase entity %s", qid)
+            return None
+        return _extract_entity_props(qid, raw)
 
-    result = _extract_entity_props(qid, raw)
-    if result:
-        cache.set(cache_key, result, _BIBLISSIMA_CACHE_TTL)
-    return result
+    return get_or_build(cache_key, fetch, _BIBLISSIMA_CACHE_TTL, lock_timeout=90)
 
 
 def _batch_get_wikibase_entities(qids, session=None):
@@ -875,6 +877,13 @@ def _label_from(lang_map, lang):
     return ""
 
 
+# Every Biblissima identifier prefix, plus the iconographic descriptors that
+# never appear in a client-supplied identifier.
+_ANY_HASH_RE = re.compile(
+    "(?:" + "|".join(("desc",) + BIBLISSIMA_HASH_PREFIXES) + r")[0-9a-f]{40}"
+)
+
+
 def _suggest_result(qid, item, entity, lang):
     """Assemble one /api/biblissima/suggest payload entry.
 
@@ -892,11 +901,8 @@ def _suggest_result(qid, item, entity, lang):
         value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
         # P129 encodes the persistent portal-ARK hash; the prefix varies by
         # entity kind (desc for iconographic descriptors, mdata for
-        # manuscripts, etc. — same vocabulary as _normalize_descriptors).
-        if isinstance(value, str) and re.fullmatch(
-            r"(?:desc|mdata|ifdata|pdata|oedata|cdata|ldata)[0-9a-f]{40}",
-            value.strip(),
-        ):
+        # manuscripts, etc.).
+        if isinstance(value, str) and _ANY_HASH_RE.fullmatch(value.strip()):
             portal_url = f"{BIBLISSIMA_PORTAL}/{value.strip()}"
             break
     return {
@@ -915,6 +921,11 @@ class BiblissimaSuggestView(View):
 
     Combines prefix match (wbsearchentities) and full-text search
     (CirrusSearch) for flexible matching regardless of word order.
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
     """
 
     # Wikibase type QIDs for filtering
@@ -1100,11 +1111,20 @@ class BiblissimaSuggestView(View):
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaEntityView(View):
-    """Proxy for fetching a single Wikibase entity with extracted properties."""
+    """Proxy for fetching a single Wikibase entity with extracted properties.
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
+    """
 
     @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request, qid):
+        if not _QID_RE.fullmatch(qid):
+            return JsonResponse({"error": "invalid qid"}, status=400)
+
         entity = _get_wikibase_entity(qid)
         if entity is None:
             return JsonResponse({"error": "Entity not found"}, status=404)
@@ -1146,6 +1166,11 @@ class BiblissimaSearchManuscriptsView(View):
     3. Batch author resolution (1 call for unique author QIDs)
     4. Deduplicated collection resolution
     5. Parallel portal date scraping
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
     """
 
     TYPE_FILTERS = BiblissimaSuggestView.TYPE_FILTERS
@@ -1608,7 +1633,7 @@ def _enrich_canvases(canvases, session=None):
 def _normalize_descriptors(descriptors):
     """Normalize a raw descriptors query string to the canonical desc-prefixed list."""
     hash_list = [h.strip() for h in descriptors.split(",") if h.strip()]
-    known_prefixes = ("pdata", "mdata", "oedata", "cdata", "ldata", "ifdata")
+    known_prefixes = BIBLISSIMA_HASH_PREFIXES
     normalized = []
     for h in hash_list:
         if h.startswith("desc"):
@@ -1652,13 +1677,10 @@ def _fetch_biblissima_canvases(desc_hashes, session):
     return _parse_iiif_canvases(resp.json())
 
 
-# Raw parsed canvases are cached server-side under this key to avoid
-# refetching the (big, slow) IIIF manifest for every paginated request.
-_BIBLISSIMA_RAW_SEARCH_CACHE_KEY = "biblissima:search:raw:{descriptors_key}"
-_BIBLISSIMA_RAW_SEARCH_TTL = 3600  # 1h
-
 _DEFAULT_SEARCH_PAGE_SIZE = 50
 _MAX_SEARCH_PAGE_SIZE = 200
+_MAX_SEARCH_DESCRIPTORS = 5
+_MAX_CHECK_DUPLICATES_ITEMS = 200
 
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
@@ -1669,9 +1691,11 @@ class BiblissimaSearchView(View):
     (incurs the one-time IIIF manifest fetch), then continues with pages 2..N
     in the background while the user is already interacting with page 1.
 
-    Raw parsed canvases are cached server-side for 1h under the normalized
-    descriptor key, so paginated follow-up requests skip the IIIF fetch and
-    only enrich the requested slice.
+    Raw parsed canvases are cached server-side for
+    ``BIBLISSIMA_RAW_CACHE_TTL`` under the normalized descriptor key, so
+    paginated follow-up requests skip the IIIF fetch and only enrich the
+    requested slice. One worker fetches a miss while concurrent callers wait
+    for its result; the lock outlives a slot wait plus a retried fetch.
     """
 
     def get(self, request):
@@ -1692,20 +1716,40 @@ class BiblissimaSearchView(View):
         desc_hashes = _normalize_descriptors(descriptors)
         if not desc_hashes:
             return JsonResponse({"error": "descriptors parameter required"}, status=400)
+        if len(desc_hashes) > _MAX_SEARCH_DESCRIPTORS:
+            return JsonResponse(
+                {
+                    "error": "too many descriptors",
+                    "max": _MAX_SEARCH_DESCRIPTORS,
+                    "message": _("Select at most %(max)s descriptors.")
+                    % {"max": _MAX_SEARCH_DESCRIPTORS},
+                },
+                status=400,
+            )
+        if not all(_DESC_HASH_RE.fullmatch(h) for h in desc_hashes):
+            return JsonResponse(
+                {
+                    "error": "invalid descriptors",
+                    "message": _("The descriptor list is malformed."),
+                },
+                status=400,
+            )
 
-        descriptors_key = ",".join(sorted(desc_hashes))
-        raw_cache_key = _BIBLISSIMA_RAW_SEARCH_CACHE_KEY.format(
-            descriptors_key=descriptors_key
+        raw_cache_key = stable_cache_key(
+            "biblissima:search:raw", ",".join(sorted(desc_hashes))
         )
 
         session = _get_biblissima_session()
-        all_canvases = cache.get(raw_cache_key)
-        if all_canvases is None:
-            try:
-                all_canvases = _fetch_biblissima_canvases(desc_hashes, session)
-            except Exception as exc:
-                return _biblissima_upstream_error(exc, "Biblissima IIIF search")
-            cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
+        try:
+            all_canvases = get_or_build(
+                raw_cache_key,
+                lambda: _fetch_biblissima_canvases(desc_hashes, session),
+                _BIBLISSIMA_RAW_CACHE_TTL,
+                lock_timeout=240,
+                wait=10.0,
+            )
+        except Exception as exc:
+            return _biblissima_upstream_error(exc, "Biblissima IIIF search")
 
         total = len(all_canvases)
         total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
@@ -1745,6 +1789,15 @@ class BiblissimaCheckDuplicatesView(View):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         items = body.get("items", [])
+        if not isinstance(items, list):
+            return JsonResponse({"error": "items must be a list"}, status=400)
+        if not all(isinstance(item, dict) for item in items):
+            return JsonResponse({"error": "items must be objects"}, status=400)
+        if len(items) > _MAX_CHECK_DUPLICATES_ITEMS:
+            return JsonResponse(
+                {"error": "too many items", "max": _MAX_CHECK_DUPLICATES_ITEMS},
+                status=400,
+            )
         graph_id = body.get("graphId", DOCUMENT_GRAPH_ID)
 
         if not items:
@@ -1755,12 +1808,12 @@ class BiblissimaCheckDuplicatesView(View):
         se = SearchEngineInstance
 
         # ---------------------------------------------------------------------------
-        # Strategy 1 — hoist corpus load to O(1) in len(items)
+        # Strategy 1 — identifier matching through an atom index
         #
-        # id_ng / id_node depend only on graph_id, not on any individual item.
-        # Load the entire identifier-tile corpus ONCE before the items loop and
-        # keep it as an in-memory list of (tile_value, rid) pairs.  The per-item
-        # loop then matches search_tokens against this list with no DB call.
+        # id_ng / id_node depend only on graph_id, so the whole identifier-tile
+        # corpus loads ONCE into a dict mapping each atom of a tile value to the
+        # rows carrying it. A per-item match is then a handful of dict lookups
+        # keyed by the atoms of its own tokens, with no DB call.
         # ---------------------------------------------------------------------------
         id_ng = (
             DOC_IDENTIFIER_NG if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_NG
@@ -1770,7 +1823,8 @@ class BiblissimaCheckDuplicatesView(View):
             if graph_id == DOCUMENT_GRAPH_ID
             else COMP_IDENTIFIER_VALUE
         )
-        tile_index = []  # list of (tile_value: str, rid: str)
+        atom_index: dict = {}  # atom -> list of (tile_value: str, rid: str)
+        corpus_pos: dict = {}  # rid -> rank of the resource's first corpus row
         try:
             # Use ``TileModel`` + ``.values_list`` (NOT the arches proxy ``Tile``):
             # the proxy's ``__init__`` unconditionally calls
@@ -1794,7 +1848,10 @@ class BiblissimaCheckDuplicatesView(View):
                 except Exception:
                     continue
                 if tv:
-                    tile_index.append((tv, str(rid)))
+                    rid_s = str(rid)
+                    corpus_pos.setdefault(rid_s, len(corpus_pos))
+                    for atom in self._identifier_atoms(tv):
+                        atom_index.setdefault(atom, []).append((tv, rid_s))
         except Exception:
             logger.warning("Tile identifier corpus load failed for graph %s", graph_id)
 
@@ -1802,7 +1859,8 @@ class BiblissimaCheckDuplicatesView(View):
         # Collect all rids matched by strategy 1 across all items so we can
         # resolve their displaynames in a single batched query after the loop.
         matched_rids: set = set()
-        # Per-item list of (rid, tile_value) hits in corpus-iteration order.
+        # Per-item list of (rid, tile_value) hits, ordered by the corpus rank
+        # of each matched resource's first row.
         per_item_id_hits: list = [[] for _ in items]
         # Parallel state structure: avoids mutating caller-supplied input dicts.
         # Each slot holds (seen_ids, label, shelfmark, ark_id) for item[idx].
@@ -1816,40 +1874,42 @@ class BiblissimaCheckDuplicatesView(View):
 
             seen_ids: set = set()
 
-            # Strategy 1: match search_tokens against the in-memory tile_index.
+            # Strategy 1: probe the atom index with the atoms of each token.
             # Build all possible search tokens from Biblissima data.
+            # Client data is unchecked, and only a string has atoms: a token
+            # of any other type is dropped rather than compared.
             search_tokens: set = set()
-            if ark_id:
+            if isinstance(ark_id, str) and ark_id:
                 search_tokens.add(ark_id)
                 # Hash without ark: prefix
                 ark_hash = ark_id.replace("ark:/43093/", "")
                 if ark_hash != ark_id:
                     search_tokens.add(ark_hash)
-            if qid:
+            if isinstance(qid, str) and qid:
                 search_tokens.add(qid)
                 # Also match full URL form used in Arches identifiers
                 search_tokens.add(f"https://data.biblissima.fr/entity/{qid}")
 
             portal_hash = item.get("portalHash", "")
-            if portal_hash:
+            if isinstance(portal_hash, str) and portal_hash:
                 search_tokens.add(portal_hash)
                 search_tokens.add(f"ark:/43093/{portal_hash}")
 
             manifest_url = item.get("manifestUrl", "")
-            if manifest_url:
+            if isinstance(manifest_url, str) and manifest_url:
                 search_tokens.add(manifest_url)
 
-            if search_tokens:
-                for tile_value, rid in tile_index:
+            token_atoms: set = set()
+            for t in search_tokens:
+                token_atoms |= self._identifier_atoms(t)
+            for atom in sorted(token_atoms):
+                for tile_value, rid in atom_index.get(atom, ()):
                     if rid in seen_ids:
                         continue
-                    if any(
-                        t == tile_value or t in tile_value or tile_value in t
-                        for t in search_tokens
-                    ):
-                        seen_ids.add(rid)
-                        per_item_id_hits[idx].append((rid, tile_value))
-                        matched_rids.add(rid)
+                    seen_ids.add(rid)
+                    per_item_id_hits[idx].append((rid, tile_value))
+                    matched_rids.add(rid)
+            per_item_id_hits[idx].sort(key=lambda hit: corpus_pos[hit[0]])
 
             # Stash per-item state in parallel structure (not in the input dict).
             item_state[idx] = (seen_ids, label, shelfmark, ark_id)
@@ -1875,7 +1935,8 @@ class BiblissimaCheckDuplicatesView(View):
             suggestions: list = []
             seen_ids, label, shelfmark, ark_id = item_state[idx]
 
-            # Identifier suggestions (strategy 1) — in corpus-iteration order.
+            # Identifier suggestions (strategy 1) — by corpus rank of the
+            # matched resource's first row.
             for rid, tile_value in per_item_id_hits[idx]:
                 suggestions.append(
                     {
@@ -1919,6 +1980,24 @@ class BiblissimaCheckDuplicatesView(View):
             )
 
         return JsonResponse({"results": results})
+
+    @staticmethod
+    def _identifier_atoms(value):
+        """The comparable forms of an identifier.
+
+        Two identifiers match when they share an atom: the whole string, the
+        hash of an ARK (``ark:/43093/<hash>``, also inside a portal URL), or a
+        QID standing alone, or after a slash and before the end, a slash, ``?``
+        or ``#``. A QID inside free text is not an atom, and partial strings
+        never match: ``Q12`` is not ``Q123``.
+        """
+        atoms = {value}
+        for hash_ in _ARK_RE.findall(value):
+            atoms.add(hash_)
+        qid = re.search(r"(?:^|/)(Q\d+)(?:[/?#]|$)", value)
+        if qid:
+            atoms.add(qid.group(1))
+        return atoms
 
     @staticmethod
     def _extract_tile_value(raw_value):
@@ -2172,10 +2251,10 @@ def _parse_manuscript_illuminations(html):
     return results
 
 
-# Raw parsed illumination lists are cached server-side under this key to
-# avoid re-scraping the (slow) portal HTML page on every paginated request.
+# Raw parsed illumination lists are cached server-side under this key for
+# ``BIBLISSIMA_RAW_CACHE_TTL`` to avoid re-scraping the (slow) portal HTML
+# page on every paginated request.
 _BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY = "biblissima:illuminations:raw:{portal_hash}"
-_BIBLISSIMA_RAW_ILLUMINATIONS_TTL = 3600  # 1h
 
 _DEFAULT_ILLUMINATIONS_PAGE_SIZE = 20
 _MAX_ILLUMINATIONS_PAGE_SIZE = 200
@@ -2187,8 +2266,16 @@ class BiblissimaManuscriptIlluminationsView(View):
 
     Paginated like BiblissimaSearchView so the frontend can render the first
     page quickly and stream the rest in the background with a progress bar.
-    Raw parsed illuminations are cached for 1h under the manuscript portal
-    hash so follow-up page requests skip the (slow) HTML scrape.
+    Raw parsed illuminations are cached for ``BIBLISSIMA_RAW_CACHE_TTL``
+    under the manuscript portal hash so follow-up page requests skip the
+    (slow) HTML scrape; one worker scrapes a miss while concurrent callers
+    wait for its result, and the lock outlives a slot wait plus a retried
+    fetch.
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
     """
 
     @method_decorator(cache_control(private=True))
@@ -2197,6 +2284,14 @@ class BiblissimaManuscriptIlluminationsView(View):
         portal_hash = request.GET.get("portalHash", "").strip()
         if not portal_hash:
             return JsonResponse({"error": "portalHash required"}, status=400)
+        if not _PORTAL_HASH_RE.fullmatch(portal_hash):
+            return JsonResponse(
+                {
+                    "error": "invalid portalHash",
+                    "message": _("The manuscript identifier is malformed."),
+                },
+                status=400,
+            )
 
         try:
             page = max(1, int(request.GET.get("page", 1)))
@@ -2213,29 +2308,32 @@ class BiblissimaManuscriptIlluminationsView(View):
         raw_cache_key = _BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY.format(
             portal_hash=portal_hash
         )
-        all_illuminations = cache.get(raw_cache_key)
 
-        if all_illuminations is None:
+        def scrape():
             session = _build_biblissima_session()
             try:
-                try:
-                    resp = _bib_request(
-                        session,
-                        f"{BIBLISSIMA_PORTAL}/{portal_hash}",
-                        timeout=PORTAL_REQUEST_TIMEOUT,
-                    )
-                    resp.raise_for_status()
-                    html = resp.text
-                except Exception as exc:
-                    return _biblissima_upstream_error(
-                        exc, f"Biblissima portal fetch ({portal_hash})"
-                    )
+                resp = _bib_request(
+                    session,
+                    f"{BIBLISSIMA_PORTAL}/{portal_hash}",
+                    timeout=PORTAL_REQUEST_TIMEOUT,
+                )
+                resp.raise_for_status()
+                html = resp.text
             finally:
                 session.close()
+            return _parse_manuscript_illuminations(html)
 
-            all_illuminations = _parse_manuscript_illuminations(html)
-            cache.set(
-                raw_cache_key, all_illuminations, _BIBLISSIMA_RAW_ILLUMINATIONS_TTL
+        try:
+            all_illuminations = get_or_build(
+                raw_cache_key,
+                scrape,
+                _BIBLISSIMA_RAW_CACHE_TTL,
+                lock_timeout=240,
+                wait=10.0,
+            )
+        except Exception as exc:
+            return _biblissima_upstream_error(
+                exc, f"Biblissima portal fetch ({portal_hash})"
             )
 
         total = len(all_illuminations)
@@ -2287,7 +2385,9 @@ def _fetch_canvas_dimensions(manifest_url, folio, session=None):
     """
     if not manifest_url:
         return {}
-    cache_key = f"biblissima:manifest-canvas:{manifest_url}:{folio or ''}"
+    cache_key = stable_cache_key(
+        "biblissima:manifest-canvas", manifest_url, folio or ""
+    )
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -2374,7 +2474,7 @@ def _fetch_canvas_dimensions(manifest_url, folio, session=None):
         # IIIF Image API tile requests for the Leaflet layer.
         "imageServiceUrl": service_id,
     }
-    cache.set(cache_key, result, 3600)
+    cache.set(cache_key, result, _BIBLISSIMA_RAW_CACHE_TTL)
     return result
 
 
@@ -2553,7 +2653,15 @@ class BiblissimaIlluminationDetailView(View):
         The /en/ fetch is best-effort: if it fails the French-only
         result is returned and date parsing may degrade for century
         idioms, but the create step still works.
+
+        Cached by ``cache_page`` on the URL alone, before the session and locale
+        middlewares add their ``Vary`` headers: the payload must depend neither
+        on the user nor on the active language. A per-user or localised field
+        here would be served to every editor.
         """
+        if not _IFDATA_HASH_RE.fullmatch(ifdata_hash):
+            return JsonResponse({"error": "invalid identifier"}, status=400)
+
         session = _build_biblissima_session()
         try:
             try:
