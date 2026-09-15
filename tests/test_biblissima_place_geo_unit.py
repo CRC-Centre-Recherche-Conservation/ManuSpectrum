@@ -9,6 +9,7 @@ Run:
 import json
 import os
 import uuid
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -25,6 +26,8 @@ from tests.test_biblissima_write_transaction_unit import (
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "biblissima")
 LOGGER = "manuspectrum.views.biblissima_proxy"
 PARIS_GEO = {"geonamesId": "2988507", "latitude": 48.85341, "longitude": 2.3488}
+View = bp.BiblissimaCreateResourceView
+USER = SimpleNamespace(id=7, username="editor", first_name="", last_name="", email="")
 
 
 def _claims(fixture, qid):
@@ -366,3 +369,211 @@ class PlaceLiteralLocationDatatypeTests(TestCase):
         self.assertEqual(
             tile.data[bp.PLACE_LITERAL_LOCATION_NODE]["features"][0]["id"], feature_id
         )
+
+
+class ExistingPlaceGeoTests(TestCase):
+    def setUp(self):
+        self.events = []
+        self.in_transaction = False
+        self.rid = str(uuid.uuid4())
+
+        @contextmanager
+        def recording_atomic(*args, **kwargs):
+            self.events.append("atomic:enter")
+            self.in_transaction = True
+            try:
+                yield
+            finally:
+                self.in_transaction = False
+                self.events.append("atomic:exit")
+
+        self._start(patch("django.db.transaction.atomic", new=recording_atomic))
+        self._start(patch("arches.app.datatypes.datatypes.DataTypeFactory"))
+        resource_cls = self._start(patch("arches.app.models.resource.Resource"))
+        resource_cls.return_value.get_serialized_graph.return_value = {"nodes": []}
+        self.ri = self._start(
+            patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
+        )
+        self.ri.objects.filter.return_value.exists.return_value = True
+        locked = self.ri.objects.select_for_update.return_value.filter.return_value
+        locked.values_list.side_effect = lambda *a, **k: (
+            self.events.append(("lock", self.in_transaction)) or [self.rid]
+        )
+        self.place_geo = self._start(
+            patch.object(bp, "_get_place_geo", return_value=dict(PARIS_GEO))
+        )
+        self.missing = self._start(patch.object(View, "_missing_place_geo_parts"))
+        self._start(
+            patch.object(
+                View,
+                "_stage_tiles",
+                side_effect=lambda *a: self.events.append(
+                    ("stage", self.in_transaction)
+                ),
+            )
+        )
+        self.indexing = self._start(patch.object(View, "_defer_indexing"))
+        self.flushed = []
+        self.flushed_tiles = []
+
+        def flush(view, resource, user, transaction_id):
+            self.events.append(("flush", self.in_transaction))
+            self.flushed.append([t._mspectrum_place_part for t in view._tile_buffer])
+            self.flushed_tiles.extend(view._tile_buffer)
+
+        self.flush = self._start(
+            patch.object(View, "_flush_tile_buffer", autospec=True, side_effect=flush)
+        )
+        self.view = View()
+        self.view._concept_list = lambda concept_ids: []
+
+    def _start(self, patcher):
+        mock = patcher.start()
+        self.addCleanup(patcher.stop)
+        return mock
+
+    def test_only_the_missing_part_is_added(self):
+        self.missing.side_effect = [["location"], ["location"]]
+
+        added = self.view._enrich_existing_place(self.rid, "Q27392", USER)
+
+        self.assertEqual(added, ["location"])
+        self.assertEqual(self.flushed, [["location"]])
+        self.indexing.assert_called_once_with(resource_ids=[self.rid])
+
+    def test_a_place_that_has_both_parts_is_left_untouched(self):
+        self.missing.return_value = []
+
+        self.assertEqual(self.view._enrich_existing_place(self.rid, "Q27392", USER), [])
+
+        self.place_geo.assert_not_called()
+        self.assertNotIn("atomic:enter", self.events)
+
+    def test_a_part_added_meanwhile_is_not_added_twice(self):
+        self.missing.side_effect = [["identifier", "location"], ["location"]]
+
+        added = self.view._enrich_existing_place(self.rid, "Q27392", USER)
+
+        self.assertEqual(added, ["location"])
+        self.assertEqual(self.flushed, [["location"]])
+
+    def test_staging_runs_before_the_transaction_and_the_lock_inside_it(self):
+        self.missing.side_effect = [["identifier", "location"]] * 2
+
+        self.view._enrich_existing_place(self.rid, "Q27392", USER)
+
+        self.assertEqual(
+            [e for e in self.events if isinstance(e, tuple)],
+            [("stage", False), ("stage", False), ("lock", True), ("flush", True)],
+        )
+
+    def test_a_resource_that_is_not_a_place_is_left_untouched(self):
+        self.ri.objects.filter.return_value.exists.return_value = False
+
+        self.assertEqual(self.view._enrich_existing_place(self.rid, "Q27392", USER), [])
+
+        self.missing.assert_not_called()
+        self.place_geo.assert_not_called()
+
+    def test_a_failed_write_adds_nothing_and_does_not_raise(self):
+        self.missing.side_effect = [["location"], ["location"]]
+        self.flush.side_effect = RuntimeError("tiles check violated")
+
+        with self.assertLogs(LOGGER, level="WARNING"):
+            added = self.view._enrich_existing_place(self.rid, "Q27392", USER)
+
+        self.assertEqual(added, [])
+        self.indexing.assert_not_called()
+
+    def test_an_added_tile_follows_the_highest_sortorder_of_its_card_or_starts_at_0(
+        self,
+    ):
+        self.missing.side_effect = [["identifier", "location"]] * 2
+        existing = {bp.PLACE_IDENTIFIER_NG: [0, 2]}
+
+        def tiles_of(**kwargs):
+            def aggregate(*args):
+                self.events.append(("sortorder", self.in_transaction))
+                sortorders = existing.get(str(kwargs["nodegroup_id"]), [])
+                return {"sortorder__max": max(sortorders, default=None)}
+
+            return SimpleNamespace(aggregate=aggregate)
+
+        tiles = self._start(patch.object(bp.TileModel, "objects"))
+        tiles.filter.side_effect = tiles_of
+
+        self.view._enrich_existing_place(self.rid, "Q27392", USER)
+
+        self.assertEqual(
+            {t._mspectrum_place_part: t.sortorder for t in self.flushed_tiles},
+            {"identifier": 3, "location": 0},
+        )
+        self.assertEqual(
+            [e for e in self.events if isinstance(e, tuple)],
+            [
+                ("stage", False),
+                ("stage", False),
+                ("lock", True),
+                ("sortorder", True),
+                ("sortorder", True),
+                ("flush", True),
+            ],
+        )
+
+
+class AddAltNameEnrichesPlacesTests(TestCase):
+    def setUp(self):
+        self.rid = str(uuid.uuid4())
+        for patcher in (
+            patch.object(View, "_defer_indexing"),
+            patch.object(View, "_concept_list", return_value=[]),
+            patch.object(View, "_attribute_tile_save"),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        tile_patcher = patch("manuspectrum.views.biblissima_proxy.Tile")
+        self.tile = tile_patcher.start()
+        self.addCleanup(tile_patcher.stop)
+        self.tile.objects.filter.return_value = []
+        enrich_patcher = patch.object(
+            View, "_enrich_existing_place", return_value=["identifier"]
+        )
+        self.enrich = enrich_patcher.start()
+        self.addCleanup(enrich_patcher.stop)
+
+    def _post(self, graph_id, **extra):
+        body = {"resourceId": self.rid, "graphId": graph_id, "label": "Paris (France)"}
+        body.update(extra)
+        request = SimpleNamespace(body=json.dumps(body).encode("utf-8"), user=USER)
+        return bp.BiblissimaAddAltNameView().post(request)
+
+    def test_a_linked_place_is_enriched_with_its_qid(self):
+        response = self._post(bp.PLACE_GRAPH_ID, biblissimaQid="Q27392")
+
+        self.assertEqual(response.status_code, 200)
+        self.enrich.assert_called_once_with(self.rid, "Q27392", USER)
+        self.assertEqual(json.loads(response.content)["placeGeo"], ["identifier"])
+
+    def test_a_place_whose_name_is_already_present_is_still_enriched(self):
+        self.tile.objects.filter.return_value = [
+            SimpleNamespace(
+                data={bp.PLACE_NAME_LABEL: {"fr": {"value": "Paris (France)"}}}
+            )
+        ]
+
+        response = self._post(bp.PLACE_GRAPH_ID, biblissimaQid="Q27392")
+
+        payload = json.loads(response.content)
+        self.assertEqual(payload["status"], "already_exists")
+        self.assertEqual(payload["placeGeo"], ["identifier"])
+        self.enrich.assert_called_once_with(self.rid, "Q27392", USER)
+
+    def test_a_person_is_not_enriched(self):
+        self._post(bp.PERSON_GRAPH_ID, biblissimaQid="Q1")
+
+        self.enrich.assert_not_called()
+
+    def test_a_place_without_qid_is_not_enriched(self):
+        self._post(bp.PLACE_GRAPH_ID)
+
+        self.enrich.assert_not_called()

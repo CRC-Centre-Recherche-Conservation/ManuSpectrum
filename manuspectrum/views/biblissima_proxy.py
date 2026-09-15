@@ -3295,6 +3295,97 @@ class BiblissimaCreateResourceView(View):
         return appended
 
     @staticmethod
+    def _missing_place_geo_parts(resource_id):
+        """The GeoNames parts a Place has no tile for, among ``identifier`` and ``location``.
+
+        ``identifier`` is present when an Identifier tile has the Geonames
+        source; ``location`` when a "Literal location" tile exists (its card
+        holds a single tile).
+        """
+        tiles = TileModel.objects.filter(resourceinstance_id=resource_id)
+        missing = []
+        if not tiles.filter(
+            nodegroup_id=PLACE_IDENTIFIER_NG,
+            data__contains={
+                PLACE_IDENTIFIER_SOURCE: [
+                    {"labels": [{"list_item_id": CONCEPT_SOURCE_GEONAMES}]}
+                ]
+            },
+        ).exists():
+            missing.append("identifier")
+        if not tiles.filter(nodegroup_id=PLACE_LITERAL_LOCATION_NG).exists():
+            missing.append("location")
+        return missing
+
+    def _enrich_existing_place(self, resource_id, place_qid, user):
+        """Add to an existing Place the GeoNames parts of *place_qid* it lacks.
+
+        The tiles are staged before the transaction. Inside it the resource row
+        is locked and the missing parts are read again, so a part added by a
+        concurrent enrichment of the same Place is not written twice. Each added
+        tile takes as ``sortorder`` the highest one the resource holds in its
+        nodegroup plus one, or 0 when it holds none
+        (``TileModel.set_next_sort_order``). The edit log names *user*; indexing
+        follows the commit. Best-effort: a failure is logged and adds nothing.
+        Returns the names of the parts added.
+        """
+        from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
+        from arches.app.models.resource import Resource
+
+        try:
+            if not ResourceInstance.objects.filter(
+                pk=resource_id, graph_id=PLACE_GRAPH_ID
+            ).exists():
+                return []
+            missing = self._missing_place_geo_parts(resource_id)
+            if not missing:
+                return []
+            self._tile_buffer = []
+            serialized_graph = (
+                Resource(graph_id=PLACE_GRAPH_ID).get_serialized_graph() or {}
+            )
+            staged = self._stage_place_geo(
+                resource_id,
+                place_qid,
+                self._nodes_by_id(serialized_graph),
+                DataTypeFactory(),
+                parts=missing,
+            )
+            if not staged:
+                return []
+            with transaction.atomic():
+                list(
+                    ResourceInstance.objects.select_for_update()
+                    .filter(pk=resource_id)
+                    .values_list("pk", flat=True)
+                )
+                still_missing = self._missing_place_geo_parts(resource_id)
+                self._tile_buffer = [
+                    t
+                    for t in self._tile_buffer
+                    if t._mspectrum_place_part in still_missing
+                ]
+                added = [t._mspectrum_place_part for t in self._tile_buffer]
+                if added:
+                    for tile in self._tile_buffer:
+                        tile.set_next_sort_order()
+                    resource = Resource.objects.select_related(
+                        "graph__publication"
+                    ).get(pk=resource_id)
+                    resource.set_serialized_graph(serialized_graph)
+                    self._flush_tile_buffer(resource, user, uuid.uuid4())
+            if added:
+                self._defer_indexing(resource_ids=[str(resource_id)])
+            return added
+        except Exception:
+            logger.warning(
+                "GeoNames data not added to place %s", resource_id, exc_info=True
+            )
+            self._tile_buffer = []
+            return []
+
+    @staticmethod
     def _editlog_user_fields(user):
         """``EditLog`` user columns for *user*: a null id and empty names when
         *user* is ``None``."""
@@ -4701,7 +4792,12 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaAddAltNameView(View):
-    """Add a Biblissima label as alternative name to an existing resource."""
+    """Add a Biblissima label as alternative name to an existing resource.
+
+    A Place given ``biblissimaQid`` also receives the GeoNames identifier and
+    point it lacks (``_enrich_existing_place``), whether or not the name was
+    already present; the answer lists them under ``placeGeo``.
+    """
 
     def post(self, request):
         import json
@@ -4723,51 +4819,71 @@ class BiblissimaAddAltNameView(View):
             )
 
         name_conf = DEP_NAME_CONFIG[graph_id]
-
-        # Check if this name already exists on the resource
-        existing_tiles = Tile.objects.filter(
-            nodegroup_id=name_conf["ng"],
-            resourceinstance_id=resource_id,
-        )
-        for tile in existing_tiles:
-            existing_label = tile.data.get(name_conf["label"], {})
-            for lang_data in existing_label.values():
-                if (
-                    isinstance(lang_data, dict)
-                    and lang_data.get("value", "").strip().lower() == label.lower()
-                ):
-                    return JsonResponse(
-                        {"status": "already_exists", "message": "Name already present"}
-                    )
-
         creator = BiblissimaCreateResourceView()
-        try:
-            tile = Tile(
-                tileid=uuid.uuid4(),
+
+        already_present = any(
+            isinstance(lang_data, dict)
+            and lang_data.get("value", "").strip().lower() == label.lower()
+            for tile in Tile.objects.filter(
                 nodegroup_id=name_conf["ng"],
                 resourceinstance_id=resource_id,
-                data={
-                    name_conf["label"]: creator._i18n_string(label),
-                    name_conf["language"]: creator._concept_list([CONCEPT_FRENCH]),
-                    name_conf["type"]: creator._concept_list(
-                        [CONCEPT_ALTERNATE_TITLES]
-                    ),
-                },
-                sortorder=0,
             )
-            transaction_id = uuid.uuid4()
-            with transaction.atomic():
-                tile.save(index=False, transaction_id=transaction_id)
-                creator._attribute_tile_save(tile.tileid, transaction_id, request.user)
+            for lang_data in tile.data.get(name_conf["label"], {}).values()
+        )
 
-            # Route through the defer seam (post-commit; honors
-            # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
-            creator._defer_indexing(resource_ids=[str(resource_id)])
-        except Exception:
-            logger.exception("Failed to add alt name to resource %s", resource_id)
-            return JsonResponse({"error": "Failed to add alternative name"}, status=500)
+        if not already_present:
+            try:
+                tile = Tile(
+                    tileid=uuid.uuid4(),
+                    nodegroup_id=name_conf["ng"],
+                    resourceinstance_id=resource_id,
+                    data={
+                        name_conf["label"]: creator._i18n_string(label),
+                        name_conf["language"]: creator._concept_list([CONCEPT_FRENCH]),
+                        name_conf["type"]: creator._concept_list(
+                            [CONCEPT_ALTERNATE_TITLES]
+                        ),
+                    },
+                    sortorder=0,
+                )
+                transaction_id = uuid.uuid4()
+                with transaction.atomic():
+                    tile.save(index=False, transaction_id=transaction_id)
+                    creator._attribute_tile_save(
+                        tile.tileid, transaction_id, request.user
+                    )
 
-        return JsonResponse({"status": "added", "message": "Alternative name added"})
+                # Route through the defer seam (post-commit; honors
+                # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
+                creator._defer_indexing(resource_ids=[str(resource_id)])
+            except Exception:
+                logger.exception("Failed to add alt name to resource %s", resource_id)
+                return JsonResponse(
+                    {"error": "Failed to add alternative name"}, status=500
+                )
+
+        place_geo = []
+        place_qid = body.get("biblissimaQid")
+        if graph_id == PLACE_GRAPH_ID and place_qid:
+            place_geo = creator._enrich_existing_place(
+                resource_id, place_qid, request.user
+            )
+
+        if already_present:
+            return JsonResponse(
+                {
+                    "status": "already_exists",
+                    "message": "Name already present",
+                    "placeGeo": place_geo,
+                }
+            )
+        return JsonResponse(
+            {
+                "status": "added",
+                "message": "Alternative name added",
+                "placeGeo": place_geo,
+            }
+        )
 
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
