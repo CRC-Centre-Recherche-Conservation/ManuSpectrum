@@ -444,69 +444,88 @@ class ResolveCollectionTests(TestCase):
             self.assertEqual(bp._resolve_collection("Q1"), {})
 
     def test_resolves_owner_label_minimally(self):
-        # Only the collection entity is resolvable, no P201/P169 claims.
-        with patch.object(
-            bp,
-            "_get_wikibase_entity",
-            return_value={"label": "Collection BnF"},
+        with (
+            patch.object(
+                bp, "_get_wikibase_entity", return_value={"label": "Collection BnF"}
+            ),
+            patch.object(
+                bp,
+                "_bib_request",
+                return_value=_make_response(
+                    json_data={"entities": {"Q1": {"claims": {}}}}
+                ),
+            ),
         ):
-            session = MagicMock()
-            session.get.return_value = _make_response(
-                json_data={"entities": {"Q1": {"claims": {}}}}
-            )
-            result = bp._resolve_collection("Q1", session=session)
+            result = bp._resolve_collection("Q1")
         self.assertEqual(result["ownerLabel"], "Collection BnF")
         self.assertEqual(result["ownerQid"], "Q1")
         self.assertNotIn("locationLabel", result)
         self.assertNotIn("parentInstitutionLabel", result)
 
+    def test_the_collection_claims_are_fetched_through_the_guarded_path(self):
+        with (
+            patch.object(
+                bp, "_get_wikibase_entity", return_value={"label": "Collection BnF"}
+            ),
+            patch.object(
+                bp,
+                "_bib_request",
+                return_value=_make_response(
+                    json_data={"entities": {"Q1": {"claims": {}}}}
+                ),
+            ) as fetch,
+        ):
+            bp._resolve_collection("Q1")
+
+        args, kwargs = fetch.call_args
+        self.assertTrue(args[1].startswith(bp.BIBLISSIMA_WIKIBASE + "?"))
+        self.assertIn("ids=Q1", args[1])
+        self.assertIn("props=claims", args[1])
+        self.assertTrue(kwargs["guarded"])
+        self.assertEqual(kwargs["timeout"], bp.REQUEST_TIMEOUT)
+        self.assertIs(args[0], bp._get_biblissima_session())
+
     def test_resolves_full_chain_with_location_and_parent(self):
-        # _get_wikibase_entity is called for: collection (Q1), location
-        # (Q2), parent institution (Q3) — return a different label each time.
         labels = {
             "Q1": {"label": "BnF Latin"},
             "Q2": {"label": "Paris"},
             "Q3": {"label": "Bibliothèque nationale de France"},
         }
-
-        def fake_get_entity(qid, session=None):  # noqa: ARG001
-            return labels.get(qid)
-
-        # session.get is invoked twice for raw claims (collection, place).
+        collection_claims = _make_response(
+            json_data={
+                "entities": {
+                    "Q1": {
+                        "claims": {
+                            bp.P201: [
+                                {"mainsnak": {"datavalue": {"value": {"id": "Q2"}}}}
+                            ],
+                            bp.P169: [
+                                {"mainsnak": {"datavalue": {"value": {"id": "Q3"}}}}
+                            ],
+                        }
+                    }
+                }
+            }
+        )
         session = MagicMock()
-        session.get.side_effect = [
-            _make_response(  # collection claims (P201, P169)
-                json_data={
-                    "entities": {
-                        "Q1": {
-                            "claims": {
-                                bp.P201: [
-                                    {"mainsnak": {"datavalue": {"value": {"id": "Q2"}}}}
-                                ],
-                                bp.P169: [
-                                    {"mainsnak": {"datavalue": {"value": {"id": "Q3"}}}}
-                                ],
-                            }
-                        }
-                    }
-                }
-            ),
-            _make_response(  # place claims (P123 = Geonames)
-                json_data={
-                    "entities": {
-                        "Q2": {
-                            "claims": {
-                                bp.P123: [
-                                    {"mainsnak": {"datavalue": {"value": "2988507"}}}
-                                ]
-                            }
-                        }
-                    }
-                }
-            ),
-        ]
 
-        with patch.object(bp, "_get_wikibase_entity", side_effect=fake_get_entity):
+        with (
+            patch.object(
+                bp,
+                "_get_wikibase_entity",
+                side_effect=lambda qid, session=None: labels.get(qid),
+            ),
+            patch.object(bp, "_bib_request", return_value=collection_claims),
+            patch.object(
+                bp,
+                "_get_place_geo",
+                return_value={
+                    "geonamesId": "2988507",
+                    "latitude": 48.85,
+                    "longitude": 2.35,
+                },
+            ) as place_geo,
+        ):
             result = bp._resolve_collection("Q1", session=session)
 
         self.assertEqual(result["ownerLabel"], "BnF Latin")
@@ -517,16 +536,58 @@ class ResolveCollectionTests(TestCase):
             result["parentInstitutionLabel"], "Bibliothèque nationale de France"
         )
         self.assertEqual(result["parentInstitutionQid"], "Q3")
+        place_geo.assert_called_once_with("Q2", session=session)
+
+    def test_a_place_whose_claims_could_not_be_read_has_no_geonames_id(self):
+        labels = {"Q1": {"label": "BnF Latin"}, "Q2": {"label": "Paris"}}
+        collection_claims = _make_response(
+            json_data={
+                "entities": {
+                    "Q1": {
+                        "claims": {
+                            bp.P201: [
+                                {"mainsnak": {"datavalue": {"value": {"id": "Q2"}}}}
+                            ]
+                        }
+                    }
+                }
+            }
+        )
+
+        with (
+            patch.object(
+                bp,
+                "_get_wikibase_entity",
+                side_effect=lambda qid, session=None: labels.get(qid),
+            ),
+            patch.object(bp, "_bib_request", return_value=collection_claims),
+            patch.object(bp, "_get_place_geo", return_value=None),
+        ):
+            result = bp._resolve_collection("Q1")
+
+        self.assertEqual(result["locationLabel"], "Paris")
+        self.assertNotIn("geonamesId", result)
 
     def test_returns_owner_only_when_claims_fetch_fails(self):
-        with patch.object(
-            bp,
-            "_get_wikibase_entity",
-            return_value={"label": "Some Coll"},
+        with (
+            patch.object(
+                bp, "_get_wikibase_entity", return_value={"label": "Some Coll"}
+            ),
+            patch.object(bp, "_bib_request", side_effect=requests.exceptions.Timeout()),
+            self.assertLogs("manuspectrum.views.biblissima_proxy", level="WARNING"),
         ):
-            session = MagicMock()
-            session.get.side_effect = requests.exceptions.Timeout()
-            result = bp._resolve_collection("Q1", session=session)
+            result = bp._resolve_collection("Q1")
+        self.assertEqual(result, {"ownerLabel": "Some Coll", "ownerQid": "Q1"})
+
+    def test_returns_owner_only_when_no_concurrency_slot_is_free(self):
+        with (
+            patch.object(
+                bp, "_get_wikibase_entity", return_value={"label": "Some Coll"}
+            ),
+            patch.object(bp, "_bib_request", side_effect=bp.BiblissimaBusy()),
+            self.assertLogs("manuspectrum.views.biblissima_proxy", level="WARNING"),
+        ):
+            result = bp._resolve_collection("Q1")
         self.assertEqual(result, {"ownerLabel": "Some Coll", "ownerQid": "Q1"})
 
 
@@ -1382,14 +1443,21 @@ class WikibaseEntityFixtureTests(TestCase):
             }
             return mapping.get(qid)
 
-        # session.get is invoked twice for raw claims fetches:
-        # first for the collection, then for the location (place).
-        session.get.side_effect = [
-            _make_response(json_data=self.collection),
-            _make_response(json_data=self.paris),
-        ]
-
-        with patch.object(bp, "_get_wikibase_entity", side_effect=fake_get_entity):
+        with (
+            patch.object(bp, "_get_wikibase_entity", side_effect=fake_get_entity),
+            patch.object(
+                bp,
+                "_bib_request",
+                return_value=_make_response(json_data=self.collection),
+            ),
+            patch.object(
+                bp,
+                "_get_place_geo",
+                side_effect=lambda qid, session=None: bp._place_geo_from_claims(
+                    self.paris["entities"][qid]["claims"]
+                ),
+            ),
+        ):
             result = bp._resolve_collection("Q32812", session=session)
 
         self.assertIn("Bibliothèque nationale de France", result["ownerLabel"])

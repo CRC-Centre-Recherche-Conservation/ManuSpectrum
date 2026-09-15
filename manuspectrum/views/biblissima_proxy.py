@@ -58,6 +58,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from html import unescape
+from urllib.parse import urlencode
 
 import requests
 from lxml import html as lxml_html
@@ -587,12 +588,105 @@ def _batch_get_wikibase_entities(qids, session=None):
     return results
 
 
+def _fetch_wikibase_claims(qid, session=None):
+    """Claims of one Wikibase entity, read through the guarded fetch.
+
+    Returns ``{}`` for an entity Wikibase marks missing or that has no claims.
+    Raises ``ValueError`` for an answer that carries an ``error`` or no
+    ``entities``, ``HTTPError`` for an error status, and what the fetch raises
+    (``BiblissimaBusy``, ``UnsafeURLError``, ``requests`` errors).
+    """
+    query = urlencode(
+        {"action": "wbgetentities", "ids": qid, "format": "json", "props": "claims"}
+    )
+    resp = _bib_request(
+        session or _get_biblissima_session(),
+        f"{BIBLISSIMA_WIKIBASE}?{query}",
+        guarded=True,
+        timeout=REQUEST_TIMEOUT,
+    )
+    resp.raise_for_status()
+    payload = resp.json()
+    if not isinstance(payload, dict) or "error" in payload or "entities" not in payload:
+        error = payload.get("error") if isinstance(payload, dict) else None
+        code = error.get("code") if isinstance(error, dict) else error
+        raise ValueError(f"Wikibase answered no entities for {qid}: {code}")
+    return payload["entities"].get(qid, {}).get("claims", {})
+
+
+def _place_geo_from_claims(claims):
+    """GeoNames id (P123) and coordinates (P276) found in a place's claims.
+
+    Returns ``{"geonamesId", "latitude", "longitude"}``. Deprecated statements
+    are skipped. The id is the first P123 value made of ASCII digits; the
+    coordinates are the first P276 value on the Earth globe whose latitude and
+    longitude are numbers (not booleans) within [-90, 90] and [-180, 180]. A
+    value not found is ``None``.
+    """
+    geonames_id = None
+    for claim in claims.get(P123, []):
+        if claim.get("rank") == "deprecated":
+            continue
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+", value.strip()):
+            geonames_id = value.strip()
+            break
+
+    latitude = longitude = None
+    for claim in claims.get(P276, []):
+        if claim.get("rank") == "deprecated":
+            continue
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if not isinstance(value, dict):
+            continue
+        lat, lon = value.get("latitude"), value.get("longitude")
+        if (
+            (value.get("globe") or _EARTH_GLOBE) == _EARTH_GLOBE
+            and isinstance(lat, (int, float))
+            and not isinstance(lat, bool)
+            and isinstance(lon, (int, float))
+            and not isinstance(lon, bool)
+            and -90 <= lat <= 90
+            and -180 <= lon <= 180
+        ):
+            latitude, longitude = float(lat), float(lon)
+            break
+
+    return {"geonamesId": geonames_id, "latitude": latitude, "longitude": longitude}
+
+
+def _get_place_geo(place_qid, session=None):
+    """GeoNames id and coordinates of a Wikibase place; see ``_place_geo_from_claims``.
+
+    The result is cached for ``BIBLISSIMA_CACHE_TTL``. Returns ``None`` for a
+    malformed QID or when the claims could not be fetched; that is not cached.
+    """
+    if not _QID_RE.fullmatch(place_qid or ""):
+        return None
+    cache_key = _BIBLISSIMA_PLACE_GEO_CACHE_KEY.format(qid=place_qid)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        claims = _fetch_wikibase_claims(place_qid, session=session)
+    except Exception as exc:
+        logger.warning("Claims of place %s could not be fetched: %s", place_qid, exc)
+        return None
+
+    result = _place_geo_from_claims(claims)
+    cache.set(cache_key, result, _BIBLISSIMA_CACHE_TTL)
+    return result
+
+
 def _resolve_collection(collection_qid, session=None):
     """Resolve a Biblissima collection entity into owner + location data.
 
-    Follows the chain: collection → P201 (localisation) → place with Geonames ID
-                        collection → P169 (partie de) → parent institution
-    Returns dict with ownerLabel, ownerQid, locationLabel, locationQid, geonamesId.
+    Follows the chain: collection → P201 (localisation) → place, whose GeoNames
+    id comes from ``_get_place_geo``; collection → P169 (partie de) → parent
+    institution. Claims are read with ``_fetch_wikibase_claims``.
+    Returns dict with ownerLabel, ownerQid, locationLabel, locationQid, geonamesId,
+    parentInstitutionLabel, parentInstitutionQid.
     """
     if not collection_qid:
         return {}
@@ -606,23 +700,8 @@ def _resolve_collection(collection_qid, session=None):
         "ownerQid": collection_qid,
     }
 
-    s = session or requests
-    coll_claims = {}
     try:
-        resp = s.get(
-            BIBLISSIMA_WIKIBASE,
-            params={
-                "action": "wbgetentities",
-                "ids": collection_qid,
-                "format": "json",
-                "languages": "fr|en",
-                "props": "claims",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        entity = resp.json().get("entities", {}).get(collection_qid, {})
-        coll_claims = entity.get("claims", {})
+        coll_claims = _fetch_wikibase_claims(collection_qid, session=session)
     except Exception:
         logger.warning("Failed to fetch collection claims for %s", collection_qid)
         return result
@@ -642,33 +721,9 @@ def _resolve_collection(collection_qid, session=None):
             if loc_entity:
                 result["locationLabel"] = loc_entity.get("label", "")
                 result["locationQid"] = loc_qid
-
-                # Get Geonames ID from the place entity
-                try:
-                    loc_resp = s.get(
-                        BIBLISSIMA_WIKIBASE,
-                        params={
-                            "action": "wbgetentities",
-                            "ids": loc_qid,
-                            "format": "json",
-                            "props": "claims",
-                        },
-                        timeout=REQUEST_TIMEOUT,
-                    )
-                    loc_resp.raise_for_status()
-                    loc_data = loc_resp.json().get("entities", {}).get(loc_qid, {})
-                    geo_claims = loc_data.get("claims", {}).get(P123, [])
-                    if geo_claims:
-                        geo_val = (
-                            geo_claims[0]
-                            .get("mainsnak", {})
-                            .get("datavalue", {})
-                            .get("value")
-                        )
-                        if geo_val:
-                            result["geonamesId"] = str(geo_val)
-                except Exception:
-                    pass
+                geo = _get_place_geo(loc_qid, session=session)
+                if geo and geo["geonamesId"]:
+                    result["geonamesId"] = geo["geonamesId"]
 
     # P169 = partie de (parent institution) — for the top-level owner
     parent_claims = coll_claims.get(P169, [])
