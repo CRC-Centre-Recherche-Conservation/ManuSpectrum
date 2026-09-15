@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from manuspectrum.views import biblissima_proxy as bp
 
@@ -18,6 +18,18 @@ def _editor(username="cache_hardening_editor"):
     user = User.objects.create_user(username, password="pw")
     user.groups.add(Group.objects.get(name="Resource Editor"))
     return user
+
+
+class HashPrefixVocabularyTests(SimpleTestCase):
+    def test_every_prefix_is_accepted_by_the_portal_hash_pattern(self):
+        for prefix in bp.BIBLISSIMA_HASH_PREFIXES:
+            self.assertTrue(bp._PORTAL_HASH_RE.fullmatch(prefix + HEX40), prefix)
+
+    def test_every_prefix_normalizes_to_the_desc_form(self):
+        for prefix in bp.BIBLISSIMA_HASH_PREFIXES:
+            self.assertEqual(
+                bp._normalize_descriptors(prefix + HEX40), ["desc" + HEX40], prefix
+            )
 
 
 class InputShapeTests(TestCase):
@@ -40,6 +52,7 @@ class InputShapeTests(TestCase):
                     "/api/biblissima/manuscript-illuminations", {"portalHash": bad}
                 )
                 self.assertEqual(resp.status_code, 400, bad)
+                self.assertIn("message", resp.json(), bad)
         fetch.assert_not_called()
 
     def test_a_well_formed_portal_hash_reaches_the_portal(self):
@@ -58,6 +71,7 @@ class InputShapeTests(TestCase):
             for bad in ("desc123", "desc" + HEX40 + ",zzz", HEX40[:-1]):
                 resp = self.client.get("/api/biblissima/search", {"descriptors": bad})
                 self.assertEqual(resp.status_code, 400, bad)
+                self.assertIn("message", resp.json(), bad)
         fetch.assert_not_called()
 
     def test_too_many_descriptors_are_refused(self):
@@ -66,6 +80,7 @@ class InputShapeTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.json()["error"], "too many descriptors")
         self.assertEqual(resp.json()["max"], bp._MAX_SEARCH_DESCRIPTORS)
+        self.assertIn(str(bp._MAX_SEARCH_DESCRIPTORS), resp.json()["message"])
 
     def test_exactly_the_maximum_number_of_descriptors_is_accepted(self):
         enough = ",".join(f"desc{i:040x}" for i in range(bp._MAX_SEARCH_DESCRIPTORS))
@@ -255,7 +270,15 @@ class StampedeTests(TestCase):
             bp._fetch_canvas_dimensions("https://example/m", "1r", MagicMock())
         self.assertEqual(set_.call_args[0][2], settings.BIBLISSIMA_RAW_CACHE_TTL)
 
-    def test_view_misses_wait_ten_seconds_and_hold_the_lock_three_minutes(self):
+    def test_entity_misses_hold_the_lock_ninety_seconds(self):
+        with (
+            patch.object(bp, "get_or_build", return_value=None) as build,
+            patch.object(bp, "_bib_request"),
+        ):
+            bp._get_wikibase_entity("Q1")
+        self.assertEqual(build.call_args.kwargs["lock_timeout"], 90)
+
+    def test_view_misses_wait_ten_seconds_and_hold_the_lock_four_minutes(self):
         self.client.force_login(_editor())
         with (
             patch.object(bp, "get_or_build", return_value=[]) as build,
@@ -275,4 +298,4 @@ class StampedeTests(TestCase):
             timeout = call.args[2] if len(call.args) > 2 else call.kwargs["timeout"]
             self.assertEqual(timeout, bp._BIBLISSIMA_RAW_CACHE_TTL)
             self.assertEqual(call.kwargs["wait"], 10.0)
-            self.assertEqual(call.kwargs["lock_timeout"], 180)
+            self.assertEqual(call.kwargs["lock_timeout"], 240)

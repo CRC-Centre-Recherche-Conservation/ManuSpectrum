@@ -527,9 +527,9 @@ def _get_wikibase_entity(qid, session=None):
         except Exception:
             logger.warning("Failed to fetch Wikibase entity %s", qid)
             return None
-        return _extract_entity_props(qid, raw) or None
+        return _extract_entity_props(qid, raw)
 
-    return get_or_build(cache_key, fetch, _BIBLISSIMA_CACHE_TTL)
+    return get_or_build(cache_key, fetch, _BIBLISSIMA_CACHE_TTL, lock_timeout=90)
 
 
 def _batch_get_wikibase_entities(qids, session=None):
@@ -877,6 +877,13 @@ def _label_from(lang_map, lang):
     return ""
 
 
+# Every Biblissima identifier prefix, plus the iconographic descriptors that
+# never appear in a client-supplied identifier.
+_ANY_HASH_RE = re.compile(
+    "(?:" + "|".join(("desc",) + BIBLISSIMA_HASH_PREFIXES) + r")[0-9a-f]{40}"
+)
+
+
 def _suggest_result(qid, item, entity, lang):
     """Assemble one /api/biblissima/suggest payload entry.
 
@@ -894,11 +901,8 @@ def _suggest_result(qid, item, entity, lang):
         value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
         # P129 encodes the persistent portal-ARK hash; the prefix varies by
         # entity kind (desc for iconographic descriptors, mdata for
-        # manuscripts, etc. — same vocabulary as _normalize_descriptors).
-        if isinstance(value, str) and re.fullmatch(
-            r"(?:desc|mdata|ifdata|pdata|oedata|cdata|ldata)[0-9a-f]{40}",
-            value.strip(),
-        ):
+        # manuscripts, etc.).
+        if isinstance(value, str) and _ANY_HASH_RE.fullmatch(value.strip()):
             portal_url = f"{BIBLISSIMA_PORTAL}/{value.strip()}"
             break
     return {
@@ -1629,7 +1633,7 @@ def _enrich_canvases(canvases, session=None):
 def _normalize_descriptors(descriptors):
     """Normalize a raw descriptors query string to the canonical desc-prefixed list."""
     hash_list = [h.strip() for h in descriptors.split(",") if h.strip()]
-    known_prefixes = ("pdata", "mdata", "oedata", "cdata", "ldata", "ifdata")
+    known_prefixes = BIBLISSIMA_HASH_PREFIXES
     normalized = []
     for h in hash_list:
         if h.startswith("desc"):
@@ -1714,11 +1718,22 @@ class BiblissimaSearchView(View):
             return JsonResponse({"error": "descriptors parameter required"}, status=400)
         if len(desc_hashes) > _MAX_SEARCH_DESCRIPTORS:
             return JsonResponse(
-                {"error": "too many descriptors", "max": _MAX_SEARCH_DESCRIPTORS},
+                {
+                    "error": "too many descriptors",
+                    "max": _MAX_SEARCH_DESCRIPTORS,
+                    "message": _("Select at most %(max)s descriptors.")
+                    % {"max": _MAX_SEARCH_DESCRIPTORS},
+                },
                 status=400,
             )
         if not all(_DESC_HASH_RE.fullmatch(h) for h in desc_hashes):
-            return JsonResponse({"error": "invalid descriptors"}, status=400)
+            return JsonResponse(
+                {
+                    "error": "invalid descriptors",
+                    "message": _("The descriptor list is malformed."),
+                },
+                status=400,
+            )
 
         raw_cache_key = stable_cache_key(
             "biblissima:search:raw", ",".join(sorted(desc_hashes))
@@ -1730,7 +1745,7 @@ class BiblissimaSearchView(View):
                 raw_cache_key,
                 lambda: _fetch_biblissima_canvases(desc_hashes, session),
                 _BIBLISSIMA_RAW_CACHE_TTL,
-                lock_timeout=180,
+                lock_timeout=240,
                 wait=10.0,
             )
         except Exception as exc:
@@ -1776,6 +1791,8 @@ class BiblissimaCheckDuplicatesView(View):
         items = body.get("items", [])
         if not isinstance(items, list):
             return JsonResponse({"error": "items must be a list"}, status=400)
+        if not all(isinstance(item, dict) for item in items):
+            return JsonResponse({"error": "items must be objects"}, status=400)
         if len(items) > _MAX_CHECK_DUPLICATES_ITEMS:
             return JsonResponse(
                 {"error": "too many items", "max": _MAX_CHECK_DUPLICATES_ITEMS},
@@ -2268,7 +2285,13 @@ class BiblissimaManuscriptIlluminationsView(View):
         if not portal_hash:
             return JsonResponse({"error": "portalHash required"}, status=400)
         if not _PORTAL_HASH_RE.fullmatch(portal_hash):
-            return JsonResponse({"error": "invalid portalHash"}, status=400)
+            return JsonResponse(
+                {
+                    "error": "invalid portalHash",
+                    "message": _("The manuscript identifier is malformed."),
+                },
+                status=400,
+            )
 
         try:
             page = max(1, int(request.GET.get("page", 1)))
@@ -2305,7 +2328,7 @@ class BiblissimaManuscriptIlluminationsView(View):
                 raw_cache_key,
                 scrape,
                 _BIBLISSIMA_RAW_CACHE_TTL,
-                lock_timeout=180,
+                lock_timeout=240,
                 wait=10.0,
             )
         except Exception as exc:

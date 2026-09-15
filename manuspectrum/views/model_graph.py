@@ -6,7 +6,7 @@ is republished — or when resources/concepts are added or removed — the
 fingerprint changes and the cache is bypassed automatically. A 24h TTL is
 only a backstop in case the fingerprint never changes but the cache backend
 still needs an eviction horizon. Only the latest entry per language is kept;
-a miss is built by one worker while the others wait for it.
+a miss is built by one worker while other callers wait briefly for it.
 """
 
 import hashlib
@@ -66,9 +66,8 @@ def graph_fingerprint():
 def _retire_previous_entry(language, cache_key):
     """Keep one live payload per language.
 
-    The fingerprint moves on every record or concept change, so each rebuild
-    would otherwise leave the previous 440 KB entry to age out over 24 h.
-    A pointer key names the current entry; a different one is deleted.
+    The fingerprint moves on every record or concept change; a pointer key
+    names the current entry and the one it replaces is deleted.
     """
     pointer = f"ms:model-graph:v{PAYLOAD_VERSION}:{language}:current"
     previous = cache.get(pointer)
@@ -100,7 +99,8 @@ class ModelGraphView(View):
             payload = get_or_build(
                 cache_key, lambda: build_model_graph(language), CACHE_TTL
             )
-            _retire_previous_entry(language, cache_key)
+            if payload is not None:
+                _retire_previous_entry(language, cache_key)
             resp = JsonResponse(payload)
             resp["Cache-Control"] = "public, max-age=3600"
             resp["ETag"] = etag

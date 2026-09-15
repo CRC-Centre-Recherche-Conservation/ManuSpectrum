@@ -72,7 +72,9 @@ class GetOrBuildTests(SimpleTestCase):
             time.sleep(0.2)
             cache.set(self.KEY, "from-holder", 60)
 
-        threading.Thread(target=holder_finishes).start()
+        holder = threading.Thread(target=holder_finishes, daemon=True)
+        self.addCleanup(holder.join)
+        holder.start()
         build = MagicMock(return_value="from-me")
         self.assertEqual(
             get_or_build(self.KEY, build, 60, wait=2.0, poll=0.05), "from-holder"

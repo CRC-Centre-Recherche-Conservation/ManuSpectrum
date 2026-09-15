@@ -2444,6 +2444,13 @@ class CheckDuplicatesBoundsTests(TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(data["error"], "items must be a list")
 
+    def test_items_must_be_objects(self):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": ["a"]})
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"], "items must be objects")
+
     def test_a_non_string_token_is_dropped_not_compared(self):
         from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
 

@@ -370,9 +370,14 @@ _ARK_RE = re.compile(r"ark:/43093/(\w+)")
 # A Wikibase item id.
 _QID_RE = re.compile(r"Q\d+")
 
+# The type prefixes Biblissima puts in front of its 40-hex hashes.
+BIBLISSIMA_HASH_PREFIXES = ("mdata", "pdata", "oedata", "cdata", "ldata", "ifdata")
+
 # Biblissima identifiers: a type prefix and a 40-character hexadecimal hash.
 # Used with ``.fullmatch()`` on every client-supplied identifier.
-_PORTAL_HASH_RE = re.compile(r"(?:mdata|pdata|oedata|cdata|ldata|ifdata)[0-9a-f]{40}")
+_PORTAL_HASH_RE = re.compile(
+    "(?:" + "|".join(BIBLISSIMA_HASH_PREFIXES) + r")[0-9a-f]{40}"
+)
 _DESC_HASH_RE = re.compile(r"desc[0-9a-f]{40}")
 _IFDATA_HASH_RE = re.compile(r"ifdata[0-9a-f]{40}")
 
@@ -552,6 +557,7 @@ __all__ = [
     # Misc
     "_ARK_RE",
     "_QID_RE",
+    "BIBLISSIMA_HASH_PREFIXES",
     "_PORTAL_HASH_RE",
     "_DESC_HASH_RE",
     "_IFDATA_HASH_RE",

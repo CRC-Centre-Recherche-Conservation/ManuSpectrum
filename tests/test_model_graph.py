@@ -298,16 +298,14 @@ from manuspectrum.views.model_graph import PAYLOAD_VERSION, graph_fingerprint
 class ModelGraphViewTests(TestCase):
     def setUp(self):
         cache.clear()
+        translation.activate("en")
+        self.addCleanup(translation.deactivate)
 
     def tearDown(self):
         cache.clear()
 
     def payload_key(self, fingerprint):
-        """The key the view writes, under the language `reverse()` resolves to.
-
-        An earlier test class leaves `fr` active, so the language is read
-        rather than spelled out.
-        """
+        """The key the view writes, under the language `reverse()` resolves to."""
         language = translation.get_language() or "en"
         return f"ms:model-graph:v{PAYLOAD_VERSION}:{language}:{fingerprint}"
 
@@ -377,7 +375,9 @@ class ModelGraphViewTests(TestCase):
             time.sleep(0.2)
             cache.set(key, {"stats": {"models": 42}, "models": [], "relations": []}, 60)
 
-        threading.Thread(target=holder_finishes).start()
+        holder = threading.Thread(target=holder_finishes, daemon=True)
+        self.addCleanup(holder.join)
+        holder.start()
         resp = self.client.get(reverse("model-graph"))
         self.assertEqual(resp.json()["stats"]["models"], 42)
         m_build.assert_not_called()
