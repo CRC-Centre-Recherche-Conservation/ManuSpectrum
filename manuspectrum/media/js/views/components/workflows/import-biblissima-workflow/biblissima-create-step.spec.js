@@ -187,9 +187,9 @@ const makeRawItem = (overrides = {}) => ({
  * background async init (resolveDependencies + checkDuplicates) so that
  * subsequent test fetch stubs intercept only what the test cares about.
  */
-const makeViewModel = async (items = [], resourceType = 'Document') => {
+const makeViewModel = async (items = [], resourceType = 'Document', initFetch = null) => {
     // Generic stub for the background init calls (check-duplicates etc.)
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
+    vi.stubGlobal('fetch', initFetch || vi.fn().mockImplementation(() =>
         Promise.resolve({
             ok: true,
             json: () => Promise.resolve({ results: [], resourceId: null }),
@@ -694,6 +694,43 @@ describe('biblissima-create-step', () => {
             const call = fetchMock.mock.calls.find(([u]) => u === url);
             return JSON.parse(call[1].body);
         };
+
+        const highPlaceMatch = (displayname) => vi.fn().mockImplementation((url, init) => {
+            const label = url === '/api/biblissima/check-duplicates'
+                ? JSON.parse(init.body).items[0]?.label
+                : null;
+            const results = label === 'Paris (France)'
+                ? [{ index: 0, suggestions: [{ resourceId: 'place-1', displayname, confidence: 'high' }] }]
+                : [];
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ results, resourceId: null }) });
+        });
+
+        it('sends the QID when an automatic match has the same name up to case and spaces', async () => {
+            const fetchMock = highPlaceMatch('  paris  (france) ');
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends a null QID when an automatic match has another name', async () => {
+            const fetchMock = highPlaceMatch('Paris');
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            const body = bodyOf(fetchMock, '/api/biblissima/add-alt-name');
+            expect(body.label).toBe('Paris (France)');
+            expect(body.biblissimaQid).toBeNull();
+        });
+
+        it('sends the QID when the user picks a match with another name', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const fetchMock = stubPost();
+
+            vm.useExistingDep(placeDep(vm), { resourceId: 'place-1', displayname: 'Paris' });
+
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
 
         it('carries the Wikibase QID of the item location', async () => {
             const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);

@@ -389,8 +389,9 @@ class ExistingPlaceGeoTests(TestCase):
 
         self._start(patch("django.db.transaction.atomic", new=recording_atomic))
         self._start(patch("arches.app.datatypes.datatypes.DataTypeFactory"))
-        resource_cls = self._start(patch("arches.app.models.resource.Resource"))
-        resource_cls.return_value.get_serialized_graph.return_value = {"nodes": []}
+        self.resource_cls = self._start(patch("arches.app.models.resource.Resource"))
+        self.get_graph = self.resource_cls.return_value.get_serialized_graph
+        self.get_graph.return_value = {"nodes": []}
         self.ri = self._start(
             patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
         )
@@ -465,6 +466,59 @@ class ExistingPlaceGeoTests(TestCase):
         self.assertEqual(
             [e for e in self.events if isinstance(e, tuple)],
             [("stage", False), ("stage", False), ("lock", True), ("flush", True)],
+        )
+
+    def test_a_malformed_qid_is_rejected_without_any_query(self):
+        for qid in (None, 42, "P123", "Q1|Q2"):
+            with self.subTest(qid=qid):
+                self.assertEqual(
+                    self.view._enrich_existing_place(self.rid, qid, USER), []
+                )
+
+        self.ri.objects.filter.assert_not_called()
+        self.missing.assert_not_called()
+        self.place_geo.assert_not_called()
+
+    def test_an_unreachable_wikibase_adds_nothing_and_loads_no_graph(self):
+        self.missing.return_value = ["identifier", "location"]
+        self.place_geo.return_value = None
+
+        self.assertEqual(self.view._enrich_existing_place(self.rid, "Q27392", USER), [])
+
+        self.assertNotIn("atomic:enter", self.events)
+        self.flush.assert_not_called()
+        self.get_graph.assert_not_called()
+
+    def test_a_place_missing_only_its_location_without_wikibase_coordinates_is_left_untouched(
+        self,
+    ):
+        self.missing.return_value = ["location"]
+        self.place_geo.return_value = {
+            "geonamesId": "2988507",
+            "latitude": None,
+            "longitude": None,
+        }
+
+        self.assertEqual(self.view._enrich_existing_place(self.rid, "Q27392", USER), [])
+
+        self.assertNotIn("atomic:enter", self.events)
+        self.flush.assert_not_called()
+        self.get_graph.assert_not_called()
+
+    def test_only_the_missing_parts_wikibase_has_a_value_for_are_staged(self):
+        self.missing.side_effect = [["identifier", "location"]] * 2
+        self.place_geo.return_value = {
+            "geonamesId": "2988507",
+            "latitude": 48.85341,
+            "longitude": None,
+        }
+
+        added = self.view._enrich_existing_place(self.rid, "Q27392", USER)
+
+        self.assertEqual(added, ["identifier"])
+        self.assertEqual(
+            [e for e in self.events if isinstance(e, tuple)],
+            [("stage", False), ("lock", True), ("flush", True)],
         )
 
     def test_a_resource_that_is_not_a_place_is_left_untouched(self):

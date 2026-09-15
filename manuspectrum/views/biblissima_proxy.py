@@ -3140,10 +3140,11 @@ class BiblissimaCreateResourceView(View):
                         raise TileValidationError(err.get("message", ""))
 
     def _run_hook(self, tiles, nodes_by_id, factory, method_name):
-        """Replay ``pre_tile_save`` / ``post_tile_save`` for every (tile, node).
+        """Replay a datatype hook the bulk write skips, named by *method_name*.
 
-        Mirrors the side effects that ``Tile.save()`` would run around the
-        ``bulk_create``:
+        ``pre_tile_save`` / ``post_tile_save`` run for every (tile, node), as
+        ``Tile.save()`` runs them. ``after_update_all`` runs once per datatype
+        of a tile, as Arches' tile view runs it after a save:
 
         - ``pre_tile_save``: IIIF manifest import rewrites the URL to
           ``/manifest/{globalid}`` so Mirador can serve external manifests.
@@ -3320,6 +3321,12 @@ class BiblissimaCreateResourceView(View):
     def _enrich_existing_place(self, resource_id, place_qid, user):
         """Add to an existing Place the GeoNames parts of *place_qid* it lacks.
 
+        A *place_qid* that is not a Wikibase item id adds nothing and queries
+        nothing. Only the missing parts Wikibase has a value for are staged
+        (``identifier``: a GeoNames id; ``location``: a latitude and a
+        longitude); when none remains, or Wikibase cannot be read, nothing is
+        added and the graph is not loaded.
+
         The tiles are staged before the transaction. Inside it the resource row
         is locked and the missing parts are read again, so a part added by a
         concurrent enrichment of the same Place is not written twice. Each added
@@ -3333,12 +3340,25 @@ class BiblissimaCreateResourceView(View):
         from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
 
+        if not isinstance(place_qid, str) or not _QID_RE.fullmatch(place_qid):
+            return []
         try:
             if not ResourceInstance.objects.filter(
                 pk=resource_id, graph_id=PLACE_GRAPH_ID
             ).exists():
                 return []
             missing = self._missing_place_geo_parts(resource_id)
+            if not missing:
+                return []
+            geo = _get_place_geo(place_qid)
+            if not geo:
+                return []
+            has_value = {
+                "identifier": bool(geo.get("geonamesId")),
+                "location": geo.get("latitude") is not None
+                and geo.get("longitude") is not None,
+            }
+            missing = [part for part in missing if has_value[part]]
             if not missing:
                 return []
             self._tile_buffer = []

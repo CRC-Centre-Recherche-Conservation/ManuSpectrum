@@ -119,6 +119,9 @@ const BIBLISSIMA_TYPE_LABELS = {
     'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4': 'Enluminure',
 };
 
+const normaliseLabel = (label) => (label || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+const sameLabel = (a, b) => normaliseLabel(a) === normaliseLabel(b);
+
 const viewModel = function(params) {
     const self = this;
 
@@ -959,7 +962,8 @@ const viewModel = function(params) {
                         dep.action('use_existing');
                         dep.existingId(best.resourceId);
                         dep.existingLabel(best.displayname || dep.key);
-                        self._addAltName(dep);
+                        // An automatic match sends the place QID only when both names are the same.
+                        self._addAltName(dep, { withQid: sameLabel(dep.key, best.displayname) });
                     } else {
                         dep.action('has_suggestions');
                     }
@@ -1109,7 +1113,7 @@ const viewModel = function(params) {
     };
 
     // Add Biblissima label as alt name to existing resource (non-blocking)
-    this._addAltName = async (dep) => {
+    this._addAltName = async (dep, { withQid = true } = {}) => {
         if (!dep.existingId() || !dep.key) return;
         try {
             await fetch('/api/biblissima/add-alt-name', {
@@ -1122,7 +1126,7 @@ const viewModel = function(params) {
                     resourceId: dep.existingId(),
                     graphId: dep.graphId,
                     label: dep.key,
-                    biblissimaQid: dep.biblissimaQid,
+                    biblissimaQid: withQid ? dep.biblissimaQid : null,
                 }),
             });
         } catch (err) {
