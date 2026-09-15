@@ -1,7 +1,10 @@
 """Cache keys and their inputs on the Biblissima proxy (PR-8)."""
 
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache
 from django.test import TestCase
@@ -11,7 +14,7 @@ from manuspectrum.views import biblissima_proxy as bp
 HEX40 = "a" * 40
 
 
-def _editor(username):
+def _editor(username="cache_hardening_editor"):
     user = User.objects.create_user(username, password="pw")
     user.groups.add(Group.objects.get(name="Resource Editor"))
     return user
@@ -150,3 +153,126 @@ class HashedKeyTests(TestCase):
         key = set_.call_args[0][0]
         self.assertNotIn("evil.example", key)
         self.assertTrue(key.startswith("iiif_manifest_data:"))
+
+
+class StampedeTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self._deliveries = []
+
+    def tearDown(self):
+        for thread in self._deliveries:
+            thread.join()
+        cache.clear()
+
+    def _deliver_later(self, key, value, delay=0.2):
+        def run():
+            time.sleep(delay)
+            cache.set(key, value, 60)
+
+        thread = threading.Thread(target=run)
+        self._deliveries.append(thread)
+        thread.start()
+
+    def test_entity_lookup_waits_for_the_worker_holding_the_lock(self):
+        key = bp._BIBLISSIMA_ENTITY_CACHE_KEY.format(qid="Q1")
+        cache.add(key + ":lock", 1, 60)
+        self._deliver_later(key, {"qid": "Q1", "label": "from-holder"})
+        with patch.object(bp, "_bib_request") as fetch:
+            self.assertEqual(bp._get_wikibase_entity("Q1")["label"], "from-holder")
+        fetch.assert_not_called()
+
+    def test_entity_failure_is_not_cached_and_releases_the_lock(self):
+        key = bp._BIBLISSIMA_ENTITY_CACHE_KEY.format(qid="Q2")
+        with patch.object(bp, "_bib_request", side_effect=RuntimeError("down")):
+            self.assertIsNone(bp._get_wikibase_entity("Q2"))
+        self.assertIsNone(cache.get(key))
+        self.assertIsNone(cache.get(key + ":lock"))
+
+    def test_search_fetch_waits_for_the_worker_holding_the_lock(self):
+        self.client.force_login(_editor())
+        key = bp.stable_cache_key("biblissima:search:raw", "desc" + HEX40)
+        cache.add(key + ":lock", 1, 60)
+        self._deliver_later(key, [{"canvasId": "c1"}])
+        with (
+            patch.object(bp, "_fetch_biblissima_canvases") as fetch,
+            patch.object(bp, "_enrich_canvases"),
+        ):
+            resp = self.client.get(
+                "/api/biblissima/search", {"descriptors": "desc" + HEX40}
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["total"], 1)
+        fetch.assert_not_called()
+
+    def test_illuminations_scrape_waits_for_the_worker_holding_the_lock(self):
+        self.client.force_login(_editor())
+        key = bp._BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY.format(
+            portal_hash="mdata" + HEX40
+        )
+        cache.add(key + ":lock", 1, 60)
+        self._deliver_later(key, [{"illuminationId": "i1"}])
+        with patch.object(bp, "_bib_request") as fetch:
+            resp = self.client.get(
+                "/api/biblissima/manuscript-illuminations",
+                {"portalHash": "mdata" + HEX40},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["total"], 1)
+        fetch.assert_not_called()
+
+    def test_illuminations_scrape_error_still_returns_the_upstream_error(self):
+        self.client.force_login(_editor())
+        with patch.object(
+            bp, "_bib_request", side_effect=bp.requests.ConnectionError("x")
+        ):
+            resp = self.client.get(
+                "/api/biblissima/manuscript-illuminations",
+                {"portalHash": "mdata" + HEX40},
+            )
+        self.assertEqual(resp.status_code, 502)
+        key = bp._BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY.format(
+            portal_hash="mdata" + HEX40
+        )
+        self.assertIsNone(cache.get(key))
+        self.assertIsNone(cache.get(key + ":lock"))
+
+    def test_raw_caches_use_the_settings_ttl(self):
+        self.assertEqual(
+            bp._BIBLISSIMA_RAW_CACHE_TTL, settings.BIBLISSIMA_RAW_CACHE_TTL
+        )
+        manifest = {
+            "sequences": [
+                {"canvases": [{"@id": "https://example/c/1", "width": 1, "height": 2}]}
+            ]
+        }
+        resp = MagicMock()
+        resp.json.return_value = manifest
+        with (
+            patch.object(bp, "_bib_request", return_value=resp),
+            patch.object(bp.cache, "set", wraps=bp.cache.set) as set_,
+        ):
+            bp._fetch_canvas_dimensions("https://example/m", "1r", MagicMock())
+        self.assertEqual(set_.call_args[0][2], settings.BIBLISSIMA_RAW_CACHE_TTL)
+
+    def test_view_misses_wait_ten_seconds_and_hold_the_lock_three_minutes(self):
+        self.client.force_login(_editor())
+        with (
+            patch.object(bp, "get_or_build", return_value=[]) as build,
+            patch.object(bp, "_fetch_biblissima_canvases", return_value=[]),
+            patch.object(bp, "_enrich_canvases"),
+            patch.object(
+                bp, "_bib_request", return_value=MagicMock(text="<html></html>")
+            ),
+        ):
+            self.client.get("/api/biblissima/search", {"descriptors": "desc" + HEX40})
+            self.client.get(
+                "/api/biblissima/manuscript-illuminations",
+                {"portalHash": "mdata" + HEX40},
+            )
+        self.assertEqual(build.call_count, 2)
+        for call in build.call_args_list:
+            timeout = call.args[2] if len(call.args) > 2 else call.kwargs["timeout"]
+            self.assertEqual(timeout, bp._BIBLISSIMA_RAW_CACHE_TTL)
+            self.assertEqual(call.kwargs["wait"], 10.0)
+            self.assertEqual(call.kwargs["lock_timeout"], 180)

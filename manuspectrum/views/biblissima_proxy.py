@@ -78,7 +78,7 @@ from arches.app.models.tile import Tile
 from arches_controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
-from manuspectrum.utils.cache import stable_cache_key
+from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.dates import (
     CENTURY_MAPPING,
     parse_century,
@@ -118,6 +118,7 @@ PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
 _BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
 _BIBLISSIMA_SLOT_TIMEOUT = settings.BIBLISSIMA_SLOT_TIMEOUT
 _BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
+_BIBLISSIMA_RAW_CACHE_TTL = settings.BIBLISSIMA_RAW_CACHE_TTL
 
 
 def _build_biblissima_session(retry=None):
@@ -496,8 +497,9 @@ def _extract_entity_props(qid, raw_entity):
 def _get_wikibase_entity(qid, session=None):
     """Fetch a single Wikibase entity and extract relevant properties.
 
-    Results are cached in the Django cache for 24h keyed by QID, so repeated
-    lookups across requests hit the cache instead of Biblissima.
+    Cached for ``BIBLISSIMA_CACHE_TTL`` by QID; a miss is fetched by one
+    worker while concurrent callers wait for its result. ``None`` on failure,
+    never cached.
     """
     cache_key = _BIBLISSIMA_ENTITY_CACHE_KEY.format(qid=qid)
     cached = cache.get(cache_key)
@@ -506,29 +508,28 @@ def _get_wikibase_entity(qid, session=None):
         return cached
     _incr_stat("cache_misses", 1)
 
-    s = session or _build_biblissima_session()
-    try:
-        resp = _bib_request(
-            s,
-            BIBLISSIMA_WIKIBASE,
-            params={
-                "action": "wbgetentities",
-                "ids": qid,
-                "format": "json",
-                "languages": "fr|en",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        raw = resp.json().get("entities", {}).get(qid, {})
-    except Exception:
-        logger.warning("Failed to fetch Wikibase entity %s", qid)
-        return None
+    def fetch():
+        s = session or _build_biblissima_session()
+        try:
+            resp = _bib_request(
+                s,
+                BIBLISSIMA_WIKIBASE,
+                params={
+                    "action": "wbgetentities",
+                    "ids": qid,
+                    "format": "json",
+                    "languages": "fr|en",
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            raw = resp.json().get("entities", {}).get(qid, {})
+        except Exception:
+            logger.warning("Failed to fetch Wikibase entity %s", qid)
+            return None
+        return _extract_entity_props(qid, raw) or None
 
-    result = _extract_entity_props(qid, raw)
-    if result:
-        cache.set(cache_key, result, _BIBLISSIMA_CACHE_TTL)
-    return result
+    return get_or_build(cache_key, fetch, _BIBLISSIMA_CACHE_TTL)
 
 
 def _batch_get_wikibase_entities(qids, session=None):
@@ -1672,10 +1673,6 @@ def _fetch_biblissima_canvases(desc_hashes, session):
     return _parse_iiif_canvases(resp.json())
 
 
-# Raw parsed canvases are cached server-side to avoid refetching the (big,
-# slow) IIIF manifest for every paginated request.
-_BIBLISSIMA_RAW_SEARCH_TTL = 3600  # 1h
-
 _DEFAULT_SEARCH_PAGE_SIZE = 50
 _MAX_SEARCH_PAGE_SIZE = 200
 _MAX_SEARCH_DESCRIPTORS = 5
@@ -1689,9 +1686,11 @@ class BiblissimaSearchView(View):
     (incurs the one-time IIIF manifest fetch), then continues with pages 2..N
     in the background while the user is already interacting with page 1.
 
-    Raw parsed canvases are cached server-side for 1h under the normalized
-    descriptor key, so paginated follow-up requests skip the IIIF fetch and
-    only enrich the requested slice.
+    Raw parsed canvases are cached server-side for
+    ``BIBLISSIMA_RAW_CACHE_TTL`` under the normalized descriptor key, so
+    paginated follow-up requests skip the IIIF fetch and only enrich the
+    requested slice. One worker fetches a miss while concurrent callers wait
+    for its result; the lock outlives a slot wait plus a retried fetch.
     """
 
     def get(self, request):
@@ -1725,13 +1724,16 @@ class BiblissimaSearchView(View):
         )
 
         session = _get_biblissima_session()
-        all_canvases = cache.get(raw_cache_key)
-        if all_canvases is None:
-            try:
-                all_canvases = _fetch_biblissima_canvases(desc_hashes, session)
-            except Exception as exc:
-                return _biblissima_upstream_error(exc, "Biblissima IIIF search")
-            cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
+        try:
+            all_canvases = get_or_build(
+                raw_cache_key,
+                lambda: _fetch_biblissima_canvases(desc_hashes, session),
+                _BIBLISSIMA_RAW_CACHE_TTL,
+                lock_timeout=180,
+                wait=10.0,
+            )
+        except Exception as exc:
+            return _biblissima_upstream_error(exc, "Biblissima IIIF search")
 
         total = len(all_canvases)
         total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
@@ -2198,10 +2200,10 @@ def _parse_manuscript_illuminations(html):
     return results
 
 
-# Raw parsed illumination lists are cached server-side under this key to
-# avoid re-scraping the (slow) portal HTML page on every paginated request.
+# Raw parsed illumination lists are cached server-side under this key for
+# ``BIBLISSIMA_RAW_CACHE_TTL`` to avoid re-scraping the (slow) portal HTML
+# page on every paginated request.
 _BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY = "biblissima:illuminations:raw:{portal_hash}"
-_BIBLISSIMA_RAW_ILLUMINATIONS_TTL = 3600  # 1h
 
 _DEFAULT_ILLUMINATIONS_PAGE_SIZE = 20
 _MAX_ILLUMINATIONS_PAGE_SIZE = 200
@@ -2213,8 +2215,11 @@ class BiblissimaManuscriptIlluminationsView(View):
 
     Paginated like BiblissimaSearchView so the frontend can render the first
     page quickly and stream the rest in the background with a progress bar.
-    Raw parsed illuminations are cached for 1h under the manuscript portal
-    hash so follow-up page requests skip the (slow) HTML scrape.
+    Raw parsed illuminations are cached for ``BIBLISSIMA_RAW_CACHE_TTL``
+    under the manuscript portal hash so follow-up page requests skip the
+    (slow) HTML scrape; one worker scrapes a miss while concurrent callers
+    wait for its result, and the lock outlives a slot wait plus a retried
+    fetch.
 
     ``get`` is cached by ``cache_page`` on the URL alone, before the session
     and locale middlewares add their ``Vary`` headers: the payload must depend
@@ -2246,29 +2251,32 @@ class BiblissimaManuscriptIlluminationsView(View):
         raw_cache_key = _BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY.format(
             portal_hash=portal_hash
         )
-        all_illuminations = cache.get(raw_cache_key)
 
-        if all_illuminations is None:
+        def scrape():
             session = _build_biblissima_session()
             try:
-                try:
-                    resp = _bib_request(
-                        session,
-                        f"{BIBLISSIMA_PORTAL}/{portal_hash}",
-                        timeout=PORTAL_REQUEST_TIMEOUT,
-                    )
-                    resp.raise_for_status()
-                    html = resp.text
-                except Exception as exc:
-                    return _biblissima_upstream_error(
-                        exc, f"Biblissima portal fetch ({portal_hash})"
-                    )
+                resp = _bib_request(
+                    session,
+                    f"{BIBLISSIMA_PORTAL}/{portal_hash}",
+                    timeout=PORTAL_REQUEST_TIMEOUT,
+                )
+                resp.raise_for_status()
+                html = resp.text
             finally:
                 session.close()
+            return _parse_manuscript_illuminations(html)
 
-            all_illuminations = _parse_manuscript_illuminations(html)
-            cache.set(
-                raw_cache_key, all_illuminations, _BIBLISSIMA_RAW_ILLUMINATIONS_TTL
+        try:
+            all_illuminations = get_or_build(
+                raw_cache_key,
+                scrape,
+                _BIBLISSIMA_RAW_CACHE_TTL,
+                lock_timeout=180,
+                wait=10.0,
+            )
+        except Exception as exc:
+            return _biblissima_upstream_error(
+                exc, f"Biblissima portal fetch ({portal_hash})"
             )
 
         total = len(all_illuminations)
@@ -2409,7 +2417,7 @@ def _fetch_canvas_dimensions(manifest_url, folio, session=None):
         # IIIF Image API tile requests for the Leaflet layer.
         "imageServiceUrl": service_id,
     }
-    cache.set(cache_key, result, 3600)
+    cache.set(cache_key, result, _BIBLISSIMA_RAW_CACHE_TTL)
     return result
 
 
