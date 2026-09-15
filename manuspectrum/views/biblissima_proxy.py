@@ -78,6 +78,7 @@ from arches.app.models.tile import Tile
 from arches_controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
+from manuspectrum.utils.cache import stable_cache_key
 from manuspectrum.utils.dates import (
     CENTURY_MAPPING,
     parse_century,
@@ -915,6 +916,11 @@ class BiblissimaSuggestView(View):
 
     Combines prefix match (wbsearchentities) and full-text search
     (CirrusSearch) for flexible matching regardless of word order.
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
     """
 
     # Wikibase type QIDs for filtering
@@ -1100,11 +1106,20 @@ class BiblissimaSuggestView(View):
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaEntityView(View):
-    """Proxy for fetching a single Wikibase entity with extracted properties."""
+    """Proxy for fetching a single Wikibase entity with extracted properties.
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
+    """
 
     @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request, qid):
+        if not _QID_RE.fullmatch(qid):
+            return JsonResponse({"error": "invalid qid"}, status=400)
+
         entity = _get_wikibase_entity(qid)
         if entity is None:
             return JsonResponse({"error": "Entity not found"}, status=404)
@@ -1146,6 +1161,11 @@ class BiblissimaSearchManuscriptsView(View):
     3. Batch author resolution (1 call for unique author QIDs)
     4. Deduplicated collection resolution
     5. Parallel portal date scraping
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
     """
 
     TYPE_FILTERS = BiblissimaSuggestView.TYPE_FILTERS
@@ -1652,13 +1672,13 @@ def _fetch_biblissima_canvases(desc_hashes, session):
     return _parse_iiif_canvases(resp.json())
 
 
-# Raw parsed canvases are cached server-side under this key to avoid
-# refetching the (big, slow) IIIF manifest for every paginated request.
-_BIBLISSIMA_RAW_SEARCH_CACHE_KEY = "biblissima:search:raw:{descriptors_key}"
+# Raw parsed canvases are cached server-side to avoid refetching the (big,
+# slow) IIIF manifest for every paginated request.
 _BIBLISSIMA_RAW_SEARCH_TTL = 3600  # 1h
 
 _DEFAULT_SEARCH_PAGE_SIZE = 50
 _MAX_SEARCH_PAGE_SIZE = 200
+_MAX_SEARCH_DESCRIPTORS = 5
 
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
@@ -1692,10 +1712,16 @@ class BiblissimaSearchView(View):
         desc_hashes = _normalize_descriptors(descriptors)
         if not desc_hashes:
             return JsonResponse({"error": "descriptors parameter required"}, status=400)
+        if len(desc_hashes) > _MAX_SEARCH_DESCRIPTORS:
+            return JsonResponse(
+                {"error": "too many descriptors", "max": _MAX_SEARCH_DESCRIPTORS},
+                status=400,
+            )
+        if not all(_DESC_HASH_RE.fullmatch(h) for h in desc_hashes):
+            return JsonResponse({"error": "invalid descriptors"}, status=400)
 
-        descriptors_key = ",".join(sorted(desc_hashes))
-        raw_cache_key = _BIBLISSIMA_RAW_SEARCH_CACHE_KEY.format(
-            descriptors_key=descriptors_key
+        raw_cache_key = stable_cache_key(
+            "biblissima:search:raw", ",".join(sorted(desc_hashes))
         )
 
         session = _get_biblissima_session()
@@ -2189,6 +2215,11 @@ class BiblissimaManuscriptIlluminationsView(View):
     page quickly and stream the rest in the background with a progress bar.
     Raw parsed illuminations are cached for 1h under the manuscript portal
     hash so follow-up page requests skip the (slow) HTML scrape.
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
     """
 
     @method_decorator(cache_control(private=True))
@@ -2197,6 +2228,8 @@ class BiblissimaManuscriptIlluminationsView(View):
         portal_hash = request.GET.get("portalHash", "").strip()
         if not portal_hash:
             return JsonResponse({"error": "portalHash required"}, status=400)
+        if not _PORTAL_HASH_RE.fullmatch(portal_hash):
+            return JsonResponse({"error": "invalid portalHash"}, status=400)
 
         try:
             page = max(1, int(request.GET.get("page", 1)))
@@ -2287,7 +2320,9 @@ def _fetch_canvas_dimensions(manifest_url, folio, session=None):
     """
     if not manifest_url:
         return {}
-    cache_key = f"biblissima:manifest-canvas:{manifest_url}:{folio or ''}"
+    cache_key = stable_cache_key(
+        "biblissima:manifest-canvas", manifest_url, folio or ""
+    )
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -2553,7 +2588,15 @@ class BiblissimaIlluminationDetailView(View):
         The /en/ fetch is best-effort: if it fails the French-only
         result is returned and date parsing may degrade for century
         idioms, but the create step still works.
+
+        Cached by ``cache_page`` on the URL alone, before the session and locale
+        middlewares add their ``Vary`` headers: the payload must depend neither
+        on the user nor on the active language. A per-user or localised field
+        here would be served to every editor.
         """
+        if not _IFDATA_HASH_RE.fullmatch(ifdata_hash):
+            return JsonResponse({"error": "invalid identifier"}, status=400)
+
         session = _build_biblissima_session()
         try:
             try:

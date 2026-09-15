@@ -20,6 +20,7 @@ from arches.app.models.models import ResourceInstance, ResourceXResource, VwAnno
 from arches.app.models.resource import Resource
 from arches.app.utils.permission_backend import user_can_read_resource
 
+from manuspectrum.utils.cache import stable_cache_key
 from manuspectrum.views.serializers.iiif_annotation import (
     IIIFAnnotationSerializer,
     IIIFAnnotationSerializerV2,
@@ -190,7 +191,7 @@ class IIIFAnnotationMixin:
         if not manifest_url:
             return None
 
-        cache_key = f"iiif_manifest_data:{manifest_url}"
+        cache_key = stable_cache_key("iiif_manifest_data", manifest_url)
         cached = cache.get(cache_key)
         if cached:
             logger.debug(f"Manifest cache hit for: {manifest_url}")
