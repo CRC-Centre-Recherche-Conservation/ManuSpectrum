@@ -3143,20 +3143,18 @@ class BiblissimaCreateResourceView(View):
         """Replay a datatype hook the bulk write skips, named by *method_name*.
 
         ``pre_tile_save`` / ``post_tile_save`` run for every (tile, node), as
-        ``Tile.save()`` runs them. ``after_update_all`` runs once per datatype
-        of a tile, as Arches' tile view runs it after a save:
+        ``Tile.save()`` runs them:
 
         - ``pre_tile_save``: IIIF manifest import rewrites the URL to
           ``/manifest/{globalid}`` so Mirador can serve external manifests.
         - ``post_tile_save``: R2R relationship creation via the Arches SQL
           function that populates ``resource_x_resource``.
-        - ``after_update_all``: called as ``method(tile=tile)``, once per
-          datatype of a tile; the geojson datatype refreshes
-          ``geojson_geometries`` from it.
 
-        ``method_name`` is intentionally the last argument so that Task 3.4
-        can call ``_run_hook(tiles, nodes_by_id, factory, "pre_tile_save")``
-        with a consistent, reusable signature.
+        ``after_update_all`` is called as ``method(tile=tile)``, once per
+        datatype of a tile. ``Tile.after_update_all()`` calls it once per
+        node of the nodegroup; the hook only receives the tile, so a datatype
+        present on several nodes would do the same work several times (the
+        geojson datatype refreshes ``geojson_geometries`` for the whole tile).
         """
         for tile in tiles:
             replayed_datatypes = set()

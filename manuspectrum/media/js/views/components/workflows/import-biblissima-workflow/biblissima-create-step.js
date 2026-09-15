@@ -119,7 +119,7 @@ const BIBLISSIMA_TYPE_LABELS = {
     'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4': 'Enluminure',
 };
 
-const normaliseLabel = (label) => (label || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+const normaliseLabel = (label) => String(label ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 const sameLabel = (a, b) => normaliseLabel(a) === normaliseLabel(b);
 
 const viewModel = function(params) {

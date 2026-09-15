@@ -713,6 +713,22 @@ describe('biblissima-create-step', () => {
             expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
         });
 
+        it('sends the QID when an automatic match spells the same name in decomposed Unicode', async () => {
+            const fetchMock = highPlaceMatch('Paris (France)'.normalize('NFD'));
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('links without a QID, instead of failing, when the match has no textual name', async () => {
+            const fetchMock = highPlaceMatch(42);
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBeNull();
+        });
+
         it('sends a null QID when an automatic match has another name', async () => {
             const fetchMock = highPlaceMatch('Paris');
             const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
