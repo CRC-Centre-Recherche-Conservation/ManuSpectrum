@@ -37,7 +37,7 @@ const viewModel = function(params) {
 
     self.transactionId = uuid.generate();
     self.uniqueId = uuid.generate();
-    self.uniqueidClass = ko.computed(function() {
+    self.uniqueidClass = ko.pureComputed(function() {
         return "unique_id_" + self.uniqueId;
     });
 
@@ -130,7 +130,7 @@ const viewModel = function(params) {
     };
 
     self._lastManifestValue = null;
-    self.manifest.subscribe(function(newValue) {
+    self.disposables.push(self.manifest.subscribe(function(newValue) {
         if (newValue === self._lastManifestValue) return;
         self._lastManifestValue = newValue;
 
@@ -142,7 +142,7 @@ const viewModel = function(params) {
         } else {
             self.clearManifest();
         }
-    });
+    }));
 
     self.loadManifestFromId = function(manifestId) {
         self.loading(true);
@@ -385,7 +385,7 @@ const viewModel = function(params) {
         }
     };
 
-    self.manifestDisplayUrl = ko.computed(function() {
+    self.manifestDisplayUrl = ko.pureComputed(function() {
         // Show the canonical IIIF id from the JSON if available (original external URL)
         var data = self.manifestData();
         if (data) {
@@ -398,7 +398,7 @@ const viewModel = function(params) {
         return url || '';
     });
 
-    self.displayValue = ko.computed(function() {
+    self.displayValue = ko.pureComputed(function() {
         if (self.state === 'report') {
             return self.manifestDisplayUrl() || self.value() || '';
         }

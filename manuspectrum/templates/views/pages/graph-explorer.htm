@@ -11,8 +11,8 @@
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     "itemListElement": [
-        {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"},
-        {"@type": "ListItem", "position": 2, "name": "{% trans 'Graph Explorer' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'about-explorer' %}"}
+        {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'root' %}"},
+        {"@type": "ListItem", "position": 2, "name": "{% trans 'Graph Explorer' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'about-explorer' %}"}
     ]
 }
 </script>

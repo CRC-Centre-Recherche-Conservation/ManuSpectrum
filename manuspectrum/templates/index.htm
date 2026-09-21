@@ -64,14 +64,14 @@ Homepage — Prismatic Luminescence aesthetic
             {
                 "@type": "WebSite",
                 "name": "ManuSpectrum",
-                "url": "{{ request.scheme }}://{{ request.get_host }}/",
+                "url": "{{ request.scheme }}://{{ request.get_host|escapejs }}/",
                 "inLanguage": ["en", "fr"],
                 "description": "{{ seo_description|escapejs }}"
             },
             {
                 "@type": "ResearchProject",
                 "name": "ManuSpectrum",
-                "url": "{{ request.scheme }}://{{ request.get_host }}/",
+                "url": "{{ request.scheme }}://{{ request.get_host|escapejs }}/",
                 "description": "{{ seo_description|escapejs }}",
                 "parentOrganization": {
                     "@type": "ResearchOrganization",
