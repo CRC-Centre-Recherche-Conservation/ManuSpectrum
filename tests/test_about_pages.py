@@ -308,3 +308,55 @@ class TeamPageTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         for name in ("Anne Michelin", "Gilles Kagan", "Maxime Humeau"):
             self.assertContains(resp, name)
+
+
+class JsonLdHostEscapingTests(SimpleTestCase):
+    """Every JSON-LD block stays valid JSON whatever `request.get_host()` returns."""
+
+    TEMPLATES = (
+        "index.htm",
+        "views/pages/contact.htm",
+        "views/pages/graph-explorer.htm",
+        "views/pages/conceptual-model.htm",
+        "views/pages/team.htm",
+    )
+    HOSTILE_HOST = 'example.org"</script><script>alert(1)</script>'
+
+    def render(self, name):
+        """Render a public page outside the request cycle.
+
+        `render_to_string` is called without `request=`, so no context processor
+        runs: the header and footer read a bare `user`, supplied here.
+        """
+        from django.contrib.auth.models import AnonymousUser
+        from django.template.loader import render_to_string
+        from django.test import RequestFactory
+        from django.utils import translation
+
+        request = RequestFactory().get("/")
+        request.get_host = lambda: self.HOSTILE_HOST
+        with translation.override("en"):
+            return render_to_string(
+                name,
+                {
+                    "request": request,
+                    "user": AnonymousUser(),
+                    "seo_description": "d",
+                },
+            )
+
+    def test_json_ld_blocks_survive_a_host_carrying_quotes(self):
+        import json
+        import re
+
+        for name in self.TEMPLATES:
+            with self.subTest(template=name):
+                html = self.render(name)
+                blocks = re.findall(
+                    r'<script type="application/ld\+json">(.*?)</script>', html, re.S
+                )
+                self.assertTrue(blocks, f"{name}: no JSON-LD")
+                for block in blocks:
+                    self.assertIn("\\u0022", block)
+                    self.assertNotIn("<script>", block)
+                    json.loads(block)
