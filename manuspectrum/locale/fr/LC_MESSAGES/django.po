@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-14 05:43-0500\n"
+"POT-Creation-Date: 2026-09-15 10:31-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -3908,28 +3908,28 @@ msgstr ""
 "License v3. La consultation et le téléchargement des données publiées ne "
 "nécessitent aucun compte."
 
-#: views/biblissima_proxy.py:306
+#: views/biblissima_proxy.py:324
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 msgstr ""
 "Trop de requêtes Biblissima sont en cours. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:319
+#: views/biblissima_proxy.py:337
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "Le portail Biblissima n'a pas répondu à temps. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:330
+#: views/biblissima_proxy.py:348
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Impossible de joindre le portail Biblissima. Vérifiez votre connexion et "
 "réessayez."
 
-#: views/biblissima_proxy.py:343
+#: views/biblissima_proxy.py:361
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -3938,13 +3938,26 @@ msgstr ""
 "Le portail Biblissima a renvoyé une erreur (%(status)s). Veuillez réessayer "
 "dans un instant."
 
-#: views/biblissima_proxy.py:354
+#: views/biblissima_proxy.py:372
 msgid "Invalid response from the Biblissima portal."
 msgstr "Réponse invalide du portail Biblissima."
 
-#: views/biblissima_proxy.py:362
+#: views/biblissima_proxy.py:380
 msgid "Unknown error while querying Biblissima."
 msgstr "Erreur inconnue lors de la requête Biblissima."
+
+#: views/biblissima_proxy.py:1724
+#, python-format
+msgid "Select at most %(max)s descriptors."
+msgstr "Sélectionnez au plus %(max)s descripteurs."
+
+#: views/biblissima_proxy.py:1733
+msgid "The descriptor list is malformed."
+msgstr "La liste de descripteurs est mal formée."
+
+#: views/biblissima_proxy.py:2291
+msgid "The manuscript identifier is malformed."
+msgstr "L'identifiant du manuscrit est mal formé."
 
 #: views/model_graph_service.py:103
 msgid "String"

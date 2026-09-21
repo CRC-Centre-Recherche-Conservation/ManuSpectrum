@@ -2381,3 +2381,253 @@ class MultiDescriptorPrefetchTests(TestCase):
         )
 
         MockNode.objects.filter.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — check-duplicates input bounds and identifier atom index
+# ---------------------------------------------------------------------------
+
+
+class CheckDuplicatesBoundsTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def _post_raw(self, body):
+        import json as _json
+        from django.test import RequestFactory
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+        req = RequestFactory().post(
+            "/api/biblissima/check-duplicates",
+            data=_json.dumps(body),
+            content_type="application/json",
+        )
+        with (
+            patch(PATCH_TILEMODEL, MagicMock()),
+            patch(PATCH_RESOURCE_INSTANCE, MagicMock()),
+        ):
+            resp = BiblissimaCheckDuplicatesView().post(req)
+        return resp.status_code, _json.loads(resp.content)
+
+    def test_more_than_the_cap_is_refused(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _MAX_CHECK_DUPLICATES_ITEMS,
+            DOCUMENT_GRAPH_ID,
+        )
+
+        items = [
+            {"arkId": f"ark:/43093/x{i}"}
+            for i in range(_MAX_CHECK_DUPLICATES_ITEMS + 1)
+        ]
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": items})
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"], "too many items")
+        self.assertEqual(data["max"], _MAX_CHECK_DUPLICATES_ITEMS)
+
+    def test_exactly_the_cap_is_accepted(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _MAX_CHECK_DUPLICATES_ITEMS,
+            DOCUMENT_GRAPH_ID,
+        )
+
+        items = [
+            {"arkId": f"ark:/43093/x{i}"} for i in range(_MAX_CHECK_DUPLICATES_ITEMS)
+        ]
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": items})
+        self.assertEqual(status, 200)
+        self.assertEqual(len(data["results"]), _MAX_CHECK_DUPLICATES_ITEMS)
+
+    def test_items_must_be_a_list(self):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": {"a": 1}})
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"], "items must be a list")
+
+    def test_items_must_be_objects(self):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": ["a"]})
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"], "items must be objects")
+
+    def test_a_non_string_token_is_dropped_not_compared(self):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        status, data = self._post_raw(
+            {"graphId": DOCUMENT_GRAPH_ID, "items": [{"biblissimaQid": 5}]}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertEqual(data["results"][0]["suggestions"], [])
+
+
+class IdentifierAtomsTests(TestCase):
+    def atoms(self, value):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+        return BiblissimaCheckDuplicatesView._identifier_atoms(value)
+
+    def test_an_ark_yields_itself_and_its_hash(self):
+        self.assertEqual(
+            self.atoms("ark:/43093/ifdataA001"),
+            {"ark:/43093/ifdataA001", "ifdataA001"},
+        )
+
+    def test_a_portal_url_yields_the_hash(self):
+        self.assertIn(
+            "mdata" + "b" * 40,
+            self.atoms("https://portail.biblissima.fr/fr/ark:/43093/mdata" + "b" * 40),
+        )
+
+    def test_an_entity_uri_yields_the_qid(self):
+        self.assertIn("Q27392", self.atoms("https://data.biblissima.fr/entity/Q27392"))
+        self.assertEqual(self.atoms("Q27392"), {"Q27392"})
+
+    def test_a_qid_followed_by_a_slash_query_or_fragment_still_yields_the_qid(self):
+        for value in (
+            "https://data.biblissima.fr/entity/Q27392/",
+            "https://data.biblissima.fr/entity/Q27392?lang=fr",
+            "https://data.biblissima.fr/entity/Q27392#x",
+        ):
+            with self.subTest(value=value):
+                self.assertIn("Q27392", self.atoms(value))
+
+    def test_a_qid_inside_free_text_is_not_an_atom(self):
+        self.assertEqual(self.atoms("Biblissima Q27392"), {"Biblissima Q27392"})
+
+    def test_a_partial_qid_does_not_match(self):
+        self.assertFalse(
+            self.atoms("Q12") & self.atoms("https://data.biblissima.fr/entity/Q123")
+        )
+
+    def test_a_shelfmark_yields_only_itself(self):
+        self.assertEqual(self.atoms("Français 11"), {"Français 11"})
+
+
+class CheckDuplicatesIndexTests(TestCase):
+    """The matching goes through the atom index, not a substring scan."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_bare_hash_in_corpus_matches_a_full_ark_token(self):
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus = [_make_corpus_tile("ifdataA001", _RID_A, id_node=DOC_IDENTIFIER_VALUE)]
+        data = _post_check_duplicates(
+            items=[
+                {
+                    "arkId": "ark:/43093/ifdataA001",
+                    "label": "",
+                    "shelfmark": "",
+                    "biblissimaQid": "",
+                    "portalHash": "",
+                    "manifestUrl": "",
+                }
+            ],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=_build_mock_tile(corpus),
+            mock_ri_cls=_build_mock_ri({_RID_A: "Alpha"}),
+        )
+        self.assertEqual(data["results"][0]["suggestions"][0]["resourceId"], _RID_A)
+
+    def test_entity_uri_in_corpus_matches_a_qid_token(self):
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus = [
+            _make_corpus_tile(
+                "https://data.biblissima.fr/entity/Q5",
+                _RID_A,
+                id_node=DOC_IDENTIFIER_VALUE,
+            )
+        ]
+        data = _post_check_duplicates(
+            items=[
+                {
+                    "arkId": "",
+                    "label": "",
+                    "shelfmark": "",
+                    "biblissimaQid": "Q5",
+                    "portalHash": "",
+                    "manifestUrl": "",
+                }
+            ],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=_build_mock_tile(corpus),
+            mock_ri_cls=_build_mock_ri({_RID_A: "Alpha"}),
+        )
+        self.assertEqual(data["results"][0]["suggestions"][0]["resourceId"], _RID_A)
+
+    def test_a_partial_qid_no_longer_matches(self):
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus = [
+            _make_corpus_tile(
+                "https://data.biblissima.fr/entity/Q123",
+                _RID_A,
+                id_node=DOC_IDENTIFIER_VALUE,
+            )
+        ]
+        data = _post_check_duplicates(
+            items=[
+                {
+                    "arkId": "",
+                    "label": "",
+                    "shelfmark": "",
+                    "biblissimaQid": "Q12",
+                    "portalHash": "",
+                    "manifestUrl": "",
+                }
+            ],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=_build_mock_tile(corpus),
+            mock_ri_cls=_build_mock_ri({_RID_A: "Alpha"}),
+        )
+        self.assertEqual(
+            [
+                s
+                for s in data["results"][0]["suggestions"]
+                if s["matchType"] == "identifier"
+            ],
+            [],
+        )
+
+    def test_one_resource_is_suggested_once_even_with_two_matching_tiles(self):
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus = [
+            _make_corpus_tile(
+                "ark:/43093/ifdataA001", _RID_A, id_node=DOC_IDENTIFIER_VALUE
+            ),
+            _make_corpus_tile(
+                "https://portail.biblissima.fr/fr/ark:/43093/ifdataA001",
+                _RID_A,
+                id_node=DOC_IDENTIFIER_VALUE,
+            ),
+        ]
+        data = _post_check_duplicates(
+            items=[
+                {
+                    "arkId": "ark:/43093/ifdataA001",
+                    "label": "",
+                    "shelfmark": "",
+                    "biblissimaQid": "",
+                    "portalHash": "",
+                    "manifestUrl": "",
+                }
+            ],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=_build_mock_tile(corpus),
+            mock_ri_cls=_build_mock_ri({_RID_A: "Alpha"}),
+        )
+        ids = [
+            s["resourceId"]
+            for s in data["results"][0]["suggestions"]
+            if s["matchType"] == "identifier"
+        ]
+        self.assertEqual(ids, [_RID_A])

@@ -1,3 +1,6 @@
+import threading
+import time
+
 from django.test import SimpleTestCase, TestCase
 
 from manuspectrum.views.model_graph_service import (
@@ -285,6 +288,9 @@ from unittest import mock
 
 from django.core.cache import cache
 from django.urls import reverse
+from django.utils import translation
+
+from manuspectrum.views.model_graph import PAYLOAD_VERSION, graph_fingerprint
 
 # TestCase is already imported at the top of the file (Task 1).
 
@@ -292,9 +298,16 @@ from django.urls import reverse
 class ModelGraphViewTests(TestCase):
     def setUp(self):
         cache.clear()
+        translation.activate("en")
+        self.addCleanup(translation.deactivate)
 
     def tearDown(self):
         cache.clear()
+
+    def payload_key(self, fingerprint):
+        """The key the view writes, under the language `reverse()` resolves to."""
+        language = translation.get_language() or "en"
+        return f"ms:model-graph:v{PAYLOAD_VERSION}:{language}:{fingerprint}"
 
     @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
     @mock.patch("manuspectrum.views.model_graph.build_model_graph")
@@ -336,12 +349,53 @@ class ModelGraphViewTests(TestCase):
         self.assertEqual(resp.status_code, 500)
         self.assertIn("error", resp.json())
 
+    @mock.patch("manuspectrum.views.model_graph.build_model_graph")
+    def test_a_rebuild_evicts_the_previous_entry_of_the_language(self, m_build):
+        m_build.return_value = {"stats": {"models": 1}, "models": [], "relations": []}
+        with mock.patch(
+            "manuspectrum.views.model_graph.graph_fingerprint", return_value="A"
+        ):
+            self.client.get(reverse("model-graph"))
+        old_key = self.payload_key("A")
+        self.assertIsNotNone(cache.get(old_key))
+        with mock.patch(
+            "manuspectrum.views.model_graph.graph_fingerprint", return_value="B"
+        ):
+            self.client.get(reverse("model-graph"))
+        self.assertIsNone(cache.get(old_key))
+        self.assertIsNotNone(cache.get(self.payload_key("B")))
+
+    @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
+    @mock.patch("manuspectrum.views.model_graph.build_model_graph")
+    def test_a_concurrent_miss_waits_for_the_holder(self, m_build, _fp):
+        key = self.payload_key("fp1")
+        cache.add(key + ":lock", 1, 60)
+
+        def holder_finishes():
+            time.sleep(0.2)
+            cache.set(key, {"stats": {"models": 42}, "models": [], "relations": []}, 60)
+
+        holder = threading.Thread(target=holder_finishes, daemon=True)
+        self.addCleanup(holder.join)
+        holder.start()
+        resp = self.client.get(reverse("model-graph"))
+        self.assertEqual(resp.json()["stats"]["models"], 42)
+        m_build.assert_not_called()
+
+    @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
+    @mock.patch(
+        "manuspectrum.views.model_graph.build_model_graph",
+        side_effect=RuntimeError("boom"),
+    )
+    def test_a_failed_build_leaves_no_lock_behind(self, _b, _fp):
+        self.assertEqual(self.client.get(reverse("model-graph")).status_code, 500)
+        self.assertIsNone(cache.get(self.payload_key("fp1") + ":lock"))
+
 
 # --- Task 5 (feat/homepage_v2 audit): cache versioning, headers, drafts ------
 
 from django.test import override_settings
 
-from manuspectrum.views.model_graph import PAYLOAD_VERSION, graph_fingerprint
 from manuspectrum.views.model_graph_service import draft_state_ids
 
 

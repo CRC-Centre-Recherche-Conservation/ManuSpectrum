@@ -710,6 +710,10 @@ BIBLISSIMA_SLOT_TIMEOUT = 15
 # enrichment results.
 BIBLISSIMA_CACHE_TTL = 24 * 60 * 60
 
+# Parsed search canvases, scraped illumination lists and manifest canvas
+# lookups: bulky and perishable, kept one hour by default.
+BIBLISSIMA_RAW_CACHE_TTL = 60 * 60
+
 
 # ---------------------------------------------------------------------------
 # Biblissima async ES indexing (Phase 4)
