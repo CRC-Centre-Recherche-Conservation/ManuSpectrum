@@ -29,7 +29,7 @@ describe('bindings/dropzone', () => {
     let instance;
 
     beforeEach(() => {
-        instance = { destroy: vi.fn() };
+        instance = { destroy: vi.fn(), files: [], cancelUpload: vi.fn() };
         $.fn.dropzone = vi.fn(function() {
             this.each((_, element) => {
                 element.dropzone = instance;
@@ -63,5 +63,23 @@ describe('bindings/dropzone', () => {
         const root = mount();
 
         expect(() => ko.removeNode(root)).not.toThrow();
+    });
+
+    it('destroys without emitting removedfile for staged files', () => {
+        const staged = { status: 'added' };
+        const removedfile = vi.fn();
+        instance.files = [staged];
+        instance.cancelUpload = vi.fn();
+        instance.destroy = vi.fn(function() {
+            // Dropzone 5.7.0 destroy() -> removeAllFiles(true) -> one removedfile per remaining file
+            this.files.forEach(() => removedfile());
+        });
+        const root = mount();
+
+        ko.removeNode(root);
+
+        expect(instance.cancelUpload).toHaveBeenCalledWith(staged);
+        expect(removedfile).not.toHaveBeenCalled();
+        expect(instance.destroy).toHaveBeenCalledTimes(1);
     });
 });

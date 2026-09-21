@@ -2,9 +2,9 @@
  * Shadow of arches/app/media/js/bindings/dropzone.js (Arches 8.1.4).
  *
  * Diff vs original:
- *   - registers a node-disposal callback that calls `destroy()` on the
- *     Dropzone instance attached to the element (`element.dropzone`), which
- *     also removes it from the static `Dropzone.instances` registry
+ *   - a node-disposal callback aborts in-flight uploads, drops the instance's
+ *     file list without emitting `removedfile`, then destroys the instance,
+ *     which also removes it from the static `Dropzone.instances` registry
  *   - `import dropzone from 'dropzone'` -> side-effect import (the module is
  *     only needed for its jQuery plugin registration)
  */
@@ -37,6 +37,13 @@ ko.bindingHandlers.dropzone = {
         ko.utils.domNodeDisposal.addDisposeCallback(element, function() {
             var instance = element.dropzone;
             if (instance && typeof instance.destroy === 'function') {
+                // `destroy()` runs `removeAllFiles(true)`; its `removedfile`
+                // events reach the tile's formData, which outlives the widget,
+                // and unstage files that were never saved.
+                instance.files.slice().forEach(function(file) {
+                    instance.cancelUpload(file);
+                });
+                instance.files = [];
                 instance.destroy();
             }
         });
