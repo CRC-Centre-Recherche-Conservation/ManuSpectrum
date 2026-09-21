@@ -8,6 +8,7 @@ import uuid from 'uuid';
 import arches from 'arches';
 import addThingsStepTemplate from 'templates/views/components/workflows/create-project-workflow/add-things-step.htm';
 import 'bindings/select2-query';
+import { renderTermResult } from 'views/components/workflows/create-project-workflow/add-things-step-utils';
 import 'views/components/resource-instance-creator';
 import 'views/components/search/paging-filter';
 
@@ -397,14 +398,8 @@ const viewModel = function(params) {
                 return { results: filteredResults };
             }
         },
-        templateResult: (item) => {
-            if (item.context_label === 'Search Term') {
-                return `<strong><u>${item.text}</u></strong>`;
-            }
-            return item.text;
-        },
-        templateSelection: (item) => item.text,
-        escapeMarkup: (m) => m
+        templateResult: renderTermResult,
+        templateSelection: (item) => item.text
     };
 
     const getResultData = async (termFilter, pagingFilter) => {
