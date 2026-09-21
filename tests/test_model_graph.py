@@ -284,13 +284,15 @@ class ExcludedGraphExactMatchTests(SimpleTestCase):
             self.assertEqual(slug, slug.strip().lower())
 
 
+import contextlib
 from unittest import mock
 
+from django.conf import settings
 from django.core.cache import cache
 from django.urls import reverse
 from django.utils import translation
 
-from manuspectrum.views.model_graph import PAYLOAD_VERSION, graph_fingerprint
+from manuspectrum.views.model_graph import _cards_hash, graph_fingerprint
 
 # TestCase is already imported at the top of the file (Task 1).
 
@@ -307,7 +309,7 @@ class ModelGraphViewTests(TestCase):
     def payload_key(self, fingerprint):
         """The key the view writes, under the language `reverse()` resolves to."""
         language = translation.get_language() or "en"
-        return f"ms:model-graph:v{PAYLOAD_VERSION}:{language}:{fingerprint}"
+        return f"model-graph:{language}:{fingerprint}"
 
     @mock.patch("manuspectrum.views.model_graph.graph_fingerprint", return_value="fp1")
     @mock.patch("manuspectrum.views.model_graph.build_model_graph")
@@ -469,7 +471,7 @@ class ModelGraphCachingTests(TestCase):
         m_build.return_value = self.PAYLOAD
         resp = self.client.get(reverse("model-graph"))
         self.assertIn("fp1", resp["ETag"])
-        self.assertIn(f"v{PAYLOAD_VERSION}", resp["ETag"])
+        self.assertIn(settings.CACHE_CODE_VERSION, resp["ETag"])
         self.assertIn("en", resp["ETag"])
         self.assertIn("max-age", resp["Cache-Control"])
 
@@ -553,11 +555,11 @@ class PayloadEnrichmentTests(TestCase):
             self.assertEqual(str(DATATYPE_LABELS["string"]), "String")
 
 
-def _fingerprint_tables(graph_rows, resource_count, concept_count):
-    """Stand-ins for the three managers ``graph_fingerprint`` reads.
+def _fingerprint_tables(graph_rows, resource_count, concept_count, cards="h0"):
+    """Stand-ins for what ``graph_fingerprint`` reads.
 
-    It imports them inside its own body, so the patch has to land on
-    ``arches.app.models.models``.
+    The managers are imported inside its body, so their patch lands on
+    ``arches.app.models.models``; the SQL hash is patched on the view module.
     """
     graph_model = mock.Mock()
     graph_model.objects.filter.return_value.values_list.return_value = graph_rows
@@ -568,12 +570,78 @@ def _fingerprint_tables(graph_rows, resource_count, concept_count):
     concept = mock.Mock()
     concept.objects.count.return_value = concept_count
 
-    return mock.patch.multiple(
-        "arches.app.models.models",
-        GraphModel=graph_model,
-        ResourceInstance=resource_instance,
-        Concept=concept,
+    stack = contextlib.ExitStack()
+    stack.enter_context(
+        mock.patch.multiple(
+            "arches.app.models.models",
+            GraphModel=graph_model,
+            ResourceInstance=resource_instance,
+            Concept=concept,
+        )
     )
+    stack.enter_context(
+        mock.patch("manuspectrum.views.model_graph._cards_hash", return_value=cards)
+    )
+    return stack
+
+
+class CardsHashTests(TestCase):
+    """The SQL hash behind the fingerprint, against real widget rows."""
+
+    LIFECYCLE_ID = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
+
+    def setUp(self):
+        from arches.app.models.models import (
+            CardModel,
+            CardXNodeXWidget,
+            GraphModel,
+            Node,
+            NodeGroup,
+            Widget,
+        )
+
+        graph = GraphModel.objects.create(
+            graphid="1b3d0a44-9c11-4f9a-8e5d-3f6b2c1a9e01",
+            name="Hash probe",
+            isresource=True,
+            is_active=True,
+            slug="cards-hash-probe",
+            resource_instance_lifecycle_id=self.LIFECYCLE_ID,
+        )
+        nodegroup = NodeGroup.objects.create(
+            nodegroupid="2c4e1b55-0d22-4a0b-9f6e-4a7c3d2b0f12", cardinality="1"
+        )
+        card = CardModel.objects.create(graph=graph, nodegroup=nodegroup, name=None)
+        node = Node.objects.create(
+            nodeid="3d5f2c66-1e33-4b1c-8a7f-5b8d4e3c1a23",
+            name="Probe",
+            istopnode=False,
+            datatype="string",
+            nodegroup=nodegroup,
+            graph=graph,
+            alias="probe",
+        )
+        self.widget = CardXNodeXWidget.objects.create(
+            node=node,
+            card=card,
+            widget=Widget.objects.get(name="text-widget"),
+            label={"en": "Before", "fr": "Avant"},
+        )
+
+    def test_moves_when_a_widget_label_changes_in_place(self):
+        before = _cards_hash()
+        self.widget.label = {"en": "Before", "fr": "Après"}
+        self.widget.save()
+        self.assertNotEqual(before, _cards_hash())
+
+    def test_a_card_without_a_name_still_counts(self):
+        # The probe card has no name: its widget must still reach the hash.
+        before = _cards_hash()
+        self.widget.delete()
+        self.assertNotEqual(before, _cards_hash())
+
+    def test_is_stable_without_edits(self):
+        self.assertEqual(_cards_hash(), _cards_hash())
 
 
 class GraphFingerprintTests(SimpleTestCase):
@@ -587,11 +655,14 @@ class GraphFingerprintTests(SimpleTestCase):
 
     ROWS = [("g1", "p1"), ("g2", "p2")]
 
-    def fingerprint(self, rows=None, resources=3, concepts=7):
+    def fingerprint(self, rows=None, resources=3, concepts=7, cards="h0"):
         with _fingerprint_tables(
-            self.ROWS if rows is None else rows, resources, concepts
+            self.ROWS if rows is None else rows, resources, concepts, cards
         ):
             return graph_fingerprint()
+
+    def test_moves_when_a_widget_label_is_edited_in_place(self):
+        self.assertNotEqual(self.fingerprint(cards="h0"), self.fingerprint(cards="h1"))
 
     def test_is_stable_for_unchanged_data(self):
         self.assertEqual(self.fingerprint(), self.fingerprint())

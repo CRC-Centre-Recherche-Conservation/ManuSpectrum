@@ -4,6 +4,8 @@ Django settings for manuspectrum project.
 
 import os
 import inspect
+
+from manuspectrum.cache_version import cache_code_version
 import semantic_version
 from datetime import datetime, timedelta
 from django.utils.translation import gettext_lazy as _
@@ -372,6 +374,10 @@ SESSION_COOKIE_NAME = "manuspectrum"
 
 # For more info on configuring your cache: https://docs.djangoproject.com/en/2.2/topics/cache/
 #
+# Digest of the payload-shaping modules, computed once per process; also
+# part of the model-graph ETag so browsers refetch after a deploy.
+CACHE_CODE_VERSION = cache_code_version(APP_ROOT)
+
 # Redis database allocation, shared with CELERY_BROKER_URL below:
 #   0 = Celery broker   1 = default cache   2 = permission checker
 #
@@ -381,6 +387,10 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": "redis://localhost:6379/1",
+        # Every key of this cache carries the code version of the modules that
+        # shape cached payloads (manuspectrum/cache_version.py): a process
+        # running new serializer code never reads an entry built by old code.
+        "KEY_PREFIX": f"ms:{CACHE_CODE_VERSION}",
     },
     # Arches stores a pickled CachedObjectPermissionChecker here on nearly
     # every request. On a database backend that is a write and a read of a
