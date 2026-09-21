@@ -53,6 +53,7 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "test-cache",
+        "KEY_PREFIX": f"ms:{CACHE_CODE_VERSION}",
     },
     "user_permission": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
