@@ -36,7 +36,7 @@ const viewModel = function(params) {
             this.url(this.value().url);
             this.url_label(this.value().url_label);
         }
-        this.value.subscribe(function(newValue) {
+        this.disposables.push(this.value.subscribe(function(newValue) {
             if (newValue) {
                 self.url(newValue.url || null);
                 if (newValue.url_label) {
@@ -49,25 +49,25 @@ const viewModel = function(params) {
                 self.url(null);
                 self.url_label(null);
             }
-        });
+        }));
     } else if (this.value) {
-        this.value.url.subscribe(function(newUrl) {
+        this.disposables.push(this.value.url.subscribe(function(newUrl) {
             self.url(newUrl || null);
-        });
-        this.value.url_label.subscribe(function(newUrlLabel) {
+        }));
+        this.disposables.push(this.value.url_label.subscribe(function(newUrlLabel) {
             self.url_label(newUrlLabel || null);
-        });
+        }));
     }
 
     // Trim every write path (manual typing included): the core URL regex
     // does not reject trailing whitespace, which is how stray values like
     // "…Q292273 " reached the database.
     ['url', 'url_label'].forEach(function(property) {
-        self[property].subscribe(function(newValue) {
+        self.disposables.push(self[property].subscribe(function(newValue) {
             if (typeof newValue === 'string' && newValue !== newValue.trim()) {
                 self[property](newValue.trim());
             }
-        });
+        }));
     });
 
     this.urlPreviewText = ko.pureComputed(function() {

@@ -11,6 +11,7 @@ import 'bindings/select2-query';
 import { renderTermResult } from 'views/components/workflows/create-project-workflow/add-things-step-utils';
 import 'views/components/resource-instance-creator';
 import 'views/components/search/paging-filter';
+import dispose from 'utils/dispose';
 
 const DOCUMENT_GRAPH_ID = '0c8226c1-11a9-4c48-9601-a7a0c6f2df6b';
 const STUDIED_OBJECTS_NODEGROUP_ID = 'a8fb3c9e-bbc4-11ef-bd5f-ed806b645d76';
@@ -34,8 +35,9 @@ const viewModel = function(params) {
     self.documentGraphId = params.documentGraphId || DOCUMENT_GRAPH_ID;
 
     _.extend(this, params.form);
+    this.disposables = [];
 
-    this.newResourceInstance.subscribe(async (data) => {
+    this.disposables.push(this.newResourceInstance.subscribe(async (data) => {
         if (!data) { return; }
         await self.updateSearchResults({
             type: "string",
@@ -51,7 +53,7 @@ const viewModel = function(params) {
             this.updateTileData(this.targetResources()[0]);
         }
         self.updateSearchResults(self.termFilter());
-    });
+    }));
 
     this.projectResourceId = ko.observable();
     this.studiedObjectsTileId = ko.observable();
@@ -103,16 +105,16 @@ const viewModel = function(params) {
     this.mustSave = ko.pureComputed(() => {
         return self.dirty() || (!self.studiedObjectsTileId() && self.value().length === 0);
     });
-    this.mustSave.subscribe((mustSave) => {
+    this.disposables.push(this.mustSave.subscribe((mustSave) => {
         if (ko.isObservable(params.form.dirty)) {
             params.form.dirty(mustSave);
         }
-    });
+    }));
     if (ko.isObservable(params.form.dirty)) {
         params.form.dirty(this.mustSave());
     }
 
-    this.value.subscribe((a) => {
+    this.disposables.push(this.value.subscribe((a) => {
         a.forEach((action) => {
             const id = ko.unwrap(action.value).resourceinstanceid;
             if (action.status === 'added') {
@@ -124,7 +126,7 @@ const viewModel = function(params) {
             }
         });
         self.sortSelectedResources();
-    }, null, "arrayChange");
+    }, null, "arrayChange"));
 
     const loadExistingStudiedObjects = async () => {
         const projectRelatedResources = await (await window.fetch(`${arches.urls.related_resources}${self.projectResourceId()}`)).json();
@@ -329,13 +331,13 @@ const viewModel = function(params) {
 
     // auto-save: any cart change gives immediate feedback and persists once
     // the user pauses (debounced), so Back/Next can never lose a selection
-    this.value.subscribe(() => {
+    this.disposables.push(this.value.subscribe(() => {
         if (isInSync()) { return; }
         self.saveState('saving');
         self.complete(false);
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(persist, 500);
-    });
+    }));
 
     this.retrySave = () => {
         persist();
@@ -459,14 +461,19 @@ const viewModel = function(params) {
         await getResultData(termFilter, pagingFilter);
     };
 
-    this.selectedTerm.subscribe((val) => {
+    this.disposables.push(this.selectedTerm.subscribe((val) => {
         self.termFilter(self.termOptions.find(x => val == x.id));
         self.updateSearchResults(self.termFilter());
-    });
+    }));
 
-    this.query.subscribe((query) => {
+    this.disposables.push(this.query.subscribe((query) => {
         self.updateSearchResults(self.termFilter(), query['paging-filter']);
-    });
+    }));
+
+    /** Releases every subscription of this step; Knockout calls it on teardown. */
+    this.dispose = () => {
+        dispose(self);
+    };
 
     this.initialize();
 
