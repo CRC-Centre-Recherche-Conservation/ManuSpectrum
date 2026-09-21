@@ -25,6 +25,9 @@ function generateConfig(): Promise<UserConfig> {
 
         const rawData = fs.readFileSync(path.join(__dirname, 'frontend_configuration', 'webpack-metadata.json'), 'utf-8');
         const parsedData = JSON.parse(rawData);
+        // `APP_RELATIVE_PATH` is relative to the directory Django was started
+        // from; `APP_ROOT` is absolute, so the app directory is resolved from it.
+        const appRelativePath = path.relative(filePath, parsedData['APP_ROOT']);
 
         const alias: { [key: string]: string } = {
             '@/arches': path.join(parsedData['ROOT_DIR'], 'app', 'src', 'arches'),
@@ -110,9 +113,9 @@ function generateConfig(): Promise<UserConfig> {
                     // (bindings, widgets, workflows…) would crater the ratio and
                     // trip CI's "no coverage decrease" gate for every branch.
                     include: [
-                        path.join(parsedData['APP_RELATIVE_PATH'], 'src', path.sep),
-                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'utils', path.sep),
-                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'views', 'pages', path.sep),
+                        path.join(appRelativePath, 'src', path.sep),
+                        path.join(appRelativePath, 'media', 'js', 'utils', path.sep),
+                        path.join(appRelativePath, 'media', 'js', 'views', 'pages', path.sep),
                     ],
                     exclude: [...exclude, '**/*.spec.js'],
                     reporter: [

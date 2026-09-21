@@ -21,9 +21,13 @@ const metadataPath = path.join(
     'webpack-metadata.json'
 );
 
+// `APP_RELATIVE_PATH` in the metadata is relative to the directory Django was
+// started from, so it is only usable when that was the repo root. `APP_ROOT`
+// is absolute: resolve the app directory from it.
 let APP_RELATIVE_PATH;
 try {
-    ({ APP_RELATIVE_PATH } = JSON.parse(fs.readFileSync(metadataPath, 'utf-8')));
+    const { APP_ROOT } = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+    APP_RELATIVE_PATH = path.relative(projectRoot, APP_ROOT);
 } catch {
     // Generated, and gitignored: a fresh clone has none until the Django check
     // writes it. Say so, rather than let ENOENT surface from a lint run.
