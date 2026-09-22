@@ -13,6 +13,7 @@ from django.http import HttpResponse, HttpResponseNotFound
 from arches.app.utils.mvt_tiler import MVTTiler
 from arches.app.views.api.geo import MVT
 
+from manuspectrum.utils.cache import renews_csrf_cookie
 from manuspectrum.views.summary_service import perm_scope
 
 # A zoom deeper than any map requests, whose tile indices fit the int4
@@ -46,10 +47,12 @@ class EmptyTileMVTView(MVT):
     the reader's viewable nodegroups: a bodyless 404 with no lifetime. An empty
     tile comes back as ``""`` up to the clustering zoom and as ``b""`` beyond
     it: a 204, ``public, max-age=MVT_EMPTY_TILE_MAX_AGE`` while ``perm_scope``
-    finds nothing restricted, ``private, no-store`` from the first restriction
-    on, since one reader's empty tile then says nothing of another's. A tile
-    with features is served as Arches serves it; what the tiler raises
-    propagates.
+    finds nothing restricted, ``private, no-store`` within ``PERM_SCOPE_TTL``
+    (a minute) of the first restriction, since one reader's empty tile then
+    says nothing of another's. It is ``private, no-store`` too while the CSRF
+    middleware renews the reader's cookie: a public answer never carries a
+    ``Set-Cookie``. A tile with features is served as Arches serves it; what
+    the tiler raises propagates.
     """
 
     def get(self, request, nodeid, zoom, x, y):
@@ -69,7 +72,7 @@ class EmptyTileMVTView(MVT):
         response = HttpResponse(status=204)
         response["Cache-Control"] = (
             f"public, max-age={settings.MVT_EMPTY_TILE_MAX_AGE}"
-            if perm_scope(request.user) == "public"
+            if perm_scope(request.user) == "public" and not renews_csrf_cookie(request)
             else "private, no-store"
         )
         return response

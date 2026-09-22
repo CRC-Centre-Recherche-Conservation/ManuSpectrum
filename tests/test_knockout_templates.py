@@ -9,6 +9,7 @@ Usage:
     python manage.py test tests.test_knockout_templates --settings="tests.test_settings"
 """
 
+import copy
 import os
 import re
 import shutil
@@ -16,6 +17,7 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.http import HttpResponse
@@ -48,16 +50,23 @@ INCLUDE_ARGUMENT = re.compile(
     r"\{%\s*(?:include|extends)\s+((?:\"[^\"]*\"|'[^']*'|[^\s%])+)"
 )
 LOADED = re.compile(r"\{%\s*load\s+(.*?)\s*%\}", re.S)
-# Tag libraries whose tags used in the shared subtrees read no request.
-SHARED_LIBRARIES = {"i18n", "static", "template_tags", "webpack_loader"}
+# What a shared template may load: whole libraries, or ``library:tag`` for a
+# library allowed one tag at a time (webpack_loader's render_bundle and
+# get_files read the request).
+SHARED_LIBRARIES = {"i18n", "static", "template_tags", "webpack_loader:webpack_static"}
 
 
 def loaded_libraries(arguments):
-    """The libraries a ``{% load %}`` names: each one, or the one after ``from``."""
+    """What a ``{% load %}`` pulls in: each library, or ``library:tag`` per tag
+    of the ``{% load tag … from library %}`` form."""
     bits = arguments.split()
     if len(bits) >= 3 and bits[-2] == "from":
-        return bits[-1:]
+        return [f"{bits[-1]}:{tag}" for tag in bits[:-2]]
     return bits
+
+
+def is_allowed_load(library):
+    return library in SHARED_LIBRARIES or library.split(":")[0] in SHARED_LIBRARIES
 
 
 def pin_language(test, language="en"):
@@ -154,10 +163,25 @@ class SharedSubtreeTests(SimpleTestCase):
             for path in self.shared_files()
             for arguments in LOADED.findall(path.read_text(errors="replace"))
             for library in loaded_libraries(arguments)
-            if library not in SHARED_LIBRARIES
+            if not is_allowed_load(library)
         ]
 
         self.assertEqual(offenders, [])
+
+    def test_the_load_guard_admits_webpack_static_alone_from_webpack_loader(self):
+        for arguments, allowed in (
+            ("i18n", True),
+            ("trans from i18n", True),
+            ("webpack_static from webpack_loader", True),
+            ("webpack_loader", False),
+            ("render_bundle from webpack_loader", False),
+            ("webpack_static get_files from webpack_loader", False),
+            ("i18n webpack_loader", False),
+        ):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(
+                    all(map(is_allowed_load, loaded_libraries(arguments))), allowed
+                )
 
     def test_shared_templates_include_and_extend_string_literals_only(self):
         offenders = [
@@ -512,6 +536,27 @@ class RenderedTemplateTests(TestCase):
         request.user = AnonymousUser()
 
         self.assertEqual(knockout_template(request, "").status_code, 404)
+
+    def test_a_real_template_reading_the_csrf_token_is_private_and_not_kept(self):
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder)
+        name = "views/components/csrf-probe.htm"
+        (folder / name).parent.mkdir(parents=True)
+        (folder / name).write_text("<form>{% csrf_token %}</form>")
+        templates = copy.deepcopy(settings.TEMPLATES)
+        templates[0]["DIRS"] = [str(folder), *templates[0].get("DIRS", [])]
+
+        with override_settings(TEMPLATES=templates):
+            with self.assertLogs(MODULE, "WARNING"):
+                first = self.get(name)
+            with self.assertLogs(MODULE, "WARNING"):
+                second = self.get(name)
+
+        for response in (first, second):
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"csrfmiddlewaretoken", response.content)
+            self.assertEqual(response.headers["Cache-Control"], "private, no-store")
+            self.assertNotIn("ETag", response.headers)
 
     def test_through_the_middleware_the_client_can_revalidate(self):
         first = self.client.get(f"/en/templates/{SWITCHER}")

@@ -9,9 +9,10 @@ page load. This view answers the same URLs.
 A name under ``SHARED_PREFIXES`` is rendered once per language and
 ``template_stamp()`` into the default cache, and served with an ETag and
 ``public, max-age=KNOCKOUT_TEMPLATE_MAX_AGE``: those subtrees print no
-per-reader value, load only the tag libraries ``i18n``, ``static``,
-``template_tags`` and ``webpack_loader``, and include or extend string
-literals only (``tests/test_knockout_templates.py`` scans them). Any other
+per-reader value, load only the tag libraries ``i18n``, ``static`` and
+``template_tags`` plus ``webpack_static`` from ``webpack_loader`` (its
+``render_bundle`` and ``get_files`` read the request), and include or extend
+string literals only (``tests/test_knockout_templates.py`` scans them). Any other
 name is left to the core view, uncached: a page template such as ``login.htm``
 carries the reader's CSRF token. A name no loader can read is a bodyless 404,
 as the browser loader inserts whatever it receives into the page.
@@ -33,7 +34,11 @@ from django.utils import translation
 
 from arches.app.views import main
 
-from manuspectrum.utils.cache import etag_already_held, stable_cache_key
+from manuspectrum.utils.cache import (
+    etag_already_held,
+    renews_csrf_cookie,
+    stable_cache_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +51,12 @@ SHARED_PREFIXES = (
 )
 
 # Distributions whose templates and catalogues a shared template renders.
-STAMPED_DISTRIBUTIONS = ("arches", "arches-controlled-lists", "arches-vue-components")
+STAMPED_DISTRIBUTIONS = (
+    "arches",
+    "arches-controlled-lists",
+    "arches-vue-components",
+    "django",
+)
 
 HTML = "text/html; charset=utf-8"
 
@@ -150,10 +160,6 @@ def _load(name):
         return None
 
 
-def _renews_csrf_cookie(request):
-    return bool(request.META.get("CSRF_COOKIE_NEEDS_UPDATE"))
-
-
 def _shared(request, name):
     """Serve a shared template from the cache, rendering it on a miss.
 
@@ -172,9 +178,9 @@ def _shared(request, name):
         template = _load(name)
         if template is None:
             return HttpResponseNotFound()
-        renewed_before = _renews_csrf_cookie(request)
+        renewed_before = renews_csrf_cookie(request)
         body = template.render(request=request).encode("utf-8")
-        if _renews_csrf_cookie(request):
+        if renews_csrf_cookie(request):
             if not renewed_before:
                 logger.warning("%s reads the CSRF token; served uncached", name)
             response = HttpResponse(body, content_type=HTML)
@@ -190,7 +196,7 @@ def _shared(request, name):
     response["ETag"] = entry["etag"]
     response["Cache-Control"] = (
         "private, no-store"
-        if _renews_csrf_cookie(request)
+        if renews_csrf_cookie(request)
         else f"public, max-age={settings.KNOCKOUT_TEMPLATE_MAX_AGE}"
     )
     return response

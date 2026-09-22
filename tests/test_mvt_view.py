@@ -47,6 +47,13 @@ class MVTRoutingTests(SimpleTestCase):
             match.kwargs, {"nodeid": NODE_ID, "zoom": "3", "x": "4", "y": "2"}
         )
 
+    def test_the_french_tile_url_reaches_it_too(self):
+        with translation.override("fr"):
+            match = resolve(f"/fr/mvt/{NODE_ID}/3/4/2.pbf")
+
+        self.assertIs(match.func.view_class, EmptyTileMVTView)
+        self.assertEqual(match.url_name, "mvt")
+
     def test_the_url_template_handed_to_the_map_resolves_here(self):
         template = unquote(reverse("mvt", args=(NODE_ID, "{z}", "{x}", "{y}")))
 
@@ -98,8 +105,8 @@ class EmptyTileMVTViewTests(SimpleTestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def get(self, zoom="3", x="4", y="2"):
-        request = self.factory.get(f"/en/mvt/{NODE_ID}/{zoom}/{x}/{y}.pbf")
+    def get(self, zoom="3", x="4", y="2", **meta):
+        request = self.factory.get(f"/en/mvt/{NODE_ID}/{zoom}/{x}/{y}.pbf", **meta)
         request.user = mock.Mock(id=7)
         request.user.userprofile.viewable_nodegroups = VIEWABLE
         return self.view(request, nodeid=NODE_ID, zoom=zoom, x=x, y=y)
@@ -135,6 +142,14 @@ class EmptyTileMVTViewTests(SimpleTestCase):
         self.tiler.createTile.return_value = ""
 
         response = self.get()
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.headers["Cache-Control"], "private, no-store")
+
+    def test_an_empty_tile_is_private_while_the_csrf_cookie_is_renewed(self):
+        self.tiler.createTile.return_value = b""
+
+        response = self.get(CSRF_COOKIE_NEEDS_UPDATE=True)
 
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.headers["Cache-Control"], "private, no-store")
@@ -200,3 +215,37 @@ class UnknownNodeOverHttpTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.content, b"")
+
+
+@override_settings(MVT_EMPTY_TILE_MAX_AGE=3600)
+class EmptyTileOverHttpTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        for target, value in (
+            ("manuspectrum.views.summary_service._count_restrictions", 0),
+            ("manuspectrum.views.summary_service._count_nodegroup_restrictions", 0),
+        ):
+            patcher = mock.patch(target, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = mock.patch("manuspectrum.views.mvt.MVTTiler")
+        patcher.start().return_value.createTile.return_value = b""
+        self.addCleanup(patcher.stop)
+
+    def test_an_empty_tile_is_public_through_the_middleware(self):
+        response = self.client.get(f"/en/mvt/{NODE_ID}/3/4/2.pbf")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.headers["Cache-Control"], "public, max-age=3600")
+        self.assertNotIn("csrftoken", response.cookies)
+
+    def test_a_malformed_csrf_cookie_gets_a_private_empty_tile(self):
+        self.client.cookies["csrftoken"] = "!!"
+
+        response = self.client.get(f"/fr/mvt/{NODE_ID}/3/4/2.pbf")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.headers["Cache-Control"], "private, no-store")
+        self.assertNotIn("public", response.headers["Cache-Control"])
+        self.assertIn("csrftoken", response.cookies)

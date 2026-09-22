@@ -1,4 +1,4 @@
-"""Cache helpers for the views that memoise a build, and their ETag check."""
+"""Cache helpers for the views that memoise a build, their ETag and CSRF checks."""
 
 import hashlib
 import time
@@ -24,6 +24,17 @@ def etag_already_held(request, etag):
     """
     header = request.headers.get("If-None-Match", "")
     return header.strip() == "*" or etag in header or f"W/{etag}" in header
+
+
+def renews_csrf_cookie(request):
+    """Whether ``CsrfViewMiddleware`` will add a ``Set-Cookie`` to this response.
+
+    The middleware sets ``CSRF_COOKIE_NEEDS_UPDATE`` before the view for a
+    malformed ``csrftoken`` cookie, and ``get_token()`` sets it whenever a
+    render reads the token. A response answered while it is set is never
+    ``public`` and never stored.
+    """
+    return bool(request.META.get("CSRF_COOKIE_NEEDS_UPDATE"))
 
 
 def get_or_build(

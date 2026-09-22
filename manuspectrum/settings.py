@@ -419,10 +419,10 @@ EXPORT_DATA_FIELDS_IN_CARD_ORDER = False
 CACHE_BY_USER = {"default": 3600 * 24, "anonymous": 3600 * 24}  # 24hrs  # 24hrs
 
 TILE_CACHE_TIMEOUT = 600  # seconds
-# max-age of an empty vector tile (manuspectrum.views.mvt). On top of the
-# TILE_CACHE_TIMEOUT Arches keeps each reader's tile for, never invalidated,
-# this is how long a geometry drawn where a reader saw an empty tile can stay
-# off that reader's map overlay.
+# max-age of an empty vector tile (manuspectrum.views.mvt). A geometry drawn in
+# a tile a reader saw empty can stay off that reader's overlay for
+# TILE_CACHE_TIMEOUT (Arches' per-reader tile cache, never invalidated) plus
+# this delay.
 MVT_EMPTY_TILE_MAX_AGE = 60 * 60
 CLUSTER_DISTANCE_MAX = 5000  # meters
 GRAPH_MODEL_CACHE_TIMEOUT = None

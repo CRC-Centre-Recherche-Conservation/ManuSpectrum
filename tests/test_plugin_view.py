@@ -38,6 +38,16 @@ class PluginRoutingTests(SimpleTestCase):
         self.assertEqual(match.url_name, "plugins")
         self.assertEqual(match.kwargs, {"slug": "init-workflow"})
 
+    def test_the_french_urls_reach_it_too(self):
+        with translation.override("fr"):
+            by_slug = resolve("/fr/plugins/init-workflow")
+            by_id = resolve(f"/fr/plugins/{PLUGIN_ID}")
+
+        self.assertIs(by_slug.func.view_class, PluginView)
+        self.assertEqual(by_slug.kwargs, {"slug": "init-workflow"})
+        self.assertIs(by_id.func.view_class, PluginView)
+        self.assertEqual(by_id.kwargs, {"pluginid": uuid.UUID(PLUGIN_ID)})
+
     def test_an_id_url_is_read_as_an_id_not_as_a_slug(self):
         match = resolve(f"/en/plugins/{PLUGIN_ID}")
 
