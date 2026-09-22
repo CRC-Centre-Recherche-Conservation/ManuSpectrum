@@ -46,6 +46,51 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
     based on node aliases rather than node names.
     """
 
+    def _graph_nodes(self, resource, context):
+        """Nodes of the resource's graph, read once per ``context``.
+
+        ``context["_prefetched_graph_nodes"]`` is honoured when present and
+        written on the first call when ``context`` is a dict: Arches hands the
+        same dict to the six calls of one ``save_descriptors``. Deferred fields
+        are never used here: datatypes read node fields this class does not
+        know about.
+        """
+        cacheable = isinstance(context, dict)
+        if cacheable and context.get("_prefetched_graph_nodes") is not None:
+            return context["_prefetched_graph_nodes"]
+        nodes = list(models.Node.objects.filter(graph=resource.graph))
+        if cacheable:
+            context["_prefetched_graph_nodes"] = nodes
+        return nodes
+
+    def _tiles_by_nodegroup(self, resource, context, nodegroup_ids):
+        """Tiles of ``resource`` for each nodegroup, sorted by ``sortorder``.
+
+        Missing nodegroups are read in one query and kept in
+        ``context["_prefetched_tiles"][<resourceinstanceid>]`` when ``context``
+        is a dict; the cache is keyed by resource so a context shared across
+        resources never serves another resource's tiles. A nodegroup without
+        tiles is cached as an empty list.
+        """
+        resource_key = str(resource.resourceinstanceid)
+        cacheable = isinstance(context, dict)
+        cached = (
+            context.setdefault("_prefetched_tiles", {}).setdefault(resource_key, {})
+            if cacheable
+            else {}
+        )
+        missing = [ng for ng in nodegroup_ids if ng not in cached]
+        if missing:
+            for nodegroup_id in missing:
+                cached[nodegroup_id] = []
+            tiles = models.TileModel.objects.filter(
+                nodegroup_id__in=missing,
+                resourceinstance_id=resource.resourceinstanceid,
+            ).order_by("sortorder")
+            for tile in tiles:
+                cached[tile.nodegroup_id].append(tile)
+        return {ng: cached[ng] for ng in nodegroup_ids}
+
     def get_primary_descriptor_from_nodes(
         self, resource, config, context=None, descriptor=None
     ):
@@ -61,26 +106,23 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
             if matches:
                 node_aliases = matches
 
-            prefetched = (context or {}).get("_prefetched_graph_nodes")
-            graph_nodes = (
-                prefetched
-                if prefetched is not None
-                else models.Node.objects.filter(graph=resource.graph)
-            )
+            graph_nodes = self._graph_nodes(resource, context)
             nodes_by_alias = {}
             for node in graph_nodes:
                 if node.alias in node_aliases:
                     nodes_by_alias[node.alias] = node
 
             processed_tiles = set()
+            nodegroup_ids = []
+            for node in nodes_by_alias.values():
+                if node.nodegroup_id not in nodegroup_ids:
+                    nodegroup_ids.append(node.nodegroup_id)
+            tiles_by_nodegroup = self._tiles_by_nodegroup(
+                resource, context, nodegroup_ids
+            )
             for alias, node in nodes_by_alias.items():
                 nodeid = str(node.nodeid)
-                nodegroup_id = node.nodegroup_id
-
-                tiles = models.TileModel.objects.filter(
-                    nodegroup_id=nodegroup_id,
-                    resourceinstance_id=resource.resourceinstanceid,
-                ).order_by("sortorder")
+                tiles = tiles_by_nodegroup[node.nodegroup_id]
 
                 for tile in tiles:
                     if tile.tileid in processed_tiles:

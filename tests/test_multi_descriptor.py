@@ -43,6 +43,7 @@ def make_node(alias, nodegroup_id=NODEGROUP_ID, datatype="string"):
 def make_tile(values):
     tile = mock.Mock()
     tile.tileid = uuid.uuid4()
+    tile.nodegroup_id = next(iter(values)).nodegroup_id if values else NODEGROUP_ID
     tile.data = {str(node.nodeid): value for node, value in values.items()}
     return tile
 
@@ -101,23 +102,20 @@ class TemplateSubstitutionTests(DescriptorTestCase):
     def test_placeholders_from_two_nodegroups_are_both_filled(self):
         cote = make_node("cote")
         auteur = make_node("auteur", nodegroup_id=OTHER_NODEGROUP_ID)
-        tiles_by_nodegroup = {
-            NODEGROUP_ID: [make_tile({cote: ["Ms. 12"]})],
-            OTHER_NODEGROUP_ID: [make_tile({auteur: ["Guillaume"]})],
-        }
-
-        def tiles_of_nodegroup(**kwargs):
-            queryset = mock.Mock()
-            queryset.order_by.return_value = tiles_by_nodegroup[kwargs["nodegroup_id"]]
-            return queryset
-
         self.graph_nodes(cote, auteur)
-        self.TileModel.objects.filter.side_effect = tiles_of_nodegroup
+        self.tiles(
+            make_tile({cote: ["Ms. 12"]}),
+            make_tile({auteur: ["Guillaume"]}),
+        )
         self.display_values({"cote": "Ms. 12", "auteur": "Guillaume"})
 
         self.assertEqual(
             self.describe("<cote> — <auteur>"),
             "Ms. 12 — Guillaume",
+        )
+        self.TileModel.objects.filter.assert_called_once_with(
+            nodegroup_id__in=[NODEGROUP_ID, OTHER_NODEGROUP_ID],
+            resourceinstance_id=self.resource.resourceinstanceid,
         )
 
     def test_the_descriptor_language_is_handed_to_the_datatype(self):
@@ -145,7 +143,7 @@ class TemplateSubstitutionTests(DescriptorTestCase):
         self.assertEqual(self.describe("Cote <cote>"), "Cote Ms. 12")
 
         self.TileModel.objects.filter.assert_called_once_with(
-            nodegroup_id=cote.nodegroup_id,
+            nodegroup_id__in=[cote.nodegroup_id],
             resourceinstance_id=self.resource.resourceinstanceid,
         )
         self.TileModel.objects.filter.return_value.order_by.assert_called_once_with(
@@ -281,7 +279,7 @@ class PrefetchedNodeTests(DescriptorTestCase):
         self.assertEqual([first, second], ["Cote Ms. 12", "Manuscrit Ms. 12"])
         self.Node.objects.filter.assert_not_called()
 
-    def test_without_a_prefetch_every_call_queries_the_graph_again(self):
+    def test_the_first_call_without_a_prefetch_populates_the_context(self):
         cote = make_node("cote")
         self.graph_nodes(cote)
         self.tiles(make_tile({cote: ["Ms. 12"]}))
@@ -291,11 +289,77 @@ class PrefetchedNodeTests(DescriptorTestCase):
         self.describe("Cote <cote>", context=context, descriptor="name")
         self.describe("Manuscrit <cote>", context=context, descriptor="description")
 
-        self.assertEqual(
-            self.Node.objects.filter.call_args_list,
-            [mock.call(graph=self.resource.graph)] * 2,
+        self.Node.objects.filter.assert_called_once_with(graph=self.resource.graph)
+        self.assertEqual(context["_prefetched_graph_nodes"], [cote])
+
+    def test_a_context_that_is_not_a_dict_still_reads_the_graph(self):
+        cote = make_node("cote")
+        self.graph_nodes(cote)
+        self.tiles(make_tile({cote: ["Ms. 12"]}))
+        self.display_values({"cote": "Ms. 12"})
+
+        result = self.function.get_primary_descriptor_from_nodes(
+            self.resource,
+            {"nodegroup_id": str(NODEGROUP_ID), "string_template": "Cote <cote>"},
+            None,
+            "name",
         )
-        self.assertNotIn("_prefetched_graph_nodes", context)
+
+        self.assertEqual(result, "Cote Ms. 12")
+        self.Node.objects.filter.assert_called_once_with(graph=self.resource.graph)
+
+
+class TileCacheTests(DescriptorTestCase):
+    def test_tiles_are_read_once_per_resource_and_context(self):
+        cote = make_node("cote")
+        self.graph_nodes(cote)
+        self.tiles(make_tile({cote: ["Ms. 12"]}))
+        self.display_values({"cote": "Ms. 12"})
+        context = {"language": "en"}
+
+        self.describe("Cote <cote>", context=context, descriptor="name")
+        self.describe("Manuscrit <cote>", context=context, descriptor="description")
+
+        self.assertEqual(self.TileModel.objects.filter.call_count, 1)
+        self.assertIn(
+            str(self.resource.resourceinstanceid), context["_prefetched_tiles"]
+        )
+
+    def test_a_nodegroup_without_tiles_is_not_read_again(self):
+        cote = make_node("cote")
+        self.graph_nodes(cote)
+        self.tiles()
+        self.resource.descriptors = {"en": {"name": "Ms. 12, fonds ancien"}}
+        context = {"language": "en"}
+
+        self.describe("Cote <cote>", context=context)
+        self.describe("Cote <cote>", context=context)
+
+        self.assertEqual(self.TileModel.objects.filter.call_count, 1)
+
+    def test_a_shared_context_never_serves_another_resources_tiles(self):
+        cote = make_node("cote")
+        self.graph_nodes(cote)
+        self.tiles(make_tile({cote: ["Ms. 12"]}))
+        self.display_values({"cote": "Ms. 12"})
+        context = {"language": "en"}
+        self.describe("Cote <cote>", context=context)
+
+        other = mock.Mock()
+        other.graph = GRAPH_ID
+        other.resourceinstanceid = uuid.uuid4()
+        other.descriptors = {}
+        self.tiles(make_tile({cote: ["Ms. 99"]}))
+        self.display_values({"cote": "Ms. 99"})
+        result = self.function.get_primary_descriptor_from_nodes(
+            other,
+            {"nodegroup_id": str(NODEGROUP_ID), "string_template": "Cote <cote>"},
+            context,
+            "name",
+        )
+
+        self.assertEqual(result, "Cote Ms. 99")
+        self.assertEqual(self.TileModel.objects.filter.call_count, 2)
 
 
 class SaveDescriptorsTests(SimpleTestCase):
@@ -386,18 +450,22 @@ class SaveDescriptorsTests(SimpleTestCase):
             resource.name, {"en": "Cote Ms. 12 (en)", "fr": "Cote Ms. 12 (fr)"}
         )
 
-    def test_the_unprefetched_path_queries_the_graph_nodes_once_per_descriptor(self):
-        """Six queries is the contract PR-10 is meant to collapse: 3 x 2.
-
-        Three descriptors (name, description, map popup) times the two
-        configured languages, each re-reading the whole node list because the
-        function consumes ``_prefetched_graph_nodes`` but never populates it.
-        """
+    def test_the_unprefetched_path_queries_the_graph_nodes_once_per_save(self):
+        """One query for the six calls: the context dict Arches hands to every
+        call of one ``save_descriptors`` carries the node list after the first."""
         resource = self.make_resource()
 
         resource.save_descriptors()
 
-        self.assertEqual(self.Node.objects.filter.call_count, 6)
+        self.assertEqual(self.Node.objects.filter.call_count, 1)
+
+    def test_the_tiles_are_queried_once_per_save(self):
+        """The three templates share one nodegroup: one tile query for six calls."""
+        resource = self.make_resource()
+
+        resource.save_descriptors()
+
+        self.assertEqual(self.TileModel.objects.filter.call_count, 1)
 
     def test_a_prefetched_context_covers_every_language_and_descriptor(self):
         resource = self.make_resource()
