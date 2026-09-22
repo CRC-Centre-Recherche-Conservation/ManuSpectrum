@@ -47,6 +47,17 @@ export interface SummaryConfig {
     rollups: SummaryRollup[];
 }
 
+// A row as the form holds it. `uid` is what Vue keys the list on, so an edit
+// or a reorder follows the row it belongs to rather than its position; it is
+// minted client-side and stripped from what `saveConfig` sends.
+export type EditableRow<T> = T & { uid: string };
+
+export interface EditableConfig
+    extends Omit<SummaryConfig, "fields" | "rollups"> {
+    fields: EditableRow<SummaryField>[];
+    rollups: EditableRow<SummaryRollup>[];
+}
+
 export interface SummaryConfigResponse {
     graphid: string;
     config: SummaryConfig;

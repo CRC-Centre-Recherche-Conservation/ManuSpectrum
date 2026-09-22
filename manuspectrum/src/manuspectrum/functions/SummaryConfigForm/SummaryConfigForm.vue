@@ -15,15 +15,17 @@ import {
     emptyConfig,
     fetchConfig,
     fetchRelations,
+    newRowUid,
     saveConfig,
+    withRowUids,
 } from "@/manuspectrum/functions/summary-config-api.ts";
 
 import type {
+    EditableConfig,
     FieldStyle,
     LocalizedLabel,
     RelatableNodes,
     SummaryAggregate,
-    SummaryConfig,
     SummaryField,
     SummaryHop,
     SummaryRollup,
@@ -33,7 +35,7 @@ const { graphid } = defineProps<{ graphid: string }>();
 
 const { $gettext } = useGettext();
 
-const config = ref<SummaryConfig>(emptyConfig());
+const config = ref<EditableConfig>(withRowUids(emptyConfig()));
 const relations = ref<RelatableNodes | null>(null);
 const warnings = ref<string[]>([]);
 const errorMessage = ref("");
@@ -58,12 +60,12 @@ async function load(id: string): Promise<void> {
             fetchConfig(id),
             fetchRelations(id),
         ]);
-        config.value = stored.config;
+        config.value = withRowUids(stored.config);
         warnings.value = stored.warnings;
         attached.value = stored.attached;
         relations.value = relatable;
     } catch (caught) {
-        config.value = emptyConfig();
+        config.value = withRowUids(emptyConfig());
         errorMessage.value = $gettext("This configuration could not be read.");
         errorDetail.value = detailOf(caught);
     } finally {
@@ -82,7 +84,7 @@ async function save(): Promise<void> {
     clearFeedback();
     try {
         const stored = await saveConfig(graphid, config.value);
-        config.value = stored.config;
+        config.value = withRowUids(stored.config);
         warnings.value = stored.warnings;
         attached.value = stored.attached;
         saved.value = true;
@@ -136,6 +138,7 @@ function addField(): void {
     config.value.fields = [
         ...config.value.fields,
         {
+            uid: newRowUid(),
             alias: first?.alias ?? "",
             style: first ? defaultStyleFor(first.datatype) : "text",
         },
@@ -193,6 +196,7 @@ function addRollup(): void {
     config.value.rollups = [
         ...config.value.rollups,
         {
+            uid: newRowUid(),
             key: "",
             path: [blankHop(relations.value)],
             aggregate: [{ op: "count" }],
@@ -295,9 +299,9 @@ function removeRollup(index: number): void {
                 <h4>{{ $gettext("Fields") }}</h4>
                 <FieldRow
                     v-for="(field, index) in config.fields"
-                    :key="index"
+                    :key="field.uid"
                     :alias="field.alias"
-                    :style="field.style"
+                    :field-style="field.style"
                     :label-en="field.label?.en ?? ''"
                     :label-fr="field.label?.fr ?? ''"
                     :max-values="field.max_values ?? null"
@@ -305,7 +309,7 @@ function removeRollup(index: number): void {
                     :can-move-up="index > 0"
                     :can-move-down="index < config.fields.length - 1"
                     @update:alias="setFieldAlias(index, $event)"
-                    @update:style="setFieldStyle(index, $event)"
+                    @update:field-style="setFieldStyle(index, $event)"
                     @update:label-en="setFieldLabel(index, 'en', $event)"
                     @update:label-fr="setFieldLabel(index, 'fr', $event)"
                     @update:max-values="setFieldMaxValues(index, $event)"
@@ -327,7 +331,7 @@ function removeRollup(index: number): void {
                 <h4>{{ $gettext("Related counts") }}</h4>
                 <RollupEditor
                     v-for="(rollup, index) in config.rollups"
-                    :key="index"
+                    :key="rollup.uid"
                     :rollup-key="rollup.key"
                     :label-en="rollup.label?.en ?? ''"
                     :label-fr="rollup.label?.fr ?? ''"

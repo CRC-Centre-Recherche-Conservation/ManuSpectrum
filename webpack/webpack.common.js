@@ -62,10 +62,14 @@ module.exports = () => {
         };
 
         // Vitest specs sit next to the modules they test and run under Node
-        // (they may import `fs`); they are not browser entry points. The
-        // project tree is scanned twice (as the project and as an Arches
+        // (they may import `fs`); they are neither browser entry points nor
+        // members of the component context modules (see the `IgnorePlugin`
+        // below). The extension is optional because a context registers each
+        // file under its extension-less request as well (`./utils/foo.spec`).
+        const isTestFile = (request) => /\.(spec|test)(\.[jt]sx?)?$/.test(request);
+
+        // The project tree is scanned twice (as the project and as an Arches
         // application), so the filter runs on the merged map.
-        const isTestFile = (file) => /\.(spec|test)\.[jt]sx?$/.test(file);
         for (const [key, entry] of Object.entries(entryPoints)) {
             if (entry && isTestFile(entry.import)) {
                 delete entryPoints[key];
@@ -316,12 +320,9 @@ module.exports = () => {
                 new CleanWebpackPlugin(),
                 // Arches' `loadComponentDependencies` requires components through a
                 // template literal, which turns each `media/js` tree into a context
-                // module holding every file. Vitest specs run under Node (they may
-                // import `fs`) and have no place in the bundle.
+                // module holding every file, specs included.
                 new webpack.IgnorePlugin({
-                    // The context also registers each file under its extension-less
-                    // request (`./utils/foo.spec`), so the check ignores the suffix.
-                    checkResource: (resource) => /\.(spec|test)(\.[jt]sx?)?$/.test(resource),
+                    checkResource: (resource) => isTestFile(resource),
                 }),
                 new webpack.DefinePlugin(universalConstants),
                 new webpack.DefinePlugin({

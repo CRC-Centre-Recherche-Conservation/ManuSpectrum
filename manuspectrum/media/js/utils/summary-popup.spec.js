@@ -30,6 +30,9 @@ vi.mock('leaflet', () => ({
                 },
                 setContent(node) {
                     instance.content = node;
+                    // Leaflet puts the content inside the popup container, which
+                    // is on the page: without that, focus cannot move to it.
+                    document.body.appendChild(node);
                     return instance;
                 },
                 emit(name) {
@@ -99,6 +102,12 @@ afterEach(() => {
 describe('summaryUrl', () => {
     it('hangs the id off the Arches root, which already carries the language', () => {
         expect(summaryUrl(ID)).toBe(`/fr/api/summary/${ID}`);
+    });
+
+    it('encodes an id that is not the uuid the route expects', () => {
+        expect(summaryUrl('../../pwn?x=1')).toBe(
+            '/fr/api/summary/..%2F..%2Fpwn%3Fx%3D1',
+        );
     });
 });
 
@@ -433,6 +442,39 @@ describe('attachMapboxPopupCleanup', () => {
         expect(popup.remove).not.toHaveBeenCalled();
     });
 
+    it('moves focus into the card when the popup opens', () => {
+        const { content, data } = build();
+
+        attachMapboxPopupCleanup(data);
+
+        expect(document.activeElement).toBe(content);
+    });
+
+    it('gives focus back to what opened the popup when it closes', () => {
+        const trigger = document.createElement('button');
+        document.body.appendChild(trigger);
+        trigger.focus();
+        const { data, handlers } = build();
+
+        attachMapboxPopupCleanup(data);
+        handlers.close();
+
+        expect(document.activeElement).toBe(trigger);
+    });
+
+    it('leaves focus alone when the opener is gone from the page', () => {
+        const trigger = document.createElement('button');
+        document.body.appendChild(trigger);
+        trigger.focus();
+        const { data, handlers } = build();
+
+        attachMapboxPopupCleanup(data);
+        trigger.remove();
+
+        expect(() => handlers.close()).not.toThrow();
+        expect(document.activeElement).not.toBe(trigger);
+    });
+
     it('attaches once per popup', () => {
         const { data, popup } = build();
 
@@ -542,6 +584,37 @@ describe('bindLeafletSummaryPopup', () => {
                 },
             },
         });
+    });
+
+    it('moves focus into the card it mounts, and gives it back on close', () => {
+        vi.spyOn(ko, 'applyBindingsToNode').mockImplementation(() => {});
+        const trigger = document.createElement('button');
+        document.body.appendChild(trigger);
+        trigger.focus();
+        bindLeafletSummaryPopup(feature, { bindPopup: vi.fn() });
+        const popup = leafletPopups[0];
+
+        popup.emit('add');
+        expect(document.activeElement).toBe(popup.content);
+
+        popup.emit('remove');
+
+        expect(document.activeElement).toBe(trigger);
+    });
+
+    it('leaves focus alone when the opener is gone from the page', () => {
+        vi.spyOn(ko, 'applyBindingsToNode').mockImplementation(() => {});
+        const trigger = document.createElement('button');
+        document.body.appendChild(trigger);
+        trigger.focus();
+        bindLeafletSummaryPopup(feature, { bindPopup: vi.fn() });
+        const popup = leafletPopups[0];
+
+        popup.emit('add');
+        trigger.remove();
+
+        expect(() => popup.emit('remove')).not.toThrow();
+        expect(document.activeElement).not.toBe(trigger);
     });
 
     it('cleans the host when the popup closes, once', () => {

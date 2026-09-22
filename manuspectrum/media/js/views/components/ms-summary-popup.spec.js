@@ -35,11 +35,14 @@ vi.mock('arches', () => ({
 }));
 
 // The core helper lives outside the project root, where vite cannot resolve
-// its `knockout` import. Stand in for the one branch it takes here: an object
-// that carries `disposables` has only that list disposed.
+// its `knockout` import. Stand in for the branch this viewmodel takes: with no
+// `disposables` list, every property of the object that can be disposed is.
 vi.mock('utils/dispose', () => ({
     default: (obj) =>
-        (obj.disposables || []).forEach((entry) => entry && entry.dispose()),
+        Object.keys(obj).forEach((key) => {
+            const value = obj[key];
+            if (value && typeof value.dispose === 'function') value.dispose();
+        }),
 }));
 
 vi.mock('utils/summary-popup', () => ({
@@ -186,6 +189,18 @@ describe('loading', () => {
 
     it('shows the graph name in the title bar while loading', () => {
         const vm = build({ graphName: 'Document' });
+
+        expect(vm.title()).toBe('Document');
+        expect(vm.graphName()).toBe('Document');
+    });
+
+    it('follows a graph name the search map fills after construction', () => {
+        const graphName = ko.observable('');
+        const vm = build({ graphName });
+
+        expect(vm.graphName()).toBe('');
+
+        graphName('Document');
 
         expect(vm.title()).toBe('Document');
         expect(vm.graphName()).toBe('Document');
@@ -447,14 +462,16 @@ describe('disposal', () => {
         expect(vm.loading()).toBe(true);
     });
 
-    it('disposes the subscriptions it collected', async () => {
+    it('lets the core helper sweep the computeds it derived', async () => {
         const vm = await buildWith({ status: 'ok', data: payload() });
-        const subscription = { dispose: vi.fn() };
-        vm.disposables.push(subscription);
+        const swept = ['title', 'graphName', 'fields', 'rollups', 'spark'].map(
+            (name) => vi.spyOn(vm[name], 'dispose')
+        );
 
         vm.dispose();
 
-        expect(subscription.dispose).toHaveBeenCalledTimes(1);
+        expect(vm.disposables).toBeUndefined();
+        swept.forEach((spy) => expect(spy).toHaveBeenCalledTimes(1));
     });
 });
 

@@ -350,7 +350,7 @@ describe("SummaryConfigForm", () => {
         const rows = wrapper.findAllComponents(FieldRow);
         expect(rows).toHaveLength(3);
         expect(rows[2].props("alias")).toBe("label_of_name");
-        expect(rows[2].props("style")).toBe("text");
+        expect(rows[2].props("fieldStyle")).toBe("text");
     });
 
     it("sends the edited configuration and shows what the server cleaned", async () => {
@@ -422,6 +422,31 @@ describe("SummaryConfigForm", () => {
         ).toEqual(["label_of_name", "period_production"]);
     });
 
+    it("keeps the element of a row that a reorder moves", async () => {
+        const wrapper = await mountForm();
+        const moved = wrapper.findAllComponents(FieldRow)[0].element;
+
+        wrapper.findAllComponents(FieldRow)[0].vm.$emit("move-down");
+        await flushPromises();
+
+        const rows = wrapper.findAllComponents(FieldRow);
+        expect(rows.map((row) => row.props("alias"))).toEqual([
+            "period_production",
+            "label_of_name",
+        ]);
+        expect(rows[1].element).toBe(moved);
+    });
+
+    it("keeps the identity of a row out of what it sends", async () => {
+        const wrapper = await mountForm();
+        await wrapper.find('[data-testid="add-field"]').trigger("click");
+        await wrapper.find('[data-testid="add-rollup"]').trigger("click");
+        await wrapper.find('[data-testid="save-config"]').trigger("click");
+        await flushPromises();
+
+        expect(putCalls()[0].body.includes("uid")).toBe(false);
+    });
+
     it("ignores a move that would leave the list", async () => {
         const wrapper = await mountForm();
         wrapper.findAllComponents(FieldRow)[0].vm.$emit("move-up");
@@ -437,7 +462,7 @@ describe("SummaryConfigForm", () => {
     it("carries the style, the labels and the value ceiling of a field", async () => {
         const wrapper = await mountForm();
         const row = wrapper.findAllComponents(FieldRow)[0];
-        row.vm.$emit("update:style", "chip");
+        row.vm.$emit("update:field-style", "chip");
         row.vm.$emit("update:label-en", "Title");
         row.vm.$emit("update:label-fr", "Titre");
         row.vm.$emit("update:max-values", 4);
@@ -584,7 +609,7 @@ describe("SummaryConfigForm", () => {
 
         const row = wrapper.findAllComponents(FieldRow)[0];
         expect(row.props("alias")).toBe("");
-        expect(row.props("style")).toBe("text");
+        expect(row.props("fieldStyle")).toBe("text");
         expect(
             wrapper.findAllComponents(RollupEditor)[0].props("path"),
         ).toEqual([{ graph_slug: "", alias: "", direction: "incoming" }]);
@@ -616,7 +641,7 @@ describe("SummaryConfigForm", () => {
         await flushPromises();
         const row = wrapper.findAllComponents(FieldRow)[1];
         expect(row.props("alias")).toBe("renamed_away");
-        expect(row.props("style")).toBe("chip");
+        expect(row.props("fieldStyle")).toBe("chip");
     });
 
     it("drops a rollup label the editor empties again", async () => {
@@ -641,7 +666,7 @@ describe("FieldRow", () => {
         return mount(FieldRow, {
             props: {
                 alias,
-                style: "text" as const,
+                fieldStyle: "text" as const,
                 labelEn: "",
                 labelFr: "",
                 maxValues: null,
@@ -690,7 +715,7 @@ describe("FieldRow", () => {
         await flushPromises();
 
         expect(row.emitted("update:alias")?.[0]).toEqual(["period_production"]);
-        expect(row.emitted("update:style")?.[0]).toEqual(["chip"]);
+        expect(row.emitted("update:field-style")?.[0]).toEqual(["chip"]);
         expect(row.emitted("update:label-en")?.[0]).toEqual([""]);
         expect(row.emitted("update:label-fr")?.[0]).toEqual(["Titre"]);
 

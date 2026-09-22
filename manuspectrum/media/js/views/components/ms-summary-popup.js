@@ -61,7 +61,6 @@ const vm = function (params) {
      * component; the card brings its own on the other surfaces.
      */
     this.ownChrome = this.surface !== 'map';
-    this.disposables = [];
     this.disposed = false;
 
     /** The reference on the page cache this instance currently holds. */
@@ -71,16 +70,19 @@ const vm = function (params) {
     this.errorCode = ko.observable(null);
     this.summary = ko.observable(null);
 
-    const fallbackTitle = ko.unwrap(params.graphName) || '';
+    // The search map fills `graph_name` from a request of its own, after the
+    // popup is built, so the fallback is unwrapped on every read.
+    const graphNameParam = params.graphName;
+    const fallbackTitle = () => ko.unwrap(graphNameParam) || '';
 
     this.title = ko.pureComputed(() => {
         const data = self.summary();
-        return (data && data.name) || fallbackTitle;
+        return (data && data.name) || fallbackTitle();
     });
 
     this.graphName = ko.pureComputed(() => {
         const data = self.summary();
-        return (data && data.graph && data.graph.name) || fallbackTitle;
+        return (data && data.graph && data.graph.name) || fallbackTitle();
     });
 
     this.fields = ko.pureComputed(() => {

@@ -21,7 +21,7 @@ import type {
 } from "@/manuspectrum/functions/types.ts";
 
 const UPDATE_ALIAS_EVENT = "update:alias" as const;
-const UPDATE_STYLE_EVENT = "update:style" as const;
+const UPDATE_FIELD_STYLE_EVENT = "update:field-style" as const;
 const UPDATE_LABEL_EN_EVENT = "update:label-en" as const;
 const UPDATE_LABEL_FR_EVENT = "update:label-fr" as const;
 const UPDATE_MAX_VALUES_EVENT = "update:max-values" as const;
@@ -31,7 +31,7 @@ const MOVE_DOWN_EVENT = "move-down" as const;
 
 const props = defineProps<{
     alias: string;
-    style: FieldStyle;
+    fieldStyle: FieldStyle;
     labelEn: string;
     labelFr: string;
     maxValues: number | null;
@@ -42,7 +42,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (event: typeof UPDATE_ALIAS_EVENT, alias: string): void;
-    (event: typeof UPDATE_STYLE_EVENT, style: FieldStyle): void;
+    (event: typeof UPDATE_FIELD_STYLE_EVENT, style: FieldStyle): void;
     (event: typeof UPDATE_LABEL_EN_EVENT, label: string): void;
     (event: typeof UPDATE_LABEL_FR_EVENT, label: string): void;
     (event: typeof UPDATE_MAX_VALUES_EVENT, maxValues: number | null): void;
@@ -84,7 +84,7 @@ function onAliasChange(alias: string): void {
 }
 
 function onStyleChange(style: FieldStyle): void {
-    emit(UPDATE_STYLE_EVENT, style);
+    emit(UPDATE_FIELD_STYLE_EVENT, style);
 }
 
 function onMaxValuesChange(maxValues: number | null): void {
@@ -118,7 +118,7 @@ function onMaxValuesChange(maxValues: number | null): void {
                 option-label="label"
                 option-value="value"
                 :aria-label="$gettext('Display style')"
-                :model-value="style"
+                :model-value="fieldStyle"
                 :options="styleChoices"
                 @update:model-value="onStyleChange"
             />

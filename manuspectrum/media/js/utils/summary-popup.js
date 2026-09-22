@@ -51,7 +51,7 @@ const never = () => new Promise(() => {});
  * `arches.urls.root` already carries the language prefix the route needs.
  */
 export function summaryUrl(id) {
-    return `${arches.urls.root}api/summary/${id}`;
+    return `${arches.urls.root}api/summary/${encodeURIComponent(id)}`;
 }
 
 function batchUrl(ids) {
@@ -188,21 +188,42 @@ export function warmSummaryCache(ids) {
 }
 
 /**
+ * Hand focus to a popup that just opened.
+ *
+ * The card is a `role="dialog"` with nothing focusable of its own when the
+ * payload has no link, so it takes the tab index a programmatic focus needs.
+ */
+function focusPopup(element) {
+    element.tabIndex = -1;
+    element.focus();
+}
+
+/** Give focus back to what opened the popup, unless the page lost it since. */
+function restoreFocus(element) {
+    if (element && typeof element.focus === 'function' && document.contains(element)) {
+        element.focus();
+    }
+}
+
+/**
  * Give a Mapbox popup the teardown and the keyboard Arches does not give it.
  *
  * Called from the popup provider's `processData`, which runs once the popup
  * exists, and returns its argument so it can sit in that pipeline. Arches never
  * runs `ko.cleanNode` on a popup, so without this the component's `dispose()`
  * never fires and the reference it holds on the cache is never released.
- * Mapbox also ships no Escape handler and an English close label. Both the
- * listener and the label are undone in the popup's own `close` handler, and the
- * popup is marked so a second pass adds nothing.
+ * Mapbox also ships no Escape handler and an English close label, and moves
+ * focus neither into the card nor back to the feature that opened it. The
+ * listener, the label and the focus are all undone in the popup's own `close`
+ * handler, and the popup is marked so a second pass adds nothing.
  */
 export function attachMapboxPopupCleanup(data) {
     const popup = data?.popupFeatures?.[0]?.mapCard?.popup;
     const content = popup?._content;
     if (!content || popup._msSummaryCleanup) return data;
     popup._msSummaryCleanup = true;
+
+    const opener = document.activeElement;
 
     const onKeydown = (event) => {
         if (event.key === 'Escape' || event.key === 'Esc') popup.remove();
@@ -216,7 +237,10 @@ export function attachMapboxPopupCleanup(data) {
     popup.on('close', () => {
         content.removeEventListener('keydown', onKeydown);
         ko.cleanNode(content);
+        restoreFocus(opener);
     });
+
+    focusPopup(content);
 
     return data;
 }
@@ -229,12 +253,16 @@ export function attachMapboxPopupCleanup(data) {
  * container, which would orphan the bindings of the previous open, and it is
  * cleaned on every close — `bindPopup` closes the popup when the annotation
  * layer is rebuilt, so a canvas change releases the cache reference too.
+ *
+ * Focus moves into the card on every open and back to whatever opened it on
+ * every close.
  */
 export function bindLeafletSummaryPopup(feature, layer) {
     const properties = feature?.properties || {};
     if (!properties.resourceId) return;
 
     let host = null;
+    let opener = null;
     const popup = L.popup({
         maxWidth: 360,
         minWidth: 260,
@@ -242,6 +270,7 @@ export function bindLeafletSummaryPopup(feature, layer) {
     });
 
     popup.on('add', () => {
+        opener = document.activeElement;
         host = document.createElement('div');
         popup.setContent(host);
         ko.applyBindingsToNode(host, {
@@ -259,14 +288,15 @@ export function bindLeafletSummaryPopup(feature, layer) {
                 },
             },
         });
-        host.tabIndex = -1;
-        host.focus();
+        focusPopup(host);
     });
 
     popup.on('remove', () => {
         if (!host) return;
         ko.cleanNode(host);
         host = null;
+        restoreFocus(opener);
+        opener = null;
     });
 
     layer.bindPopup(popup);

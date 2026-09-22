@@ -4,6 +4,7 @@
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
 import type {
+    EditableConfig,
     FieldStyle,
     InvolvedGraph,
     RelatableNodes,
@@ -45,6 +46,38 @@ export function emptyConfig(): SummaryConfig {
 
 export function defaultStyleFor(datatype: string): FieldStyle {
     return STYLE_BY_DATATYPE[datatype] ?? "text";
+}
+
+let rowsCreated = 0;
+
+/**
+ * The identity one editor row is keyed on.
+ *
+ * A counter rather than a UUID: the value never leaves the page, and it only
+ * has to tell the rows of one form apart.
+ */
+export function newRowUid(): string {
+    rowsCreated += 1;
+    return `row-${rowsCreated}`;
+}
+
+/** Take a stored configuration into the form, one identity per row. */
+export function withRowUids(config: SummaryConfig): EditableConfig {
+    return {
+        ...config,
+        fields: config.fields.map((field) => ({ ...field, uid: newRowUid() })),
+        rollups: config.rollups.map((rollup) => ({
+            ...rollup,
+            uid: newRowUid(),
+        })),
+    };
+}
+
+/** One row as the endpoint stores it: the identity of a row never leaves. */
+function withoutUid<T extends object>(row: T): T {
+    const stored = { ...row } as T & { uid?: string };
+    delete stored.uid;
+    return stored;
 }
 
 /**
@@ -156,7 +189,13 @@ export async function saveConfig(
             "Content-Type": "application/json",
             "X-CSRFToken": csrfToken(),
         },
-        body: JSON.stringify({ config }),
+        body: JSON.stringify({
+            config: {
+                ...config,
+                fields: config.fields.map(withoutUid),
+                rollups: config.rollups.map(withoutUid),
+            },
+        }),
     });
     return readJson<SummaryConfigResponse>(response);
 }

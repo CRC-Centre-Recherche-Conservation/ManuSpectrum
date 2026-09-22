@@ -31,8 +31,9 @@ function generateConfig(): Promise<UserConfig> {
 
         const alias: { [key: string]: string } = {
             '@/arches': path.join(parsedData['ROOT_DIR'], 'app', 'src', 'arches'),
-            // Mirrors `webpack/webpack.common.js:352`: a project file that
-            // shadows a core one reaches the core module through this prefix.
+            // Mirrors the `arches/arches/app` alias of
+            // `webpack/webpack.common.js`: a project file that shadows a core
+            // one reaches the core module through this prefix.
             // It must come before the bare `arches` entry, which matches every
             // specifier starting with `arches/` and would send this one into
             // `arches.js`.
