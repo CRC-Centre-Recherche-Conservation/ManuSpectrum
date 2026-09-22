@@ -118,6 +118,10 @@ $ms-summary-accent:        #2c6faa;
     margin-top: 8px;
     color: $ms-summary-accent;
 
+    &[hidden] {
+        display: none;
+    }
+
     svg {
         display: block;
         width: 100%;

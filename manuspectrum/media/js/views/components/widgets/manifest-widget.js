@@ -6,6 +6,7 @@ import 'bindings/select2-query';
 import 'bindings/dropzone';
 import WidgetViewModel from 'viewmodels/widget';
 import arches from 'arches';
+import { bindLeafletSummaryPopup } from 'utils/summary-popup';
 import manifestWidgetTemplate from 'templates/views/components/widgets/manifest-widget.htm';
 
 const viewModel = function(params) {
@@ -16,6 +17,10 @@ const viewModel = function(params) {
 
     self.state = params.state || 'form';
     self.hideEmptyNodes = params.hideEmptyNodes || false;
+
+    // Read by the viewer's params accessor: a plain function, so reading it
+    // creates no dependency and the viewer is not re-created.
+    self.bindAnnotationPopup = bindLeafletSummaryPopup;
 
     self.manifest = ko.observable();
     self.manifestId = ko.observable();
