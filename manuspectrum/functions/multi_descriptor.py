@@ -1,11 +1,12 @@
 import logging
 import re
+from contextlib import nullcontext
 from arches.app.functions.primary_descriptors import AbstractPrimaryDescriptorsFunction
 from arches.app.models import models
 from arches.app.models.system_settings import settings
 from arches.app.datatypes.datatypes import DataTypeFactory
 
-from django.utils.translation import get_language, gettext as _
+from django.utils.translation import get_language, gettext as _, override
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,9 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
     """
     Function for processing multi-card resource descriptors by extracting node values
     based on node aliases rather than node names.
+
+    The "Undefined" fallback is translated in ``context["language"]``, the
+    language the descriptor is stored under.
     """
 
     def _graph_nodes(self, resource, context):
@@ -150,7 +154,8 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
             )
 
         if result.strip() == "":
-            result = _("Undefined")
+            with override(language) if language else nullcontext():
+                result = _("Undefined")
 
         if not updated:
             try:

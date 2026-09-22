@@ -211,14 +211,7 @@ class TemplateSubstitutionTests(DescriptorTestCase):
         with translation.override("en"):
             self.assertEqual(self.describe("<cote>"), "Undefined")
 
-    def test_the_undefined_label_ignores_the_requested_descriptor_language(self):
-        """Characterisation, not endorsement.
-
-        The label goes through ``gettext``, which resolves in the thread's
-        ACTIVE language, while every other part of the descriptor honours
-        ``context["language"]``. So a save served in English writes the English
-        word into ``descriptors["fr"]``, and vice versa.
-        """
+    def test_the_undefined_label_follows_the_requested_descriptor_language(self):
         cote = make_node("cote")
         self.graph_nodes(cote)
         self.tiles(make_tile({cote: [""]}))
@@ -226,8 +219,21 @@ class TemplateSubstitutionTests(DescriptorTestCase):
 
         with translation.override("fr"):
             self.assertEqual(
-                self.describe("<cote>", context={"language": "en"}), "Indéfini"
+                self.describe("<cote>", context={"language": "en"}), "Undefined"
             )
+        with translation.override("en"):
+            self.assertEqual(
+                self.describe("<cote>", context={"language": "fr"}), "Indéfini"
+            )
+
+    def test_the_undefined_label_uses_the_active_language_without_a_requested_one(self):
+        cote = make_node("cote")
+        self.graph_nodes(cote)
+        self.tiles(make_tile({cote: [""]}))
+        self.display_values({"cote": ""})
+
+        with translation.override("fr"):
+            self.assertEqual(self.describe("<cote>", context={}), "Indéfini")
 
     def test_a_display_value_of_none_is_substituted_as_an_empty_string(self):
         cote = make_node("cote")
