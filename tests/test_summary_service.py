@@ -17,6 +17,7 @@ from django.test import SimpleTestCase, override_settings
 from elasticsearch import ApiError, NotFoundError, TransportError
 
 from manuspectrum.views.summary_service import (
+    readable_doc,
     GraphIndex,
     NodeInfo,
     ResourceNotFound,
@@ -1441,9 +1442,10 @@ class NodegroupPermissionTests(SummaryBuildMixin, SimpleTestCase):
 
     def setUp(self):
         super().setUp()
-        self.visible = {
-            tile["nodegroup_id"] for tile in summary_doc()["tiles"]
-        } - self.HIDDEN
+        self.visible = (
+            {tile["nodegroup_id"] for tile in summary_doc()["tiles"]}
+            | {"ng-item_visual_is_part_of_document", "ng-color_features"}
+        ) - self.HIDDEN
 
     def es(self):
         return FakeES(
@@ -1485,6 +1487,48 @@ class NodegroupPermissionTests(SummaryBuildMixin, SimpleTestCase):
             [field["key"] for field in payload["fields"]], ["analysis_technique_used"]
         )
         self.assertEqual(es.count("mget"), 0)
+
+    def test_a_rollup_through_a_hidden_relation_node_is_dropped(self):
+        reader = FakeReader(
+            2, viewable=self.visible - {"ng-item_visual_is_part_of_document"}
+        )
+        es = self.es()
+        with self.assertLogs("manuspectrum.views.summary_service", "INFO"):
+            payload = self.run_build(es, user=reader, nodegroup_grants=1)
+        self.assertEqual(payload["rollups"], [])
+        self.assertEqual(es.count("search"), 0)
+
+    def test_a_rollup_aggregating_a_hidden_node_is_dropped(self):
+        reader = FakeReader(2, viewable=self.visible - {"ng-color_features"})
+        es = self.es()
+        with self.assertLogs("manuspectrum.views.summary_service", "INFO"):
+            payload = self.run_build(es, user=reader, nodegroup_grants=1)
+        self.assertEqual(payload["rollups"], [])
+        self.assertEqual(es.count("search"), 0)
+
+    def test_a_rollup_the_reader_may_read_still_runs(self):
+        reader = FakeReader(2, viewable=self.visible)
+        es = self.es()
+        payload = self.run_build(es, user=reader, nodegroup_grants=1)
+        self.assertEqual(len(payload["rollups"]), 1)
+        self.assertEqual(es.count("search"), 1)
+
+    def test_readable_doc_strips_the_ids_and_geometries_of_hidden_nodegroups(self):
+        doc = {
+            "tiles": [],
+            "ids": [
+                {"id": "a", "nodegroup_id": "ng-kept"},
+                {"id": "b", "nodegroup_id": "ng-hidden"},
+            ],
+            "geometries": [
+                {"nodegroup_id": "ng-kept", "geom": {}},
+                {"nodegroup_id": "ng-hidden", "geom": {}},
+            ],
+        }
+        kept = readable_doc(doc, {"ng-kept"})
+        self.assertEqual([entry["id"] for entry in kept["ids"]], ["a"])
+        self.assertEqual([g["nodegroup_id"] for g in kept["geometries"]], ["ng-kept"])
+        self.assertEqual(doc["ids"][1]["id"], "b")
 
     def test_a_batch_filters_every_document_and_reads_the_set_once(self):
         reader = FakeReader(2, viewable=self.visible)

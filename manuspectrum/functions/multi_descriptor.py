@@ -58,7 +58,8 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
         context shared across resources of several graphs serves each its own
         nodes. ``context["_prefetched_graph_nodes"]`` is a list a caller
         supplies for the one resource it saves; it is honoured as that
-        resource's graph when the keyed entry is absent. Deferred fields are
+        resource's graph when the keyed entry is absent, and is attributed
+        to the first graph that asks. Deferred fields are
         never used here: datatypes read node fields this class does not know
         about.
         """

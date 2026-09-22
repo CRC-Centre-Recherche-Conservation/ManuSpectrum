@@ -642,14 +642,16 @@ def parse_rollup_response(response, rollup, aggregate, labels):
     }
 
 
-def run_rollup(es, index_name, doc, rollup, indexes, user_id, language):
+def run_rollup(
+    es, index_name, doc, rollup, indexes, user_id, language, nodegroups=None
+):
     """One configured rollup, driven one ``search`` at a time.
 
     The work is in ``rollup_plan``; this runs it against one resource, which
     is what a single popup needs. A batch runs the same plans together.
     """
     return drive(
-        rollup_plan(doc, rollup, indexes, user_id, language),
+        rollup_plan(doc, rollup, indexes, user_id, language, nodegroups),
         lambda kwargs: es.search(index=index_name, **kwargs),
     )
 
@@ -665,7 +667,7 @@ def drive(plan, run):
         response = run(kwargs)
 
 
-def rollup_plan(doc, rollup, indexes, user_id, language):
+def rollup_plan(doc, rollup, indexes, user_id, language, nodegroups=None):
     """One configured rollup, one search per hop.
 
     An intermediate hop hands the next one the ids of its hits, or, when that
@@ -678,7 +680,10 @@ def rollup_plan(doc, rollup, indexes, user_id, language):
     rollup is dropped rather than shown empty.
 
     ``indexes`` maps a slug to an index already in hand; a model missing from
-    it is read (and memoised) by ``GraphIndex``.
+    it is read (and memoised) by ``GraphIndex``. ``nodegroups`` is what
+    ``readable_nodegroups`` returned: a rollup whose relation node or distinct
+    node sits in a nodegroup the reader may not read is dropped, the same way
+    Arches search filters on the reader's permitted nodegroups.
     """
     hops = rollup.get("path") or []
     aggregate = next(
@@ -686,6 +691,9 @@ def rollup_plan(doc, rollup, indexes, user_id, language):
     )
     steps = _resolve_path(hops, aggregate, indexes, rollup)
     if steps is None:
+        return None
+    if nodegroups is not None and _reads_hidden_nodegroup(steps, aggregate, nodegroups):
+        logger.info("summary rollup %s: hidden from this reader", rollup.get("key"))
         return None
     target_index = steps[-1][1]
     label = (
@@ -733,6 +741,16 @@ def rollup_plan(doc, rollup, indexes, user_id, language):
         hits = (response.get("hits") or {}).get("hits") or []
         source_ids = [str(hit.get("_id")) for hit in hits if hit.get("_id")]
         sources = [hit.get("_source") or {} for hit in hits]
+
+
+def _reads_hidden_nodegroup(steps, aggregate, nodegroups):
+    """Whether a step's relation node or the distinct node is outside the set."""
+    nodes = [relation_node for _hop, _reached, relation_node in steps]
+    if aggregate is not None:
+        distinct = steps[-1][1].nodes.get(aggregate.get("alias"))
+        if distinct is not None:
+            nodes.append(distinct)
+    return any(node.nodegroup_id not in nodegroups for node in nodes)
 
 
 def _resolve_path(hops, aggregate, indexes, rollup):
@@ -927,21 +945,23 @@ def readable_nodegroups(user):
         return None
     try:
         return set(user.userprofile.viewable_nodegroups)
-    except (AttributeError, ObjectDoesNotExist):
+    except (AttributeError, ObjectDoesNotExist) as error:
+        logger.warning("summary: no profile for reader %s: %s", user, error)
         return set()
 
 
 def readable_doc(doc, nodegroups):
-    """The document stripped of the tiles and indexed ids the reader may not read.
+    """The document stripped of what the reader may not read.
 
     ``nodegroups`` is what ``readable_nodegroups`` returned; None keeps the
-    document as indexed. The indexed ``ids`` go with the tiles, because an
-    outgoing hop reads them when a document holds no tile.
+    document as indexed. The indexed ``ids`` and ``geometries`` go with the
+    tiles: an outgoing hop reads the ids when a document holds no tile, and
+    ``has_geometry`` reads the geometries.
     """
     if nodegroups is None:
         return doc
     kept = dict(doc)
-    for key in ("tiles", "ids"):
+    for key in ("tiles", "ids", "geometries"):
         kept[key] = [
             entry
             for entry in doc.get(key) or []
@@ -965,9 +985,9 @@ def build_summary(resourceid, language, user):
     user_id = getattr(user, "id", None)
     es, index_name = es_client()
     try:
+        nodegroups = readable_nodegroups(user)
         doc = readable_doc(
-            es.get(index=index_name, id=resourceid)["_source"] or {},
-            readable_nodegroups(user),
+            es.get(index=index_name, id=resourceid)["_source"] or {}, nodegroups
         )
         draft = _draft(doc, resourceid, language)
         if draft.config is None:
@@ -979,7 +999,9 @@ def build_summary(resourceid, language, user):
             )
         indexes = {draft.index.slug: draft.index}
         for rollup in draft.config.get("rollups") or []:
-            result = run_rollup(es, index_name, doc, rollup, indexes, user_id, language)
+            result = run_rollup(
+                es, index_name, doc, rollup, indexes, user_id, language, nodegroups
+            )
             if result is not None:
                 draft.payload["rollups"].append(result)
         return draft.payload
@@ -1028,7 +1050,9 @@ def build_summaries(ids, language, user):
                 plans.append(
                     (
                         (resource_id, position),
-                        rollup_plan(doc, rollup, indexes, user_id, language),
+                        rollup_plan(
+                            doc, rollup, indexes, user_id, language, nodegroups
+                        ),
                     )
                 )
         results = run_plans(es, index_name, plans)

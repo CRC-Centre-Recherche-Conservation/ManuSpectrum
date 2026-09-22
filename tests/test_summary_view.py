@@ -19,11 +19,15 @@ from django.urls import reverse
 from elasticsearch import TransportError
 from guardian.shortcuts import assign_perm
 
+from guardian.models import GroupObjectPermission
+
 from arches.app.models.models import GraphXPublishedGraph, NodeGroup, UserProfile
 
 from manuspectrum.functions.resource_summary import ResourceSummary, details
 from manuspectrum.views import summary as summary_view
 from manuspectrum.views.summary_service import (
+    RESTRICTED_CACHE_KEY,
+    RESTRICTED_NODEGROUPS_CACHE_KEY,
     SLUG_CACHE_KEY,
     GraphIndex,
     _count_nodegroup_restrictions,
@@ -364,17 +368,38 @@ class GraphSlugInvalidationTests(TestCase):
         cache.clear()
         self.addCleanup(cache.clear)
 
-    def test_a_publication_saved_drops_the_slug_map(self):
+    def test_a_publication_saved_drops_the_slug_map_once_committed(self):
         cache.set(SLUG_CACHE_KEY, {"document": "g-document"}, 3600)
-        post_save.send(
-            sender=GraphXPublishedGraph, instance=GraphXPublishedGraph(), created=True
-        )
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            post_save.send(
+                sender=GraphXPublishedGraph,
+                instance=GraphXPublishedGraph(),
+                created=True,
+            )
+            self.assertEqual(cache.get(SLUG_CACHE_KEY), {"document": "g-document"})
+        self.assertEqual(len(callbacks), 1)
+        callbacks[0]()
         self.assertIsNone(cache.get(SLUG_CACHE_KEY))
 
     def test_a_publication_deleted_drops_the_slug_map(self):
         cache.set(SLUG_CACHE_KEY, {"document": "g-document"}, 3600)
-        post_delete.send(sender=GraphXPublishedGraph, instance=GraphXPublishedGraph())
+        with self.captureOnCommitCallbacks(execute=True):
+            post_delete.send(
+                sender=GraphXPublishedGraph, instance=GraphXPublishedGraph()
+            )
         self.assertIsNone(cache.get(SLUG_CACHE_KEY))
+
+    def test_an_object_grant_written_drops_the_restriction_counts(self):
+        cache.set(RESTRICTED_CACHE_KEY, 0, 60)
+        cache.set(RESTRICTED_NODEGROUPS_CACHE_KEY, 0, 60)
+        with self.captureOnCommitCallbacks(execute=True):
+            post_save.send(
+                sender=GroupObjectPermission,
+                instance=GroupObjectPermission(),
+                created=True,
+            )
+        self.assertIsNone(cache.get(RESTRICTED_CACHE_KEY))
+        self.assertIsNone(cache.get(RESTRICTED_NODEGROUPS_CACHE_KEY))
 
     def test_another_model_saved_keeps_the_slug_map(self):
         cache.set(SLUG_CACHE_KEY, {"document": "g-document"}, 3600)
