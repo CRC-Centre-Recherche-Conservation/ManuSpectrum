@@ -13,6 +13,7 @@
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import ko from 'knockout';
+import L from 'leaflet';
 
 vi.mock('arches/arches/app/media/js/views/components/iiif-viewer', () => ({
     default: vi.fn(function (params) {
@@ -30,6 +31,7 @@ import CoreIIIFViewerViewmodel from 'arches/arches/app/media/js/views/components
 import { bindLeafletSummaryPopup } from 'utils/summary-popup';
 
 let IIIFViewerViewmodel;
+let stackSmallestOnTop;
 let registration;
 let unregistered;
 
@@ -48,7 +50,26 @@ beforeAll(async () => {
     registerSpy.mockRestore();
     unregisterSpy.mockRestore();
     IIIFViewerViewmodel = module.default;
+    stackSmallestOnTop = module.stackSmallestOnTop;
 });
+
+function fakeMap(layers) {
+    const handlers = {};
+    return {
+        layers,
+        on: (event, handler) => {
+            handlers[event] = handler;
+        },
+        emit: (event, payload) => handlers[event](payload),
+        eachLayer: (fn) => layers.forEach(fn),
+    };
+}
+
+function annotation(layer) {
+    layer.feature = { type: 'Feature', properties: {} };
+    layer.bringToFront = vi.fn();
+    return layer;
+}
 
 describe('iiif-viewer wrapper', () => {
     it('hands the summary popup binder to the core viewmodel', () => {
@@ -77,5 +98,43 @@ describe('iiif-viewer wrapper', () => {
         expect(unregistered).toBe('iiif-viewer');
         expect(registration.name).toBe('iiif-viewer');
         expect(registration.config.viewModel).toBe(IIIFViewerViewmodel);
+    });
+
+    it('restacks annotations largest first once a batch is drawn', () => {
+        const large = annotation(L.polygon([[0, 0], [0, 10], [10, 10], [10, 0]]));
+        const small = annotation(L.polygon([[1, 1], [1, 2], [2, 2], [2, 1]]));
+        const point = annotation(L.circleMarker([5, 5]));
+        const scheduled = [];
+        const map = fakeMap([small, point, large]);
+
+        stackSmallestOnTop(map, (fn) => scheduled.push(fn));
+        map.emit('layeradd', { layer: small });
+        map.emit('layeradd', { layer: large });
+        map.emit('layeradd', { layer: { feature: {} } });
+
+        expect(scheduled).toHaveLength(1);
+        scheduled[0]();
+        const order = [large, small, point].map((l) => l.bringToFront.mock.invocationCallOrder[0]);
+        expect(order[0]).toBeLessThan(order[1]);
+        expect(order[1]).toBeLessThan(order[2]);
+
+        map.emit('layeradd', { layer: small });
+        expect(scheduled).toHaveLength(2);
+    });
+
+    it('hooks the restacking on the map the core viewmodel creates', () => {
+        const map = fakeMap([]);
+        const onSpy = vi.spyOn(map, 'on');
+        CoreIIIFViewerViewmodel.mockImplementationOnce(function () {
+            this.map = ko.observable();
+        });
+        const viewModel = new IIIFViewerViewmodel({});
+        expect(onSpy).not.toHaveBeenCalled();
+
+        viewModel.map(map);
+        expect(onSpy).toHaveBeenCalledWith('layeradd', expect.any(Function));
+
+        viewModel.map(fakeMap([]));
+        expect(onSpy).toHaveBeenCalledTimes(1);
     });
 });
