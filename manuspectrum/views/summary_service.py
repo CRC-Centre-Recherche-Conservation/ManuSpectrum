@@ -383,10 +383,9 @@ def extract_fields(doc, config, index, language):
     """Return ``(fields, link ids, preview)`` for one resource document.
 
     A field is ``{key, label, style, values, more}``, in configuration order;
-    an alias the model does not carry is skipped rather than shown empty, and a
-    configured field with no value is kept so the popup stays the same shape
-    from one resource to the next. ``max_values`` bounds ``values``, the
-    remainder is counted in ``more``. Values of the ``link`` style carry an id
+    an alias the model does not carry, and a field the resource holds no value
+    for, are both left out. ``max_values`` bounds ``values``, the remainder is
+    counted in ``more``. Values of the ``link`` style carry an id
     alone, and those ids come back once each, in order, for the caller to
     resolve in a single request. The ``image`` style holds no value: it yields
     the preview, and only the first such field does.
@@ -401,6 +400,8 @@ def extract_fields(doc, config, index, language):
         if style == "image" and preview is None:
             preview = find_preview(doc, node)
         values = _style_values(style, _tile_values(doc, node), language)
+        if not values:
+            continue
         limit = entry.get("max_values") or settings.SUMMARY_MAX_VALUES
         more, values = max(0, len(values) - limit), values[:limit]
         if style == "link":

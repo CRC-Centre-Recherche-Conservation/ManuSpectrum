@@ -55,6 +55,12 @@ const vm = function (params) {
     // which annotation the IIIF popup was opened from.
     this.surface = params.surface || 'map';
     this.context = params.context || null;
+
+    /**
+     * The search map popup already draws a title bar and a footer around the
+     * component; the card brings its own on the other surfaces.
+     */
+    this.ownChrome = this.surface !== 'map';
     this.disposables = [];
     this.disposed = false;
 

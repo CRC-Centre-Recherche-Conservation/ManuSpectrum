@@ -8,7 +8,7 @@
 // IIIF viewer.
 
 $ms-summary-max-width:     340px;
-$ms-summary-rollups-max:   150px;
+$ms-summary-body-max:      320px;
 $ms-summary-spark-height:  56px;
 $ms-summary-spark-width:   220px;
 $ms-summary-border:        #e1e6eb;
@@ -18,9 +18,32 @@ $ms-summary-accent:        #2c6faa;
 .ms-summary {
     max-width: $ms-summary-max-width;
 
+    // The core chrome is sized for a one-line title and a 350px body
+    // (`.hover-feature-title-bar`, `.hover-feature-body` in arches.scss);
+    // the card wraps its title and takes the width of its host.
+    .hover-feature-title-bar {
+        height: auto;
+        min-height: 40px;
+        max-width: none;
+    }
+
     .hover-feature-title {
+        max-width: none;
         white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        overflow-wrap: anywhere;
         line-height: 1.3;
+    }
+
+    .hover-feature-body {
+        display: block;
+        width: auto;
+        border: 0;
+    }
+
+    .hover-feature-footer {
+        height: auto;
     }
 
     // A popup that opens on "loading" and then fills would otherwise resize
@@ -28,10 +51,22 @@ $ms-summary-accent:        #2c6faa;
     &.is-loading .ms-summary-body {
         min-height: 60px;
     }
+
+    // Inside the search map popup the core draws the title bar and footer;
+    // its body already pads the content.
+    &.ms-summary--embedded .ms-summary-body {
+        padding: 0;
+    }
 }
 
+// One scrollbar for the whole card: the body is the part that grows, the
+// title bar and footer stay in view.
 .ms-summary-body {
+    max-height: $ms-summary-body-max;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 8px 12px;
+    overflow-wrap: anywhere;
 }
 
 .ms-summary-loading {
@@ -54,10 +89,29 @@ $ms-summary-accent:        #2c6faa;
 }
 
 // ---- Fields ---------------------------------
+// Report pages restyle every `dt`/`dd` on the page (`.dl-horizontal`,
+// `.rp-report-tile` in arches.scss, float/flex/fixed widths); the list resets
+// them so the card reads the same inside a report as on the search map.
 .ms-summary-fields {
+    display: block;
     margin: 6px 0 0;
 
+    dt,
+    dd {
+        display: block;
+        float: none;
+        width: auto;
+        padding: 0;
+        text-align: left;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        flex-direction: row;
+        word-break: normal;
+    }
+
     dt {
+        margin: 4px 0 0;
         font-size: 11px;
         font-weight: 600;
         text-transform: uppercase;
@@ -75,16 +129,12 @@ $ms-summary-accent:        #2c6faa;
         display: inline-block;
         margin: 0 3px 2px 0;
         font-weight: 500;
+        white-space: normal;
     }
 }
 
 // ---- Rollups --------------------------------
-// The list is the one part that can grow without bound: a Document with a
-// dozen configured aggregates scrolls rather than pushing the footer off the
-// map.
 .ms-summary-rollups {
-    max-height: $ms-summary-rollups-max;
-    overflow-y: auto;
     margin: 8px 0 0;
     padding-top: 6px;
     border-top: 1px solid $ms-summary-border;
@@ -99,6 +149,7 @@ $ms-summary-accent:        #2c6faa;
         display: inline-block;
         margin: 0 3px 2px 0;
         font-weight: 500;
+        white-space: normal;
     }
 }
 

@@ -178,7 +178,7 @@ class ExtractFieldsTests(SimpleTestCase):
         config = {"fields": [{"alias": "measurement_point_data", "style": "image"}]}
         fields, _, preview = extract_fields(self.doc, config, self.index, "en")
         self.assertEqual(preview, {"file_id": "f-csv", "name": "a.csv"})
-        self.assertEqual(fields[0]["values"], [])
+        self.assertEqual(fields, [])
 
     def test_display_name_prefers_the_language(self):
         doc = {
@@ -366,11 +366,10 @@ class TileReadingTests(SimpleTestCase):
             [["2025-02-07"], ["1150-01-01/1199-12-31"]],
         )
 
-    def test_a_document_without_tiles_yields_empty_fields(self):
+    def test_a_field_without_value_is_left_out(self):
         config = {"fields": [{"alias": "note", "style": "text"}]}
         fields, link_ids, preview = extract_fields({}, config, self.index, "en")
-        self.assertEqual(fields[0]["values"], [])
-        self.assertEqual((link_ids, preview), ([], None))
+        self.assertEqual((fields, link_ids, preview), ([], [], None))
 
     def test_an_empty_configuration_yields_nothing(self):
         self.assertEqual(
@@ -1150,12 +1149,7 @@ class BuildSummaryTests(SimpleTestCase):
         self.assertTrue(payload["has_geometry"])
         self.assertEqual(
             [field["key"] for field in payload["fields"]],
-            [
-                "label_of_name",
-                "analysis_technique_used",
-                "current_location",
-                "measurement_point_data",
-            ],
+            ["label_of_name", "analysis_technique_used", "current_location"],
         )
         self.assertEqual(
             payload["rollups"],

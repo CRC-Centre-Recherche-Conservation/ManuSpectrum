@@ -486,11 +486,14 @@ describe('rendering', () => {
         [...host.querySelectorAll(selector)].map((node) => node.textContent.trim());
 
     it('renders the name, the model and the fields', async () => {
-        const host = render(await buildWith({ status: 'ok', data: payload() }));
+        const host = render(
+            await buildWith({ status: 'ok', data: payload() }, { surface: 'iiif' })
+        );
 
         expect(host.querySelector('.hover-feature-title').textContent).toBe(
             'Avranches. BM, Ms. 59'
         );
+        expect(host.querySelector('.ms-summary-footer')).not.toBeNull();
         expect(host.querySelector('.hover-feature-metadata').textContent).toContain(
             'Document'
         );
@@ -506,6 +509,17 @@ describe('rendering', () => {
 
         expect(link.textContent).toBe('Le Mont-Saint-Michel');
         expect(link.getAttribute('href')).toBe(`/fr/report/${PLACE_ID}`);
+    });
+
+    it('leaves the title bar and the footer to the search map popup', async () => {
+        const host = render(await buildWith({ status: 'ok', data: payload() }));
+
+        expect(host.querySelector('.hover-feature-title')).toBeNull();
+        expect(host.querySelector('.ms-summary-footer')).toBeNull();
+        expect(host.querySelector('.ms-summary').classList).toContain(
+            'ms-summary--embedded'
+        );
+        expect(textOf(host, '.ms-summary-fields dt')).toEqual(['Période', 'Lieu']);
     });
 
     it('separates several linked values without markup', async () => {

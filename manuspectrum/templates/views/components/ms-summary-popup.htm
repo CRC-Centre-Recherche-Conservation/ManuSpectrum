@@ -9,11 +9,13 @@ annotation popup. Every value comes from the summary endpoint and is bound with
 
 <div class="ms-summary"
      role="dialog"
-     data-bind="attr: {'aria-label': title}, css: {'is-loading': loading}">
+     data-bind="attr: {'aria-label': title}, css: {'is-loading': loading, 'ms-summary--embedded': !ownChrome}">
 
+    <!-- ko if: ownChrome -->
     <div class="hover-feature-title-bar">
         <div class="hover-feature-title" data-bind="text: title"></div>
     </div>
+    <!-- /ko -->
 
     <div class="hover-feature-body ms-summary-body"
          aria-live="polite"
@@ -100,6 +102,7 @@ annotation popup. Every value comes from the summary endpoint and is bound with
         <!-- /ko -->
     </div>
 
+    <!-- ko if: ownChrome -->
     <div class="hover-feature-footer ms-summary-footer">
         <!-- ko if: reportUrl -->
         <a data-bind="attr: {href: reportUrl}">
@@ -114,4 +117,5 @@ annotation popup. Every value comes from the summary endpoint and is bound with
         </a>
         <!-- /ko -->
     </div>
+    <!-- /ko -->
 </div>
