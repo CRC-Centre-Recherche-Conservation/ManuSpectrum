@@ -1,0 +1,211 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:321
+msgid "Add a field"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:243
+msgid "Add a hop"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:353
+msgid "Add a related count"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:211
+msgid "Alias of the node carrying the relation"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:284
+msgid "Alias to list"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:283
+msgid "Alias whose distinct values are listed"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:151
+msgid "All"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:59
+msgid "Chips"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:259
+msgid "Configuration saved."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:58
+msgid "Date"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:223
+msgid "Direction of the relation"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:120
+msgid "Display style"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:131
+msgid "English label"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:166
+msgid "English label of this related count"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:129
+msgid "English label override"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:102
+msgid "Field"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:295
+msgid "Fields"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:140
+msgid "French label"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:174
+msgid "French label of this related count"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:138
+msgid "French label override"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:293
+msgid "How many distinct values to show"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:68
+msgid "Incoming — that model carries the link"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:158
+msgid "Key of this related count"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:159
+msgid "Key, e.g. analyses"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:167
+msgid "Label (EN)"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:175
+msgid "Label (FR)"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:61
+msgid "Link to the report"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:254
+msgid "List distinct values"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:239
+msgid "Loading the configuration…"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:265
+msgid "Maximum number of intermediate resources"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:147
+msgid "Maximum number of values"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:201
+msgid "Model"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:200
+msgid "Model carrying the relation"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:167
+msgid "Move down"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:159
+msgid "Move up"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:60
+msgid "Number"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:72
+msgid "Outgoing — this model carries the link"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:152
+msgid "Related count"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:327
+msgid "Related counts"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:213
+msgid "Relation alias"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:176
+msgid "Remove this field"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:232
+msgid "Remove this hop"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:183
+msgid "Remove this related count"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:363
+msgid "Save this configuration"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:282
+msgid "Some entries were dropped:"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:62
+msgid "Spectrum thumbnail"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:253
+msgid "Stop listing distinct values"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:57
+msgid "Text"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:67
+msgid "This configuration could not be read."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:90
+msgid "This configuration could not be saved."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:270
+msgid "This model has no summary configuration yet. Saving creates one."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:112
+msgid "This node no longer exists in the model."
+msgstr ""

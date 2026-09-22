@@ -1,0 +1,17 @@
+{% extends "views/components/map-popup.htm" %}
+{% comment %}
+Map popup of the search map: the body carries the summary component instead of
+the raw `map_popup` markup. `showFilterByFeatureButton` is `!!params.search` on
+every popup feature, so it is true on the search map only; the editor map cards
+keep the core body. Title, navigation and footer stay the core's.
+{% endcomment %}
+
+{% block body %}
+<!-- ko if: showFilterByFeatureButton -->
+<div data-bind="component: {
+    name: 'ms-summary-popup',
+    params: { resourceId: resourceinstanceid, graphName: graph_name, surface: 'map' }
+}"></div>
+<!-- /ko -->
+<!-- ko ifnot: showFilterByFeatureButton -->{{ block.super }}<!-- /ko -->
+{% endblock body %}

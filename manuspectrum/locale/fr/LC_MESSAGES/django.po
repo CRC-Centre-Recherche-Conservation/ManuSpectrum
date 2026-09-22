@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-15 10:31-0500\n"
+"POT-Creation-Date: 2026-09-22 12:15-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -32,27 +32,76 @@ msgstr "Manifeste introuvable"
 msgid "Invalid URL format"
 msgstr "Format d'URL invalide"
 
-#: functions/multi_descriptor.py:111
+#: functions/multi_descriptor.py:166
 msgid "Undefined"
 msgstr "Indéfini"
 
-#: settings.py:151
+#: functions/resource_summary.py:92
+#, python-format
+msgid "%(where)s: alias missing"
+msgstr "%(where)s : alias manquant"
+
+#: functions/resource_summary.py:97
+#, python-format
+msgid "%(where)s (%(alias)s): unknown style %(style)r"
+msgstr "%(where)s (%(alias)s) : style inconnu %(style)r"
+
+#: functions/resource_summary.py:112
+#, python-format
+msgid "%(where)s: hop is not an object"
+msgstr "%(where)s : l'étape n'est pas un objet"
+
+#: functions/resource_summary.py:121
+#, python-format
+msgid "%(where)s: graph_slug and alias are required"
+msgstr "%(where)s : graph_slug et alias sont obligatoires"
+
+#: functions/resource_summary.py:126
+#, python-format
+msgid "%(where)s: unknown direction %(direction)r"
+msgstr "%(where)s : direction inconnue %(direction)r"
+
+#: functions/resource_summary.py:136
+#, python-format
+msgid "%(where)s: unknown op %(op)r"
+msgstr "%(where)s : opération inconnue %(op)r"
+
+#: functions/resource_summary.py:141
+#, python-format
+msgid "%(where)s: distinct needs an alias"
+msgstr "%(where)s : l'opération distinct exige un alias"
+
+#: functions/resource_summary.py:165
+#, python-format
+msgid "%(where)s: key missing"
+msgstr "%(where)s : clé manquante"
+
+#: functions/resource_summary.py:170
+#, python-format
+msgid "%(where)s: path must hold 1 to %(max)s hops"
+msgstr "%(where)s : le chemin doit compter de 1 à %(max)s étapes"
+
+#: functions/resource_summary.py:215
+msgid "config_version unsupported: configuration ignored"
+msgstr "config_version non prise en charge : configuration ignorée"
+
+#: settings.py:153
 msgid "Term Matches"
 msgstr "Correspondances de termes"
 
-#: settings.py:157
+#: settings.py:159
 msgid "References"
 msgstr "Références"
 
-#: settings.py:535
+#: settings.py:545
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:572
+#: settings.py:582
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:573
+#: settings.py:583
 msgid "French"
 msgstr "Français"
 
@@ -359,7 +408,8 @@ msgstr ""
 "chimiques — XRF, Raman, FTIR, FORS — de manuscrits, imprimés et "
 "inscriptions : pigments, encres, supports."
 
-#: templates/index.htm:222 templates/views/pages/graph-explorer.htm:204
+#: templates/index.htm:222 templates/javascript.htm:240
+#: templates/views/pages/graph-explorer.htm:204
 msgid "Close"
 msgstr "Fermer"
 
@@ -1335,7 +1385,9 @@ msgstr "Taille du cercle = enregistrements publiés"
 msgid "Dashed outline = no records published yet"
 msgstr "Contour en pointillés = aucun enregistrement publié"
 
-#: templates/javascript.htm:128 templates/views/pages/graph-explorer.htm:113
+#: templates/javascript.htm:128
+#: templates/views/components/ms-summary-popup.htm:40
+#: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Modèle"
 
@@ -1785,6 +1837,35 @@ msgstr "Courant d'obscurité"
 msgid "Configuration deduced from the analysis technique"
 msgstr "Configuration déduite de la technique d'analyse"
 
+#: templates/javascript.htm:233
+msgid "The summary could not be loaded."
+msgstr "La fiche n'a pas pu être chargée."
+
+#: templates/javascript.htm:234
+msgid "You do not have permission to view this resource."
+msgstr "Vous n'avez pas l'autorisation de consulter cette ressource."
+
+#: templates/javascript.htm:235
+msgid "This resource no longer exists."
+msgstr "Cette ressource n'existe plus."
+
+#: templates/javascript.htm:236
+msgid "Details are unavailable right now."
+msgstr "Les détails sont indisponibles pour le moment."
+
+#: templates/javascript.htm:237
+msgid "No details to show."
+msgstr "Aucun détail à afficher."
+
+#: templates/javascript.htm:238
+#, python-brace-format
+msgid "+{n}"
+msgstr "+{n}"
+
+#: templates/javascript.htm:239
+msgid "Spectrum"
+msgstr "Spectre"
+
 #: templates/ms_base.htm:11 templates/ms_base.htm:28
 msgid ""
 "ManuSpectrum — interoperable database for physicochemical analysis of "
@@ -2017,6 +2098,14 @@ msgstr "Réinitialiser à la config"
 msgid "Apply & re-render"
 msgstr "Appliquer et re-rendre"
 
+#: templates/views/components/functions/resource-summary.htm:5
+msgid ""
+"This configuration is saved with its own button. The Save button of the "
+"function manager does not store it."
+msgstr ""
+"Cette configuration s’enregistre avec son propre bouton. Le bouton "
+"Enregistrer du gestionnaire de fonctions ne la sauvegarde pas."
+
 #: templates/views/components/functions/xy-technique-config.htm:5
 msgid "Automatic XY viewer configuration"
 msgstr "Configuration automatique du visualiseur XY"
@@ -2096,6 +2185,28 @@ msgstr "Attribution"
 #: templates/views/components/widgets/manifest-widget.htm:133
 msgid "Description"
 msgstr "Description"
+
+#: templates/views/components/ms-summary-popup.htm:27
+msgid "Loading…"
+msgstr "Chargement…"
+
+#: templates/views/components/ms-summary-popup.htm:35
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
+msgid "Retry"
+msgstr "Réessayer"
+
+#: templates/views/components/ms-summary-popup.htm:93
+msgid "(partial)"
+msgstr "(partiel)"
+
+#: templates/views/components/ms-summary-popup.htm:110
+msgid "Report"
+msgstr "Rapport"
+
+#: templates/views/components/ms-summary-popup.htm:116
+msgid "Map"
+msgstr "Carte"
 
 #: templates/views/components/plugins/importer-configuration.htm:4
 msgid "Importer Configurations"
@@ -2588,11 +2699,6 @@ msgstr "Enregistré"
 #: templates/views/components/workflows/create-project-workflow/add-things-step.htm:72
 msgid "Save failed."
 msgstr "Échec de l'enregistrement."
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
-msgid "Retry"
-msgstr "Réessayer"
 
 #: templates/views/components/workflows/create-project-workflow/add-things-step.htm:78
 msgid "Remove all"
@@ -4053,6 +4159,18 @@ msgid ""
 msgstr ""
 "Cette configuration fait partie du socle commun et ne peut pas être "
 "supprimée."
+
+#: views/summary_config.py:65
+msgid "Malformed JSON body"
+msgstr "Corps JSON mal formé"
+
+#: views/summary_config.py:67
+msgid "Expected a JSON object"
+msgstr "Un objet JSON est attendu"
+
+#: views/summary_config.py:72
+msgid "config: an empty configuration replaces the stored one"
+msgstr "config : une configuration vide remplace celle enregistrée"
 
 #, python-format
 #~ msgid "Could not apply the XY configuration to tile %s"

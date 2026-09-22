@@ -226,6 +226,16 @@
     xy-role-reference='{% trans "White reference" as xyRoleReference %} "{{ xyRoleReference|escapejs }}"'
     xy-role-dark='{% trans "Dark current" as xyRoleDark %} "{{ xyRoleDark|escapejs }}"'
     xy-config-auto='{% trans "Configuration deduced from the analysis technique" as xyConfigAuto %} "{{ xyConfigAuto|escapejs }}"'
+
+    {% comment %} Summary popup — the strings the viewmodel and the popup binders build. {% endcomment %}
+    summary-error='{% trans "The summary could not be loaded." as summaryError %} "{{ summaryError|escapejs }}"'
+    summary-forbidden='{% trans "You do not have permission to view this resource." as summaryForbidden %} "{{ summaryForbidden|escapejs }}"'
+    summary-not-found='{% trans "This resource no longer exists." as summaryNotFound %} "{{ summaryNotFound|escapejs }}"'
+    summary-unavailable='{% trans "Details are unavailable right now." as summaryUnavailable %} "{{ summaryUnavailable|escapejs }}"'
+    summary-empty='{% trans "No details to show." as summaryEmpty %} "{{ summaryEmpty|escapejs }}"'
+    summary-more='{% trans "+{n}" as summaryMore %} "{{ summaryMore|escapejs }}"'
+    summary-spectrum='{% trans "Spectrum" as summarySpectrum %} "{{ summarySpectrum|escapejs }}"'
+    summary-close='{% trans "Close" as summaryClose %} "{{ summaryClose|escapejs }}"'
 ></div>
 {% endblock arches_translations %}
 

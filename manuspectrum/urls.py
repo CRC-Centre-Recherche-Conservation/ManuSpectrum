@@ -30,7 +30,11 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationPageViewV2,
     IIIFAnnotationViewV2,
 )
+from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.model_graph import ModelGraphView
+from manuspectrum.views.spectrum_preview import SpectrumPreviewView
+from manuspectrum.views.summary import SummaryBatchView, SummaryView
+from manuspectrum.views.summary_config import SummaryConfigView
 from manuspectrum.views.thumbnail import CachedThumbnailView
 
 urlpatterns = [
@@ -116,6 +120,45 @@ for _slug, _name, _tpl in [
 ### one for free.
 urlpatterns.append(
     path("api/model-graph", ModelGraphView.as_view(), name="model-graph")
+)
+
+### Relatable nodes of one model, read by the summary Function's configuration
+### form in the designer. Wrapped like model-graph: the field and model labels
+### it carries are the ones of the request language.
+urlpatterns.append(
+    re_path(
+        r"^function-config/relatable-nodes/(?P<graphid>%s)$" % settings.UUID_REGEX,
+        RelatableNodesView.as_view(),
+        name="relatable-nodes",
+    )
+)
+
+### Summary configuration of one model, read and written by the Vue form in the
+### designer. Wrapped like the endpoint above: its normalisation warnings are
+### messages a curator reads. The PUT is safe under the wrap because the form
+### builds this URL with generateArchesURL, which always writes the language
+### prefix in — the bare path a browser would replay as a GET is never asked for.
+urlpatterns.append(
+    path(
+        "api/summary-config/<uuid:graphid>",
+        SummaryConfigView.as_view(),
+        name="summary-config",
+    )
+)
+
+### Summary popups of the search map and the IIIF viewer. Wrapped like
+### model-graph, and for the same reason: the payload carries the field
+### labels, model names and bucket labels of the request language, and the
+### path is what keys its cache. GET only.
+urlpatterns.append(
+    re_path(
+        r"^api/summary/(?P<resourceid>%s)$" % settings.UUID_REGEX,
+        SummaryView.as_view(),
+        name="api-summary",
+    )
+)
+urlpatterns.append(
+    path("api/summary", SummaryBatchView.as_view(), name="api-summary-batch")
 )
 
 if settings.ROOT_URLCONF == __name__:
@@ -250,6 +293,18 @@ urlpatterns.append(
         "api/biblissima/link-to-project",
         BiblissimaLinkToProjectView.as_view(),
         name="biblissima-link-to-project",
+    )
+)
+
+### Manuspectrum URL - Spectrum preview
+###
+### Language-neutral: the payload is a pair of number arrays, and the browser
+### caches one answer per file for a day whatever page asks for it.
+urlpatterns.append(
+    re_path(
+        r"^api/spectrum-preview/(?P<file_id>%s)$" % settings.UUID_REGEX,
+        SpectrumPreviewView.as_view(),
+        name="api-spectrum-preview",
     )
 )
 

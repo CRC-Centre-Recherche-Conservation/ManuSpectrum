@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-15 10:31-0500\n"
+"POT-Creation-Date: 2026-09-22 12:15-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -34,27 +34,76 @@ msgstr "Manifest not found"
 msgid "Invalid URL format"
 msgstr "Invalid URL format"
 
-#: functions/multi_descriptor.py:111
+#: functions/multi_descriptor.py:166
 msgid "Undefined"
 msgstr "Undefined"
 
-#: settings.py:151
+#: functions/resource_summary.py:92
+#, python-format
+msgid "%(where)s: alias missing"
+msgstr ""
+
+#: functions/resource_summary.py:97
+#, python-format
+msgid "%(where)s (%(alias)s): unknown style %(style)r"
+msgstr ""
+
+#: functions/resource_summary.py:112
+#, python-format
+msgid "%(where)s: hop is not an object"
+msgstr ""
+
+#: functions/resource_summary.py:121
+#, python-format
+msgid "%(where)s: graph_slug and alias are required"
+msgstr ""
+
+#: functions/resource_summary.py:126
+#, python-format
+msgid "%(where)s: unknown direction %(direction)r"
+msgstr ""
+
+#: functions/resource_summary.py:136
+#, python-format
+msgid "%(where)s: unknown op %(op)r"
+msgstr ""
+
+#: functions/resource_summary.py:141
+#, python-format
+msgid "%(where)s: distinct needs an alias"
+msgstr ""
+
+#: functions/resource_summary.py:165
+#, python-format
+msgid "%(where)s: key missing"
+msgstr ""
+
+#: functions/resource_summary.py:170
+#, python-format
+msgid "%(where)s: path must hold 1 to %(max)s hops"
+msgstr ""
+
+#: functions/resource_summary.py:215
+msgid "config_version unsupported: configuration ignored"
+msgstr ""
+
+#: settings.py:153
 msgid "Term Matches"
 msgstr ""
 
-#: settings.py:157
+#: settings.py:159
 msgid "References"
 msgstr ""
 
-#: settings.py:535
+#: settings.py:545
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:572
+#: settings.py:582
 msgid "English"
 msgstr "English"
 
-#: settings.py:573
+#: settings.py:583
 msgid "French"
 msgstr ""
 
@@ -344,7 +393,8 @@ msgid ""
 "supports."
 msgstr ""
 
-#: templates/index.htm:222 templates/views/pages/graph-explorer.htm:204
+#: templates/index.htm:222 templates/javascript.htm:240
+#: templates/views/pages/graph-explorer.htm:204
 msgid "Close"
 msgstr "Close"
 
@@ -1288,7 +1338,9 @@ msgstr "Circle size = published records"
 msgid "Dashed outline = no records published yet"
 msgstr "Dashed outline = no records published yet"
 
-#: templates/javascript.htm:128 templates/views/pages/graph-explorer.htm:113
+#: templates/javascript.htm:128
+#: templates/views/components/ms-summary-popup.htm:40
+#: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Model"
 
@@ -1727,6 +1779,35 @@ msgstr ""
 msgid "Configuration deduced from the analysis technique"
 msgstr ""
 
+#: templates/javascript.htm:233
+msgid "The summary could not be loaded."
+msgstr "The summary could not be loaded."
+
+#: templates/javascript.htm:234
+msgid "You do not have permission to view this resource."
+msgstr "You do not have permission to view this resource."
+
+#: templates/javascript.htm:235
+msgid "This resource no longer exists."
+msgstr "This resource no longer exists."
+
+#: templates/javascript.htm:236
+msgid "Details are unavailable right now."
+msgstr "Details are unavailable right now."
+
+#: templates/javascript.htm:237
+msgid "No details to show."
+msgstr "No details to show."
+
+#: templates/javascript.htm:238
+#, python-brace-format
+msgid "+{n}"
+msgstr "+{n}"
+
+#: templates/javascript.htm:239
+msgid "Spectrum"
+msgstr "Spectrum"
+
 #: templates/ms_base.htm:11 templates/ms_base.htm:28
 msgid ""
 "ManuSpectrum — interoperable database for physicochemical analysis of "
@@ -1952,6 +2033,14 @@ msgstr "Reset to config"
 msgid "Apply & re-render"
 msgstr "Apply & re-render"
 
+#: templates/views/components/functions/resource-summary.htm:5
+msgid ""
+"This configuration is saved with its own button. The Save button of the "
+"function manager does not store it."
+msgstr ""
+"This configuration is saved with its own button. The Save button of the "
+"function manager does not store it."
+
 #: templates/views/components/functions/xy-technique-config.htm:5
 msgid "Automatic XY viewer configuration"
 msgstr "Automatic XY viewer configuration"
@@ -2019,6 +2108,28 @@ msgstr "Attribution"
 #: templates/views/components/widgets/manifest-widget.htm:133
 msgid "Description"
 msgstr "Description"
+
+#: templates/views/components/ms-summary-popup.htm:27
+msgid "Loading…"
+msgstr "Loading…"
+
+#: templates/views/components/ms-summary-popup.htm:35
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
+msgid "Retry"
+msgstr "Retry"
+
+#: templates/views/components/ms-summary-popup.htm:93
+msgid "(partial)"
+msgstr "(partial)"
+
+#: templates/views/components/ms-summary-popup.htm:110
+msgid "Report"
+msgstr "Report"
+
+#: templates/views/components/ms-summary-popup.htm:116
+msgid "Map"
+msgstr "Map"
 
 #: templates/views/components/plugins/importer-configuration.htm:4
 msgid "Importer Configurations"
@@ -2494,11 +2605,6 @@ msgstr "Saved"
 #: templates/views/components/workflows/create-project-workflow/add-things-step.htm:72
 msgid "Save failed."
 msgstr "Save failed."
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
-msgid "Retry"
-msgstr "Retry"
 
 #: templates/views/components/workflows/create-project-workflow/add-things-step.htm:78
 msgid "Remove all"
@@ -3886,6 +3992,18 @@ msgstr ""
 #: views/renderer_config.py:172
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
+msgstr ""
+
+#: views/summary_config.py:65
+msgid "Malformed JSON body"
+msgstr "Malformed JSON body"
+
+#: views/summary_config.py:67
+msgid "Expected a JSON object"
+msgstr "Expected a JSON object"
+
+#: views/summary_config.py:72
+msgid "config: an empty configuration replaces the stored one"
 msgstr ""
 
 #~ msgid ""

@@ -1,0 +1,199 @@
+// ============================================
+// Summary popup — ms-summary-popup
+// ============================================
+// The card is built from Bootstrap 3 classes and the Arches `.hover-feature-*`
+// popup chrome; what is left here is sizing, the field list, the scrolling
+// rollups and the sparkline box. Part of the `css/core` bundle, so both hosts
+// pick it up: the Mapbox popup of the search map and the Leaflet popup of the
+// IIIF viewer.
+
+$ms-summary-max-width:     340px;
+$ms-summary-body-max:      320px;
+$ms-summary-spark-height:  56px;
+$ms-summary-spark-width:   220px;
+$ms-summary-border:        #e1e6eb;
+$ms-summary-muted:         #6b7a88;
+$ms-summary-accent:        #2c6faa;
+
+.ms-summary {
+    max-width: $ms-summary-max-width;
+
+    // The core chrome is sized for a one-line title and a 350px body
+    // (`.hover-feature-title-bar`, `.hover-feature-body` in arches.scss);
+    // the card wraps its title and takes the width of its host.
+    .hover-feature-title-bar {
+        height: auto;
+        min-height: 40px;
+        max-width: none;
+    }
+
+    .hover-feature-title {
+        max-width: none;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        overflow-wrap: anywhere;
+        line-height: 1.3;
+    }
+
+    .hover-feature-body {
+        display: block;
+        width: auto;
+        border: 0;
+    }
+
+    .hover-feature-footer {
+        height: auto;
+    }
+
+    // A popup that opens on "loading" and then fills would otherwise resize
+    // under the pointer.
+    &.is-loading .ms-summary-body {
+        min-height: 60px;
+    }
+
+    // Inside the search map popup the core draws the title bar and footer;
+    // its body already pads the content.
+    &.ms-summary--embedded .ms-summary-body {
+        padding: 0;
+    }
+}
+
+// One scrollbar for the whole card: the body is the part that grows, the
+// title bar and footer stay in view.
+.ms-summary-body {
+    max-height: $ms-summary-body-max;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 12px;
+    overflow-wrap: anywhere;
+}
+
+.ms-summary-loading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.ms-summary-alert {
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.ms-summary-legacy,
+.ms-summary-empty {
+    margin: 6px 0 0;
+    font-size: 12px;
+}
+
+// ---- Fields ---------------------------------
+// Report pages restyle every `dt`/`dd` on the page (`.dl-horizontal`,
+// `.rp-report-tile` in arches.scss, float/flex/fixed widths); the list resets
+// them so the card reads the same inside a report as on the search map.
+.ms-summary-fields {
+    display: block;
+    margin: 6px 0 0;
+
+    dt,
+    dd {
+        display: block;
+        float: none;
+        width: auto;
+        padding: 0;
+        text-align: left;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        word-break: normal;
+    }
+
+    dt {
+        margin: 4px 0 0;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: $ms-summary-muted;
+    }
+
+    dd {
+        margin: 0 0 6px;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .label-default {
+        display: inline-block;
+        margin: 0 3px 2px 0;
+        font-weight: 500;
+        white-space: normal;
+    }
+}
+
+// ---- Rollups --------------------------------
+.ms-summary-rollups {
+    margin: 8px 0 0;
+    padding-top: 6px;
+    border-top: 1px solid $ms-summary-border;
+    font-size: 13px;
+
+    li {
+        margin-bottom: 4px;
+        line-height: 1.4;
+    }
+
+    .label-default {
+        display: inline-block;
+        margin: 0 3px 2px 0;
+        font-weight: 500;
+        white-space: normal;
+    }
+}
+
+.ms-summary-sep {
+    color: $ms-summary-muted;
+    margin: 0 2px;
+}
+
+// ---- Spectrum thumbnail ---------------------
+// `currentColor` in the SVG the `msSpark` binding draws, so the curve follows
+// this colour in every theme without a second code path.
+.ms-summary-spark {
+    display: block;
+    width: 100%;
+    max-width: $ms-summary-spark-width;
+    height: $ms-summary-spark-height;
+    margin-top: 8px;
+    color: $ms-summary-accent;
+
+    &[hidden] {
+        display: none;
+    }
+
+    svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+}
+
+.ms-summary-footer {
+    display: flex;
+    gap: 12px;
+}
+
+// ---- Leaflet host ---------------------------
+// `bindLeafletSummaryPopup` opens the popup under this class. Leaflet pads its
+// content wrapper for prose; the card brings its own padding.
+.ms-summary-popup-shell {
+    .leaflet-popup-content {
+        margin: 0;
+    }
+
+    .leaflet-popup-content-wrapper {
+        padding: 0;
+        overflow: hidden;
+    }
+}

@@ -32,6 +32,8 @@ dist/
 
 # Manuspectrum (other)
 *.csv
+# Golden fixtures read by both the Python and the vitest twins (tests/test_spectrum_preview.py, xy-transforms.golden.spec.js)
+!tests/fixtures/**/*.csv
 /messages.mo
 CLAUDE.md
 agents_*.md
