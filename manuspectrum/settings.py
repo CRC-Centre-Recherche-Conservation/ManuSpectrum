@@ -734,6 +734,23 @@ BIBLISSIMA_RAW_CACHE_TTL = 60 * 60
 # until a broker is confirmed available and this flag is explicitly
 BIBLISSIMA_ASYNC_INDEXING = False
 
+
+# ---------------------------------------------------------------------------
+# Summary popup ("fiche essentielle")
+# ---------------------------------------------------------------------------
+# Server ceilings for the per-graph summary configuration and the spectrum
+# preview. A configuration may ask for less, never for more: the normaliser in
+# manuspectrum/functions/resource_summary.py clamps to these values. Bounds
+# from docs/superpowers/specs/2026-09-22-summary-popups-design.md §4.3.
+SUMMARY_MAX_RELATED = 500
+SUMMARY_MAX_IDS = 25
+SUMMARY_CACHE_TTL = 300
+SUMMARY_ES_TIMEOUT = 3
+SUMMARY_MAX_LIMIT = 10
+SUMMARY_MAX_VALUES = 10
+SPECTRUM_PREVIEW_POINTS = 200
+SPECTRUM_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
+
 try:
     from .package_settings import *
 except ImportError:
