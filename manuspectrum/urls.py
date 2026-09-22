@@ -31,7 +31,10 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationViewV2,
 )
 from manuspectrum.views.graph_nodes import RelatableNodesView
+from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
+from manuspectrum.views.mvt import EmptyTileMVTView
+from manuspectrum.views.plugin import PluginView
 from manuspectrum.views.spectrum_preview import SpectrumPreviewView
 from manuspectrum.views.summary import SummaryBatchView, SummaryView
 from manuspectrum.views.summary_config import SummaryConfigView
@@ -41,9 +44,9 @@ urlpatterns = [
     # SEO: Arches serves the homepage at both "/" and "/index.htm" (names
     # `root` and `home`) — duplicate content. Project templates only link
     # `root`; anything still hitting /index.htm gets a permanent redirect.
-    # MUST stay above the app includes: arches_querysets and
-    # arches_controlled_lists each re-include arches.urls, so the first arches
-    # `^index.htm` pattern appears as early as those includes.
+    # MUST stay above the app includes: arches_controlled_lists re-includes
+    # arches.urls, so the first arches `^index.htm` pattern appears as early
+    # as that include.
     path(
         "index.htm",
         RedirectView.as_view(pattern_name="root", permanent=True, query_string=True),
@@ -56,16 +59,35 @@ urlpatterns = [
         ),
         name="password_reset",
     ),
-    # Search thumbnails: the Arches route, answered by the caching subclass.
-    # Registered before the app includes so it wins both resolution and
-    # {% url 'thumbnail' %}. That is also why it sits above the language
-    # boundary although its bytes are language-neutral: the core route it
-    # supersedes is itself inside the wrap, and a language-neutral
-    # registration would not win the reversal the templates use.
+    # Arches core routes answered by project views. Each entry copies the core
+    # pattern and name verbatim (arches/urls.py). Resolution takes the first
+    # match, and these come before arches_controlled_lists, the first include
+    # that pulls arches.urls in. reverse() takes the last registered pattern
+    # of a name, the core one, so {% url %}, reverse() and urls.json keep
+    # building the core URL, which then resolves here: a pattern that differed
+    # from core's would never be requested. Above the language boundary
+    # because those URLs carry the language prefix.
     re_path(
         r"^thumbnail/(?P<resource_id>%s)$" % settings.UUID_REGEX,
         CachedThumbnailView.as_view(),
         name="thumbnail",
+    ),
+    # Core order: an id pattern before its slug twin, which would also match
+    # an id and look it up as a slug.
+    path("plugins/<uuid:pluginid>", PluginView.as_view(), name="plugins"),
+    path("plugins/<uuid:pluginid>/<path:path>", PluginView.as_view(), name="plugins"),
+    path("plugins/<slug:slug>", PluginView.as_view(), name="plugins"),
+    path("plugins/<slug:slug>/<path:path>", PluginView.as_view(), name="plugins"),
+    re_path(
+        r"^mvt/(?P<nodeid>%s)/(?P<zoom>[0-9]+|\{z\})/(?P<x>[0-9]+|\{x\})/(?P<y>[0-9]+|\{y\}).pbf$"
+        % settings.UUID_REGEX,
+        EmptyTileMVTView.as_view(),
+        name="mvt",
+    ),
+    re_path(
+        r"^templates/(?P<template>[a-zA-Z_\-./]*)",
+        knockout_template,
+        name="templates",
     ),
 ]
 

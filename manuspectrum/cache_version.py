@@ -20,6 +20,9 @@ CACHE_SHAPE_MODULES = (
     "views/summary_service.py",
     # The summary payload reads its localized texts through graph_nodes.
     "views/graph_nodes.py",
+    # What the Knockout template memo stores; its key also carries the
+    # template stamp, since templates are not Python modules.
+    "views/knockout_templates.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

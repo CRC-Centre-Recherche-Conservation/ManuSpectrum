@@ -419,6 +419,11 @@ EXPORT_DATA_FIELDS_IN_CARD_ORDER = False
 CACHE_BY_USER = {"default": 3600 * 24, "anonymous": 3600 * 24}  # 24hrs  # 24hrs
 
 TILE_CACHE_TIMEOUT = 600  # seconds
+# max-age of an empty vector tile (manuspectrum.views.mvt). On top of the
+# TILE_CACHE_TIMEOUT Arches keeps each reader's tile for, never invalidated,
+# this is how long a geometry drawn where a reader saw an empty tile can stay
+# off that reader's map overlay.
+MVT_EMPTY_TILE_MAX_AGE = 60 * 60
 CLUSTER_DISTANCE_MAX = 5000  # meters
 GRAPH_MODEL_CACHE_TIMEOUT = None
 
@@ -678,6 +683,15 @@ IIIF_MANIFEST_CACHE_TTL = 60 * 60 * 24
 # plus an image fetch from the provider, so the browser and any intermediary
 # must be told the answer keeps.
 SEARCH_THUMBNAIL_MAX_AGE = 60 * 60 * 24
+
+# Knockout component templates (manuspectrum.views.knockout_templates).
+# max-age: how long a browser reuses a template without asking. The URL carries
+# no build version, so it is also the longest a page can pair a new bundle with
+# an old template after a deploy; the ETag makes the next request a 304.
+KNOCKOUT_TEMPLATE_MAX_AGE = 60 * 10
+# Lifetime of a rendered template in the default cache. Template and catalogue
+# edits change its key; a setting a template prints reaches it within this delay.
+KNOCKOUT_TEMPLATE_CACHE_TTL = 60 * 60
 
 
 # ---------------------------------------------------------------------------
