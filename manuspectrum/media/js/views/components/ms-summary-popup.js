@@ -16,6 +16,7 @@
 
 import arches from 'arches';
 import ko from 'knockout';
+import 'bindings/ms-spark';
 import dispose from 'utils/dispose';
 import { acquireSummary, invalidateSummary } from 'utils/summary-popup';
 import summaryPopupTemplate from 'templates/views/components/ms-summary-popup.htm';

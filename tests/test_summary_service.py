@@ -11,7 +11,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.core.cache import cache
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from elasticsearch import ApiError, NotFoundError, TransportError
 
@@ -397,20 +397,31 @@ class FindPreviewTests(SimpleTestCase):
     def test_the_first_plottable_extension_wins(self):
         doc = self.doc_with(
             {"file_id": "f-0", "name": "spectrum.0"},
-            {"file_id": "f-mca", "name": "SPECTRUM.MCA"},
-            {"file_id": "f-txt", "name": "spectrum.txt"},
+            {"file_id": "f-csv", "name": "SPECTRUM.CSV"},
+            {"file_id": "f-second", "name": "other.csv"},
         )
         self.assertEqual(
             find_preview(doc, self.index.nodes["files"]),
-            {"file_id": "f-mca", "name": "SPECTRUM.MCA"},
+            {"file_id": "f-csv", "name": "SPECTRUM.CSV"},
         )
 
-    def test_no_plottable_file_yields_nothing(self):
+    def test_the_formats_converted_upstream_are_not_plottable(self):
         doc = self.doc_with(
             {"file_id": "f-asd", "name": "spectrum.asd"},
+            {"file_id": "f-mca", "name": "spectrum.mca"},
+            {"file_id": "f-txt", "name": "spectrum.txt"},
             {"file_id": "f-none", "name": "spectrum"},
         )
         self.assertIsNone(find_preview(doc, self.index.nodes["files"]))
+
+    @override_settings(XY_TEXT_FILE_FORMATS=["csv", "txt"])
+    def test_the_plottable_formats_are_the_canonical_xy_ones(self):
+        doc = self.doc_with({"file_id": "f-txt", "name": "spectrum.txt"})
+
+        self.assertEqual(
+            find_preview(doc, self.index.nodes["files"]),
+            {"file_id": "f-txt", "name": "spectrum.txt"},
+        )
 
 
 class GraphIndexTests(SimpleTestCase):

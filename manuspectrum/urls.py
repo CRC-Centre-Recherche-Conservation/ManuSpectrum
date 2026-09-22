@@ -32,6 +32,7 @@ from manuspectrum.views.iiif_annotation import (
 )
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.model_graph import ModelGraphView
+from manuspectrum.views.spectrum_preview import SpectrumPreviewView
 from manuspectrum.views.summary import SummaryBatchView, SummaryView
 from manuspectrum.views.summary_config import SummaryConfigView
 from manuspectrum.views.thumbnail import CachedThumbnailView
@@ -292,6 +293,18 @@ urlpatterns.append(
         "api/biblissima/link-to-project",
         BiblissimaLinkToProjectView.as_view(),
         name="biblissima-link-to-project",
+    )
+)
+
+### Manuspectrum URL - Spectrum preview
+###
+### Language-neutral: the payload is a pair of number arrays, and the browser
+### caches one answer per file for a day whatever page asks for it.
+urlpatterns.append(
+    re_path(
+        r"^api/spectrum-preview/(?P<file_id>%s)$" % settings.UUID_REGEX,
+        SpectrumPreviewView.as_view(),
+        name="api-spectrum-preview",
     )
 )
 

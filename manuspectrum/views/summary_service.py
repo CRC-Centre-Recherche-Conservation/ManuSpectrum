@@ -56,6 +56,7 @@ from manuspectrum.functions.resource_summary import (
     normalize_config,
 )
 from manuspectrum.utils.cache import get_or_build
+from manuspectrum.utils.spectrum_preview import is_supported
 from manuspectrum.views.graph_nodes import (
     RELATION_DATATYPES,
     localized,
@@ -78,10 +79,6 @@ NO_ACCESS = "no_access_to_resourceinstance"
 # What a linked resource is fetched for: its name, and whether the reader may
 # open it at all.
 LINK_SOURCE = ["displayname", "permissions"]
-
-# Extensions the spectrum preview can plot; the binary formats (.asd, .0) are
-# out of scope for v1.
-PREVIEW_EXTENSIONS = ("csv", "txt", "mca")
 
 NodeInfo = namedtuple("NodeInfo", "nodeid nodegroup_id datatype alias")
 
@@ -434,13 +431,17 @@ def _field_label(entry, node, index, language):
 
 
 def find_preview(doc, node):
-    """First file of a file-list node the spectrum preview can plot, or None."""
+    """First file of a file-list node the spectrum preview can plot, or None.
+
+    Which extensions those are is ``settings.XY_TEXT_FILE_FORMATS``, read
+    through the endpoint's own test so the popup never offers a file the
+    preview answers 204 for.
+    """
     for value in _tile_values(doc, node):
         if not isinstance(value, dict) or not value.get("file_id"):
             continue
         name = value.get("name") or ""
-        extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-        if extension in PREVIEW_EXTENSIONS:
+        if is_supported(name):
             return {"file_id": str(value["file_id"]), "name": name}
     return None
 
