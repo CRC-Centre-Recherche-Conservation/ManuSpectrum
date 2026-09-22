@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 06:34-0500\n"
+"POT-Creation-Date: 2026-09-22 12:15-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -32,9 +32,58 @@ msgstr "Manifeste introuvable"
 msgid "Invalid URL format"
 msgstr "Format d'URL invalide"
 
-#: functions/multi_descriptor.py:158
+#: functions/multi_descriptor.py:166
 msgid "Undefined"
 msgstr "Indéfini"
+
+#: functions/resource_summary.py:92
+#, python-format
+msgid "%(where)s: alias missing"
+msgstr "%(where)s : alias manquant"
+
+#: functions/resource_summary.py:97
+#, python-format
+msgid "%(where)s (%(alias)s): unknown style %(style)r"
+msgstr "%(where)s (%(alias)s) : style inconnu %(style)r"
+
+#: functions/resource_summary.py:112
+#, python-format
+msgid "%(where)s: hop is not an object"
+msgstr "%(where)s : l'étape n'est pas un objet"
+
+#: functions/resource_summary.py:121
+#, python-format
+msgid "%(where)s: graph_slug and alias are required"
+msgstr "%(where)s : graph_slug et alias sont obligatoires"
+
+#: functions/resource_summary.py:126
+#, python-format
+msgid "%(where)s: unknown direction %(direction)r"
+msgstr "%(where)s : direction inconnue %(direction)r"
+
+#: functions/resource_summary.py:136
+#, python-format
+msgid "%(where)s: unknown op %(op)r"
+msgstr "%(where)s : opération inconnue %(op)r"
+
+#: functions/resource_summary.py:141
+#, python-format
+msgid "%(where)s: distinct needs an alias"
+msgstr "%(where)s : l'opération distinct exige un alias"
+
+#: functions/resource_summary.py:165
+#, python-format
+msgid "%(where)s: key missing"
+msgstr "%(where)s : clé manquante"
+
+#: functions/resource_summary.py:170
+#, python-format
+msgid "%(where)s: path must hold 1 to %(max)s hops"
+msgstr "%(where)s : le chemin doit compter de 1 à %(max)s étapes"
+
+#: functions/resource_summary.py:215
+msgid "config_version unsupported: configuration ignored"
+msgstr "config_version non prise en charge : configuration ignorée"
 
 #: settings.py:153
 msgid "Term Matches"
@@ -1337,7 +1386,7 @@ msgid "Dashed outline = no records published yet"
 msgstr "Contour en pointillés = aucun enregistrement publié"
 
 #: templates/javascript.htm:128
-#: templates/views/components/ms-summary-popup.htm:38
+#: templates/views/components/ms-summary-popup.htm:40
 #: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Modèle"
@@ -2137,25 +2186,25 @@ msgstr "Attribution"
 msgid "Description"
 msgstr "Description"
 
-#: templates/views/components/ms-summary-popup.htm:25
+#: templates/views/components/ms-summary-popup.htm:27
 msgid "Loading…"
 msgstr "Chargement…"
 
-#: templates/views/components/ms-summary-popup.htm:33
+#: templates/views/components/ms-summary-popup.htm:35
 #: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
 msgid "Retry"
 msgstr "Réessayer"
 
-#: templates/views/components/ms-summary-popup.htm:91
+#: templates/views/components/ms-summary-popup.htm:93
 msgid "(partial)"
 msgstr "(partiel)"
 
-#: templates/views/components/ms-summary-popup.htm:107
+#: templates/views/components/ms-summary-popup.htm:110
 msgid "Report"
 msgstr "Rapport"
 
-#: templates/views/components/ms-summary-popup.htm:113
+#: templates/views/components/ms-summary-popup.htm:116
 msgid "Map"
 msgstr "Carte"
 
@@ -4111,13 +4160,17 @@ msgstr ""
 "Cette configuration fait partie du socle commun et ne peut pas être "
 "supprimée."
 
-#: views/summary_config.py:63
+#: views/summary_config.py:65
 msgid "Malformed JSON body"
 msgstr "Corps JSON mal formé"
 
-#: views/summary_config.py:65
+#: views/summary_config.py:67
 msgid "Expected a JSON object"
 msgstr "Un objet JSON est attendu"
+
+#: views/summary_config.py:72
+msgid "config: an empty configuration replaces the stored one"
+msgstr "config : une configuration vide remplace celle enregistrée"
 
 #, python-format
 #~ msgid "Could not apply the XY configuration to tile %s"

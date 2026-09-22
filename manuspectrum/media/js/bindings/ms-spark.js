@@ -1,10 +1,9 @@
 /**
  * `msSpark: {fileId, title}` — the spectrum of one file as an inline sparkline.
  *
- * The series is fetched from `/api/spectrum-preview/<fileId>`, which answers at
- * most a couple of hundred points, already reduced to the curve the XY reader
- * draws, and `204` for a file it cannot plot. The route is language-neutral, so
- * the path is absolute and carries no `arches.urls.root` prefix.
+ * The series is fetched from the `manuspectrum:api-spectrum-preview` route, which
+ * answers at most a couple of hundred points, already reduced to the curve the XY
+ * reader draws, and `204` for a file it cannot plot.
  *
  * Init-only and without a single subscription: a popup is destroyed and rebuilt
  * on every click, and the value it hands over never changes under one element.
@@ -13,6 +12,7 @@
  */
 
 import ko from 'knockout';
+import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -114,7 +114,11 @@ ko.bindingHandlers.msSpark = {
             }
         };
 
-        fetch(`/api/spectrum-preview/${encodeURIComponent(spark.fileId)}`, {
+        const url = generateArchesURL('manuspectrum:api-spectrum-preview', {
+            file_id: encodeURIComponent(spark.fileId),
+        });
+
+        fetch(url, {
             credentials: 'same-origin',
             headers: { Accept: 'application/json' },
             signal: controller.signal,

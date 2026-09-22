@@ -15,6 +15,7 @@ class ManuspectrumConfig(AppConfig):
             from manuspectrum.utils import search_thumbnail_fetchers
 
         from manuspectrum import checks  # noqa: F401  (registers system checks)
+        from manuspectrum import signals  # noqa: F401  (connects the receivers)
 
         self._check_async_indexing_config()
         self._check_contact_email_config()

@@ -11,8 +11,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ko from 'knockout';
 
 vi.mock('arches', () => ({
-    default: { urls: { root: '/fr/' }, translations: { summaryClose: 'Fermer' } },
+    default: { translations: { summaryClose: 'Fermer' } },
 }));
+
+import arches from 'arches';
+
+const { generateArchesURL } = vi.hoisted(() => {
+    const routes = {
+        'manuspectrum:api-summary': '/{language_code}/api/summary/{resourceid}',
+        'manuspectrum:api-summary-batch': '/{language_code}/api/summary',
+    };
+    return {
+        generateArchesURL: vi.fn((name, params = {}, languageCode) =>
+            Object.entries({ ...params, language_code: languageCode }).reduce(
+                (url, [key, value]) => url.replaceAll(`{${key}}`, String(value)),
+                routes[name],
+            )),
+    };
+});
+
+vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL }));
 
 const { leafletPopups } = vi.hoisted(() => ({ leafletPopups: [] }));
 
@@ -86,7 +104,7 @@ let fetchMock;
 beforeEach(() => {
     _resetCacheForTests();
     leafletPopups.length = 0;
-    document.documentElement.lang = '';
+    document.documentElement.lang = 'fr';
     fetchMock = vi.fn(() => Promise.resolve(response({ resourceid: ID })));
     vi.stubGlobal('fetch', fetchMock);
 });
@@ -100,8 +118,29 @@ afterEach(() => {
 });
 
 describe('summaryUrl', () => {
-    it('hangs the id off the Arches root, which already carries the language', () => {
+    it('reverses the named route in the language of the page', () => {
         expect(summaryUrl(ID)).toBe(`/fr/api/summary/${ID}`);
+        expect(generateArchesURL).toHaveBeenCalledWith(
+            'manuspectrum:api-summary',
+            { resourceid: ID },
+            'fr',
+        );
+    });
+
+    it('takes the language Arches negotiated over the document attribute', () => {
+        arches.activeLanguage = 'fr';
+        document.documentElement.lang = 'en';
+        try {
+            expect(summaryUrl(ID)).toBe(`/fr/api/summary/${ID}`);
+        } finally {
+            delete arches.activeLanguage;
+        }
+    });
+
+    it('falls back to English when the page declares no language', () => {
+        document.documentElement.lang = '';
+
+        expect(summaryUrl(ID)).toBe(`/en/api/summary/${ID}`);
     });
 
     it('encodes an id that is not the uuid the route expects', () => {
@@ -314,6 +353,11 @@ describe('warmSummaryCache', () => {
         await flush();
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(generateArchesURL).toHaveBeenCalledWith(
+            'manuspectrum:api-summary-batch',
+            {},
+            'fr',
+        );
         expect(fetchMock.mock.calls[0][0]).toBe(
             `/fr/api/summary?ids=${ID},${OTHER},${THIRD}`,
         );

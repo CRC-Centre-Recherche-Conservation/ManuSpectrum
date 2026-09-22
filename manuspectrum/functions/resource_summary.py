@@ -14,6 +14,7 @@ import uuid
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
+from django.utils.translation import gettext as _
 
 from arches.app.functions.base import BaseFunction
 
@@ -88,11 +89,14 @@ def _normalize_field(raw, warnings, index):
         or not isinstance(raw.get("alias"), str)
         or not raw["alias"]
     ):
-        warnings.append(f"fields[{index}]: alias missing")
+        warnings.append(_("%(where)s: alias missing") % {"where": f"fields[{index}]"})
         return None
     style = raw.get("style", "text")
     if style not in STYLES:
-        warnings.append(f"fields[{index}] ({raw['alias']}): unknown style {style!r}")
+        warnings.append(
+            _("%(where)s (%(alias)s): unknown style %(style)r")
+            % {"where": f"fields[{index}]", "alias": raw["alias"], "style": style}
+        )
         return None
     field = {"alias": raw["alias"], "style": style}
     if "max_values" in raw:
@@ -105,7 +109,7 @@ def _normalize_field(raw, warnings, index):
 
 def _normalize_hop(raw, warnings, where):
     if not isinstance(raw, dict):
-        warnings.append(f"{where}: hop is not an object")
+        warnings.append(_("%(where)s: hop is not an object") % {"where": where})
         return None
     slug, alias, direction = (
         raw.get("graph_slug"),
@@ -113,10 +117,15 @@ def _normalize_hop(raw, warnings, where):
         raw.get("direction"),
     )
     if not (isinstance(slug, str) and slug and isinstance(alias, str) and alias):
-        warnings.append(f"{where}: graph_slug and alias are required")
+        warnings.append(
+            _("%(where)s: graph_slug and alias are required") % {"where": where}
+        )
         return None
     if direction not in DIRECTIONS:
-        warnings.append(f"{where}: unknown direction {direction!r}")
+        warnings.append(
+            _("%(where)s: unknown direction %(direction)r")
+            % {"where": where, "direction": direction}
+        )
         return None
     return {"graph_slug": slug, "alias": alias, "direction": direction}
 
@@ -124,12 +133,12 @@ def _normalize_hop(raw, warnings, where):
 def _normalize_aggregate(raw, warnings, where):
     op = raw.get("op") if isinstance(raw, dict) else None
     if op not in OPS:
-        warnings.append(f"{where}: unknown op {op!r}")
+        warnings.append(_("%(where)s: unknown op %(op)r") % {"where": where, "op": op})
         return None
     if op == "count":
         return {"op": "count"}
     if not isinstance(raw.get("alias"), str) or not raw["alias"]:
-        warnings.append(f"{where}: distinct needs an alias")
+        warnings.append(_("%(where)s: distinct needs an alias") % {"where": where})
         return None
     return {
         "op": "distinct",
@@ -153,11 +162,14 @@ def _normalize_rollup(raw, warnings, index):
         or not isinstance(raw.get("key"), str)
         or not raw["key"]
     ):
-        warnings.append(f"{where}: key missing")
+        warnings.append(_("%(where)s: key missing") % {"where": where})
         return None
     path = raw.get("path")
     if not isinstance(path, list) or not 1 <= len(path) <= MAX_HOPS:
-        warnings.append(f"{where}: path must hold 1 to {MAX_HOPS} hops")
+        warnings.append(
+            _("%(where)s: path must hold 1 to %(max)s hops")
+            % {"where": where, "max": MAX_HOPS}
+        )
         return None
     hops = [
         _normalize_hop(h, warnings, f"{where}.path[{i}]") for i, h in enumerate(path)
@@ -192,13 +204,15 @@ def normalize_config(config):
 
     Invalid entries are dropped, never repaired; limits are clamped to the
     settings ceilings; a missing or foreign ``config_version`` yields an empty
-    config. The result never contains ``triggering_nodegroups``.
+    config. The result never contains ``triggering_nodegroups``. Warnings are
+    plain strings in the active language, each led by the untranslated path of
+    the entry it is about (``fields[2]``, ``rollups[0].path[1]``).
     """
     warnings = []
     empty = {"config_version": CONFIG_VERSION, "fields": [], "rollups": []}
     if not isinstance(config, dict) or config.get("config_version") != CONFIG_VERSION:
         if config:
-            warnings.append("config_version unsupported: configuration ignored")
+            warnings.append(_("config_version unsupported: configuration ignored"))
         return empty, warnings
     fields = [
         _normalize_field(f, warnings, i)

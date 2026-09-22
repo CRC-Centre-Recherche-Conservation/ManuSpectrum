@@ -51,21 +51,29 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
     """
 
     def _graph_nodes(self, resource, context):
-        """Nodes of the resource's graph, read once per ``context``.
+        """Nodes of the resource's graph, read once per graph and ``context``.
 
-        ``context["_prefetched_graph_nodes"]`` is honoured when present and
-        written on the first call when ``context`` is a dict: Arches hands the
-        same dict to the six calls of one ``save_descriptors``. Deferred fields
-        are never used here: datatypes read node fields this class does not
-        know about.
+        When ``context`` is a dict the list is kept in
+        ``context["_prefetched_graph_nodes_by_graph"][<graph_id>]``, so a
+        context shared across resources of several graphs serves each its own
+        nodes. ``context["_prefetched_graph_nodes"]`` is a list a caller
+        supplies for the one resource it saves; it is honoured as that
+        resource's graph when the keyed entry is absent. Deferred fields are
+        never used here: datatypes read node fields this class does not know
+        about.
         """
-        cacheable = isinstance(context, dict)
-        if cacheable and context.get("_prefetched_graph_nodes") is not None:
-            return context["_prefetched_graph_nodes"]
-        nodes = list(models.Node.objects.filter(graph=resource.graph))
-        if cacheable:
-            context["_prefetched_graph_nodes"] = nodes
-        return nodes
+        if not isinstance(context, dict):
+            return list(models.Node.objects.filter(graph=resource.graph))
+        by_graph = context.setdefault("_prefetched_graph_nodes_by_graph", {})
+        graph_key = str(resource.graph_id)
+        if graph_key not in by_graph:
+            supplied = context.get("_prefetched_graph_nodes")
+            by_graph[graph_key] = (
+                supplied
+                if supplied is not None
+                else list(models.Node.objects.filter(graph=resource.graph))
+            )
+        return by_graph[graph_key]
 
     def _tiles_by_nodegroup(self, resource, context, nodegroup_ids):
         """Tiles of ``resource`` for each nodegroup, sorted by ``sortorder``.

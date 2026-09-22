@@ -3,6 +3,7 @@ import uuid
 from django.core.cache import cache
 from django.db import transaction
 from django.test import SimpleTestCase, TestCase
+from django.utils import translation
 
 from arches.app.models import models
 
@@ -295,3 +296,24 @@ class SummaryCheckTests(TestCase):
             self.assertEqual(
                 check_summary_function_registered(None, databases=["default"]), []
             )
+
+
+class WarningLanguageTests(SimpleTestCase):
+    def test_a_warning_is_written_in_the_active_language(self):
+        with translation.override("fr"):
+            _, warnings = normalize_config({"config_version": 99})
+        self.assertEqual(
+            warnings, ["config_version non prise en charge : configuration ignorée"]
+        )
+
+    def test_a_located_warning_keeps_its_locator_verbatim(self):
+        config = valid_config()
+        config["fields"].append({"style": "text"})
+        with translation.override("fr"):
+            _, warnings = normalize_config(config)
+        self.assertEqual(warnings, ["fields[2] : alias manquant"])
+
+    def test_a_warning_is_a_plain_string_the_json_config_can_hold(self):
+        with translation.override("fr"):
+            _, warnings = normalize_config({"config_version": 99})
+        self.assertIs(type(warnings[0]), str)

@@ -64,6 +64,7 @@ class DescriptorTestCase(SimpleTestCase):
 
         self.resource = mock.Mock()
         self.resource.graph = GRAPH_ID
+        self.resource.graph_id = GRAPH_ID
         self.resource.resourceinstanceid = uuid.uuid4()
         self.resource.descriptors = {}
 
@@ -296,7 +297,39 @@ class PrefetchedNodeTests(DescriptorTestCase):
         self.describe("Manuscrit <cote>", context=context, descriptor="description")
 
         self.Node.objects.filter.assert_called_once_with(graph=self.resource.graph)
-        self.assertEqual(context["_prefetched_graph_nodes"], [cote])
+        self.assertEqual(
+            context["_prefetched_graph_nodes_by_graph"], {str(GRAPH_ID): [cote]}
+        )
+
+    def test_two_resources_of_two_graphs_sharing_a_context_get_their_own_nodes(self):
+        cote = make_node("cote")
+        titre = make_node("titre")
+        other = mock.Mock()
+        other.graph = other.graph_id = uuid.uuid4()
+        other.resourceinstanceid = uuid.uuid4()
+        other.descriptors = {}
+        self.Node.objects.filter.side_effect = lambda graph: (
+            [cote] if graph == GRAPH_ID else [titre]
+        )
+        self.TileModel.objects.filter.return_value.order_by.side_effect = [
+            [make_tile({cote: ["Ms. 12"]})],
+            [make_tile({titre: ["Psautier"]})],
+        ]
+        self.datatype.get_display_value.side_effect = (
+            lambda tile, node, language=None: tile.data[str(node.nodeid)][0]
+        )
+        context = {"language": "en"}
+
+        first = self.describe("Cote <cote>", context=context)
+        second = self.function.get_primary_descriptor_from_nodes(
+            other,
+            {"nodegroup_id": str(NODEGROUP_ID), "string_template": "Titre <titre>"},
+            context,
+            "name",
+        )
+
+        self.assertEqual([first, second], ["Cote Ms. 12", "Titre Psautier"])
+        self.assertEqual(self.Node.objects.filter.call_count, 2)
 
     def test_a_context_that_is_not_a_dict_still_reads_the_graph(self):
         cote = make_node("cote")

@@ -22,6 +22,7 @@
 import ko from 'knockout';
 import L from 'leaflet';
 import arches from 'arches';
+import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
 
 /** Resolved entries kept for the next popup; the oldest goes first. */
 const MAX_ENTRIES = 50;
@@ -36,7 +37,13 @@ const cache = new Map();
 /** A settled entry holds no controller, which is also how "pending" is read. */
 const isPending = (entry) => Boolean(entry && entry.controller);
 
-const currentLanguage = () => document.documentElement.lang || 'en';
+/**
+ * The language of the page, as Arches negotiated it (`ACTIVE_LANGUAGE`).
+ *
+ * The core template hard-codes `<html lang="en">`, so the document is only a
+ * fallback for a page that carries no `arches` data.
+ */
+const currentLanguage = () => arches.activeLanguage || document.documentElement.lang || 'en';
 
 const cacheKey = (id) => `${currentLanguage()}|${id}`;
 
@@ -46,16 +53,21 @@ const isAbort = (error) => Boolean(error) && error.name === 'AbortError';
 const never = () => new Promise(() => {});
 
 /**
- * The summary endpoint for one resource.
+ * The summary endpoint for one resource, in the language the cache keys on.
  *
- * `arches.urls.root` already carries the language prefix the route needs.
+ * `generateArchesURL` substitutes parameters verbatim, so the id is encoded here.
  */
 export function summaryUrl(id) {
-    return `${arches.urls.root}api/summary/${encodeURIComponent(id)}`;
+    return generateArchesURL(
+        'manuspectrum:api-summary',
+        { resourceid: encodeURIComponent(id) },
+        currentLanguage(),
+    );
 }
 
 function batchUrl(ids) {
-    return `${arches.urls.root}api/summary?ids=${ids.join(',')}`;
+    const route = generateArchesURL('manuspectrum:api-summary-batch', {}, currentLanguage());
+    return `${route}?ids=${ids.join(',')}`;
 }
 
 /**

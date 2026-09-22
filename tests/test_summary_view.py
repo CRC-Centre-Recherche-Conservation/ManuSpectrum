@@ -12,14 +12,22 @@ from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.db.models.signals import post_delete, post_save
 from django.test import TestCase
 from django.urls import reverse
 
 from elasticsearch import TransportError
+from guardian.shortcuts import assign_perm
+
+from arches.app.models.models import GraphXPublishedGraph, NodeGroup, UserProfile
 
 from manuspectrum.functions.resource_summary import ResourceSummary, details
 from manuspectrum.views import summary as summary_view
-from manuspectrum.views.summary_service import GraphIndex
+from manuspectrum.views.summary_service import (
+    SLUG_CACHE_KEY,
+    GraphIndex,
+    _count_nodegroup_restrictions,
+)
 
 from tests.test_summary_service import (
     SUMMARY_CONFIG,
@@ -241,6 +249,31 @@ class SummaryEndpointTests(SummaryTestCase):
             self.get(es)
         self.assertEqual(es.count("get"), 2)
 
+    def test_two_readers_under_a_nodegroup_grant_do_not_share_the_memo(self):
+        other = User.objects.create_user("summary_other", password="pw")
+        es = self.one_document(count=2)
+        with (
+            mock.patch(
+                "manuspectrum.views.summary_service._count_nodegroup_restrictions",
+                return_value=1,
+            ),
+            mock.patch.object(
+                UserProfile,
+                "viewable_nodegroups",
+                new_callable=mock.PropertyMock,
+                return_value={"ng-analysis_technique_used"},
+            ),
+        ):
+            first = self.get(es)
+            self.client.force_login(other)
+            self.get(es)
+        self.assertEqual(es.count("get"), 2)
+        self.assertEqual(first["Cache-Control"], "private, no-store")
+        self.assertEqual(
+            [field["key"] for field in json.loads(first.content)["fields"]],
+            ["analysis_technique_used"],
+        )
+
     def test_a_model_without_configuration_carries_the_core_popup(self):
         response = self.get(FakeES(source=summary_doc(DOC_ONE)), config=None)
         payload = json.loads(response.content)
@@ -315,3 +348,35 @@ class SummaryBatchEndpointTests(SummaryTestCase):
     def test_nothing_asked_answers_nothing(self):
         response = self.batch(FakeES(), "")
         self.assertEqual(json.loads(response.content), {"summaries": {}})
+
+
+class NodegroupRestrictionCountTests(TestCase):
+    def test_a_grant_on_a_nodegroup_counts_whatever_its_codename(self):
+        reader = User.objects.create_user("nodegroup_reader", password="pw")
+        nodegroup = NodeGroup.objects.create(nodegroupid=uuid.uuid4(), cardinality="n")
+        baseline = _count_nodegroup_restrictions()
+        assign_perm("write_nodegroup", reader, nodegroup)
+        self.assertEqual(_count_nodegroup_restrictions(), baseline + 1)
+
+
+class GraphSlugInvalidationTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def test_a_publication_saved_drops_the_slug_map(self):
+        cache.set(SLUG_CACHE_KEY, {"document": "g-document"}, 3600)
+        post_save.send(
+            sender=GraphXPublishedGraph, instance=GraphXPublishedGraph(), created=True
+        )
+        self.assertIsNone(cache.get(SLUG_CACHE_KEY))
+
+    def test_a_publication_deleted_drops_the_slug_map(self):
+        cache.set(SLUG_CACHE_KEY, {"document": "g-document"}, 3600)
+        post_delete.send(sender=GraphXPublishedGraph, instance=GraphXPublishedGraph())
+        self.assertIsNone(cache.get(SLUG_CACHE_KEY))
+
+    def test_another_model_saved_keeps_the_slug_map(self):
+        cache.set(SLUG_CACHE_KEY, {"document": "g-document"}, 3600)
+        post_save.send(sender=NodeGroup, instance=NodeGroup(), created=True)
+        self.assertEqual(cache.get(SLUG_CACHE_KEY), {"document": "g-document"})

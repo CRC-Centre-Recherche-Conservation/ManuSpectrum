@@ -27,6 +27,10 @@ Elasticsearch search each. The reader's permission filter rides in every one
 of them, so a resource a click could not open is never counted, and the last
 hop counts and aggregates in the same search.
 
+Once any nodegroup carries a grant, the document is stripped of the tiles the
+reader may not read before anything is extracted from it, and the payload is
+memoised per reader.
+
 Every search is produced by a plan, a generator yielding search keywords and
 receiving the response: one resource drives its plans with ``search``, a batch
 drives all of them together with one ``msearch`` per hop. A cluster that
@@ -40,6 +44,7 @@ from collections import defaultdict, namedtuple
 from typing import NamedTuple
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 
 from elasticsearch import ApiError, NotFoundError, TransportError
 from guardian.models import GroupObjectPermission, UserObjectPermission
@@ -74,6 +79,7 @@ DEGRADED_TTL = 30
 
 PERM_SCOPE_TTL = 60
 RESTRICTED_CACHE_KEY = "summary-restricted-resources"
+RESTRICTED_NODEGROUPS_CACHE_KEY = "summary-restricted-nodegroups"
 NO_ACCESS = "no_access_to_resourceinstance"
 
 # What a linked resource is fetched for: its name, and whether the reader may
@@ -202,6 +208,8 @@ def _graph_ids_by_slug():
 
     One entry for the whole deployment: a rollup names the models it crosses by
     slug, and resolving them per click would put a query back on the hot path.
+    ``manuspectrum.signals`` drops it whenever a publication row is written or
+    deleted.
     """
 
     def build():
@@ -855,13 +863,13 @@ class ResourceNotFound(Exception):
 def perm_scope(user):
     """The memo scope of a reader: shared when nothing is restricted.
 
-    A deployment where no resource carries a ``no_access`` grant answers the
-    same payload to everyone, so one entry per resource and language is
-    enough and a shared HTTP cache may keep it. The count is read once a
-    minute; the first restriction moves every reader onto their own entry
-    within that minute.
+    A deployment where no resource carries a ``no_access`` grant and no
+    nodegroup carries any grant answers the same payload to everyone, so one
+    entry per resource and language is enough and a shared HTTP cache may
+    keep it. Both counts are read once a minute; the first restriction moves
+    every reader onto their own entry within that minute.
     """
-    if not _restricted_resources():
+    if not _restricted_resources() and not _restricted_nodegroups():
         return "public"
     return str(getattr(user, "id", None) or "anonymous")
 
@@ -879,6 +887,69 @@ def _count_restrictions():
     )
 
 
+def _restricted_nodegroups():
+    """Whether any nodegroup carries a grant, memoised for a minute."""
+    return bool(
+        get_or_build(
+            RESTRICTED_NODEGROUPS_CACHE_KEY,
+            _count_nodegroup_restrictions,
+            PERM_SCOPE_TTL,
+        )
+    )
+
+
+def _count_nodegroup_restrictions():
+    """Object grants on a nodegroup, users and groups together.
+
+    Arches reads a nodegroup that carries no grant as readable by everyone.
+    Any grant can take it away from someone: ``no_access_to_nodegroup``, and
+    equally a set of grants that leaves ``read_nodegroup`` out, so every
+    codename counts.
+    """
+    on_nodegroup = {
+        "content_type__app_label": "models",
+        "content_type__model": "nodegroup",
+    }
+    return (
+        UserObjectPermission.objects.filter(**on_nodegroup).count()
+        + GroupObjectPermission.objects.filter(**on_nodegroup).count()
+    )
+
+
+def readable_nodegroups(user):
+    """Nodegroup ids the reader may read, or None when no nodegroup is restricted.
+
+    None costs one memoised count. Otherwise the set is the reader profile's
+    ``viewable_nodegroups``, which Arches computes once per profile instance,
+    so once per request; a reader without a profile reads none.
+    """
+    if not _restricted_nodegroups():
+        return None
+    try:
+        return set(user.userprofile.viewable_nodegroups)
+    except (AttributeError, ObjectDoesNotExist):
+        return set()
+
+
+def readable_doc(doc, nodegroups):
+    """The document stripped of the tiles and indexed ids the reader may not read.
+
+    ``nodegroups`` is what ``readable_nodegroups`` returned; None keeps the
+    document as indexed. The indexed ``ids`` go with the tiles, because an
+    outgoing hop reads them when a document holds no tile.
+    """
+    if nodegroups is None:
+        return doc
+    kept = dict(doc)
+    for key in ("tiles", "ids"):
+        kept[key] = [
+            entry
+            for entry in doc.get(key) or []
+            if isinstance(entry, dict) and str(entry.get("nodegroup_id")) in nodegroups
+        ]
+    return kept
+
+
 _Draft = namedtuple("_Draft", "payload index config link_ids")
 
 
@@ -894,7 +965,10 @@ def build_summary(resourceid, language, user):
     user_id = getattr(user, "id", None)
     es, index_name = es_client()
     try:
-        doc = es.get(index=index_name, id=resourceid)["_source"] or {}
+        doc = readable_doc(
+            es.get(index=index_name, id=resourceid)["_source"] or {},
+            readable_nodegroups(user),
+        )
         draft = _draft(doc, resourceid, language)
         if draft.config is None:
             return draft.payload
@@ -931,11 +1005,13 @@ def build_summaries(ids, language, user):
     es, index_name = es_client()
     try:
         sources = _fetch_sources(es, index_name, ids)
+        nodegroups = readable_nodegroups(user)
         drafts, plans = {}, []
         for resource_id in ids:
             doc = sources.get(resource_id)
             if doc is None:
                 continue
+            doc = readable_doc(doc, nodegroups)
             draft = _draft(doc, resource_id, language)
             drafts[resource_id] = draft
             if draft.config is None:

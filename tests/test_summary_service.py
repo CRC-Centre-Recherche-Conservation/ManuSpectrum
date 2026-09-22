@@ -7,6 +7,7 @@ the module stays a ``SimpleTestCase`` and the suite creates no database.
 covered by the endpoint tests of Task 7.
 """
 
+from contextlib import contextmanager
 from unittest import mock
 
 from django.conf import settings
@@ -39,6 +40,27 @@ class FakeUser:
 
     def __init__(self, user_id):
         self.id = user_id
+
+
+class FakeProfile:
+    """A ``UserProfile`` counting the reads of its readable nodegroups."""
+
+    def __init__(self, viewable):
+        self.viewable = set(viewable)
+        self.reads = 0
+
+    @property
+    def viewable_nodegroups(self):
+        self.reads += 1
+        return self.viewable
+
+
+class FakeReader(FakeUser):
+    """A reader with a profile, as ``request.user`` carries one."""
+
+    def __init__(self, user_id, viewable=()):
+        super().__init__(user_id)
+        self.userprofile = FakeProfile(viewable)
 
 
 def make_index(**nodes):
@@ -1110,16 +1132,23 @@ def one_hop_response():
     return response
 
 
-class BuildSummaryTests(SimpleTestCase):
+class SummaryBuildMixin:
+    """The service with every reader of the database or the cluster replaced."""
+
     def setUp(self):
         self.addCleanup(cache.clear)
         cache.clear()
         self.index = summary_index()
         self.component = component_index()
 
-    def run_build(self, es, config=SUMMARY_CONFIG, language="fr", user=None):
+    @contextmanager
+    def patched(self, es, config, nodegroup_grants):
         indexes = {"g-document": self.index, "g-component": self.component}
         with (
+            mock.patch(
+                "manuspectrum.views.summary_service._count_nodegroup_restrictions",
+                return_value=nodegroup_grants,
+            ),
             mock.patch(
                 "manuspectrum.views.summary_service.es_client",
                 return_value=(es, "test_resources"),
@@ -1141,8 +1170,20 @@ class BuildSummaryTests(SimpleTestCase):
                 return_value={"blue": "Bleu", "red": "Rouge"},
             ),
         ):
+            yield
+
+    def run_build(
+        self, es, config=SUMMARY_CONFIG, language="fr", user=None, nodegroup_grants=0
+    ):
+        with self.patched(es, config, nodegroup_grants):
             return build_summary("doc-1", language, user or FakeUser(2))
 
+    def run_batch(self, es, ids, config=SUMMARY_CONFIG, user=None, nodegroup_grants=0):
+        with self.patched(es, config, nodegroup_grants):
+            return build_summaries(ids, "fr", user or FakeUser(2))
+
+
+class BuildSummaryTests(SummaryBuildMixin, SimpleTestCase):
     def test_the_payload_carries_the_model_the_name_the_fields_and_the_rollups(self):
         es = FakeES(
             source=summary_doc(),
@@ -1303,39 +1344,7 @@ class BuildSummaryTests(SimpleTestCase):
         self.assertTrue(payload["degraded"])
 
 
-class BuildSummariesTests(SimpleTestCase):
-    def setUp(self):
-        self.addCleanup(cache.clear)
-        cache.clear()
-        self.index = summary_index()
-        self.component = component_index()
-
-    def run_batch(self, es, ids, config=SUMMARY_CONFIG):
-        indexes = {"g-document": self.index, "g-component": self.component}
-        with (
-            mock.patch(
-                "manuspectrum.views.summary_service.es_client",
-                return_value=(es, "test_resources"),
-            ),
-            mock.patch.object(
-                GraphIndex,
-                "for_graph",
-                side_effect=lambda graph_id: indexes.get(str(graph_id)),
-            ),
-            mock.patch.object(
-                GraphIndex, "for_slug", side_effect=lambda slug: self.component
-            ),
-            mock.patch(
-                "manuspectrum.views.summary_service.load_summary_config",
-                return_value=config,
-            ),
-            mock.patch(
-                "manuspectrum.views.summary_service.list_labels",
-                return_value={"blue": "Bleu", "red": "Rouge"},
-            ),
-        ):
-            return build_summaries(ids, "fr", FakeUser(2))
-
+class BuildSummariesTests(SummaryBuildMixin, SimpleTestCase):
     def test_a_batch_costs_one_mget_and_one_msearch(self):
         es = FakeES(
             docs={"doc-1": summary_doc("doc-1"), "doc-2": summary_doc("doc-2")},
@@ -1388,22 +1397,112 @@ class PermScopeTests(SimpleTestCase):
         self.addCleanup(cache.clear)
         cache.clear()
 
+    def counts(self, resources=0, nodegroups=0):
+        return (
+            mock.patch(
+                "manuspectrum.views.summary_service._count_restrictions",
+                return_value=resources,
+            ),
+            mock.patch(
+                "manuspectrum.views.summary_service._count_nodegroup_restrictions",
+                return_value=nodegroups,
+            ),
+        )
+
     def test_a_deployment_without_restriction_shares_one_scope(self):
-        with mock.patch(
-            "manuspectrum.views.summary_service._count_restrictions", return_value=0
-        ):
+        resources, nodegroups = self.counts()
+        with resources, nodegroups:
             self.assertEqual(perm_scope(FakeUser(2)), "public")
 
     def test_a_restriction_anywhere_keys_the_scope_on_the_reader(self):
-        with mock.patch(
-            "manuspectrum.views.summary_service._count_restrictions", return_value=1
-        ):
+        resources, nodegroups = self.counts(resources=1)
+        with resources, nodegroups:
             self.assertEqual(perm_scope(FakeUser(7)), "7")
 
-    def test_the_count_is_read_once_per_cache_cycle(self):
-        with mock.patch(
-            "manuspectrum.views.summary_service._count_restrictions", return_value=0
-        ) as count:
+    def test_a_nodegroup_grant_keys_the_scope_on_the_reader(self):
+        resources, nodegroups = self.counts(nodegroups=1)
+        with resources, nodegroups:
+            self.assertEqual(perm_scope(FakeUser(7)), "7")
+            self.assertEqual(perm_scope(FakeUser(8)), "8")
+
+    def test_the_counts_are_read_once_per_cache_cycle(self):
+        resources, nodegroups = self.counts()
+        with resources as count, nodegroups as nodegroup_count:
             perm_scope(FakeUser(2))
             perm_scope(FakeUser(3))
             count.assert_called_once_with()
+            nodegroup_count.assert_called_once_with()
+
+
+class NodegroupPermissionTests(SummaryBuildMixin, SimpleTestCase):
+    """Tiles of a nodegroup the reader may not read stay out of the payload."""
+
+    HIDDEN = {"ng-label_of_name", "ng-measurement_point_data"}
+
+    def setUp(self):
+        super().setUp()
+        self.visible = {
+            tile["nodegroup_id"] for tile in summary_doc()["tiles"]
+        } - self.HIDDEN
+
+    def es(self):
+        return FakeES(
+            source=summary_doc(),
+            docs={
+                "place-1": {"displayname": [{"language": "fr", "value": "Avranches"}]}
+            },
+            searches=[one_hop_response()],
+        )
+
+    def test_without_a_nodegroup_grant_the_tiles_are_read_as_indexed(self):
+        reader = FakeReader(2, viewable=())
+        payload = self.run_build(self.es(), user=reader, nodegroup_grants=0)
+        self.assertEqual(
+            [field["key"] for field in payload["fields"]],
+            ["label_of_name", "analysis_technique_used", "current_location"],
+        )
+        self.assertEqual(payload["preview"]["file_id"], "file-1")
+        self.assertEqual(reader.userprofile.reads, 0)
+
+    def test_a_nodegroup_the_reader_may_not_read_leaves_the_fields_and_the_preview(
+        self,
+    ):
+        reader = FakeReader(2, viewable=self.visible)
+        payload = self.run_build(self.es(), user=reader, nodegroup_grants=1)
+        self.assertEqual(
+            [field["key"] for field in payload["fields"]],
+            ["analysis_technique_used", "current_location"],
+        )
+        self.assertIsNone(payload["preview"])
+
+    def test_a_hidden_relation_is_not_followed_through_the_indexed_ids(self):
+        doc = summary_doc()
+        doc["ids"] = [{"id": "place-1", "nodegroup_id": "ng-current_location"}]
+        reader = FakeReader(2, viewable=self.visible - {"ng-current_location"})
+        es = FakeES(source=doc, docs={}, searches=[one_hop_response()])
+        payload = self.run_build(es, user=reader, nodegroup_grants=1)
+        self.assertEqual(
+            [field["key"] for field in payload["fields"]], ["analysis_technique_used"]
+        )
+        self.assertEqual(es.count("mget"), 0)
+
+    def test_a_batch_filters_every_document_and_reads_the_set_once(self):
+        reader = FakeReader(2, viewable=self.visible)
+        es = FakeES(
+            docs={"doc-1": summary_doc("doc-1"), "doc-2": summary_doc("doc-2")},
+            rounds=[[link_page(), one_hop_response(), link_page(), one_hop_response()]],
+        )
+        summaries = self.run_batch(
+            es, ["doc-1", "doc-2"], user=reader, nodegroup_grants=1
+        )
+        for payload in summaries.values():
+            self.assertNotIn(
+                "label_of_name", [field["key"] for field in payload["fields"]]
+            )
+            self.assertIsNone(payload["preview"])
+        self.assertEqual(reader.userprofile.reads, 1)
+
+    def test_a_reader_without_a_profile_reads_no_restricted_tile(self):
+        payload = self.run_build(self.es(), user=FakeUser(2), nodegroup_grants=1)
+        self.assertEqual(payload["fields"], [])
+        self.assertIsNone(payload["preview"])

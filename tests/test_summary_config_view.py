@@ -12,6 +12,7 @@ from django.contrib.auth.models import Group, User
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import translation
 
 from arches.app.models import models
 
@@ -212,6 +213,23 @@ class SummaryConfigViewTests(TestCase):
         self.assertEqual(
             response.json()["warnings"],
             ["config: an empty configuration replaces the stored one"],
+        )
+
+    def test_the_empty_configuration_warning_is_written_in_the_active_language(self):
+        models.FunctionXGraph.objects.create(
+            function_id=SUMMARY_FUNCTION_ID,
+            graph_id=self.graph.graphid,
+            config=valid_config(),
+        )
+        with translation.override("fr"):
+            response = self.client.put(
+                reverse("summary-config", args=[self.graph.graphid]),
+                data=json.dumps({"config": details["defaultconfig"]}),
+                content_type="application/json",
+            )
+        self.assertEqual(
+            response.json()["warnings"],
+            ["config : une configuration vide remplace celle enregistrée"],
         )
 
     def test_put_of_an_empty_configuration_over_nothing_stored_does_not_warn(self):

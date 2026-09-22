@@ -69,7 +69,7 @@ class SummaryConfigView(View):
         stored = self.attachment(graphid)
         config, warnings = normalize_config(body.get("config"))
         if not _holds_entries(config) and _holds_entries(stored and stored.config):
-            warnings.append("config: an empty configuration replaces the stored one")
+            warnings.append(_("config: an empty configuration replaces the stored one"))
         models.FunctionXGraph.objects.update_or_create(
             function_id=SUMMARY_FUNCTION_ID,
             graph_id=graphid,

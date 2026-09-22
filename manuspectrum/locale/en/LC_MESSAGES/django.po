@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 06:34-0500\n"
+"POT-Creation-Date: 2026-09-22 12:15-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -34,9 +34,58 @@ msgstr "Manifest not found"
 msgid "Invalid URL format"
 msgstr "Invalid URL format"
 
-#: functions/multi_descriptor.py:158
+#: functions/multi_descriptor.py:166
 msgid "Undefined"
 msgstr "Undefined"
+
+#: functions/resource_summary.py:92
+#, python-format
+msgid "%(where)s: alias missing"
+msgstr ""
+
+#: functions/resource_summary.py:97
+#, python-format
+msgid "%(where)s (%(alias)s): unknown style %(style)r"
+msgstr ""
+
+#: functions/resource_summary.py:112
+#, python-format
+msgid "%(where)s: hop is not an object"
+msgstr ""
+
+#: functions/resource_summary.py:121
+#, python-format
+msgid "%(where)s: graph_slug and alias are required"
+msgstr ""
+
+#: functions/resource_summary.py:126
+#, python-format
+msgid "%(where)s: unknown direction %(direction)r"
+msgstr ""
+
+#: functions/resource_summary.py:136
+#, python-format
+msgid "%(where)s: unknown op %(op)r"
+msgstr ""
+
+#: functions/resource_summary.py:141
+#, python-format
+msgid "%(where)s: distinct needs an alias"
+msgstr ""
+
+#: functions/resource_summary.py:165
+#, python-format
+msgid "%(where)s: key missing"
+msgstr ""
+
+#: functions/resource_summary.py:170
+#, python-format
+msgid "%(where)s: path must hold 1 to %(max)s hops"
+msgstr ""
+
+#: functions/resource_summary.py:215
+msgid "config_version unsupported: configuration ignored"
+msgstr ""
 
 #: settings.py:153
 msgid "Term Matches"
@@ -1290,7 +1339,7 @@ msgid "Dashed outline = no records published yet"
 msgstr "Dashed outline = no records published yet"
 
 #: templates/javascript.htm:128
-#: templates/views/components/ms-summary-popup.htm:38
+#: templates/views/components/ms-summary-popup.htm:40
 #: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Model"
@@ -2060,25 +2109,25 @@ msgstr "Attribution"
 msgid "Description"
 msgstr "Description"
 
-#: templates/views/components/ms-summary-popup.htm:25
+#: templates/views/components/ms-summary-popup.htm:27
 msgid "Loading…"
 msgstr "Loading…"
 
-#: templates/views/components/ms-summary-popup.htm:33
+#: templates/views/components/ms-summary-popup.htm:35
 #: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
 msgid "Retry"
 msgstr "Retry"
 
-#: templates/views/components/ms-summary-popup.htm:91
+#: templates/views/components/ms-summary-popup.htm:93
 msgid "(partial)"
 msgstr "(partial)"
 
-#: templates/views/components/ms-summary-popup.htm:107
+#: templates/views/components/ms-summary-popup.htm:110
 msgid "Report"
 msgstr "Report"
 
-#: templates/views/components/ms-summary-popup.htm:113
+#: templates/views/components/ms-summary-popup.htm:116
 msgid "Map"
 msgstr "Map"
 
@@ -3945,13 +3994,17 @@ msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
 
-#: views/summary_config.py:63
+#: views/summary_config.py:65
 msgid "Malformed JSON body"
 msgstr "Malformed JSON body"
 
-#: views/summary_config.py:65
+#: views/summary_config.py:67
 msgid "Expected a JSON object"
 msgstr "Expected a JSON object"
+
+#: views/summary_config.py:72
+msgid "config: an empty configuration replaces the stored one"
+msgstr ""
 
 #~ msgid ""
 #~ "Specify how to process the data files for viewing.  Any additional files "

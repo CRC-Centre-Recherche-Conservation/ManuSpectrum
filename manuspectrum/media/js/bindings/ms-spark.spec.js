@@ -14,6 +14,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ko from 'knockout';
 
+const { generateArchesURL } = vi.hoisted(() => ({
+    generateArchesURL: vi.fn((name, params) => `/prefix/api/spectrum-preview/${params.file_id}`),
+}));
+
+vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL }));
+
 import './ms-spark.js';
 
 const FILE_ID = '3f2b1c44-2c0e-4f2e-9f3a-9a1d0c5e7b21';
@@ -52,6 +58,7 @@ describe('bindings/ms-spark', () => {
     });
 
     afterEach(() => {
+        generateArchesURL.mockClear();
         vi.unstubAllGlobals();
         document.body.innerHTML = '';
     });
@@ -62,10 +69,22 @@ describe('bindings/ms-spark', () => {
 
         expect(fetch).toHaveBeenCalledTimes(1);
         const [url, options] = fetch.mock.calls[0];
-        expect(url).toBe(`/api/spectrum-preview/${FILE_ID}`);
+        expect(generateArchesURL).toHaveBeenCalledWith('manuspectrum:api-spectrum-preview', {
+            file_id: FILE_ID,
+        });
+        expect(url).toBe(`/prefix/api/spectrum-preview/${FILE_ID}`);
         expect(options.credentials).toBe('same-origin');
         expect(options.signal).toBeInstanceOf(AbortSignal);
         expect(root).toBeTruthy();
+    });
+
+    it('encodes a file id before it reaches the route', async () => {
+        mount({ fileId: '../x?y=1', title: '' });
+        await flush();
+
+        expect(generateArchesURL).toHaveBeenCalledWith('manuspectrum:api-spectrum-preview', {
+            file_id: '..%2Fx%3Fy%3D1',
+        });
     });
 
     it('draws the served points as one polyline', async () => {
