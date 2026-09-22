@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-15 10:31-0500\n"
+"POT-Creation-Date: 2026-09-22 05:44-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -34,27 +34,27 @@ msgstr "Manifest not found"
 msgid "Invalid URL format"
 msgstr "Invalid URL format"
 
-#: functions/multi_descriptor.py:111
+#: functions/multi_descriptor.py:158
 msgid "Undefined"
 msgstr "Undefined"
 
-#: settings.py:151
+#: settings.py:153
 msgid "Term Matches"
 msgstr ""
 
-#: settings.py:157
+#: settings.py:159
 msgid "References"
 msgstr ""
 
-#: settings.py:535
+#: settings.py:545
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:572
+#: settings.py:582
 msgid "English"
 msgstr "English"
 
-#: settings.py:573
+#: settings.py:583
 msgid "French"
 msgstr ""
 
@@ -1951,6 +1951,14 @@ msgstr "Reset to config"
 #: templates/views/components/cards/file-renderers/xy-reader.htm:229
 msgid "Apply & re-render"
 msgstr "Apply & re-render"
+
+#: templates/views/components/functions/resource-summary.htm:5
+msgid ""
+"This configuration is saved with its own button. The Save button of the "
+"function manager does not store it."
+msgstr ""
+"This configuration is saved with its own button. The Save button of the "
+"function manager does not store it."
 
 #: templates/views/components/functions/xy-technique-config.htm:5
 msgid "Automatic XY viewer configuration"
@@ -3887,6 +3895,14 @@ msgstr ""
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
+
+#: views/summary_config.py:63
+msgid "Malformed JSON body"
+msgstr "Malformed JSON body"
+
+#: views/summary_config.py:65
+msgid "Expected a JSON object"
+msgstr "Expected a JSON object"
 
 #~ msgid ""
 #~ "Specify how to process the data files for viewing.  Any additional files "

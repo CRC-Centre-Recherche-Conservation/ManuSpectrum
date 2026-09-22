@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-15 10:31-0500\n"
+"POT-Creation-Date: 2026-09-22 05:44-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -32,27 +32,27 @@ msgstr "Manifeste introuvable"
 msgid "Invalid URL format"
 msgstr "Format d'URL invalide"
 
-#: functions/multi_descriptor.py:111
+#: functions/multi_descriptor.py:158
 msgid "Undefined"
 msgstr "Indéfini"
 
-#: settings.py:151
+#: settings.py:153
 msgid "Term Matches"
 msgstr "Correspondances de termes"
 
-#: settings.py:157
+#: settings.py:159
 msgid "References"
 msgstr "Références"
 
-#: settings.py:535
+#: settings.py:545
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:572
+#: settings.py:582
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:573
+#: settings.py:583
 msgid "French"
 msgstr "Français"
 
@@ -2016,6 +2016,14 @@ msgstr "Réinitialiser à la config"
 #: templates/views/components/cards/file-renderers/xy-reader.htm:229
 msgid "Apply & re-render"
 msgstr "Appliquer et re-rendre"
+
+#: templates/views/components/functions/resource-summary.htm:5
+msgid ""
+"This configuration is saved with its own button. The Save button of the "
+"function manager does not store it."
+msgstr ""
+"Cette configuration s’enregistre avec son propre bouton. Le bouton "
+"Enregistrer du gestionnaire de fonctions ne la sauvegarde pas."
 
 #: templates/views/components/functions/xy-technique-config.htm:5
 msgid "Automatic XY viewer configuration"
@@ -4053,6 +4061,14 @@ msgid ""
 msgstr ""
 "Cette configuration fait partie du socle commun et ne peut pas être "
 "supprimée."
+
+#: views/summary_config.py:63
+msgid "Malformed JSON body"
+msgstr "Corps JSON mal formé"
+
+#: views/summary_config.py:65
+msgid "Expected a JSON object"
+msgstr "Un objet JSON est attendu"
 
 #, python-format
 #~ msgid "Could not apply the XY configuration to tile %s"
