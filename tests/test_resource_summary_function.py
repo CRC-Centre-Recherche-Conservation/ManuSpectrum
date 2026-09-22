@@ -150,3 +150,81 @@ class TileSaveExclusionTests(TestCase):
             ~Q(function__functiontype="primarydescriptors"),
         )
         self.assertFalse(matched.filter(function=function).exists())
+
+
+class SeedConfigTests(SimpleTestCase):
+    def test_every_seed_config_is_valid_and_warning_free(self):
+        from manuspectrum.constants.summary_configs import SEED_CONFIGS
+
+        self.assertEqual(
+            set(SEED_CONFIGS),
+            {"document", "component", "analysis", "characterization", "sample"},
+        )
+        for slug, config in SEED_CONFIGS.items():
+            cleaned, warnings = normalize_config(config)
+            self.assertEqual(warnings, [], slug)
+            self.assertEqual(cleaned, config, slug)
+
+
+class MigrationTests(TestCase):
+    def test_the_function_row_exists_and_is_attached_to_seeded_graphs(self):
+        from manuspectrum.constants.summary_configs import SEED_CONFIGS
+
+        self.assertTrue(models.Function.objects.filter(pk=SUMMARY_FUNCTION_ID).exists())
+        for slug in SEED_CONFIGS:
+            graph = models.GraphModel.objects.filter(slug=slug).first()
+            if graph is None:
+                continue
+            row = models.FunctionXGraph.objects.get(
+                function_id=SUMMARY_FUNCTION_ID, graph=graph
+            )
+            self.assertEqual(row.config["config_version"], CONFIG_VERSION)
+            self.assertNotIn("triggering_nodegroups", row.config)
+
+    def test_the_descriptor_function_row_exists_without_attachments_of_its_own(self):
+        from manuspectrum.functions.multi_descriptor import details as descriptor
+
+        row = models.Function.objects.get(pk=descriptor["functionid"])
+        self.assertEqual(row.modulename, "multi_descriptor.py")
+        self.assertEqual(row.functiontype, descriptor["type"])
+        self.assertFalse(
+            models.FunctionXGraph.objects.filter(
+                function_id=descriptor["functionid"]
+            ).exists()
+        )
+
+
+class SummaryCheckTests(TestCase):
+    def test_w003_fires_when_a_package_graph_carries_the_function_but_the_row_is_missing(
+        self,
+    ):
+        from manuspectrum.checks import check_summary_function_registered
+
+        models.FunctionXGraph.objects.filter(function_id=SUMMARY_FUNCTION_ID).delete()
+        models.Function.objects.filter(pk=SUMMARY_FUNCTION_ID).delete()
+        with self.settings(
+            SUMMARY_PACKAGE_GRAPH_IDS=["0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"]
+        ):
+            messages = check_summary_function_registered(None, databases=["default"])
+        self.assertEqual([m.id for m in messages], ["manuspectrum.W003"])
+
+    def test_no_message_when_the_checked_databases_exclude_default(self):
+        from manuspectrum.checks import check_summary_function_registered
+
+        models.Function.objects.filter(pk=SUMMARY_FUNCTION_ID).delete()
+        with self.settings(
+            SUMMARY_PACKAGE_GRAPH_IDS=["0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"]
+        ):
+            self.assertEqual(check_summary_function_registered(None, databases=[]), [])
+            self.assertEqual(
+                check_summary_function_registered(None, databases=None), []
+            )
+
+    def test_nothing_fires_when_no_package_graph_references_the_function(self):
+        from manuspectrum.checks import check_summary_function_registered
+
+        models.Function.objects.filter(pk=SUMMARY_FUNCTION_ID).delete()
+        with self.settings(SUMMARY_PACKAGE_GRAPH_IDS=[]):
+            self.assertEqual(
+                check_summary_function_registered(None, databases=["default"]), []
+            )

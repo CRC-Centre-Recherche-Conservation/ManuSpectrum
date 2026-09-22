@@ -77,6 +77,71 @@ def check_published_graph_languages(app_configs, databases, **kwargs):
         return []
 
 
+def _package_graphs_referencing(function_id):
+    """Names of the pkg/ graph files whose JSON mentions ``function_id``.
+
+    A plain substring scan of ~2 MB: the exported graph carries its
+    ``functions_x_graphs`` rows verbatim (arches/app/utils/exporter.py:89-90,
+    191-199), so the id appears as text or not at all.
+    """
+    from pathlib import Path
+
+    package_dir = getattr(settings, "PACKAGE_DIR", None)
+    if not package_dir:
+        return []
+    found = []
+    for path in sorted(Path(package_dir, "graphs").rglob("*.json")):
+        try:
+            if function_id in path.read_text(encoding="utf-8"):
+                found.append(path.name)
+        except OSError:
+            continue
+    return found
+
+
+@checks.register(checks.Tags.database)
+def check_summary_function_registered(app_configs, databases, **kwargs):
+    """W003: a pkg/ graph references the summary function but its row is absent.
+
+    ``load_package`` drops a ``functions_x_graphs`` entry whose Function is
+    unknown without a word (arches/app/models/graph.py:571-592), so the graph
+    would load with its summary configuration silently gone. Running ``migrate``
+    first registers the function.
+
+    ``SUMMARY_PACKAGE_GRAPH_IDS`` short-circuits the pkg/ scan when set.
+    Database-tagged so it runs with migrate, and, like W002, silent on a
+    half-migrated database.
+    """
+    if "default" not in (databases or []):
+        return []
+
+    from manuspectrum.functions.resource_summary import SUMMARY_FUNCTION_ID
+
+    graph_ids = getattr(settings, "SUMMARY_PACKAGE_GRAPH_IDS", None)
+    if graph_ids is None:
+        graph_ids = _package_graphs_referencing(SUMMARY_FUNCTION_ID)
+    if not graph_ids:
+        return []
+
+    try:
+        from arches.app.models.models import Function
+
+        registered = Function.objects.filter(pk=SUMMARY_FUNCTION_ID).exists()
+    except Exception:  # noqa: BLE001 — a half-migrated DB must not block migrate
+        return []
+    if registered:
+        return []
+    return [
+        checks.Warning(
+            "The Resource Summary function is referenced by "
+            f"{', '.join(str(g) for g in graph_ids)} but is not registered; "
+            "run `python manage.py migrate` before loading the package, or the "
+            "summary configuration of those graphs is dropped on load.",
+            id="manuspectrum.W003",
+        )
+    ]
+
+
 @checks.register()
 def check_contact_email(app_configs, **kwargs):
     """Block prod deploys while the public contact address is a placeholder.
