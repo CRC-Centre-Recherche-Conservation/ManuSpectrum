@@ -9,6 +9,7 @@ class stays out of that loop.
 """
 
 import logging
+import uuid
 
 from django.conf import settings
 from django.core.cache import cache
@@ -38,6 +39,28 @@ details = {
 
 def config_cache_key(graph_id):
     return f"summary-config:{graph_id}"
+
+
+# One stamp for the whole deployment: the views key memos by resource id and
+# do not know the graph without one more query per id.
+SUMMARY_CONFIG_STAMP_KEY = "summary-config-stamp"
+
+
+def config_stamp():
+    """The token every memoised popup carries, stored without expiry.
+
+    Minted on first read and kept until a configuration save deletes it.
+    """
+    return cache.get_or_set(SUMMARY_CONFIG_STAMP_KEY, lambda: uuid.uuid4().hex, None)
+
+
+def bump_config_stamp():
+    """Drop the stamp: the next reader mints another, orphaning every memo.
+
+    Called by every path that writes a summary configuration, so a saved
+    configuration reaches the popups before ``SUMMARY_CACHE_TTL`` elapses.
+    """
+    cache.delete(SUMMARY_CONFIG_STAMP_KEY)
 
 
 def _clamp(value, ceiling, default):
@@ -194,7 +217,7 @@ class ResourceSummary(BaseFunction):
     """Configuration holder: no tile hook is implemented on purpose."""
 
     def after_function_save(self, functionxgraph, request):
-        """Store the normalised config and drop the graph's cached copy.
+        """Store the normalised config, drop the graph's cached copy and the stamp.
 
         The hook is the last write of the designer POST: the view
         (arches/app/views/graph.py:964-989) creates the row inside its
@@ -213,3 +236,4 @@ class ResourceSummary(BaseFunction):
         functionxgraph.config = cleaned
         functionxgraph.save()
         cache.delete(config_cache_key(functionxgraph.graph_id))
+        bump_config_stamp()

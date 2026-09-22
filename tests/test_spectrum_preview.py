@@ -410,6 +410,31 @@ class SpectrumPreviewViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, 304)
         self.assertEqual(response.headers["ETag"], etag)
 
+    def test_a_client_holding_any_representation_gets_a_304(self):
+        path = self.written(".csv")
+        etag = self.get(path).headers["ETag"]
+
+        response = self.get(path, HTTP_IF_NONE_MATCH="*")
+
+        self.assertEqual(response.status_code, 304)
+        self.assertEqual(response.headers["ETag"], etag)
+
+    def test_a_client_listing_several_tags_gets_a_304(self):
+        path = self.written(".csv")
+        etag = self.get(path).headers["ETag"]
+
+        response = self.get(path, HTTP_IF_NONE_MATCH=f'"other", {etag}')
+
+        self.assertEqual(response.status_code, 304)
+
+    def test_a_client_holding_the_weak_tag_gets_a_304(self):
+        path = self.written(".csv")
+        etag = self.get(path).headers["ETag"]
+
+        response = self.get(path, HTTP_IF_NONE_MATCH=f"W/{etag}")
+
+        self.assertEqual(response.status_code, 304)
+
     def test_the_payload_of_one_file_is_built_once(self):
         path = self.written(".csv")
 

@@ -19,6 +19,7 @@ from manuspectrum.functions.resource_summary import (
     CONFIG_VERSION,
     SUMMARY_FUNCTION_ID,
     config_cache_key,
+    config_stamp,
     details,
 )
 
@@ -181,6 +182,41 @@ class SummaryConfigViewTests(TestCase):
         cache.set(self.cache_key, {"stale": True}, 60)
         self.put(json.dumps({"config": valid_config()}))
         self.assertIsNone(cache.get(self.cache_key))
+
+    def test_put_renews_the_stamp_the_memoised_summaries_carry(self):
+        before = config_stamp()
+        self.put(json.dumps({"config": valid_config()}))
+        self.assertNotEqual(config_stamp(), before)
+
+    def test_put_of_an_empty_configuration_over_a_stored_one_warns(self):
+        models.FunctionXGraph.objects.create(
+            function_id=SUMMARY_FUNCTION_ID,
+            graph_id=self.graph.graphid,
+            config=valid_config(),
+        )
+        response = self.put(json.dumps({"config": details["defaultconfig"]}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.attachment().config, details["defaultconfig"])
+        self.assertEqual(
+            response.json()["warnings"],
+            ["config: an empty configuration replaces the stored one"],
+        )
+
+    def test_put_of_a_body_without_a_configuration_over_a_stored_one_warns(self):
+        models.FunctionXGraph.objects.create(
+            function_id=SUMMARY_FUNCTION_ID,
+            graph_id=self.graph.graphid,
+            config=valid_config(),
+        )
+        response = self.put(json.dumps({}))
+        self.assertEqual(
+            response.json()["warnings"],
+            ["config: an empty configuration replaces the stored one"],
+        )
+
+    def test_put_of_an_empty_configuration_over_nothing_stored_does_not_warn(self):
+        response = self.put(json.dumps({"config": details["defaultconfig"]}))
+        self.assertEqual(response.json()["warnings"], [])
 
     def test_put_saves_a_configuration_without_its_invalid_entries_and_warns(self):
         config = valid_config()

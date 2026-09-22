@@ -109,8 +109,8 @@ class GraphIndex(NamedTuple):
     name: dict
     nodes: dict
     labels: dict
-    targets: dict = {}
-    lists: dict = {}
+    targets: dict
+    lists: dict
 
     def name_for(self, language):
         """Localized name of the model."""
@@ -479,7 +479,7 @@ def es_client():
     engine = SearchEngineFactory().create()
     return (
         engine.es.options(request_timeout=settings.SUMMARY_ES_TIMEOUT),
-        engine._add_prefix(index=RESOURCES_INDEX)["index"],
+        engine._add_prefix(RESOURCES_INDEX),
     )
 
 

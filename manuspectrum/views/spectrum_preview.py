@@ -30,7 +30,7 @@ from arches.app.models.models import File
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.models import RendererConfig
-from manuspectrum.utils.cache import get_or_build
+from manuspectrum.utils.cache import etag_already_held, get_or_build
 from manuspectrum.utils.spectrum_preview import build_preview, is_supported
 
 logger = logging.getLogger(__name__)
@@ -141,12 +141,6 @@ def _private(data, status):
     return response
 
 
-def _already_held(request, etag):
-    """Whether the client's ``If-None-Match`` names this payload."""
-    header = request.headers.get("If-None-Match", "")
-    return etag in header or f"W/{etag}" in header
-
-
 class SpectrumPreviewView(View):
     """``GET /api/spectrum-preview/<file_id>``, at most one file read per day.
 
@@ -177,7 +171,7 @@ class SpectrumPreviewView(View):
 
         body = orjson.dumps(payload)
         etag = '"%s"' % hashlib.md5(body, usedforsecurity=False).hexdigest()
-        if _already_held(request, etag):
+        if etag_already_held(request, etag):
             response = HttpResponseNotModified()
         else:
             response = HttpResponse(body, content_type="application/json")

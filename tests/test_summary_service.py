@@ -62,6 +62,8 @@ def make_index(**nodes):
         name={"en": "Document", "fr": "Document"},
         nodes=infos,
         labels=labels,
+        targets={},
+        lists={},
     )
 
 
@@ -426,12 +428,21 @@ class FindPreviewTests(SimpleTestCase):
 class GraphIndexTests(SimpleTestCase):
     def test_name_for_falls_back_to_english_then_to_any_language(self):
         index = GraphIndex(
-            graph_id="g", slug="document", name={"en": "Document"}, nodes={}, labels={}
+            graph_id="g",
+            slug="document",
+            name={"en": "Document"},
+            nodes={},
+            labels={},
+            targets={},
+            lists={},
         )
         self.assertEqual(index.name_for("fr"), "Document")
         other = index._replace(name={"de": "Dokument"})
         self.assertEqual(other.name_for("fr"), "Dokument")
         self.assertEqual(index._replace(name={}).name_for("fr"), "")
+
+    def test_the_index_declares_no_default_of_its_own(self):
+        self.assertEqual(GraphIndex._field_defaults, {})
 
     def test_the_index_is_picklable(self):
         import pickle

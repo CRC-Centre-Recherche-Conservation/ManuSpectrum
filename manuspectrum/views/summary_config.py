@@ -9,7 +9,8 @@ same normaliser runs on both sides instead.
 What is stored is always the cleaned configuration: invalid entries are dropped
 rather than kept for a later repair, and the problems travel back in the
 response so the form can show them next to the fields that caused them. A write
-therefore answers 200 with warnings, never 400.
+therefore answers 200 with warnings, never 400 — emptying a configuration is a
+legitimate curator action, and one of those warnings is what says it happened.
 """
 
 import json
@@ -26,6 +27,7 @@ from arches.app.utils.decorators import group_required
 
 from manuspectrum.functions.resource_summary import (
     SUMMARY_FUNCTION_ID,
+    bump_config_stamp,
     config_cache_key,
     details,
     normalize_config,
@@ -64,13 +66,17 @@ class SummaryConfigView(View):
         if not isinstance(body, dict):
             return JsonResponse({"error": _("Expected a JSON object")}, status=400)
 
+        stored = self.attachment(graphid)
         config, warnings = normalize_config(body.get("config"))
+        if not _holds_entries(config) and _holds_entries(stored and stored.config):
+            warnings.append("config: an empty configuration replaces the stored one")
         models.FunctionXGraph.objects.update_or_create(
             function_id=SUMMARY_FUNCTION_ID,
             graph_id=graphid,
             defaults={"config": config},
         )
         cache.delete(config_cache_key(graphid))
+        bump_config_stamp()
         return JsonResponse(
             {
                 "graphid": graphid,
@@ -98,3 +104,10 @@ class SummaryConfigView(View):
         return models.FunctionXGraph.objects.filter(
             function_id=SUMMARY_FUNCTION_ID, graph_id=graphid
         ).first()
+
+
+def _holds_entries(config):
+    """Whether a configuration shows anything: one field or one rollup."""
+    if not isinstance(config, dict):
+        return False
+    return bool(config.get("fields") or config.get("rollups"))

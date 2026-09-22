@@ -1,12 +1,18 @@
 import uuid
 
+from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 
 from arches.app.models import models
 
 from manuspectrum.functions.resource_summary import (
     CONFIG_VERSION,
+    SUMMARY_CONFIG_STAMP_KEY,
     SUMMARY_FUNCTION_ID,
+    ResourceSummary,
+    bump_config_stamp,
+    config_cache_key,
+    config_stamp,
     details,
     normalize_config,
 )
@@ -53,6 +59,44 @@ def valid_config():
             }
         ],
     }
+
+
+class SavedRow:
+    """What ``after_function_save`` touches of a ``FunctionXGraph`` row."""
+
+    def __init__(self, graph_id="g-1"):
+        self.graph_id = graph_id
+        self.config = dict(details["defaultconfig"])
+        self.saved = 0
+
+    def save(self):
+        self.saved += 1
+
+
+class ConfigStampTests(SimpleTestCase):
+    def setUp(self):
+        cache.delete(SUMMARY_CONFIG_STAMP_KEY)
+        self.addCleanup(cache.delete, SUMMARY_CONFIG_STAMP_KEY)
+
+    def test_the_stamp_holds_until_a_save_drops_it(self):
+        first = config_stamp()
+        self.assertEqual(config_stamp(), first)
+        bump_config_stamp()
+        self.assertNotEqual(config_stamp(), first)
+
+    def test_after_function_save_stores_the_config_and_renews_the_stamp(self):
+        row = SavedRow()
+        first = config_stamp()
+        ResourceSummary().after_function_save(row, None)
+        self.assertEqual(row.saved, 1)
+        self.assertEqual(row.config, details["defaultconfig"])
+        self.assertNotEqual(config_stamp(), first)
+
+    def test_after_function_save_drops_the_cached_config_of_the_graph(self):
+        cache.set(config_cache_key("g-1"), {"stale": True}, 60)
+        self.addCleanup(cache.delete, config_cache_key("g-1"))
+        ResourceSummary().after_function_save(SavedRow(), None)
+        self.assertIsNone(cache.get(config_cache_key("g-1")))
 
 
 class NormalizeConfigTests(SimpleTestCase):

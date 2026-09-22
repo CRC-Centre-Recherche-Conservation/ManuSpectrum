@@ -27,7 +27,8 @@ from django.views.decorators.gzip import gzip_page
 
 from arches.app.utils.permission_backend import user_can_read_resource
 
-from manuspectrum.utils.cache import get_or_build, stable_cache_key
+from manuspectrum.functions.resource_summary import config_stamp
+from manuspectrum.utils.cache import etag_already_held, get_or_build, stable_cache_key
 from manuspectrum.views.summary_service import (
     DEGRADED_TTL,
     ResourceNotFound,
@@ -44,13 +45,22 @@ LOCK_TIMEOUT = 10
 LOCK_WAIT = 2.0
 
 
-def summary_cache_key(resourceid, language, scope):
-    """The memo entry of one payload; both views read and write this one."""
-    return stable_cache_key("summary", resourceid, language, scope)
+def summary_cache_key(resourceid, language, scope, stamp):
+    """The memo entry of one payload; both views read and write this one.
+
+    The configuration stamp is part of the key, so a saved configuration
+    orphans every payload built under the previous one. It is read once per
+    request, the batch view included, and passed down here.
+    """
+    return stable_cache_key("summary", resourceid, language, scope, stamp)
 
 
 def shorten_degraded(payload, key):
-    """Expire a degraded payload in seconds: it states a symptom, not a fact."""
+    """Expire a degraded payload in seconds: it states a symptom, not a fact.
+
+    Runs on a payload that was just built, so the lifetime counts from the
+    build rather than from the last read.
+    """
     if payload.get("degraded"):
         cache.set(key, payload, DEGRADED_TTL)
 
@@ -62,12 +72,6 @@ def _private(data, status=200):
     return response
 
 
-def _already_held(request, etag):
-    """Whether the client's ``If-None-Match`` names this payload."""
-    header = request.headers.get("If-None-Match", "")
-    return etag in header or f"W/{etag}" in header
-
-
 @method_decorator(gzip_page, name="dispatch")
 class SummaryView(View):
     """The summary of one resource, for the map popup and the IIIF viewer."""
@@ -77,7 +81,7 @@ class SummaryView(View):
             return _private({"error": "forbidden"}, 403)
         language = translation.get_language() or settings.LANGUAGE_CODE
         scope = perm_scope(request.user)
-        key = summary_cache_key(resourceid, language, scope)
+        key = summary_cache_key(resourceid, language, scope, config_stamp())
         try:
             payload = get_or_build(
                 key,
@@ -85,16 +89,16 @@ class SummaryView(View):
                 settings.SUMMARY_CACHE_TTL,
                 lock_timeout=LOCK_TIMEOUT,
                 wait=LOCK_WAIT,
+                kept=lambda built: shorten_degraded(built, key),
             )
         except ResourceNotFound:
             return _private({"error": "not_found"}, 404)
         if payload is None:
             logger.error("summary: nothing built for %s", resourceid)
             return _private({"error": "unavailable"}, 503)
-        shorten_degraded(payload, key)
         body = orjson.dumps(payload)
         etag = '"%s"' % hashlib.md5(body, usedforsecurity=False).hexdigest()
-        if _already_held(request, etag):
+        if etag_already_held(request, etag):
             response = HttpResponseNotModified()
         else:
             response = HttpResponse(body, content_type="application/json")
@@ -129,18 +133,19 @@ class SummaryBatchView(View):
             return _private({"error": "too_many_ids"}, 400)
         language = translation.get_language() or settings.LANGUAGE_CODE
         scope = perm_scope(request.user)
+        stamp = config_stamp()
         summaries, missing = {}, []
         for resourceid in _well_formed(asked):
             if not user_can_read_resource(request.user, resourceid=resourceid):
                 continue
-            held = cache.get(summary_cache_key(resourceid, language, scope))
+            held = cache.get(summary_cache_key(resourceid, language, scope, stamp))
             if held is None:
                 missing.append(resourceid)
             else:
                 summaries[resourceid] = held
         built = build_summaries(missing, language, request.user)
         for resourceid, payload in built.items():
-            key = summary_cache_key(resourceid, language, scope)
+            key = summary_cache_key(resourceid, language, scope, stamp)
             cache.set(key, payload, settings.SUMMARY_CACHE_TTL)
             shorten_degraded(payload, key)
             summaries[resourceid] = payload

@@ -15,6 +15,10 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
+from elasticsearch import TransportError
+
+from manuspectrum.functions.resource_summary import ResourceSummary, details
+from manuspectrum.views import summary as summary_view
 from manuspectrum.views.summary_service import GraphIndex
 
 from tests.test_summary_service import (
@@ -29,6 +33,17 @@ from tests.test_summary_service import (
 
 DOC_ONE = str(uuid.uuid4())
 DOC_TWO = str(uuid.uuid4())
+
+
+class SavedRow:
+    """What ``after_function_save`` touches of a ``FunctionXGraph`` row."""
+
+    def __init__(self, graph_id="g-document"):
+        self.graph_id = graph_id
+        self.config = dict(details["defaultconfig"])
+
+    def save(self):
+        pass
 
 
 class SummaryTestCase(TestCase):
@@ -148,6 +163,61 @@ class SummaryEndpointTests(SummaryTestCase):
         self.assertEqual(second["ETag"], etag)
         self.assertEqual(second.content, b"")
 
+    def test_a_client_holding_any_representation_is_answered_without_a_body(self):
+        es = self.one_document()
+        etag = self.get(es)["ETag"]
+        response = self.get(es, HTTP_IF_NONE_MATCH="*")
+        self.assertEqual(response.status_code, 304)
+        self.assertEqual(response["ETag"], etag)
+
+    def test_a_conditional_request_listing_several_tags_names_the_payload(self):
+        es = self.one_document()
+        etag = self.get(es)["ETag"]
+        response = self.get(es, HTTP_IF_NONE_MATCH=f'"other", {etag}')
+        self.assertEqual(response.status_code, 304)
+
+    def test_a_conditional_request_holding_the_weak_tag_names_the_payload(self):
+        es = self.one_document()
+        etag = self.get(es)["ETag"]
+        response = self.get(es, HTTP_IF_NONE_MATCH=f"W/{etag}")
+        self.assertEqual(response.status_code, 304)
+
+    def test_a_configuration_saved_in_the_designer_rebuilds_the_payload(self):
+        es = self.one_document(count=2)
+        self.get(es)
+        ResourceSummary().after_function_save(SavedRow(), None)
+        self.assertEqual(self.get(es).status_code, 200)
+        self.assertEqual(es.count("get"), 2)
+
+    def test_the_configuration_stamp_is_read_once_per_request(self):
+        with mock.patch(
+            "manuspectrum.views.summary.config_stamp", return_value="stamp"
+        ) as stamp:
+            self.get(self.one_document())
+        self.assertEqual(stamp.call_count, 1)
+
+    def test_a_degraded_payload_expires_from_its_build_not_from_its_last_read(self):
+        es = FakeES(get_error=TransportError("connection refused"))
+        with (
+            mock.patch(
+                "manuspectrum.views.summary_service.ResourceInstance"
+            ) as resource,
+            mock.patch(
+                "manuspectrum.views.summary.shorten_degraded",
+                wraps=summary_view.shorten_degraded,
+            ) as shorten,
+        ):
+            resource.objects.filter.return_value.values.return_value.first.return_value = {
+                "descriptors": {"en": {"name": "Ms. 59"}},
+                "name": None,
+                "graph_id": "g-document",
+            }
+            first = self.get(es)
+            self.get(es)
+        self.assertTrue(json.loads(first.content)["degraded"])
+        self.assertEqual(shorten.call_count, 1)
+        self.assertEqual(es.count("get"), 1)
+
     def test_two_readers_of_a_restricted_deployment_do_not_share_the_memo(self):
         other = User.objects.create_user("summary_other", password="pw")
         es = self.one_document(count=2)
@@ -214,6 +284,20 @@ class SummaryBatchEndpointTests(SummaryTestCase):
         summaries = json.loads(response.content)["summaries"]
         self.assertEqual(sorted(summaries), sorted([DOC_ONE, DOC_TWO]))
         self.assertEqual(es.calls[0], ("mget", [DOC_TWO]))
+
+    def test_the_configuration_stamp_is_read_once_for_the_whole_batch(self):
+        with mock.patch(
+            "manuspectrum.views.summary.config_stamp", return_value="stamp"
+        ) as stamp:
+            self.batch(self.two_documents(), f"{DOC_ONE},{DOC_TWO}")
+        self.assertEqual(stamp.call_count, 1)
+
+    def test_a_configuration_saved_in_the_designer_rebuilds_a_warmed_payload(self):
+        self.batch(self.two_documents(), f"{DOC_ONE},{DOC_TWO}")
+        ResourceSummary().after_function_save(SavedRow(), None)
+        es = self.two_documents()
+        self.batch(es, f"{DOC_ONE},{DOC_TWO}")
+        self.assertEqual(es.calls[0], ("mget", [DOC_ONE, DOC_TWO]))
 
     def test_nothing_asked_answers_nothing(self):
         response = self.batch(FakeES(), "")
