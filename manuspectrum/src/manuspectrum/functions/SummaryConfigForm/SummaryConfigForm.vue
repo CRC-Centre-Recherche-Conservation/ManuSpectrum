@@ -374,11 +374,15 @@ function removeRollup(index: number): void {
 </template>
 
 <style scoped>
+/* The form scrolls on its own inside the Function Manager panel, and the
+   action bar sticks to its bottom edge so the save button stays in view. */
 .summary-config {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    max-height: calc(100vh - 24rem);
     padding: 1rem;
+    overflow-y: auto;
     font-size: 1.2rem;
 }
 
@@ -407,9 +411,16 @@ function removeRollup(index: number): void {
 }
 
 .summary-config .actions {
+    position: sticky;
+    bottom: -1rem;
+    z-index: 1;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem;
+    margin: 0 -1rem -1rem;
+    padding: 0.75rem 1rem;
+    border-top: 0.1rem solid var(--p-content-border-color);
+    background: var(--p-content-background);
 }
 </style>
