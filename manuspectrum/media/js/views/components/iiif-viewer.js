@@ -10,11 +10,14 @@
  *     service manager, manifest widget) opens the fiche instead of the core
  *     popup; a handler passed by the host wins
  *   - the 'iiif-viewer' Knockout component is re-registered on the wrapper
+ *   - imports `views/components/ms-summary-popup`, which registers the
+ *     'ms-summary-popup' component the binder mounts
  */
 import ko from 'knockout';
 import CoreIIIFViewerViewmodel from 'arches/arches/app/media/js/views/components/iiif-viewer';
 import iiifViewerTemplate from 'templates/views/components/iiif-viewer.htm';
 import { bindLeafletSummaryPopup } from 'utils/summary-popup';
+import 'views/components/ms-summary-popup';
 
 const IIIFViewerViewmodel = function(params) {
     if (params && !params.onEachFeature) {

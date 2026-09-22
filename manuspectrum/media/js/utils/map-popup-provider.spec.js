@@ -42,6 +42,8 @@ vi.mock('utils/summary-popup', () => ({
     warmSummaryCache,
 }));
 
+vi.mock('views/components/ms-summary-popup', () => ({}));
+
 import provider from './map-popup-provider.js';
 
 const requests = [];

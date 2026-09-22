@@ -24,6 +24,8 @@ vi.mock('utils/summary-popup', () => ({
     bindLeafletSummaryPopup: vi.fn(),
 }));
 
+vi.mock('views/components/ms-summary-popup', () => ({}));
+
 import CoreIIIFViewerViewmodel from 'arches/arches/app/media/js/views/components/iiif-viewer';
 import { bindLeafletSummaryPopup } from 'utils/summary-popup';
 

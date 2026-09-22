@@ -8,12 +8,15 @@
  *     (`map-popup.htm` extended with the summary component on the search map)
  *   - `processData` gives the Mapbox popup the teardown Arches never runs and
  *     warms the summary cache for the resources of the click
+ *   - imports `views/components/ms-summary-popup`, which registers the
+ *     'ms-summary-popup' component the template mounts
  */
 
 import ko from 'knockout';
 import coreProvider from 'arches/arches/app/media/js/utils/map-popup-provider';
 import popupTemplate from 'templates/views/components/ms-map-popup.htm';
 import { attachMapboxPopupCleanup, warmSummaryCache } from 'utils/summary-popup';
+import 'views/components/ms-summary-popup';
 
 const provider = {
     ...coreProvider,
