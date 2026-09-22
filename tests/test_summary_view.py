@@ -75,7 +75,9 @@ class SummaryTestCase(TestCase):
             ),
         )
 
-    def get(self, es, resourceid=DOC_ONE, config=SUMMARY_CONFIG, readable=True, **extra):
+    def get(
+        self, es, resourceid=DOC_ONE, config=SUMMARY_CONFIG, readable=True, **extra
+    ):
         patches = self.patched(es, config=config, readable=readable)
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             return self.client.get(reverse("api-summary", args=[resourceid]), **extra)

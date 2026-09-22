@@ -16,6 +16,10 @@ CACHE_SHAPE_MODULES = (
     "views/model_graph_service.py",
     "views/iiif_annotation.py",
     "views/serializers/iiif_annotation.py",
+    "views/summary.py",
+    "views/summary_service.py",
+    # The summary payload reads its localized texts through graph_nodes.
+    "views/graph_nodes.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

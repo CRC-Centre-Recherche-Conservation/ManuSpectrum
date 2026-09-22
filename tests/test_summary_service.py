@@ -1125,7 +1125,9 @@ class BuildSummaryTests(SimpleTestCase):
     def test_the_payload_carries_the_model_the_name_the_fields_and_the_rollups(self):
         es = FakeES(
             source=summary_doc(),
-            docs={"place-1": {"displayname": [{"language": "fr", "value": "Avranches"}]}},
+            docs={
+                "place-1": {"displayname": [{"language": "fr", "value": "Avranches"}]}
+            },
             searches=[one_hop_response()],
         )
         payload = self.run_build(es)
@@ -1164,7 +1166,9 @@ class BuildSummaryTests(SimpleTestCase):
     def test_a_linked_resource_is_named_by_a_single_mget(self):
         es = FakeES(
             source=summary_doc(),
-            docs={"place-1": {"displayname": [{"language": "fr", "value": "Avranches"}]}},
+            docs={
+                "place-1": {"displayname": [{"language": "fr", "value": "Avranches"}]}
+            },
             searches=[one_hop_response()],
         )
         payload = self.run_build(es)
@@ -1326,9 +1330,7 @@ class BuildSummariesTests(SimpleTestCase):
         self.assertEqual(es.count("mget"), 1)
         self.assertEqual(es.count("msearch"), 1)
         self.assertEqual(es.count("search"), 0)
-        link = next(
-            f for f in summaries["doc-2"]["fields"] if f["style"] == "link"
-        )
+        link = next(f for f in summaries["doc-2"]["fields"] if f["style"] == "link")
         self.assertEqual(link["values"], [{"id": "place-1", "label": "Avranches"}])
         self.assertEqual(summaries["doc-1"]["rollups"][0]["count"], 20)
 

@@ -984,7 +984,7 @@ def _draft(doc, resourceid, language):
     attached to, stops here on the core display (D11): its name and the
     ``map_popup`` the descriptors wrote.
     """
-    index = GraphIndex.for_graph(doc.get("graph_id"))
+    index = GraphIndex.for_graph(doc["graph_id"]) if doc.get("graph_id") else None
     graph = {
         "slug": index.slug if index else None,
         "name": index.name_for(language) if index else "",

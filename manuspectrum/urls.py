@@ -32,6 +32,7 @@ from manuspectrum.views.iiif_annotation import (
 )
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.model_graph import ModelGraphView
+from manuspectrum.views.summary import SummaryBatchView, SummaryView
 from manuspectrum.views.summary_config import SummaryConfigView
 from manuspectrum.views.thumbnail import CachedThumbnailView
 
@@ -142,6 +143,21 @@ urlpatterns.append(
         SummaryConfigView.as_view(),
         name="summary-config",
     )
+)
+
+### Summary popups of the search map and the IIIF viewer. Wrapped like
+### model-graph, and for the same reason: the payload carries the field
+### labels, model names and bucket labels of the request language, and the
+### path is what keys its cache. GET only.
+urlpatterns.append(
+    re_path(
+        r"^api/summary/(?P<resourceid>%s)$" % settings.UUID_REGEX,
+        SummaryView.as_view(),
+        name="api-summary",
+    )
+)
+urlpatterns.append(
+    path("api/summary", SummaryBatchView.as_view(), name="api-summary-batch")
 )
 
 if settings.ROOT_URLCONF == __name__:
