@@ -1,6 +1,7 @@
 import uuid
 
 from django.core.cache import cache
+from django.db import transaction
 from django.test import SimpleTestCase, TestCase
 
 from arches.app.models import models
@@ -84,10 +85,17 @@ class ConfigStampTests(SimpleTestCase):
         bump_config_stamp()
         self.assertNotEqual(config_stamp(), first)
 
+
+class AfterFunctionSaveTests(TestCase):
+    def setUp(self):
+        cache.delete(SUMMARY_CONFIG_STAMP_KEY)
+        self.addCleanup(cache.delete, SUMMARY_CONFIG_STAMP_KEY)
+
     def test_after_function_save_stores_the_config_and_renews_the_stamp(self):
         row = SavedRow()
         first = config_stamp()
-        ResourceSummary().after_function_save(row, None)
+        with self.captureOnCommitCallbacks(execute=True):
+            ResourceSummary().after_function_save(row, None)
         self.assertEqual(row.saved, 1)
         self.assertEqual(row.config, details["defaultconfig"])
         self.assertNotEqual(config_stamp(), first)
@@ -95,8 +103,23 @@ class ConfigStampTests(SimpleTestCase):
     def test_after_function_save_drops_the_cached_config_of_the_graph(self):
         cache.set(config_cache_key("g-1"), {"stale": True}, 60)
         self.addCleanup(cache.delete, config_cache_key("g-1"))
-        ResourceSummary().after_function_save(SavedRow(), None)
+        with self.captureOnCommitCallbacks(execute=True):
+            ResourceSummary().after_function_save(SavedRow(), None)
         self.assertIsNone(cache.get(config_cache_key("g-1")))
+
+    def test_the_caches_are_dropped_only_once_the_transaction_commits(self):
+        cache.set(config_cache_key("g-1"), {"stale": True}, 60)
+        self.addCleanup(cache.delete, config_cache_key("g-1"))
+        first = config_stamp()
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            with transaction.atomic():
+                ResourceSummary().after_function_save(SavedRow(), None)
+                self.assertEqual(cache.get(config_cache_key("g-1")), {"stale": True})
+                self.assertEqual(config_stamp(), first)
+        self.assertEqual(len(callbacks), 1)
+        callbacks[0]()
+        self.assertIsNone(cache.get(config_cache_key("g-1")))
+        self.assertNotEqual(config_stamp(), first)
 
 
 class NormalizeConfigTests(SimpleTestCase):

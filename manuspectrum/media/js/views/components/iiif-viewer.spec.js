@@ -77,6 +77,8 @@ describe('iiif-viewer wrapper', () => {
         const viewModel = new IIIFViewerViewmodel(params);
 
         expect(viewModel.received.onEachFeature).toBe(bindLeafletSummaryPopup);
+        expect(viewModel.received.manifest).toBe('m');
+        expect(params.onEachFeature).toBeUndefined();
         expect(CoreIIIFViewerViewmodel).toHaveBeenCalled();
     });
 
@@ -120,6 +122,43 @@ describe('iiif-viewer wrapper', () => {
 
         map.emit('layeradd', { layer: small });
         expect(scheduled).toHaveLength(2);
+    });
+
+    it('keeps the pinned paths above the restacked annotations', () => {
+        const large = annotation(L.polygon([[0, 0], [0, 10], [10, 10], [10, 0]]));
+        const small = annotation(L.polygon([[1, 1], [1, 2], [2, 2], [2, 1]]));
+        const drawn = annotation(L.polygon([[0, 0], [0, 20], [20, 20], [20, 0]]));
+        const scheduled = [];
+        const map = fakeMap([drawn, small, large]);
+
+        stackSmallestOnTop(map, (fn) => scheduled.push(fn), (layer) => layer === drawn);
+        map.emit('layeradd', { layer: drawn });
+        scheduled[0]();
+
+        const order = [large, small, drawn].map((l) => l.bringToFront.mock.invocationCallOrder[0]);
+        expect(order[0]).toBeLessThan(order[1]);
+        expect(order[1]).toBeLessThan(order[2]);
+    });
+
+    it("pins the shapes of the host's own drawLayer", () => {
+        const drawn = annotation(L.polygon([[0, 0], [0, 20], [20, 20], [20, 0]]));
+        const small = annotation(L.polygon([[1, 1], [1, 2], [2, 2], [2, 1]]));
+        const map = fakeMap([drawn, small]);
+        CoreIIIFViewerViewmodel.mockImplementationOnce(function () {
+            this.map = ko.observable(map);
+            this.drawLayer = ko.observable({ hasLayer: (layer) => layer === drawn });
+        });
+        vi.useFakeTimers();
+        try {
+            new IIIFViewerViewmodel({});
+            map.emit('layeradd', { layer: small });
+            vi.runAllTimers();
+        } finally {
+            vi.useRealTimers();
+        }
+
+        const order = [small, drawn].map((l) => l.bringToFront.mock.invocationCallOrder[0]);
+        expect(order[0]).toBeLessThan(order[1]);
     });
 
     it('hooks the restacking on the map the core viewmodel creates', () => {

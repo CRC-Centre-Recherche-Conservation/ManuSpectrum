@@ -475,6 +475,20 @@ describe('attachMapboxPopupCleanup', () => {
         expect(document.activeElement).not.toBe(trigger);
     });
 
+    it('leaves focus where the user moved it before the popup closed', () => {
+        const trigger = document.createElement('button');
+        const elsewhere = document.createElement('button');
+        document.body.append(trigger, elsewhere);
+        trigger.focus();
+        const { data, handlers } = build();
+
+        attachMapboxPopupCleanup(data);
+        elsewhere.focus();
+        handlers.close();
+
+        expect(document.activeElement).toBe(elsewhere);
+    });
+
     it('attaches once per popup', () => {
         const { data, popup } = build();
 

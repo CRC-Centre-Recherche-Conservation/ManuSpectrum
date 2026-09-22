@@ -11,7 +11,10 @@
  *     popup; a handler passed by the host wins
  *   - annotations are restacked largest first once drawn, so a large
  *     annotation no longer covers the smaller ones inside it and takes their
- *     clicks (`stackSmallestOnTop`)
+ *     clicks (`stackSmallestOnTop`); the shapes of the host's own `drawLayer`
+ *     (the annotation widget's editable tile) stay above them all, as the core
+ *     draws them
+ *   - the core receives a copy of `params`; the host's object is not written to
  *   - the 'iiif-viewer' Knockout component is re-registered on the wrapper
  *   - imports `views/components/ms-summary-popup`, which registers the
  *     'ms-summary-popup' component the binder mounts
@@ -36,9 +39,14 @@ function footprint(layer) {
 /**
  * Leaflet keeps annotations in manifest order, and a click reaches only the
  * topmost path. After each batch of additions, every annotation path is
- * brought to the front from the largest to the smallest.
+ * brought to the front from the largest to the smallest; the paths `isPinned`
+ * accepts come last, above them all.
  */
-export function stackSmallestOnTop(map, schedule = (fn) => setTimeout(fn, 0)) {
+export function stackSmallestOnTop(
+    map,
+    schedule = (fn) => setTimeout(fn, 0),
+    isPinned = () => false
+) {
     let pending = false;
     map.on('layeradd', (event) => {
         if (pending || !(event.layer instanceof L.Path) || !event.layer.feature) return;
@@ -50,26 +58,35 @@ export function stackSmallestOnTop(map, schedule = (fn) => setTimeout(fn, 0)) {
                 if (layer instanceof L.Path && layer.feature) paths.push(layer);
             });
             paths.sort((a, b) => footprint(b) - footprint(a));
-            paths.forEach((layer) => layer.bringToFront());
+            paths.filter((layer) => !isPinned(layer)).forEach((layer) => layer.bringToFront());
+            paths.filter(isPinned).forEach((layer) => layer.bringToFront());
         });
     });
 }
 
 const IIIFViewerViewmodel = function(params) {
-    if (params && !params.onEachFeature) {
-        params.onEachFeature = bindLeafletSummaryPopup;
-    }
-    CoreIIIFViewerViewmodel.apply(this, [params]);
+    const viewerParams =
+        params && !params.onEachFeature
+            ? { ...params, onEachFeature: bindLeafletSummaryPopup }
+            : params;
+    CoreIIIFViewerViewmodel.apply(this, [viewerParams]);
+
+    const self = this;
+    const drawnByHost = (layer) => {
+        const drawn = ko.isObservable(self.drawLayer) ? self.drawLayer() : null;
+        return Boolean(drawn && typeof drawn.hasLayer === 'function' && drawn.hasLayer(layer));
+    };
+    const restack = (map) => stackSmallestOnTop(map, undefined, drawnByHost);
 
     if (ko.isObservable(this.map)) {
         const mapSubscription = this.map.subscribe((map) => {
             if (!map) return;
             mapSubscription.dispose();
-            stackSmallestOnTop(map);
+            restack(map);
         });
         if (this.map()) {
             mapSubscription.dispose();
-            stackSmallestOnTop(this.map());
+            restack(this.map());
         }
     }
 };

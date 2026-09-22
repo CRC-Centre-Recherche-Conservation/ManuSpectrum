@@ -195,13 +195,20 @@ export function warmSummaryCache(ids) {
  */
 function focusPopup(element) {
     element.tabIndex = -1;
-    element.focus();
+    element.focus({ preventScroll: true });
 }
 
-/** Give focus back to what opened the popup, unless the page lost it since. */
-function restoreFocus(element) {
-    if (element && typeof element.focus === 'function' && document.contains(element)) {
-        element.focus();
+/**
+ * Give focus back to what opened the popup.
+ *
+ * Only when focus is still inside `content` or has fallen to the body: a
+ * popup closed by a click elsewhere leaves that click's focus alone.
+ */
+function restoreFocus(element, content) {
+    const active = document.activeElement;
+    const stillHere = !active || active === document.body || (content && content.contains(active));
+    if (stillHere && element && typeof element.focus === 'function' && document.contains(element)) {
+        element.focus({ preventScroll: true });
     }
 }
 
@@ -237,7 +244,7 @@ export function attachMapboxPopupCleanup(data) {
     popup.on('close', () => {
         content.removeEventListener('keydown', onKeydown);
         ko.cleanNode(content);
-        restoreFocus(opener);
+        restoreFocus(opener, content);
     });
 
     focusPopup(content);
@@ -293,9 +300,10 @@ export function bindLeafletSummaryPopup(feature, layer) {
 
     popup.on('remove', () => {
         if (!host) return;
-        ko.cleanNode(host);
+        const closing = host;
+        ko.cleanNode(closing);
         host = null;
-        restoreFocus(opener);
+        restoreFocus(opener, closing);
         opener = null;
     });
 

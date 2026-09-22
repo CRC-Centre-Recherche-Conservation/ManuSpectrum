@@ -185,7 +185,8 @@ class SummaryEndpointTests(SummaryTestCase):
     def test_a_configuration_saved_in_the_designer_rebuilds_the_payload(self):
         es = self.one_document(count=2)
         self.get(es)
-        ResourceSummary().after_function_save(SavedRow(), None)
+        with self.captureOnCommitCallbacks(execute=True):
+            ResourceSummary().after_function_save(SavedRow(), None)
         self.assertEqual(self.get(es).status_code, 200)
         self.assertEqual(es.count("get"), 2)
 
@@ -212,11 +213,22 @@ class SummaryEndpointTests(SummaryTestCase):
                 "name": None,
                 "graph_id": "g-document",
             }
-            first = self.get(es)
+            with mock.patch.object(
+                summary_view.cache, "set", wraps=summary_view.cache.set
+            ) as cache_set:
+                first = self.get(es)
             self.get(es)
         self.assertTrue(json.loads(first.content)["degraded"])
         self.assertEqual(shorten.call_count, 1)
         self.assertEqual(es.count("get"), 1)
+        self.assertTrue(
+            any(
+                call.args[1].get("degraded")
+                and call.args[2] == summary_view.DEGRADED_TTL
+                for call in cache_set.call_args_list
+                if len(call.args) >= 3 and isinstance(call.args[1], dict)
+            )
+        )
 
     def test_two_readers_of_a_restricted_deployment_do_not_share_the_memo(self):
         other = User.objects.create_user("summary_other", password="pw")
@@ -294,7 +306,8 @@ class SummaryBatchEndpointTests(SummaryTestCase):
 
     def test_a_configuration_saved_in_the_designer_rebuilds_a_warmed_payload(self):
         self.batch(self.two_documents(), f"{DOC_ONE},{DOC_TWO}")
-        ResourceSummary().after_function_save(SavedRow(), None)
+        with self.captureOnCommitCallbacks(execute=True):
+            ResourceSummary().after_function_save(SavedRow(), None)
         es = self.two_documents()
         self.batch(es, f"{DOC_ONE},{DOC_TWO}")
         self.assertEqual(es.calls[0], ("mget", [DOC_ONE, DOC_TWO]))
