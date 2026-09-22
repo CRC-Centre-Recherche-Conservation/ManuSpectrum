@@ -30,6 +30,7 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationPageViewV2,
     IIIFAnnotationViewV2,
 )
+from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.model_graph import ModelGraphView
 from manuspectrum.views.thumbnail import CachedThumbnailView
 
@@ -116,6 +117,17 @@ for _slug, _name, _tpl in [
 ### one for free.
 urlpatterns.append(
     path("api/model-graph", ModelGraphView.as_view(), name="model-graph")
+)
+
+### Relatable nodes of one model, read by the summary Function's configuration
+### form in the designer. Wrapped like model-graph: the field and model labels
+### it carries are the ones of the request language.
+urlpatterns.append(
+    re_path(
+        r"^function-config/relatable-nodes/(?P<graphid>%s)$" % settings.UUID_REGEX,
+        RelatableNodesView.as_view(),
+        name="relatable-nodes",
+    )
 )
 
 if settings.ROOT_URLCONF == __name__:
