@@ -6,6 +6,7 @@
 //   ms/
 //     _utilities.scss   → flex utils, animations (BS3 gap-fill)
 //     _forms.scss       → radio-row, input-row, collapsible, overrides
+//     _summary-popup.scss → ms-summary-popup (map + IIIF summary card)
 //     widgets/          → manifest-widget, file-xy
 //     cards/            → xy-reader (file-renderer)
 //     plugins/          → importer-configuration, init-workflow
@@ -14,6 +15,7 @@
 @import "utilities";
 @import "forms";
 @import "workflow-summary";
+@import "summary-popup";
 @import "widgets";
 @import "cards";
 @import "plugins";

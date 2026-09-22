@@ -48,6 +48,7 @@ import {
     acquireSummary,
     attachMapboxPopupCleanup,
     bindLeafletSummaryPopup,
+    invalidateSummary,
     summaryUrl,
     warmSummaryCache,
 } from './summary-popup.js';
@@ -254,6 +255,43 @@ describe('acquireSummary', () => {
         fetchMock.mockClear();
         acquireSummary(uuidAt(50));
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+});
+
+describe('invalidateSummary', () => {
+    it('drops a settled refusal so the next reader fetches again', async () => {
+        fetchMock.mockResolvedValue(response({ error: 'unavailable' }, 503));
+        const first = acquireSummary(ID);
+        expect(await first.promise).toEqual({ status: 'network' });
+        first.release();
+        expect(_cacheSize()).toBe(1);
+
+        invalidateSummary(ID);
+
+        expect(_cacheSize()).toBe(0);
+        fetchMock.mockResolvedValue(response({ resourceid: ID }));
+        expect(await acquireSummary(ID).promise).toEqual({
+            status: 'ok',
+            data: { resourceid: ID },
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('leaves a pending entry and its readers alone', async () => {
+        fetchMock.mockImplementation(() => new Promise(() => {}));
+        const handle = acquireSummary(ID);
+
+        invalidateSummary(ID);
+
+        expect(_cacheSize()).toBe(1);
+        expect(await raceSettle(handle.promise)).toBe('pending');
+        expect(acquireSummary(ID).promise).toBe(handle.promise);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing about a resource the page never asked for', () => {
+        expect(() => invalidateSummary(OTHER)).not.toThrow();
+        expect(_cacheSize()).toBe(0);
     });
 });
 

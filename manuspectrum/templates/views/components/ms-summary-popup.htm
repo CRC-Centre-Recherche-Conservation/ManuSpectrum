@@ -1,0 +1,117 @@
+{% load i18n %}
+
+{% comment %}
+Summary card of one resource, mounted by the search map popup and by the IIIF
+annotation popup. Every value comes from the summary endpoint and is bound with
+`text:`; the only `href` bindings read URLs the viewmodel built from
+`arches.urls.resource_report`.
+{% endcomment %}
+
+<div class="ms-summary"
+     role="dialog"
+     data-bind="attr: {'aria-label': title}, css: {'is-loading': loading}">
+
+    <div class="hover-feature-title-bar">
+        <div class="hover-feature-title" data-bind="text: title"></div>
+    </div>
+
+    <div class="hover-feature-body ms-summary-body"
+         aria-live="polite"
+         data-bind="attr: {'aria-busy': loading}">
+
+        <!-- ko if: loading -->
+        <div class="ms-summary-loading text-muted">
+            <i class="fa fa-spin fa-spinner"></i>
+            <span>{% trans "Loading…" %}</span>
+        </div>
+        <!-- /ko -->
+
+        <!-- ko if: errorCode -->
+        <div class="alert alert-warning ms-summary-alert" data-bind="text: errorMessage"></div>
+        <button type="button"
+                class="btn btn-xs btn-default"
+                data-bind="click: retry, visible: errorCode() === 'network'">{% trans "Retry" %}</button>
+        <!-- /ko -->
+
+        <!-- ko if: summary -->
+        <div class="hover-feature-metadata">
+            <span>{% trans "Model" %}</span>
+            <span data-bind="text: graphName"></span>
+        </div>
+
+        <!-- ko if: legacy -->
+        <p class="ms-summary-legacy" data-bind="text: mapPopup"></p>
+        <!-- /ko -->
+
+        <!-- ko if: isEmpty -->
+        <p class="ms-summary-empty text-muted" data-bind="text: emptyMessage"></p>
+        <!-- /ko -->
+
+        <dl class="ms-summary-fields" data-bind="foreach: fields">
+            <dt data-bind="text: $data.label"></dt>
+            <dd>
+                <!-- ko if: $data.style === 'chip' -->
+                <!-- ko foreach: $data.values -->
+                <span class="label label-default" data-bind="text: $data"></span>
+                <!-- /ko -->
+                <!-- /ko -->
+
+                <!-- ko if: $data.style === 'link' -->
+                <!-- ko foreach: $data.values -->
+                <a data-bind="text: $data.label, attr: {href: $parents[1].reportUrlFor($data.id)}"></a><!-- ko if: $index() < $parent.values.length - 1 -->, <!-- /ko -->
+                <!-- /ko -->
+                <!-- /ko -->
+
+                <!-- ko ifnot: $data.style === 'chip' || $data.style === 'link' -->
+                <span data-bind="text: $parent.joinValues($data.values)"></span>
+                <!-- /ko -->
+
+                <!-- ko if: $data.more -->
+                <span class="text-muted text-sm" data-bind="text: $parent.moreLabel($data.more)"></span>
+                <!-- /ko -->
+            </dd>
+        </dl>
+
+        <ul class="list-unstyled ms-summary-rollups" data-bind="foreach: rollups">
+            <li>
+                <a data-bind="attr: {href: $parent.reportUrl}">
+                    <strong data-bind="text: $data.count"></strong>
+                    <span data-bind="text: $data.label"></span>
+                </a>
+                <!-- ko if: ($data.items || []).length -->
+                <span class="ms-summary-sep">·</span>
+                <!-- ko foreach: $data.items -->
+                <span class="label label-default" data-bind="text: $data.label"></span>
+                <!-- /ko -->
+                <!-- /ko -->
+                <!-- ko if: $data.more -->
+                <span class="text-muted text-sm" data-bind="text: $parent.moreLabel($data.more)"></span>
+                <!-- /ko -->
+                <!-- ko if: $data.truncated -->
+                <span class="text-muted text-sm">{% trans "(partial)" %}</span>
+                <!-- /ko -->
+            </li>
+        </ul>
+
+        <!-- ko if: spark -->
+        <a class="ms-summary-spark"
+           data-bind="attr: {href: reportUrl, 'aria-label': previewLabel}, msSpark: spark"></a>
+        <!-- /ko -->
+        <!-- /ko -->
+    </div>
+
+    <div class="hover-feature-footer ms-summary-footer">
+        <!-- ko if: reportUrl -->
+        <a data-bind="attr: {href: reportUrl}">
+            <i class="ion-document-text"></i>
+            <span>{% trans "Report" %}</span>
+        </a>
+        <!-- /ko -->
+        <!-- ko if: mapUrl -->
+        <a data-bind="attr: {href: mapUrl}">
+            <i class="fa fa-map-marker"></i>
+            <span>{% trans "Map" %}</span>
+        </a>
+        <!-- /ko -->
+    </div>
+</div>

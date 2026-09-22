@@ -137,6 +137,20 @@ export function acquireSummary(id) {
 }
 
 /**
+ * Forget the settled summary of one resource.
+ *
+ * A retry has to reach the server again, and a settled entry answers from the
+ * page instead — including one that settled on a refusal, which is exactly the
+ * entry a retry exists to replace. A pending entry is left alone: its readers
+ * are still waiting on the request it holds.
+ */
+export function invalidateSummary(id) {
+    const key = cacheKey(id);
+    const entry = cache.get(key);
+    if (entry && !isPending(entry)) cache.delete(key);
+}
+
+/**
  * Warm the cache with the resources one map click is about to offer.
  *
  * Only for a handful of features: a single one is fetched by the popup itself,

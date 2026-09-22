@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 05:44-0500\n"
+"POT-Creation-Date: 2026-09-22 06:34-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -359,7 +359,8 @@ msgstr ""
 "chimiques — XRF, Raman, FTIR, FORS — de manuscrits, imprimés et "
 "inscriptions : pigments, encres, supports."
 
-#: templates/index.htm:222 templates/views/pages/graph-explorer.htm:204
+#: templates/index.htm:222 templates/javascript.htm:240
+#: templates/views/pages/graph-explorer.htm:204
 msgid "Close"
 msgstr "Fermer"
 
@@ -1335,7 +1336,9 @@ msgstr "Taille du cercle = enregistrements publiés"
 msgid "Dashed outline = no records published yet"
 msgstr "Contour en pointillés = aucun enregistrement publié"
 
-#: templates/javascript.htm:128 templates/views/pages/graph-explorer.htm:113
+#: templates/javascript.htm:128
+#: templates/views/components/ms-summary-popup.htm:38
+#: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Modèle"
 
@@ -1785,6 +1788,35 @@ msgstr "Courant d'obscurité"
 msgid "Configuration deduced from the analysis technique"
 msgstr "Configuration déduite de la technique d'analyse"
 
+#: templates/javascript.htm:233
+msgid "The summary could not be loaded."
+msgstr "La fiche n'a pas pu être chargée."
+
+#: templates/javascript.htm:234
+msgid "You do not have permission to view this resource."
+msgstr "Vous n'avez pas l'autorisation de consulter cette ressource."
+
+#: templates/javascript.htm:235
+msgid "This resource no longer exists."
+msgstr "Cette ressource n'existe plus."
+
+#: templates/javascript.htm:236
+msgid "Details are unavailable right now."
+msgstr "Les détails sont indisponibles pour le moment."
+
+#: templates/javascript.htm:237
+msgid "No details to show."
+msgstr "Aucun détail à afficher."
+
+#: templates/javascript.htm:238
+#, python-brace-format
+msgid "+{n}"
+msgstr "+{n}"
+
+#: templates/javascript.htm:239
+msgid "Spectrum"
+msgstr "Spectre"
+
 #: templates/ms_base.htm:11 templates/ms_base.htm:28
 msgid ""
 "ManuSpectrum — interoperable database for physicochemical analysis of "
@@ -2104,6 +2136,28 @@ msgstr "Attribution"
 #: templates/views/components/widgets/manifest-widget.htm:133
 msgid "Description"
 msgstr "Description"
+
+#: templates/views/components/ms-summary-popup.htm:25
+msgid "Loading…"
+msgstr "Chargement…"
+
+#: templates/views/components/ms-summary-popup.htm:33
+#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
+msgid "Retry"
+msgstr "Réessayer"
+
+#: templates/views/components/ms-summary-popup.htm:91
+msgid "(partial)"
+msgstr "(partiel)"
+
+#: templates/views/components/ms-summary-popup.htm:107
+msgid "Report"
+msgstr "Rapport"
+
+#: templates/views/components/ms-summary-popup.htm:113
+msgid "Map"
+msgstr "Carte"
 
 #: templates/views/components/plugins/importer-configuration.htm:4
 msgid "Importer Configurations"
@@ -2596,11 +2650,6 @@ msgstr "Enregistré"
 #: templates/views/components/workflows/create-project-workflow/add-things-step.htm:72
 msgid "Save failed."
 msgstr "Échec de l'enregistrement."
-
-#: templates/views/components/workflows/create-project-workflow/add-things-step.htm:73
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:265
-msgid "Retry"
-msgstr "Réessayer"
 
 #: templates/views/components/workflows/create-project-workflow/add-things-step.htm:78
 msgid "Remove all"
