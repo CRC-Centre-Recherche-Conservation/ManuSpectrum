@@ -495,12 +495,63 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-gallery-item ms-gallery-analysis reveal reveal-d2" id="ms-analysis-viewer">
                     <img src="https://iiif.unicaen.fr/mrsh/bvmsm/AVRANCHES_MS059/AVRANCHES_MS059_0011.tif/full/800,/0/default.jpg" alt="{% trans 'Manuscript analysis' %}" width="800" height="600" loading="lazy">
                     <div class="ms-analysis-points">
-                        <button class="ms-analysis-point ms-apoint-1" data-point="0" aria-label="{% trans 'Analysis point' %} 1"></button>
-                        <button class="ms-analysis-point ms-apoint-2" data-point="1" aria-label="{% trans 'Analysis point' %} 2"></button>
-                        <button class="ms-analysis-point ms-apoint-3" data-point="2" aria-label="{% trans 'Analysis point' %} 3"></button>
-                        <button class="ms-analysis-point ms-apoint-4" data-point="3" aria-label="{% trans 'Analysis point' %} 4"></button>
+                        <button type="button" class="ms-analysis-point ms-apoint-1" aria-controls="ms-analysis-popup-1" aria-expanded="false" aria-label="{% blocktrans with n=1 %}Analysis point {{ n }}{% endblocktrans %}"></button>
+                        <button type="button" class="ms-analysis-point ms-apoint-2" aria-controls="ms-analysis-popup-2" aria-expanded="false" aria-label="{% blocktrans with n=2 %}Analysis point {{ n }}{% endblocktrans %}"></button>
+                        <button type="button" class="ms-analysis-point ms-apoint-3" aria-controls="ms-analysis-popup-3" aria-expanded="false" aria-label="{% blocktrans with n=3 %}Analysis point {{ n }}{% endblocktrans %}"></button>
+                        <button type="button" class="ms-analysis-point ms-apoint-4" aria-controls="ms-analysis-popup-4" aria-expanded="false" aria-label="{% blocktrans with n=4 %}Analysis point {{ n }}{% endblocktrans %}"></button>
                     </div>
-                    <div class="ms-analysis-popup" id="ms-analysis-popup"></div>
+                    <div class="ms-analysis-popup ms-analysis-popup--blue" id="ms-analysis-popup-1" hidden>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">XRF</span><span class="ms-popup-id">P-01</span></div>
+                        <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="ms-popup-area" d="M0,42 8,41 18,39 25,34 30,38 38,36 45,10 50,32 55,38 62,35 70,39 80,18 88,36 95,34 105,38 115,40 130,39 150,40 175,39 200,40 232,41 L232,44 0,44Z"/>
+                            <path class="ms-popup-line" d="M0,42 8,41 18,39 25,34 30,38 38,36 45,10 50,32 55,38 62,35 70,39 80,18 88,36 95,34 105,38 115,40 130,39 150,40 175,39 200,40 232,41"/>
+                        </svg></div>
+                        <div class="ms-popup-data">
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Material" %}</span><span class="ms-popup-value">{% trans "Lapis lazuli" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Layer" %}</span><span class="ms-popup-value">{% trans "Pigment" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Range" %}</span><span class="ms-popup-value">1 – 40 keV</span></div>
+                        </div>
+                        <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Cu</span><span class="ms-popup-element ms-popup-element--primary">S</span><span class="ms-popup-element">Ca</span><span class="ms-popup-element">Si</span><span class="ms-popup-element">Fe</span></div>
+                    </div>
+                    <div class="ms-analysis-popup ms-analysis-popup--red" id="ms-analysis-popup-2" hidden>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">Raman</span><span class="ms-popup-id">P-02</span></div>
+                        <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="ms-popup-area" d="M0,40 15,39 30,40 42,38 47,6 51,38 60,40 75,39 85,40 91,24 96,40 110,39 125,40 140,39 165,30 172,39 195,40 220,39 232,40 L232,44 0,44Z"/>
+                            <path class="ms-popup-line" d="M0,40 15,39 30,40 42,38 47,6 51,38 60,40 75,39 85,40 91,24 96,40 110,39 125,40 140,39 165,30 172,39 195,40 220,39 232,40"/>
+                        </svg></div>
+                        <div class="ms-popup-data">
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Material" %}</span><span class="ms-popup-value">{% trans "Vermilion (HgS)" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Layer" %}</span><span class="ms-popup-value">{% trans "Paint" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Range" %}</span><span class="ms-popup-value">100 – 3000 cm⁻¹</span></div>
+                        </div>
+                        <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Hg</span><span class="ms-popup-element ms-popup-element--primary">S</span><span class="ms-popup-element">Pb</span></div>
+                    </div>
+                    <div class="ms-analysis-popup ms-analysis-popup--green" id="ms-analysis-popup-3" hidden>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">FORS</span><span class="ms-popup-id">P-03</span></div>
+                        <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="ms-popup-area" d="M0,40 20,39 40,38 60,34 80,26 100,16 120,10 140,8 160,10 180,13 200,15 220,16 232,17 L232,44 0,44Z"/>
+                            <path class="ms-popup-line" d="M0,40 20,39 40,38 60,34 80,26 100,16 120,10 140,8 160,10 180,13 200,15 220,16 232,17"/>
+                        </svg></div>
+                        <div class="ms-popup-data">
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Material" %}</span><span class="ms-popup-value">{% trans "Gold leaf" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Layer" %}</span><span class="ms-popup-value">{% trans "Gilding" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Range" %}</span><span class="ms-popup-value">350 – 2500 nm</span></div>
+                        </div>
+                        <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Au</span><span class="ms-popup-element">Ag</span><span class="ms-popup-element">Cu</span></div>
+                    </div>
+                    <div class="ms-analysis-popup ms-analysis-popup--purple" id="ms-analysis-popup-4" hidden>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">XRF</span><span class="ms-popup-id">P-04</span></div>
+                        <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="ms-popup-area" d="M0,40 12,39 22,38 30,34 38,10 43,34 52,38 62,36 70,20 76,35 85,38 100,39 120,38 140,39 160,26 168,38 185,39 210,40 232,40 L232,44 0,44Z"/>
+                            <path class="ms-popup-line" d="M0,40 12,39 22,38 30,34 38,10 43,34 52,38 62,36 70,20 76,35 85,38 100,39 120,38 140,39 160,26 168,38 185,39 210,40 232,40"/>
+                        </svg></div>
+                        <div class="ms-popup-data">
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Material" %}</span><span class="ms-popup-value">{% trans "Iron gall ink" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Layer" %}</span><span class="ms-popup-value">{% trans "Text" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Range" %}</span><span class="ms-popup-value">1 – 40 keV</span></div>
+                        </div>
+                        <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Fe</span><span class="ms-popup-element">Zn</span><span class="ms-popup-element">Cu</span><span class="ms-popup-element">K</span></div>
+                    </div>
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "Spectroscopy" %}</div>
                         <h4>{% trans "Point Analysis" %}</h4>

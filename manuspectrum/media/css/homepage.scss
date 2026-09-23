@@ -1145,6 +1145,17 @@ a.ms-feature-tag--link i {
     background: rgba(240,180,41,0.06);
 }
 
+.ms-analysis-popup--blue   { --popup-color: var(--spectral-5); }
+.ms-analysis-popup--red    { --popup-color: var(--spectral-1); }
+.ms-analysis-popup--green  { --popup-color: var(--spectral-4); }
+.ms-analysis-popup--purple { --popup-color: var(--spectral-6); }
+.ms-analysis-popup .ms-popup-technique {
+    color: var(--popup-color);
+    background: color-mix(in srgb, var(--popup-color) 8%, transparent);
+}
+.ms-popup-area { fill: var(--popup-color); opacity: 0.12; }
+.ms-popup-line { fill: none; stroke: var(--popup-color); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
 // --- Multispectral Imaging (spectral scan effect) ---
 // Base image stays in flow to give the container height
 .ms-gallery-msi .ms-msi-base {

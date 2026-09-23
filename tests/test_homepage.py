@@ -39,3 +39,19 @@ class ScriptLoadingTests(TestCase):
         self.assertTrue(tags)
         for tag in tags:
             self.assertRegex(tag, r"\sdefer[\s>]")
+
+
+class AnalysisPopupTests(TestCase):
+    def test_four_popups_are_rendered_hidden(self):
+        html = self.client.get("/en/").content.decode()
+        self.assertEqual(html.count('id="ms-analysis-popup-'), 4)
+        for n in range(1, 5):
+            self.assertRegex(
+                html, rf'<div class="[^"]*" id="ms-analysis-popup-{n}" hidden>'
+            )
+            self.assertIn(f'aria-controls="ms-analysis-popup-{n}"', html)
+
+    def test_popups_are_translated(self):
+        html = self.client.get("/fr/").content.decode()
+        self.assertIn("Vermillon (HgS)", html)
+        self.assertIn("Encre ferrogallique", html)
