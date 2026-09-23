@@ -6,8 +6,11 @@
  *   - FileWidgetViewModel -> FileWidgetXYViewModel (from file-widget-xy)
  *   - file.htm -> file-xy.htm (extends file.htm with XY charts)
  *   - Added bindings/plotly import
- *   - Registers ms-file-license, the licence notice/picker used by file-xy.htm
- *     and by the File Viewer card (ms-file-workbench.htm)
+ *   - Registers ms-file-license, mounted by file-xy.htm (report) and by the
+ *     File Viewer card template (ms-file-workbench.htm). widgets.js loads every
+ *     widget module on each page that renders cards (via models/card-widget.js),
+ *     so the card relies on this registration; if this shadow is removed, the
+ *     import must move.
  */
 
 import ko from 'knockout';

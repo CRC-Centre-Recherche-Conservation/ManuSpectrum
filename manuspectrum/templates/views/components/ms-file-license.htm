@@ -2,11 +2,13 @@
 
 {% comment %}
 Licence notice of one file (title — © attribution — licence link), with the
-licence picker above it when the component is editable. Every value is bound
+licence picker above it when the component is editable; in the report, the
+file name and its licence link. Every value is bound
 with `text:`; the only `href` is a URL `utils/file-license.js` resolved from
 the catalogue or checked as http(s).
 {% endcomment %}
 
+<!-- ko if: hasCatalogue -->
 <!-- ko if: editable -->
 <div class="ms-file-metadata-field ms-file-license-form">
     <label>{% trans "Licence" %}</label>
@@ -42,3 +44,4 @@ the catalogue or checked as http(s).
     <!-- ko ifnot: $data.url --><span data-bind="text: text"></span><!-- /ko -->
     <!-- /ko -->
 </p>
+<!-- /ko -->

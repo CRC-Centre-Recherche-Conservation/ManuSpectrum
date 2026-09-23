@@ -1,14 +1,16 @@
 /**
- * Licence notice of one stored file, and its picker when `editable`.
+ * Licence of one stored file: the notice, the report row, or the picker.
  *
  * Params:
  *   entry     one entry of a `file-list` value (plain or mapped by knockout-mapping)
- *   files     the observable array holding `entry`: notified on each write,
- *             and read by the notice so it follows another instance's writes
+ *   tile      the tile holding `entry`; writes wake its snapshot once (see
+ *             `writeLicense`) and the notice follows it
  *   editable  show the licence form above the notice
+ *   report    show the report row (file name and licence) instead of the notice
  *
  * The picker opens on the stored licence, or on the default when there is
- * none, and writes `entry.license` only when the curator changes it.
+ * none, and writes `entry.license` only when the curator changes it. Without
+ * a catalogue the component renders nothing.
  */
 
 import arches from 'arches';
@@ -18,6 +20,8 @@ import {
     catalogueFrom,
     licenseToStore,
     noticeParts,
+    readLicense,
+    reportParts,
     resolveLicense,
     writeLicense,
 } from 'utils/file-license';
@@ -27,10 +31,13 @@ const viewModel = function(params) {
     const self = this;
     const catalogue = catalogueFrom(arches.translations.licenseCatalogue);
     const entry = params.entry;
+    const tile = params.tile;
     const stored = ko.toJS(entry.license) || {};
-    const isCustom = stored.id === catalogue.customId;
+    const isCustom = !!stored.id && stored.id === catalogue.customId;
 
-    this.editable = !!params.editable;
+    this.hasCatalogue = catalogue.licenses.length > 0;
+    this.editable = !!ko.unwrap(params.editable) && this.hasCatalogue;
+    this.report = !!params.report;
     this.licenses = catalogue.licenses;
     this.selectedId = ko.observable(
         isCustom || catalogue.byId.has(stored.id) ? stored.id : catalogue.defaultId
@@ -44,24 +51,23 @@ const viewModel = function(params) {
     );
     this.disposables = [choice];
 
-    this.current = ko.pureComputed(() => {
-        if (self.editable) {
-            return choice();
-        }
-        ko.unwrap(params.files);
-        return ko.toJS(entry.license);
-    });
+    this.current = ko.pureComputed(() =>
+        self.editable ? choice() : readLicense(entry, tile)
+    );
     this.resolved = ko.pureComputed(() => resolveLicense(self.current(), catalogue));
     this.customIsIncomplete = ko.pureComputed(() =>
         self.isCustom() && self.resolved()?.id !== catalogue.customId
     );
-    this.parts = ko.pureComputed(() =>
-        noticeParts({ ...entry, license: self.current() }, catalogue, arches.activeLanguage)
-    );
+    this.parts = ko.pureComputed(() => {
+        const shown = { ...entry, license: self.current() };
+        return self.report
+            ? reportParts(shown, catalogue)
+            : noticeParts(shown, catalogue, arches.activeLanguage);
+    });
 
     if (this.editable) {
         this.disposables.push(
-            choice.subscribe((value) => writeLicense(entry, value, params.files))
+            choice.subscribe((value) => writeLicense(entry, value, tile))
         );
     }
 

@@ -5,6 +5,8 @@ import {
     catalogueFrom,
     licenseToStore,
     noticeParts,
+    readLicense,
+    reportParts,
     resolveLicense,
     writeLicense,
 } from "./file-license";
@@ -120,22 +122,113 @@ describe("licenseToStore", () => {
 });
 
 describe("writeLicense", () => {
-    it("adds the key to a mapped tile entry so the saved tile carries it", () => {
-        const data = koMapping.fromJS({ node: [{ name: "a.csv", title: localized("") }] });
-        const dirty = ko.computed(() => koMapping.toJSON(data));
-        const before = dirty();
+    const localizedEntry = (extra = {}) => ({ name: "a.csv", title: localized(""), ...extra });
 
-        writeLicense(data.node()[0], { id: "CC0-1.0", url: "u" }, data.node);
+    function mountTile(entries) {
+        const data = koMapping.fromJS({ node: entries });
+        const tile = { data, _tileData: ko.observable(koMapping.toJSON(data)) };
+        const dirty = ko.pureComputed(() => tile._tileData() !== koMapping.toJSON(data));
+        const seen = [];
+        dirty.subscribe((value) => seen.push(value));
+        let arrayNotifications = 0;
+        data.node.subscribe(() => (arrayNotifications += 1));
+        let snapshotNotifications = 0;
+        tile._tileData.subscribe(() => (snapshotNotifications += 1));
+        return {
+            data,
+            tile,
+            dirty,
+            seen,
+            arrayNotifications: () => arrayNotifications,
+            snapshotNotifications: () => snapshotNotifications,
+        };
+    }
 
-        expect(dirty()).not.toBe(before);
-        expect(koMapping.toJS(data).node[0].license).toEqual({ id: "CC0-1.0", url: "u" });
+    it("adds the key to a mapped entry so the saved tile carries it", () => {
+        const mounted = mountTile([localizedEntry()]);
+
+        writeLicense(mounted.data.node()[0], { id: "CC0-1.0", url: "u" }, mounted.tile);
+
+        expect(mounted.dirty()).toBe(true);
+        expect(koMapping.toJS(mounted.data).node[0].license).toEqual({ id: "CC0-1.0", url: "u" });
+    });
+
+    it("never notifies the file array, and wakes the snapshot only for a new key", () => {
+        const mounted = mountTile([localizedEntry()]);
+        const entry = mounted.data.node()[0];
+
+        writeLicense(entry, { id: "LicenseRef-custom", url: "", label: "T" }, mounted.tile);
+        writeLicense(entry, { id: "LicenseRef-custom", url: "https://e.org/", label: "T" }, mounted.tile);
+        writeLicense(entry, { id: "CC0-1.0", url: "u" }, mounted.tile);
+
+        expect(mounted.arrayNotifications()).toBe(0);
+        expect(mounted.snapshotNotifications()).toBe(1);
+        expect(mounted.dirty()).toBe(true);
+        expect(koMapping.toJS(mounted.data).node[0].license).toEqual({ id: "CC0-1.0", url: "u" });
     });
 
     it("replaces a licence the mapping turned into observables", () => {
-        const data = koMapping.fromJS({ node: [{ name: "a.csv", license: { id: "CC0-1.0", url: "u" } }] });
+        const mounted = mountTile([localizedEntry({ license: { id: "CC0-1.0", url: "u" } })]);
 
-        writeLicense(data.node()[0], { id: "LicenseRef-custom", url: "https://e.org/", label: "T" }, data.node);
+        writeLicense(mounted.data.node()[0], { id: "LicenseRef-custom", url: "https://e.org/", label: "T" }, mounted.tile);
 
-        expect(koMapping.toJS(data).node[0].license).toEqual({ id: "LicenseRef-custom", url: "https://e.org/", label: "T" });
+        expect(mounted.dirty()).toBe(true);
+        expect(mounted.arrayNotifications()).toBe(0);
+        expect(koMapping.toJS(mounted.data).node[0].license).toEqual({
+            id: "LicenseRef-custom",
+            url: "https://e.org/",
+            label: "T",
+        });
+    });
+
+    it("writes nothing for a missing value", () => {
+        const mounted = mountTile([localizedEntry()]);
+
+        writeLicense(mounted.data.node()[0], null, mounted.tile);
+
+        expect("license" in mounted.data.node()[0]).toBe(false);
+        expect(mounted.dirty()).toBe(false);
+    });
+});
+
+describe("readLicense", () => {
+    it("follows a key another instance added to the entry", () => {
+        const data = koMapping.fromJS({ node: [{ name: "a.csv" }] });
+        const tile = { data, _tileData: ko.observable(koMapping.toJSON(data)) };
+        const entry = data.node()[0];
+        const shown = ko.pureComputed(() => readLicense(entry, tile)?.id);
+        const seen = [];
+        shown.subscribe((value) => seen.push(value));
+
+        writeLicense(entry, { id: "CC0-1.0", url: "u" }, tile);
+        writeLicense(entry, { id: "CC-BY-SA-4.0", url: "v" }, tile);
+
+        expect(seen).toEqual(["CC0-1.0", "CC-BY-SA-4.0"]);
+    });
+});
+
+describe("without a catalogue", () => {
+    const none = catalogueFrom(undefined);
+
+    it("stores nothing and names no licence", () => {
+        expect(licenseToStore("CC0-1.0", "", "", none)).toBeNull();
+        expect(noticeParts({ title: localized("T") }, none, "en")).toEqual([{ text: "T" }]);
+    });
+});
+
+describe("reportParts", () => {
+    it("names the file and its licence only", () => {
+        const entry = { name: "recto.jpg", title: localized("Folio"), attribution: localized("BnF"), license: { id: "CC0-1.0" } };
+        expect(reportParts(entry, catalogue)).toEqual([
+            { text: "recto.jpg" },
+            { text: "CC0 1.0", url: "https://creativecommons.org/publicdomain/zero/1.0/" },
+        ]);
+    });
+
+    it("shows the default licence for a file without one", () => {
+        expect(reportParts(koMapping.fromJS({ name: "a.csv" }), catalogue)).toEqual([
+            { text: "a.csv" },
+            { text: BY_SA.label, url: BY_SA.url },
+        ]);
     });
 });

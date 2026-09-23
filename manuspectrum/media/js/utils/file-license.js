@@ -66,27 +66,61 @@ export const noticeParts = (entry, catalogue, lang) => {
     return parts;
 };
 
-/** The `license` value stored for a choice made in the form. */
+/** File name and linked licence, for the report row of one file. */
+export const reportParts = (entry, catalogue) => {
+    const parts = [];
+    const name = text(entry.name);
+    if (name) {
+        parts.push({ text: name });
+    }
+    const license = resolveLicense(entry.license, catalogue);
+    if (license) {
+        parts.push({ text: license.label, url: license.url });
+    }
+    return parts;
+};
+
+/** The `license` value stored for a choice made in the form, or null without a catalogue. */
 export const licenseToStore = (id, label, url, catalogue) => {
-    if (id === catalogue.customId) {
+    if (id && id === catalogue.customId) {
         return { id, label: text(label), url: text(url) };
     }
     const entry = catalogue.byId.get(id) || catalogue.byId.get(catalogue.defaultId);
-    return { id: entry.id, url: entry.url };
+    return entry ? { id: entry.id, url: entry.url } : null;
 };
 
 /**
- * Sets `entry.license` and notifies `files`, the observable array holding the
- * entry, so the tile sees the change (the key may not exist yet, and a
- * property added to an entry is not observable).
+ * Stores `value` on `entry.license`, held in one observable that the tile
+ * serialises as the plain object.
+ *
+ * The file array is never notified: its subscribers re-mount the File Viewer
+ * renderer. The first write replaces whatever the key held (absent, or the
+ * observables knockout-mapping made of a stored licence) and wakes
+ * `tile._tileData` once, as `viewmodels/provisional-tile.js` does, so
+ * `tile.dirty` re-reads the data and tracks the new observable; later writes
+ * go through that observable only.
  */
-export const writeLicense = (entry, value, files) => {
+export const writeLicense = (entry, value, tile) => {
+    if (!value) {
+        return;
+    }
     if (ko.isWriteableObservable(entry.license)) {
         entry.license(value);
-    } else {
-        entry.license = value;
+        return;
     }
-    if (ko.isObservable(files) && typeof files.valueHasMutated === 'function') {
-        files.valueHasMutated();
+    entry.license = ko.observable(value);
+    if (tile && ko.isObservable(tile._tileData)) {
+        tile._tileData.valueHasMutated();
     }
+};
+
+/**
+ * The stored licence of `entry` as a plain object. Read inside a computed, it
+ * also follows `tile._tileData`, so a key another instance adds is seen.
+ */
+export const readLicense = (entry, tile) => {
+    if (tile && ko.isObservable(tile._tileData)) {
+        tile._tileData();
+    }
+    return ko.toJS(entry.license);
 };

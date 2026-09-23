@@ -2,8 +2,10 @@
 {% load i18n %}
 
 {% comment %}
-Adds the file metadata fields, licence included, to the File Viewer side
-panel, and the licence notice of the displayed file above the main panel.
+Adds the file metadata fields and the licence picker to the File Viewer side
+panel, and the licence notice of the displayed file above the main panel. The
+picker sits outside the metadata form, which needs a title in the active
+language, and is read-only when the card is (same rule as the core widgets).
 
 The panel renders every widget of the card for the selected file except the
 file-list one, which it skips on the assumption that the workbench replaces it.
@@ -51,13 +53,15 @@ so on a card using this component they have no editor at all.
             data-bind="textInput: entry.description['{{ LANGUAGE_CODE }}'].value,
                 attr: {'aria-label': '{% trans "Description" %}'}"></textarea>
     </div>
-
-    <!-- ko component: {
-        name: 'ms-file-license',
-        params: {entry: entry, files: tile.data[$component.fileListNodeId], editable: true}
-    } --><!-- /ko -->
 </form>
 <!-- /ko -->
+
+<div class="widgets ms-file-metadata ms-file-license-block">
+    <!-- ko component: {
+        name: 'ms-file-license',
+        params: {entry: entry, tile: tile, editable: !!(self.card.isWritable || self.preview)}
+    } --><!-- /ko -->
+</div>
 <!-- /ko -->
 <!-- /ko -->
 <!-- /ko -->
@@ -69,7 +73,7 @@ so on a card using this component they have no editor at all.
     <!-- ko foreach: { data: ko.unwrap(displayContent().tile.data[fileListNodeId]) || [], as: 'entry' } -->
     <!-- ko component: {
         name: 'ms-file-license',
-        params: {entry: entry, files: $component.displayContent().tile.data[$component.fileListNodeId]}
+        params: {entry: entry, tile: $component.displayContent().tile}
     } --><!-- /ko -->
     <!-- /ko -->
 </div>

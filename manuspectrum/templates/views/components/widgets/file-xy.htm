@@ -4,10 +4,11 @@
 {% block report %}
 {{ block.super }}
 
-<!-- ko foreach: uploadedFiles() -->
+<!-- Licence of each file, in the order the core block lists them. -->
+<!-- ko foreach: reportFiles().concat(reportImages()) -->
 <dt data-bind="class: $parent.nodeCssClasses">{% trans "Licence" %}</dt>
 <dd data-bind="class: $parent.nodeCssClasses">
-    <!-- ko component: {name: 'ms-file-license', params: {entry: $data, files: $parent.uploadedFiles}} --><!-- /ko -->
+    <!-- ko component: {name: 'ms-file-license', params: {entry: $data, report: true}} --><!-- /ko -->
 </dd>
 <!-- /ko -->
 
