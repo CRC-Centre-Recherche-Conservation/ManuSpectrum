@@ -4,6 +4,14 @@
 {% block report %}
 {{ block.super }}
 
+<!-- Licence of each file, in the order the core block lists them. -->
+<!-- ko foreach: reportFiles().concat(reportImages()) -->
+<dt data-bind="class: $parent.nodeCssClasses">{% trans "Licence" %}</dt>
+<dd data-bind="class: $parent.nodeCssClasses">
+    <!-- ko component: {name: 'ms-file-license', params: {entry: $data, report: true}} --><!-- /ko -->
+</dd>
+<!-- /ko -->
+
 <!-- XY Unified Chart (only rendered by the first widget instance / chart host) -->
 <!-- ko if: isChartHost() && xyFileEntries().length > 0 -->
 <dd class="report-xy-unified-container">
