@@ -29,9 +29,16 @@ class CachedThumbnailViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.view = CachedThumbnailView.as_view()
+        readable = mock.patch(
+            "manuspectrum.views.thumbnail.user_can_read_resource", return_value=True
+        )
+        self.readable = readable.start()
+        self.addCleanup(readable.stop)
 
     def get(self, **headers):
-        return self.factory.get(f"/thumbnail/{RESOURCE_ID}", **headers)
+        request = self.factory.get(f"/thumbnail/{RESOURCE_ID}", **headers)
+        request.user = mock.sentinel.reader
+        return request
 
     @override_settings(SEARCH_THUMBNAIL_MAX_AGE=3600)
     @mock.patch.object(CachedThumbnailView, "get_thumbnail_fetcher")
@@ -102,9 +109,9 @@ class CachedThumbnailViewTests(SimpleTestCase):
     def test_head_advertises_the_lifetime_without_a_body(self, get_fetcher):
         get_fetcher.return_value = fetcher((JPEG, "image/jpeg"))
 
-        response = self.view(
-            self.factory.head(f"/thumbnail/{RESOURCE_ID}"), resource_id=RESOURCE_ID
-        )
+        request = self.factory.head(f"/thumbnail/{RESOURCE_ID}")
+        request.user = mock.sentinel.reader
+        response = self.view(request, resource_id=RESOURCE_ID)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"")
