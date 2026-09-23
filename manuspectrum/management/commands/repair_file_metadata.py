@@ -1,38 +1,43 @@
-"""Give every stored file the localised metadata the search indexer expects.
+"""Give every stored file the metadata and licence the application expects.
 
-Arches 8 added ``altText``, ``title``, ``attribution`` and ``description`` to
-each entry of a ``file-list`` value. Files uploaded before that — and files
-written by paths that never went through the widget — carry ``None`` for them.
-
-The widget hides this: it hydrates missing metadata client-side on load. The
-indexer does not, and ``FileListDataType.append_to_document`` walks
-``f[field].keys()`` unguarded, so ``python manage.py es index_resources`` dies
-with::
+Each entry of a ``file-list`` value carries four localised metadata fields
+(``altText``, ``title``, ``attribution``, ``description``) and a ``license``.
+``FileListDataType.append_to_document`` walks ``f[field].keys()`` unguarded,
+so ``python manage.py es index_resources`` dies with::
 
     AttributeError: 'NoneType' object has no attribute 'keys'
 
-on the first such file — one malformed entry stops the entire reindex.
+on the first entry whose metadata is ``None``. Entries written outside the
+upload widget, including by the Arches CSV/ETL import, lack them.
 
-The repair itself lives in :func:`manuspectrum.utils.file_entries.normalize_metadata`,
-which is also what server-side writers should use when creating an entry, so
-this command and the conversion workflow cannot drift apart.
+The command completes every entry through
+:func:`manuspectrum.utils.file_entries.normalize_metadata`, the single rule
+server-side writers also use: missing metadata becomes empty strings, a
+missing ``license`` becomes ``--license`` (default: the catalogue default of
+:mod:`manuspectrum.constants.licenses`). Nothing already stored is replaced.
 
 Dry-run by default; pass ``--apply`` to write.
 """
 
 from collections import Counter
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from arches.app.models.models import Node, TileModel
 
+from manuspectrum.constants.licenses import (
+    CUSTOM_LICENSE_ID,
+    DEFAULT_LICENSE_ID,
+    LICENSE_KEY,
+    LICENSES,
+)
 from manuspectrum.utils.file_entries import METADATA_FIELDS, normalize_metadata
 
 
 class Command(BaseCommand):
     help = (
-        "Fill in missing localised metadata on stored files so the search "
-        "indexer can walk them (dry-run by default, pass --apply to write)."
+        "Fill in missing localised metadata and licences on stored files "
+        "(dry-run by default, pass --apply to write)."
     )
 
     def add_arguments(self, parser):
@@ -46,10 +51,20 @@ class Command(BaseCommand):
             default=None,
             help="Restrict to one language code (default: every configured language).",
         )
+        parser.add_argument(
+            "--license",
+            dest="license_id",
+            default=DEFAULT_LICENSE_ID,
+            help=(
+                "SPDX id of the licence given to files that have none "
+                f"(default: {DEFAULT_LICENSE_ID})."
+            ),
+        )
 
     def handle(self, *args, **options):
         apply_changes = options["apply"]
         language_code = options["language"]
+        file_license = self.catalogue_license(options["license_id"])
 
         file_nodes = list(Node.objects.filter(datatype="file-list"))
         if not file_nodes:
@@ -60,6 +75,7 @@ class Command(BaseCommand):
 
         by_node = Counter()
         fields_filled = 0
+        licenses_set = 0
         tiles_changed = 0
         files_changed = 0
 
@@ -74,8 +90,12 @@ class Command(BaseCommand):
                 if not isinstance(entries, list):
                     continue
                 for entry in entries:
-                    filled = normalize_metadata(entry, language_code)
+                    had_license = isinstance(entry, dict) and LICENSE_KEY in entry
+                    filled = normalize_metadata(entry, language_code, file_license)
                     if filled:
+                        if isinstance(entry, dict) and not had_license:
+                            licenses_set += 1
+                            filled -= 1
                         fields_filled += filled
                         files_changed += 1
                         by_node[node_name] += 1
@@ -96,6 +116,7 @@ class Command(BaseCommand):
         self.stdout.write(
             f"  {fields_filled} field(s) across {', '.join(METADATA_FIELDS)}"
         )
+        self.stdout.write(f"  {licenses_set} licence(s) set to {file_license['id']}")
 
         summary = (
             f"{files_changed} file(s) across {tiles_changed} tile(s) "
@@ -108,3 +129,14 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.WARNING(summary + " (dry run)"))
             self.stdout.write("Pass --apply to write.")
+
+    @staticmethod
+    def catalogue_license(license_id):
+        """``{"id", "url"}`` of a catalogue licence; the custom entry is refused."""
+        for entry in LICENSES:
+            if entry["id"] == license_id and license_id != CUSTOM_LICENSE_ID:
+                return {"id": entry["id"], "url": entry["url"]}
+        raise CommandError(
+            f"{license_id!r} is not a catalogue licence; choose one of "
+            + ", ".join(e["id"] for e in LICENSES if e["id"] != CUSTOM_LICENSE_ID)
+        )

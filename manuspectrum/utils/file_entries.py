@@ -5,7 +5,8 @@ instrument's own export kept for the record, plus the CSV derivative the XY
 reader can plot, live side by side in a single measurement tile.
 
 Each entry carries four localised metadata fields (``altText``, ``title``,
-``attribution``, ``description``). The upload widget always fills them, and
+``attribution``, ``description``) and a ``license`` (see
+:mod:`manuspectrum.constants.licenses`). The upload widget always fills them, and
 hydrates any that are missing when it loads a tile
 (``arches/app/media/js/viewmodels/file-widget.js``). Nothing on the server does
 the same, and ``FileListDataType.append_to_document`` walks
@@ -24,6 +25,8 @@ hand: hand-assembly is how the malformed entries got there in the first place.
 from functools import lru_cache
 
 from django.conf import settings
+
+from manuspectrum.constants.licenses import LICENSE_KEY, default_license
 
 #: The localised metadata fields the search indexer walks on every file entry.
 METADATA_FIELDS = ("altText", "title", "attribution", "description")
@@ -67,16 +70,21 @@ def configured_languages():
     return [code for code, _ in settings.LANGUAGES]
 
 
-def normalize_metadata(entry, language_codes=None):
-    """Fill in a file entry's missing localised metadata, in place.
+def normalize_metadata(entry, language_codes=None, file_license=None):
+    """Fill in a file entry's missing localised metadata and licence, in place.
 
     Defaults to every configured language. Pass a single code, or a list, to
     narrow it — a repair that fills only one language leaves the entry dirty in
     the others, which is the whole reason this exists.
 
+    An entry without a ``license`` key receives ``file_license`` (default: the
+    catalogue default, ``{"id", "url"}``); an existing ``license`` is kept
+    whatever it holds.
+
     Only ever adds: a field that already holds a value is left untouched, so
     this is safe to run over curated data. Returns the number of fields filled,
-    which lets callers skip a write when there was nothing to do.
+    the licence counting as one, which lets callers skip a write when there was
+    nothing to do.
     """
     if not isinstance(entry, dict):
         return 0
@@ -101,6 +109,9 @@ def normalize_metadata(entry, language_codes=None):
                     language_code
                 ]
                 filled += 1
+    if LICENSE_KEY not in entry:
+        entry[LICENSE_KEY] = dict(file_license or default_license())
+        filled += 1
     return filled
 
 
