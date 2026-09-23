@@ -157,9 +157,11 @@ urlpatterns.append(
 
 ### Summary configuration of one model, read and written by the Vue form in the
 ### designer. Wrapped like the endpoint above: its normalisation warnings are
-### messages a curator reads. The PUT is safe under the wrap because the form
-### builds this URL with generateArchesURL, which always writes the language
-### prefix in — the bare path a browser would replay as a GET is never asked for.
+### shown to the curator as returned (the 412 carries a translated message too,
+### which the form replaces with its own). The PUT and the DELETE
+### are safe under the wrap because the form builds this URL with
+### generateArchesURL, which always writes the language prefix in — the bare
+### path a browser would replay as a GET is never asked for.
 urlpatterns.append(
     path(
         "api/summary-config/<uuid:graphid>",

@@ -252,9 +252,10 @@ class ResourceSummary(BaseFunction):
         functionxgraph.config = cleaned
         functionxgraph.save()
         # The designer's view calls this hook inside `transaction.atomic()`.
-        transaction.on_commit(lambda: _forget_config(functionxgraph.graph_id))
+        transaction.on_commit(lambda: forget_config(functionxgraph.graph_id))
 
 
-def _forget_config(graph_id):
+def forget_config(graph_id):
+    """Drop a graph's cached configuration and the stamp memoised summaries carry."""
     cache.delete(config_cache_key(graph_id))
     bump_config_stamp()

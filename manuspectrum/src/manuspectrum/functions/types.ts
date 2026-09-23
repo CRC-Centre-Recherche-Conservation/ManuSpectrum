@@ -1,5 +1,5 @@
 // Shapes of the two endpoints the summary configuration form talks to:
-// `manuspectrum:summary-config` (read and write) and
+// `manuspectrum:summary-config` (read, write and remove) and
 // `manuspectrum:relatable-nodes` (read). The configuration types mirror
 // `manuspectrum/functions/resource_summary.py`, so the snake_case keys are the
 // ones stored in `functions_x_graphs.config` and must not be renamed here.
@@ -63,6 +63,13 @@ export interface SummaryConfigResponse {
     config: SummaryConfig;
     warnings: string[];
     attached: boolean;
+}
+
+// A stored state with the ETag it was answered with, echoed as `If-Match` by
+// the next write. `null` when the answer carried none: that write is then
+// unconditional.
+export interface VersionedConfig extends SummaryConfigResponse {
+    etag: string | null;
 }
 
 export interface NamedGraph {
