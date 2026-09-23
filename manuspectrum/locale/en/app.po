@@ -1,15 +1,15 @@
 msgid ""
 msgstr ""
-"Content-Type: text/plain; charset=UTF-8\n"
 "Project-Id-Version: PACKAGE VERSION\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:321
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:423
 msgid "Add a field"
 msgstr "Add a field"
 
@@ -17,7 +17,7 @@ msgstr "Add a field"
 msgid "Add a hop"
 msgstr "Add a hop"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:353
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:455
 msgid "Add a related count"
 msgstr "Add a related count"
 
@@ -37,11 +37,15 @@ msgstr "Alias whose distinct values are listed"
 msgid "All"
 msgstr "All"
 
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:127
+msgid "Cancel"
+msgstr "Cancel"
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:59
 msgid "Chips"
 msgstr "Chips"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:259
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:361
 msgid "Configuration saved."
 msgstr "Configuration saved."
 
@@ -73,7 +77,7 @@ msgstr "English label override"
 msgid "Field"
 msgstr "Field"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:295
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:397
 msgid "Fields"
 msgstr "Fields"
 
@@ -121,7 +125,7 @@ msgstr "Link to the report"
 msgid "List distinct values"
 msgstr "List distinct values"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:239
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:325
 msgid "Loading the configuration…"
 msgstr "Loading the configuration…"
 
@@ -161,13 +165,36 @@ msgstr "Outgoing — this model carries the link"
 msgid "Related count"
 msgstr "Related count"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:327
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:429
 msgid "Related counts"
 msgstr "Related counts"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:213
 msgid "Relation alias"
 msgstr "Relation alias"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:349
+msgid "Reload the configuration"
+msgstr "Reload the configuration"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:126
+msgid "Remove"
+msgstr "Remove"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:123
+msgid ""
+"Remove the summary configuration of this model? Its popups fall back to the "
+"name and the default popup. The page reloads afterwards; unsaved edits to "
+"other functions on this page ask for confirmation first."
+msgstr ""
+"Remove the summary configuration of this model? Its popups fall back to the "
+"name and the default popup. The page reloads afterwards; unsaved edits to "
+"other functions on this page ask for confirmation first."
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:122
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:476
+msgid "Remove this configuration"
+msgstr "Remove this configuration"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:176
 msgid "Remove this field"
@@ -181,13 +208,21 @@ msgstr "Remove this hop"
 msgid "Remove this related count"
 msgstr "Remove this related count"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:363
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:465
 msgid "Save this configuration"
 msgstr "Save this configuration"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:282
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:384
 msgid "Some entries were dropped:"
 msgstr "Some entries were dropped:"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:171
+msgid ""
+"Someone else changed this configuration since you opened it. Your changes "
+"are not saved: reload it to see their version."
+msgstr ""
+"Someone else changed this configuration since you opened it. Your changes "
+"are not saved: reload it to see their version."
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:62
 msgid "Spectrum thumbnail"
@@ -201,15 +236,19 @@ msgstr "Stop listing distinct values"
 msgid "Text"
 msgstr "Text"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:67
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:90
 msgid "This configuration could not be read."
 msgstr "This configuration could not be read."
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:90
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:152
+msgid "This configuration could not be removed."
+msgstr "This configuration could not be removed."
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:112
 msgid "This configuration could not be saved."
 msgstr "This configuration could not be saved."
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:270
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:372
 msgid "This model has no summary configuration yet. Saving creates one."
 msgstr "This model has no summary configuration yet. Saving creates one."
 

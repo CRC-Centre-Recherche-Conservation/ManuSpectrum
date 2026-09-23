@@ -4187,17 +4187,25 @@ msgstr ""
 "Cette configuration fait partie du socle commun et ne peut pas être "
 "supprimée."
 
-#: views/summary_config.py:65
+#: views/summary_config.py:75
 msgid "Malformed JSON body"
 msgstr "Corps JSON mal formé"
 
-#: views/summary_config.py:67
+#: views/summary_config.py:77
 msgid "Expected a JSON object"
 msgstr "Un objet JSON est attendu"
 
-#: views/summary_config.py:72
+#: views/summary_config.py:87
 msgid "config: an empty configuration replaces the stored one"
 msgstr "config : une configuration vide remplace celle enregistrée"
+
+#: views/summary_config.py:131
+msgid ""
+"This configuration was changed by someone else since it was loaded. Reload "
+"it before saving."
+msgstr ""
+"Cette configuration a été modifiée par quelqu’un d’autre depuis son "
+"chargement. Rechargez-la avant d’enregistrer."
 
 #, python-format
 #~ msgid "Could not apply the XY configuration to tile %s"

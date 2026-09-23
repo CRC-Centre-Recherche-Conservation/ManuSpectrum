@@ -11,6 +11,7 @@ import type {
     SummaryConfig,
     SummaryConfigResponse,
     SummaryHop,
+    VersionedConfig,
 } from "@/manuspectrum/functions/types.ts";
 
 export const CONFIG_VERSION = 1;
@@ -23,6 +24,7 @@ export const DEFAULT_DISTINCT_LIMIT = 5;
 const CONFIG_ROUTE = "manuspectrum:summary-config";
 const RELATIONS_ROUTE = "manuspectrum:relatable-nodes";
 const CSRF_COOKIE = "csrftoken";
+const PRECONDITION_FAILED = 412;
 
 // Datatypes whose values the popup renders as something other than plain text.
 // Anything absent falls back to "text", which every datatype can be shown as.
@@ -162,6 +164,12 @@ export function csrfToken(): string {
     return match ? decodeURIComponent(match[1]) : "";
 }
 
+/**
+ * A write refused because the stored configuration is no longer the one the
+ * form read: someone else saved or removed it in between.
+ */
+export class ConfigConflictError extends Error {}
+
 async function readJson<T>(response: Response): Promise<T> {
     if (!response.ok) {
         throw new Error(String(response.status));
@@ -169,26 +177,48 @@ async function readJson<T>(response: Response): Promise<T> {
     return (await response.json()) as T;
 }
 
-export async function fetchConfig(
-    graphid: string,
-): Promise<SummaryConfigResponse> {
+/** A stored state and the ETag it was answered with; 412 is a conflict. */
+async function readVersioned(response: Response): Promise<VersionedConfig> {
+    if (response.status === PRECONDITION_FAILED) {
+        throw new ConfigConflictError(String(PRECONDITION_FAILED));
+    }
+    const stored = await readJson<SummaryConfigResponse>(response);
+    return { ...stored, etag: response.headers.get("ETag") };
+}
+
+/**
+ * Headers of a write. The ETag goes back exactly as it was received: a
+ * compressing proxy may have weakened it to `W/"…"`, and the endpoint matches
+ * that form too.
+ */
+function versionHeaders(etag: string | null): Record<string, string> {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken(),
+    };
+    if (etag !== null) {
+        headers["If-Match"] = etag;
+    }
+    return headers;
+}
+
+export async function fetchConfig(graphid: string): Promise<VersionedConfig> {
     const response = await fetch(generateArchesURL(CONFIG_ROUTE, { graphid }), {
         credentials: "same-origin",
     });
-    return readJson<SummaryConfigResponse>(response);
+    return readVersioned(response);
 }
 
+/** Write a configuration; `etag` is that of the state the form was editing. */
 export async function saveConfig(
     graphid: string,
     config: SummaryConfig,
-): Promise<SummaryConfigResponse> {
+    etag: string | null,
+): Promise<VersionedConfig> {
     const response = await fetch(generateArchesURL(CONFIG_ROUTE, { graphid }), {
         method: "PUT",
         credentials: "same-origin",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": csrfToken(),
-        },
+        headers: versionHeaders(etag),
         body: JSON.stringify({
             config: {
                 ...config,
@@ -197,7 +227,20 @@ export async function saveConfig(
             },
         }),
     });
-    return readJson<SummaryConfigResponse>(response);
+    return readVersioned(response);
+}
+
+/** Detach the function from the model; answers the detached state. */
+export async function removeConfig(
+    graphid: string,
+    etag: string | null,
+): Promise<VersionedConfig> {
+    const response = await fetch(generateArchesURL(CONFIG_ROUTE, { graphid }), {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: versionHeaders(etag),
+    });
+    return readVersioned(response);
 }
 
 export async function fetchRelations(graphid: string): Promise<RelatableNodes> {

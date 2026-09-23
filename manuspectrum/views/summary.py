@@ -25,6 +25,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.gzip import gzip_page
 
+from arches.app.models.models import ResourceInstance
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.functions.resource_summary import config_stamp
@@ -118,9 +119,11 @@ class SummaryBatchView(View):
     """The summaries of the features a map load shows, warmed in one request.
 
     The answer is never cached by a proxy: it mixes as many resources as the
-    map holds, each with its own guard. The payloads themselves are memoised
-    one by one, under the keys the single endpoint reads, so a click that
-    follows the warm-up costs nothing.
+    map holds, each with its own guard. Every id goes through Arches' read
+    check; the rows are loaded in one query and handed to it (``resource=``),
+    so the check does not fetch them again. The payloads themselves are
+    memoised one by one, under the keys the single endpoint reads, so a click
+    that follows the warm-up costs nothing.
     """
 
     def get(self, request):
@@ -134,9 +137,16 @@ class SummaryBatchView(View):
         language = translation.get_language() or settings.LANGUAGE_CODE
         scope = perm_scope(request.user)
         stamp = config_stamp()
+        wanted = _well_formed(asked)
+        rows = _rows(wanted)
         summaries, missing = {}, []
-        for resourceid in _well_formed(asked):
-            if not user_can_read_resource(request.user, resourceid=resourceid):
+        for resourceid in wanted:
+            row = rows.get(str(uuid.UUID(resourceid)))
+            if row is not None:
+                readable = user_can_read_resource(request.user, resource=row)
+            else:
+                readable = user_can_read_resource(request.user, resourceid=resourceid)
+            if not readable:
                 continue
             held = cache.get(summary_cache_key(resourceid, language, scope, stamp))
             if held is None:
@@ -150,6 +160,20 @@ class SummaryBatchView(View):
             shorten_degraded(payload, key)
             summaries[resourceid] = payload
         return _private({"summaries": summaries})
+
+
+def _rows(ids):
+    """The resource rows of ``ids``, keyed by canonical id, in one query.
+
+    Loaded as Arches' read check loads a row it is asked for by id, so the
+    check decides on the same instance either way.
+    """
+    return {
+        str(row.pk): row
+        for row in ResourceInstance.objects.select_related(
+            "resource_instance_lifecycle_state"
+        ).filter(pk__in=ids)
+    }
 
 
 def _well_formed(values):

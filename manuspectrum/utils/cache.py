@@ -26,6 +26,22 @@ def etag_already_held(request, etag):
     return header.strip() == "*" or etag in header or f"W/{etag}" in header
 
 
+def if_match_allows(request, etag):
+    """Whether a write may proceed under the client's ``If-Match``.
+
+    An absent header allows it; ``*`` allows it; otherwise one listed tag must
+    name *etag*. A ``W/`` prefix is ignored, unlike the strong comparison of
+    RFC 9110 §13.1.1: a compressing proxy weakens the ETag the client echoes
+    back, and the tags compared here are digests of the stored state, so a
+    weakened copy still names the same version.
+    """
+    header = request.headers.get("If-Match")
+    if header is None:
+        return True
+    tags = [tag.strip() for tag in header.split(",")]
+    return "*" in tags or any(tag.removeprefix("W/") == etag for tag in tags)
+
+
 def renews_csrf_cookie(request):
     """Whether ``CsrfViewMiddleware`` will add a ``Set-Cookie`` to this response.
 

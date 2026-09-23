@@ -3,9 +3,9 @@ import time
 from unittest.mock import MagicMock
 
 from django.core.cache import cache
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
 
-from manuspectrum.utils.cache import get_or_build, stable_cache_key
+from manuspectrum.utils.cache import get_or_build, if_match_allows, stable_cache_key
 
 
 class StableCacheKeyTests(SimpleTestCase):
@@ -91,3 +91,33 @@ class GetOrBuildTests(SimpleTestCase):
         self.assertGreaterEqual(time.monotonic() - started, 0.3)
         build.assert_called_once()
         self.assertEqual(cache.get(self.KEY), "fallback")
+
+
+class IfMatchTests(SimpleTestCase):
+    def allows(self, header, etag='"abc"'):
+        headers = {} if header is None else {"If-Match": header}
+        return if_match_allows(RequestFactory().put("/", headers=headers), etag)
+
+    def test_an_absent_header_allows_the_write(self):
+        self.assertTrue(self.allows(None))
+
+    def test_the_current_tag_allows_the_write(self):
+        self.assertTrue(self.allows('"abc"'))
+
+    def test_another_tag_refuses_the_write(self):
+        self.assertFalse(self.allows('"abd"'))
+
+    def test_a_star_allows_the_write(self):
+        self.assertTrue(self.allows("*"))
+
+    def test_one_tag_of_a_list_is_enough(self):
+        self.assertTrue(self.allows('"x", "abc"'))
+
+    def test_a_weakened_copy_of_the_current_tag_allows_the_write(self):
+        self.assertTrue(self.allows('W/"abc"'))
+
+    def test_a_weakened_copy_of_another_tag_refuses_the_write(self):
+        self.assertFalse(self.allows('W/"abd"'))
+
+    def test_an_empty_header_refuses_the_write(self):
+        self.assertFalse(self.allows(""))
