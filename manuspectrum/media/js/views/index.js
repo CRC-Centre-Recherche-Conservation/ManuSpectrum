@@ -2,6 +2,7 @@ import ko from 'knockout';
 import arches from 'arches';
 import 'views/components/language-switcher';
 import initMsNav from 'utils/ms-nav';
+import revealOnScroll from 'utils/reveal-on-scroll';
 
 $(function () {
     'use strict';
@@ -12,23 +13,9 @@ $(function () {
     initMsNav();
 
     // ================================================================
-    // SCROLL REVEAL (IntersectionObserver)
+    // SCROLL REVEAL
     // ================================================================
-    if ('IntersectionObserver' in window) {
-        var revealObserver = new IntersectionObserver(function (entries) {
-            $.each(entries, function (_, entry) {
-                if (entry.isIntersecting) {
-                    $(entry.target).addClass('is-visible');
-                }
-            });
-        }, { threshold: 0.06, rootMargin: '0px 0px -30px 0px' });
-
-        $('.reveal, .reveal-scale').each(function () {
-            revealObserver.observe(this);
-        });
-    } else {
-        $('.reveal, .reveal-scale').addClass('is-visible');
-    }
+    revealOnScroll(0.06, { selector: '.reveal, .reveal-scale', rootMargin: '0px 0px -30px 0px' });
 
     // ================================================================
     // SEARCH FORM — URL from arches.urls

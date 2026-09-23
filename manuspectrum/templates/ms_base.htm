@@ -40,7 +40,6 @@
     {% block structured_data %}{% endblock %}
     <link rel="shortcut icon" href="{% webpack_static 'favicons/favicon.ico' %}" type="image/x-icon" />
     {# Fonts are self-hosted (@font-face in _ms-fonts.scss, shipped by the css bundle) #}
-    <noscript><style>.reveal,.reveal-scale{opacity:1 !important;transform:none !important;}</style></noscript>
     {% render_bundle 'css/homepage/_fa-subset' 'css' %}
     {% render_bundle 'css/pages' 'css' %}
     {% block extra_head %}{% endblock %}

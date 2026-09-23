@@ -46,6 +46,10 @@
     // is the reference layout). When a lead follows the bar inside the hero,
     // give it air; on team nothing follows, so this rule changes nothing there.
     &__accent + * { margin-top: 28px; }
+    animation: ms-page-hero-in 0.8s var(--ease-out-expo) 0.1s both;
+}
+@keyframes ms-page-hero-in {
+    from { opacity: 0; transform: translateY(24px); }
 }
 @media (max-width: 768px) { .ms-page-hero { padding-top: 108px; padding-bottom: 32px; } }
 
