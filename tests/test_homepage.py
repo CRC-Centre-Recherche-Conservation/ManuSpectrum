@@ -69,3 +69,11 @@ class LogoDialogTests(TestCase):
         self.assertRegex(
             html, r'<button type="button" class="ms-logo-zoom-btn" id="ms-logo-zoom"'
         )
+
+
+class ArchesPayloadTests(TestCase):
+    def test_homepage_carries_no_arches_payload(self):
+        for lang in ("en", "fr"):
+            html = self.client.get(f"/{lang}/").content.decode()
+            for marker in ("arches-translations", "arches-urls", "CKEDITOR_BASEPATH"):
+                self.assertNotIn(marker, html, f"{marker} on /{lang}/")
