@@ -730,6 +730,12 @@ BIBLISSIMA_CONCURRENCY_LIMIT = 12
 # answering 503; also sent as Retry-After.
 BIBLISSIMA_SLOT_TIMEOUT = 15
 
+# Whole-request budget, in seconds, of one /api/biblissima/suggest miss. Each
+# upstream call's slot wait, connect and read are capped by what is left of it,
+# and no call starts once it is spent: the answer then carries the results
+# already in hand. Calls on this path are never retried.
+BIBLISSIMA_SUGGEST_DEADLINE = 4
+
 # 24h Django-cache TTL for resolved Wikibase entities and manuscript
 # enrichment results.
 BIBLISSIMA_CACHE_TTL = 24 * 60 * 60

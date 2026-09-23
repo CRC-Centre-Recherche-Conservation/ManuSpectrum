@@ -20,14 +20,16 @@ Two surface areas:
   but the endpoints are generic: they take a ``resourceType`` + payload
   and don't assume a specific UI flow.
 
-Outbound HTTP goes through ``_bib_request()`` on a session built by
-``_build_biblissima_session()``; the search view and the enrichment use the
-process-wide ``_get_biblissima_session()``. ``_bib_request()`` holds a slot of
-a concurrency semaphore that is per worker process: a request that waits
-longer than ``BIBLISSIMA_SLOT_TIMEOUT`` for a slot gets ``BiblissimaBusy``,
-answered 503. Sessions force ``Accept-Language: fr`` so that scraped portal
-field labels (``Type :``, ``Lieu de fabrication :``, …) always match our
-French field map regardless of the end-user's browser locale.
+Outbound HTTP goes through ``_bib_request()``. The search view and the
+enrichment use the process-wide ``_get_biblissima_session()`` (retries with
+backoff); the suggest view uses the no-retry ``_get_besteffort_session()``
+through the guarded fetch, under one whole-request deadline.
+``_bib_request()`` holds a slot of a concurrency semaphore that is per worker
+process: a request that waits longer than ``BIBLISSIMA_SLOT_TIMEOUT`` for a
+slot gets ``BiblissimaBusy``, answered 503. Sessions force
+``Accept-Language: fr`` so that scraped portal field labels (``Type :``,
+``Lieu de fabrication :``, …) always match our French field map regardless of
+the end-user's browser locale.
 
 ## Attention points for devs
 
@@ -53,6 +55,7 @@ French field map regardless of the end-user's browser locale.
 import logging
 import re
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -117,6 +120,7 @@ IIIF_CONNECT_TIMEOUT = settings.BIBLISSIMA_IIIF_CONNECT_TIMEOUT
 PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
 _BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
 _BIBLISSIMA_SLOT_TIMEOUT = settings.BIBLISSIMA_SLOT_TIMEOUT
+SUGGEST_DEADLINE = settings.BIBLISSIMA_SUGGEST_DEADLINE
 _BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
 _BIBLISSIMA_RAW_CACHE_TTL = settings.BIBLISSIMA_RAW_CACHE_TTL
 
@@ -164,9 +168,11 @@ def _build_biblissima_session(retry=None):
     return session
 
 
-# Dedicated session for OPTIONAL, best-effort enrichment fetches (IIIF
-# manifests -> canvas dimensions + thumbnail). These MUST fail fast: a dead
-# IIIF host must never hold a gunicorn worker + concurrency slot for minutes.
+# Dedicated no-retry session for calls that must fail fast: OPTIONAL
+# best-effort enrichment fetches (IIIF manifests -> canvas dimensions +
+# thumbnail) and the typeahead suggest path, which runs under a whole-request
+# deadline. A dead host must never hold a gunicorn worker + concurrency slot
+# for minutes.
 # Unlike the shared session it does NOT retry (``total=0``); paired with the
 # short ``IIIF_CONNECT_TIMEOUT`` connect timeout, an unreachable host errors in
 # seconds instead of ~138 s (which was 3 connect retries x a 45 s timeout).
@@ -224,6 +230,10 @@ class BiblissimaBusy(Exception):
     """No concurrency slot freed up within ``_BIBLISSIMA_SLOT_TIMEOUT``."""
 
 
+class BiblissimaBudgetSpent(Exception):
+    """The request's deadline passed before this call could start."""
+
+
 # Lightweight counters for observing upstream health via /api/biblissima/stats.
 _biblissima_stats = {
     "requests_total": 0,
@@ -244,13 +254,15 @@ def _incr_stat(key, delta=1):
 
 
 @contextmanager
-def _biblissima_slot():
+def _biblissima_slot(timeout=None):
     """Hold one concurrency slot for an outbound Biblissima call.
 
-    Waits at most ``_BIBLISSIMA_SLOT_TIMEOUT`` seconds, then raises
-    ``BiblissimaBusy``. Once acquired, the slot is released on every exit.
+    Waits at most *timeout* seconds (``_BIBLISSIMA_SLOT_TIMEOUT`` when None),
+    then raises ``BiblissimaBusy``. Once acquired, the slot is released on
+    every exit.
     """
-    if not _biblissima_semaphore.acquire(timeout=_BIBLISSIMA_SLOT_TIMEOUT):
+    wait = _BIBLISSIMA_SLOT_TIMEOUT if timeout is None else timeout
+    if not _biblissima_semaphore.acquire(timeout=wait):
         _incr_stat("slot_timeouts", 1)
         raise BiblissimaBusy()
     try:
@@ -261,7 +273,9 @@ def _biblissima_slot():
         _biblissima_semaphore.release()
 
 
-def _bib_request(session, url, *, guarded=False, **kwargs):
+def _bib_request(
+    session, url, *, guarded=False, slot_timeout=None, deadline=None, **kwargs
+):
     """Wrapper around session.get bounding concurrency and recording metrics.
 
     The session's HTTPAdapter already handles Retry-After and transient 5xx/429
@@ -276,8 +290,20 @@ def _bib_request(session, url, *, guarded=False, **kwargs):
     throttle is off here — a slot of the concurrency semaphore is already held
     for the whole call, and sleeping inside one would serialise the enrichment
     pool behind a single provider.
+
+    ``slot_timeout`` bounds the wait for a concurrency slot
+    (``_BIBLISSIMA_SLOT_TIMEOUT`` when None). ``deadline``, a
+    ``time.monotonic()`` instant, sets the connect and read timeouts to the
+    seconds left once the slot is held (at most ``REQUEST_TIMEOUT``) and raises
+    ``BiblissimaBudgetSpent`` when none are left. The read timeout applies to
+    each read of the body, not to the whole of it.
     """
-    with _biblissima_slot():
+    with _biblissima_slot(slot_timeout):
+        if deadline is not None:
+            left = min(deadline - time.monotonic(), REQUEST_TIMEOUT)
+            if left <= 0:
+                raise BiblissimaBudgetSpent()
+            kwargs["timeout"] = (left, left)
         _incr_stat("requests_total", 1)
         try:
             if guarded:
@@ -915,6 +941,203 @@ def _suggest_result(qid, item, entity, lang):
     }
 
 
+def _suggest_call(params, deadline):
+    """One Wikibase API call of the suggest path, bounded by *deadline*.
+
+    *deadline* is a ``time.monotonic()`` instant. The call goes through the
+    guarded fetch on the no-retry session; the slot wait is capped by the
+    seconds left, the connect and each read by what is left once the slot is
+    held, and no call starts once they are spent (``BiblissimaBudgetSpent``).
+    The DNS lookups of the SSRF guard are not covered by the budget. Returns
+    the decoded JSON object. Raises ``ValueError`` for a body that is not an
+    object or that carries a MediaWiki ``error`` (reported inside an HTTP 200),
+    and what the fetch raises otherwise; a read timeout surfaces as
+    ``requests.ConnectionError``.
+    """
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise BiblissimaBudgetSpent()
+    resp = _bib_request(
+        _get_besteffort_session(),
+        f"{BIBLISSIMA_WIKIBASE}?{urlencode(params)}",
+        guarded=True,
+        slot_timeout=min(left, REQUEST_TIMEOUT),
+        deadline=deadline,
+    )
+    resp.raise_for_status()
+    payload = resp.json()
+    if not isinstance(payload, dict) or "error" in payload:
+        raise ValueError(f"Wikibase {params.get('action')} answered an error")
+    return payload
+
+
+def _entity_types(entity):
+    """Item ids named by the P2 (type) claims of a wbgetentities entity."""
+    types = []
+    for claim in (entity.get("claims") or {}).get(P2, []):
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+        if isinstance(value, dict) and value.get("id"):
+            types.append(value["id"])
+    return types
+
+
+def _suggest_languages(lang):
+    """The ``languages`` parameter of a batch: the chain lang → en → fr."""
+    return "|".join(dict.fromkeys((lang, "en", "fr")))
+
+
+def _suggest_untyped_results(query, lang, limit, deadline):
+    """``wbsearchentities`` hits as suggestions, without a claims batch.
+
+    The enriched fields (``label_en``, ``portal_url``) stay null.
+    """
+    items = _suggest_call(
+        {
+            "action": "wbsearchentities",
+            "search": query,
+            "language": lang,
+            "format": "json",
+            "limit": limit,
+        },
+        deadline,
+    ).get("search", [])
+    results, seen = [], set()
+    for item in items:
+        if item["id"] not in seen:
+            seen.add(item["id"])
+            results.append(_suggest_result(item["id"], item, None, lang))
+    return results
+
+
+def _suggest_prefix_results(query, lang, type_qid, limit, deadline):
+    """Typed ``wbsearchentities`` hits.
+
+    Three times *limit* hits are fetched, then kept in upstream order when a
+    P2 claim names *type_qid*, up to *limit*. MediaWiki caps the search at 50
+    for non-bot clients and reports an overflow inside an HTTP 200, hence the
+    15-suggestion ceiling of the view.
+    """
+    items = _suggest_call(
+        {
+            "action": "wbsearchentities",
+            "search": query,
+            "language": lang,
+            "format": "json",
+            "limit": limit * 3,
+        },
+        deadline,
+    ).get("search", [])
+    if not items:
+        return []
+    entities = _suggest_call(
+        {
+            "action": "wbgetentities",
+            "ids": "|".join(item["id"] for item in items),
+            "format": "json",
+            "props": "claims|labels",
+            "languages": _suggest_languages(lang),
+        },
+        deadline,
+    ).get("entities", {})
+    results, seen = [], set()
+    for item in items:
+        qid = item["id"]
+        entity = entities.get(qid)
+        if qid in seen or entity is None or type_qid not in _entity_types(entity):
+            continue
+        seen.add(qid)
+        results.append(_suggest_result(qid, item, entity, lang))
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _suggest_fulltext_results(query, lang, type_qid, limit, seen_ids, deadline):
+    """CirrusSearch hits not already suggested, labelled by one batch.
+
+    Fills the room *limit* leaves after the ``len(seen_ids)`` suggestions
+    already made. An entity without a label in the lang → en → fr chain is
+    skipped.
+    """
+    room = limit - len(seen_ids)
+    srsearch = f"{query} haswbstatement:P2={type_qid}" if type_qid else query
+    hits = (
+        _suggest_call(
+            {
+                "action": "query",
+                "list": "search",
+                "srsearch": srsearch,
+                "srnamespace": 120,
+                "format": "json",
+                "srlimit": limit,
+            },
+            deadline,
+        )
+        .get("query", {})
+        .get("search", [])
+    )
+    qids = dict.fromkeys(hit["title"].replace("Item:", "") for hit in hits)
+    qids = [qid for qid in qids if qid not in seen_ids][:room]
+    if not qids:
+        return []
+    entities = _suggest_call(
+        {
+            "action": "wbgetentities",
+            "ids": "|".join(qids),
+            "format": "json",
+            "languages": _suggest_languages(lang),
+            "props": "labels|descriptions|claims",
+        },
+        deadline,
+    ).get("entities", {})
+    results = []
+    for qid in qids:
+        entity = entities.get(qid)
+        if not entity:
+            continue
+        entry = _suggest_result(qid, None, entity, lang)
+        if entry["label"]:
+            results.append(entry)
+    return results
+
+
+def _build_suggestions(query, lang, type_qid, limit, deadline):
+    """The suggest payload of *query*, computed before *deadline*.
+
+    The prefix search runs first and the fulltext search fills the room left;
+    a branch that fails or finds the budget spent keeps the results already in
+    hand. ``degraded``: both branches failed; ``partial``: at least one did.
+    """
+    results, prefix_failed, fulltext_failed = [], False, False
+    try:
+        if type_qid:
+            results = _suggest_prefix_results(query, lang, type_qid, limit, deadline)
+        else:
+            results = _suggest_untyped_results(query, lang, limit, deadline)
+    except Exception as exc:
+        prefix_failed = True
+        logger.warning(
+            "[biblissima.suggest] prefix search failed for query=%r: %s", query, exc
+        )
+    if len(results) < limit:
+        try:
+            results += _suggest_fulltext_results(
+                query, lang, type_qid, limit, {r["id"] for r in results}, deadline
+            )
+        except Exception as exc:
+            fulltext_failed = True
+            logger.warning(
+                "[biblissima.suggest] fulltext search failed for query=%r: %s",
+                query,
+                exc,
+            )
+    return {
+        "results": results,
+        "degraded": prefix_failed and fulltext_failed,
+        "partial": prefix_failed or fulltext_failed,
+    }
+
+
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaSuggestView(View):
     """Proxy for Biblissima Wikibase entity search (autocomplete).
@@ -942,169 +1165,19 @@ class BiblissimaSuggestView(View):
     def get(self, request):
         query = request.GET.get("q", "").strip()
         if len(query) < 2:
-            return JsonResponse({"results": [], "degraded": False})
-
+            return JsonResponse({"results": [], "degraded": False, "partial": False})
         lang = request.GET.get("lang", "fr")
         try:
             limit = int(request.GET.get("limit", 10))
         except (TypeError, ValueError):
             limit = 10
-        # MediaWiki caps wbsearchentities at 50 ids for non-bots and reports
-        # overflow as JSON inside HTTP 200 — fetch_limit = 3 × limit must
-        # stay under that or the prefix path silently returns nothing.
         limit = max(1, min(limit, 15))
-        type_filter = request.GET.get("type", "")  # "manuscript" or "descriptor"
-        type_qid = self.TYPE_FILTERS.get(type_filter, "")
-        # wbgetentities only returns the requested languages — ask for the
-        # exact fallback chain lang → en → fr.
-        langs_param = "|".join(dict.fromkeys((lang, "en", "fr")))
-        seen_ids = set()
-        results = []
-
-        session = _build_biblissima_session()
-
-        prefix_failed = False
-        fulltext_failed = False
-
-        # 1. Prefix match (fast, good for exact starts)
-        # wbsearchentities doesn't support type filtering, so we fetch more
-        # and filter by checking P2 claims afterwards
-        try:
-            fetch_limit = limit * 3 if type_qid else limit
-            resp = _bib_request(
-                session,
-                BIBLISSIMA_WIKIBASE,
-                params={
-                    "action": "wbsearchentities",
-                    "search": query,
-                    "language": lang,
-                    "format": "json",
-                    "limit": fetch_limit,
-                },
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            prefix_items = resp.json().get("search", [])
-
-            if type_qid and prefix_items:
-                # Batch fetch claims (P2 type filter + P129 portal hash) and
-                # labels (EN/FR fallback chain) in the single existing call.
-                batch_ids = [item["id"] for item in prefix_items]
-                type_resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "wbgetentities",
-                        "ids": "|".join(batch_ids),
-                        "format": "json",
-                        "props": "claims|labels",
-                        "languages": langs_param,
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                type_resp.raise_for_status()
-                entities = type_resp.json().get("entities", {})
-                matching = {}
-                for qid, entity in entities.items():
-                    for claim in entity.get("claims", {}).get(P2, []):
-                        val = (
-                            claim.get("mainsnak", {})
-                            .get("datavalue", {})
-                            .get("value", {})
-                        )
-                        if isinstance(val, dict) and val.get("id") == type_qid:
-                            matching[qid] = entity
-                            break
-
-                for item in prefix_items:
-                    qid = item["id"]
-                    if qid not in matching or qid in seen_ids:
-                        continue
-                    seen_ids.add(qid)
-                    results.append(_suggest_result(qid, item, matching[qid], lang))
-                    if len(results) >= limit:
-                        break
-            else:
-                for item in prefix_items:
-                    if item["id"] not in seen_ids:
-                        seen_ids.add(item["id"])
-                        results.append(_suggest_result(item["id"], item, None, lang))
-        except Exception:
-            prefix_failed = True
-            logger.warning("wbsearchentities failed for query=%s", query)
-
-        # 2. Full-text search (flexible word order, partial matches)
-        # CirrusSearch supports haswbstatement for native type filtering
-        if len(results) < limit:
-            try:
-                srsearch = query
-                if type_qid:
-                    srsearch = f"{query} haswbstatement:P2={type_qid}"
-
-                resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "query",
-                        "list": "search",
-                        "srsearch": srsearch,
-                        "srnamespace": 120,
-                        "format": "json",
-                        "srlimit": limit,
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                resp.raise_for_status()
-                search_results = resp.json().get("query", {}).get("search", [])
-                qids_to_fetch = [
-                    r["title"].replace("Item:", "")
-                    for r in search_results
-                    if r["title"].replace("Item:", "") not in seen_ids
-                ]
-
-                # Batch fetch labels for full-text results
-                if qids_to_fetch:
-                    resp = _bib_request(
-                        session,
-                        BIBLISSIMA_WIKIBASE,
-                        params={
-                            "action": "wbgetentities",
-                            "ids": "|".join(qids_to_fetch[: limit - len(results)]),
-                            "format": "json",
-                            "languages": langs_param,
-                            "props": "labels|descriptions|claims",
-                        },
-                        timeout=REQUEST_TIMEOUT,
-                    )
-                    resp.raise_for_status()
-                    entities = resp.json().get("entities", {})
-                    for qid in qids_to_fetch:
-                        if len(results) >= limit:
-                            break
-                        entity = entities.get(qid)
-                        if not entity:
-                            continue
-                        entry = _suggest_result(qid, None, entity, lang)
-                        if not entry["label"]:
-                            continue
-                        seen_ids.add(qid)
-                        results.append(entry)
-            except Exception as exc:
-                fulltext_failed = True
-                logger.warning(
-                    "[biblissima.suggest] Wikibase CirrusSearch fulltext search "
-                    "failed for query=%r: %s (results truncated to wbsearchentities prefix matches)",
-                    query,
-                    exc,
-                    exc_info=True,
-                )
-
-        session.close()
-        degraded = prefix_failed and fulltext_failed
-        response = JsonResponse({"results": results, "degraded": degraded})
-        if degraded:
-            # cache_page skips responses whose max-age is 0 — a Biblissima
-            # outage must not poison the 30-minute cache with empty results.
+        type_qid = self.TYPE_FILTERS.get(request.GET.get("type", ""), "")
+        payload = _build_suggestions(
+            query, lang, type_qid, limit, time.monotonic() + SUGGEST_DEADLINE
+        )
+        response = JsonResponse(payload)
+        if payload["partial"]:
             patch_cache_control(response, max_age=0)
         return response
 

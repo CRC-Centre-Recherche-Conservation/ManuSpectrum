@@ -29,6 +29,7 @@ import json
 import os
 import socket
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qsl, urlsplit
 
 import requests
 from django.core.cache import cache
@@ -81,6 +82,11 @@ def _make_response(json_data=None, status_code=200, text=""):
     else:
         resp.raise_for_status.return_value = None
     return resp
+
+
+def _params_of(call):
+    """Query parameters of a mocked ``_bib_request`` call, from its URL."""
+    return dict(parse_qsl(urlsplit(call.args[1]).query))
 
 
 def _address(ip):
@@ -2480,8 +2486,8 @@ class BiblissimaSuggestViewTests(TestCase):
             bp, "_bib_request", side_effect=[search_resp, fulltext_resp]
         ) as mocked:
             self._get(q="dragon", type="descriptor", limit="50")
-        first_call_params = mocked.call_args_list[0].kwargs["params"]
-        self.assertEqual(first_call_params["limit"], 45)
+        first_call_params = _params_of(mocked.call_args_list[0])
+        self.assertEqual(first_call_params["limit"], "45")
 
     DESC_HASH = "desc46a049ef1a1cfed3c4a9c932503ea8497b6ae21f"
 
@@ -2540,7 +2546,7 @@ class BiblissimaSuggestViewTests(TestCase):
 
     def test_languages_param_deduplicated_with_lang(self):
         _, mocked = self._descriptor_flow({"fr": {"value": "dragon"}}, lang="de")
-        batch_params = mocked.call_args_list[1].kwargs["params"]
+        batch_params = _params_of(mocked.call_args_list[1])
         self.assertEqual(batch_params["languages"], "de|en|fr")
         self.assertEqual(batch_params["props"], "claims|labels")
 
