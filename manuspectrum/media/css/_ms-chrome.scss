@@ -421,7 +421,7 @@ img { max-width: 100%; height: auto; display: block; }
 // These live HERE, not in pages.scss, because includes/ms_header.htm is shared:
 // index.htm loads only `css/homepage`, so keeping them in the pages bundle left
 // the About dropdown completely unstyled on the homepage.
-// Custom properties only — homepage.scss does not import _ms-tokens.scss.
+// Custom properties only: both bundles import this partial before _ms-tokens.scss.
 .ms-nav-dropdown { position: relative; }
 
 .ms-nav-dropdown-toggle {
