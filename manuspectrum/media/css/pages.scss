@@ -38,6 +38,7 @@
 .ms-page-hero {
     @include ms-container;
     padding-top: 140px; padding-bottom: 48px;
+    animation: ms-page-hero-in 0.8s var(--ease-out-expo) 0.1s both;
     &__eyebrow { font-family: $ms-font-mono; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: $ms-blue-text; }
     &__title { font-family: $ms-font-serif; font-weight: 400; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.08; margin: 12px 0 16px; }
     &__lead { max-width: 720px; color: $ms-ink-soft; font-size: 1.1rem; line-height: 1.6; }
@@ -47,7 +48,11 @@
     // give it air; on team nothing follows, so this rule changes nothing there.
     &__accent + * { margin-top: 28px; }
 }
+@keyframes ms-page-hero-in {
+    from { opacity: 0; transform: translateY(24px); }
+}
 @media (max-width: 768px) { .ms-page-hero { padding-top: 108px; padding-bottom: 32px; } }
+@media (prefers-reduced-motion: reduce) { .ms-page-hero { animation: none; } }
 
 // NOTE: `.ms-nav-dropdown*` / `.ms-mobile-nav-group*` used to live here. They were
 // moved to _ms-chrome.scss because includes/ms_header.htm is shared with index.htm,
@@ -159,13 +164,6 @@ select.ms-contact-input { appearance: none; background-image: none; cursor: poin
     &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
 .ms-contact-copied { margin: 0; font-size: 0.8rem; color: $ms-ink-soft;
     &:empty { display: none; } }
-
-// Off-screen host for the execCommand('copy') fallback textarea. `display:none`
-// would make the selection uncopyable, so it has to stay rendered.
-.ms-visually-hidden {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
-}
 
 .ms-contact-aside { padding: 8px 4px;
     h3 { font-family: $ms-font-serif; font-weight: 500; font-size: 1.5rem; margin: 0 0 10px; }

@@ -110,20 +110,11 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- Fonts are self-hosted (@font-face in _ms-fonts.scss, shipped by the
          css bundle below) — no Google Fonts connection. -->
 
-    <!-- Fallback: if JS doesn't load, make everything visible -->
-    <noscript>
-        <style>
-            .reveal, .reveal-scale { opacity: 1 !important; transform: none !important; }
-        </style>
-    </noscript>
-
+    {% render_bundle 'views/index' 'js' attrs=' defer' %}
     {% render_bundle 'css/homepage' 'css' %}
 </head>
 
 <body>
-    <!-- Arches base config (translations, URLs) -->
-    {% include 'javascript.htm' %}
-
     <!-- ============================================================
          HEADER
          ============================================================ -->
@@ -188,7 +179,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <rect x="40" y="82" width="580" height="3" rx="1.5" fill="url(#spectral-bar)"/>
 
                 <!-- Interactive overlay (hidden by default) -->
-                <g id="ms-logo-crosshair" style="display:none;pointer-events:none;">
+                <g id="ms-logo-crosshair" display="none" pointer-events="none">
                   <line id="ms-cross-v" x1="0" y1="4" x2="0" y2="82" stroke="#1a1a2e" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
                   <line id="ms-cross-h-blue" x1="40" y1="0" x2="0" y2="0" stroke="#3b82f6" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
                   <line id="ms-cross-h-red" x1="40" y1="0" x2="0" y2="0" stroke="#dc3545" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
@@ -197,7 +188,7 @@ Homepage — Prismatic Luminescence aesthetic
                 </g>
 
                 <!-- Tooltip background + text -->
-                <g id="ms-logo-tooltip" style="display:none;pointer-events:none;">
+                <g id="ms-logo-tooltip" display="none" pointer-events="none">
                   <rect id="ms-tt-bg" x="0" y="0" width="120" height="42" rx="4" fill="#1a1a2e" opacity="0.88"/>
                   <text id="ms-tt-wl" x="0" y="0" fill="#f0b429" font-family="'JetBrains Mono','Sora',monospace" font-size="7.5" font-weight="600"></text>
                   <text id="ms-tt-blue" x="0" y="0" fill="#3b82f6" font-family="'JetBrains Mono','Sora',monospace" font-size="7"></text>
@@ -211,19 +202,18 @@ Homepage — Prismatic Luminescence aesthetic
                 </g>
               </svg>
               <!-- Zoom button (appears on hover) -->
-              <button class="ms-logo-zoom-btn" id="ms-logo-zoom" aria-label="Zoom" title="Zoom">
+              <button type="button" class="ms-logo-zoom-btn" id="ms-logo-zoom" aria-label="{% trans 'Enlarge the spectral plot' %}" title="{% trans 'Enlarge the spectral plot' %}">
                 <svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="10" y1="7" x2="10" y2="13"/></svg>
               </button>
             </div>
 
-            <!-- Fullscreen overlay for zoomed logo -->
-            <div class="ms-logo-overlay" id="ms-logo-overlay">
+            <dialog class="ms-logo-dialog" id="ms-logo-dialog" aria-labelledby="ms-logo-dialog-title">
               <div class="ms-logo-overlay-inner">
-                <button class="ms-logo-close-btn" id="ms-logo-close" aria-label="{% trans 'Close' %}">
+                <button type="button" class="ms-logo-close-btn" id="ms-logo-close" aria-label="{% trans 'Close' %}">
                   <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
                 </button>
                 <div class="ms-logo-overlay-header">
-                  <span class="ms-logo-overlay-title">{% trans "ManuSpectrum — Spectral Analysis Plot" %}</span>
+                  <span class="ms-logo-overlay-title" id="ms-logo-dialog-title">{% trans "ManuSpectrum — Spectral Analysis Plot" %}</span>
                   <span class="ms-logo-overlay-badge">{% trans "interactive" %}</span>
                 </div>
                 <div id="ms-logo-zoom-target"></div>
@@ -233,7 +223,7 @@ Homepage — Prismatic Luminescence aesthetic
                   <span>λ : 380 – 780 nm</span>
                 </div>
               </div>
-            </div>
+            </dialog>
 
             <h1 class="ms-hero-tagline">
                 {% blocktrans %}Interoperable database for <em>physicochemical analysis</em> of written cultural heritage{% endblocktrans %}
@@ -353,9 +343,9 @@ Homepage — Prismatic Luminescence aesthetic
             </div>
 
             <!-- Showcase carousel -->
-            <div class="ms-showcase-carousel reveal-scale" id="ms-showcase" role="region" aria-roledescription="carousel" aria-label="{% trans 'Analysis techniques in pictures' %}">
+            <div class="ms-showcase-carousel reveal-scale" id="ms-showcase" role="region" aria-roledescription="{% trans 'carousel' context 'aria-roledescription' %}" aria-label="{% trans 'Analysis techniques in pictures' %}">
                 <div class="ms-showcase-track" id="ms-showcase-track">
-                    <div class="ms-showcase-slide">
+                    <div class="ms-showcase-slide" role="group" aria-roledescription="{% trans 'slide' context 'aria-roledescription' %}" aria-label="{% blocktrans with n=1 total=3 %}{{ n }} of {{ total }}{% endblocktrans %}">
                         <img src="{% static 'img/landing/bible-msm-scanx.jpg' %}" alt="{% trans 'A manuscript on the motorised stage of a macro-XRF scanner, which maps chemical elements across the page without touching it' %}" width="2000" height="1161" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "Macro-XRF scanning of a manuscript" %}</h4>
@@ -363,7 +353,7 @@ Homepage — Prismatic Luminescence aesthetic
                             <span class="ms-showcase-credit">© Centre de Recherche sur la Conservation (CRC), 2025</span>
                         </div>
                     </div>
-                    <div class="ms-showcase-slide">
+                    <div class="ms-showcase-slide" role="group" aria-roledescription="{% trans 'slide' context 'aria-roledescription' %}" aria-label="{% blocktrans with n=2 total=3 %}{{ n }} of {{ total }}{% endblocktrans %}">
                         <img src="{% static 'img/landing/bible-msm-fors.jpg' %}" alt="{% trans 'An optical fibre held over a manuscript for FORS analysis — the reflected light carries the spectral signature of the pigments' %}" width="1126" height="2000" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "Fiber optic reflectance spectroscopy (FORS)" %}</h4>
@@ -371,7 +361,7 @@ Homepage — Prismatic Luminescence aesthetic
                             <span class="ms-showcase-credit">© Centre de Recherche sur la Conservation (CRC), 2025</span>
                         </div>
                     </div>
-                    <div class="ms-showcase-slide">
+                    <div class="ms-showcase-slide" role="group" aria-roledescription="{% trans 'slide' context 'aria-roledescription' %}" aria-label="{% blocktrans with n=3 total=3 %}{{ n }} of {{ total }}{% endblocktrans %}">
                         <img src="{% static 'img/landing/bible-msm-uv.jpg' %}" alt="{% trans 'A manuscript under ultraviolet light during hyperspectral imaging, revealing inks and retouches invisible to the naked eye' %}" width="2000" height="1430" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "UV hyperspectral imaging" %}</h4>
@@ -383,19 +373,19 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <!-- Arrows -->
                 <div class="ms-showcase-arrows">
-                    <button class="ms-showcase-arrow" id="ms-showcase-prev" aria-label="{% trans 'Previous' %}">
+                    <button type="button" class="ms-showcase-arrow" id="ms-showcase-prev" aria-label="{% trans 'Previous' %}">
                         <i class="fa-solid fa-chevron-left"></i>
                     </button>
-                    <button class="ms-showcase-arrow" id="ms-showcase-next" aria-label="{% trans 'Next' %}">
+                    <button type="button" class="ms-showcase-arrow" id="ms-showcase-next" aria-label="{% trans 'Next' %}">
                         <i class="fa-solid fa-chevron-right"></i>
                     </button>
                 </div>
 
                 <!-- Dots -->
-                <div class="ms-showcase-nav" id="ms-showcase-nav" role="tablist" aria-label="{% trans 'Choose a slide' %}">
-                    <button class="ms-showcase-dot active" data-slide="0" role="tab" aria-selected="true" aria-label="{% trans 'Slide 1 of 3 — Macro-XRF scanning' %}"></button>
-                    <button class="ms-showcase-dot" data-slide="1" role="tab" aria-selected="false" aria-label="{% trans 'Slide 2 of 3 — Fiber optic reflectance spectroscopy' %}"></button>
-                    <button class="ms-showcase-dot" data-slide="2" role="tab" aria-selected="false" aria-label="{% trans 'Slide 3 of 3 — UV hyperspectral imaging' %}"></button>
+                <div class="ms-showcase-nav" id="ms-showcase-nav" role="group" aria-label="{% trans 'Choose a slide' %}">
+                    <button type="button" class="ms-showcase-dot active" aria-current="true" aria-label="{% trans 'Slide 1 of 3 — Macro-XRF scanning' %}"></button>
+                    <button type="button" class="ms-showcase-dot" aria-label="{% trans 'Slide 2 of 3 — Fiber optic reflectance spectroscopy' %}"></button>
+                    <button type="button" class="ms-showcase-dot" aria-label="{% trans 'Slide 3 of 3 — UV hyperspectral imaging' %}"></button>
                 </div>
             </div>
         </div>
@@ -488,6 +478,9 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-gallery-item ms-gallery-compare reveal reveal-d1" id="ms-xrf-compare">
                     <img class="ms-compare-img ms-compare-bottom" src="{% static 'img/landing/ms86-f32v-deconv-ca.webp' %}" alt="{% trans 'Macro-XRF map of calcium (Ca) on an ornate letter — bright areas mark calcium-rich zones' %}" width="963" height="804" loading="lazy">
                     <img class="ms-compare-img ms-compare-top" src="{% static 'img/landing/ms86-f32v-deconv-hg.webp' %}" alt="{% trans 'Macro-XRF map of mercury (Hg) on the same ornate letter — bright areas reveal vermilion, a mercury pigment' %}" width="963" height="804" loading="lazy">
+                    <div class="ms-compare-divider" aria-hidden="true"></div>
+                    <input type="range" class="ms-compare-range ms-visually-hidden" min="0" max="100" value="100"
+                           aria-label="{% trans 'Position of the divide between the mercury map and the calcium map' %}">
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "X-ray Fluorescence" %}</div>
                         <h4>{% trans "Macro-XRF mapping" %}</h4>
@@ -498,12 +491,63 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-gallery-item ms-gallery-analysis reveal reveal-d2" id="ms-analysis-viewer">
                     <img src="https://iiif.unicaen.fr/mrsh/bvmsm/AVRANCHES_MS059/AVRANCHES_MS059_0011.tif/full/800,/0/default.jpg" alt="{% trans 'Manuscript analysis' %}" width="800" height="600" loading="lazy">
                     <div class="ms-analysis-points">
-                        <button class="ms-analysis-point ms-apoint-1" data-point="0" aria-label="{% trans 'Analysis point' %} 1"></button>
-                        <button class="ms-analysis-point ms-apoint-2" data-point="1" aria-label="{% trans 'Analysis point' %} 2"></button>
-                        <button class="ms-analysis-point ms-apoint-3" data-point="2" aria-label="{% trans 'Analysis point' %} 3"></button>
-                        <button class="ms-analysis-point ms-apoint-4" data-point="3" aria-label="{% trans 'Analysis point' %} 4"></button>
+                        <button type="button" class="ms-analysis-point ms-apoint-1" aria-controls="ms-analysis-popup-1" aria-expanded="false" aria-label="{% blocktrans with n=1 %}Analysis point {{ n }}{% endblocktrans %}"></button>
+                        <button type="button" class="ms-analysis-point ms-apoint-2" aria-controls="ms-analysis-popup-2" aria-expanded="false" aria-label="{% blocktrans with n=2 %}Analysis point {{ n }}{% endblocktrans %}"></button>
+                        <button type="button" class="ms-analysis-point ms-apoint-3" aria-controls="ms-analysis-popup-3" aria-expanded="false" aria-label="{% blocktrans with n=3 %}Analysis point {{ n }}{% endblocktrans %}"></button>
+                        <button type="button" class="ms-analysis-point ms-apoint-4" aria-controls="ms-analysis-popup-4" aria-expanded="false" aria-label="{% blocktrans with n=4 %}Analysis point {{ n }}{% endblocktrans %}"></button>
                     </div>
-                    <div class="ms-analysis-popup" id="ms-analysis-popup"></div>
+                    <div class="ms-analysis-popup ms-analysis-popup--blue" id="ms-analysis-popup-1" hidden>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">XRF</span><span class="ms-popup-id">P-01</span></div>
+                        <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="ms-popup-area" d="M0,42 8,41 18,39 25,34 30,38 38,36 45,10 50,32 55,38 62,35 70,39 80,18 88,36 95,34 105,38 115,40 130,39 150,40 175,39 200,40 232,41 L232,44 0,44Z"/>
+                            <path class="ms-popup-line" d="M0,42 8,41 18,39 25,34 30,38 38,36 45,10 50,32 55,38 62,35 70,39 80,18 88,36 95,34 105,38 115,40 130,39 150,40 175,39 200,40 232,41"/>
+                        </svg></div>
+                        <div class="ms-popup-data">
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Material" %}</span><span class="ms-popup-value">{% trans "Lapis lazuli" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Layer" %}</span><span class="ms-popup-value">{% trans "Pigment" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Range" %}</span><span class="ms-popup-value">1 – 40 keV</span></div>
+                        </div>
+                        <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Cu</span><span class="ms-popup-element ms-popup-element--primary">S</span><span class="ms-popup-element">Ca</span><span class="ms-popup-element">Si</span><span class="ms-popup-element">Fe</span></div>
+                    </div>
+                    <div class="ms-analysis-popup ms-analysis-popup--red" id="ms-analysis-popup-2" hidden>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">Raman</span><span class="ms-popup-id">P-02</span></div>
+                        <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="ms-popup-area" d="M0,40 15,39 30,40 42,38 47,6 51,38 60,40 75,39 85,40 91,24 96,40 110,39 125,40 140,39 165,30 172,39 195,40 220,39 232,40 L232,44 0,44Z"/>
+                            <path class="ms-popup-line" d="M0,40 15,39 30,40 42,38 47,6 51,38 60,40 75,39 85,40 91,24 96,40 110,39 125,40 140,39 165,30 172,39 195,40 220,39 232,40"/>
+                        </svg></div>
+                        <div class="ms-popup-data">
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Material" %}</span><span class="ms-popup-value">{% trans "Vermilion (HgS)" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Layer" %}</span><span class="ms-popup-value">{% trans "Paint" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Range" %}</span><span class="ms-popup-value">100 – 3000 cm⁻¹</span></div>
+                        </div>
+                        <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Hg</span><span class="ms-popup-element ms-popup-element--primary">S</span><span class="ms-popup-element">Pb</span></div>
+                    </div>
+                    <div class="ms-analysis-popup ms-analysis-popup--green" id="ms-analysis-popup-3" hidden>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">FORS</span><span class="ms-popup-id">P-03</span></div>
+                        <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="ms-popup-area" d="M0,40 20,39 40,38 60,34 80,26 100,16 120,10 140,8 160,10 180,13 200,15 220,16 232,17 L232,44 0,44Z"/>
+                            <path class="ms-popup-line" d="M0,40 20,39 40,38 60,34 80,26 100,16 120,10 140,8 160,10 180,13 200,15 220,16 232,17"/>
+                        </svg></div>
+                        <div class="ms-popup-data">
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Material" %}</span><span class="ms-popup-value">{% trans "Gold leaf" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Layer" %}</span><span class="ms-popup-value">{% trans "Gilding" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Range" %}</span><span class="ms-popup-value">350 – 2500 nm</span></div>
+                        </div>
+                        <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Au</span><span class="ms-popup-element">Ag</span><span class="ms-popup-element">Cu</span></div>
+                    </div>
+                    <div class="ms-analysis-popup ms-analysis-popup--purple" id="ms-analysis-popup-4" hidden>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">XRF</span><span class="ms-popup-id">P-04</span></div>
+                        <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
+                            <path class="ms-popup-area" d="M0,40 12,39 22,38 30,34 38,10 43,34 52,38 62,36 70,20 76,35 85,38 100,39 120,38 140,39 160,26 168,38 185,39 210,40 232,40 L232,44 0,44Z"/>
+                            <path class="ms-popup-line" d="M0,40 12,39 22,38 30,34 38,10 43,34 52,38 62,36 70,20 76,35 85,38 100,39 120,38 140,39 160,26 168,38 185,39 210,40 232,40"/>
+                        </svg></div>
+                        <div class="ms-popup-data">
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Material" %}</span><span class="ms-popup-value">{% trans "Iron gall ink" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Layer" %}</span><span class="ms-popup-value">{% trans "Text" %}</span></div>
+                            <div class="ms-popup-row"><span class="ms-popup-label">{% trans "Range" %}</span><span class="ms-popup-value">1 – 40 keV</span></div>
+                        </div>
+                        <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Fe</span><span class="ms-popup-element">Zn</span><span class="ms-popup-element">Cu</span><span class="ms-popup-element">K</span></div>
+                    </div>
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "Spectroscopy" %}</div>
                         <h4>{% trans "Point Analysis" %}</h4>
@@ -564,12 +608,12 @@ Homepage — Prismatic Luminescence aesthetic
                 </form>
 
                 <div class="ms-search-chips">
-                    <button class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'Raman' %}">{% trans "Raman" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'Raman' %}">{% trans "Raman" %}</button>
                 </div>
 
                 <div class="ms-search-cta">
@@ -624,11 +668,5 @@ Homepage — Prismatic Luminescence aesthetic
          FOOTER
          ============================================================ -->
     {% include 'includes/ms_footer.htm' %}
-
-
-    <!-- ============================================================
-         SCRIPTS — Webpack entry point (views/index)
-         ============================================================ -->
-    {% render_bundle 'views/index' %}
 </body>
 </html>
