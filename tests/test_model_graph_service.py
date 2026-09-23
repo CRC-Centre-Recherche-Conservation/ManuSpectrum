@@ -27,13 +27,16 @@ CIDOC = "http://www.cidoc-crm.org/cidoc-crm/"
 
 
 class _Rows:
-    """Chainable queryset stand-in: filter/values/order_by/annotate all return self."""
+    """Chainable queryset stand-in: filter/exclude/values/order_by/annotate return self."""
 
     def __init__(self, rows=(), count=0):
         self._rows = list(rows)
         self._count = count
 
     def filter(self, *args, **kwargs):
+        return self
+
+    def exclude(self, *args, **kwargs):
         return self
 
     def values(self, *args, **kwargs):
@@ -136,7 +139,14 @@ def patched_orm(
         "Relation": _manager(relations),
     }
     targets.update(overrides)
-    with mock.patch.multiple("arches.app.models.models", **targets):
+    with (
+        mock.patch.multiple("arches.app.models.models", **targets),
+        mock.patch(
+            "manuspectrum.views.model_graph_service.hidden_resource_ids",
+            return_value=frozenset(),
+        ),
+        mock.patch("manuspectrum.views.model_graph_service.anonymous_user"),
+    ):
         yield
 
 
