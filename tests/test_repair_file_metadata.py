@@ -1,7 +1,7 @@
 """What `repair_file_metadata` reports, and what it writes.
 
 The command walks every tile of every `file-list` nodegroup, completes the
-localised metadata of each stored file entry, and writes with a plain UPDATE —
+localised metadata and the licence of each stored file entry, and writes with a plain UPDATE —
 only for the tiles that actually needed it, and only when `--apply` is passed.
 
 The Arches managers are patched as the command reaches them, so nothing here
@@ -14,8 +14,10 @@ from io import StringIO
 from unittest import mock
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 
+from manuspectrum.constants.licenses import CUSTOM_LICENSE_ID, default_license
 from manuspectrum.utils.file_entries import METADATA_FIELDS, build_file_entry
 
 COMMAND = "repair_file_metadata"
@@ -214,3 +216,104 @@ class RepairFileMetadataTests(SimpleTestCase):
 
         self.assertEqual(manager.updates, [])
         self.assertIn("0 file(s) across 0 tile(s) repaired", output)
+
+
+def licensed_entry(name="licensed.csv", file_license=None):
+    entry = complete_entry(name)
+    if file_license is not None:
+        entry["license"] = file_license
+    return entry
+
+
+class RepairFileLicenseTests(SimpleTestCase):
+    run_command = RepairFileMetadataTests.run_command
+
+    def test_a_dry_run_counts_the_licences_it_would_set_and_writes_nothing(self):
+        node = make_node("Fichier de mesure")
+        entry = complete_entry()
+        del entry["license"]
+        tile = make_tile({node: [entry]})
+
+        output, manager = self.run_command([node], [tile])
+
+        self.assertEqual(manager.updates, [])
+        self.assertIn("1 licence(s) set to CC-BY-SA-4.0", output)
+        self.assertIn("1 file(s) across 1 tile(s) would be repaired (dry run)", output)
+
+    def test_apply_adds_the_default_licence_only_where_missing(self):
+        node = make_node("Fichier de mesure")
+        bare = complete_entry("bare.csv")
+        del bare["license"]
+        custom = {
+            "id": CUSTOM_LICENSE_ID,
+            "label": "Terms",
+            "url": "https://example.org/terms",
+        }
+        mixed = make_tile({node: [bare, licensed_entry("kept.csv", dict(custom))]})
+        licensed = make_tile({node: [licensed_entry(file_license={"id": "CC0-1.0"})]})
+
+        output, manager = self.run_command([node], [mixed, licensed], "--apply")
+
+        self.assertEqual([pk for pk, _ in manager.updates], [mixed.tileid])
+        stored = manager.updates[0][1][str(node.nodeid)]
+        self.assertEqual(stored[0]["license"], default_license())
+        self.assertEqual(stored[1]["license"], custom)
+        self.assertIn("1 licence(s) set to CC-BY-SA-4.0", output)
+        self.assertIn("0 field(s) across", output)
+
+    def test_an_existing_licence_is_never_overwritten_even_if_unknown(self):
+        node = make_node("Fichier de mesure")
+        tile = make_tile({node: [licensed_entry(file_license={"id": "GPL-3.0"})]})
+
+        output, manager = self.run_command(
+            [node], [tile], "--apply", "--license=CC0-1.0"
+        )
+
+        self.assertEqual(manager.updates, [])
+        self.assertEqual(tile.data[str(node.nodeid)][0]["license"], {"id": "GPL-3.0"})
+        self.assertIn("0 licence(s) set to CC0-1.0", output)
+
+    def test_the_licence_option_picks_the_licence_given_to_bare_files(self):
+        node = make_node("Fichier de mesure")
+        tile = make_tile({node: [broken_entry()]})
+
+        output, _manager = self.run_command(
+            [node], [tile], "--apply", "--license=CC0-1.0"
+        )
+
+        self.assertEqual(
+            tile.data[str(node.nodeid)][0]["license"],
+            {
+                "id": "CC0-1.0",
+                "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            },
+        )
+        self.assertIn("1 licence(s) set to CC0-1.0", output)
+
+    def test_the_licence_option_refuses_an_id_outside_the_catalogue_or_custom(self):
+        for value in ("GPL-3.0", CUSTOM_LICENSE_ID):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(CommandError, "not a catalogue licence"):
+                    self.run_command([make_node("F")], [], f"--license={value}")
+
+    def test_a_null_licence_is_stamped_and_counted(self):
+        node = make_node("Fichier de mesure")
+        tile = make_tile({node: [licensed_entry(file_license=None)]})
+        tile.data[str(node.nodeid)][0]["license"] = None
+
+        output, manager = self.run_command([node], [tile], "--apply")
+
+        self.assertEqual([pk for pk, _ in manager.updates], [tile.tileid])
+        self.assertEqual(tile.data[str(node.nodeid)][0]["license"], default_license())
+        self.assertIn("1 licence(s) set to CC-BY-SA-4.0", output)
+        self.assertIn("0 field(s) across", output)
+
+    def test_a_second_run_sets_no_licence(self):
+        node = make_node("Fichier de mesure")
+        tile = make_tile({node: [broken_entry()]})
+
+        self.run_command([node], [tile], "--apply")
+        output, manager = self.run_command([node], [tile], "--apply")
+
+        self.assertEqual(manager.updates, [])
+        self.assertIn("0 licence(s) set to CC-BY-SA-4.0", output)

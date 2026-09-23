@@ -1,0 +1,47 @@
+{% load i18n %}
+
+{% comment %}
+Licence notice of one file (title — © attribution — licence link), with the
+licence picker above it when the component is editable; in the report, the
+file name and its licence link. Every value is bound
+with `text:`; the only `href` is a URL `utils/file-license.js` resolved from
+the catalogue or checked as http(s).
+{% endcomment %}
+
+<!-- ko if: hasCatalogue -->
+<!-- ko if: editable -->
+<div class="ms-file-metadata-field ms-file-license-form">
+    <label>{% trans "Licence" %}</label>
+    <select class="form-control" aria-label="{% trans "Licence" %}"
+        data-bind="options: licenses, optionsText: 'label', optionsValue: 'id', value: selectedId"></select>
+
+    <!-- ko if: isCustom -->
+    <input type="text" class="form-control ms-file-license-custom"
+        placeholder="{% trans "Licence name" %}" aria-label="{% trans "Licence name" %}"
+        data-bind="textInput: customLabel">
+    <input type="url" class="form-control ms-file-license-custom"
+        placeholder="{% trans "https://… (licence text)" %}" aria-label="{% trans "Licence URL" %}"
+        data-bind="textInput: customUrl">
+    <!-- ko if: customIsIncomplete -->
+    <p class="help-block text-danger">{% trans "Enter a name and an http(s) link to the licence text; until then the default licence is shown." %}</p>
+    <!-- /ko -->
+    <!-- /ko -->
+
+    <!-- ko with: resolved -->
+    <p class="ms-file-license-link">
+        <a target="_blank" rel="noopener license" data-bind="attr: {href: url}, text: label"></a>
+    </p>
+    <!-- /ko -->
+</div>
+<!-- /ko -->
+
+<p class="ms-file-license-notice">
+    <!-- ko foreach: parts -->
+    <!-- ko if: $index() > 0 --><span class="ms-file-license-sep" aria-hidden="true"> — </span><!-- /ko -->
+    <!-- ko if: $data.url -->
+    <a target="_blank" rel="noopener license" data-bind="attr: {href: url}, text: text"></a>
+    <!-- /ko -->
+    <!-- ko ifnot: $data.url --><span data-bind="text: text"></span><!-- /ko -->
+    <!-- /ko -->
+</p>
+<!-- /ko -->

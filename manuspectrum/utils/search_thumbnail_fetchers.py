@@ -61,11 +61,11 @@ def _image_payload(response):
     return (response.content, content_type)
 
 
-@SearchThumbnailFetcherFactory.register("72ac748a-7368-41e7-9f54-99be41319fac")
-class ManifestThumbnailFetcher(SearchThumbnailFetcher):
+@SearchThumbnailFetcherFactory.register("0c8226c1-11a9-4c48-9601-a7a0c6f2df6b")
+class DocumentThumbnailFetcher(SearchThumbnailFetcher):
     """
-    Fetcher for resources with a 'manifest' type node (IIIF v2/v3).
-    Retrieves thumbnails from IIIF manifests.
+    Fetcher for Documents: the thumbnail of the IIIF manifest (v2/v3) held in
+    the Document's 'manifest' node (facsimiles).
     """
 
     def get_thumbnail(self, retrieve=False):

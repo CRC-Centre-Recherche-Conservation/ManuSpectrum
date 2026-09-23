@@ -4,6 +4,7 @@
 {% load l10n %}
 {% load i18n %}
 {% load biblissima_settings %}
+{% load file_licenses %}
 
 {% block arches_translations %}
 {{ block.super }}
@@ -225,6 +226,9 @@
     summary-more='{% trans "+{n}" as summaryMore %} "{{ summaryMore|escapejs }}"'
     summary-spectrum='{% trans "Spectrum" as summarySpectrum %} "{{ summarySpectrum|escapejs }}"'
     summary-close='{% trans "Close" as summaryClose %} "{{ summaryClose|escapejs }}"'
+
+    {% comment %} File licences — catalogue of the licence picker and notice (utils/file-license.js). {% endcomment %}
+    license-catalogue='{% license_catalogue_json %}'
 ></div>
 {% endblock arches_translations %}
 
