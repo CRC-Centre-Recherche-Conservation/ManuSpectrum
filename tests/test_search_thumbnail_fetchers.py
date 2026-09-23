@@ -5,7 +5,8 @@ Each fetcher answers two different questions through one method: with
 advertises a thumbnail at all, and with ``retrieve=True`` it returns
 ``(bytes, content_type)``. These tests lock both answers for each fetcher, every
 early ``None``, the exact IIIF Image API region URL built from an annotation
-bbox, and ``AnalysisThumbnailFetcher``'s manifest-before-annotation priority.
+bbox, and ``AnalysisThumbnailFetcher``'s manifest-before-annotation priority, and the
+model each fetcher is registered on.
 
 The Arches ORM is imported inside the methods, so ``TileModel`` and
 ``VwAnnotation`` are patched on ``arches.app.models.models``; the manifest fetch
@@ -22,10 +23,14 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
+from arches.app.utils.search_thumbnail_fetcher_factory import (
+    SearchThumbnailFetcherFactory,
+)
+
 from manuspectrum.utils.search_thumbnail_fetchers import (
     AnalysisThumbnailFetcher,
     ComponentThumbnailFetcher,
-    ManifestThumbnailFetcher,
+    DocumentThumbnailFetcher,
 )
 
 FETCHERS = "manuspectrum.utils.search_thumbnail_fetchers"
@@ -143,7 +148,7 @@ EMPTY_MANIFEST = {"@context": "http://iiif.io/api/presentation/2/context.json"}
 
 class ManifestFetcherExistenceTests(SimpleTestCase):
     def setUp(self):
-        self.fetcher = ManifestThumbnailFetcher(RESOURCE)
+        self.fetcher = DocumentThumbnailFetcher(RESOURCE)
 
     @mock.patch(TILE_MODEL)
     def test_a_manifest_tile_means_a_thumbnail_exists(self, tile_model):
@@ -172,7 +177,7 @@ class ManifestFetcherExistenceTests(SimpleTestCase):
 @mock.patch(TILE_MODEL)
 class ManifestFetcherRetrieveTests(SimpleTestCase):
     def setUp(self):
-        self.fetcher = ManifestThumbnailFetcher(RESOURCE)
+        self.fetcher = DocumentThumbnailFetcher(RESOURCE)
 
     def test_returns_the_image_bytes_and_the_type_its_signature_names(
         self, tile_model, fetch_manifest, safe_fetch
@@ -854,3 +859,19 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
         tile_model.objects.filter.side_effect = RuntimeError("connection lost")
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
+
+
+class RegistryTests(SimpleTestCase):
+    def test_each_model_resolves_to_its_fetcher(self):
+        registry = SearchThumbnailFetcherFactory.registry
+
+        self.assertIs(
+            registry["0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"], DocumentThumbnailFetcher
+        )
+        self.assertIs(
+            registry["d47595b4-f8a6-419c-8f33-b388206280c4"], ComponentThumbnailFetcher
+        )
+        self.assertIs(
+            registry["60c85aba-f079-45bc-997f-21cdd4f77b6d"], AnalysisThumbnailFetcher
+        )
+        self.assertNotIn("72ac748a-7368-41e7-9f54-99be41319fac", registry)
