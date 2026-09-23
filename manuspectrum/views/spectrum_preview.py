@@ -12,16 +12,19 @@ normalisation the series goes through. It is part of the memo key, so restamping
 a file with another preset is another entry rather than a stale drawing.
 
 The resource a file hangs from never changes, so its row is memoised under the
-file id for as long as a summary payload lives (``SUMMARY_CACHE_TTL``); the
-read permission on that resource is still checked on every request, before
-anything is read from disk. The renderer configuration id travels in the memo
-with the join and keeps keying the series memo: a file restamped with another
-preset is drawn with it once the join entry expires, within the same lifetime a
-summary payload has for an edited resource. Deleting the file row drops its
-entry on commit (``signals.py``). A request that read the row while the delete
-was committing can put the entry back, for at most ``SUMMARY_CACHE_TTL``;
-during that time the guard still runs, but Arches permits reading a resource
-that no longer exists.
+file id for as long as a summary payload lives (``SUMMARY_CACHE_TTL``). Two
+read permissions are still checked on every request, before anything is read
+from disk or from the series memo: the one on that resource, then the one on
+the nodegroup of the tile holding the file, through ``readable_nodegroups``,
+the rule the summary popup filters its fields with. Either refusal is a 403.
+The renderer configuration id and the nodegroup id travel in the memo with the
+join, and the configuration id keeps keying the series memo: a file restamped
+with another preset is drawn with it once the join entry expires, within the
+same lifetime a summary payload has for an edited resource. Deleting the file
+row drops its entry on commit (``signals.py``). A request that read the row
+while the delete was committing can put the entry back, for at most
+``SUMMARY_CACHE_TTL``; during that time the guard still runs, but Arches
+permits reading a resource that no longer exists.
 
 ``None`` (no row, no stored file, no tile) is not memoised, and no caller waits
 on the join's lock: an unknown id costs one query per request, never a 2 s
@@ -47,6 +50,7 @@ from arches.app.utils.permission_backend import user_can_read_resource
 from manuspectrum.models import RendererConfig
 from manuspectrum.utils.cache import etag_already_held, get_or_build
 from manuspectrum.utils.spectrum_preview import build_preview, is_supported
+from manuspectrum.views.summary_service import readable_nodegroups
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +69,10 @@ def file_record_key(file_id):
 
 
 def file_record(file_id):
-    """Path, owning resource and renderer configuration id of a file, memoised.
+    """``(path, resourceid, config_id, nodegroup_id)`` of a file, memoised.
+
+    ``config_id`` is the renderer configuration the file entry carries, and
+    ``nodegroup_id`` the nodegroup of the tile holding the file, as a string.
 
     ``None`` covers a row that is gone, a row whose file was never stored, and
     a file no tile holds: with no resource there is nothing to check a read
@@ -99,6 +106,7 @@ def _load_file_record(file_id):
         row.path.path,
         str(row.tile.resourceinstance_id),
         stamped_config_id(row.tile.data, file_id),
+        str(row.tile.nodegroup_id),
     )
 
 
@@ -188,8 +196,11 @@ class SpectrumPreviewView(View):
         record = file_record(file_id)
         if record is None:
             return _private({"error": "not_found"}, 404)
-        path, resourceid, config_id = record
+        path, resourceid, config_id, nodegroup_id = record
         if not user_can_read_resource(request.user, resourceid=resourceid):
+            return _private({"error": "forbidden"}, 403)
+        nodegroups = readable_nodegroups(request.user)
+        if nodegroups is not None and nodegroup_id not in nodegroups:
             return _private({"error": "forbidden"}, 403)
 
         n = settings.SPECTRUM_PREVIEW_POINTS

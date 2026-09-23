@@ -52,6 +52,7 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures", "xy")
 FILE_ID = "3f2b1c44-2c0e-4f2e-9f3a-9a1d0c5e7b21"
 RESOURCE_ID = "8d1e2f30-4a5b-4c6d-8e9f-0a1b2c3d4e5f"
 CONFIG_ID = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a03"
+NODEGROUP_ID = "c4a9e6d2-1f3b-4e8a-9d57-6b0e2f1a3c88"
 
 # The FORS preset, as the seeded row holds it.
 FORS_CONFIG = {
@@ -365,7 +366,7 @@ class SpectrumPreviewViewTests(SimpleTestCase):
         return request
 
     def get(self, path, readable=True, config_id=None, config=None, **headers):
-        record = None if path is None else (path, RESOURCE_ID, config_id)
+        record = None if path is None else (path, RESOURCE_ID, config_id, "ng-1")
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview.file_record", return_value=record
@@ -373,6 +374,10 @@ class SpectrumPreviewViewTests(SimpleTestCase):
             mock.patch(
                 "manuspectrum.views.spectrum_preview.user_can_read_resource",
                 return_value=readable,
+            ),
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                return_value=None,
             ),
             mock.patch(
                 "manuspectrum.views.spectrum_preview.renderer_config",
@@ -533,10 +538,11 @@ class FileRecordTests(SimpleTestCase):
             objects.filter.return_value = queryset
             return spectrum_preview._load_file_record(FILE_ID)
 
-    def test_a_row_gives_its_path_its_resource_and_its_configuration(self):
+    def row(self):
         row = mock.Mock(
             tile=mock.Mock(
                 resourceinstance_id=uuid.UUID(RESOURCE_ID),
+                nodegroup_id=uuid.UUID(NODEGROUP_ID),
                 data={
                     "node-files": [{"file_id": FILE_ID, "rendererConfig": CONFIG_ID}]
                 },
@@ -544,10 +550,16 @@ class FileRecordTests(SimpleTestCase):
         )
         row.path.name = "spectrum.csv"
         row.path.path = "/media/spectrum.csv"
+        return row
 
+    def test_a_row_gives_its_path_its_resource_and_its_configuration(self):
         self.assertEqual(
-            self.record(row), ("/media/spectrum.csv", RESOURCE_ID, CONFIG_ID)
+            self.record(self.row())[:3],
+            ("/media/spectrum.csv", RESOURCE_ID, CONFIG_ID),
         )
+
+    def test_the_join_carries_the_nodegroup_of_the_tile(self):
+        self.assertEqual(self.record(self.row())[3], NODEGROUP_ID)
 
     def test_a_file_no_tile_holds_has_no_resource_to_check(self):
         row = mock.Mock(tile=None)
@@ -573,7 +585,7 @@ class FileRecordMemoTests(SimpleTestCase):
     def test_the_join_is_read_once_per_file(self):
         with mock.patch(
             "manuspectrum.views.spectrum_preview._load_file_record",
-            return_value=("/tmp/a.csv", "r-1", None),
+            return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
         ) as load:
             file_record(FILE_ID)
             file_record(FILE_ID)
@@ -625,12 +637,16 @@ class SpectrumPreviewGuardTests(SimpleTestCase):
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview._load_file_record",
-                return_value=("/tmp/a.csv", "r-1", None),
+                return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
             ) as load,
             mock.patch(
                 "manuspectrum.views.spectrum_preview.user_can_read_resource",
                 side_effect=[True, False],
             ) as guard,
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                return_value=None,
+            ),
             mock.patch(
                 "manuspectrum.views.spectrum_preview._series",
                 return_value={"x": [0, 1], "y": [0, 1]},
@@ -645,6 +661,71 @@ class SpectrumPreviewGuardTests(SimpleTestCase):
 
         load.assert_called_once()
         self.assertEqual(guard.call_count, 2)
+
+
+class SpectrumPreviewNodegroupGuardTests(SimpleTestCase):
+    """The read permission on the nodegroup of the tile that holds the file."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.view = SpectrumPreviewView.as_view()
+
+    def get(self, nodegroups, readable=True):
+        """The response, with the ``readable_nodegroups`` and ``_series`` mocks."""
+        request = RequestFactory().get(f"/api/spectrum-preview/{FILE_ID}")
+        request.user = AnonymousUser()
+        with (
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.file_record",
+                return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
+            ),
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.user_can_read_resource",
+                return_value=readable,
+            ),
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                return_value=nodegroups,
+            ) as allowed,
+            mock.patch(
+                "manuspectrum.views.spectrum_preview._series",
+                return_value={"x": [0, 1], "y": [0, 1]},
+            ) as series,
+        ):
+            return self.view(request, file_id=FILE_ID), allowed, series
+
+    def test_a_file_in_a_nodegroup_the_reader_may_not_read_is_refused(self):
+        response, _, series = self.get({"other-ng"})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json.loads(response.content), {"error": "forbidden"})
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        series.assert_not_called()
+
+    def test_a_file_in_a_readable_nodegroup_is_served(self):
+        response, _, _ = self.get({"other-ng", "ng-1"})
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_no_nodegroup_restriction_checks_nothing_more(self):
+        response, _, _ = self.get(None)
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_a_reader_who_reads_no_nodegroup_is_refused(self):
+        response, _, series = self.get(set())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json.loads(response.content), {"error": "forbidden"})
+        series.assert_not_called()
+
+    def test_the_nodegroup_is_checked_after_the_resource(self):
+        response, allowed, series = self.get({"ng-1"}, readable=False)
+
+        self.assertEqual(response.status_code, 403)
+        allowed.assert_not_called()
+        series.assert_not_called()
 
 
 class StampedConfigIdTests(SimpleTestCase):
