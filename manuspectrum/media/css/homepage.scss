@@ -183,7 +183,7 @@
     to { opacity: 1; }
 }
 
-#ms-logo-svg { touch-action: pan-y pinch-zoom; }
+#ms-logo-svg { touch-action: pan-y pinch-zoom; display: block; }
 // The logo is marked drawn when it first moves into the zoom dialog, so the
 // draw-in never replays when it moves back into the hero.
 #ms-logo-svg.is-drawn .ms-logo-curve { animation: none; stroke-dashoffset: 0; }
@@ -981,9 +981,6 @@ a.ms-feature-tag--link i {
 }
 .ms-gallery-compare.is-comparing .ms-compare-divider,
 .ms-gallery-compare:focus-within .ms-compare-divider { opacity: 1; }
-@media (hover: none) {
-    .ms-compare-divider { opacity: 0.6; }
-}
 
 // --- Interactive Analysis Points ---
 .ms-gallery-analysis .ms-analysis-points {

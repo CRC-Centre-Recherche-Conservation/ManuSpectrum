@@ -38,6 +38,7 @@
 .ms-page-hero {
     @include ms-container;
     padding-top: 140px; padding-bottom: 48px;
+    animation: ms-page-hero-in 0.8s var(--ease-out-expo) 0.1s both;
     &__eyebrow { font-family: $ms-font-mono; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: $ms-blue-text; }
     &__title { font-family: $ms-font-serif; font-weight: 400; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.08; margin: 12px 0 16px; }
     &__lead { max-width: 720px; color: $ms-ink-soft; font-size: 1.1rem; line-height: 1.6; }
@@ -46,12 +47,12 @@
     // is the reference layout). When a lead follows the bar inside the hero,
     // give it air; on team nothing follows, so this rule changes nothing there.
     &__accent + * { margin-top: 28px; }
-    animation: ms-page-hero-in 0.8s var(--ease-out-expo) 0.1s both;
 }
 @keyframes ms-page-hero-in {
     from { opacity: 0; transform: translateY(24px); }
 }
 @media (max-width: 768px) { .ms-page-hero { padding-top: 108px; padding-bottom: 32px; } }
+@media (prefers-reduced-motion: reduce) { .ms-page-hero { animation: none; } }
 
 // NOTE: `.ms-nav-dropdown*` / `.ms-mobile-nav-group*` used to live here. They were
 // moved to _ms-chrome.scss because includes/ms_header.htm is shared with index.htm,
