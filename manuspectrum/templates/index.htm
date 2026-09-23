@@ -182,7 +182,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <rect x="40" y="82" width="580" height="3" rx="1.5" fill="url(#spectral-bar)"/>
 
                 <!-- Interactive overlay (hidden by default) -->
-                <g id="ms-logo-crosshair" style="display:none;pointer-events:none;">
+                <g id="ms-logo-crosshair" display="none" pointer-events="none">
                   <line id="ms-cross-v" x1="0" y1="4" x2="0" y2="82" stroke="#1a1a2e" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
                   <line id="ms-cross-h-blue" x1="40" y1="0" x2="0" y2="0" stroke="#3b82f6" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
                   <line id="ms-cross-h-red" x1="40" y1="0" x2="0" y2="0" stroke="#dc3545" stroke-width="0.5" stroke-dasharray="3,3" opacity="0.35"/>
@@ -191,7 +191,7 @@ Homepage — Prismatic Luminescence aesthetic
                 </g>
 
                 <!-- Tooltip background + text -->
-                <g id="ms-logo-tooltip" style="display:none;pointer-events:none;">
+                <g id="ms-logo-tooltip" display="none" pointer-events="none">
                   <rect id="ms-tt-bg" x="0" y="0" width="120" height="42" rx="4" fill="#1a1a2e" opacity="0.88"/>
                   <text id="ms-tt-wl" x="0" y="0" fill="#f0b429" font-family="'JetBrains Mono','Sora',monospace" font-size="7.5" font-weight="600"></text>
                   <text id="ms-tt-blue" x="0" y="0" fill="#3b82f6" font-family="'JetBrains Mono','Sora',monospace" font-size="7"></text>
@@ -205,19 +205,18 @@ Homepage — Prismatic Luminescence aesthetic
                 </g>
               </svg>
               <!-- Zoom button (appears on hover) -->
-              <button class="ms-logo-zoom-btn" id="ms-logo-zoom" aria-label="Zoom" title="Zoom">
+              <button type="button" class="ms-logo-zoom-btn" id="ms-logo-zoom" aria-label="{% trans 'Enlarge the spectral plot' %}" title="{% trans 'Enlarge the spectral plot' %}">
                 <svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="10" y1="7" x2="10" y2="13"/></svg>
               </button>
             </div>
 
-            <!-- Fullscreen overlay for zoomed logo -->
-            <div class="ms-logo-overlay" id="ms-logo-overlay">
+            <dialog class="ms-logo-dialog" id="ms-logo-dialog" aria-labelledby="ms-logo-dialog-title">
               <div class="ms-logo-overlay-inner">
-                <button class="ms-logo-close-btn" id="ms-logo-close" aria-label="{% trans 'Close' %}">
+                <button type="button" class="ms-logo-close-btn" id="ms-logo-close" aria-label="{% trans 'Close' %}">
                   <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
                 </button>
                 <div class="ms-logo-overlay-header">
-                  <span class="ms-logo-overlay-title">{% trans "ManuSpectrum — Spectral Analysis Plot" %}</span>
+                  <span class="ms-logo-overlay-title" id="ms-logo-dialog-title">{% trans "ManuSpectrum — Spectral Analysis Plot" %}</span>
                   <span class="ms-logo-overlay-badge">{% trans "interactive" %}</span>
                 </div>
                 <div id="ms-logo-zoom-target"></div>
@@ -227,7 +226,7 @@ Homepage — Prismatic Luminescence aesthetic
                   <span>λ : 380 – 780 nm</span>
                 </div>
               </div>
-            </div>
+            </dialog>
 
             <h1 class="ms-hero-tagline">
                 {% blocktrans %}Interoperable database for <em>physicochemical analysis</em> of written cultural heritage{% endblocktrans %}

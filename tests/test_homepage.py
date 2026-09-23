@@ -55,3 +55,17 @@ class AnalysisPopupTests(TestCase):
         html = self.client.get("/fr/").content.decode()
         self.assertIn("Vermillon (HgS)", html)
         self.assertIn("Encre ferrogallique", html)
+
+
+class LogoDialogTests(TestCase):
+    def test_zoom_is_a_labelled_dialog(self):
+        html = self.client.get("/en/").content.decode()
+        self.assertRegex(
+            html,
+            r'<dialog class="ms-logo-dialog" id="ms-logo-dialog" aria-labelledby="ms-logo-dialog-title">',
+        )
+        self.assertIn('id="ms-logo-dialog-title"', html)
+        self.assertNotIn('class="ms-logo-overlay"', html)
+        self.assertRegex(
+            html, r'<button type="button" class="ms-logo-zoom-btn" id="ms-logo-zoom"'
+        )
