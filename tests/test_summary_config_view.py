@@ -557,3 +557,18 @@ class SummaryConfigConcurrencyTests(TransactionTestCase):
         self.assertEqual(
             self.race(self.put_with(changed), self.delete_with()), [200, 412]
         )
+
+    def test_two_first_saves_of_an_unattached_model_cannot_both_write(self):
+        models.FunctionXGraph.objects.filter(
+            function_id=SUMMARY_FUNCTION_ID, graph=self.graph
+        ).delete()
+        first, second = valid_config(), valid_config()
+        first["fields"] = first["fields"][:1]
+        second["rollups"] = []
+        self.assertEqual(
+            self.race(self.put_with(first), self.put_with(second)), [200, 412]
+        )
+        rows = models.FunctionXGraph.objects.filter(
+            function_id=SUMMARY_FUNCTION_ID, graph=self.graph
+        )
+        self.assertEqual(rows.count(), 1)

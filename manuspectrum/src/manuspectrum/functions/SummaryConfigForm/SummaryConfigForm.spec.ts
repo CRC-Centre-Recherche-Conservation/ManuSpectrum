@@ -153,6 +153,7 @@ let configResponse: SummaryConfigResponse;
 let saveResponse: SummaryConfigResponse;
 let deleteResponse: SummaryConfigResponse;
 let loadFails: boolean;
+let relationsFail: boolean;
 let saveFails: boolean;
 let deleteFails: boolean;
 let conflictOn: "PUT" | "DELETE" | null;
@@ -210,7 +211,7 @@ function installFetch(): void {
                         : fakeResponse(saveResponse, true, 200, '"v2"'),
                 );
             }
-            if (loadFails) {
+            if (loadFails || (relationsFail && url === RELATIONS_URL)) {
                 return Promise.resolve(fakeResponse({}, false, 403));
             }
             return Promise.resolve(
@@ -250,6 +251,7 @@ function acceptConfirmation(): void {
 beforeEach(() => {
     calls = [];
     loadFails = false;
+    relationsFail = false;
     saveFails = false;
     deleteFails = false;
     conflictOn = null;
@@ -819,6 +821,9 @@ describe("SummaryConfigForm removal", () => {
         await flushPromises();
         expect(calls.some((call) => call.method === "DELETE")).toBe(true);
         expect(wrapper.emitted("detached")).toHaveLength(1);
+        expect(
+            calls.find((call) => call.method === "DELETE")?.headers["If-Match"],
+        ).toBe('"v1"');
     });
 
     it("keeps the form attached and says so when the removal fails", async () => {
@@ -832,6 +837,12 @@ describe("SummaryConfigForm removal", () => {
             "could not be removed",
         );
         expect(wrapper.emitted("detached")).toBeUndefined();
+        expect(wrapper.find("[data-testid='remove-config']").exists()).toBe(
+            true,
+        );
+        expect(wrapper.find("[data-testid='config-unattached']").exists()).toBe(
+            false,
+        );
     });
 
     it("explains a conflict and offers to reload", async () => {
@@ -842,10 +853,17 @@ describe("SummaryConfigForm removal", () => {
         expect(wrapper.find("[data-testid='config-error']").text()).toContain(
             "Someone else changed this configuration",
         );
-        const before = calls.length;
+        readEtag = '"v9"';
         await wrapper.find("[data-testid='reload-config']").trigger("click");
         await flushPromises();
-        expect(calls.length).toBeGreaterThan(before);
+        expect(wrapper.find("[data-testid='config-error']").exists()).toBe(
+            false,
+        );
+
+        conflictOn = null;
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+        expect(putCalls().at(-1)?.headers["If-Match"]).toBe('"v9"');
     });
 
     it("explains a conflicting removal without emitting detached", async () => {
@@ -862,6 +880,101 @@ describe("SummaryConfigForm removal", () => {
             true,
         );
         expect(wrapper.emitted("detached")).toBeUndefined();
+    });
+
+    it("offers no write after a failed read", async () => {
+        loadFails = true;
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='add-field']").trigger("click");
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+
+        expect(
+            wrapper.find("[data-testid='save-config']").attributes("disabled"),
+        ).toBeDefined();
+        expect(wrapper.find("[data-testid='remove-config']").exists()).toBe(
+            false,
+        );
+        expect(wrapper.find("[data-testid='reload-config']").exists()).toBe(
+            true,
+        );
+        expect(calls.every((call) => call.method === "GET")).toBe(true);
+    });
+
+    it("offers no write when only the relations cannot be read", async () => {
+        relationsFail = true;
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+
+        expect(
+            wrapper.find("[data-testid='save-config']").attributes("disabled"),
+        ).toBeDefined();
+        expect(wrapper.find("[data-testid='remove-config']").exists()).toBe(
+            false,
+        );
+        expect(wrapper.find("[data-testid='reload-config']").exists()).toBe(
+            true,
+        );
+        expect(calls.every((call) => call.method === "GET")).toBe(true);
+    });
+
+    it("reads both payloads again when a failed read is reloaded", async () => {
+        loadFails = true;
+        const wrapper = await mountForm();
+        const before = calls.length;
+        await wrapper.find("[data-testid='reload-config']").trigger("click");
+        await flushPromises();
+
+        const reread = calls.slice(before).map((call) => call.url);
+        expect(reread).toHaveLength(2);
+        expect(reread).toEqual(
+            expect.arrayContaining([CONFIG_URL, RELATIONS_URL]),
+        );
+    });
+
+    it("a successful reload after a failed read offers the writes again", async () => {
+        loadFails = true;
+        const wrapper = await mountForm();
+        loadFails = false;
+        readEtag = '"v3"';
+        await wrapper.find("[data-testid='reload-config']").trigger("click");
+        await flushPromises();
+
+        expect(
+            wrapper.find("[data-testid='save-config']").attributes("disabled"),
+        ).toBeUndefined();
+        expect(wrapper.find("[data-testid='remove-config']").exists()).toBe(
+            true,
+        );
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+        expect(putCalls()[0].headers["If-Match"]).toBe('"v3"');
+    });
+
+    it("brings a conflict into view from the bottom of a long form", async () => {
+        conflictOn = "PUT";
+        const wrapper = await mountForm();
+        wrapper.element.scrollTop = 500;
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+
+        expect(wrapper.element.scrollTop).toBe(0);
+        expect(wrapper.find("[data-testid='reload-config']").exists()).toBe(
+            true,
+        );
+    });
+
+    it("brings the saved notice into view from the bottom of a long form", async () => {
+        const wrapper = await mountForm();
+        wrapper.element.scrollTop = 500;
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+
+        expect(wrapper.element.scrollTop).toBe(0);
+        expect(wrapper.find("[data-testid='config-saved']").exists()).toBe(
+            true,
+        );
     });
 });
 

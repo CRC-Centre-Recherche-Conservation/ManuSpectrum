@@ -43,10 +43,13 @@ def drop_summary_restriction_counts(sender, **kwargs):
 def drop_detached_summary_config(sender, instance, **kwargs):
     """Drop the configuration and the stamp once a summary attachment is gone.
 
-    Covers the ``summary-config`` DELETE, the function manager's own delete,
-    a graph deleted with its functions, and ``Graph.save()``, which deletes
-    and re-creates every attachment of the graph it saves
-    (arches/app/models/graph.py:571-592).
+    Attachment rows are deleted by the ``summary-config`` DELETE, the
+    function manager's delete, the deletion of a graph (a draft included)
+    or of a function, and the restoration of a graph from a serialized
+    state (designer publish, model-history restore, graph or package
+    import), which deletes each attachment and writes it again
+    (arches/app/models/graph.py:571-592, 674-675). ``Graph.save()`` on a
+    graph loaded from the database leaves the rows in place.
     """
     if str(instance.function_id) == str(SUMMARY_FUNCTION_ID):
         graph_id = instance.graph_id

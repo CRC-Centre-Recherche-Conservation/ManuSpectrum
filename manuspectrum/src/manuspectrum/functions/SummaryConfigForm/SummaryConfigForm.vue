@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from "vue";
+import { computed, nextTick, ref, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
 import { useConfirm } from "primevue/useconfirm";
 
@@ -62,6 +62,8 @@ const saved = ref(false);
 const attached = ref(true);
 const conflicted = ref(false);
 const etag = ref<string | null>(null);
+const stateKnown = ref(false);
+const formRoot = ref<HTMLElement | null>(null);
 
 const aliasOptions = computed(() => relations.value?.fields ?? []);
 
@@ -72,8 +74,9 @@ watchEffect(() => {
 /**
  * Read both payloads at once; either failure leaves the form empty and says so.
  *
- * A failed read keeps the ETag of the last state read, so a later write stays
- * conditional on it.
+ * Until one read succeeds, the form offers no write: it never saves or removes
+ * a state it has not read. A failed read after that keeps the ETag of the last
+ * state read, so a later write stays conditional on it.
  */
 async function load(id: string): Promise<void> {
     loading.value = true;
@@ -106,6 +109,7 @@ async function save(): Promise<void> {
     try {
         adopt(await saveConfig(graphid, config.value, etag.value));
         saved.value = true;
+        void revealFeedback();
     } catch (caught) {
         reportFailure(
             caught,
@@ -162,6 +166,7 @@ function adopt(stored: VersionedConfig): void {
     warnings.value = stored.warnings;
     attached.value = stored.attached;
     etag.value = stored.etag;
+    stateKnown.value = true;
 }
 
 /** A conflict says why and offers the reload; anything else shows its detail. */
@@ -171,10 +176,25 @@ function reportFailure(caught: unknown, message: string): void {
         errorMessage.value = $gettext(
             "Someone else changed this configuration since you opened it. Your changes are not saved: reload it to see their version.",
         );
-        return;
+    } else {
+        errorMessage.value = message;
+        errorDetail.value = detailOf(caught);
     }
-    errorMessage.value = message;
-    errorDetail.value = detailOf(caught);
+    void revealFeedback();
+}
+
+/**
+ * Scroll the form back to its top, where the feedback of a write renders.
+ *
+ * The form scrolls on its own and its write buttons stick to its bottom edge,
+ * away from that feedback. It assigns `scrollTop` because jsdom implements
+ * neither `scrollTo` nor `scrollIntoView` on elements.
+ */
+async function revealFeedback(): Promise<void> {
+    await nextTick();
+    if (formRoot.value) {
+        formRoot.value.scrollTop = 0;
+    }
 }
 
 function clearFeedback(): void {
@@ -316,7 +336,10 @@ function removeRollup(index: number): void {
 </script>
 
 <template>
-    <div class="summary-config">
+    <div
+        ref="formRoot"
+        class="summary-config"
+    >
         <p
             v-if="loading"
             class="loading"
@@ -341,7 +364,7 @@ function removeRollup(index: number): void {
                         {{ errorDetail }}
                     </span>
                     <Button
-                        v-if="conflicted"
+                        v-if="conflicted || !stateKnown"
                         class="reload"
                         data-testid="reload-config"
                         icon="fa fa-refresh"
@@ -464,11 +487,11 @@ function removeRollup(index: number): void {
                     icon="fa fa-save"
                     :label="$gettext('Save this configuration')"
                     :loading="saving"
-                    :disabled="removing"
+                    :disabled="removing || !stateKnown"
                     @click="save"
                 />
                 <Button
-                    v-if="attached"
+                    v-if="attached && stateKnown"
                     class="remove"
                     data-testid="remove-config"
                     icon="fa fa-trash"
