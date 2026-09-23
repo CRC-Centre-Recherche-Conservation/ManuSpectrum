@@ -3,25 +3,38 @@
 Elasticsearch is never reached: the client, the graph index and the
 configuration reader of the service are patched, so a request exercises the
 view and the assembly together against recorded responses. The fixtures come
-from ``test_summary_service`` rather than being copied here.
+from ``test_summary_service`` rather than being copied here. The permission
+guard is patched as well, except in ``SummaryBatchParityTests``, which decides
+on real resources and grants.
 """
 
+import contextlib
 import json
 import uuid
 from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.db import connection
 from django.db.models.signals import post_delete, post_save
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from elasticsearch import TransportError
+from elasticsearch import NotFoundError, TransportError
 from guardian.shortcuts import assign_perm
 
 from guardian.models import GroupObjectPermission
 
-from arches.app.models.models import GraphXPublishedGraph, NodeGroup, UserProfile
+from arches.app.models.models import (
+    GraphModel,
+    GraphXPublishedGraph,
+    Node,
+    NodeGroup,
+    ResourceInstance,
+    UserProfile,
+)
+from arches.app.utils import permission_backend
 
 from manuspectrum.functions.resource_summary import ResourceSummary, details
 from manuspectrum.views import summary as summary_view
@@ -45,6 +58,9 @@ from tests.test_summary_service import (
 
 DOC_ONE = str(uuid.uuid4())
 DOC_TWO = str(uuid.uuid4())
+
+#: Seeded by ``models.11042_add_resource_instance_lifecycle``.
+DEFAULT_LIFECYCLE_ID = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
 
 
 class SavedRow:
@@ -71,13 +87,13 @@ class SummaryTestCase(TestCase):
         self.client.force_login(self.reader)
         self.indexes = {"g-document": summary_index(), "g-component": component_index()}
 
-    def patched(self, es, config=SUMMARY_CONFIG, readable=True):
-        """Every reader of the database or of the cluster, replaced."""
-        return (
-            mock.patch(
-                "manuspectrum.views.summary.user_can_read_resource",
-                return_value=readable,
-            ),
+    def patched(self, es, config=SUMMARY_CONFIG, readable=True, real_guard=False):
+        """Every reader of the database or of the cluster, replaced.
+
+        The read check of both endpoints answers ``readable``; ``real_guard``
+        leaves it to Arches, on the rows and grants of the test database.
+        """
+        patches = [
             mock.patch(
                 "manuspectrum.views.summary_service.es_client",
                 return_value=(es, "test_resources"),
@@ -100,18 +116,38 @@ class SummaryTestCase(TestCase):
                 "manuspectrum.views.summary_service.list_labels",
                 return_value={"blue": "Bleu", "red": "Rouge"},
             ),
-        )
+        ]
+        if not real_guard:
+            patches.append(
+                mock.patch(
+                    "manuspectrum.views.summary.user_can_read_resource",
+                    return_value=readable,
+                )
+            )
+        return patches
 
     def get(
-        self, es, resourceid=DOC_ONE, config=SUMMARY_CONFIG, readable=True, **extra
+        self,
+        es,
+        resourceid=DOC_ONE,
+        config=SUMMARY_CONFIG,
+        readable=True,
+        real_guard=False,
+        **extra,
     ):
-        patches = self.patched(es, config=config, readable=readable)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        with contextlib.ExitStack() as stack:
+            for patch in self.patched(
+                es, config=config, readable=readable, real_guard=real_guard
+            ):
+                stack.enter_context(patch)
             return self.client.get(reverse("api-summary", args=[resourceid]), **extra)
 
-    def batch(self, es, ids, config=SUMMARY_CONFIG, readable=True):
-        patches = self.patched(es, config=config, readable=readable)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+    def batch(self, es, ids, config=SUMMARY_CONFIG, readable=True, real_guard=False):
+        with contextlib.ExitStack() as stack:
+            for patch in self.patched(
+                es, config=config, readable=readable, real_guard=real_guard
+            ):
+                stack.enter_context(patch)
             return self.client.get(reverse("api-summary-batch"), {"ids": ids})
 
     def one_document(self, count=1):
@@ -132,8 +168,6 @@ class SummaryEndpointTests(SummaryTestCase):
         self.assertEqual(response["Cache-Control"], "private, no-store")
 
     def test_an_id_the_index_does_not_hold_is_not_found(self):
-        from elasticsearch import NotFoundError
-
         es = FakeES(get_error=NotFoundError("missing", meta=None, body=None))
         response = self.get(es)
         self.assertEqual(response.status_code, 404)
@@ -319,7 +353,9 @@ class SummaryBatchEndpointTests(SummaryTestCase):
         self.assertEqual(list(json.loads(response.content)["summaries"]), [DOC_ONE])
 
     def test_an_id_the_reader_may_not_open_is_omitted(self):
-        response = self.batch(FakeES(), f"{DOC_ONE},{DOC_TWO}", readable=False)
+        response = self.batch(
+            self.two_documents(), f"{DOC_ONE},{DOC_TWO}", readable=False
+        )
         self.assertEqual(json.loads(response.content)["summaries"], {})
 
     def test_an_id_already_memoised_is_not_rebuilt(self):
@@ -352,6 +388,124 @@ class SummaryBatchEndpointTests(SummaryTestCase):
     def test_nothing_asked_answers_nothing(self):
         response = self.batch(FakeES(), "")
         self.assertEqual(json.loads(response.content), {"summaries": {}})
+
+
+class ParityES(FakeES):
+    """Answers ``get`` per id, and raises for an id the index does not hold."""
+
+    def get(self, index, id):  # noqa: A002 — the elasticsearch-py keyword
+        self.calls.append(("get", id))
+        if id not in self.docs:
+            raise NotFoundError("missing", meta=None, body=None)
+        return {"_source": self.docs[id]}
+
+
+class SummaryBatchParityTests(SummaryTestCase):
+    """The batch keeps exactly the ids the single endpoint would not refuse."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        graph = GraphModel.objects.create(
+            name="sp_readable",
+            slug="sp_readable",
+            isresource=True,
+            resource_instance_lifecycle_id=DEFAULT_LIFECYCLE_ID,
+        )
+        Node.objects.create(
+            graph=graph,
+            nodegroup=NodeGroup.objects.create(cardinality="1"),
+            name="sp_node",
+            alias="sp_node",
+            datatype="string",
+            istopnode=False,
+        )
+        cls.open_one = str(ResourceInstance.objects.create(graph=graph).pk)
+        cls.open_two = str(ResourceInstance.objects.create(graph=graph).pk)
+        forbidden = ResourceInstance.objects.create(graph=graph)
+        assign_perm("no_access_to_resourceinstance", cls.reader, forbidden)
+        cls.forbidden = str(forbidden.pk)
+        cls.missing = str(uuid.uuid4())
+
+    def parity_es(self):
+        """The index as the batch reads it.
+
+        The forbidden resource is held under both spellings of its id, so only
+        the read check keeps it out of an answer.
+        """
+        return ParityES(
+            docs={
+                rid: {"displayname": [{"language": "en", "value": "x"}]}
+                for rid in (
+                    self.open_one,
+                    self.open_two,
+                    self.forbidden,
+                    self.forbidden.upper(),
+                )
+            }
+        )
+
+    def batch_ids(self, ids, es=None):
+        """The summaries the batch answers for ``ids``, under Arches' own check."""
+        response = self.batch(es or self.parity_es(), ",".join(ids), real_guard=True)
+        return json.loads(response.content)["summaries"]
+
+    def test_the_batch_keeps_the_ids_the_single_endpoint_serves(self):
+        es = self.parity_es()
+        ids = [self.open_one, self.open_two, self.forbidden, self.missing]
+        summaries = self.batch_ids(ids, es)
+        single = {rid: self.get(es, rid, real_guard=True).status_code for rid in ids}
+        self.assertEqual(
+            single,
+            {
+                self.open_one: 200,
+                self.open_two: 200,
+                self.forbidden: 403,
+                self.missing: 404,
+            },
+        )
+        self.assertEqual(
+            {rid for rid, status in single.items() if status == 200}, set(summaries)
+        )
+        self.assertNotIn(self.forbidden, summaries)
+        self.assertFalse(
+            any(self.forbidden in call[1] for call in es.calls if call[0] == "mget")
+        )
+        self.assertNotIn(self.missing, summaries)
+
+    def test_the_batch_loads_its_rows_once(self):
+        ids = [self.open_one, self.open_two, self.forbidden]
+        with CaptureQueriesContext(connection) as queries:
+            self.batch_ids(ids)
+        # django-silk, when a local settings file loads it, adds an EXPLAIN per
+        # statement and one INSERT carrying every statement's text.
+        loads = [
+            q["sql"]
+            for q in queries
+            if q["sql"].startswith("SELECT") and 'FROM "resource_instances"' in q["sql"]
+        ]
+        self.assertEqual(len(loads), 1, "\n".join(loads))
+
+    def test_each_loaded_row_is_handed_to_the_core_check(self):
+        with mock.patch(
+            "manuspectrum.views.summary.user_can_read_resource",
+            wraps=permission_backend.user_can_read_resource,
+        ) as check:
+            self.batch_ids([self.open_one, self.missing])
+        by_row = [
+            c for c in check.call_args_list if c.kwargs.get("resource") is not None
+        ]
+        by_id = [
+            c for c in check.call_args_list if c.kwargs.get("resourceid") is not None
+        ]
+        self.assertEqual(
+            [str(c.kwargs["resource"].pk) for c in by_row], [self.open_one]
+        )
+        self.assertEqual([c.kwargs["resourceid"] for c in by_id], [self.missing])
+
+    def test_an_id_asked_in_upper_case_meets_its_grant(self):
+        summaries = self.batch_ids([self.forbidden.upper(), self.open_one])
+        self.assertEqual(list(summaries), [self.open_one])
 
 
 class NodegroupRestrictionCountTests(TestCase):
