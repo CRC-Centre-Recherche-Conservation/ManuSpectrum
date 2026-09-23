@@ -4,15 +4,14 @@ Each entry of a ``file-list`` value may carry a ``license`` key::
 
     {"id": "<SPDX id>", "url": "<licence text URL>", "label": "<custom only>"}
 
-The key is not localised. A missing or unknown licence is shown as
-``DEFAULT_LICENSE_ID``; ``LicenseRef-custom`` carries the label and URL the
+The key is not localised. ``LicenseRef-custom`` carries the label and URL the
 curator typed. The browser receives this catalogue through
-``templates/javascript.htm`` (``license_catalogue_json``) and applies the same
-resolution in ``media/js/utils/file-license.js``.
+``templates/javascript.htm`` (``license_catalogue_json``); the display rule
+(a missing, unknown or incomplete licence shows ``DEFAULT_LICENSE_ID``) lives
+in ``media/js/utils/file-license.js``.
 """
 
 import json
-from urllib.parse import urlsplit
 
 from django.utils.translation import gettext_lazy as _
 
@@ -71,36 +70,21 @@ LICENSES = (
 _BY_ID = {entry["id"]: entry for entry in LICENSES}
 
 
-def _is_web_url(value):
-    if not isinstance(value, str):
-        return False
-    parts = urlsplit(value.strip())
-    return parts.scheme in ("http", "https") and bool(parts.netloc)
+def stored_license(license_id):
+    """``{"id", "url"}`` stored on a file for a catalogue licence.
 
-
-def default_license():
-    """The licence stored on a file that has none: ``{"id", "url"}``."""
-    entry = _BY_ID[DEFAULT_LICENSE_ID]
+    Raises ``ValueError`` for an id outside the catalogue and for
+    ``LicenseRef-custom``, whose label and URL only a curator can give.
+    """
+    entry = _BY_ID.get(license_id)
+    if entry is None or license_id == CUSTOM_LICENSE_ID:
+        raise ValueError(f"{license_id!r} is not a catalogue licence")
     return {"id": entry["id"], "url": entry["url"]}
 
 
-def resolve(entry_license):
-    """The licence to display for a stored ``license`` value.
-
-    Returns ``{"id", "url", "label"}`` with a translated label. A missing or
-    unknown id resolves to the default; a custom licence keeps its own label
-    and URL, and resolves to the default unless its URL is http(s) and its
-    label is not blank. A catalogue id always shows the catalogue URL.
-    """
-    license_id = entry_license.get("id") if isinstance(entry_license, dict) else None
-    if license_id == CUSTOM_LICENSE_ID:
-        label = entry_license.get("label")
-        url = entry_license.get("url")
-        if _is_web_url(url) and isinstance(label, str) and label.strip():
-            return {"id": CUSTOM_LICENSE_ID, "url": url.strip(), "label": label.strip()}
-        license_id = DEFAULT_LICENSE_ID
-    entry = _BY_ID.get(license_id) or _BY_ID[DEFAULT_LICENSE_ID]
-    return {"id": entry["id"], "url": entry["url"], "label": str(entry["label"])}
+def default_license():
+    """The licence stored on a file that has none."""
+    return stored_license(DEFAULT_LICENSE_ID)
 
 
 def catalogue_json():

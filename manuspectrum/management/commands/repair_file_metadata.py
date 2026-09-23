@@ -28,8 +28,8 @@ from arches.app.models.models import Node, TileModel
 from manuspectrum.constants.licenses import (
     CUSTOM_LICENSE_ID,
     DEFAULT_LICENSE_ID,
-    LICENSE_KEY,
     LICENSES,
+    stored_license,
 )
 from manuspectrum.utils.file_entries import METADATA_FIELDS, normalize_metadata
 
@@ -64,7 +64,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         apply_changes = options["apply"]
         language_code = options["language"]
-        file_license = self.catalogue_license(options["license_id"])
+        try:
+            file_license = stored_license(options["license_id"])
+        except ValueError as error:
+            choices = ", ".join(
+                entry["id"] for entry in LICENSES if entry["id"] != CUSTOM_LICENSE_ID
+            )
+            raise CommandError(f"{error}; choose one of {choices}") from error
 
         file_nodes = list(Node.objects.filter(datatype="file-list"))
         if not file_nodes:
@@ -90,13 +96,10 @@ class Command(BaseCommand):
                 if not isinstance(entries, list):
                     continue
                 for entry in entries:
-                    had_license = isinstance(entry, dict) and LICENSE_KEY in entry
                     filled = normalize_metadata(entry, language_code, file_license)
                     if filled:
-                        if isinstance(entry, dict) and not had_license:
-                            licenses_set += 1
-                            filled -= 1
-                        fields_filled += filled
+                        fields_filled += filled.fields
+                        licenses_set += filled.license
                         files_changed += 1
                         by_node[node_name] += 1
                         touched = True
@@ -129,14 +132,3 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.WARNING(summary + " (dry run)"))
             self.stdout.write("Pass --apply to write.")
-
-    @staticmethod
-    def catalogue_license(license_id):
-        """``{"id", "url"}`` of a catalogue licence; the custom entry is refused."""
-        for entry in LICENSES:
-            if entry["id"] == license_id and license_id != CUSTOM_LICENSE_ID:
-                return {"id": entry["id"], "url": entry["url"]}
-        raise CommandError(
-            f"{license_id!r} is not a catalogue licence; choose one of "
-            + ", ".join(e["id"] for e in LICENSES if e["id"] != CUSTOM_LICENSE_ID)
-        )

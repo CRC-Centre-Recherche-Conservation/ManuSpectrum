@@ -1,4 +1,4 @@
-"""The licence catalogue, its resolution, and its delivery to the browser.
+"""The licence catalogue, its stored shape, and its delivery to the browser.
 
 The licence stamped on stored files is covered by ``test_repair_file_metadata``.
 
@@ -22,7 +22,7 @@ from manuspectrum.constants.licenses import (
     LICENSES,
     catalogue_json,
     default_license,
-    resolve,
+    stored_license,
 )
 
 
@@ -54,59 +54,29 @@ class CatalogueTests(SimpleTestCase):
         )
 
     def test_labels_follow_the_active_language(self):
+        other = next(e for e in LICENSES if e["id"] == CUSTOM_LICENSE_ID)
         with translation.override("fr"):
-            french = resolve({"id": CUSTOM_LICENSE_ID})
-            other = next(e for e in LICENSES if e["id"] == CUSTOM_LICENSE_ID)
             self.assertEqual(str(other["label"]), "Autre licence…")
-        self.assertEqual(french["id"], DEFAULT_LICENSE_ID)
 
 
-class ResolveTests(SimpleTestCase):
-    def test_missing_licence_resolves_to_the_default(self):
-        for value in (None, {}, "CC-BY-4.0", {"url": "https://example.org/"}):
-            with self.subTest(value=value):
-                self.assertEqual(resolve(value)["id"], DEFAULT_LICENSE_ID)
-
-    def test_unknown_id_resolves_to_the_default(self):
-        self.assertEqual(resolve({"id": "GPL-3.0"})["id"], DEFAULT_LICENSE_ID)
-
-    def test_catalogue_id_shows_the_catalogue_url_and_label(self):
-        resolved = resolve({"id": "CC0-1.0", "url": "javascript:alert(1)"})
+class StoredLicenseTests(SimpleTestCase):
+    def test_a_catalogue_id_gives_the_stored_shape(self):
         self.assertEqual(
-            resolved["url"], "https://creativecommons.org/publicdomain/zero/1.0/"
-        )
-        self.assertTrue(resolved["label"])
-
-    def test_valid_custom_licence_keeps_its_label_and_url(self):
-        resolved = resolve(
+            stored_license("CC0-1.0"),
             {
-                "id": CUSTOM_LICENSE_ID,
-                "label": " Musée X reuse terms ",
-                "url": "http://example.org/terms",
-            }
-        )
-        self.assertEqual(
-            resolved,
-            {
-                "id": CUSTOM_LICENSE_ID,
-                "label": "Musée X reuse terms",
-                "url": "http://example.org/terms",
+                "id": "CC0-1.0",
+                "url": "https://creativecommons.org/publicdomain/zero/1.0/",
             },
         )
 
-    def test_custom_licence_without_a_web_url_resolves_to_the_default(self):
-        for url in ("javascript:alert(1)", "ftp://example.org/x", "", None, "https://"):
-            with self.subTest(url=url):
-                resolved = resolve(
-                    {"id": CUSTOM_LICENSE_ID, "label": "Terms", "url": url}
-                )
-                self.assertEqual(resolved["id"], DEFAULT_LICENSE_ID)
+    def test_the_default_is_the_stored_shape_of_the_default_id(self):
+        self.assertEqual(default_license(), stored_license(DEFAULT_LICENSE_ID))
 
-    def test_custom_licence_without_a_label_resolves_to_the_default(self):
-        resolved = resolve(
-            {"id": CUSTOM_LICENSE_ID, "label": "  ", "url": "https://example.org/"}
-        )
-        self.assertEqual(resolved["id"], DEFAULT_LICENSE_ID)
+    def test_the_custom_entry_and_unknown_ids_are_refused(self):
+        for value in (CUSTOM_LICENSE_ID, "GPL-3.0", None):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    stored_license(value)
 
 
 class CatalogueDeliveryTests(SimpleTestCase):

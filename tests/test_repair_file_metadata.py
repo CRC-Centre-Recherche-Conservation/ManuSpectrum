@@ -296,6 +296,18 @@ class RepairFileLicenseTests(SimpleTestCase):
                 with self.assertRaisesRegex(CommandError, "not a catalogue licence"):
                     self.run_command([make_node("F")], [], f"--license={value}")
 
+    def test_a_null_licence_is_stamped_and_counted(self):
+        node = make_node("Fichier de mesure")
+        tile = make_tile({node: [licensed_entry(file_license=None)]})
+        tile.data[str(node.nodeid)][0]["license"] = None
+
+        output, manager = self.run_command([node], [tile], "--apply")
+
+        self.assertEqual([pk for pk, _ in manager.updates], [tile.tileid])
+        self.assertEqual(tile.data[str(node.nodeid)][0]["license"], default_license())
+        self.assertIn("1 licence(s) set to CC-BY-SA-4.0", output)
+        self.assertIn("0 field(s) across", output)
+
     def test_a_second_run_sets_no_licence(self):
         node = make_node("Fichier de mesure")
         tile = make_tile({node: [broken_entry()]})

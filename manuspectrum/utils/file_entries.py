@@ -23,6 +23,7 @@ hand: hand-assembly is how the malformed entries got there in the first place.
 """
 
 from functools import lru_cache
+from typing import NamedTuple
 
 from django.conf import settings
 
@@ -70,6 +71,16 @@ def configured_languages():
     return [code for code, _ in settings.LANGUAGES]
 
 
+class Normalized(NamedTuple):
+    """What :func:`normalize_metadata` added to one entry."""
+
+    fields: int
+    license: bool
+
+    def __bool__(self):
+        return bool(self.fields or self.license)
+
+
 def normalize_metadata(entry, language_codes=None, file_license=None):
     """Fill in a file entry's missing localised metadata and licence, in place.
 
@@ -77,17 +88,17 @@ def normalize_metadata(entry, language_codes=None, file_license=None):
     narrow it — a repair that fills only one language leaves the entry dirty in
     the others, which is the whole reason this exists.
 
-    An entry without a ``license`` key receives ``file_license`` (default: the
-    catalogue default, ``{"id", "url"}``); an existing ``license`` is kept
-    whatever it holds.
+    An entry whose ``license`` is missing, empty or not an object receives
+    ``file_license`` (default: :func:`default_license`); any other stored
+    ``license`` is kept whatever it holds.
 
     Only ever adds: a field that already holds a value is left untouched, so
-    this is safe to run over curated data. Returns the number of fields filled,
-    the licence counting as one, which lets callers skip a write when there was
-    nothing to do.
+    this is safe to run over curated data. Returns a :class:`Normalized`
+    (metadata fields filled, licence added), false when nothing changed, which
+    lets callers skip a write when there was nothing to do.
     """
     if not isinstance(entry, dict):
-        return 0
+        return Normalized(0, False)
 
     if language_codes is None:
         language_codes = configured_languages()
@@ -109,10 +120,11 @@ def normalize_metadata(entry, language_codes=None, file_license=None):
                     language_code
                 ]
                 filled += 1
-    if LICENSE_KEY not in entry:
+    current_license = entry.get(LICENSE_KEY)
+    license_added = not (isinstance(current_license, dict) and current_license)
+    if license_added:
         entry[LICENSE_KEY] = dict(file_license or default_license())
-        filled += 1
-    return filled
+    return Normalized(filled, license_added)
 
 
 def build_file_entry(
