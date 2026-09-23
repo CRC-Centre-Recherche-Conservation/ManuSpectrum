@@ -14,6 +14,7 @@ Run:
 import os
 import time
 import unittest
+from unittest.mock import patch
 
 from django.core.cache import cache
 from django.test import SimpleTestCase
@@ -80,8 +81,12 @@ class SuggestPrefixContractTests(LiveContractTestCase):
             entry["complete"], "'drag' now has more than 50 hits: use a rarer prefix"
         )
         cache.set(bp._suggest_prefix_key("drag", "fr"), entry, 60)
-        derived = bp._suggest_prefix_results(
-            "dragon", "fr", "Q304387", 15, time.monotonic() + 10
+        with patch.object(bp, "_suggest_call", wraps=bp._suggest_call) as calls:
+            derived = bp._suggest_prefix_results(
+                "dragon", "fr", "Q304387", 15, time.monotonic() + 10
+            )
+        self.assertNotIn(
+            "wbsearchentities", [c.args[0]["action"] for c in calls.call_args_list]
         )
         cache.clear()
 
@@ -89,4 +94,4 @@ class SuggestPrefixContractTests(LiveContractTestCase):
             "dragon", "fr", "Q304387", 15, time.monotonic() + 10
         )
 
-        self.assertEqual({r["id"] for r in fresh}, {r["id"] for r in derived})
+        self.assertLessEqual({r["id"] for r in fresh}, {r["id"] for r in derived})

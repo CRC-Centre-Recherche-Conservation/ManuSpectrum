@@ -2655,8 +2655,6 @@ class ResourceRelationsDatabaseTests(TestCase):
     are created below (a test run never loads the package).
     """
 
-    LIFECYCLE_ID = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
-
     @classmethod
     def setUpTestData(cls):
         graphs = {}
@@ -2670,7 +2668,6 @@ class ResourceRelationsDatabaseTests(TestCase):
                 isresource=True,
                 is_active=True,
                 slug=f"relations-{name.lower()}",
-                resource_instance_lifecycle_id=cls.LIFECYCLE_ID,
             )
         cls.component_graph = graphs["Component"]
         nodegroup = NodeGroup.objects.create(

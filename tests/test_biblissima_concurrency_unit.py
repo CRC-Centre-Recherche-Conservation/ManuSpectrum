@@ -110,17 +110,24 @@ class BibRequestDeadlineTests(ConcurrencyTestCase):
     URL = "https://data.example/w/api.php"
 
     def test_the_timeouts_are_what_is_left_once_the_slot_is_held(self):
+        semaphore = threading.BoundedSemaphore(1)
+        self._start(patch.object(bp, "_biblissima_semaphore", semaphore))
         fetch = self._start(
             patch.object(bp, "safe_fetch", return_value=MagicMock(status_code=200))
         )
+        semaphore.acquire()
+        release = threading.Timer(0.3, semaphore.release)
+        self.addCleanup(release.join)
+        self.addCleanup(release.cancel)
+        release.start()
 
         bp._bib_request(
             MagicMock(), self.URL, guarded=True, deadline=time.monotonic() + 1.0
         )
 
         connect, read = fetch.call_args.kwargs["timeout"]
-        self.assertTrue(0 < connect <= 1.0)
-        self.assertTrue(0 < read <= 1.0)
+        self.assertTrue(0 < connect <= 0.8)
+        self.assertTrue(0 < read <= 0.8)
 
     def test_a_spent_deadline_starts_no_call(self):
         fetch = self._start(patch.object(bp, "safe_fetch"))

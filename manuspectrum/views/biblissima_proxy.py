@@ -89,6 +89,7 @@ from manuspectrum.utils.dates import (
     parse_historical_date,
 )
 from manuspectrum.utils.http import (
+    ResponseTooLargeError,
     UnsafeURLError,
     assert_url_is_safe,
     get_user_agent,
@@ -994,10 +995,11 @@ _FOLD_LETTERS = str.maketrans(
 def _fold(text):
     """*text* without case, accents or extra whitespace.
 
-    Wikibase applies the same equivalence to a search (``Jéro`` and ``jero``
-    return the same hits in the same order). The suggest memo is keyed on this
-    form and the upstream receives it, so a stored answer is always the
-    upstream's answer for its own key.
+    Wikibase ignores case and accents (``Jéro`` and ``jero`` return the same
+    hits in the same order); runs of whitespace are collapsed by choice (a
+    doubled space is a typing slip). The suggest memo is keyed on this form and
+    the upstream receives it, so a stored answer is always the upstream's
+    answer for its own key.
     """
     decomposed = unicodedata.normalize("NFKD", text.casefold().translate(_FOLD_LETTERS))
     return " ".join(
@@ -1035,11 +1037,14 @@ def _suggest_terms(entity):
 def _suggest_prefix_entry(folded, lang, deadline):
     """What ``wbsearchentities`` knows of *folded*, as upstream data only.
 
-    Up to 50 hits and, from one batch, their labels and aliases in every
-    language and their P2/P129 claims. ``complete`` is true when Wikibase
-    reports no further page: the hits are then every entity one of whose
-    labels or aliases starts with *folded*. Raises ``ValueError`` for an answer
-    without a ``search`` list.
+    Up to 50 hits and, from one batch, their labels and P2/P129 claims.
+    ``complete`` is true when Wikibase reports no further page and the batch
+    holds every hit: the hits are then every entity one of whose labels or
+    aliases starts with *folded*, with their labels and aliases in every
+    language. A search that reports a further page gets a batch of the labels
+    of the lang → en → fr chain only: its entry answers the current query and
+    nothing else. Raises ``ValueError`` for an answer without a ``search`` list
+    or a batch without an ``entities`` object.
     """
     search = _suggest_call(
         {
@@ -1059,17 +1064,21 @@ def _suggest_prefix_entry(folded, lang, deadline):
         for i in items
         if isinstance(i, dict) and i.get("id")
     ]
+    truncated = "search-continue" in search
     entities = {}
     if items:
-        batch = _suggest_call(
-            {
-                "action": "wbgetentities",
-                "ids": "|".join(dict.fromkeys(item["id"] for item in items)),
-                "format": "json",
-                "props": "claims|labels|aliases",
-            },
-            deadline,
-        ).get("entities", {})
+        params = {
+            "action": "wbgetentities",
+            "ids": "|".join(dict.fromkeys(item["id"] for item in items)),
+            "format": "json",
+        }
+        if truncated:
+            params.update(languages=_suggest_languages(lang), props="claims|labels")
+        else:
+            params["props"] = "claims|labels|aliases"
+        batch = _suggest_call(params, deadline).get("entities")
+        if not isinstance(batch, dict):
+            raise ValueError("wbgetentities answered no entities")
         for qid, raw in batch.items():
             claims = raw.get("claims") or {}
             entities[qid] = {
@@ -1078,7 +1087,7 @@ def _suggest_prefix_entry(folded, lang, deadline):
                 "claims": {P2: claims.get(P2, []), P129: claims.get(P129, [])},
             }
     return {
-        "complete": "search-continue" not in search,
+        "complete": not truncated and all(item["id"] in entities for item in items),
         "items": items,
         "entities": entities,
     }
@@ -1183,8 +1192,9 @@ def _suggest_prefix_results(folded, lang, type_qid, limit, deadline):
 
     A complete ancestor's entry answers only when its narrowed typed hits fit
     in *limit*: they are then every hit a fresh search would keep, in the
-    ancestor's order. Otherwise a fresh entry is fetched, and stored for
-    ``BIBLISSIMA_CACHE_TTL`` when it is complete. Kept: up to *limit* hits
+    ancestor's order. Otherwise a fresh entry is fetched and, when it is
+    complete, stored for ``BIBLISSIMA_CACHE_TTL``, or for
+    ``SUGGEST_ANSWER_TTL`` when it holds no hit. Kept: up to *limit* hits
     whose P2 claims name *type_qid*.
     """
     entry, needle = _suggest_cached_entry(folded, lang)
@@ -1196,7 +1206,8 @@ def _suggest_prefix_results(folded, lang, type_qid, limit, deadline):
     if hits is None:
         entry = _suggest_prefix_entry(folded, lang, deadline)
         if entry["complete"]:
-            cache.set(_suggest_prefix_key(folded, lang), entry, _BIBLISSIMA_CACHE_TTL)
+            ttl = _BIBLISSIMA_CACHE_TTL if entry["items"] else SUGGEST_ANSWER_TTL
+            cache.set(_suggest_prefix_key(folded, lang), entry, ttl)
         hits = _suggest_typed_hits(entry, type_qid)
     return [
         _suggest_result(item["id"], item, entity, lang) for item, entity in hits[:limit]
@@ -1252,12 +1263,25 @@ def _suggest_fulltext_results(query, lang, type_qid, limit, seen_ids, deadline):
     return results
 
 
+_SUGGEST_UPSTREAM_FAILURES = (
+    requests.RequestException,
+    BiblissimaBusy,
+    BiblissimaBudgetSpent,
+    UnsafeURLError,
+    ResponseTooLargeError,
+    ValueError,
+)
+"""What a suggest call raises when the upstream fails or the budget runs out."""
+
+
 def _build_suggestions(folded, lang, type_qid, limit, deadline):
     """The suggest payload of the folded query *folded*, computed before *deadline*.
 
     The prefix search runs first and the fulltext search fills the room left;
     a branch that fails or finds the budget spent keeps the results already in
     hand. ``degraded``: both branches failed; ``partial``: at least one did.
+    An upstream failure (``_SUGGEST_UPSTREAM_FAILURES``) logs a warning; any
+    other exception fails its branch the same way and logs its traceback.
     """
     results, prefix_failed, fulltext_failed = [], False, False
     try:
@@ -1265,22 +1289,32 @@ def _build_suggestions(folded, lang, type_qid, limit, deadline):
             results = _suggest_prefix_results(folded, lang, type_qid, limit, deadline)
         else:
             results = _suggest_untyped_results(folded, lang, limit, deadline)
-    except Exception as exc:
+    except _SUGGEST_UPSTREAM_FAILURES as exc:
         prefix_failed = True
         logger.warning(
             "[biblissima.suggest] prefix search failed for query=%r: %r", folded, exc
+        )
+    except Exception:
+        prefix_failed = True
+        logger.exception(
+            "[biblissima.suggest] prefix search failed for query=%r", folded
         )
     if len(results) < limit:
         try:
             results += _suggest_fulltext_results(
                 folded, lang, type_qid, limit, {r["id"] for r in results}, deadline
             )
-        except Exception as exc:
+        except _SUGGEST_UPSTREAM_FAILURES as exc:
             fulltext_failed = True
             logger.warning(
                 "[biblissima.suggest] fulltext search failed for query=%r: %r",
                 folded,
                 exc,
+            )
+        except Exception:
+            fulltext_failed = True
+            logger.exception(
+                "[biblissima.suggest] fulltext search failed for query=%r", folded
             )
     return {
         "results": results,
@@ -1300,7 +1334,9 @@ class BiblissimaSuggestView(View):
     after the group check of ``dispatch``: they depend neither on the user nor
     on the active language. The prefix search is stored apart, per folded
     query and language, and answers longer queries when it was complete
-    (``_suggest_prefix_results``).
+    (``_suggest_prefix_results``). A caller whose budget is spent when its
+    turn to build comes (a waiter that polled past the deadline) answers
+    degraded and stores nothing.
     """
 
     # Wikibase type QIDs for filtering
@@ -1328,18 +1364,25 @@ class BiblissimaSuggestView(View):
         key = _suggest_key(folded, type_qid, lang, limit)
         deadline = time.monotonic() + SUGGEST_DEADLINE
 
+        def build():
+            if time.monotonic() >= deadline:
+                return None
+            return _build_suggestions(folded, lang, type_qid, limit, deadline)
+
         def shorten_partial(built):
             if built["partial"]:
                 cache.set(key, built, SUGGEST_PARTIAL_TTL)
 
         payload = get_or_build(
             key,
-            lambda: _build_suggestions(folded, lang, type_qid, limit, deadline),
+            build,
             SUGGEST_ANSWER_TTL,
             lock_timeout=3 * SUGGEST_DEADLINE,
             wait=SUGGEST_DEADLINE + 0.5,
             kept=shorten_partial,
         )
+        if payload is None:
+            payload = {"results": [], "degraded": True, "partial": True}
         response = JsonResponse(payload)
         patch_cache_control(
             response, max_age=0 if payload["partial"] else SUGGEST_ANSWER_TTL

@@ -278,6 +278,5 @@ class BiblissimaCachePrivacyTests(TestCase):
             self.assertGreater(upstream_calls, 0)  # first hit went upstream
             r2 = self.client.get(url)
             self.assertEqual(r2.status_code, 200)
-            # Second hit served from the suggest memo, private header kept.
             self.assertEqual(bib.call_count, upstream_calls)
             self.assertIn("private", r2["Cache-Control"])

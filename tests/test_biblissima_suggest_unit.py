@@ -50,13 +50,17 @@ class FakeWikibase:
     match, then alias match, then corpus order; ``search-continue`` past
     ``limit``. ``query``: the entities whose labels hold every word of the text
     as a whole word. ``slow`` maps an action to seconds slept before
-    answering; ``errors`` maps an action to a MediaWiki error code.
+    answering; ``errors`` maps an action to a MediaWiki error code;
+    ``payloads`` maps an action to the body answered in place of the corpus's;
+    ``omit`` holds the ids a ``wbgetentities`` batch leaves out.
     """
 
-    def __init__(self, corpus, *, slow=None, errors=None):
+    def __init__(self, corpus, *, slow=None, errors=None, payloads=None, omit=()):
         self.corpus = corpus
         self.slow = slow or {}
         self.errors = errors or {}
+        self.payloads = payloads or {}
+        self.omit = set(omit)
         self.calls = []
         self.sessions = []
         self.kwargs = []
@@ -72,6 +76,8 @@ class FakeWikibase:
         time.sleep(self.slow.get(action, 0))
         if action in self.errors:
             payload = {"error": {"code": self.errors[action]}}
+        elif action in self.payloads:
+            payload = self.payloads[action]
         elif action == "wbsearchentities":
             payload = self._search(params)
         elif action == "wbgetentities":
@@ -122,6 +128,8 @@ class FakeWikibase:
         props = params["props"].split("|")
         out = {}
         for qid in params["ids"].split("|"):
+            if qid in self.omit:
+                continue
             record = self.corpus[qid]
             item = {}
             if "labels" in props:
@@ -252,12 +260,31 @@ class SuggestBudgetTests(SuggestTestCase):
         self.start(patch.object(bp, "_biblissima_semaphore", semaphore))
         self.start(patch.dict(bp._biblissima_stats))
         self.start(patch.object(bp, "SUGGEST_DEADLINE", 0.3))
+        fetch = self.start(
+            patch.object(
+                bp, "safe_fetch", side_effect=AssertionError("no network in unit tests")
+            )
+        )
 
         started = time.monotonic()
         _, payload = self.suggest(q="drag", type="descriptor")
 
         self.assertLess(time.monotonic() - started, 2.0)
         self.assertTrue(payload["degraded"])
+        fetch.assert_not_called()
+
+    def test_a_waiter_past_the_deadline_answers_without_storing(self):
+        fake = self.upstream(DRAGONS)
+        self.start(patch.object(bp, "SUGGEST_DEADLINE", 0.1))
+        key = bp._suggest_key("drag", DESCRIPTOR, "fr", 10)
+        cache.add(f"{key}:lock", 1, 60)
+
+        response, payload = self.suggest(q="drag", type="descriptor")
+
+        self.assertEqual(fake.calls, [])
+        self.assertEqual(payload, {"results": [], "degraded": True, "partial": True})
+        self.assertIn("max-age=0", response["Cache-Control"])
+        self.assertIsNone(cache.get(key))
 
     def test_an_error_answer_is_a_failed_branch(self):
         self.upstream(DRAGONS, errors={"wbsearchentities": "badvalue"})
@@ -280,6 +307,18 @@ class SuggestBudgetTests(SuggestTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(payload["degraded"])
+
+    def test_a_bug_in_our_code_is_logged_with_its_traceback(self):
+        self.upstream(DRAGONS)
+        self.start(patch.object(bp, "_suggest_typed_hits", side_effect=KeyError("x")))
+
+        with self.assertLogs(bp.logger, "ERROR") as logs:
+            response, payload = self.suggest(q="drag", type="descriptor")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["partial"])
+        [record] = logs.records
+        self.assertIsNotNone(record.exc_info)
 
 
 SAINTS = {
@@ -459,12 +498,47 @@ class SuggestPrefixEntryTests(SuggestTestCase):
         timeouts = [c.args[2] for c in setter.call_args_list if c.args[0] == key]
         self.assertEqual(timeouts, [bp._BIBLISSIMA_CACHE_TTL])
 
+    def test_an_empty_complete_entry_lives_half_an_hour(self):
+        self.upstream(DRAGONS)
+        setter = self.start(patch.object(bp.cache, "set", wraps=bp.cache.set))
+
+        self.suggest(q="zzz", type="descriptor")
+
+        key = bp._suggest_prefix_key("zzz", "fr")
+        timeouts = [c.args[2] for c in setter.call_args_list if c.args[0] == key]
+        self.assertEqual(timeouts, [bp.SUGGEST_ANSWER_TTL])
+
     def test_a_truncated_entry_is_not_stored(self):
         self.upstream(SAINTS)
 
         self.suggest(q="sain", type="descriptor")
 
         self.assertIsNone(cache.get(bp._suggest_prefix_key("sain", "fr")))
+
+    def test_a_truncated_search_asks_the_light_batch(self):
+        fake = self.upstream(SAINTS)
+
+        self.suggest(q="sain", type="descriptor")
+
+        [batch] = [c for c in fake.calls if c["action"] == "wbgetentities"]
+        self.assertEqual(batch["languages"], bp._suggest_languages("fr"))
+        self.assertNotIn("aliases", batch["props"].split("|"))
+
+    def test_a_batch_missing_an_entity_is_not_stored(self):
+        self.upstream(DRAGONS, omit={"Q3"})
+
+        _, payload = self.suggest(q="drag", type="descriptor")
+
+        self.assertIsNone(cache.get(bp._suggest_prefix_key("drag", "fr")))
+        self.assertEqual([r["id"] for r in payload["results"]], ["Q1"])
+
+    def test_a_batch_without_entities_is_a_failed_branch(self):
+        self.upstream(DRAGONS, payloads={"wbgetentities": {}})
+
+        _, payload = self.suggest(q="drag", type="descriptor")
+
+        self.assertTrue(payload["partial"])
+        self.assertIsNone(cache.get(bp._suggest_prefix_key("drag", "fr")))
 
     def test_an_error_answer_never_becomes_a_prefix_entry(self):
         self.upstream(DRAGONS, errors={"wbsearchentities": "badvalue"})

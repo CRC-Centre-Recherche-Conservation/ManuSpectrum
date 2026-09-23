@@ -2715,7 +2715,8 @@ class BiblissimaSuggestViewTests(TestCase):
         search_resp = _make_response(json_data={})  # no "search" key
         fulltext_resp = _make_response(json_data={"query": {}})  # no "search"
         with patch.object(bp, "_bib_request", side_effect=[search_resp, fulltext_resp]):
-            response = self._get(q="épée", type="descriptor")
+            with self.assertLogs(bp.logger, "WARNING"):
+                response = self._get(q="épée", type="descriptor")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.content)["results"], [])
 
