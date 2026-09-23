@@ -3,6 +3,8 @@ from django.urls import reverse
 
 from arches.app.models.resource import Resource
 
+from manuspectrum.utils.public_visibility import anonymous_user, hidden_resource_ids
+
 # Document graph UUID
 DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
 
@@ -37,7 +39,11 @@ class StaticSitemap(Sitemap):
 
 
 class DocumentSitemap(Sitemap):
-    """Public Document resource reports."""
+    """Document resource reports the anonymous visitor may read.
+
+    A Document carrying a grant that denies the ``anonymous`` user read access
+    (an embargo) is left out.
+    """
 
     priority = 0.7
     changefreq = "monthly"
@@ -46,8 +52,10 @@ class DocumentSitemap(Sitemap):
     x_default = False
 
     def items(self):
-        return Resource.objects.filter(graph_id=DOCUMENT_GRAPH_ID).values_list(
-            "resourceinstanceid", flat=True
+        return (
+            Resource.objects.filter(graph_id=DOCUMENT_GRAPH_ID)
+            .exclude(resourceinstanceid__in=hidden_resource_ids(anonymous_user()))
+            .values_list("resourceinstanceid", flat=True)
         )
 
     def location(self, resourceid):

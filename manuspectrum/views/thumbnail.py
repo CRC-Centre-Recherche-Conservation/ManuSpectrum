@@ -12,30 +12,36 @@ there rather than falling back to the core view.
 The manifest fetch itself is cached in ``CanvasIIIF.fetch_manifest``; this is
 the other half — the answer a client already holds is not re-sent, and is not
 re-requested at all for ``settings.SEARCH_THUMBNAIL_MAX_AGE``.
+
+The core view checks no permission. Here a resource the reader may not read
+answers a bodyless 404 before any fetcher, and so any cache, is reached.
 """
 
 import hashlib
 
 from django.conf import settings
-from django.http import HttpResponseNotModified
+from django.http import HttpResponseNotFound, HttpResponseNotModified
 from django.utils.cache import patch_cache_control
 
+from arches.app.utils.permission_backend import user_can_read_resource
 from arches.app.views.thumbnail import ThumbnailView
 
 
 class CachedThumbnailView(ThumbnailView):
     """``ThumbnailView`` with an ETag and a Cache-Control lifetime.
 
-    ``private`` rather than ``public``: nothing restricts a resource today, but
-    a shared cache holding thumbnails would have to be purged the day one does
-    (decision D1 in the remediation plan), and a per-browser cache already
-    absorbs the repeat requests this route was answering.
+    ``private`` rather than ``public``: the answer depends on the reader's
+    rights on the resource, and a shared cache cannot run the read check.
     """
 
     def head(self, request, resource_id):
+        if not user_can_read_resource(request.user, resourceid=resource_id):
+            return HttpResponseNotFound()
         return self._with_lifetime(super().head(request, resource_id))
 
     def get(self, request, resource_id):
+        if not user_can_read_resource(request.user, resourceid=resource_id):
+            return HttpResponseNotFound()
         response = super().get(request, resource_id)
         if response.status_code != 200:
             return response

@@ -44,7 +44,6 @@ from collections import defaultdict, namedtuple
 from typing import NamedTuple
 
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
 
 from elasticsearch import ApiError, NotFoundError, TransportError
 from guardian.models import GroupObjectPermission, UserObjectPermission
@@ -61,6 +60,13 @@ from manuspectrum.functions.resource_summary import (
     normalize_config,
 )
 from manuspectrum.utils.cache import get_or_build
+from manuspectrum.utils.public_visibility import (  # noqa: F401  (re-exported)
+    PERM_SCOPE_TTL,
+    RESTRICTED_CACHE_KEY,
+    RESTRICTED_NODEGROUPS_CACHE_KEY,
+    readable_nodegroup_ids,
+    resource_grant_count,
+)
 from manuspectrum.utils.spectrum_preview import is_supported
 from manuspectrum.views.graph_nodes import (
     RELATION_DATATYPES,
@@ -77,10 +83,6 @@ SLUG_CACHE_KEY = "summary-graph-slugs"
 # symptom and not a fact about the resource: it expires in seconds.
 DEGRADED_TTL = 30
 
-PERM_SCOPE_TTL = 60
-RESTRICTED_CACHE_KEY = "summary-restricted-resources"
-RESTRICTED_NODEGROUPS_CACHE_KEY = "summary-restricted-nodegroups"
-NO_ACCESS = "no_access_to_resourceinstance"
 
 # What a linked resource is fetched for: its name, and whether the reader may
 # open it at all.
@@ -881,11 +883,11 @@ class ResourceNotFound(Exception):
 def perm_scope(user):
     """The memo scope of a reader: shared when nothing is restricted.
 
-    A deployment where no resource carries a ``no_access`` grant and no
-    nodegroup carries any grant answers the same payload to everyone, so one
-    entry per resource and language is enough and a shared HTTP cache may
-    keep it. Both counts are read once a minute; the first restriction moves
-    every reader onto their own entry within that minute.
+    A deployment where no resource carries an object grant and no nodegroup
+    carries any grant answers the same payload to everyone, so one entry per
+    resource and language is enough and a shared HTTP cache may keep it. Both
+    counts are read once a minute and dropped when a grant is written; the
+    first restriction moves every reader onto their own entry.
     """
     if not _restricted_resources() and not _restricted_nodegroups():
         return "public"
@@ -898,11 +900,13 @@ def _restricted_resources():
 
 
 def _count_restrictions():
-    """Object grants denying read access, users and groups together."""
-    return (
-        UserObjectPermission.objects.filter(permission__codename=NO_ACCESS).count()
-        + GroupObjectPermission.objects.filter(permission__codename=NO_ACCESS).count()
-    )
+    """Object grants on resource instances that may deny read access to someone.
+
+    Every codename counts, as for nodegroups: a grant set that leaves
+    ``view_resourceinstance`` out denies read to its holder
+    (arches/app/permissions/arches_default_allow.py:325-330).
+    """
+    return resource_grant_count()
 
 
 def _restricted_nodegroups():
@@ -937,17 +941,13 @@ def _count_nodegroup_restrictions():
 def readable_nodegroups(user):
     """Nodegroup ids the reader may read, or None when no nodegroup is restricted.
 
-    None costs one memoised count. Otherwise the set is the reader profile's
-    ``viewable_nodegroups``, which Arches computes once per profile instance,
-    so once per request; a reader without a profile reads none.
+    None costs one memoised count. Otherwise the set is
+    ``readable_nodegroup_ids``, memoised per reader; a reader without a
+    profile reads none.
     """
     if not _restricted_nodegroups():
         return None
-    try:
-        return set(user.userprofile.viewable_nodegroups)
-    except (AttributeError, ObjectDoesNotExist) as error:
-        logger.warning("summary: no profile for reader %s: %s", user, error)
-        return set()
+    return set(readable_nodegroup_ids(user))
 
 
 def readable_doc(doc, nodegroups):
