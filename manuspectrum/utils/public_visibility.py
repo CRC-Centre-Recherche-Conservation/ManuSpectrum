@@ -1,8 +1,8 @@
 """What a reader may see, decided by the Arches permission framework.
 
-The single entry point for the project surfaces that list, count or serve
-resources outside the Arches UI: thumbnails, the IIIF annotation collection,
-the sitemap and the model-graph counts. Arches core routes (``files/``,
+The single entry point for the project surfaces that list or serve
+resources outside the Arches UI: thumbnails, the IIIF annotation collection
+and the sitemap. Arches core routes (``files/``,
 ``manifest/``, ``iiifannotations``, the querysets API) keep core behaviour.
 
 ``hidden_resource_ids(user)`` is the set of resource ids carrying an

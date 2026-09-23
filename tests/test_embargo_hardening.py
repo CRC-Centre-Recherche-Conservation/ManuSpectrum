@@ -20,7 +20,6 @@ from django.test import TestCase
 
 from arches.app.models.models import (
     GraphModel,
-    GraphXPublishedGraph,
     Node,
     NodeGroup,
     ResourceInstance,
@@ -205,31 +204,6 @@ class SitemapTests(EmbargoCase):
 
         self.assertIn(str(self.open("document").pk), xml)
         self.assertNotIn(str(self.embargoed("document").pk), xml)
-
-
-class ModelGraphCountTests(EmbargoCase):
-    def setUp(self):
-        super().setUp()
-        graph = GraphModel.objects.get(pk=ANALYSIS_GRAPH_ID)
-        graph.publication = GraphXPublishedGraph.objects.create(graph=graph)
-        graph.save()
-
-    def analysis_count(self):
-        """Records of the one published model, the Analysis, draft or not."""
-        from manuspectrum.views.model_graph_service import build_model_graph
-
-        payload = build_model_graph("en")
-        return payload["stats"]["records"] + payload["stats"]["records_draft"]
-
-    def test_an_embargoed_analysis_is_not_counted_and_moves_the_fingerprint(self):
-        from manuspectrum.views.model_graph import graph_fingerprint
-
-        before, fingerprint = self.analysis_count(), graph_fingerprint()
-
-        self.embargo("analysis")
-
-        self.assertEqual(self.analysis_count(), before - 1)
-        self.assertNotEqual(graph_fingerprint(), fingerprint)
 
 
 class CollectionTests(EmbargoCase):

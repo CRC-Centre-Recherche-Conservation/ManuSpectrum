@@ -11,8 +11,6 @@ from django.db.models import Count
 from django.utils import timezone, translation
 from django.utils.translation import gettext_lazy as _
 
-from manuspectrum.utils.public_visibility import anonymous_user, hidden_resource_ids
-
 # The four atelier "carte des ressources" groupings, keyed by graph slug.
 GROUPS = [
     {
@@ -313,12 +311,9 @@ def build_model_graph(language="en"):
                 "id", "is_initial_state", "resource_instance_lifecycle_id"
             )
         )
-        # The payload is public and shared: a resource hidden from the
-        # anonymous visitor is not counted.
         counts, draft_counts = {}, {}
         for row in (
             ResourceInstance.objects.filter(graph_id__in=graph_ids)
-            .exclude(resourceinstanceid__in=hidden_resource_ids(anonymous_user()))
             .values("graph_id", "resource_instance_lifecycle_state_id")
             .order_by()
             .annotate(n=Count("resourceinstanceid"))

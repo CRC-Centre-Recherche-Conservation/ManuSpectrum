@@ -3,9 +3,8 @@
 The DB introspection (build_model_graph) is memoized by a content
 fingerprint so it is not re-run on every request. The fingerprint moves when
 a resource graph is republished, when a card or widget is edited in place
-(designer, ``i18n loadmessages``: the widget labels the payload reads), when resources or concepts are added
-or removed, and when a resource is hidden from or shown again to the
-anonymous visitor. The cache key prefix carries the code version of the serializer
+(designer, ``i18n loadmessages``: the widget labels the payload reads), and when resources or concepts are added
+or removed. The cache key prefix carries the code version of the serializer
 (``settings.CACHE_CODE_VERSION``), so a deploy that changes the payload shape
 starts cold. A 24h TTL is only a backstop in case the fingerprint never
 changes but the cache backend still needs an eviction horizon. Only the
@@ -26,7 +25,6 @@ from django.views import View
 from django.views.decorators.gzip import gzip_page
 
 from manuspectrum.utils.cache import get_or_build
-from manuspectrum.utils.public_visibility import anonymous_user, hidden_resource_ids
 from manuspectrum.views.model_graph_service import build_model_graph
 
 logger = logging.getLogger(__name__)
@@ -54,25 +52,13 @@ def _cards_hash():
         return cursor.fetchone()[0] or ""
 
 
-def _hidden_hash():
-    """md5 of the resource ids the anonymous visitor may not read, sorted.
-
-    The payload counts only what that visitor may read; the set is memoised
-    per permission epoch (``public_visibility``).
-    """
-    hidden = ",".join(sorted(hidden_resource_ids(anonymous_user())))
-    return hashlib.md5(hidden.encode("utf-8"), usedforsecurity=False).hexdigest()
-
-
 def graph_fingerprint():
-    """Content fingerprint: publications, card/widget texts, record counts, embargoes.
+    """Content fingerprint: publications, card/widget texts, record counts.
 
-    Moves on republish, on any in-place widget label edit, on any resource or
-    concept add/delete, and when the set of resources hidden from the
-    anonymous visitor changes, which keeps the "live figures" (records,
-    concepts, thesauri) honest without a rebuild on every request. Five cheap
-    queries (1 values_list, 1 md5 aggregate, 2 COUNTs, the anonymous row) on
-    top of the memoised hidden set.
+    Moves on republish, on any in-place widget label edit, and on any
+    resource or concept add/delete, which keeps the "live figures" (records,
+    concepts, thesauri) honest without a rebuild on every request. Four cheap
+    queries (1 values_list, 1 md5 aggregate, 2 COUNTs).
     """
     from arches.app.models.models import Concept, GraphModel, ResourceInstance
 
@@ -83,7 +69,6 @@ def graph_fingerprint():
     payload += f"|labels:{_cards_hash()}"
     payload += f"|ri:{ResourceInstance.objects.count()}"
     payload += f"|c:{Concept.objects.count()}"
-    payload += f"|hidden:{_hidden_hash()}"
     return hashlib.md5(payload.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 

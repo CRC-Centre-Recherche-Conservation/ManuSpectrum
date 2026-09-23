@@ -555,9 +555,7 @@ class PayloadEnrichmentTests(TestCase):
             self.assertEqual(str(DATATYPE_LABELS["string"]), "String")
 
 
-def _fingerprint_tables(
-    graph_rows, resource_count, concept_count, cards="h0", hidden="x0"
-):
+def _fingerprint_tables(graph_rows, resource_count, concept_count, cards="h0"):
     """Stand-ins for what ``graph_fingerprint`` reads.
 
     The managers are imported inside its body, so their patch lands on
@@ -583,9 +581,6 @@ def _fingerprint_tables(
     )
     stack.enter_context(
         mock.patch("manuspectrum.views.model_graph._cards_hash", return_value=cards)
-    )
-    stack.enter_context(
-        mock.patch("manuspectrum.views.model_graph._hidden_hash", return_value=hidden)
     )
     return stack
 
@@ -660,16 +655,11 @@ class GraphFingerprintTests(SimpleTestCase):
 
     ROWS = [("g1", "p1"), ("g2", "p2")]
 
-    def fingerprint(self, rows=None, resources=3, concepts=7, cards="h0", hidden="x0"):
+    def fingerprint(self, rows=None, resources=3, concepts=7, cards="h0"):
         with _fingerprint_tables(
-            self.ROWS if rows is None else rows, resources, concepts, cards, hidden
+            self.ROWS if rows is None else rows, resources, concepts, cards
         ):
             return graph_fingerprint()
-
-    def test_moves_when_a_resource_is_hidden_from_the_visitor(self):
-        self.assertNotEqual(
-            self.fingerprint(hidden="x0"), self.fingerprint(hidden="x1")
-        )
 
     def test_moves_when_a_widget_label_is_edited_in_place(self):
         self.assertNotEqual(self.fingerprint(cards="h0"), self.fingerprint(cards="h1"))
