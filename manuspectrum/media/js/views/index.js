@@ -1,6 +1,8 @@
 import arches from 'arches';
 import initMsNav from 'utils/ms-nav';
 import revealOnScroll from 'utils/reveal-on-scroll';
+import initHomepageSearch from '../utils/homepage/homepage-search';
+import initShowcaseCarousel from '../utils/homepage/showcase-carousel';
 
 $(function () {
     'use strict';
@@ -18,76 +20,12 @@ $(function () {
     // ================================================================
     // SEARCH FORM — URL from arches.urls
     // ================================================================
-    var $searchInput = $('#ms-search-input');
-    var searchUrl = arches.urls.search_home;
-
-    function navigateToSearch(query) {
-        if (query) {
-            var termFilter = JSON.stringify([{
-                inverted: false,
-                type: 'string',
-                context: '',
-                context_label: '',
-                id: query,
-                text: query,
-                value: query
-            }]);
-            window.location.href = searchUrl + '?paging-filter=1&term-filter=' + encodeURIComponent(termFilter);
-        } else {
-            window.location.href = searchUrl;
-        }
-    }
-
-    $('#ms-search-form').on('submit', function (e) {
-        e.preventDefault();
-        navigateToSearch($searchInput.val().trim());
-    });
-
-    $('.ms-search-chip').on('click', function () {
-        navigateToSearch($(this).data('term'));
-    });
+    initHomepageSearch(document);
 
     // ================================================================
     // SHOWCASE CAROUSEL
     // ================================================================
-    var $track = $('#ms-showcase-track');
-    var $dots = $('#ms-showcase-nav .ms-showcase-dot');
-    var slideCount = $track.children().length;
-    var currentSlide = 0;
-    // CSS `scroll-behavior` can't override a JS scrollTo() option — honour
-    // the preference here too.
-    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    function markActiveDot() {
-        $dots.removeClass('active').attr('aria-selected', 'false')
-            .eq(currentSlide).addClass('active').attr('aria-selected', 'true');
-    }
-
-    function goToSlide(idx) {
-        currentSlide = (idx + slideCount) % slideCount;
-        $track[0].scrollTo({
-            left: $track[0].offsetWidth * currentSlide,
-            behavior: reduceMotion ? 'auto' : 'smooth',
-        });
-        markActiveDot();
-    }
-
-    $('#ms-showcase-prev').on('click', function () { goToSlide(currentSlide - 1); });
-    $('#ms-showcase-next').on('click', function () { goToSlide(currentSlide + 1); });
-    $dots.on('click', function () { goToSlide($(this).data('slide')); });
-
-    // Sync dots on manual scroll
-    var scrollTimer;
-    $track.on('scroll', function () {
-        clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(function () {
-            var idx = Math.round($track[0].scrollLeft / $track[0].offsetWidth);
-            if (idx !== currentSlide) {
-                currentSlide = idx;
-                markActiveDot();
-            }
-        }, 80);
-    });
+    initShowcaseCarousel(document);
 
     // ================================================================
     // ANALYSIS POINTS — Interactive spectral viewer

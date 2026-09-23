@@ -347,9 +347,9 @@ Homepage — Prismatic Luminescence aesthetic
             </div>
 
             <!-- Showcase carousel -->
-            <div class="ms-showcase-carousel reveal-scale" id="ms-showcase" role="region" aria-roledescription="carousel" aria-label="{% trans 'Analysis techniques in pictures' %}">
+            <div class="ms-showcase-carousel reveal-scale" id="ms-showcase" role="region" aria-roledescription="{% trans 'carousel' context 'aria-roledescription' %}" aria-label="{% trans 'Analysis techniques in pictures' %}">
                 <div class="ms-showcase-track" id="ms-showcase-track">
-                    <div class="ms-showcase-slide">
+                    <div class="ms-showcase-slide" role="group" aria-roledescription="{% trans 'slide' context 'aria-roledescription' %}" aria-label="{% blocktrans with n=1 total=3 %}{{ n }} of {{ total }}{% endblocktrans %}">
                         <img src="{% static 'img/landing/bible-msm-scanx.jpg' %}" alt="{% trans 'A manuscript on the motorised stage of a macro-XRF scanner, which maps chemical elements across the page without touching it' %}" width="2000" height="1161" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "Macro-XRF scanning of a manuscript" %}</h4>
@@ -357,7 +357,7 @@ Homepage — Prismatic Luminescence aesthetic
                             <span class="ms-showcase-credit">© Centre de Recherche sur la Conservation (CRC), 2025</span>
                         </div>
                     </div>
-                    <div class="ms-showcase-slide">
+                    <div class="ms-showcase-slide" role="group" aria-roledescription="{% trans 'slide' context 'aria-roledescription' %}" aria-label="{% blocktrans with n=2 total=3 %}{{ n }} of {{ total }}{% endblocktrans %}">
                         <img src="{% static 'img/landing/bible-msm-fors.jpg' %}" alt="{% trans 'An optical fibre held over a manuscript for FORS analysis — the reflected light carries the spectral signature of the pigments' %}" width="1126" height="2000" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "Fiber optic reflectance spectroscopy (FORS)" %}</h4>
@@ -365,7 +365,7 @@ Homepage — Prismatic Luminescence aesthetic
                             <span class="ms-showcase-credit">© Centre de Recherche sur la Conservation (CRC), 2025</span>
                         </div>
                     </div>
-                    <div class="ms-showcase-slide">
+                    <div class="ms-showcase-slide" role="group" aria-roledescription="{% trans 'slide' context 'aria-roledescription' %}" aria-label="{% blocktrans with n=3 total=3 %}{{ n }} of {{ total }}{% endblocktrans %}">
                         <img src="{% static 'img/landing/bible-msm-uv.jpg' %}" alt="{% trans 'A manuscript under ultraviolet light during hyperspectral imaging, revealing inks and retouches invisible to the naked eye' %}" width="2000" height="1430" loading="lazy">
                         <div class="ms-showcase-caption">
                             <h4>{% trans "UV hyperspectral imaging" %}</h4>
@@ -377,19 +377,19 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <!-- Arrows -->
                 <div class="ms-showcase-arrows">
-                    <button class="ms-showcase-arrow" id="ms-showcase-prev" aria-label="{% trans 'Previous' %}">
+                    <button type="button" class="ms-showcase-arrow" id="ms-showcase-prev" aria-label="{% trans 'Previous' %}">
                         <i class="fa-solid fa-chevron-left"></i>
                     </button>
-                    <button class="ms-showcase-arrow" id="ms-showcase-next" aria-label="{% trans 'Next' %}">
+                    <button type="button" class="ms-showcase-arrow" id="ms-showcase-next" aria-label="{% trans 'Next' %}">
                         <i class="fa-solid fa-chevron-right"></i>
                     </button>
                 </div>
 
                 <!-- Dots -->
-                <div class="ms-showcase-nav" id="ms-showcase-nav" role="tablist" aria-label="{% trans 'Choose a slide' %}">
-                    <button class="ms-showcase-dot active" data-slide="0" role="tab" aria-selected="true" aria-label="{% trans 'Slide 1 of 3 — Macro-XRF scanning' %}"></button>
-                    <button class="ms-showcase-dot" data-slide="1" role="tab" aria-selected="false" aria-label="{% trans 'Slide 2 of 3 — Fiber optic reflectance spectroscopy' %}"></button>
-                    <button class="ms-showcase-dot" data-slide="2" role="tab" aria-selected="false" aria-label="{% trans 'Slide 3 of 3 — UV hyperspectral imaging' %}"></button>
+                <div class="ms-showcase-nav" id="ms-showcase-nav" role="group" aria-label="{% trans 'Choose a slide' %}">
+                    <button type="button" class="ms-showcase-dot active" aria-current="true" aria-label="{% trans 'Slide 1 of 3 — Macro-XRF scanning' %}"></button>
+                    <button type="button" class="ms-showcase-dot" aria-label="{% trans 'Slide 2 of 3 — Fiber optic reflectance spectroscopy' %}"></button>
+                    <button type="button" class="ms-showcase-dot" aria-label="{% trans 'Slide 3 of 3 — UV hyperspectral imaging' %}"></button>
                 </div>
             </div>
         </div>
@@ -558,12 +558,12 @@ Homepage — Prismatic Luminescence aesthetic
                 </form>
 
                 <div class="ms-search-chips">
-                    <button class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
-                    <button class="ms-search-chip" data-term="{% trans 'Raman' %}">{% trans "Raman" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="{% trans 'Raman' %}">{% trans "Raman" %}</button>
                 </div>
 
                 <div class="ms-search-cta">
