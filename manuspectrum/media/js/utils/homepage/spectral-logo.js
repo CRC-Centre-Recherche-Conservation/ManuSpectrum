@@ -1,3 +1,5 @@
+import listen, { stopAll } from "./listen";
+
 /**
  * Interactive hero logo: a crosshair and tooltip that read the two curves,
  * and a zoomed view in a native <dialog>.
@@ -152,14 +154,10 @@ function initCrosshair(svg) {
         }
     };
 
-    svg.addEventListener("pointermove", onMove);
-    svg.addEventListener("pointerleave", hide);
-    svg.addEventListener("pointercancel", hide);
+    const stops = [listen(svg, "pointermove", onMove), listen(svg, "pointerleave", hide), listen(svg, "pointercancel", hide)];
     return () => {
         hide();
-        svg.removeEventListener("pointermove", onMove);
-        svg.removeEventListener("pointerleave", hide);
-        svg.removeEventListener("pointercancel", hide);
+        stopAll(stops);
     };
 }
 
@@ -197,22 +195,16 @@ function initZoom(root, svg) {
         downOnBackdrop = false;
     };
 
-    zoom.addEventListener("click", open);
+    const stops = [
+        listen(zoom, "click", open),
+        listen(dialog, "pointerdown", onDown),
+        listen(dialog, "click", onClick),
+        listen(dialog, "close", onClose),
+    ];
     if (closeButton) {
-        closeButton.addEventListener("click", onCloseButton);
+        stops.push(listen(closeButton, "click", onCloseButton));
     }
-    dialog.addEventListener("pointerdown", onDown);
-    dialog.addEventListener("click", onClick);
-    dialog.addEventListener("close", onClose);
-    return () => {
-        zoom.removeEventListener("click", open);
-        if (closeButton) {
-            closeButton.removeEventListener("click", onCloseButton);
-        }
-        dialog.removeEventListener("pointerdown", onDown);
-        dialog.removeEventListener("click", onClick);
-        dialog.removeEventListener("close", onClose);
-    };
+    return () => stopAll(stops);
 }
 
 /**

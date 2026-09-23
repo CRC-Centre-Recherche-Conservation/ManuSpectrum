@@ -1,3 +1,5 @@
+import listen, { stopAll } from "./listen";
+
 /**
  * Showcase carousel: arrows, dots and manual scrolling stay in sync.
  *
@@ -84,14 +86,13 @@ export default function initShowcaseCarousel(root = document) {
         slides.forEach((slide) => io.observe(slide));
     }
 
-    track.addEventListener("scrollend", endProgrammed);
+    const stops = [listen(track, "scrollend", endProgrammed), ...dots.map((dot) => listen(dot, "click", onDot))];
     if (prev) {
-        prev.addEventListener("click", onPrev);
+        stops.push(listen(prev, "click", onPrev));
     }
     if (next) {
-        next.addEventListener("click", onNext);
+        stops.push(listen(next, "click", onNext));
     }
-    dots.forEach((dot) => dot.addEventListener("click", onDot));
     markActive();
 
     return () => {
@@ -99,13 +100,6 @@ export default function initShowcaseCarousel(root = document) {
         if (io) {
             io.disconnect();
         }
-        track.removeEventListener("scrollend", endProgrammed);
-        if (prev) {
-            prev.removeEventListener("click", onPrev);
-        }
-        if (next) {
-            next.removeEventListener("click", onNext);
-        }
-        dots.forEach((dot) => dot.removeEventListener("click", onDot));
+        stopAll(stops);
     };
 }

@@ -1,3 +1,5 @@
+import listen, { stopAll } from "./listen";
+
 /**
  * Analysis points on the manuscript image, each opening its server-rendered
  * popup (`aria-controls` → `#ms-analysis-popup-N`, initially `hidden`).
@@ -27,6 +29,7 @@ export default function initAnalysisViewer(root = document) {
     const pendingHide = new Map();
     let open = null;
     let frame = 0;
+    const docStops = [];
 
     const popupOf = (point) => viewer.querySelector(`#${point.getAttribute("aria-controls")}`);
 
@@ -102,8 +105,7 @@ export default function initAnalysisViewer(root = document) {
         point.setAttribute("aria-expanded", "false");
         viewer.classList.remove("has-popup");
         scheduleHide(popup);
-        document.removeEventListener("keydown", onKey);
-        document.removeEventListener("click", onDocClick);
+        stopAll(docStops);
     }
     function openFor(point) {
         const popup = popupOf(point);
@@ -119,8 +121,7 @@ export default function initAnalysisViewer(root = document) {
         viewer.classList.add("has-popup");
         frame = requestAnimationFrame(() => popup.classList.add("active"));
         open = { point, popup };
-        document.addEventListener("keydown", onKey);
-        document.addEventListener("click", onDocClick);
+        docStops.push(listen(document, "keydown", onKey), listen(document, "click", onDocClick));
     }
     const onPoint = (event) => {
         const point = event.currentTarget;
@@ -131,10 +132,10 @@ export default function initAnalysisViewer(root = document) {
         }
     };
 
-    points.forEach((point) => point.addEventListener("click", onPoint));
+    const stops = points.map((point) => listen(point, "click", onPoint));
     return () => {
         close();
         pendingHide.forEach((cancel) => cancel());
-        points.forEach((point) => point.removeEventListener("click", onPoint));
+        stopAll(stops);
     };
 }

@@ -1,3 +1,5 @@
+import listen, { stopAll } from "./listen";
+
 /**
  * XRF comparison: the mercury map (top image) is clipped at `--split` to
  * reveal the calcium map beneath.
@@ -56,18 +58,13 @@ export default function initXrfCompare(root = document) {
     };
     const onInput = () => setSplit(Number(range.value));
 
-    box.addEventListener("pointermove", onMove);
-    box.addEventListener("pointerdown", onDown);
-    box.addEventListener("pointerup", onUp);
-    box.addEventListener("pointercancel", onUp);
-    box.addEventListener("pointerleave", onLeave);
-    range.addEventListener("input", onInput);
-    return () => {
-        box.removeEventListener("pointermove", onMove);
-        box.removeEventListener("pointerdown", onDown);
-        box.removeEventListener("pointerup", onUp);
-        box.removeEventListener("pointercancel", onUp);
-        box.removeEventListener("pointerleave", onLeave);
-        range.removeEventListener("input", onInput);
-    };
+    const stops = [
+        listen(box, "pointermove", onMove),
+        listen(box, "pointerdown", onDown),
+        listen(box, "pointerup", onUp),
+        listen(box, "pointercancel", onUp),
+        listen(box, "pointerleave", onLeave),
+        listen(range, "input", onInput),
+    ];
+    return () => stopAll(stops);
 }

@@ -1,3 +1,5 @@
+import listen, { stopAll } from "./listen";
+
 /**
  * Homepage search box and suggestion chips.
  *
@@ -46,10 +48,6 @@ export default function initHomepageSearch(root = document, { navigate = (url) =
         go(input ? input.value : "");
     };
     const onChip = (event) => go(event.currentTarget.dataset.term);
-    form.addEventListener("submit", onSubmit);
-    chips.forEach((chip) => chip.addEventListener("click", onChip));
-    return () => {
-        form.removeEventListener("submit", onSubmit);
-        chips.forEach((chip) => chip.removeEventListener("click", onChip));
-    };
+    const stops = [listen(form, "submit", onSubmit), ...chips.map((chip) => listen(chip, "click", onChip))];
+    return () => stopAll(stops);
 }
