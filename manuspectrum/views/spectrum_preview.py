@@ -11,8 +11,23 @@ configuration, and that configuration decides the columns and the reference
 normalisation the series goes through. It is part of the memo key, so restamping
 a file with another preset is another entry rather than a stale drawing.
 
-The guard is the resource the file hangs from, checked before anything is read
-from disk.
+The resource a file hangs from never changes, so its row is memoised under the
+file id for as long as a summary payload lives (``SUMMARY_CACHE_TTL``); the
+read permission on that resource is still checked on every request, before
+anything is read from disk. The renderer configuration id travels in the memo
+with the join and keeps keying the series memo: a file restamped with another
+preset is drawn with it once the join entry expires, within the same lifetime a
+summary payload has for an edited resource. Deleting the file row drops its
+entry on commit (``signals.py``). A request that read the row while the delete
+was committing can put the entry back, for at most ``SUMMARY_CACHE_TTL``;
+during that time the guard still runs, but Arches permits reading a resource
+that no longer exists.
+
+``None`` (no row, no stored file, no tile) is not memoised, and no caller waits
+on the join's lock: an unknown id costs one query per request, never a 2 s
+poll for a value that will never be stored, and a file created later is found
+at once. The primary-key read costs less than the stampede protection it would
+buy.
 """
 
 import hashlib
@@ -45,13 +60,32 @@ LOCK_TIMEOUT = 10
 LOCK_WAIT = 2.0
 
 
+def file_record_key(file_id):
+    return f"spectrum-preview-file:{str(file_id).lower()}"
+
+
 def file_record(file_id):
-    """Path, owning resource and renderer configuration id of a file.
+    """Path, owning resource and renderer configuration id of a file, memoised.
 
     ``None`` covers a row that is gone, a row whose file was never stored, and
     a file no tile holds: with no resource there is nothing to check a read
-    permission against. ``thumbnail_data`` is deferred — the column holds
-    image bytes this route never looks at.
+    permission against. Memoised under the file id for ``SUMMARY_CACHE_TTL``;
+    ``None`` is never kept, and a miss never waits on another caller's build.
+    """
+    return get_or_build(
+        file_record_key(file_id),
+        lambda: _load_file_record(file_id),
+        settings.SUMMARY_CACHE_TTL,
+        lock_timeout=LOCK_TIMEOUT,
+        wait=0,
+    )
+
+
+def _load_file_record(file_id):
+    """The one database read behind ``file_record``.
+
+    ``thumbnail_data`` is deferred — the column holds image bytes this route
+    never looks at.
     """
     row = (
         File.objects.filter(pk=file_id)

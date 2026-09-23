@@ -1,7 +1,8 @@
 """The spectrum preview: parser, decimator and the HTTP contract of the view.
 
 No database and no Elasticsearch: the one row the view reads is behind
-``file_record``, which is patched, and the files themselves are written to a
+``file_record``, which is patched, or behind ``_load_file_record`` when the memo
+in front of it is under test, and the files themselves are written to a
 temporary directory. The decimator is exercised on a signal whose global
 extremes are known, because keeping them is the whole point of a min/max
 decimation.
@@ -41,6 +42,8 @@ from manuspectrum.utils.xy_transforms import (
 )
 from manuspectrum.views.spectrum_preview import (
     SpectrumPreviewView,
+    file_record,
+    file_record_key,
     stamped_config_id,
 )
 
@@ -519,7 +522,7 @@ class SpectrumPreviewViewTests(SimpleTestCase):
 
 
 class FileRecordTests(SimpleTestCase):
-    """The one database read, over a stubbed queryset."""
+    """The one database read behind the memo, over a stubbed queryset."""
 
     def record(self, row):
         from manuspectrum.views import spectrum_preview
@@ -528,7 +531,7 @@ class FileRecordTests(SimpleTestCase):
         queryset.defer.return_value.select_related.return_value.first.return_value = row
         with mock.patch.object(spectrum_preview.File, "objects") as objects:
             objects.filter.return_value = queryset
-            return spectrum_preview.file_record(FILE_ID)
+            return spectrum_preview._load_file_record(FILE_ID)
 
     def test_a_row_gives_its_path_its_resource_and_its_configuration(self):
         row = mock.Mock(
@@ -560,6 +563,88 @@ class FileRecordTests(SimpleTestCase):
 
     def test_a_missing_row_is_nothing_to_read(self):
         self.assertIsNone(self.record(None))
+
+
+class FileRecordMemoTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def test_the_join_is_read_once_per_file(self):
+        with mock.patch(
+            "manuspectrum.views.spectrum_preview._load_file_record",
+            return_value=("/tmp/a.csv", "r-1", None),
+        ) as load:
+            file_record(FILE_ID)
+            file_record(FILE_ID)
+
+        load.assert_called_once()
+
+    def test_an_unknown_file_is_not_memoised(self):
+        with mock.patch(
+            "manuspectrum.views.spectrum_preview._load_file_record", return_value=None
+        ) as load:
+            file_record(FILE_ID)
+            file_record(FILE_ID)
+
+        self.assertEqual(load.call_count, 2)
+
+    def test_the_memo_key_ignores_the_case_of_the_id(self):
+        self.assertEqual(file_record_key(FILE_ID.upper()), file_record_key(FILE_ID))
+
+    def test_an_unknown_file_never_waits_on_a_concurrent_reader(self):
+        cache.add(file_record_key(FILE_ID) + ":lock", "held", 10)
+
+        with (
+            mock.patch(
+                "manuspectrum.views.spectrum_preview._load_file_record",
+                return_value=None,
+            ) as load,
+            mock.patch("manuspectrum.utils.cache.time.sleep") as sleep,
+        ):
+            self.assertIsNone(file_record(FILE_ID))
+
+        load.assert_called_once()
+        sleep.assert_not_called()
+
+
+class SpectrumPreviewGuardTests(SimpleTestCase):
+    """The permission is checked on every request, memo or not."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.view = SpectrumPreviewView.as_view()
+
+    def request(self):
+        request = RequestFactory().get(f"/api/spectrum-preview/{FILE_ID}")
+        request.user = AnonymousUser()
+        return request
+
+    def test_a_memoised_file_is_refused_to_a_reader_who_lost_access(self):
+        with (
+            mock.patch(
+                "manuspectrum.views.spectrum_preview._load_file_record",
+                return_value=("/tmp/a.csv", "r-1", None),
+            ) as load,
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.user_can_read_resource",
+                side_effect=[True, False],
+            ) as guard,
+            mock.patch(
+                "manuspectrum.views.spectrum_preview._series",
+                return_value={"x": [0, 1], "y": [0, 1]},
+            ),
+        ):
+            self.assertEqual(
+                self.view(self.request(), file_id=FILE_ID).status_code, 200
+            )
+            self.assertEqual(
+                self.view(self.request(), file_id=FILE_ID).status_code, 403
+            )
+
+        load.assert_called_once()
+        self.assertEqual(guard.call_count, 2)
 
 
 class StampedConfigIdTests(SimpleTestCase):

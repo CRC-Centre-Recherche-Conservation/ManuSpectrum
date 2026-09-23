@@ -23,6 +23,10 @@ CACHE_SHAPE_MODULES = (
     # What the Knockout template memo stores; its key also carries the
     # template stamp, since templates are not Python modules.
     "views/knockout_templates.py",
+    # The spectrum preview memo: its join and its series.
+    "views/spectrum_preview.py",
+    "utils/spectrum_preview.py",
+    "utils/xy_transforms.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

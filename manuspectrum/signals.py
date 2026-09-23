@@ -11,9 +11,10 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from guardian.models import GroupObjectPermission, UserObjectPermission
 
-from arches.app.models.models import FunctionXGraph, GraphXPublishedGraph
+from arches.app.models.models import File, FunctionXGraph, GraphXPublishedGraph
 
 from manuspectrum.functions.resource_summary import SUMMARY_FUNCTION_ID, forget_config
+from manuspectrum.views.spectrum_preview import file_record_key
 from manuspectrum.views.summary_service import (
     RESTRICTED_CACHE_KEY,
     RESTRICTED_NODEGROUPS_CACHE_KEY,
@@ -50,3 +51,14 @@ def drop_detached_summary_config(sender, instance, **kwargs):
     if str(instance.function_id) == str(SUMMARY_FUNCTION_ID):
         graph_id = instance.graph_id
         transaction.on_commit(lambda: forget_config(graph_id))
+
+
+@receiver(post_delete, sender=File)
+def drop_deleted_file_record(sender, instance, **kwargs):
+    """Stop serving the preview of a file once its row is gone.
+
+    Covers a file removed from a file-list, and a tile or a resource deleted
+    with its files: the ORM cascade sends ``post_delete`` for each row.
+    """
+    key = file_record_key(instance.pk)
+    transaction.on_commit(lambda: cache.delete(key))
