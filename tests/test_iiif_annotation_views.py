@@ -7,6 +7,7 @@ Usage:
     python manage.py test tests.test_iiif_annotation_views
 """
 
+import contextlib
 import json
 import uuid
 import zlib
@@ -447,7 +448,7 @@ class TestIIIFAnnotationCollectionView(TestCase):
         mock_resource = MagicMock()
         mock_ri.objects.select_related.return_value.get.return_value = mock_resource
 
-        with patch.object(type(self.view), "_get_related_analyses", return_value=[]):
+        with patch.object(type(self.view), "_analysis_paths", return_value=[]):
             request = self.factory.get("/iiif/annotation-collection/123/")
             request.user = MagicMock()
             response = self.view.get(request, uuid.uuid4())
@@ -808,13 +809,17 @@ class TestIIIFAnnotationPageView(TestCase):
         mock_ri.objects.select_related.return_value.get.return_value = mock_resource
 
         mock_collection_instance = MagicMock()
-        mock_collection_instance._get_related_analyses.return_value = [MagicMock()]
         mock_collection.return_value = mock_collection_instance
 
-        with patch.object(
-            self.view,
-            "_get_annotations_from_analyses",
-            return_value=[{"canvas": "https://example.com/canvas/1"}],
+        with (
+            patch.object(
+                self.view, "_readable_analyses", return_value=([MagicMock()], False)
+            ),
+            patch.object(
+                self.view,
+                "_get_annotations_from_analyses",
+                return_value=[{"canvas": "https://example.com/canvas/1"}],
+            ),
         ):
             with patch.object(
                 mock_collection_instance,
@@ -833,80 +838,42 @@ class TestIIIFAnnotationPageView(TestCase):
 # =============================================================================
 
 
-@override_settings(
-    PUBLIC_SERVER_ADDRESS="https://test.example.com/", CACHE_BY_USER={"anonymous": 3600}
-)
-class TestGetRelatedAnalyses(TestCase):
-    """Tests for _get_related_analyses method."""
+class TestAnalysisPaths(TestCase):
+    """Paths from an analysis to the resource a collection is asked for."""
 
-    def setUp(self):
+    def test_a_role_graph_index_cannot_resolve_yields_no_path(self):
         from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
 
-        self.view = IIIFAnnotationCollectionView()
+        with patch(
+            "manuspectrum.views.iiif_annotation.GraphIndex.for_slug",
+            return_value=None,
+        ):
+            paths = IIIFAnnotationCollectionView()._analysis_paths(
+                MagicMock(resourceinstanceid=uuid.uuid4())
+            )
 
-    @patch("manuspectrum.views.iiif_annotation.Resource")
-    @patch("manuspectrum.views.iiif_annotation.ResourceXResource")
-    def test_gets_analyses_for_component(self, mock_rxr, mock_resource):
-        """Should get analyses directly linked to a Component."""
-        resource = MagicMock()
-        resource.resourceinstanceid = uuid.uuid4()
-        resource.graph_id = self.view.COMPONENT_GRAPH_ID
+        self.assertEqual(paths, [])
 
-        analysis_id = uuid.uuid4()
-        mock_rxr.objects.filter.return_value.values_list.return_value = [analysis_id]
+    def test_an_analysis_is_readable_through_any_open_path(self):
+        from manuspectrum.views.iiif_annotation import _through_readable_path
 
-        mock_analysis = MagicMock()
-        mock_resource.objects.filter.return_value.only.return_value = [mock_analysis]
-
-        result = self.view._get_related_analyses(resource)
-
-        self.assertEqual(len(result), 1)
-        mock_rxr.objects.filter.assert_called()
-
-    @patch("manuspectrum.views.iiif_annotation.Resource")
-    @patch("manuspectrum.views.iiif_annotation.ResourceXResource")
-    def test_gets_analyses_for_document(self, mock_rxr, mock_resource):
-        """Should get analyses directly and via Components for Document."""
-        resource = MagicMock()
-        resource.resourceinstanceid = uuid.uuid4()
-        resource.graph_id = self.view.DOCUMENT_GRAPH_ID
-
-        analysis_id = uuid.uuid4()
-        # Mock the filter().values_list() chain for Document
-        mock_rxr.objects.filter.return_value.values_list.return_value = [
-            (analysis_id, self.view.ANALYSIS_GRAPH_ID)
+        paths = [
+            ("a1", (("a1", "ng-observed"), ("c-hidden", "ng-part-of"))),
+            ("a1", (("a1", "ng-observed"),)),
+            ("a2", (("a2", "ng-observed"), ("c-hidden", "ng-part-of"))),
+            ("a3", (("a3", "ng-hidden"),)),
         ]
-
-        mock_analysis = MagicMock()
-        mock_resource.objects.filter.return_value.only.return_value = [mock_analysis]
-
-        result = self.view._get_related_analyses(resource)
-
-        mock_rxr.objects.filter.assert_called()
-
-    def test_returns_empty_for_unknown_graph(self):
-        """Should return empty list for unknown graph type."""
-        resource = MagicMock()
-        resource.resourceinstanceid = uuid.uuid4()
-        resource.graph_id = str(uuid.uuid4())  # Unknown graph
-
-        result = self.view._get_related_analyses(resource)
-
-        self.assertEqual(result, [])
-
-    @patch("manuspectrum.views.iiif_annotation.Resource")
-    @patch("manuspectrum.views.iiif_annotation.ResourceXResource")
-    def test_returns_empty_when_no_relations(self, mock_rxr, mock_resource):
-        """Should return empty list when no relations found."""
-        resource = MagicMock()
-        resource.resourceinstanceid = uuid.uuid4()
-        resource.graph_id = self.view.COMPONENT_GRAPH_ID
-
-        mock_rxr.objects.filter.return_value.values_list.return_value = []
-
-        result = self.view._get_related_analyses(resource)
-
-        self.assertEqual(result, [])
+        with (
+            patch(
+                "manuspectrum.views.iiif_annotation.hidden_resource_ids",
+                return_value={"c-hidden"},
+            ),
+            patch(
+                "manuspectrum.views.iiif_annotation.readable_nodegroup_ids",
+                return_value={"ng-observed", "ng-part-of"},
+            ),
+        ):
+            self.assertEqual(_through_readable_path(paths, MagicMock()), {"a1"})
 
 
 # =============================================================================
@@ -1550,8 +1517,8 @@ class TestReadGuard(TestCase):
 
         response = IIIFAnnotationCollectionView().get(request, uuid.uuid4())
 
-        self.assertEqual(response.status_code, 403)
-        self.assertIn('"forbidden"', response.content.decode())
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("Resource not found", response.content.decode())
         self.assertEqual(response["Cache-Control"], "private, no-store")
         mock_guard.assert_called_once_with(request.user, resource=resource)
         mock_serializer.return_value.batch_to_representation.assert_not_called()
@@ -1570,7 +1537,7 @@ class TestReadGuard(TestCase):
         request.user = MagicMock()
         response = IIIFAnnotationView().get(request, uuid.uuid4())
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     @patch(
         "manuspectrum.views.iiif_annotation.user_can_read_resource", return_value=False
@@ -1586,7 +1553,7 @@ class TestReadGuard(TestCase):
         request.user = MagicMock()
         response = IIIFAnnotationPageViewV2().get(request, uuid.uuid4(), 1)
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_refusal_is_not_cached(self):
         from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
@@ -1631,7 +1598,7 @@ class TestReadGuard(TestCase):
 
         response = IIIFAnnotationCollectionView().get(request, resource_id)
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         self.assertNotIn("AnnotationCollection", response.content.decode())
 
     def test_refusal_of_an_unauthenticated_caller_is_logged(self):
@@ -1655,7 +1622,7 @@ class TestReadGuard(TestCase):
                 request, MagicMock(resourceinstanceid="r1")
             )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         self.assertIn("unauthenticated", "\n".join(logs.output))
 
     def test_refusal_of_an_authenticated_caller_is_not_logged(self):
@@ -1675,7 +1642,7 @@ class TestReadGuard(TestCase):
                 request, MagicMock(resourceinstanceid="r1")
             )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
 
 class TestAnonymousStillReadsPublicIIIF(TestCase):
@@ -1717,27 +1684,6 @@ class TestChildPermissionHelpers(TestCase):
         self.a = MagicMock(resourceinstanceid="a")
         self.b = MagicMock(resourceinstanceid="b")
 
-    def test_readable_by_keeps_only_resources_the_user_may_read(self):
-        def decide(user, resource=None):
-            return resource is self.a
-
-        with patch(
-            "manuspectrum.views.iiif_annotation.user_can_read_resource",
-            side_effect=decide,
-        ):
-            kept = self.mixin._readable_by(self.user, [self.a, self.b])
-
-        self.assertEqual(kept, [self.a])
-
-    def test_readable_by_preserves_order(self):
-        with patch(
-            "manuspectrum.views.iiif_annotation.user_can_read_resource",
-            return_value=True,
-        ):
-            kept = self.mixin._readable_by(self.user, [self.b, self.a])
-
-        self.assertEqual(kept, [self.b, self.a])
-
     def test_public_for_anonymous_is_true_when_every_resource_is_readable(self):
         from django.contrib.auth.models import User
 
@@ -1777,48 +1723,6 @@ class TestChildPermissionHelpers(TestCase):
         ):
             self.assertFalse(self.mixin._public_for_anonymous([self.a]))
 
-    def test_is_public_payload_is_false_when_the_caller_saw_fewer_analyses(self):
-        resource = MagicMock(resourceinstanceid="doc")
-        user = MagicMock(username="someone")
-
-        with patch(
-            "manuspectrum.views.iiif_annotation.user_can_read_resource",
-            return_value=True,
-        ):
-            self.assertFalse(
-                self.mixin._is_public_payload(
-                    user, resource, [self.a, self.b], [self.a]
-                )
-            )
-
-    def test_is_public_payload_is_true_when_the_caller_saw_every_analysis(self):
-        resource = MagicMock(resourceinstanceid="doc")
-        user = MagicMock(username="someone")
-
-        with patch(
-            "manuspectrum.views.iiif_annotation.user_can_read_resource",
-            return_value=True,
-        ):
-            self.assertTrue(
-                self.mixin._is_public_payload(
-                    user, resource, [self.a, self.b], [self.a, self.b]
-                )
-            )
-
-    def test_is_public_payload_trusts_the_anonymous_caller_without_a_second_pass(self):
-        resource = MagicMock(resourceinstanceid="doc")
-        user = MagicMock(username="anonymous")
-        guard = MagicMock()
-
-        with patch("manuspectrum.views.iiif_annotation.user_can_read_resource", guard):
-            self.assertTrue(
-                self.mixin._is_public_payload(
-                    user, resource, [self.a, self.b], [self.a, self.b]
-                )
-            )
-
-        guard.assert_not_called()
-
 
 class TestChildPermissionsInViews(TestCase):
     """Three combinations: everything public; public document with one
@@ -1834,6 +1738,45 @@ class TestChildPermissionsInViews(TestCase):
 
     def tearDown(self):
         cache.clear()
+
+    def _related(self, decide):
+        """Patches relating both analyses to the document, readable per *decide*."""
+        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+
+        analyses = [self.public_analysis, self.private_analysis]
+        by_id = {a.resourceinstanceid: a for a in analyses}
+
+        def hidden(u):
+            return {a.resourceinstanceid for a in analyses if not decide(u, resource=a)}
+
+        def fetched(resourceinstanceid__in):
+            kept = MagicMock()
+            kept.only.return_value = [
+                by_id[i] for i in sorted(resourceinstanceid__in, reverse=True)
+            ]
+            return kept
+
+        resource = MagicMock()
+        resource.objects.filter.side_effect = fetched
+        stack = contextlib.ExitStack()
+        for patcher in (
+            patch.object(
+                IIIFAnnotationMixin,
+                "_analysis_paths",
+                return_value=[(a, ((a, "ng"),)) for a in by_id],
+            ),
+            patch(
+                "manuspectrum.views.iiif_annotation.hidden_resource_ids",
+                side_effect=hidden,
+            ),
+            patch(
+                "manuspectrum.views.iiif_annotation.readable_nodegroup_ids",
+                return_value={"ng"},
+            ),
+            patch("manuspectrum.views.iiif_annotation.Resource", resource),
+        ):
+            stack.enter_context(patcher)
+        return stack
 
     def _collection_get(self, user, readable):
         """Run the v3 collection view with permissions defined by *readable*.
@@ -1860,11 +1803,7 @@ class TestChildPermissionsInViews(TestCase):
                 side_effect=decide,
             ),
             patch("manuspectrum.views.iiif_annotation.ResourceInstance") as mock_ri,
-            patch.object(
-                IIIFAnnotationCollectionView,
-                "_get_related_analyses",
-                return_value=[self.public_analysis, self.private_analysis],
-            ),
+            self._related(decide),
             patch.object(
                 view,
                 "_get_annotations_from_analyses",
@@ -1971,11 +1910,7 @@ class TestChildPermissionsInViews(TestCase):
                 side_effect=decide,
             ),
             patch("manuspectrum.views.iiif_annotation.ResourceInstance") as mock_ri,
-            patch.object(
-                IIIFAnnotationCollectionView,
-                "_get_related_analyses",
-                return_value=[self.public_analysis, self.private_analysis],
-            ),
+            self._related(decide),
             patch.object(
                 view,
                 "_get_annotations_from_analyses",
@@ -2041,13 +1976,13 @@ class TestChildPermissionsInViews(TestCase):
         self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertIsNone(cache.get(f"iiif_v3_collection_{self.resource_id}"))
 
-    def test_restricted_document_is_refused_before_anything_else(self):
+    def test_restricted_document_is_not_found_before_anything_else(self):
         stranger = MagicMock(is_authenticated=True)
         readable = {self.document: set(), self.public_analysis: {stranger}}
 
         response = self._collection_get(stranger, readable)
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         self.assertIsNone(cache.get(f"iiif_v3_collection_{self.resource_id}"))
 
     def test_reader_with_no_readable_analysis_gets_404(self):

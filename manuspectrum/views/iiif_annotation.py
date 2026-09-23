@@ -16,15 +16,26 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db.models import Q
 
-from arches.app.models.models import ResourceInstance, ResourceXResource, VwAnnotation
+from arches.app.models.models import (
+    ResourceInstance,
+    ResourceXResource,
+    TileModel,
+    VwAnnotation,
+)
 from arches.app.models.resource import Resource
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.utils.cache import stable_cache_key
+from manuspectrum.utils.public_visibility import (
+    anonymous_user,
+    hidden_resource_ids,
+    readable_nodegroup_ids,
+)
 from manuspectrum.views.serializers.iiif_annotation import (
     IIIFAnnotationSerializer,
     IIIFAnnotationSerializerV2,
 )
+from manuspectrum.views.summary_service import GraphIndex
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +105,57 @@ def _private_json(data: dict, status: int) -> JsonResponse:
     return resp
 
 
+def _not_found(message: str) -> JsonResponse:
+    """The answer for an unknown id and for one the reader may not read alike."""
+    return _private_json({"error": message}, 404)
+
+
+def _role_node(slug, alias):
+    """The ``NodeInfo`` of a (model slug, node alias) role, or None when unresolved."""
+    index = GraphIndex.for_slug(slug)
+    return index.nodes.get(alias) if index else None
+
+
+def _referencing(node, target_ids):
+    """``(source resource id, target id)`` of the tiles whose *node* names a target.
+
+    A resource-instance value is a list of ``{resourceId, …}``, or a bare
+    object.
+    """
+    if node is None or not target_ids:
+        return []
+    names = Q()
+    for target in target_ids:
+        names |= Q(**{f"data__{node.nodeid}__contains": [{"resourceId": target}]})
+        names |= Q(**{f"data__{node.nodeid}__contains": {"resourceId": target}})
+    rows = (
+        TileModel.objects.filter(nodegroup_id=node.nodegroup_id)
+        .filter(names)
+        .values_list("resourceinstance_id", f"data__{node.nodeid}")
+    )
+    found = []
+    for source, value in rows:
+        for ref in value if isinstance(value, list) else [value]:
+            target = str((ref or {}).get("resourceId")) if isinstance(ref, dict) else ""
+            if target in target_ids:
+                found.append((str(source), target))
+    return found
+
+
+def _through_readable_path(paths, user):
+    """Ids of the analyses *user* reaches through at least one readable path."""
+    hidden = hidden_resource_ids(user)
+    nodegroups = readable_nodegroup_ids(user)
+    return {
+        analysis_id
+        for analysis_id, steps in paths
+        if all(
+            resource_id not in hidden and str(nodegroup_id) in nodegroups
+            for resource_id, nodegroup_id in steps
+        )
+    }
+
+
 # ======================================================================================
 # Mixin with shared helpers
 # ======================================================================================
@@ -110,14 +172,21 @@ class IIIFAnnotationMixin:
     DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
     COMPONENT_GRAPH_ID = "d47595b4-f8a6-419c-8f33-b388206280c4"
 
-    def _forbid_unless_readable(self, request, resource):
-        """403 for a resource the caller may not read, else ``None``.
+    # Relations the collections follow, as (model slug, node alias) resolved
+    # through GraphIndex: an Analysis names what it observed (a Component or
+    # a Document), a Component names the Document it is part of.
+    ANALYSIS_OBJECT_ROLE = ("analysis", "component_observed")
+    COMPONENT_DOCUMENT_ROLE = ("component", "item_visual_is_part_of_document")
 
-        Runs after the lookup and before the cache read, so neither a refusal
-        nor a payload for a resource the caller may not read is ever served
-        from the public cache key. Anonymous visitors reach here as the
-        ``anonymous`` database user (``SetAnonymousUser``), whose read rights
-        come from the Guest group.
+    def _forbid_unless_readable(self, request, resource, message="Resource not found"):
+        """The not-found answer for a resource the caller may not read, else ``None``.
+
+        The same status and body as an unknown id, so a refusal says nothing
+        of the resource's existence. Runs after the lookup and before the
+        cache read, so neither a refusal nor a payload for a resource the
+        caller may not read is ever served from the public cache key.
+        Anonymous visitors reach here as the ``anonymous`` database user
+        (``SetAnonymousUser``), whose read rights come from the Guest group.
         """
         if user_can_read_resource(request.user, resource=resource):
             return None
@@ -127,16 +196,7 @@ class IIIFAnnotationMixin:
                 "SetAnonymousUser did not install the anonymous user",
                 getattr(resource, "resourceinstanceid", resource),
             )
-        return _private_json({"error": "forbidden"}, 403)
-
-    def _readable_by(self, user, resources):
-        """The subset of *resources* that *user* may read, in the same order.
-
-        Instance permissions are Arches' own: a resource with no explicit
-        grant falls back to the reader's nodegroup rights, a resource with a
-        grant is readable only by the users and groups named on it.
-        """
-        return [r for r in resources if user_can_read_resource(user, resource=r)]
+        return _not_found(message)
 
     def _public_for_anonymous(self, resources):
         """True iff the Arches ``anonymous`` user may read every resource.
@@ -153,29 +213,65 @@ class IIIFAnnotationMixin:
         return all(user_can_read_resource(anonymous, resource=r) for r in resources)
 
     def _readable_analyses(self, user, resource):
-        """Return (the analyses *user* may read, every analysis related to *resource*).
+        """Return (the analyses *user* may read, whether the payload is public).
 
-        The related set comes from
-        IIIFAnnotationCollectionView._get_related_analyses on a fresh view.
+        An analysis is reached through a path of links read off the tiles
+        (``_analysis_paths``) and is readable through a path whose resources
+        are all outside ``hidden_resource_ids(user)`` and whose relation
+        nodegroups are all readable: an analysis of a hidden Component is
+        hidden with it. The payload is public, the same for every reader,
+        when the anonymous reader may read *resource* and every analysis
+        reached, and *user* reads them all too; a restricted analysis
+        anywhere makes it reader-dependent.
         """
-        related = IIIFAnnotationCollectionView()._get_related_analyses(resource)
-        return self._readable_by(user, related), related
+        paths = self._analysis_paths(resource)
+        reached = {analysis_id for analysis_id, _ in paths}
+        readable = _through_readable_path(paths, user)
+        public = False
+        if readable == reached:
+            anonymous = anonymous_user()
+            public = _through_readable_path(
+                paths, anonymous
+            ) == reached and user_can_read_resource(anonymous, resource=resource)
+        if not readable:
+            return [], public
+        analyses = list(
+            Resource.objects.filter(resourceinstanceid__in=readable).only(
+                "resourceinstanceid", "graph_id"
+            )
+        )
+        return analyses, public
 
-    def _is_public_payload(self, user, resource, related, analyses):
-        """True iff this payload is what the anonymous reader would get.
+    def _analysis_paths(self, resource):
+        """Every ``(analysis id, ((resource id, relation nodegroup id), …))`` reaching *resource*.
 
-        Covers every related analysis, readable or not: a restricted sibling
-        makes the payload reader-dependent. The length check covers the
-        reverse case, a resource the anonymous row may read but this caller
-        may not, whose shorter payload must not reach the shared key. An
-        anonymous caller is the public reader itself: the guard and the filter
-        it just passed are the decision.
+        Read off the tiles, not ``resource_x_resource``: an Analysis naming
+        *resource* directly, and an Analysis naming a Component that names
+        *resource* as its Document. A role GraphIndex cannot resolve yields
+        no path.
         """
-        if len(analyses) != len(related):
-            return False
-        if getattr(user, "username", None) == "anonymous":
-            return True
-        return self._public_for_anonymous([resource, *related])
+        observed = _role_node(*self.ANALYSIS_OBJECT_ROLE)
+        part_of = _role_node(*self.COMPONENT_DOCUMENT_ROLE)
+        target = str(resource.resourceinstanceid)
+        paths = [
+            (analysis_id, ((analysis_id, observed.nodegroup_id),))
+            for analysis_id, _ in _referencing(observed, {target})
+        ]
+        components = dict(
+            (component_id, part_of.nodegroup_id)
+            for component_id, _ in _referencing(part_of, {target})
+        )
+        for analysis_id, component_id in _referencing(observed, set(components)):
+            paths.append(
+                (
+                    analysis_id,
+                    (
+                        (analysis_id, observed.nodegroup_id),
+                        (component_id, components[component_id]),
+                    ),
+                )
+            )
+        return paths
 
     def _get_display_name(self, resource: ResourceInstance):
         if hasattr(resource, "displayname"):
@@ -441,11 +537,10 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            analyses, related = self._readable_analyses(request.user, resource)
+            analyses, public = self._readable_analyses(request.user, resource)
             if not analyses:
                 return _private_json({"error": "No analyses found"}, 404)
 
-            public = self._is_public_payload(request.user, resource, related, analyses)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
@@ -485,59 +580,10 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
             )
 
         except ResourceInstance.DoesNotExist:
-            return JsonResponse({"error": "Resource not found"}, status=404)
+            return _not_found("Resource not found")
         except Exception:
             logger.exception("Error generating collection")
             return JsonResponse({"error": "internal_error"}, status=500)
-
-    def _get_related_analyses(self, resource: ResourceInstance) -> list[Resource]:
-        """
-        Fetch related 'Analysis' resources for a given Component or Document
-        with minimal queries (filter by IDs, pas de boucle ORM).
-        """
-        rid = resource.resourceinstanceid
-        graph_id = str(resource.graph_id)
-
-        if graph_id == self.COMPONENT_GRAPH_ID:
-            analysis_ids = list(
-                ResourceXResource.objects.filter(
-                    to_resource_id=rid,
-                    from_resource_graph_id=self.ANALYSIS_GRAPH_ID,
-                ).values_list("from_resource_id", flat=True)
-            )
-
-        elif graph_id == self.DOCUMENT_GRAPH_ID:
-            rels = ResourceXResource.objects.filter(
-                Q(to_resource_id=rid, from_resource_graph_id=self.ANALYSIS_GRAPH_ID)
-                | Q(to_resource_id=rid, from_resource_graph_id=self.COMPONENT_GRAPH_ID)
-            ).values_list("from_resource_id", "from_resource_graph_id")
-
-            analysis_ids: list = []
-            component_ids: list = []
-
-            for res_id, g in rels:
-                if str(g) == self.ANALYSIS_GRAPH_ID:
-                    analysis_ids.append(res_id)
-                else:
-                    component_ids.append(res_id)
-
-            if component_ids:
-                indirect = ResourceXResource.objects.filter(
-                    to_resource_id__in=component_ids,
-                    from_resource_graph_id=self.ANALYSIS_GRAPH_ID,
-                ).values_list("from_resource_id", flat=True)
-                analysis_ids.extend(indirect)
-        else:
-            analysis_ids = []
-
-        if not analysis_ids:
-            return []
-
-        return list(
-            Resource.objects.filter(resourceinstanceid__in=analysis_ids).only(
-                "resourceinstanceid", "graph_id"
-            )
-        )
 
     def _group_by_canvas(self, annotations: list[dict]) -> dict[str, list[dict]]:
         grouped: dict[str, list[dict]] = defaultdict(list)
@@ -652,11 +698,10 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            analyses, related = self._readable_analyses(request.user, resource)
+            analyses, public = self._readable_analyses(request.user, resource)
             if not analyses:
                 return _private_json({"error": "No analyses found"}, 404)
 
-            public = self._is_public_payload(request.user, resource, related, analyses)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
@@ -722,7 +767,7 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
             )
 
         except ResourceInstance.DoesNotExist:
-            return JsonResponse({"error": "Resource not found"}, status=404)
+            return _not_found("Resource not found")
         except Exception:
             logger.exception("Error generating IIIF page")
             return JsonResponse({"error": "internal_error"}, status=500)
@@ -745,7 +790,9 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
 
         try:
             analysis = Resource.objects.get(resourceinstanceid=resource_id)
-            forbidden = self._forbid_unless_readable(request, analysis)
+            forbidden = self._forbid_unless_readable(
+                request, analysis, "Annotation not found"
+            )
             if forbidden:
                 return forbidden
 
@@ -773,7 +820,7 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
             )
 
         except Resource.DoesNotExist:
-            return JsonResponse({"error": "Annotation not found"}, status=404)
+            return _not_found("Annotation not found")
         except Exception:
             logger.exception("Error generating annotation")
             return JsonResponse({"error": "internal_error"}, status=500)
@@ -806,11 +853,10 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            analyses, related = self._readable_analyses(request.user, resource)
+            analyses, public = self._readable_analyses(request.user, resource)
             if not analyses:
                 return _private_json({"error": "No analyses found"}, 404)
 
-            public = self._is_public_payload(request.user, resource, related, analyses)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
@@ -833,7 +879,7 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
             )
 
         except ResourceInstance.DoesNotExist:
-            return JsonResponse({"error": "Resource not found"}, status=404)
+            return _not_found("Resource not found")
         except Exception:
             logger.exception("Error generating v2 collection")
             return JsonResponse({"error": "internal_error"}, status=500)
@@ -895,11 +941,10 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            analyses, related = self._readable_analyses(request.user, resource)
+            analyses, public = self._readable_analyses(request.user, resource)
             if not analyses:
                 return _private_json({"error": "No analyses found"}, 404)
 
-            public = self._is_public_payload(request.user, resource, related, analyses)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
@@ -952,7 +997,7 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
             )
 
         except ResourceInstance.DoesNotExist:
-            return JsonResponse({"error": "Resource not found"}, status=404)
+            return _not_found("Resource not found")
         except Exception:
             logger.exception("Error generating v2 IIIF page")
             return JsonResponse({"error": "internal_error"}, status=500)
@@ -970,7 +1015,9 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
 
         try:
             analysis = Resource.objects.get(resourceinstanceid=resource_id)
-            forbidden = self._forbid_unless_readable(request, analysis)
+            forbidden = self._forbid_unless_readable(
+                request, analysis, "Annotation not found"
+            )
             if forbidden:
                 return forbidden
 
@@ -1000,7 +1047,7 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
             )
 
         except Resource.DoesNotExist:
-            return JsonResponse({"error": "Annotation not found"}, status=404)
+            return _not_found("Annotation not found")
         except Exception:
             logger.exception("Error generating v2 annotation")
             return JsonResponse({"error": "internal_error"}, status=500)
