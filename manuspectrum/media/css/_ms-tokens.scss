@@ -71,7 +71,9 @@ $ms-gutter-sm: 1.2rem;  // matches the .ms-container @media (max-width:768px) re
     padding-bottom: clamp(3rem, 5.5vw, 5rem);
 }
 
-@mixin ms-reveal {
-    transition: opacity 0.7s ease, transform 0.7s ease;
-    &.is-pending { opacity: 0; transform: translateY(24px); transition: none; }
+// Contract with utils/reveal-on-scroll: visible by default; `is-pending` hides
+// without transition, so removing it plays the transition declared here.
+@mixin ms-reveal($duration: 0.7s, $ease: ease, $hidden: translateY(24px)) {
+    transition: opacity $duration $ease, transform $duration $ease;
+    &.is-pending { opacity: 0; transform: $hidden; transition: none; }
 }

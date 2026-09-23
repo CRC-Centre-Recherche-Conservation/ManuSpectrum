@@ -11,6 +11,7 @@
 @import 'homepage/fa-subset';
 
 @import 'ms-chrome';
+@import 'ms-tokens';
 
 // Section headings + .spectral-line-thin now live in _ms-chrome.scss
 // (shared with the css/pages bundle — they had drifted apart, including a
@@ -22,14 +23,8 @@
     position: relative;
 }
 
-// --- SCROLL REVEAL ---
-// Visible by default; `is-pending` (set by utils/reveal-on-scroll on
-// off-screen elements) hides without transition, so removing it plays the
-// transition below with the `reveal-dN` delays.
-.reveal {
-    transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo);
-}
-.reveal.is-pending { opacity: 0; transform: translateY(28px); transition: none; }
+// --- SCROLL REVEAL (see the ms-reveal mixin) ---
+.reveal { @include ms-reveal(0.8s, var(--ease-out-expo), translateY(28px)); }
 .reveal-d1 { transition-delay: 0.08s; }
 .reveal-d2 { transition-delay: 0.16s; }
 .reveal-d3 { transition-delay: 0.24s; }
@@ -40,10 +35,7 @@
 .reveal-d8 { transition-delay: 0.64s; }
 .reveal-d9 { transition-delay: 0.72s; }
 
-.reveal-scale {
-    transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
-}
-.reveal-scale.is-pending { opacity: 0; transform: scale(0.97); transition: none; }
+.reveal-scale { @include ms-reveal(0.9s, var(--ease-out-expo), scale(0.97)); }
 
 
 // ============================================================
