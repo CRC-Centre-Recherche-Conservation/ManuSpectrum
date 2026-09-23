@@ -1,13 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 
 import PrimeVue from "primevue/config";
+import ConfirmationService from "primevue/confirmationservice";
 
 import FieldRow from "@/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue";
 import RollupEditor from "@/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue";
 import SummaryConfigForm from "@/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue";
 
 import {
+    ConfigConflictError,
     blankHop,
     csrfToken,
     defaultStyleFor,
@@ -16,10 +18,11 @@ import {
     fetchRelations,
     involvedGraphs,
     knownAliases,
+    removeConfig,
     saveConfig,
 } from "@/manuspectrum/functions/summary-config-api.ts";
 
-import type { ComponentPublicInstance } from "vue";
+import type { ComponentPublicInstance, Plugin } from "vue";
 
 import type {
     RelatableNodes,
@@ -49,9 +52,18 @@ vi.stubGlobal("matchMedia", (query: string) => ({
     dispatchEvent: vi.fn(),
 }));
 
+// Every form is unmounted after its test, so its ConfirmDialog leaves
+// PrimeVue's module-wide confirmation bus and the next test's dialog is the
+// only one listening.
+enableAutoUnmount(afterEach);
+
 const GRAPH_ID = "11111111-1111-4111-8111-111111111111";
 const CONFIG_URL = `/en/manuspectrum:summary-config/${GRAPH_ID}`;
 const RELATIONS_URL = `/en/manuspectrum:relatable-nodes/${GRAPH_ID}`;
+const FORM_PLUGINS: (Plugin | [Plugin, ...unknown[]])[] = [
+    [PrimeVue, { unstyled: true }],
+    ConfirmationService,
+];
 
 function relations(): RelatableNodes {
     return {
@@ -125,6 +137,7 @@ function storedConfig(): SummaryConfig {
 interface FakeResponse {
     ok: boolean;
     status: number;
+    headers: { get(name: string): string | null };
     json: () => Promise<unknown>;
 }
 
@@ -138,11 +151,32 @@ interface FetchCall {
 let calls: FetchCall[];
 let configResponse: SummaryConfigResponse;
 let saveResponse: SummaryConfigResponse;
+let deleteResponse: SummaryConfigResponse;
 let loadFails: boolean;
 let saveFails: boolean;
+let deleteFails: boolean;
+let conflictOn: "PUT" | "DELETE" | null;
+let readEtag: string;
 
-function fakeResponse(payload: unknown, ok = true, status = 200): FakeResponse {
-    return { ok, status, json: () => Promise.resolve(payload) };
+function fakeResponse(
+    payload: unknown,
+    ok = true,
+    status = 200,
+    etag = '"v1"',
+): FakeResponse {
+    return {
+        ok,
+        status,
+        headers: {
+            get: (name: string) =>
+                name.toLowerCase() === "etag" ? etag : null,
+        },
+        json: () => Promise.resolve(payload),
+    };
+}
+
+function conflictResponse(): FakeResponse {
+    return fakeResponse({ error: "changed" }, false, 412, '"v9"');
 }
 
 function installFetch(): void {
@@ -156,11 +190,24 @@ function installFetch(): void {
                 headers: (init?.headers ?? {}) as Record<string, string>,
                 body: (init?.body ?? "") as string,
             });
+            if (method === "DELETE") {
+                if (conflictOn === "DELETE") {
+                    return Promise.resolve(conflictResponse());
+                }
+                return Promise.resolve(
+                    deleteFails
+                        ? fakeResponse({}, false, 500)
+                        : fakeResponse(deleteResponse, true, 200, '"v0"'),
+                );
+            }
             if (method === "PUT") {
+                if (conflictOn === "PUT") {
+                    return Promise.resolve(conflictResponse());
+                }
                 return Promise.resolve(
                     saveFails
                         ? fakeResponse({}, false, 500)
-                        : fakeResponse(saveResponse),
+                        : fakeResponse(saveResponse, true, 200, '"v2"'),
                 );
             }
             if (loadFails) {
@@ -169,6 +216,9 @@ function installFetch(): void {
             return Promise.resolve(
                 fakeResponse(
                     url === RELATIONS_URL ? relations() : configResponse,
+                    true,
+                    200,
+                    readEtag,
                 ),
             );
         }),
@@ -182,17 +232,28 @@ function putCalls(): FetchCall[] {
 async function mountForm() {
     const wrapper = mount(SummaryConfigForm, {
         props: { graphid: GRAPH_ID },
-        global: { plugins: [[PrimeVue, { unstyled: true }]] },
+        global: { plugins: FORM_PLUGINS },
     });
     await flushPromises();
     await flushPromises();
     return wrapper;
 }
 
+function acceptConfirmation(): void {
+    const buttons = document.body.querySelectorAll<HTMLElement>(
+        '[data-testid="confirm-remove"]',
+    );
+    expect(buttons).toHaveLength(1);
+    buttons[0].click();
+}
+
 beforeEach(() => {
     calls = [];
     loadFails = false;
     saveFails = false;
+    deleteFails = false;
+    conflictOn = null;
+    readEtag = '"v1"';
     configResponse = {
         graphid: GRAPH_ID,
         config: storedConfig(),
@@ -204,6 +265,12 @@ beforeEach(() => {
         config: storedConfig(),
         warnings: [],
         attached: true,
+    };
+    deleteResponse = {
+        graphid: GRAPH_ID,
+        config: emptyConfig(),
+        warnings: [],
+        attached: false,
     };
     document.cookie = "csrftoken=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     installFetch();
@@ -249,7 +316,7 @@ describe("summary-config-api", () => {
 
     it("sends the configuration as a PUT carrying the CSRF token", async () => {
         document.cookie = "csrftoken=token-value";
-        await saveConfig(GRAPH_ID, storedConfig());
+        await saveConfig(GRAPH_ID, storedConfig(), null);
         const call = putCalls()[0];
         expect(call.url).toBe(CONFIG_URL);
         expect(call.headers["X-CSRFToken"]).toBe("token-value");
@@ -257,7 +324,7 @@ describe("summary-config-api", () => {
     });
 
     it("sends an empty CSRF header when the cookie is absent", async () => {
-        await saveConfig(GRAPH_ID, storedConfig());
+        await saveConfig(GRAPH_ID, storedConfig(), null);
         expect(putCalls()[0].headers["X-CSRFToken"]).toBe("");
     });
 
@@ -618,7 +685,7 @@ describe("SummaryConfigForm", () => {
     it("waits on the two payloads before drawing the form", () => {
         const wrapper = mount(SummaryConfigForm, {
             props: { graphid: GRAPH_ID },
-            global: { plugins: [[PrimeVue, { unstyled: true }]] },
+            global: { plugins: FORM_PLUGINS },
         });
         expect(wrapper.find('[data-testid="config-loading"]').exists()).toBe(
             true,
@@ -658,6 +725,143 @@ describe("SummaryConfigForm", () => {
             config: SummaryConfig;
         };
         expect(sent.config.rollups[0].label).toBeUndefined();
+    });
+});
+
+describe("summary-config-api versioning", () => {
+    it("returns the ETag the configuration was read with", async () => {
+        const stored = await fetchConfig(GRAPH_ID);
+        expect(stored.etag).toBe('"v1"');
+    });
+
+    it("sends If-Match with the ETag it was given", async () => {
+        await saveConfig(GRAPH_ID, storedConfig(), '"v1"');
+        expect(putCalls()[0].headers["If-Match"]).toBe('"v1"');
+    });
+
+    it("omits If-Match when no ETag is known", async () => {
+        await saveConfig(GRAPH_ID, storedConfig(), null);
+        expect(putCalls()[0].headers["If-Match"]).toBeUndefined();
+    });
+
+    it("rejects a conflicting write with a ConfigConflictError", async () => {
+        conflictOn = "PUT";
+        await expect(
+            saveConfig(GRAPH_ID, storedConfig(), '"v0"'),
+        ).rejects.toBeInstanceOf(ConfigConflictError);
+    });
+
+    it("removes the configuration with a DELETE carrying If-Match and the CSRF token", async () => {
+        document.cookie = "csrftoken=token-value";
+        const detached = await removeConfig(GRAPH_ID, '"v1"');
+        const call = calls.find((each) => each.method === "DELETE");
+        expect(call?.url).toBe(CONFIG_URL);
+        expect(call?.headers["If-Match"]).toBe('"v1"');
+        expect(call?.headers["X-CSRFToken"]).toBe("token-value");
+        expect(detached.attached).toBe(false);
+    });
+
+    it("echoes a tag a compressing proxy weakened", async () => {
+        readEtag = 'W/"v1"';
+        const stored = await fetchConfig(GRAPH_ID);
+        await saveConfig(GRAPH_ID, storedConfig(), stored.etag);
+        expect(putCalls()[0].headers["If-Match"]).toBe('W/"v1"');
+    });
+
+    it("rejects a conflicting removal with a ConfigConflictError", async () => {
+        conflictOn = "DELETE";
+        await expect(removeConfig(GRAPH_ID, '"v0"')).rejects.toBeInstanceOf(
+            ConfigConflictError,
+        );
+    });
+});
+
+describe("SummaryConfigForm removal", () => {
+    it("sends the loaded ETag when saving", async () => {
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+        expect(putCalls()[0].headers["If-Match"]).toBe('"v1"');
+    });
+
+    it("sends the ETag of its last save with the next one", async () => {
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+        expect(putCalls()[1].headers["If-Match"]).toBe('"v2"');
+    });
+
+    it("offers the removal only for an attached model", async () => {
+        configResponse = { ...configResponse, attached: false };
+        const wrapper = await mountForm();
+        expect(wrapper.find("[data-testid='remove-config']").exists()).toBe(
+            false,
+        );
+    });
+
+    it("asks for confirmation before removing", async () => {
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='remove-config']").trigger("click");
+        await flushPromises();
+        expect(calls.some((call) => call.method === "DELETE")).toBe(false);
+        expect(document.body.textContent).toContain(
+            "Remove the summary configuration of this model?",
+        );
+    });
+
+    it("emits detached after a removal", async () => {
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='remove-config']").trigger("click");
+        await flushPromises();
+        acceptConfirmation();
+        await flushPromises();
+        expect(calls.some((call) => call.method === "DELETE")).toBe(true);
+        expect(wrapper.emitted("detached")).toHaveLength(1);
+    });
+
+    it("keeps the form attached and says so when the removal fails", async () => {
+        deleteFails = true;
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='remove-config']").trigger("click");
+        await flushPromises();
+        acceptConfirmation();
+        await flushPromises();
+        expect(wrapper.find("[data-testid='config-error']").text()).toContain(
+            "could not be removed",
+        );
+        expect(wrapper.emitted("detached")).toBeUndefined();
+    });
+
+    it("explains a conflict and offers to reload", async () => {
+        conflictOn = "PUT";
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='save-config']").trigger("click");
+        await flushPromises();
+        expect(wrapper.find("[data-testid='config-error']").text()).toContain(
+            "Someone else changed this configuration",
+        );
+        const before = calls.length;
+        await wrapper.find("[data-testid='reload-config']").trigger("click");
+        await flushPromises();
+        expect(calls.length).toBeGreaterThan(before);
+    });
+
+    it("explains a conflicting removal without emitting detached", async () => {
+        conflictOn = "DELETE";
+        const wrapper = await mountForm();
+        await wrapper.find("[data-testid='remove-config']").trigger("click");
+        await flushPromises();
+        acceptConfirmation();
+        await flushPromises();
+        expect(wrapper.find("[data-testid='config-error']").text()).toContain(
+            "Someone else changed this configuration",
+        );
+        expect(wrapper.find("[data-testid='reload-config']").exists()).toBe(
+            true,
+        );
+        expect(wrapper.emitted("detached")).toBeUndefined();
     });
 });
 

@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
+import { useConfirm } from "primevue/useconfirm";
 
 import Button from "primevue/button";
+import ConfirmDialog from "primevue/confirmdialog";
 import Message from "primevue/message";
 
 import FieldRow from "@/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue";
 import RollupEditor from "@/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue";
 
 import {
+    ConfigConflictError,
     MAX_RELATED,
     blankHop,
     defaultStyleFor,
@@ -16,6 +19,7 @@ import {
     fetchConfig,
     fetchRelations,
     newRowUid,
+    removeConfig,
     saveConfig,
     withRowUids,
 } from "@/manuspectrum/functions/summary-config-api.ts";
@@ -29,11 +33,22 @@ import type {
     SummaryField,
     SummaryHop,
     SummaryRollup,
+    VersionedConfig,
 } from "@/manuspectrum/functions/types.ts";
+
+const DETACHED_EVENT = "detached" as const;
+// PrimeVue's confirmation bus is shared by every Vue application of the page:
+// the group keeps this dialog and another application's from answering each other.
+const REMOVAL_GROUP = "summary-config-removal";
 
 const { graphid } = defineProps<{ graphid: string }>();
 
+const emit = defineEmits<{
+    (event: typeof DETACHED_EVENT): void;
+}>();
+
 const { $gettext } = useGettext();
+const confirm = useConfirm();
 
 const config = ref<EditableConfig>(withRowUids(emptyConfig()));
 const relations = ref<RelatableNodes | null>(null);
@@ -42,8 +57,11 @@ const errorMessage = ref("");
 const errorDetail = ref("");
 const loading = ref(true);
 const saving = ref(false);
+const removing = ref(false);
 const saved = ref(false);
 const attached = ref(true);
+const conflicted = ref(false);
+const etag = ref<string | null>(null);
 
 const aliasOptions = computed(() => relations.value?.fields ?? []);
 
@@ -51,7 +69,12 @@ watchEffect(() => {
     void load(graphid);
 });
 
-/** Read both payloads at once; either failure leaves the form empty and says so. */
+/**
+ * Read both payloads at once; either failure leaves the form empty and says so.
+ *
+ * A failed read keeps the ETag of the last state read, so a later write stays
+ * conditional on it.
+ */
 async function load(id: string): Promise<void> {
     loading.value = true;
     clearFeedback();
@@ -60,9 +83,7 @@ async function load(id: string): Promise<void> {
             fetchConfig(id),
             fetchRelations(id),
         ]);
-        config.value = withRowUids(stored.config);
-        warnings.value = stored.warnings;
-        attached.value = stored.attached;
+        adopt(stored);
         relations.value = relatable;
     } catch (caught) {
         config.value = withRowUids(emptyConfig());
@@ -83,23 +104,84 @@ async function save(): Promise<void> {
     saving.value = true;
     clearFeedback();
     try {
-        const stored = await saveConfig(graphid, config.value);
-        config.value = withRowUids(stored.config);
-        warnings.value = stored.warnings;
-        attached.value = stored.attached;
+        adopt(await saveConfig(graphid, config.value, etag.value));
         saved.value = true;
     } catch (caught) {
-        errorMessage.value = $gettext("This configuration could not be saved.");
-        errorDetail.value = detailOf(caught);
+        reportFailure(
+            caught,
+            $gettext("This configuration could not be saved."),
+        );
     } finally {
         saving.value = false;
     }
+}
+
+function confirmRemoval(): void {
+    confirm.require({
+        group: REMOVAL_GROUP,
+        header: $gettext("Remove this configuration"),
+        message: $gettext(
+            "Remove the summary configuration of this model? Its popups fall back to the name and the default popup. The page reloads afterwards; unsaved edits to other functions on this page ask for confirmation first.",
+        ),
+        acceptLabel: $gettext("Remove"),
+        rejectLabel: $gettext("Cancel"),
+        acceptProps: { "data-testid": "confirm-remove", severity: "danger" },
+        rejectProps: { severity: "secondary" },
+        accept: () => {
+            void remove();
+        },
+    });
+}
+
+/**
+ * Detach the function from the model, then report it to the shell.
+ *
+ * The function manager around the form listed the function as applied when
+ * the page was drawn; the shell reloads the page on `detached` so it reads
+ * that list again.
+ */
+async function remove(): Promise<void> {
+    removing.value = true;
+    clearFeedback();
+    try {
+        adopt(await removeConfig(graphid, etag.value));
+        emit(DETACHED_EVENT);
+    } catch (caught) {
+        reportFailure(
+            caught,
+            $gettext("This configuration could not be removed."),
+        );
+    } finally {
+        removing.value = false;
+    }
+}
+
+/** Take a state the endpoint answered as the one the form edits. */
+function adopt(stored: VersionedConfig): void {
+    config.value = withRowUids(stored.config);
+    warnings.value = stored.warnings;
+    attached.value = stored.attached;
+    etag.value = stored.etag;
+}
+
+/** A conflict says why and offers the reload; anything else shows its detail. */
+function reportFailure(caught: unknown, message: string): void {
+    if (caught instanceof ConfigConflictError) {
+        conflicted.value = true;
+        errorMessage.value = $gettext(
+            "Someone else changed this configuration since you opened it. Your changes are not saved: reload it to see their version.",
+        );
+        return;
+    }
+    errorMessage.value = message;
+    errorDetail.value = detailOf(caught);
 }
 
 function clearFeedback(): void {
     errorMessage.value = "";
     errorDetail.value = "";
     saved.value = false;
+    conflicted.value = false;
 }
 
 function detailOf(caught: unknown): string {
@@ -250,8 +332,24 @@ function removeRollup(index: number): void {
                 severity="error"
                 :closable="false"
             >
-                <span>{{ errorMessage }}</span>
-                <span class="detail">{{ errorDetail }}</span>
+                <div class="failure">
+                    <span>{{ errorMessage }}</span>
+                    <span
+                        v-if="errorDetail"
+                        class="detail"
+                    >
+                        {{ errorDetail }}
+                    </span>
+                    <Button
+                        v-if="conflicted"
+                        class="reload"
+                        data-testid="reload-config"
+                        icon="fa fa-refresh"
+                        severity="secondary"
+                        :label="$gettext('Reload the configuration')"
+                        @click="load(graphid)"
+                    />
+                </div>
             </Message>
             <Message
                 v-if="saved"
@@ -366,10 +464,23 @@ function removeRollup(index: number): void {
                     icon="fa fa-save"
                     :label="$gettext('Save this configuration')"
                     :loading="saving"
+                    :disabled="removing"
                     @click="save"
+                />
+                <Button
+                    v-if="attached"
+                    class="remove"
+                    data-testid="remove-config"
+                    icon="fa fa-trash"
+                    severity="danger"
+                    :label="$gettext('Remove this configuration')"
+                    :loading="removing"
+                    :disabled="saving || removing"
+                    @click="confirmRemoval"
                 />
             </div>
         </template>
+        <ConfirmDialog :group="REMOVAL_GROUP" />
     </div>
 </template>
 
@@ -404,8 +515,14 @@ function removeRollup(index: number): void {
     display: block;
 }
 
+.summary-config .feedback .failure {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
 .summary-config .feedback .detail {
-    display: block;
     font-family: monospace;
     opacity: 0.8;
 }
@@ -422,5 +539,9 @@ function removeRollup(index: number): void {
     padding: 0.75rem 1rem;
     border-top: 0.1rem solid var(--p-content-border-color);
     background: var(--p-content-background);
+}
+
+.summary-config .actions .remove {
+    margin-inline-start: auto;
 }
 </style>
