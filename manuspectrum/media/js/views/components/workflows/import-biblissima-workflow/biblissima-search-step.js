@@ -32,6 +32,8 @@ import arches from 'arches';
 import 'bindings/select2-query';
 import 'bindings/thumb-fallback';
 import noUiSlider from 'nouislider';
+import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
+import { suggestAjaxOptions } from 'views/components/widgets/biblissima-concept-utils';
 import biblissimaSearchStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm';
 
 const DATE_MIN = -2000;
@@ -556,10 +558,12 @@ const viewModel = function(params) {
         placeholder: arches.translations.biblissimaSearchManuscriptForComponent || 'Search a manuscript to see its illuminations...',
         minimumInputLength: 3,
         ajax: {
-            url: '/api/biblissima/suggest',
-            dataType: 'json',
-            delay: 300,
-            data: (requestParams) => ({ q: requestParams.term || '', type: 'manuscript', limit: 15 }),
+            ...suggestAjaxOptions({
+                url: generateArchesURL('manuspectrum:biblissima-suggest'),
+                type: 'manuscript',
+                lang: 'fr',
+                limit: 15,
+            }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
                     id: item.id,
@@ -784,10 +788,11 @@ const viewModel = function(params) {
         placeholder: arches.translations.biblissimaSearchDescriptors || 'Search iconographic descriptors...',
         minimumInputLength: 2,
         ajax: {
-            url: '/api/biblissima/suggest',
-            dataType: 'json',
-            delay: 300,
-            data: (requestParams) => ({ q: requestParams.term || '', type: 'descriptor' }),
+            ...suggestAjaxOptions({
+                url: generateArchesURL('manuspectrum:biblissima-suggest'),
+                type: 'descriptor',
+                lang: 'fr',
+            }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
                     id: item.id,

@@ -3,11 +3,13 @@ import ko from 'knockout';
 import arches from 'arches';
 import WidgetViewModel from 'viewmodels/widget';
 import 'bindings/select2-query';
+import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
 import {
     mapSuggestItemToValue,
     renderSuggestItem,
     isReferentialUrl,
     isPortalArk,
+    suggestAjaxOptions,
 } from 'views/components/widgets/biblissima-concept-utils';
 import biblissimaConceptWidgetTemplate from 'templates/views/components/widgets/biblissima-concept-widget.htm';
 
@@ -124,11 +126,8 @@ const viewModel = function(params) {
         minimumInputLength: 2,
         placeholder: ko.unwrap(self.placeholder) || arches.translations.biblissimaConceptPlaceholder,
         ajax: {
-            url: '/api/biblissima/suggest',
-            dataType: 'json',
-            delay: 300, // selectWoo option — NOT the ignored v3 quietMillis
-            data: (requestParams) => ({
-                q: requestParams.term || '',
+            ...suggestAjaxOptions({
+                url: generateArchesURL('manuspectrum:biblissima-suggest'),
                 type: entityType,
                 lang: arches.activeLanguage,
             }),
