@@ -921,7 +921,7 @@ a.ms-feature-tag--link i {
 
 .ms-gallery-compare .ms-compare-top {
     z-index: 1;
-    clip-path: inset(0 0 0 0);
+    clip-path: inset(0 calc(100% - var(--split, 100%)) 0 0);
     transition: clip-path 0.5s var(--ease-out-expo);
 }
 
@@ -933,6 +933,29 @@ a.ms-feature-tag--link i {
 
 .ms-gallery-compare:hover .ms-compare-img {
     transform: none;
+}
+
+.ms-gallery-compare { touch-action: pan-y pinch-zoom; }
+.ms-gallery-compare:focus-within { outline: 2px solid var(--blue-text); outline-offset: 3px; }
+
+.ms-compare-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--split, 100%);
+    width: 2px;
+    margin-left: -1px;
+    background: rgba(255,255,255,0.9);
+    box-shadow: 0 0 6px rgba(0,0,0,0.35);
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.ms-gallery-compare.is-comparing .ms-compare-divider,
+.ms-gallery-compare:focus-within .ms-compare-divider { opacity: 1; }
+@media (hover: none) {
+    .ms-compare-divider { opacity: 0.6; }
 }
 
 // --- Interactive Analysis Points ---

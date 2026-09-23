@@ -482,6 +482,9 @@ Homepage — Prismatic Luminescence aesthetic
                 <div class="ms-gallery-item ms-gallery-compare reveal reveal-d1" id="ms-xrf-compare">
                     <img class="ms-compare-img ms-compare-bottom" src="{% static 'img/landing/ms86-f32v-deconv-ca.webp' %}" alt="{% trans 'Macro-XRF map of calcium (Ca) on an ornate letter — bright areas mark calcium-rich zones' %}" width="963" height="804" loading="lazy">
                     <img class="ms-compare-img ms-compare-top" src="{% static 'img/landing/ms86-f32v-deconv-hg.webp' %}" alt="{% trans 'Macro-XRF map of mercury (Hg) on the same ornate letter — bright areas reveal vermilion, a mercury pigment' %}" width="963" height="804" loading="lazy">
+                    <div class="ms-compare-divider" aria-hidden="true"></div>
+                    <input type="range" class="ms-compare-range ms-visually-hidden" min="0" max="100" value="100"
+                           aria-label="{% trans 'Position of the divide between the mercury map and the calcium map' %}">
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "X-ray Fluorescence" %}</div>
                         <h4>{% trans "Macro-XRF mapping" %}</h4>

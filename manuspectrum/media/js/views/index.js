@@ -3,6 +3,7 @@ import initMsNav from 'utils/ms-nav';
 import revealOnScroll from 'utils/reveal-on-scroll';
 import initHomepageSearch from '../utils/homepage/homepage-search';
 import initShowcaseCarousel from '../utils/homepage/showcase-carousel';
+import initXrfCompare from '../utils/homepage/xrf-compare';
 
 $(function () {
     'use strict';
@@ -135,27 +136,9 @@ $(function () {
     }
 
     // ================================================================
-    // XRF COMPARISON — clip-path reveal on hover
+    // XRF COMPARISON
     // ================================================================
-    var $compare = $('#ms-xrf-compare');
-    if ($compare.length) {
-        var topImg = $compare.find('.ms-compare-top')[0];
-
-        $compare.on('mouseenter', function () {
-            $(this).addClass('is-comparing');
-        });
-
-        $compare.on('mousemove', function (e) {
-            var rect = this.getBoundingClientRect();
-            var x = ((e.clientX - rect.left) / rect.width) * 100;
-            topImg.style.clipPath = 'inset(0 ' + (100 - x) + '% 0 0)';
-        });
-
-        $compare.on('mouseleave', function () {
-            $(this).removeClass('is-comparing');
-            topImg.style.clipPath = 'inset(0 0 0 0)';
-        });
-    }
+    initXrfCompare(document);
 
     // ================================================================
     // INTERACTIVE LOGO — Plotly-style crosshair & tooltip

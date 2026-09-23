@@ -164,13 +164,6 @@ select.ms-contact-input { appearance: none; background-image: none; cursor: poin
 .ms-contact-copied { margin: 0; font-size: 0.8rem; color: $ms-ink-soft;
     &:empty { display: none; } }
 
-// Off-screen host for the execCommand('copy') fallback textarea. `display:none`
-// would make the selection uncopyable, so it has to stay rendered.
-.ms-visually-hidden {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
-}
-
 .ms-contact-aside { padding: 8px 4px;
     h3 { font-family: $ms-font-serif; font-weight: 500; font-size: 1.5rem; margin: 0 0 10px; }
     p { color: $ms-ink-soft; }
