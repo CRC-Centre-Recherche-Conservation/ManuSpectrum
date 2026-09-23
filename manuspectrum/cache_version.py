@@ -27,6 +27,8 @@ CACHE_SHAPE_MODULES = (
     "views/spectrum_preview.py",
     "utils/spectrum_preview.py",
     "utils/xy_transforms.py",
+    # The per-reader visibility memos: hidden resources, readable nodegroups.
+    "utils/public_visibility.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

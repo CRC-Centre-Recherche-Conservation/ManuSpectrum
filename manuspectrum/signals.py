@@ -5,21 +5,19 @@ reader landing between the write and the commit would otherwise memoise the
 old rows again.
 """
 
+from django.contrib.auth.models import Group, User
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 from guardian.models import GroupObjectPermission, UserObjectPermission
 
 from arches.app.models.models import File, FunctionXGraph, GraphXPublishedGraph
 
 from manuspectrum.functions.resource_summary import SUMMARY_FUNCTION_ID, forget_config
+from manuspectrum.utils.public_visibility import forget_visibility
 from manuspectrum.views.spectrum_preview import file_record_key
-from manuspectrum.views.summary_service import (
-    RESTRICTED_CACHE_KEY,
-    RESTRICTED_NODEGROUPS_CACHE_KEY,
-    SLUG_CACHE_KEY,
-)
+from manuspectrum.views.summary_service import SLUG_CACHE_KEY
 
 
 @receiver([post_save, post_delete], sender=GraphXPublishedGraph)
@@ -31,12 +29,21 @@ def drop_summary_graph_slugs(sender, **kwargs):
 @receiver([post_save, post_delete], sender=UserObjectPermission)
 @receiver([post_save, post_delete], sender=GroupObjectPermission)
 def drop_summary_restriction_counts(sender, **kwargs):
-    """Drop the memoised restriction counts when an object grant changes."""
-    transaction.on_commit(
-        lambda: cache.delete_many(
-            [RESTRICTED_CACHE_KEY, RESTRICTED_NODEGROUPS_CACHE_KEY]
-        )
-    )
+    """Drop the restriction counts and the visibility memos when an object grant changes."""
+    transaction.on_commit(forget_visibility)
+
+
+@receiver(m2m_changed, sender=User.groups.through)
+@receiver(m2m_changed, sender=User.user_permissions.through)
+@receiver(m2m_changed, sender=Group.permissions.through)
+def drop_visibility_on_membership(sender, action, **kwargs):
+    """Drop the visibility memos when a reader's groups or model permissions change.
+
+    A group carries the model permissions behind ``read_nodegroup`` and the
+    object grants its members inherit.
+    """
+    if action in ("post_add", "post_remove", "post_clear"):
+        transaction.on_commit(forget_visibility)
 
 
 @receiver(post_delete, sender=FunctionXGraph)
