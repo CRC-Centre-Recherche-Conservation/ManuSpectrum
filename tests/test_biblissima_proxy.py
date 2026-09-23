@@ -2478,16 +2478,25 @@ class BiblissimaSuggestViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_limit_is_clamped_to_15(self):
-        # 17 × 3 > 50 would silently break wbsearchentities (MediaWiki cap,
-        # error reported as JSON in HTTP 200). Clamped: 15 × 3 = 45 ≤ 50.
-        search_resp = _make_response(json_data={"search": []})
-        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        items = [{"id": f"Q{i}", "label": f"dragon {i}"} for i in range(20)]
+        entities = {
+            f"Q{i}": {
+                "labels": {"fr": {"value": f"dragon {i}"}},
+                "claims": {"P2": [_claim_item("Q304387")]},
+            }
+            for i in range(20)
+        }
         with patch.object(
-            bp, "_bib_request", side_effect=[search_resp, fulltext_resp]
+            bp,
+            "_bib_request",
+            side_effect=[
+                _make_response(json_data={"search": items}),
+                _make_response(json_data={"entities": entities}),
+            ],
         ) as mocked:
-            self._get(q="dragon", type="descriptor", limit="50")
-        first_call_params = _params_of(mocked.call_args_list[0])
-        self.assertEqual(first_call_params["limit"], "45")
+            response = self._get(q="dragon", type="descriptor", limit="50")
+        self.assertEqual(_params_of(mocked.call_args_list[0])["limit"], "50")
+        self.assertEqual(len(json.loads(response.content)["results"]), 15)
 
     DESC_HASH = "desc46a049ef1a1cfed3c4a9c932503ea8497b6ae21f"
 
@@ -2544,11 +2553,11 @@ class BiblissimaSuggestViewTests(TestCase):
         )
         self.assertEqual(payload["results"][0]["label_en"], "Dragon")
 
-    def test_languages_param_deduplicated_with_lang(self):
-        _, mocked = self._descriptor_flow({"fr": {"value": "dragon"}}, lang="de")
+    def test_the_prefix_batch_reads_every_language(self):
+        _, mocked = self._descriptor_flow({"fr": {"value": "dragon"}}, lang="en")
         batch_params = _params_of(mocked.call_args_list[1])
-        self.assertEqual(batch_params["languages"], "de|en|fr")
-        self.assertEqual(batch_params["props"], "claims|labels")
+        self.assertNotIn("languages", batch_params)
+        self.assertEqual(batch_params["props"], "claims|labels|aliases")
 
     def test_portal_url_none_when_p129_missing(self):
         search_resp = _make_response(
@@ -2710,15 +2719,19 @@ class BiblissimaSuggestViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.content)["results"], [])
 
-    def test_double_upstream_failure_sets_degraded_and_is_not_cached(self):
-        with patch.object(
-            bp, "_bib_request", side_effect=requests.exceptions.Timeout()
-        ):
-            response = self._get(q="dragon", type="descriptor")
+    def test_double_upstream_failure_sets_degraded_and_is_kept_briefly(self):
+        with patch.object(bp.cache, "set", wraps=bp.cache.set) as setter:
+            with patch.object(
+                bp, "_bib_request", side_effect=requests.exceptions.Timeout()
+            ):
+                response = self._get(q="dragon", type="descriptor")
         payload = json.loads(response.content)
         self.assertTrue(payload["degraded"])
         self.assertEqual(payload["results"], [])
         self.assertIn("max-age=0", response["Cache-Control"])
+        key = bp._suggest_key("dragon", "Q304387", "fr", 10)
+        timeouts = [c.args[2] for c in setter.call_args_list if c.args[0] == key]
+        self.assertEqual(timeouts[-1], bp.SUGGEST_PARTIAL_TTL)
 
     def test_successful_response_is_not_degraded(self):
         payload, _ = self._descriptor_flow({"fr": {"value": "dragon"}})

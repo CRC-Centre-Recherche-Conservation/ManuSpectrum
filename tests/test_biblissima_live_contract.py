@@ -12,6 +12,7 @@ Run:
 """
 
 import os
+import time
 import unittest
 
 from django.core.cache import cache
@@ -49,3 +50,43 @@ class WikibasePlaceContractTests(LiveContractTestCase):
 
         self.assertEqual(result["locationQid"], "Q27392")
         self.assertEqual(result["geonamesId"], "2988507")
+
+
+@live
+class SuggestPrefixContractTests(LiveContractTestCase):
+    def _search(self, text):
+        payload = bp._suggest_call(
+            {
+                "action": "wbsearchentities",
+                "search": text,
+                "language": "fr",
+                "format": "json",
+                "limit": 50,
+            },
+            time.monotonic() + 10,
+        )
+        return [hit["id"] for hit in payload["search"]]
+
+    def test_case_and_accents_do_not_change_the_upstream_hits(self):
+        self.assertEqual(self._search("jero"), self._search("Jéro"))
+
+    def test_an_entity_id_is_matched_exactly_not_by_prefix(self):
+        self.assertIn("Q8844", self._search("q8844"))
+        self.assertNotIn("Q8844", self._search("q884"))
+
+    def test_a_derived_answer_holds_every_upstream_hit(self):
+        entry = bp._suggest_prefix_entry("drag", "fr", time.monotonic() + 10)
+        self.assertTrue(
+            entry["complete"], "'drag' now has more than 50 hits: use a rarer prefix"
+        )
+        cache.set(bp._suggest_prefix_key("drag", "fr"), entry, 60)
+        derived = bp._suggest_prefix_results(
+            "dragon", "fr", "Q304387", 15, time.monotonic() + 10
+        )
+        cache.clear()
+
+        fresh = bp._suggest_prefix_results(
+            "dragon", "fr", "Q304387", 15, time.monotonic() + 10
+        )
+
+        self.assertEqual({r["id"] for r in fresh}, {r["id"] for r in derived})

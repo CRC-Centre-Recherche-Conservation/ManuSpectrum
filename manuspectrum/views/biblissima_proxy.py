@@ -56,6 +56,7 @@ import logging
 import re
 import threading
 import time
+import unicodedata
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -971,6 +972,174 @@ def _suggest_call(params, deadline):
     return payload
 
 
+SUGGEST_MAX_QUERY = 100
+"""Longest folded query the suggest endpoint forwards upstream."""
+
+SUGGEST_PARTIAL_TTL = 60
+"""Seconds a partial or degraded suggest answer stays memoised."""
+
+SUGGEST_ANSWER_TTL = 30 * 60
+"""Lifetime of a complete suggest answer, in the memo and as the browser's ``max-age``."""
+
+_SUGGEST_PREFIX_FETCH = 50
+"""Hits fetched per prefix search: the wbsearchentities ceiling for non-bot clients."""
+
+_ENTITY_ID_TOKEN = re.compile(r"[a-z]\d+")
+
+_FOLD_LETTERS = str.maketrans(
+    {"œ": "oe", "æ": "ae", "ø": "o", "ł": "l", "đ": "d", "ð": "d", "þ": "th"}
+)
+
+
+def _fold(text):
+    """*text* without case, accents or extra whitespace.
+
+    Wikibase applies the same equivalence to a search (``Jéro`` and ``jero``
+    return the same hits in the same order). The suggest memo is keyed on this
+    form and the upstream receives it, so a stored answer is always the
+    upstream's answer for its own key.
+    """
+    decomposed = unicodedata.normalize("NFKD", text.casefold().translate(_FOLD_LETTERS))
+    return " ".join(
+        "".join(c for c in decomposed if not unicodedata.combining(c)).split()
+    )
+
+
+def _loose(text):
+    """The folded *text* with every run of punctuation read as one space.
+
+    A label or alias matches a query when its loose form starts with the
+    query's: at least every entity Wikibase's prefix search returns for it.
+    """
+    return " ".join(re.sub(r"[\W_]+", " ", _fold(text)).split())
+
+
+def _suggest_key(folded, type_qid, lang, limit):
+    """Memo key of one suggest answer."""
+    return stable_cache_key("biblissima:suggest", folded, type_qid, lang, limit)
+
+
+def _suggest_prefix_key(folded, lang):
+    """Key of the prefix entry of *folded* in *lang*; both types share it."""
+    return stable_cache_key("biblissima:suggest:prefix", folded, lang)
+
+
+def _suggest_terms(entity):
+    """Loose forms of every label and alias of *entity*, in every language."""
+    values = [v.get("value", "") for v in (entity.get("labels") or {}).values()]
+    for aliases in (entity.get("aliases") or {}).values():
+        values.extend(alias.get("value", "") for alias in aliases)
+    return {term for term in map(_loose, values) if term}
+
+
+def _suggest_prefix_entry(folded, lang, deadline):
+    """What ``wbsearchentities`` knows of *folded*, as upstream data only.
+
+    Up to 50 hits and, from one batch, their labels and aliases in every
+    language and their P2/P129 claims. ``complete`` is true when Wikibase
+    reports no further page: the hits are then every entity one of whose
+    labels or aliases starts with *folded*. Raises ``ValueError`` for an answer
+    without a ``search`` list.
+    """
+    search = _suggest_call(
+        {
+            "action": "wbsearchentities",
+            "search": folded,
+            "language": lang,
+            "format": "json",
+            "limit": _SUGGEST_PREFIX_FETCH,
+        },
+        deadline,
+    )
+    items = search.get("search")
+    if not isinstance(items, list):
+        raise ValueError("wbsearchentities answered no search list")
+    items = [
+        {"id": i["id"], "label": i.get("label"), "description": i.get("description")}
+        for i in items
+        if isinstance(i, dict) and i.get("id")
+    ]
+    entities = {}
+    if items:
+        batch = _suggest_call(
+            {
+                "action": "wbgetentities",
+                "ids": "|".join(dict.fromkeys(item["id"] for item in items)),
+                "format": "json",
+                "props": "claims|labels|aliases",
+            },
+            deadline,
+        ).get("entities", {})
+        for qid, raw in batch.items():
+            claims = raw.get("claims") or {}
+            entities[qid] = {
+                "labels": raw.get("labels") or {},
+                "aliases": raw.get("aliases") or {},
+                "claims": {P2: claims.get(P2, []), P129: claims.get(P129, [])},
+            }
+    return {
+        "complete": "search-continue" not in search,
+        "items": items,
+        "entities": entities,
+    }
+
+
+def _suggest_cached_entry(folded, lang):
+    """The stored prefix entry that answers *folded*, and the needle to narrow it with.
+
+    ``(entry, None)`` for the query's own entry; ``(entry, needle)`` for the
+    entry of its longest proper prefix of two characters or more (only complete
+    entries are stored); ``(None, None)`` when the upstream has to be asked.
+    Never an ancestor's entry for a query holding an entity id (``q884``):
+    Wikibase matches ids exactly, not by prefix. One cache round trip.
+    """
+    prefixes = [
+        prefix
+        for prefix in dict.fromkeys(
+            folded[:size].rstrip() for size in range(len(folded), 1, -1)
+        )
+        if len(prefix) >= 2
+    ]
+    keys = [_suggest_prefix_key(prefix, lang) for prefix in prefixes]
+    found = cache.get_many(keys)
+    if keys[0] in found:
+        return found[keys[0]], None
+    needle = _loose(folded)
+    if not needle or any(_ENTITY_ID_TOKEN.fullmatch(t) for t in needle.split()):
+        return None, None
+    for key in keys[1:]:
+        entry = found.get(key)
+        if entry is not None and entry["complete"]:
+            return entry, needle
+    return None, None
+
+
+def _suggest_typed_hits(entry, type_qid, needle=None):
+    """``(item, entity)`` pairs of *entry* whose P2 claims name *type_qid*.
+
+    In entry order; with *needle*, only the entities one of whose labels or
+    aliases starts with it, exact matches first.
+    """
+    ranked, seen = [], set()
+    for item in entry["items"]:
+        entity = entry["entities"].get(item["id"])
+        if (
+            item["id"] in seen
+            or entity is None
+            or type_qid not in _entity_types(entity)
+        ):
+            continue
+        seen.add(item["id"])
+        if needle is None:
+            ranked.append((False, item, entity))
+            continue
+        terms = _suggest_terms(entity)
+        if any(term.startswith(needle) for term in terms):
+            ranked.append((needle not in terms, item, entity))
+    ranked.sort(key=lambda row: row[0])
+    return [(item, entity) for _, item, entity in ranked]
+
+
 def _entity_types(entity):
     """Item ids named by the P2 (type) claims of a wbgetentities entity."""
     types = []
@@ -1009,47 +1178,29 @@ def _suggest_untyped_results(query, lang, limit, deadline):
     return results
 
 
-def _suggest_prefix_results(query, lang, type_qid, limit, deadline):
-    """Typed ``wbsearchentities`` hits.
+def _suggest_prefix_results(folded, lang, type_qid, limit, deadline):
+    """Typed suggestions of ``wbsearchentities``, from a prefix entry.
 
-    Three times *limit* hits are fetched, then kept in upstream order when a
-    P2 claim names *type_qid*, up to *limit*. MediaWiki caps the search at 50
-    for non-bot clients and reports an overflow inside an HTTP 200, hence the
-    15-suggestion ceiling of the view.
+    A complete ancestor's entry answers only when its narrowed typed hits fit
+    in *limit*: they are then every hit a fresh search would keep, in the
+    ancestor's order. Otherwise a fresh entry is fetched, and stored for
+    ``BIBLISSIMA_CACHE_TTL`` when it is complete. Kept: up to *limit* hits
+    whose P2 claims name *type_qid*.
     """
-    items = _suggest_call(
-        {
-            "action": "wbsearchentities",
-            "search": query,
-            "language": lang,
-            "format": "json",
-            "limit": limit * 3,
-        },
-        deadline,
-    ).get("search", [])
-    if not items:
-        return []
-    entities = _suggest_call(
-        {
-            "action": "wbgetentities",
-            "ids": "|".join(item["id"] for item in items),
-            "format": "json",
-            "props": "claims|labels",
-            "languages": _suggest_languages(lang),
-        },
-        deadline,
-    ).get("entities", {})
-    results, seen = [], set()
-    for item in items:
-        qid = item["id"]
-        entity = entities.get(qid)
-        if qid in seen or entity is None or type_qid not in _entity_types(entity):
-            continue
-        seen.add(qid)
-        results.append(_suggest_result(qid, item, entity, lang))
-        if len(results) >= limit:
-            break
-    return results
+    entry, needle = _suggest_cached_entry(folded, lang)
+    hits = None
+    if entry is not None:
+        hits = _suggest_typed_hits(entry, type_qid, needle)
+        if needle is not None and len(hits) > limit:
+            hits = None
+    if hits is None:
+        entry = _suggest_prefix_entry(folded, lang, deadline)
+        if entry["complete"]:
+            cache.set(_suggest_prefix_key(folded, lang), entry, _BIBLISSIMA_CACHE_TTL)
+        hits = _suggest_typed_hits(entry, type_qid)
+    return [
+        _suggest_result(item["id"], item, entity, lang) for item, entity in hits[:limit]
+    ]
 
 
 def _suggest_fulltext_results(query, lang, type_qid, limit, seen_ids, deadline):
@@ -1101,8 +1252,8 @@ def _suggest_fulltext_results(query, lang, type_qid, limit, seen_ids, deadline):
     return results
 
 
-def _build_suggestions(query, lang, type_qid, limit, deadline):
-    """The suggest payload of *query*, computed before *deadline*.
+def _build_suggestions(folded, lang, type_qid, limit, deadline):
+    """The suggest payload of the folded query *folded*, computed before *deadline*.
 
     The prefix search runs first and the fulltext search fills the room left;
     a branch that fails or finds the budget spent keeps the results already in
@@ -1111,24 +1262,24 @@ def _build_suggestions(query, lang, type_qid, limit, deadline):
     results, prefix_failed, fulltext_failed = [], False, False
     try:
         if type_qid:
-            results = _suggest_prefix_results(query, lang, type_qid, limit, deadline)
+            results = _suggest_prefix_results(folded, lang, type_qid, limit, deadline)
         else:
-            results = _suggest_untyped_results(query, lang, limit, deadline)
+            results = _suggest_untyped_results(folded, lang, limit, deadline)
     except Exception as exc:
         prefix_failed = True
         logger.warning(
-            "[biblissima.suggest] prefix search failed for query=%r: %s", query, exc
+            "[biblissima.suggest] prefix search failed for query=%r: %r", folded, exc
         )
     if len(results) < limit:
         try:
             results += _suggest_fulltext_results(
-                query, lang, type_qid, limit, {r["id"] for r in results}, deadline
+                folded, lang, type_qid, limit, {r["id"] for r in results}, deadline
             )
         except Exception as exc:
             fulltext_failed = True
             logger.warning(
-                "[biblissima.suggest] fulltext search failed for query=%r: %s",
-                query,
+                "[biblissima.suggest] fulltext search failed for query=%r: %r",
+                folded,
                 exc,
             )
     return {
@@ -1145,10 +1296,11 @@ class BiblissimaSuggestView(View):
     Combines prefix match (wbsearchentities) and full-text search
     (CirrusSearch) for flexible matching regardless of word order.
 
-    ``get`` is cached by ``cache_page`` on the URL alone, before the session
-    and locale middlewares add their ``Vary`` headers: the payload must depend
-    neither on the user nor on the active language. A per-user or localised
-    field here would be served to every editor.
+    Answers are memoised under the folded query, type, language and limit,
+    after the group check of ``dispatch``: they depend neither on the user nor
+    on the active language. The prefix search is stored apart, per folded
+    query and language, and answers longer queries when it was complete
+    (``_suggest_prefix_results``).
     """
 
     # Wikibase type QIDs for filtering
@@ -1157,28 +1309,41 @@ class BiblissimaSuggestView(View):
         "descriptor": "Q304387",
     }
 
-    # cache_control OUTSIDE cache_page (listed above it): Django's cache
-    # middleware refuses to store responses already marked private, so the
-    # stored copy stays cacheable and only the outgoing response is patched.
     @method_decorator(cache_control(private=True))
-    @method_decorator(cache_page(1800))
     def get(self, request):
-        query = request.GET.get("q", "").strip()
-        if len(query) < 2:
+        folded = _fold(request.GET.get("q", ""))
+        if len(folded) < 2:
             return JsonResponse({"results": [], "degraded": False, "partial": False})
+        if len(folded) > SUGGEST_MAX_QUERY:
+            return JsonResponse({"error": "query too long"}, status=400)
         lang = request.GET.get("lang", "fr")
+        if lang not in dict(settings.LANGUAGES):
+            lang = "fr"
         try:
             limit = int(request.GET.get("limit", 10))
         except (TypeError, ValueError):
             limit = 10
         limit = max(1, min(limit, 15))
         type_qid = self.TYPE_FILTERS.get(request.GET.get("type", ""), "")
-        payload = _build_suggestions(
-            query, lang, type_qid, limit, time.monotonic() + SUGGEST_DEADLINE
+        key = _suggest_key(folded, type_qid, lang, limit)
+        deadline = time.monotonic() + SUGGEST_DEADLINE
+
+        def shorten_partial(built):
+            if built["partial"]:
+                cache.set(key, built, SUGGEST_PARTIAL_TTL)
+
+        payload = get_or_build(
+            key,
+            lambda: _build_suggestions(folded, lang, type_qid, limit, deadline),
+            SUGGEST_ANSWER_TTL,
+            lock_timeout=3 * SUGGEST_DEADLINE,
+            wait=SUGGEST_DEADLINE + 0.5,
+            kept=shorten_partial,
         )
         response = JsonResponse(payload)
-        if payload["partial"]:
-            patch_cache_control(response, max_age=0)
+        patch_cache_control(
+            response, max_age=0 if payload["partial"] else SUGGEST_ANSWER_TTL
+        )
         return response
 
 
