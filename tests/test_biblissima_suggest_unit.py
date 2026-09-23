@@ -27,8 +27,13 @@ DESCRIPTOR = "Q304387"
 MANUSCRIPT = "Q32810"
 
 
+_WIKIBASE_LETTERS = str.maketrans({"ı": "i", "ħ": "h", "ŧ": "t", "ə": "e"})
+_WIKIBASE_SPACES = str.maketrans(dict.fromkeys("'\u2019\u02bc_-", " "))
+
+
 def _wikibase_fold(text):
-    decomposed = unicodedata.normalize("NFD", text.lower())
+    flattened = text.lower().translate(_WIKIBASE_LETTERS).translate(_WIKIBASE_SPACES)
+    decomposed = unicodedata.normalize("NFD", flattened)
     return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
@@ -46,7 +51,9 @@ class FakeWikibase:
 
     ``wbsearchentities``: an entity id typed in full matches that entity
     exactly; otherwise the entities one of whose labels or aliases starts with
-    the search (case and accents ignored), ranked exact match, then label
+    the search, both folded as Wikibase does (case and accents ignored, ``ı``,
+    ``ħ``, ``ŧ`` and ``ə`` read as ``i``, ``h``, ``t`` and ``e``, and ``'``,
+    U+2019, U+02BC, ``_`` and ``-`` as a space), ranked exact match, then label
     match, then alias match, then corpus order; ``search-continue`` past
     ``limit``. ``query``: the entities whose labels hold every word of the text
     as a whole word. ``slow`` maps an action to seconds slept before
@@ -385,6 +392,10 @@ SAINTS["Q8844"] = entity(
     aliases={"fr": ["saint Jérôme", "Sainc Hiérome"], "la": ["Hieronymus"]},
 )
 
+KILIC_ARSLAN = entity(
+    "Kılıç Arslan (1er, sultan)", aliases={"fr": ["Kılıç Arslan Ier"]}
+)
+
 
 def _by_id(payload):
     return {result["id"]: result for result in payload["results"]}
@@ -623,14 +634,36 @@ class SuggestPrefixReuseTests(SuggestTestCase):
 
         self.assertEqual(fake.searches(), ["drag", "drago"])
 
+    def test_a_letter_our_fold_keeps_sends_the_query_upstream(self):
+        corpus = {
+            "Q24517": KILIC_ARSLAN,
+            "Q31": entity("Kilkenny"),
+            "Q32": entity("Kildare (comté)", types=("Q168",)),
+            "Q33": entity("Kilian (saint)"),
+        }
+        fake = self.upstream(corpus)
+        self.suggest(q="kil", type="descriptor")
+
+        _, payload = self.suggest(q="kilic arslan ie", type="descriptor")
+
+        self.assertEqual(fake.searches(), ["kil", "kilic arslan ie"])
+        self.assertIn("Q24517", [r["id"] for r in payload["results"]])
+
     def test_derived_answers_equal_fresh_answers(self):
-        corpus = {**DRAGONS, **SAINTS}
+        corpus = {
+            **DRAGONS,
+            **SAINTS,
+            "Q24517": KILIC_ARSLAN,
+            "Q77": entity("Qur\u02bcān"),
+        }
         for sequence in (
             ["drag", "drago", "dragon"],
             ["jer", "jero", "jerom", "jerome"],
             ["hie", "hier", "hieron"],
             ["sain", "saint", "saint j", "saint jero"],
             ["q8", "q88", "q884", "q8844"],
+            ["kil", "kili", "kilic"],
+            ["qur", "qur'a"],
         ):
             cache.clear()
             self.upstream(corpus)

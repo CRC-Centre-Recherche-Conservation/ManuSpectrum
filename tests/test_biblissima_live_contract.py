@@ -75,6 +75,10 @@ class SuggestPrefixContractTests(LiveContractTestCase):
         self.assertIn("Q8844", self._search("q8844"))
         self.assertNotIn("Q8844", self._search("q884"))
 
+    def test_a_dotless_i_is_folded_upstream(self):
+        self.assertIn("Q24517", self._search("kilic"))
+        self.assertIn("Q24517", self._search("kılıç"))
+
     def test_a_derived_answer_holds_every_upstream_hit(self):
         entry = bp._suggest_prefix_entry("drag", "fr", time.monotonic() + 10)
         self.assertTrue(

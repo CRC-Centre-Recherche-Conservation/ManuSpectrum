@@ -1010,10 +1010,13 @@ def _fold(text):
 def _loose(text):
     """The folded *text* with every run of punctuation read as one space.
 
-    A label or alias matches a query when its loose form starts with the
-    query's: at least every entity Wikibase's prefix search returns for it.
+    Punctuation includes ``_`` and U+02BC: a superset of what Wikibase's
+    prefix search reads as a space (``'``, U+2019, U+02BC, ``_``, ``-``). It
+    does not fold the letters Wikibase's ASCII folding maps and ``_fold``
+    keeps (ı, ħ, ə …): ``_suggest_typed_hits`` reports a comparison on one of
+    them as undecidable.
     """
-    return " ".join(re.sub(r"[\W_]+", " ", _fold(text)).split())
+    return " ".join(re.sub(r"[\W_ʼ]+", " ", _fold(text)).split())
 
 
 def _suggest_key(folded, type_qid, lang, limit):
@@ -1127,7 +1130,11 @@ def _suggest_typed_hits(entry, type_qid, needle=None):
     """``(item, entity)`` pairs of *entry* whose P2 claims name *type_qid*.
 
     In entry order; with *needle*, only the entities one of whose labels or
-    aliases starts with it, exact matches first.
+    aliases starts with it, exact matches first. ``None`` when a typed entity
+    has no label or alias starting with *needle* and that cannot be decided
+    here: one of them first differs from the needle on a non-ASCII Latin
+    letter, which Wikibase's ASCII folding may map (ı→i, ħ→h, ə→e …) where
+    ``_fold`` keeps it.
     """
     ranked, seen = [], set()
     for item in entry["items"]:
@@ -1145,8 +1152,25 @@ def _suggest_typed_hits(entry, type_qid, needle=None):
         terms = _suggest_terms(entity)
         if any(term.startswith(needle) for term in terms):
             ranked.append((needle not in terms, item, entity))
+        elif any(_differs_on_latin_letter(term, needle) for term in terms):
+            return None
     ranked.sort(key=lambda row: row[0])
     return [(item, entity) for _, item, entity in ranked]
+
+
+def _differs_on_latin_letter(term, needle):
+    """Whether *term* and *needle* first differ on a non-ASCII Latin letter.
+
+    Compared over the length of *needle*; a term that ends before any
+    difference does not differ on one.
+    """
+    for term_char, needle_char in zip(term, needle):
+        if term_char != needle_char:
+            return any(
+                not c.isascii() and unicodedata.name(c, "").startswith("LATIN")
+                for c in (term_char, needle_char)
+            )
+    return False
 
 
 def _entity_types(entity):
@@ -1191,9 +1215,10 @@ def _suggest_prefix_results(folded, lang, type_qid, limit, deadline):
     """Typed suggestions of ``wbsearchentities``, from a prefix entry.
 
     A complete ancestor's entry answers only when its narrowed typed hits fit
-    in *limit*: they are then every hit a fresh search would keep, in the
-    ancestor's order. Otherwise a fresh entry is fetched and, when it is
-    complete, stored for ``BIBLISSIMA_CACHE_TTL``, or for
+    in *limit* and every comparison that narrowed them was decidable
+    (``_suggest_typed_hits``): they are then every hit a fresh search would
+    keep, in the ancestor's order. Otherwise a fresh entry is fetched and, when
+    it is complete, stored for ``BIBLISSIMA_CACHE_TTL``, or for
     ``SUGGEST_ANSWER_TTL`` when it holds no hit. Kept: up to *limit* hits
     whose P2 claims name *type_qid*.
     """
@@ -1201,7 +1226,7 @@ def _suggest_prefix_results(folded, lang, type_qid, limit, deadline):
     hits = None
     if entry is not None:
         hits = _suggest_typed_hits(entry, type_qid, needle)
-        if needle is not None and len(hits) > limit:
+        if needle is not None and hits is not None and len(hits) > limit:
             hits = None
     if hits is None:
         entry = _suggest_prefix_entry(folded, lang, deadline)
@@ -1378,7 +1403,9 @@ class BiblissimaSuggestView(View):
             build,
             SUGGEST_ANSWER_TTL,
             lock_timeout=3 * SUGGEST_DEADLINE,
-            wait=SUGGEST_DEADLINE + 0.5,
+            # A holder's call caps its connect and each read by the time left:
+            # it can run to about twice the deadline.
+            wait=2 * SUGGEST_DEADLINE + 0.5,
             kept=shorten_partial,
         )
         if payload is None:
