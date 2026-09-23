@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Dict, List
 
 from django.conf import settings
@@ -99,8 +100,54 @@ class IIIFAnnotationSerializer:
         return ""
 
     # ----------------------------------------------------------------------
-    # Concept and resource resolution
+    # Concept, reference and resource resolution
     # ----------------------------------------------------------------------
+
+    @staticmethod
+    def _is_concept_value_id(value) -> bool:
+        """True for a legacy concept value: a UUID string."""
+        if not isinstance(value, str):
+            return False
+        try:
+            uuid.UUID(value)
+        except ValueError:
+            return False
+        return True
+
+    @staticmethod
+    def _is_reference(value) -> bool:
+        """True for one item of a controlled-list ``reference`` value."""
+        return isinstance(value, dict) and isinstance(value.get("labels"), list)
+
+    def _resolve_reference_multilingual(self, reference: dict) -> dict | None:
+        """
+        Read the labels of one controlled-list reference item, without a query.
+
+        Each language gets its prefLabel, else its altLabel, else any label.
+        The URI is the item's ``uri`` when it is an absolute http(s) URL, else
+        the controlled-list-manager URL of the item (the form
+        arches_controlled_lists generates), else the stored ``uri``.
+        Returns: {"uri": "...", "labels": {"en": "label", "fr": "étiquette"}},
+        or None when no label carries a value.
+        """
+        rank = {"prefLabel": 0, "altLabel": 1}
+        best: Dict[str, tuple] = {}
+        item_id = None
+        for label in reference["labels"]:
+            if not isinstance(label, dict) or not label.get("value"):
+                continue
+            lang = label.get("language_id") or "en"
+            item_id = item_id or label.get("list_item_id")
+            label_rank = rank.get(label.get("valuetype_id"), len(rank))
+            if lang not in best or label_rank < best[lang][0]:
+                best[lang] = (label_rank, str(label["value"]))
+        if not best:
+            return None
+
+        uri = str(reference.get("uri") or "")
+        if not uri.startswith(("http://", "https://")) and item_id:
+            uri = f"{self.base_url}plugins/controlled-list-manager/item/{item_id}"
+        return {"uri": uri, "labels": {lang: v for lang, (_, v) in best.items()}}
 
     def _resolve_concept_multilingual(self, concept_valueid: str) -> dict:
         """
@@ -279,7 +326,9 @@ class IIIFAnnotationSerializer:
             if technique_node in tile_data:
                 tech_values = tile_data[technique_node]
                 if isinstance(tech_values, list):
-                    all_concept_ids.update(str(v) for v in tech_values if v)
+                    all_concept_ids.update(
+                        v for v in tech_values if self._is_concept_value_id(v)
+                    )
 
             # Resources
             for field in ["instrument", "component_observed", "project", "researchers"]:
@@ -577,18 +626,30 @@ class IIIFAnnotationSerializer:
     # ----------------------------------------------------------------------
 
     def _format_metadata_value(self, raw_value, field_key: str) -> dict:
-        """Format a metadata field according to its data type."""
-        # Concept lists
+        """Format a metadata field according to its data type.
+
+        A technique list mixes controlled-list reference items (labels read
+        from the value) and legacy concept value ids (labels read from the
+        RDM); any other item is skipped, and a list with no usable item
+        formats to an empty dict.
+        """
         if field_key == "technique":
             if isinstance(raw_value, list):
                 all_labels: Dict[str, List[str]] = {}
-                for concept_id in raw_value:
-                    concept_data = self._resolve_concept_multilingual(str(concept_id))
-                    for lang, label in concept_data["labels"].items():
+                for item in raw_value:
+                    if self._is_reference(item):
+                        term = self._resolve_reference_multilingual(item)
+                    elif self._is_concept_value_id(item):
+                        term = self._resolve_concept_multilingual(item)
+                    else:
+                        term = None
+                    if not term:
+                        continue
+                    for lang, label in term["labels"].items():
                         all_labels.setdefault(lang, []).append(
-                            f"{label} ({concept_data['uri']})"
+                            f"{label} ({term['uri']})" if term["uri"] else label
                         )
-                return all_labels or {"en": [str(raw_value)]}
+                return all_labels
 
         # Resource-instance fields
         if field_key in ["instrument", "component_observed", "project"]:
@@ -635,7 +696,7 @@ class IIIFAnnotationSerializer:
         return {"en": [str(raw_value)]}
 
     def _build_metadata(self, tiles_data: dict) -> list:
-        """Builds the IIIF `metadata` section."""
+        """Builds the IIIF `metadata` section; a field that formats to no value is left out."""
         metadata: List[dict] = []
 
         fields = {
@@ -654,6 +715,8 @@ class IIIFAnnotationSerializer:
                     formatted_value = self._format_metadata_value(
                         tiles_data[node], field
                     )
+                    if not formatted_value:
+                        continue
                     metadata.append(
                         {
                             "label": {"en": [label]},
