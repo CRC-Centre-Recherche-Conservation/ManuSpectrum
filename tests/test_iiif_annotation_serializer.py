@@ -1073,3 +1073,213 @@ class TestV2BatchInheritsBase(TestCase):
             IIIFAnnotationSerializerV2.batch_to_representation,
             IIIFAnnotationSerializer.batch_to_representation,
         )
+
+
+PXRF_REFERENCE = [
+    {
+        "uri": "61216",
+        "labels": [
+            {
+                "id": "47462dde-83f8-40df-8bda-fa4723f9db31",
+                "value": "Fluorescence X portable",
+                "language_id": "fr",
+                "list_item_id": "a2e4b31a-53fa-3d8c-8aa6-f5b8b2564629",
+                "valuetype_id": "prefLabel",
+            },
+            {
+                "id": "7fad4a10-d0d4-4163-bb39-36858048689f",
+                "value": "portable X-ray fluorescence",
+                "language_id": "en",
+                "list_item_id": "a2e4b31a-53fa-3d8c-8aa6-f5b8b2564629",
+                "valuetype_id": "prefLabel",
+            },
+            {
+                "id": "5ff1e3e6-3c56-4305-8290-26e364bc6d79",
+                "value": "pXRF",
+                "language_id": "en",
+                "list_item_id": "a2e4b31a-53fa-3d8c-8aa6-f5b8b2564629",
+                "valuetype_id": "altLabel",
+            },
+            {
+                "id": "8853a8d6-5c58-48e3-a072-040c956dc865",
+                "value": "pXRF",
+                "language_id": "fr",
+                "list_item_id": "a2e4b31a-53fa-3d8c-8aa6-f5b8b2564629",
+                "valuetype_id": "altLabel",
+            },
+        ],
+        "list_id": "12dc9a7b-b177-450a-a927-711fa7882882",
+    }
+]
+PXRF_ITEM_ID = "a2e4b31a-53fa-3d8c-8aa6-f5b8b2564629"
+
+
+def _technique_entry(metadata):
+    return next(
+        (m for m in metadata if m["label"] in ({"en": ["Technique"]}, "Technique")),
+        None,
+    )
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://test.example.com/")
+class TestReferenceTechnique(TestCase):
+    def setUp(self):
+        from manuspectrum.views.serializers.iiif_annotation import (
+            IIIFAnnotationSerializer,
+            IIIFAnnotationSerializerV2,
+        )
+
+        self.v3 = IIIFAnnotationSerializer
+        self.v2 = IIIFAnnotationSerializerV2
+        self.technique_node = IIIFAnnotationSerializer.DATATYPE_NODES["technique"]
+        self.base_url = IIIFAnnotationSerializer.base_url
+        self.item_uri = (
+            f"{self.base_url}plugins/controlled-list-manager/item/{PXRF_ITEM_ID}"
+        )
+
+    def _batch(self, serializer, technique_value):
+        resource_id = str(uuid.uuid4())
+        with (
+            patch("manuspectrum.views.serializers.iiif_annotation.Tile") as mock_tile,
+            patch(
+                "manuspectrum.views.serializers.iiif_annotation.Resource"
+            ) as mock_resource,
+        ):
+            mock_tile.objects.filter.return_value.values.return_value = [
+                {
+                    "resourceinstance_id": resource_id,
+                    "data": {self.technique_node: technique_value},
+                }
+            ]
+            mock_resource.objects.filter.return_value = []
+            return serializer.batch_to_representation(
+                [
+                    {
+                        "target": "https://example.org/canvas/1#xywh=0,0,10,10",
+                        "resource_id": resource_id,
+                    }
+                ]
+            )[0]
+
+    def test_reference_value_gives_pref_labels_per_language(self):
+        with patch("manuspectrum.views.serializers.iiif_annotation.Value") as value:
+            result = self.v3()._format_metadata_value(PXRF_REFERENCE, "technique")
+
+        value.objects.filter.assert_not_called()
+        self.assertEqual(
+            result,
+            {
+                "en": [f"portable X-ray fluorescence ({self.item_uri})"],
+                "fr": [f"Fluorescence X portable ({self.item_uri})"],
+            },
+        )
+
+    def test_reference_label_falls_back_to_alt_label(self):
+        reference = [
+            {
+                **PXRF_REFERENCE[0],
+                "labels": [
+                    label
+                    for label in PXRF_REFERENCE[0]["labels"]
+                    if not (
+                        label["language_id"] == "fr"
+                        and label["valuetype_id"] == "prefLabel"
+                    )
+                ],
+            }
+        ]
+
+        result = self.v3()._format_metadata_value(reference, "technique")
+
+        self.assertEqual(result["fr"], [f"pXRF ({self.item_uri})"])
+
+    def test_reference_with_absolute_uri_keeps_it(self):
+        reference = [{**PXRF_REFERENCE[0], "uri": "http://vocab.example.org/61216"}]
+
+        result = self.v3()._format_metadata_value(reference, "technique")
+
+        self.assertEqual(
+            result["en"],
+            ["portable X-ray fluorescence (http://vocab.example.org/61216)"],
+        )
+
+    def test_v3_batch_with_reference_technique_carries_en_fr_labels(self):
+        annotation = self._batch(self.v3(), PXRF_REFERENCE)
+
+        entry = _technique_entry(annotation["metadata"])
+        self.assertEqual(
+            entry["value"]["en"], [f"portable X-ray fluorescence ({self.item_uri})"]
+        )
+        self.assertEqual(
+            entry["value"]["fr"], [f"Fluorescence X portable ({self.item_uri})"]
+        )
+
+    def test_v2_batch_with_reference_technique_carries_label(self):
+        annotation = self._batch(self.v2(), PXRF_REFERENCE)
+
+        entry = _technique_entry(annotation["metadata"])
+        self.assertEqual(
+            entry["value"], f"portable X-ray fluorescence ({self.item_uri})"
+        )
+
+    def test_single_mode_reference_technique_carries_labels(self):
+        serializer = self.v3()
+        with patch.object(
+            serializer,
+            "_get_resource_tiles",
+            return_value={self.technique_node: PXRF_REFERENCE},
+        ):
+            annotation = serializer.to_representation(
+                "https://example.org/canvas/1#xywh=0,0,10,10", str(uuid.uuid4())
+            )
+
+        entry = _technique_entry(annotation["metadata"])
+        self.assertEqual(
+            entry["value"]["fr"], [f"Fluorescence X portable ({self.item_uri})"]
+        )
+
+    def test_batch_prefetches_only_concept_uuids(self):
+        concept_id = str(uuid.uuid4())
+        serializer = self.v3()
+        with (
+            patch("manuspectrum.views.serializers.iiif_annotation.Tile") as mock_tile,
+            patch.object(serializer, "_batch_load_concepts") as load,
+        ):
+            mock_tile.objects.filter.return_value.values.return_value = [
+                {
+                    "resourceinstance_id": "r1",
+                    "data": {self.technique_node: PXRF_REFERENCE + [concept_id]},
+                }
+            ]
+            serializer._prefetch_all_data(["r1"])
+
+        load.assert_called_once_with([concept_id])
+
+    @patch("manuspectrum.views.serializers.iiif_annotation.Value")
+    def test_legacy_concept_uuid_still_resolves_in_batch(self, mock_value):
+        concept_id = str(uuid.uuid4())
+        mock_value.objects.filter.return_value.select_related.return_value.values.return_value = [
+            {
+                "valueid": concept_id,
+                "language_id": "en",
+                "value": "XRF",
+                "concept__conceptid": "c0ffee00-0000-4000-8000-000000000000",
+            }
+        ]
+
+        annotation = self._batch(self.v3(), [concept_id])
+
+        entry = _technique_entry(annotation["metadata"])
+        self.assertEqual(
+            entry["value"]["en"],
+            [f"XRF ({self.base_url}rdm/concepts/c0ffee00-0000-4000-8000-000000000000)"],
+        )
+
+    def test_unexpected_technique_shapes_do_not_raise(self):
+        weird = [42, {"foo": "bar"}, "not-a-uuid", {"labels": "x"}, None]
+
+        v3 = self._batch(self.v3(), weird)
+        v2 = self._batch(self.v2(), weird)
+
+        self.assertEqual(v3["type"], "Annotation")
+        self.assertEqual(v2["@type"], "oa:Annotation")
