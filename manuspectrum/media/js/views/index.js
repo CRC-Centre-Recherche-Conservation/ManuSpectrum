@@ -10,21 +10,22 @@ const BLOCKS = [initHomepageSearch, initShowcaseCarousel, initXrfCompare, initAn
 
 /**
  * Homepage entry, loaded with `defer`: the document is parsed when it runs.
- * Starts the shared nav and the reveal, then each interactive block; a block
- * that throws is logged and does not stop the others.
+ * Starts the shared nav, the reveal and each interactive block in sequence;
+ * any one that throws is logged and does not stop the others.
  *
  * @param {Array<(root: ParentNode) => unknown>} [blocks]
  */
 export function initHomepage(blocks = BLOCKS) {
-    initMsNav();
-    revealOnScroll(0.06, { selector: '.reveal, .reveal-scale', rootMargin: '0px 0px -30px 0px' });
-    blocks.forEach((init) => {
+    const guard = (fn) => {
         try {
-            init(document);
+            fn();
         } catch (error) {
             console.error('A homepage block failed to start', error);
         }
-    });
+    };
+    guard(initMsNav);
+    guard(() => revealOnScroll(0.06, { selector: '.reveal, .reveal-scale', rootMargin: '0px 0px -30px 0px' }));
+    blocks.forEach((init) => guard(() => init(document)));
 }
 
 initHomepage();

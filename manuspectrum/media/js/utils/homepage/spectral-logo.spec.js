@@ -153,3 +153,24 @@ describe("crosshair and zoom", () => {
         expect(dialog.hasAttribute("open")).toBe(false);
     });
 });
+
+describe("zoom fallback", () => {
+    it("hides the zoom button when the dialog has no showModal", () => {
+        const original = HTMLDialogElement.prototype.showModal;
+        delete HTMLDialogElement.prototype.showModal;
+        document.body.innerHTML = `
+            <div id="ms-logo-wrap">
+                <svg id="ms-logo-svg"></svg>
+                <button type="button" id="ms-logo-zoom"></button>
+            </div>
+            <dialog id="ms-logo-dialog">
+                <div id="ms-logo-zoom-target"></div>
+            </dialog>`;
+        const destroy = initSpectralLogo(document);
+        expect(document.getElementById("ms-logo-zoom").hidden).toBe(true);
+        destroy();
+        if (original) {
+            HTMLDialogElement.prototype.showModal = original;
+        }
+    });
+});

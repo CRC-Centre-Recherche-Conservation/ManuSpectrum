@@ -9,7 +9,8 @@
  * Opening the dialog moves the SVG into it and marks it `is-drawn`, so the
  * draw-in animation never replays; closing (Close button, Escape, or a click
  * that starts and ends on the backdrop) moves it back and returns focus to
- * the zoom button.
+ * the zoom button. The zoom button is hidden when the browser has no
+ * `<dialog>.showModal` support.
  */
 export const X_MIN = 40;
 export const X_MAX = 620;
@@ -19,7 +20,7 @@ const WL_MIN = 380;
 const WL_MAX = 780;
 const BLUE_END = 438;
 const RED_END = 444;
-const SAMPLE_STEP = 0.5;
+const SAMPLE_STEP = 2;
 
 /**
  * @param {{ getTotalLength(): number, getPointAtLength(s: number): {x: number, y: number} }} path
@@ -168,7 +169,11 @@ function initZoom(root, svg) {
     const closeButton = root.querySelector("#ms-logo-close");
     const target = root.querySelector("#ms-logo-zoom-target");
     const home = root.querySelector("#ms-logo-wrap");
-    if (!dialog || !zoom || !target || !home || typeof dialog.showModal !== "function") {
+    if (!dialog || !zoom || !target || !home) {
+        return () => {};
+    }
+    if (typeof dialog.showModal !== "function") {
+        zoom.hidden = true;
         return () => {};
     }
     let downOnBackdrop = false;

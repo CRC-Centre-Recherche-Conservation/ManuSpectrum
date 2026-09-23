@@ -3,11 +3,14 @@
  *
  * Arrows and dots set the target slide synchronously, then scroll the track
  * (`instant` under reduced motion). An IntersectionObserver follows manual
- * scrolling: it only acts on entries with `intersectionRatio >= 0.6`, and
- * ignores its entries while a programmed scroll runs (until `scrollend`, or
- * 600 ms). The active dot has `.active` and `aria-current="true"`.
+ * scrolling: it only acts on entries with `intersectionRatio >= 0.6`. While a
+ * programmed scroll runs, it ignores every entry except the target slide
+ * reaching that ratio, which ends the scroll; `scrollend` ends it too, and a
+ * 1500 ms timer is the safety net for browsers with no `scrollend` on a long
+ * multi-slide smooth scroll. The active dot has `.active` and
+ * `aria-current="true"`.
  */
-const PROGRAMMED_SCROLL_MS = 600;
+const PROGRAMMED_SCROLL_MS = 1500;
 const RATIO = 0.6;
 
 /**
@@ -59,12 +62,18 @@ export default function initShowcaseCarousel(root = document) {
     if ("IntersectionObserver" in window) {
         io = new IntersectionObserver(
             (entries) => {
-                if (programmed) {
-                    return;
-                }
                 entries.forEach((entry) => {
                     const index = slides.indexOf(entry.target);
-                    if (entry.intersectionRatio >= RATIO && index !== -1 && index !== current) {
+                    if (index === -1 || entry.intersectionRatio < RATIO) {
+                        return;
+                    }
+                    if (programmed) {
+                        if (index === current) {
+                            endProgrammed();
+                        }
+                        return;
+                    }
+                    if (index !== current) {
                         current = index;
                         markActive();
                     }

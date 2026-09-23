@@ -94,9 +94,22 @@ describe("showcase carousel", () => {
         document.getElementById("ms-showcase-next").click();
         io.callback([{ target: slides[0], intersectionRatio: 0.9, isIntersecting: true }]);
         expect(activeIndex()).toBe(1);
-        vi.advanceTimersByTime(600);
+        vi.advanceTimersByTime(1500);
         io.callback([{ target: slides[0], intersectionRatio: 0.9, isIntersecting: true }]);
         expect(activeIndex()).toBe(0);
+    });
+
+    it("ignores an intermediate slide during a wrapped programmed scroll, then ends only on the target", () => {
+        const { track } = boot();
+        const slides = Array.from(track.children);
+        document.getElementById("ms-showcase-prev").click(); // 0 -> 2
+        document.getElementById("ms-showcase-next").click(); // 2 -> 0, wraps, target 0
+        expect(activeIndex()).toBe(0);
+        io.callback([{ target: slides[1], intersectionRatio: 0.9, isIntersecting: true }]);
+        expect(activeIndex()).toBe(0);
+        io.callback([{ target: slides[0], intersectionRatio: 0.9, isIntersecting: true }]);
+        io.callback([{ target: slides[1], intersectionRatio: 0.9, isIntersecting: true }]);
+        expect(activeIndex()).toBe(1);
     });
 
     it("ends the programmed scroll on scrollend", () => {
