@@ -25,3 +25,17 @@ class RevealFallbackTests(TestCase):
         self.assertEqual(resp.status_code, 404)
         html = resp.content.decode()
         self.assertFalse(any(".reveal" in block for block in noscript_blocks(html)))
+
+
+SCRIPT_SRC = re.compile(r"<script\b[^>]*\bsrc=[^>]*>")
+
+
+class ScriptLoadingTests(TestCase):
+    def test_bundle_scripts_are_deferred_in_the_head(self):
+        html = self.client.get("/en/").content.decode()
+        head, body = html.split("</head>", 1)
+        self.assertEqual(SCRIPT_SRC.findall(body), [])
+        tags = SCRIPT_SRC.findall(head)
+        self.assertTrue(tags)
+        for tag in tags:
+            self.assertRegex(tag, r"\sdefer[\s>]")

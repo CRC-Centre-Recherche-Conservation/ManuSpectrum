@@ -1,6 +1,4 @@
-import ko from 'knockout';
 import arches from 'arches';
-import 'views/components/language-switcher';
 import initMsNav from 'utils/ms-nav';
 import revealOnScroll from 'utils/reveal-on-scroll';
 
@@ -354,9 +352,4 @@ $(function () {
     $(document).on('keydown', function (e) {
         if (e.key === 'Escape' && $overlay.hasClass('active')) closeZoom();
     });
-
-    // ================================================================
-    // KNOCKOUT — Apply bindings for language-switcher
-    // ================================================================
-    ko.applyBindings({});
 });

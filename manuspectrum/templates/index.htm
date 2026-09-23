@@ -110,6 +110,7 @@ Homepage — Prismatic Luminescence aesthetic
     <!-- Fonts are self-hosted (@font-face in _ms-fonts.scss, shipped by the
          css bundle below) — no Google Fonts connection. -->
 
+    {% render_bundle 'views/index' 'js' attrs=' defer' %}
     {% render_bundle 'css/homepage' 'css' %}
 </head>
 
@@ -617,11 +618,5 @@ Homepage — Prismatic Luminescence aesthetic
          FOOTER
          ============================================================ -->
     {% include 'includes/ms_footer.htm' %}
-
-
-    <!-- ============================================================
-         SCRIPTS — Webpack entry point (views/index)
-         ============================================================ -->
-    {% render_bundle 'views/index' %}
 </body>
 </html>
