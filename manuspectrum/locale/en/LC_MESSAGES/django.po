@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 12:15-0500\n"
+"POT-Creation-Date: 2026-09-23 05:14-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3994,16 +3994,22 @@ msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
 
-#: views/summary_config.py:65
+#: views/summary_config.py:75
 msgid "Malformed JSON body"
 msgstr "Malformed JSON body"
 
-#: views/summary_config.py:67
+#: views/summary_config.py:77
 msgid "Expected a JSON object"
 msgstr "Expected a JSON object"
 
-#: views/summary_config.py:72
+#: views/summary_config.py:87
 msgid "config: an empty configuration replaces the stored one"
+msgstr ""
+
+#: views/summary_config.py:131
+msgid ""
+"This configuration was changed by someone else since it was loaded. Reload "
+"it before saving."
 msgstr ""
 
 #~ msgid ""
