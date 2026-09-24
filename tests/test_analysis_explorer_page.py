@@ -57,6 +57,11 @@ class AnalysisExplorerPageTests(TestCase):
         connected = self.client.get(reverse("analysis-explorer")).content.decode()
         self.assertIn('data-connected="true"', connected)
 
+    def test_page_is_never_stored_by_a_shared_cache(self):
+        cache_control = self.client.get(reverse("analysis-explorer"))["Cache-Control"]
+        self.assertIn("private", cache_control)
+        self.assertIn("no-store", cache_control)
+
     def test_page_drops_the_arches_payload_other_pages_keep_it(self):
         explorer = self.client.get(reverse("analysis-explorer")).content.decode()
         team = self.client.get(reverse("about-team")).content.decode()
