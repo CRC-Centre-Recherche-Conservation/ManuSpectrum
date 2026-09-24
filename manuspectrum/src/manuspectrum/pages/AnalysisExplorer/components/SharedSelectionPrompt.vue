@@ -54,6 +54,12 @@ const missingNotice = computed(() =>
     ),
 );
 
+/** The shared keys, less those the items API reported missing; every key while that answer is not in. */
+function availableKeys(): string[] {
+    const missing = new Set(itemsData.value?.missing ?? []);
+    return props.selection.keys.filter((key) => !missing.has(key));
+}
+
 function itemName(item: Item): Label {
     if (item.kind === "characterization") {
         return item.characterization.name;
@@ -65,7 +71,7 @@ function itemName(item: Item): Label {
 }
 
 function replace(): void {
-    const result = store.replaceBasket(props.selection.keys);
+    const result = store.replaceBasket(availableKeys());
     emit(
         "resolved",
         interpolate(
@@ -82,7 +88,7 @@ function replace(): void {
 
 /** Two complete translated sentences, joined with a space when some keys did not fit. */
 function merge(): void {
-    const result = store.mergeBasket(props.selection.keys);
+    const result = store.mergeBasket(availableKeys());
     const added = interpolate(
         $ngettext("%{n} item added.", "%{n} items added.", result.kept.length),
         { n: result.kept.length },

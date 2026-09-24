@@ -88,6 +88,33 @@ describe("SharedSelectionPrompt", () => {
         ]);
     });
 
+    it("leaves out the keys reported missing once the items are known", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountPrompt();
+        await flushPromises();
+        await wrapper.find(".replace").trigger("click");
+        expect(store.basket.map((item) => item.key)).toEqual([KEY_1]);
+        expect(wrapper.emitted("resolved")?.[0]).toEqual([
+            "Your Selection now holds the 1 shared item.",
+        ]);
+        store.clearBasket();
+        await wrapper.find(".merge").trigger("click");
+        expect(store.basket.map((item) => item.key)).toEqual([KEY_1]);
+    });
+
+    it("keeps every key and adds no notice when the items request fails", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => jsonResponse({}, 503)),
+        );
+        const store = useExplorerStore();
+        const wrapper = mountPrompt();
+        await flushPromises();
+        expect(wrapper.findAll(".notice")).toHaveLength(0);
+        await wrapper.find(".replace").trigger("click");
+        expect(store.basket.map((item) => item.key)).toEqual([KEY_1, KEY_2]);
+    });
+
     it("leaves the Selection alone when dismissed", async () => {
         const store = useExplorerStore();
         const wrapper = mountPrompt();
