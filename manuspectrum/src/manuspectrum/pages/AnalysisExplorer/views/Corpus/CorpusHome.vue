@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
@@ -8,6 +8,7 @@ import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/com
 import { getJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useRequest } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
+import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { searchQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import {
     emptyFilters,
@@ -26,6 +27,8 @@ import type {
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
+const heading = useTemplateRef<HTMLElement>("heading");
+useScreenHeading(() => heading.value);
 
 /**
  * Fetches page 1 of the Documents overview (grain "documents",
@@ -150,13 +153,17 @@ function hrefFor(id: string): string {
 
 <template>
     <div class="corpus-home">
-        <p class="promise">
+        <h2
+            ref="heading"
+            class="promise"
+            tabindex="-1"
+        >
             <span>{{
                 $gettext(
                     "Explore what the analyses of written heritage revealed.",
                 )
             }}</span>
-        </p>
+        </h2>
         <form
             class="search"
             role="search"
@@ -311,6 +318,7 @@ function hrefFor(id: string): string {
 .corpus-home .promise {
     font-family: var(--font-display);
     font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 400;
     color: var(--ink);
 }
 

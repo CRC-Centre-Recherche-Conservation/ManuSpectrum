@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 
 import { useDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocument.ts";
+import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 const props = defineProps<{ documentId: string }>();
@@ -13,11 +14,23 @@ const props = defineProps<{ documentId: string }>();
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const payload = useDocument(() => props.documentId);
+const heading = useTemplateRef<HTMLElement>("heading");
+const backButton = useTemplateRef<HTMLElement>("back-button");
+
+const isUnavailable = computed(
+    () =>
+        payload.status.value === "error" ||
+        payload.status.value === "unavailable",
+);
 
 const analysedPages = computed(() =>
     (payload.data.value?.canvases ?? []).filter(
         (canvas) => canvas.analysisCount > 0,
     ),
+);
+
+useScreenHeading(
+    () => heading.value ?? (isUnavailable.value ? backButton.value : null),
 );
 
 function pageLabel(label: string, count: number): string {
@@ -40,6 +53,7 @@ function goHome(): void {
 <template>
     <div class="corpus-document">
         <button
+            ref="back-button"
             type="button"
             class="back"
             @click="back"
@@ -64,7 +78,9 @@ function goHome(): void {
             :aria-busy="payload.status.value === 'loading' ? 'true' : 'false'"
         >
             <h2
+                ref="heading"
                 class="name"
+                tabindex="-1"
                 :lang="payload.data.value.name.lang"
             >
                 {{ payload.data.value.name.value }}

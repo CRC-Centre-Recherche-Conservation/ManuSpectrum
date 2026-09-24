@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { provide, ref } from "vue";
+import { provide, ref, watch } from "vue";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
 import SharedSelectionPrompt from "@/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue";
@@ -7,7 +7,10 @@ import ViewTabs from "@/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.
 import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusView.vue";
 
 import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
-import { FACET_LABELS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    FACET_LABELS_KEY,
+    SCREEN_FOCUS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { useBasketPersistence } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
 import {
@@ -48,12 +51,22 @@ useUrlState({
 const sharedSelection = ref<SharedSelection | null>(INITIAL_SELECTION);
 const announcement = ref("");
 const facetLabels = ref(new Map<string, Label>());
+const screenFocusPending = ref(false);
 
 provide(FACET_LABELS_KEY, facetLabels);
+provide(SCREEN_FOCUS_KEY, screenFocusPending);
+
+watch(
+    () => [store.corpusScreen, store.document?.id] as const,
+    () => {
+        screenFocusPending.value = true;
+    },
+);
 
 function onSelectionResolved(message: string): void {
     sharedSelection.value = null;
     announcement.value = message;
+    screenFocusPending.value = true;
 }
 </script>
 

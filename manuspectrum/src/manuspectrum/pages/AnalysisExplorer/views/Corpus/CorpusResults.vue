@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
@@ -10,6 +10,7 @@ import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/compon
 
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
+import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import {
     searchQuery,
     useSearch,
@@ -29,6 +30,8 @@ import type {
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const { activeFilters } = useActiveFilters();
+const heading = useTemplateRef<HTMLElement>("heading");
+useScreenHeading(() => heading.value);
 
 // Declared before useSearch, whose source reads `page` at once. A page belongs
 // to one filter set: any filter change reads as page 1 in the same tick.
@@ -168,7 +171,9 @@ function goHome(): void {
         >
             <h2
                 id="explorer-results-title"
+                ref="heading"
                 class="visually-hidden"
+                tabindex="-1"
             >
                 <span>{{ $gettext("Results") }}</span>
             </h2>

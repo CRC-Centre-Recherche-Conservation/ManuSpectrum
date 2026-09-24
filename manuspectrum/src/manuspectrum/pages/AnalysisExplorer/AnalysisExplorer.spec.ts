@@ -5,7 +5,11 @@ import { createPinia, setActivePinia } from "pinia";
 import AnalysisExplorer from "@/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue";
 
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
-import { searchResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    documentPayload,
+    searchResponse,
+    uuid,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
 import type { Pinia } from "pinia";
@@ -71,5 +75,75 @@ describe("AnalysisExplorer", () => {
         expect(useExplorerStore().basket.map((item) => item.key)).toEqual([
             KEY,
         ]);
+    });
+
+    it("moves the focus to the heading of each new screen", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string) =>
+                url.includes("explorer-document")
+                    ? jsonResponse(documentPayload())
+                    : jsonResponse(searchResponse()),
+            ),
+        );
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            props: { connected: false },
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        const store = useExplorerStore();
+        store.setFilter("q", "gold");
+        store.setCorpusScreen("results");
+        await flushPromises();
+        expect(document.activeElement?.id).toBe("explorer-results-title");
+        store.openDocument(uuid(1));
+        await flushPromises();
+        expect(document.activeElement?.classList.contains("name")).toBe(true);
+        store.setCorpusScreen("home");
+        await flushPromises();
+        expect(document.activeElement?.classList.contains("promise")).toBe(
+            true,
+        );
+        wrapper.unmount();
+    });
+
+    it("moves the focus to the screen heading when the shared Selection prompt closes", async () => {
+        window.history.replaceState(null, "", `/en/discover?sel=${KEY}`);
+        const wrapper = mount(AnalysisExplorer, {
+            props: { connected: false },
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        await wrapper.find(".shared-selection .dismiss").trigger("click");
+        await flushPromises();
+        expect(document.activeElement?.classList.contains("promise")).toBe(
+            true,
+        );
+        wrapper.unmount();
+    });
+
+    it("moves the focus to the back button of a document that is not available", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string) =>
+                url.includes("explorer-document")
+                    ? jsonResponse({}, 404)
+                    : jsonResponse(searchResponse()),
+            ),
+        );
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            props: { connected: false },
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        useExplorerStore().openDocument(uuid(1));
+        await flushPromises();
+        expect(document.activeElement?.classList.contains("back")).toBe(true);
+        wrapper.unmount();
     });
 });
