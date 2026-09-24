@@ -148,7 +148,8 @@ describe("useBasketPersistence", () => {
                 throw new DOMException("blocked", "SecurityError");
             },
         });
-        const { store } = mountPersistence();
+        expect(() => mountPersistence()).not.toThrow();
+        const store = useExplorerStore();
         store.addToBasket(key(1));
         await nextTick();
         expect(store.basket).toHaveLength(1);

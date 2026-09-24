@@ -112,18 +112,8 @@ function generateConfig(): Promise<UserConfig> {
         resolve({
             plugins: [vue() as any, webpackCompatStubs],
             resolve: {
-                // Arches applications (arches_vue_components, arches_querysets,
-                // arches_controlled_lists, arches) live outside this tree, under
-                // the venv's site-packages (see ARCHES_APPLICATIONS_PATHS above).
-                // Vite resolves a bare import relative to its importing file, so
-                // a bare import written inside one of those files (e.g.
-                // arches_vue_components/application/create-vue-application.ts
-                // importing "primevue/config") cannot see this project's
-                // node_modules. Dedupe resolves the listed packages from the
-                // project root instead, regardless of importer, the way
-                // webpack.common.js's `resolve.modules` already does for the
-                // real build. "vue" needs no entry: @vitejs/plugin-vue already
-                // dedupes it.
+                // Bare imports inside Arches application sources resolve from
+                // the project root, as `resolve.modules` does in webpack.common.js.
                 dedupe: ['pinia', 'primevue', 'vue3-gettext', '@primeuix/themes'],
             },
             test: {

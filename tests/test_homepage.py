@@ -156,9 +156,11 @@ class DiscoverEntryTests(TestCase):
         self.assertEqual(search.call_count, 2)
 
     def test_header_offers_the_explorer_on_every_public_page(self):
-        html = self.client.get("/en/").content.decode()
-        self.assertIn('href="/en/discover"', html)
-        self.assertNotIn('href="/en/discover" aria-current="page"', html)
+        for path in ("/en/", "/en/about/team", "/en/discover"):
+            html = self.client.get(path).content.decode()
+            self.assertIn('href="/en/discover"', html, path)
+            if path != "/en/discover":
+                self.assertNotIn('href="/en/discover" aria-current="page"', html, path)
 
 
 class HomepageTechniquesTests(ExplorerCase):
