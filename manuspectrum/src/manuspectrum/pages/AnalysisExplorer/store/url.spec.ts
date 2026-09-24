@@ -173,4 +173,18 @@ describe("store round trip", () => {
         expect(store.document?.id).toBe(DOC);
         expect(snapshotOf(store)).toEqual({ ...snapshot, view: "corpus" });
     });
+
+    it("returning home from filtered results writes a URL that reads back as home, without filters", () => {
+        const store = useExplorerStore();
+        store.setFilter("grain", "analyses");
+        store.setFilter("technique", ["http://x/xrf"]);
+        store.setCorpusScreen("results");
+        store.setCorpusScreen("home");
+        const snapshot = fromQuery(toQuery(snapshotOf(store)));
+        expect(snapshot.corpusScreen).toBe("home");
+        expect(snapshot.filters).toEqual({
+            ...emptyFilters(),
+            grain: "analyses",
+        });
+    });
 });

@@ -157,10 +157,23 @@ export const useExplorerStore = defineStore("explorer", () => {
         }
     }
 
-    /** Leaves the document screen for another Corpus screen; the document screen is reached only through `openDocument`. */
+    /**
+     * Leaves the document screen for another Corpus screen; the document
+     * screen is reached only through `openDocument`. The home screen carries
+     * no Corpus filter: going there clears them, keeping the grain, the
+     * "only with analyses" choice and the Map's event types.
+     */
     function setCorpusScreen(screen: CorpusScreen): void {
         if (screen === "document") {
             return;
+        }
+        if (screen === "home") {
+            filters.value = {
+                ...emptyFilters(),
+                grain: filters.value.grain,
+                onlyWithAnalyses: filters.value.onlyWithAnalyses,
+                eventType: filters.value.eventType,
+            };
         }
         corpusScreen.value = screen;
         document.value = null;
