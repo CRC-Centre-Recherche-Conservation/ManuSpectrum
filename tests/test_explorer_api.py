@@ -7,12 +7,17 @@ Usage:
 from unittest import mock
 
 from django.http import QueryDict
+from django.test import SimpleTestCase
 
 from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import CANVAS, MANIFEST, XY_CONFIG_ID
 from tests.test_explorer_service import FORS, XRF, ServiceCase
 
-from manuspectrum.views.explorer_service import search_payload
+from manuspectrum.views.explorer_service import (
+    imaging_entries,
+    layer_of,
+    search_payload,
+)
 
 
 class SearchRouteTests(ServiceCase):
@@ -195,3 +200,123 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual((refused.status_code, refused.content), (404, b""))
         self.assertEqual((unknown.status_code, unknown.content), (404, b""))
         self.assertEqual(refused["Cache-Control"], unknown["Cache-Control"])
+
+
+class AnalysisRouteTests(CorpusCase):
+    def get(self, resource):
+        return self.client.get(f"/en/api/explorer/analysis/{resource}")
+
+    def test_the_analysis_payload_has_the_contract_shape_and_its_files(self):
+        payload = self.get(self.analyses["open"].pk).json()
+
+        assert_shape(self, payload, "AnalysisPayload")
+        for entry in payload["files"]:
+            assert_shape(self, entry, "FileEntry")
+        roles = {f["name"]: (f["role"], f["pairedWith"]) for f in payload["files"]}
+        self.assertEqual(
+            roles["X01_f1v.csv"],
+            ("readable", "22222222-2222-4222-8222-222222222222"),
+        )
+        self.assertEqual(roles["X01_f1v.mca"][0], "raw")
+        self.assertEqual(
+            payload["conditions"],
+            [{"type": None, "html": "<p>260 µm / 100 ms</p>", "lang": "en"}],
+        )
+        self.assertEqual(
+            payload["dataset"]["url"], "https://doi.org/10.48579/PRO/ZEEJTH"
+        )
+        self.assertEqual(
+            [c["id"] for c in payload["evidenceOf"]], [str(self.characterization.pk)]
+        )
+        self.assertTrue(
+            payload["permalink"].endswith(f"report/{self.analyses['open'].pk}")
+        )
+        self.assertIsNone(payload["citation"])
+
+    def test_an_analysis_of_an_embargoed_project_answers_like_an_unknown_one(self):
+        self.embargo(self.projects["side"])
+
+        refused = self.get(self.analyses["on_document"].pk)
+        unknown = self.get("00000000-0000-4000-8000-00000000000a")
+
+        self.assertEqual(
+            (refused.status_code, refused.content),
+            (unknown.status_code, unknown.content),
+        )
+        self.assertEqual(refused.status_code, 404)
+
+
+class LayerOfTests(SimpleTestCase):
+    def test_an_element_symbol_gives_an_element_layer(self):
+        layer = layer_of(0, "Pb", {"url": None})
+
+        self.assertEqual(layer["kind"], "element")
+        self.assertEqual(layer["element"], "Pb")
+        self.assertIsNone(layer["band"])
+
+    def test_a_value_and_a_unit_gives_a_band_layer(self):
+        nanometres = layer_of(1, "450 nm", {"url": None})
+        wavenumber = layer_of(2, "1650 cm-1", {"url": None})
+
+        self.assertEqual(nanometres["kind"], "band")
+        self.assertEqual(nanometres["band"], {"value": 450.0, "unit": "nm"})
+        self.assertEqual(wavenumber["kind"], "band")
+        self.assertEqual(wavenumber["band"], {"value": 1650.0, "unit": "cm⁻¹"})
+
+    def test_anything_else_gives_another_layer_without_an_element(self):
+        layer = layer_of(3, "deconv_Pb", {"url": None})
+
+        self.assertEqual(layer["kind"], "other")
+        self.assertIsNone(layer["element"])
+
+
+class ImagingEntriesTests(SimpleTestCase):
+    MANIFEST_A = {
+        "@context": "http://iiif.io/api/presentation/3/context.json",
+        "id": "https://example.org/iiif/imaging/a",
+        "items": [
+            {
+                "id": "https://example.org/iiif/imaging/a/canvas/650",
+                "type": "Canvas",
+                "label": {"none": ["650 nm"]},
+            },
+            {
+                "id": "https://example.org/iiif/imaging/a/canvas/450",
+                "type": "Canvas",
+                "label": {"none": ["450 nm"]},
+            },
+        ],
+    }
+    MANIFEST_B = {
+        "@context": "http://iiif.io/api/presentation/3/context.json",
+        "id": "https://example.org/iiif/imaging/b",
+        "items": [
+            {
+                "id": "https://example.org/iiif/imaging/b/canvas/pb",
+                "type": "Canvas",
+                "label": {"none": ["Pb"]},
+            },
+        ],
+    }
+
+    def test_layer_indices_continue_across_manifests_and_bands_sort_by_value(self):
+        with mock.patch(
+            "manuspectrum.views.explorer_service.manifest_json",
+            side_effect=[self.MANIFEST_A, self.MANIFEST_B],
+        ):
+            entries = imaging_entries(
+                "00000000-0000-4000-8000-000000000099",
+                [
+                    "https://example.org/manifest/a",
+                    "https://example.org/manifest/b",
+                ],
+                "en",
+            )
+
+        self.assertEqual([len(entry["layers"]) for entry in entries], [2, 1])
+        self.assertEqual([layer["index"] for layer in entries[0]["layers"]], [1, 0])
+        self.assertEqual(
+            [layer["band"]["value"] for layer in entries[0]["layers"]], [450.0, 650.0]
+        )
+        self.assertEqual(entries[1]["layers"][0]["index"], 2)
+        self.assertEqual(entries[1]["layers"][0]["kind"], "element")

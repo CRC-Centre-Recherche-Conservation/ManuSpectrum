@@ -16,7 +16,11 @@ from django.views import View
 
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import is_connected
-from manuspectrum.views.explorer_service import document_payload, search_payload
+from manuspectrum.views.explorer_service import (
+    analysis_payload,
+    document_payload,
+    search_payload,
+)
 
 
 def _answer(request, payload):
@@ -57,4 +61,14 @@ class ExplorerDocumentView(View):
         return _answer(
             request,
             document_payload(resourceid, request.user, translation.get_language()),
+        )
+
+
+class ExplorerAnalysisView(View):
+    """``GET /{lang}/api/explorer/analysis/<uuid>``: one analysis with its files, conditions, evidence and dataset."""
+
+    def get(self, request, resourceid):
+        return _answer(
+            request,
+            analysis_payload(resourceid, request.user, translation.get_language()),
         )

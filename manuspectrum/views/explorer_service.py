@@ -22,6 +22,8 @@ from arches.app.models.models import (
 )
 from arches_controlled_lists.models import ListItem, ListItemValue
 
+from manuspectrum.constants.licenses import effective_license
+from manuspectrum.models import RendererConfig
 from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.utils.public_visibility import (
     hidden_resource_ids,
@@ -29,9 +31,10 @@ from manuspectrum.utils.public_visibility import (
     visible_set,
 )
 from manuspectrum.utils.role_links import readable_links, role_node
-from manuspectrum.views.explorer_conditions import clean_html
+from manuspectrum.views.explorer_conditions import clean_html, conditions_of
 from manuspectrum.views.explorer_values import (
     dataset_of,
+    file_entries,
     label,
     name_of,
     reference_terms,
@@ -967,4 +970,224 @@ def document_payload(document_id, user, language):
         "unpublished": document_id in visible.unpublished,
         "certaintyScale": certainty_scale(language),
         "unlocated": unlocated,
+    }
+
+
+_ELEMENT_SYMBOL = re.compile(r"^[A-Z][a-z]?$")
+_BAND = re.compile(
+    r"^(?P<value>\d+(?:[.,]\d+)?)\s*(?P<unit>nm|µm|um|cm-1|cm⁻¹|keV|eV)$"
+)
+
+
+def layer_of(index, text, image):
+    """One image layer of an imaging manifest (D46): an element map (maXRF), a spectral band (hyperspectral) or another image."""
+    text = (text or "").strip()
+    band = _BAND.match(text)
+    if _ELEMENT_SYMBOL.match(text):
+        return {
+            "index": index,
+            "label": text,
+            "kind": "element",
+            "element": text,
+            "band": None,
+            "image": image,
+        }
+    if band:
+        value = float(band["value"].replace(",", "."))
+        unit = band["unit"].replace("um", "µm").replace("cm-1", "cm⁻¹")
+        return {
+            "index": index,
+            "label": text,
+            "kind": "band",
+            "element": None,
+            "band": {"value": value, "unit": unit},
+            "image": image,
+        }
+    return {
+        "index": index,
+        "label": text,
+        "kind": "other",
+        "element": None,
+        "band": None,
+        "image": image,
+    }
+
+
+def imaging_entries(analysis_id, manifest_values, language):
+    """``FileEntry`` of each imaging manifest of an analysis (maXRF, hyperspectral, other); its canvases are the layers, numbered across manifests."""
+    entries, index = [], 0
+    for position, value in enumerate(manifest_values):
+        url = rewrite_legacy_url(
+            value if isinstance(value, str) else (value or {}).get("url", "")
+        )
+        if not url:
+            continue
+        manifest = manifest_json(url) or {}
+        layers = []
+        for canvas in canvases_of(manifest):
+            layers.append(layer_of(index, canvas["label"], canvas["image"]))
+            index += 1
+        layers.sort(
+            key=lambda layer: (
+                layer["kind"] != "band",
+                layer["band"]["value"] if layer["band"] else 0,
+            )
+        )
+        entries.append(
+            {
+                "id": f"{analysis_id}:imaging:{position}",
+                "name": _canvas_label(manifest.get("label")) or url.rsplit("/", 1)[-1],
+                "size": None,
+                "format": "application/ld+json",
+                "role": "other",
+                "pairedWith": None,
+                "dataKind": "chemical-imaging",
+                "viewer": {
+                    "rendererConfigId": None,
+                    "axisKey": None,
+                    "axisTitle": None,
+                    "points": None,
+                    "decimated": False,
+                },
+                "layers": layers,
+                "license": effective_license({}, language),
+                "downloadUrl": url,
+                "previewUrl": None,
+                "zone": None,
+            }
+        )
+    return entries
+
+
+def analysis_files(analysis_id, user, language):
+    """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging."""
+    values = Values([analysis_id], ["files", "micro", "imaging"], user)
+    config_ids = {
+        e.get("rendererConfig")
+        for e in values.get(analysis_id, "files")
+        if isinstance(e, dict) and e.get("rendererConfig")
+    }
+    configs = {
+        str(config_id): config
+        for config_id, config in RendererConfig.objects.filter(
+            configid__in=list(config_ids)
+        ).values_list("configid", "config")
+    }
+    return (
+        file_entries(
+            values.get(analysis_id, "files"),
+            language=language,
+            configs=configs,
+            kind="measurement",
+        )
+        + file_entries(
+            values.get(analysis_id, "micro"),
+            language=language,
+            configs={},
+            kind="micro-imaging",
+        )
+        + imaging_entries(analysis_id, values.get(analysis_id, "imaging"), language)
+    )
+
+
+def analysis_payload(analysis_id, user, language):
+    """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible."""
+    visible = visible_set(user)
+    analysis_id = str(analysis_id)
+    chains = structure(visible, user)
+    if analysis_id not in visible.analyses or analysis_id not in chains:
+        return None
+    row = next(r for r in corpus_rows(user, language) if r["id"] == analysis_id)
+    document, component = chains[analysis_id]
+    values = Values(
+        [analysis_id],
+        [
+            "dataset",
+            "bibliography",
+            "statement_type",
+            "statement_content",
+            "instrument",
+            "end",
+        ],
+        user,
+    )
+    readable = readable_nodegroup_ids(user)
+    hidden = hidden_resource_ids(user)
+    projects = sorted(
+        p
+        for p in _links("analysis", "analysis_by_project", readable)[analysis_id]
+        if p in visible.projects
+    )
+    samples = sorted(
+        s
+        for s in _links("analysis", "sample_used", readable)[analysis_id]
+        if s in visible.samples
+    )
+    instruments = [
+        i
+        for i in _links("analysis", "instrument", readable)[analysis_id]
+        if i not in hidden
+    ]
+    ids = (
+        {document}
+        | ({component} if component else set())
+        | set(projects)
+        | set(samples)
+        | set(row["operators"])
+        | set(instruments[:1])
+    )
+    label_of = names(ids, language)
+    slug_of = model_of(ids)
+    ref = lambda rid: {"id": rid, "model": slug_of.get(rid, ""), "name": label_of[rid]}
+    type_node, content_node = values.node("statement_type"), values.node(
+        "statement_content"
+    )
+    conditions = (
+        conditions_of(
+            values.tiles(analysis_id, "statement_content"),
+            type_node.nodeid if type_node else "",
+            content_node.nodeid,
+            language,
+        )
+        if content_node
+        else []
+    )
+    evidence_of = characterization_summaries(
+        [c for c, cited in visible.evidence.items() if analysis_id in cited],
+        visible,
+        user,
+        language,
+        {},
+    )
+    end = values.first(analysis_id, "end")
+    return {
+        "id": analysis_id,
+        "name": row["name"],
+        "technique": row["technique"],
+        "instrument": ref(instruments[0]) if instruments else None,
+        "operators": [ref(o) for o in row["operators"]],
+        "projects": [ref(p) for p in projects],
+        "date": {
+            "start": row["date"],
+            "end": _date(end) if isinstance(end, str) else None,
+        },
+        "document": ref(document),
+        "component": ref(component) if component else None,
+        "sample": ref(samples[0]) if samples else None,
+        "files": analysis_files(analysis_id, user, language),
+        "conditions": conditions,
+        "evidenceOf": evidence_of,
+        "dataset": dataset_of(values.first(analysis_id, "dataset")),
+        "bibliography": [
+            t
+            for t in (
+                label(string_texts(v), language)
+                for v in values.get(analysis_id, "bibliography")
+            )
+            if t
+        ],
+        "citation": None,
+        "permalink": f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis_id}",
+        "certaintyScale": certainty_scale(language),
+        "unpublished": row["unpublished"],
     }
