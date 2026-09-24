@@ -43,7 +43,7 @@ from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from guardian.models import GroupObjectPermission, UserObjectPermission
 
-from arches.app.models.models import ResourceInstance
+from arches.app.models.models import Node, ResourceInstance
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.utils.cache import get_or_build
@@ -119,6 +119,32 @@ def readable_nodegroup_ids(user):
     key = f"public-visibility:nodegroups:{_epoch()}:{getattr(user, 'id', None)}"
     return get_or_build(key, lambda: _nodegroups_of(user), PERM_SCOPE_TTL) or (
         frozenset()
+    )
+
+
+def readable_graph_ids(user):
+    """Ids of the resource models ``user`` may read, as strings.
+
+    A model is readable when at least one of its nodegroups is in
+    ``readable_nodegroup_ids(user)``: the rule ``user_can_read_resource``
+    applies to a resource without an object grant
+    (``user_has_resource_model_permissions``,
+    arches/app/permissions/arches_permission_base.py:277-302, 322-326).
+    Memoised per reader and permission epoch.
+    """
+    key = f"public-visibility:graphs:{_epoch()}:{getattr(user, 'id', None)}"
+    return get_or_build(key, lambda: _graphs_of(user), PERM_SCOPE_TTL) or (frozenset())
+
+
+def _graphs_of(user):
+    readable = readable_nodegroup_ids(user)
+    if not readable:
+        return frozenset()
+    return frozenset(
+        str(graph_id)
+        for graph_id in Node.objects.filter(nodegroup_id__in=list(readable))
+        .values_list("graph_id", flat=True)
+        .distinct()
     )
 
 
@@ -234,7 +260,8 @@ def visible_set(user):
     """The resources *user* may see in the Explorer, decided once (spec §4, D33, D37, D50).
 
     A resource is hidden only by a read restriction: it is in
-    ``hidden_resource_ids(user)``, or a link it needs runs through a nodegroup
+    ``hidden_resource_ids(user)``, its model is outside
+    ``readable_graph_ids(user)``, or a link it needs runs through a nodegroup
     outside ``readable_nodegroup_ids(user)``. A resource in a Draft lifecycle
     state is visible to every reader, the visitor included, and belongs to
     ``unpublished``; an analysis whose visible objects observed are all
@@ -256,6 +283,7 @@ def _visible_for(user):
 
     hidden = hidden_resource_ids(user)
     nodegroups = readable_nodegroup_ids(user)
+    graphs = readable_graph_ids(user)
     drafts = draft_state_id_set()
     slug_of = {graph_id_of(slug): slug for slug in EXPLORER_MODELS}
     slug_of.pop(None, None)
@@ -270,7 +298,7 @@ def _visible_for(user):
     ):
         rid, slug = str(rid), slug_of[str(graph_id)]
         existing[slug].add(rid)
-        if rid in hidden:
+        if rid in hidden or str(graph_id) not in graphs:
             continue
         if state is not None and str(state) in drafts:
             unpublished.add(rid)
