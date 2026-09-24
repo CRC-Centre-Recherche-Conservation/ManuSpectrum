@@ -1,0 +1,97 @@
+import json
+import re
+
+from django.contrib.auth.models import User
+from django.test import TestCase
+from django.urls import reverse
+
+JSON_LD = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+
+
+class AnalysisExplorerPageTests(TestCase):
+    def test_page_renders_in_both_languages_with_both_labels(self):
+        for lang, title in (
+            ("en", "Analysis explorer"),
+            ("fr", "Explorateur d'analyses"),
+        ):
+            response = self.client.get(f"/{lang}/discover")
+            self.assertEqual(response.status_code, 200, lang)
+            html = response.content.decode()
+            self.assertIn(title, html, lang)
+            self.assertIn('id="ms-explorer-app"', html, lang)
+
+    def test_bare_path_redirects_to_a_language(self):
+        response = self.client.get("/discover")
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].endswith("/en/discover"))
+
+    def test_canonical_never_carries_the_query(self):
+        html = self.client.get(reverse("analysis-explorer") + "?q=XRF").content.decode()
+        self.assertRegex(html, r'<link rel="canonical" href="[^"?]*/en/discover">')
+
+    def test_noindex_only_with_a_query(self):
+        plain = self.client.get(reverse("analysis-explorer")).content.decode()
+        queried = self.client.get(
+            reverse("analysis-explorer") + "?q=XRF"
+        ).content.decode()
+        self.assertNotIn('name="robots"', plain)
+        self.assertIn('<meta name="robots" content="noindex, follow">', queried)
+
+    def test_hreflang_alternates_point_at_both_languages(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertIn('hreflang="fr" href="http://testserver/fr/discover"', html)
+        self.assertIn('hreflang="en" href="http://testserver/en/discover"', html)
+
+    def test_json_ld_parses(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        blocks = JSON_LD.findall(html)
+        self.assertTrue(blocks)
+        for block in blocks:
+            json.loads(block)
+
+    def test_mount_point_carries_the_connection_flag(self):
+        anonymous = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertIn('data-connected="false"', anonymous)
+        user = User.objects.create_user("explorer-reader", password="unused-in-tests")
+        self.client.force_login(user)
+        connected = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertIn('data-connected="true"', connected)
+
+    def test_page_drops_the_arches_payload_other_pages_keep_it(self):
+        explorer = self.client.get(reverse("analysis-explorer")).content.decode()
+        team = self.client.get(reverse("about-team")).content.decode()
+        self.assertNotIn("arches-translations", explorer)
+        self.assertIn("arches-translations", team)
+
+    def test_body_class_marks_the_app_and_stays_default_elsewhere(self):
+        explorer = self.client.get(reverse("analysis-explorer")).content.decode()
+        team = self.client.get(reverse("about-team")).content.decode()
+        self.assertIn('<body class="ms-page ms-page--app">', explorer)
+        self.assertIn('<body class="ms-page">', team)
+
+    def test_fallback_and_noscript_are_rendered(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertIn('id="ms-explorer-fallback"', html)
+        self.assertRegex(html, r'id="ms-explorer-fallback"[^>]*hidden')
+        self.assertIn("<noscript>", html)
+
+    def test_scripts_and_styles_of_the_page_are_loaded(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertRegex(
+            html,
+            r'<script src="[^"]*/js/views/pages/analysis-explorer\.\w+\.js"\s+defer></script>',
+        )
+        self.assertRegex(
+            html, r'<link href="[^"]*/css/explorer\.\w+\.css" rel="stylesheet" />'
+        )
+
+
+class AnalysisExplorerIndexingTests(TestCase):
+    def test_sitemap_lists_the_explorer_with_its_french_alternate(self):
+        xml = self.client.get("/sitemap.xml").content.decode()
+        self.assertIn("/en/discover", xml)
+        self.assertIn("/fr/discover", xml)
+
+    def test_robots_does_not_block_the_explorer(self):
+        robots = self.client.get("/robots.txt").content.decode()
+        self.assertNotIn("discover", robots)

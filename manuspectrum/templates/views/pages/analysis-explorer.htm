@@ -1,0 +1,54 @@
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% load render_bundle from webpack_loader %}
+{% block page_title %}{% trans "Discover the data" %} · {% trans "Analysis explorer" %} — ManuSpectrum{% endblock %}
+{% block page_description %}{% trans "Browse the physicochemical analyses of manuscripts: search by technique, material, project or year, and open each document where it was analysed." %}{% endblock %}
+{% block og_title %}{% trans "Discover the data" %} · {% trans "Analysis explorer" %} — ManuSpectrum{% endblock %}
+{% block og_description %}{% trans "Browse the physicochemical analyses of manuscripts: search by technique, material, project or year, and open each document where it was analysed." %}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@graph": [
+        {"@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'root' %}"},
+            {"@type": "ListItem", "position": 2, "name": "{% trans 'Discover the data' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'analysis-explorer' %}"}
+        ]},
+        {"@type": "WebApplication", "name": "{% trans 'Analysis explorer' as ms_app %}{{ ms_app|escapejs }}",
+         "applicationCategory": "ResearchApplication", "isAccessibleForFree": true,
+         "url": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'analysis-explorer' %}"}
+    ]
+}
+</script>
+{% endblock %}
+{% block extra_head %}{% render_bundle 'css/explorer' 'css' %}{% endblock %}
+{% block body_class %}ms-page ms-page--app{% endblock %}
+{% block arches_js_data %}{% endblock %}
+{% block content %}
+<section class="ms-explorer-intro">
+    <h1 class="ms-explorer-intro__title">
+        {% trans "Discover the data" %}
+        <span class="ms-explorer-intro__subtitle">{% trans "Analysis explorer" %}</span>
+    </h1>
+    <p class="ms-explorer-intro__lead">
+        {% blocktrans trimmed %}
+        Search the analyses of written heritage by technique, material, project or year,
+        then open a document to see where each analysis was made.
+        {% endblocktrans %}
+    </p>
+</section>
+<div id="ms-explorer-app" class="ms-explorer" aria-busy="true" data-connected="{{ explorer_connected|yesno:'true,false' }}">
+    <p class="ms-explorer__loading">{% trans "Loading the explorer…" %}</p>
+</div>
+<div id="ms-explorer-fallback" class="ms-explorer-fallback" role="alert" hidden>
+    <p>{% trans "The explorer could not start in this browser." %}</p>
+    <p><a href="{% url 'search_home' %}">{% trans "Use the advanced search instead" %}</a></p>
+</div>
+<noscript>
+    <div class="ms-explorer-fallback">
+        <p>{% trans "The explorer needs JavaScript." %}</p>
+        <p><a href="{% url 'search_home' %}">{% trans "Use the advanced search instead" %}</a></p>
+    </div>
+</noscript>
+{% endblock %}
+{% block js_bundle %}{% render_bundle 'views/pages/analysis-explorer' 'js' attrs=' defer' %}{% endblock %}

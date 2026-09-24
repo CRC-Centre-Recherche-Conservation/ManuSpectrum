@@ -30,6 +30,7 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationPageViewV2,
     IIIFAnnotationViewV2,
 )
+from manuspectrum.views.analysis_explorer import AnalysisExplorerPageView
 from manuspectrum.views.explorer_api import (
     ExplorerAnalysisView,
     ExplorerDocumentView,
@@ -139,6 +140,12 @@ for _slug, _name, _tpl in [
     urlpatterns.append(
         path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
     )
+
+### Analysis Explorer page: wrapped, so /en/discover and /fr/discover; the
+### application state lives in the query string, never in the path.
+urlpatterns.append(
+    path("discover", AnalysisExplorerPageView.as_view(), name="analysis-explorer")
+)
 
 ### Model-graph API: wrapped too, so the URL carries the language
 ### (/en/api/model-graph, /fr/api/model-graph). Its payload is localised, so
