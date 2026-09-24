@@ -58,6 +58,24 @@ describe("CorpusDocument", () => {
         expect(wrapper.text()).toContain("This item is not available.");
     });
 
+    it("offers one way home when a document opened from the home is unavailable", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => jsonResponse({}, 404)),
+        );
+        const store = useExplorerStore();
+        store.openDocument(uuid(1));
+        const wrapper = mount(CorpusDocument, {
+            props: { documentId: uuid(1) },
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        const homeLabels = wrapper
+            .findAll("button")
+            .filter((button) => button.text() === "Back to the explorer home");
+        expect(homeLabels).toHaveLength(1);
+    });
+
     it("goes back to the results it was opened from", async () => {
         vi.stubGlobal(
             "fetch",

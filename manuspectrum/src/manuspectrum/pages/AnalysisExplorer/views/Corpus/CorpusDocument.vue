@@ -69,6 +69,7 @@ function goHome(): void {
                 payload.status.value === 'unavailable'
             "
             :status="payload.status.value"
+            :hide-home="store.documentOrigin !== 'results'"
             @retry="payload.retry"
             @home="goHome"
         />
