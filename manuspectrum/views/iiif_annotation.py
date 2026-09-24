@@ -28,9 +28,10 @@ from arches.app.utils.permission_backend import user_can_read_resource
 from manuspectrum.utils.cache import stable_cache_key
 from manuspectrum.utils.public_visibility import (
     anonymous_user,
-    hidden_resource_ids,
     readable_nodegroup_ids,
+    visible_set,
 )
+from manuspectrum.utils.role_links import role_node as _role_node
 from manuspectrum.views.serializers.iiif_annotation import (
     IIIFAnnotationSerializer,
     IIIFAnnotationSerializerV2,
@@ -110,12 +111,6 @@ def _not_found(message: str) -> JsonResponse:
     return _private_json({"error": message}, 404)
 
 
-def _role_node(slug, alias):
-    """The ``NodeInfo`` of a (model slug, node alias) role, or None when unresolved."""
-    index = GraphIndex.for_slug(slug)
-    return index.nodes.get(alias) if index else None
-
-
 def _referencing(node, target_ids):
     """``(source resource id, target id)`` of the tiles whose *node* names a target.
 
@@ -143,14 +138,20 @@ def _referencing(node, target_ids):
 
 
 def _through_readable_path(paths, user):
-    """Ids of the analyses *user* reaches through at least one readable path."""
-    hidden = hidden_resource_ids(user)
+    """Ids of the analyses *user* reaches through at least one visible path.
+
+    An analysis must be in ``visible_set(user).analyses`` (embargo, Draft and
+    D33 decided there) and one of its paths must have every resource visible
+    and every relation nodegroup readable.
+    """
+    visible = visible_set(user)
     nodegroups = readable_nodegroup_ids(user)
     return {
         analysis_id
         for analysis_id, steps in paths
-        if all(
-            resource_id not in hidden and str(nodegroup_id) in nodegroups
+        if analysis_id in visible.analyses
+        and all(
+            resource_id in visible.ids and str(nodegroup_id) in nodegroups
             for resource_id, nodegroup_id in steps
         )
     }
@@ -217,12 +218,12 @@ class IIIFAnnotationMixin:
 
         An analysis is reached through a path of links read off the tiles
         (``_analysis_paths``) and is readable through a path whose resources
-        are all outside ``hidden_resource_ids(user)`` and whose relation
-        nodegroups are all readable: an analysis of a hidden Component is
-        hidden with it. The payload is public, the same for every reader,
-        when the anonymous reader may read *resource* and every analysis
-        reached, and *user* reads them all too; a restricted analysis
-        anywhere makes it reader-dependent.
+        are all in ``visible_set(user)`` and whose relation nodegroups are all
+        readable: an analysis of a hidden Component, a Draft resource or a
+        hidden or Draft Project is hidden with it (D33). The payload is
+        public, the same for every reader, when the anonymous reader may read
+        *resource* and every analysis reached, and *user* reads them all too;
+        a restricted analysis anywhere makes it reader-dependent.
         """
         paths = self._analysis_paths(resource)
         reached = {analysis_id for analysis_id, _ in paths}

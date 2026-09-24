@@ -27,6 +27,8 @@ from arches.app.models.models import (
 )
 from arches.app.utils.permission_backend import assign_perm
 
+from tests.explorer_fixtures import ACTIVE
+
 DEFAULT_LIFECYCLE_ID = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
 
 DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
@@ -103,9 +105,15 @@ class EmbargoCase(TestCase):
 
         cls.documents = {}
         for side in ("open", "embargoed"):
-            document = ResourceInstance.objects.create(graph=graphs["document"])
-            component = ResourceInstance.objects.create(graph=graphs["component"])
-            analysis = ResourceInstance.objects.create(graph=graphs["analysis"])
+            document = ResourceInstance.objects.create(
+                graph=graphs["document"], resource_instance_lifecycle_state_id=ACTIVE
+            )
+            component = ResourceInstance.objects.create(
+                graph=graphs["component"], resource_instance_lifecycle_state_id=ACTIVE
+            )
+            analysis = ResourceInstance.objects.create(
+                graph=graphs["analysis"], resource_instance_lifecycle_state_id=ACTIVE
+            )
             TileModel.objects.create(
                 resourceinstance=component,
                 nodegroup_id=NG_PART_OF,

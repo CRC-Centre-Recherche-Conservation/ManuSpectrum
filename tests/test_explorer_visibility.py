@@ -17,6 +17,7 @@ from manuspectrum.utils.public_visibility import (
     reader_scope,
     visible_set,
 )
+from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
 from tests.explorer_fixtures import ACTIVE, ExplorerCase
 
 DEFAULT_LIFECYCLE_DRAFT = "9375c9a7-dad2-4f14-a5c1-d7e329fdde4f"
@@ -187,3 +188,26 @@ class VisibleSetTests(ExplorerCase):
         self.assertNotIn(
             str(self.analyses["open"].pk), visible_set(self.anonymous).analyses
         )
+
+
+class CollectionUnderVisibleSetTests(ExplorerCase):
+    def readable(self, user, document):
+        analyses, public = IIIFAnnotationCollectionView()._readable_analyses(
+            user, document
+        )
+        return {str(a.pk) for a in analyses}, public
+
+    def test_a_hidden_project_takes_its_analysis_out_of_the_collection(self):
+        self.embargo(self.projects["side"])
+
+        reached, public = self.readable(self.anonymous, self.documents["open"])
+
+        self.assertNotIn(str(self.analyses["on_document"].pk), reached)
+        self.assertIn(str(self.analyses["open"].pk), reached)
+        self.assertFalse(public)
+
+    def test_a_draft_analysis_is_not_served_to_the_visitor(self):
+        reached, public = self.readable(self.anonymous, self.documents["open"])
+
+        self.assertNotIn(str(self.analyses["draft"].pk), reached)
+        self.assertFalse(public)
