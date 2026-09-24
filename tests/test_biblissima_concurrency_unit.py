@@ -323,7 +323,7 @@ class EnrichmentPoolSessionTests(ConcurrencyTestCase):
             time.sleep(0.05)
             with used_lock:
                 used.append((threading.get_ident(), session))
-            response = MagicMock()
+            response = MagicMock(headers={})
             response.json.return_value = {"query": {"search": []}}
             return response
 

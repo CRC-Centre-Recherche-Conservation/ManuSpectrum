@@ -95,6 +95,17 @@ class SuggestPrefixContractTests(LiveContractTestCase):
                 self.assertEqual(qid in self._search(query), found)
                 self.assertEqual(bp._strict(label).startswith(bp._strict(query)), found)
 
+    def test_a_hyphen_and_an_apostrophe_read_as_a_space(self):
+        for spaced, punctuated in (
+            ("saint jacques", "saint-jacques"),
+            ("jeanne d arc", "jeanne d'arc"),
+        ):
+            with self.subTest(query=punctuated):
+                hits = self._search(spaced)
+                self.assertTrue(hits, f"no hit for {spaced!r}: pick another label")
+                self.assertEqual(self._search(punctuated), hits)
+                self.assertEqual(bp._strict(punctuated), bp._strict(spaced))
+
     def test_a_derived_answer_holds_every_upstream_hit(self):
         entry = bp._suggest_prefix_entry("drag", "fr", time.monotonic() + 10)
         self.assertTrue(

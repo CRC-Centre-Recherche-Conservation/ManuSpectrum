@@ -84,7 +84,7 @@ from urllib.parse import urlencode, urlsplit
 import requests
 from lxml import html as lxml_html
 from requests.adapters import HTTPAdapter
-from urllib3.exceptions import ReadTimeoutError
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 from urllib3.util.retry import Retry
 from django.core.cache import cache
 from django.http import JsonResponse
@@ -540,15 +540,21 @@ def _annotation_targets_are_safe(canvas_url, manifest_url):
 
 
 def _is_timeout(exc):
-    """Whether *exc* is a timeout, one met while reading the body included.
+    """Whether *exc* is a timeout, a read timeout reported as a connection error included.
 
-    ``requests`` reports a read timeout during the body download as a
-    ``ConnectionError`` wrapping urllib3's ``ReadTimeoutError``.
+    With the project's sessions ``requests`` reports a read timeout as a
+    ``ConnectionError``: wrapping urllib3's ``ReadTimeoutError`` during the
+    body download, or a ``MaxRetryError`` whose reason it is before the
+    headers (the retries of ``_NO_RETRY`` are exhausted at once).
     """
     if isinstance(exc, (requests.exceptions.Timeout, BiblissimaBudgetSpent)):
         return True
-    return isinstance(exc, requests.exceptions.ConnectionError) and any(
-        isinstance(arg, ReadTimeoutError) for arg in exc.args
+    if not isinstance(exc, requests.exceptions.ConnectionError):
+        return False
+    return any(
+        isinstance(arg, ReadTimeoutError)
+        or (isinstance(arg, MaxRetryError) and isinstance(arg.reason, ReadTimeoutError))
+        for arg in exc.args
     )
 
 
@@ -1189,7 +1195,8 @@ def _suggest_call(params, deadline):
     The DNS lookups of the SSRF guard are not covered by the budget. Returns
     the decoded JSON object. Raises ``BiblissimaApiError`` (a ``ValueError``)
     for a body ``_bib_json`` refuses, and what the fetch raises otherwise; a
-    read timeout during the body surfaces as ``requests.ConnectionError``.
+    read timeout, before or during the body, surfaces as
+    ``requests.ConnectionError``.
     """
     left = deadline - time.monotonic()
     if left <= 0:
@@ -1720,7 +1727,8 @@ class BiblissimaEntityView(View):
     Upstream calls run under one request budget. An entity that could not be
     fetched answers the failure; an id Wikibase marks missing or rejects with
     ``no-such-entity`` answers 404; a failed lookup of a linked entity makes
-    the answer ``partial``. The id must match ``Q[1-9]\d*``, else 400.
+    the answer ``partial``. An id other than ``Q`` followed by a number
+    without a leading zero answers 400.
     """
 
     @method_decorator(cache_control(private=True))

@@ -8,6 +8,7 @@ Run:
 
 import json
 import os
+import socket
 import threading
 import time
 from collections import namedtuple
@@ -492,6 +493,32 @@ class UpstreamErrorMappingTests(BudgetTestCase):
     def test_a_read_timeout_during_the_body_answers_504(self):
         with self.assertRaises(requests.exceptions.ConnectionError) as raised:
             _stalled_response(WIKIBASE)
+
+        with self.assertLogs(bp.logger.name, level="WARNING"):
+            response = bp._biblissima_upstream_error(raised.exception, "ctx")
+
+        self.assertEqual(response.status_code, 504)
+        self.assertEqual(json.loads(response.content)["error"], "timeout")
+
+    def test_a_read_timeout_before_the_headers_answers_504(self):
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        self.addCleanup(server.close)
+
+        def stall():
+            client, _ = server.accept()
+            client.recv(4096)
+            time.sleep(1)
+            client.close()
+
+        threading.Thread(target=stall, daemon=True).start()
+        session = bp._build_biblissima_session(retry=bp._NO_RETRY)
+        self.addCleanup(session.close)
+        with self.assertRaises(requests.exceptions.ConnectionError) as raised:
+            session.get(
+                f"http://127.0.0.1:{server.getsockname()[1]}/", timeout=(1, 0.2)
+            )
 
         with self.assertLogs(bp.logger.name, level="WARNING"):
             response = bp._biblissima_upstream_error(raised.exception, "ctx")
