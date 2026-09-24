@@ -1,7 +1,6 @@
 /**
- * Pure helpers for the biblissima-concept widget — kept import-free so
- * vitest can exercise them without the webpack-alias stubs (the mocked
- * WidgetViewModel/bindings make the widget viewmodel itself untestable).
+ * Pure helpers for the Biblissima suggest selects — kept import-free so
+ * vitest can exercise them without the webpack-alias stubs.
  */
 
 /**
@@ -90,4 +89,40 @@ export function isReferentialUrl(url, portalBase, entityUriBase) {
  */
 export function isPortalArk(url, portalBase) {
     return Boolean(url) && startsWithBase(url, portalBase);
+}
+
+/** Debounce, in ms, of every Biblissima suggest select (selectWoo `ajax.delay`). */
+export const SUGGEST_DELAY_MS = 300;
+
+/**
+ * The search text as the suggest endpoint reads it: trimmed, inner runs of
+ * whitespace collapsed, so two selects typing the same words send one URL.
+ */
+export function normalizeSuggestTerm(term) {
+    return (term || '').trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * selectWoo `ajax` options shared by every Biblissima suggest select: URL,
+ * debounce and a query string in a fixed parameter order. The caller adds
+ * its own `processResults`. selectWoo aborts the request in flight on each
+ * keystroke by itself.
+ */
+export function suggestAjaxOptions({ url, type, lang, limit }) {
+    return {
+        url: url,
+        dataType: 'json',
+        delay: SUGGEST_DELAY_MS,
+        data: (requestParams) => {
+            const params = {
+                q: normalizeSuggestTerm(requestParams.term),
+                type: type,
+                lang: lang,
+            };
+            if (limit) {
+                params.limit = limit;
+            }
+            return params;
+        },
+    };
 }

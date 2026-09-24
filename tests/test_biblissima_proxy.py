@@ -29,6 +29,7 @@ import json
 import os
 import socket
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qsl, urlsplit
 
 import requests
 from django.core.cache import cache
@@ -81,6 +82,11 @@ def _make_response(json_data=None, status_code=200, text=""):
     else:
         resp.raise_for_status.return_value = None
     return resp
+
+
+def _params_of(call):
+    """Query parameters of a mocked ``_bib_request`` call, from its URL."""
+    return dict(parse_qsl(urlsplit(call.args[1]).query))
 
 
 def _address(ip):
@@ -348,17 +354,10 @@ class GetWikibaseEntityTests(TestCase):
 
     def test_handles_missing_entity(self):
         session = MagicMock()
-        # API returns no entity for the QID.
         resp = _make_response(json_data={"entities": {}})
         with patch.object(bp, "_bib_request", return_value=resp):
             result = bp._get_wikibase_entity("Q999", session=session)
-        # _extract_entity_props with empty raw still returns a dict with
-        # qid + empty label and None claims — that's acceptable, but it
-        # should NOT cache an empty dict for too long. The current
-        # implementation does cache it; assert it's at least not None
-        # and shaped right.
-        self.assertIsNotNone(result)
-        self.assertEqual(result["biblissimaQid"], "Q999")
+        self.assertIsNone(result)
 
 
 class BatchGetWikibaseEntitiesTests(TestCase):
@@ -1188,6 +1187,7 @@ class BuildBiblissimaSessionTests(TestCase):
             self.assertEqual(retry.total, 3)
             self.assertIn(429, retry.status_forcelist)
             self.assertIn(503, retry.status_forcelist)
+            self.assertIs(retry.respect_retry_after_header, False)
         finally:
             session.close()
 
@@ -1919,6 +1919,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
 
         cache.clear()
 
+    @patch("manuspectrum.views.biblissima_proxy._besteffort_session", None)
     @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
     @patch("manuspectrum.views.biblissima_proxy._batch_get_wikibase_entities")
     @patch("manuspectrum.views.biblissima_proxy._bib_request")
@@ -2472,16 +2473,25 @@ class BiblissimaSuggestViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_limit_is_clamped_to_15(self):
-        # 17 × 3 > 50 would silently break wbsearchentities (MediaWiki cap,
-        # error reported as JSON in HTTP 200). Clamped: 15 × 3 = 45 ≤ 50.
-        search_resp = _make_response(json_data={"search": []})
-        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        items = [{"id": f"Q{i}", "label": f"dragon {i}"} for i in range(20)]
+        entities = {
+            f"Q{i}": {
+                "labels": {"fr": {"value": f"dragon {i}"}},
+                "claims": {"P2": [_claim_item("Q304387")]},
+            }
+            for i in range(20)
+        }
         with patch.object(
-            bp, "_bib_request", side_effect=[search_resp, fulltext_resp]
+            bp,
+            "_bib_request",
+            side_effect=[
+                _make_response(json_data={"search": items}),
+                _make_response(json_data={"entities": entities}),
+            ],
         ) as mocked:
-            self._get(q="dragon", type="descriptor", limit="50")
-        first_call_params = mocked.call_args_list[0].kwargs["params"]
-        self.assertEqual(first_call_params["limit"], 45)
+            response = self._get(q="dragon", type="descriptor", limit="50")
+        self.assertEqual(_params_of(mocked.call_args_list[0])["limit"], "50")
+        self.assertEqual(len(json.loads(response.content)["results"]), 15)
 
     DESC_HASH = "desc46a049ef1a1cfed3c4a9c932503ea8497b6ae21f"
 
@@ -2538,11 +2548,11 @@ class BiblissimaSuggestViewTests(TestCase):
         )
         self.assertEqual(payload["results"][0]["label_en"], "Dragon")
 
-    def test_languages_param_deduplicated_with_lang(self):
-        _, mocked = self._descriptor_flow({"fr": {"value": "dragon"}}, lang="de")
-        batch_params = mocked.call_args_list[1].kwargs["params"]
-        self.assertEqual(batch_params["languages"], "de|en|fr")
-        self.assertEqual(batch_params["props"], "claims|labels")
+    def test_the_prefix_batch_reads_every_language(self):
+        _, mocked = self._descriptor_flow({"fr": {"value": "dragon"}}, lang="en")
+        batch_params = _params_of(mocked.call_args_list[1])
+        self.assertNotIn("languages", batch_params)
+        self.assertEqual(batch_params["props"], "claims|labels|aliases")
 
     def test_portal_url_none_when_p129_missing(self):
         search_resp = _make_response(
@@ -2700,19 +2710,24 @@ class BiblissimaSuggestViewTests(TestCase):
         search_resp = _make_response(json_data={})  # no "search" key
         fulltext_resp = _make_response(json_data={"query": {}})  # no "search"
         with patch.object(bp, "_bib_request", side_effect=[search_resp, fulltext_resp]):
-            response = self._get(q="épée", type="descriptor")
+            with self.assertLogs(bp.logger, "WARNING"):
+                response = self._get(q="épée", type="descriptor")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.content)["results"], [])
 
-    def test_double_upstream_failure_sets_degraded_and_is_not_cached(self):
-        with patch.object(
-            bp, "_bib_request", side_effect=requests.exceptions.Timeout()
-        ):
-            response = self._get(q="dragon", type="descriptor")
+    def test_double_upstream_failure_sets_degraded_and_is_kept_briefly(self):
+        with patch.object(bp.cache, "set", wraps=bp.cache.set) as setter:
+            with patch.object(
+                bp, "_bib_request", side_effect=requests.exceptions.Timeout()
+            ):
+                response = self._get(q="dragon", type="descriptor")
         payload = json.loads(response.content)
         self.assertTrue(payload["degraded"])
         self.assertEqual(payload["results"], [])
         self.assertIn("max-age=0", response["Cache-Control"])
+        key = bp._suggest_key("dragon", "Q304387", "fr", 10)
+        timeouts = [c.args[2] for c in setter.call_args_list if c.args[0] == key]
+        self.assertEqual(timeouts[-1], bp.SUGGEST_PARTIAL_TTL)
 
     def test_successful_response_is_not_degraded(self):
         payload, _ = self._descriptor_flow({"fr": {"value": "dragon"}})

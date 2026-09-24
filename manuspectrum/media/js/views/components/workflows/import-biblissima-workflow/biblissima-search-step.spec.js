@@ -17,6 +17,13 @@ vi.mock('arches', () => ({
 }));
 vi.mock('nouislider', () => ({ default: { create: vi.fn() } }));
 
+const { SUGGEST_URL, generateArchesURL } = vi.hoisted(() => {
+    const url = '/mocked/biblissima-suggest';
+    return { SUGGEST_URL: url, generateArchesURL: vi.fn(() => url) };
+});
+
+vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL }));
+
 import viewModel from './biblissima-search-step.js';
 
 const build = (overrides = {}) => {
@@ -94,5 +101,23 @@ describe('biblissima-search-step dispose', () => {
         vm.cart.removeAll();
 
         expect(complete()).toBe(true);
+    });
+});
+
+describe('biblissima-search-step suggest selects', () => {
+    it('send the same normalised query as the concept widget', () => {
+        const { vm } = build();
+        expect(vm.descriptorSelectConfig.ajax.data({ term: ' saint   jero ' }))
+            .toEqual({ q: 'saint jero', type: 'descriptor', lang: 'fr' });
+        expect(vm.manuscriptComponentSelectConfig.ajax.data({ term: 'latin ' }))
+            .toEqual({ q: 'latin', type: 'manuscript', lang: 'fr', limit: 15 });
+    });
+
+    it('reach the suggest endpoint through its route name', () => {
+        generateArchesURL.mockClear();
+        const { vm } = build();
+        expect(generateArchesURL).toHaveBeenCalledWith('manuspectrum:biblissima-suggest');
+        expect(vm.descriptorSelectConfig.ajax.url).toBe(SUGGEST_URL);
+        expect(vm.manuscriptComponentSelectConfig.ajax.url).toBe(SUGGEST_URL);
     });
 });

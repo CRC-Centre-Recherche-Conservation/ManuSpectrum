@@ -719,7 +719,8 @@ BIBLISSIMA_PORTAL_REQUEST_TIMEOUT = 30
 # generous for large-but-reachable manifests, but a DEAD IIIF host must fail
 # in seconds — otherwise the illumination-detail request blocks for minutes
 # (a 45 s connect timeout x connect retries once held a gunicorn worker for
-# ~138 s when api.irht.cnrs.fr was unreachable).
+# ~138 s when api.irht.cnrs.fr was unreachable). Also the connect cap of every
+# call made under a request budget (BIBLISSIMA_VIEW_DEADLINE).
 BIBLISSIMA_IIIF_CONNECT_TIMEOUT = 5
 
 # Maximum concurrent outbound HTTP calls to Biblissima per worker process
@@ -729,6 +730,20 @@ BIBLISSIMA_CONCURRENCY_LIMIT = 12
 # Whole seconds a request waits for a Biblissima concurrency slot before
 # answering 503; also sent as Retry-After.
 BIBLISSIMA_SLOT_TIMEOUT = 15
+
+# Whole-request budget, in seconds, of one /api/biblissima/suggest miss. Each
+# upstream call's slot wait, connect and read are capped by what is left of it,
+# and no call starts once it is spent: the answer then carries the results
+# already in hand. Calls on this path are never retried.
+BIBLISSIMA_SUGGEST_DEADLINE = 4
+
+# Backstop, in seconds, of the Biblissima calls one interactive view makes
+# (entity, searches, illuminations). Under it calls never retry, connect within
+# BIBLISSIMA_IIIF_CONNECT_TIMEOUT and read within their own timeout, both capped
+# by what is left; no call starts once it is spent, and a host found down is not
+# called again in the same request. Kept under the 60 s abort of the create
+# step's client and under the gunicorn worker timeout.
+BIBLISSIMA_VIEW_DEADLINE = 30
 
 # 24h Django-cache TTL for resolved Wikibase entities and manuscript
 # enrichment results.

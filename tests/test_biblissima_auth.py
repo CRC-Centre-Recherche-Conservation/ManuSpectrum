@@ -239,8 +239,8 @@ class BiblissimaAuthPassThroughTests(TestCase):
 
 
 class BiblissimaCachePrivacyTests(TestCase):
-    """The cached GET proxies must be private-to-authenticated yet still
-    benefit from Django's server-side page cache."""
+    """The suggest proxy answers private to its editors yet still from its
+    server-side memo."""
 
     @classmethod
     def setUpTestData(cls):
@@ -251,17 +251,25 @@ class BiblissimaCachePrivacyTests(TestCase):
         cache.clear()
 
     def test_suggest_is_private_and_auth_precedes_cache(self):
-        self.client.force_login(self.editor)
-        # q shorter than 2 chars short-circuits before any upstream call
-        url = reverse("biblissima-suggest") + "?q=a"
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("private", resp["Cache-Control"])
-        # The response is now in the page cache; an anonymous request for the
-        # SAME URL must still be rejected (dispatch check precedes the cached get)
-        self.client.logout()
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 403)
+        with mock.patch.object(biblissima_proxy, "_bib_request") as bib:
+            bib.return_value.json.return_value = {
+                "search": [],
+                "query": {"search": []},
+                "entities": {},
+            }
+            self.client.force_login(self.editor)
+            url = reverse("biblissima-suggest") + "?q=auth-probe"
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("private", resp["Cache-Control"])
+            self.assertIsNotNone(
+                cache.get(biblissima_proxy._suggest_key("auth-probe", "", "fr", 10))
+            )
+            upstream_calls = bib.call_count
+            self.client.logout()
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 403)
+            self.assertEqual(bib.call_count, upstream_calls)
 
     def test_private_header_does_not_disable_server_side_cache(self):
         with mock.patch.object(biblissima_proxy, "_bib_request") as bib:
@@ -278,8 +286,5 @@ class BiblissimaCachePrivacyTests(TestCase):
             self.assertGreater(upstream_calls, 0)  # first hit went upstream
             r2 = self.client.get(url)
             self.assertEqual(r2.status_code, 200)
-            # Second hit must be served from the page cache: if private had
-            # been patched INSIDE cache_page, UpdateCacheMiddleware would
-            # refuse to store and this count would grow.
             self.assertEqual(bib.call_count, upstream_calls)
             self.assertIn("private", r2["Cache-Control"])

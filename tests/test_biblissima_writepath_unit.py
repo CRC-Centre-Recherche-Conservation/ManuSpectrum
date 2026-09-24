@@ -23,7 +23,8 @@ canonical source modules:
 so they are patched as ``manuspectrum.views.biblissima_proxy.Value`` /
 ``manuspectrum.views.biblissima_proxy.TileModel``.
 
-No DB writes happen.  The resource mock returns a controlled serialized graph
+No DB writes happen, except in ResourceRelationsDatabaseTests (test
+database).  The resource mock returns a controlled serialized graph
 containing concept and concept-list nodes so the code under test can look up
 datatypes.
 
@@ -37,8 +38,20 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from arches.app.datatypes.datatypes import DataTypeFactory
+from arches.app.models.models import (
+    GraphModel,
+    Node,
+    NodeGroup,
+    ResourceInstance,
+    ResourceXResource,
+)
+from arches.app.models.resource import Resource
 from django.core.cache import cache
+from django.db import transaction
 from django.test import TestCase
+
+from manuspectrum.views import biblissima_proxy as bp
 
 # ---------------------------------------------------------------------------
 # UUIDs used consistently across tests
@@ -2631,3 +2644,117 @@ class CheckDuplicatesIndexTests(TestCase):
             if s["matchType"] == "identifier"
         ]
         self.assertEqual(ids, [_RID_A])
+
+
+class ResourceRelationsDatabaseTests(TestCase):
+    """A Component written by the bulk path carries its relation row.
+
+    Real database: the row comes from Arches' own
+    ``__arches_create_resource_x_resource_relationships``, which reads the
+    ``nodes`` table, so both graphs, the parent-document node and the Document
+    are created below (a test run never loads the package).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        graphs = {}
+        for graph_id, name in (
+            (bp.DOCUMENT_GRAPH_ID, "Document"),
+            (bp.COMPONENT_GRAPH_ID, "Component"),
+        ):
+            graphs[name] = GraphModel.objects.create(
+                graphid=graph_id,
+                name=name,
+                isresource=True,
+                is_active=True,
+                slug=f"relations-{name.lower()}",
+            )
+        cls.component_graph = graphs["Component"]
+        nodegroup = NodeGroup.objects.create(
+            nodegroupid=bp.COMP_PARENT_DOC_NG, cardinality="1"
+        )
+        cls.node_config = {
+            "graphs": [
+                {
+                    "graphid": bp.DOCUMENT_GRAPH_ID,
+                    "ontologyProperty": "",
+                    "inverseOntologyProperty": "",
+                }
+            ]
+        }
+        Node.objects.create(
+            nodeid=bp.COMP_PARENT_DOC_NODE,
+            name="parent_document",
+            alias="parent_document",
+            datatype="resource-instance",
+            graph=cls.component_graph,
+            nodegroup=nodegroup,
+            istopnode=False,
+            config=cls.node_config,
+        )
+        cls.document_id = str(
+            ResourceInstance.objects.create(graph=graphs["Document"]).pk
+        )
+
+    def setUp(self):
+        self.component_id = str(
+            ResourceInstance.objects.create(graph=self.component_graph).pk
+        )
+        self.resource = Resource.objects.get(pk=self.component_id)
+        self.resource.set_serialized_graph(
+            {
+                "root": {"ontologyclass": None},
+                "nodes": [
+                    {
+                        "nodeid": bp.COMP_PARENT_DOC_NODE,
+                        "name": "parent_document",
+                        "datatype": "resource-instance",
+                        "nodegroup_id": bp.COMP_PARENT_DOC_NG,
+                        "config": self.node_config,
+                    }
+                ],
+            }
+        )
+        self.view = bp.BiblissimaCreateResourceView()
+        self.view._tile_buffer = []
+        self.tile = self.view._create_tile(
+            bp.COMP_PARENT_DOC_NG,
+            self.component_id,
+            {
+                bp.COMP_PARENT_DOC_NODE: self.view._resource_instance_ref(
+                    self.document_id
+                )
+            },
+        )
+        self.view._stage_tiles(
+            self.view._tile_buffer,
+            self.view._nodes_by_id(self.resource.get_serialized_graph()),
+            DataTypeFactory(),
+        )
+
+    def _flush(self):
+        with transaction.atomic():
+            self.view._flush_tile_buffer(
+                self.resource, user=None, default_transaction_id=None
+            )
+
+    def test_the_bulk_path_writes_the_relation_row_arches_writes(self):
+        self._flush()
+
+        row = ResourceXResource.objects.get(tile_id=self.tile.tileid)
+        self.assertEqual(str(row.from_resource_id), self.component_id)
+        self.assertEqual(str(row.to_resource_id), self.document_id)
+        self.assertEqual(str(row.node_id), bp.COMP_PARENT_DOC_NODE)
+        self.assertEqual(str(row.to_resource_graph_id), bp.DOCUMENT_GRAPH_ID)
+        stamped = self.tile.data[bp.COMP_PARENT_DOC_NODE][0]["resourceXresourceId"]
+        self.assertEqual(str(row.resourcexid), stamped)
+
+    def test_the_indexed_document_carries_the_related_id(self):
+        self._flush()
+
+        document, _terms = self.resource.get_documents_to_index(
+            datatype_factory=DataTypeFactory(),
+            node_datatypes={bp.COMP_PARENT_DOC_NODE: "resource-instance"},
+        )
+
+        self.assertIn(self.document_id, [entry["id"] for entry in document["ids"]])
