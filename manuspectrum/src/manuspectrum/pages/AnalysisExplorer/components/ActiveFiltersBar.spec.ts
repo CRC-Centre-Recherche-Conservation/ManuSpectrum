@@ -52,6 +52,16 @@ describe("ActiveFiltersBar", () => {
         expect(store.filters.technique).toEqual(["http://x/unknown"]);
     });
 
+    it("shows apostrophes and ampersands as typed, in the chip and its label", () => {
+        const store = useExplorerStore();
+        store.setFilter("q", "Livre d'heures & or");
+        const chip = mountBar().find(".active-filters .chip");
+        expect(chip.text()).toBe("Text: Livre d'heures & or×");
+        expect(chip.attributes("aria-label")).toBe(
+            "Remove filter: Text: Livre d'heures & or",
+        );
+    });
+
     it("clears everything with Clear all", async () => {
         const store = useExplorerStore();
         store.setFilter("year", [2023]);

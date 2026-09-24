@@ -38,7 +38,11 @@ export function useActiveFilters(): {
     const { facetTitle } = useVocabulary();
 
     function named(facet: string, value: string): string {
-        return interpolate($gettext("%{facet}: %{value}"), { facet, value });
+        return interpolate(
+            $gettext("%{facet}: %{value}"),
+            { facet, value },
+            true,
+        );
     }
 
     const activeFilters = computed<ActiveFilter[]>(() => {
@@ -47,9 +51,13 @@ export function useActiveFilters(): {
         if (filters.q) {
             entries.push({
                 id: "q",
-                label: interpolate($gettext("Text: %{text}"), {
-                    text: filters.q,
-                }),
+                label: interpolate(
+                    $gettext("Text: %{text}"),
+                    {
+                        text: filters.q,
+                    },
+                    true,
+                ),
                 clear: () => store.clearFilter("q"),
             });
         }
@@ -81,10 +89,14 @@ export function useActiveFilters(): {
         if (filters.period) {
             entries.push({
                 id: "period",
-                label: interpolate($gettext("Period: %{start}–%{end}"), {
-                    start: filters.period[0],
-                    end: filters.period[1],
-                }),
+                label: interpolate(
+                    $gettext("Period: %{start}–%{end}"),
+                    {
+                        start: filters.period[0],
+                        end: filters.period[1],
+                    },
+                    true,
+                ),
                 clear: () => store.clearFilter("period"),
             });
         }

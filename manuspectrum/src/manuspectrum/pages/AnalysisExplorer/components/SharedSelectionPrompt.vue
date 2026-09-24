@@ -27,6 +27,7 @@ const heading = computed(() =>
             props.selection.keys.length,
         ),
         { n: props.selection.keys.length },
+        true,
     ),
 );
 const truncatedNotice = computed(() =>
@@ -37,6 +38,7 @@ const truncatedNotice = computed(() =>
             props.selection.truncated,
         ),
         { n: props.selection.truncated },
+        true,
     ),
 );
 const missingCount = computed(() => itemsData.value?.missing.length ?? 0);
@@ -48,6 +50,7 @@ const missingNotice = computed(() =>
             missingCount.value,
         ),
         { n: missingCount.value },
+        true,
     ),
 );
 
@@ -72,6 +75,7 @@ function replace(): void {
                 result.kept.length,
             ),
             { n: result.kept.length },
+            true,
         ),
     );
 }
@@ -82,6 +86,7 @@ function merge(): void {
     const added = interpolate(
         $ngettext("%{n} item added.", "%{n} items added.", result.kept.length),
         { n: result.kept.length },
+        true,
     );
     if (result.truncated === 0) {
         emit("resolved", added);
@@ -94,6 +99,7 @@ function merge(): void {
             result.truncated,
         ),
         { n: result.truncated, limit: BASKET_LIMIT },
+        true,
     );
     emit("resolved", `${added} ${refused}`);
 }

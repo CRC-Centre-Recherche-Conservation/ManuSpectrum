@@ -16,9 +16,13 @@ const views = computed(() => availableViews());
 
 function tabLabel(view: ExplorerView): string {
     if (view === "compare") {
-        return interpolate($gettext("Compare (%{count})"), {
-            count: store.basket.length,
-        });
+        return interpolate(
+            $gettext("Compare (%{count})"),
+            {
+                count: store.basket.length,
+            },
+            true,
+        );
     }
     return viewTitle(view);
 }

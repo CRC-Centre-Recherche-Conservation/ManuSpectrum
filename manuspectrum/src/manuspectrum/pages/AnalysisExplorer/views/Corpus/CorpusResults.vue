@@ -57,9 +57,13 @@ const pageCount = computed(() => {
     return Math.max(1, Math.ceil(total.value / size));
 });
 const countText = computed(() =>
-    interpolate($ngettext("%{n} result", "%{n} results", total.value), {
-        n: total.value,
-    }),
+    interpolate(
+        $ngettext("%{n} result", "%{n} results", total.value),
+        {
+            n: total.value,
+        },
+        true,
+    ),
 );
 const withoutAnalysesCount = computed(() =>
     probe.status.value === "ready" ? probe.data.value?.total ?? 0 : 0,
@@ -68,9 +72,13 @@ const isEmpty = computed(
     () => search.status.value === "ready" && total.value === 0,
 );
 const railToggleLabel = computed(() =>
-    interpolate($gettext("Filters (%{count})"), {
-        count: store.activeFilterCount,
-    }),
+    interpolate(
+        $gettext("Filters (%{count})"),
+        {
+            count: store.activeFilterCount,
+        },
+        true,
+    ),
 );
 
 function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
@@ -245,6 +253,7 @@ function goHome(): void {
                                 {
                                     n: withoutAnalysesCount,
                                 },
+                                true,
                             )
                         }}
                     </span>
@@ -257,9 +266,13 @@ function goHome(): void {
                     @click="filter.clear"
                 >
                     <span>{{
-                        interpolate($gettext("Remove: %{label}"), {
-                            label: filter.label,
-                        })
+                        interpolate(
+                            $gettext("Remove: %{label}"),
+                            {
+                                label: filter.label,
+                            },
+                            true,
+                        )
                     }}</span>
                 </button>
             </div>
@@ -301,10 +314,14 @@ function goHome(): void {
                     <span>{{ $gettext("Previous page") }}</span>
                 </button>
                 <span>{{
-                    interpolate($gettext("Page %{page} of %{pages}"), {
-                        page,
-                        pages: pageCount,
-                    })
+                    interpolate(
+                        $gettext("Page %{page} of %{pages}"),
+                        {
+                            page,
+                            pages: pageCount,
+                        },
+                        true,
+                    )
                 }}</span>
                 <button
                     type="button"

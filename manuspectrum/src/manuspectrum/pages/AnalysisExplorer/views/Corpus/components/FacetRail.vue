@@ -46,9 +46,13 @@ function visibleValues(facet: Facet): FacetValue[] {
 function moreLabel(facet: Facet): string {
     return isExpanded(facet.key)
         ? $gettext("Show fewer")
-        : interpolate($gettext("Show all (%{count})"), {
-              count: facet.values.length,
-          });
+        : interpolate(
+              $gettext("Show all (%{count})"),
+              {
+                  count: facet.values.length,
+              },
+              true,
+          );
 }
 
 function onChange(facet: Facet, id: string, event: Event): void {

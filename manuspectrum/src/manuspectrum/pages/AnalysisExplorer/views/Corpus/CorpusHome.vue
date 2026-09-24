@@ -99,10 +99,14 @@ const nothingPublished = computed(
 );
 
 function countLabel(value: FacetValue): string {
-    return interpolate($gettext("%{label} (%{count})"), {
-        label: value.label.value,
-        count: value.count,
-    });
+    return interpolate(
+        $gettext("%{label} (%{count})"),
+        {
+            label: value.label.value,
+            count: value.count,
+        },
+        true,
+    );
 }
 
 function submitSearch(): void {

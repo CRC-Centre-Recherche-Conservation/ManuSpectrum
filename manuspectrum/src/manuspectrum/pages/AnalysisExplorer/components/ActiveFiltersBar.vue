@@ -7,7 +7,7 @@ const { $gettext, interpolate } = useGettext();
 const { activeFilters, clearAll } = useActiveFilters();
 
 function removeLabel(label: string): string {
-    return interpolate($gettext("Remove filter: %{label}"), { label });
+    return interpolate($gettext("Remove filter: %{label}"), { label }, true);
 }
 </script>
 

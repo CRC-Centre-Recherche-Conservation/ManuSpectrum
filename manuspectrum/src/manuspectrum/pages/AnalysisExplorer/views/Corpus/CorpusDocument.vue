@@ -21,7 +21,11 @@ const analysedPages = computed(() =>
 );
 
 function pageLabel(label: string, count: number): string {
-    return interpolate($gettext("%{page} (%{count})"), { page: label, count });
+    return interpolate(
+        $gettext("%{page} (%{count})"),
+        { page: label, count },
+        true,
+    );
 }
 
 function back(): void {

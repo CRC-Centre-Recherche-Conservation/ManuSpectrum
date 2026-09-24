@@ -15,6 +15,7 @@ const countText = computed(() =>
         {
             n: props.hit.analysisCount,
         },
+        true,
     ),
 );
 

@@ -26,7 +26,7 @@ const message = computed(() => {
                   "%{n} drafts on this page; they are marked “Draft”.",
                   props.count,
               );
-    return interpolate(text, { n: props.count });
+    return interpolate(text, { n: props.count }, true);
 });
 </script>
 
