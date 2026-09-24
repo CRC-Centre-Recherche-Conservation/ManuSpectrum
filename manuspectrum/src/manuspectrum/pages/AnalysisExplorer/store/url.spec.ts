@@ -187,4 +187,13 @@ describe("store round trip", () => {
             grain: "analyses",
         });
     });
+
+    it("records where a document screen was entered from", () => {
+        const store = useExplorerStore();
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        expect(store.documentOrigin).toBe("home");
+        applySnapshot(store, fromQuery(new URLSearchParams("screen=results")));
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        expect(store.documentOrigin).toBe("results");
+    });
 });

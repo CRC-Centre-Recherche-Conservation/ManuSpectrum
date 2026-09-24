@@ -58,7 +58,29 @@ describe("CorpusDocument", () => {
         expect(wrapper.text()).toContain("This item is not available.");
     });
 
-    it("goes back to the results", async () => {
+    it("goes back to the results it was opened from", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => jsonResponse(documentPayload())),
+        );
+        const store = useExplorerStore();
+        store.setFilter("technique", ["http://x/xrf"]);
+        store.setCorpusScreen("results");
+        store.openDocument(uuid(1));
+        const wrapper = mount(CorpusDocument, {
+            props: { documentId: uuid(1) },
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        const back = wrapper.find(".back");
+        expect(back.text()).toBe("Back to the results");
+        await back.trigger("click");
+        expect(store.corpusScreen).toBe("results");
+        expect(store.document).toBeNull();
+        expect(store.filters.technique).toEqual(["http://x/xrf"]);
+    });
+
+    it("goes back to the explorer home when opened from it", async () => {
         vi.stubGlobal(
             "fetch",
             vi.fn(async () => jsonResponse(documentPayload())),
@@ -70,8 +92,9 @@ describe("CorpusDocument", () => {
             global: { plugins: [pinia] },
         });
         await flushPromises();
-        await wrapper.find(".back").trigger("click");
-        expect(store.corpusScreen).toBe("results");
-        expect(store.document).toBeNull();
+        const back = wrapper.find(".back");
+        expect(back.text()).toBe("Back to the explorer home");
+        await back.trigger("click");
+        expect(store.corpusScreen).toBe("home");
     });
 });

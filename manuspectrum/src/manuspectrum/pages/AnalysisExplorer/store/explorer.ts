@@ -14,6 +14,7 @@ import type {
     BasketItem,
     BasketLoadResult,
     CorpusScreen,
+    DocumentOrigin,
     DocumentState,
     ExplorerView,
     FilterKey,
@@ -105,6 +106,7 @@ export const useExplorerStore = defineStore("explorer", () => {
     const corpusScreen = ref<CorpusScreen>("home");
     const filters = ref<Filters>(emptyFilters());
     const document = ref<DocumentState | null>(null);
+    const documentOrigin = ref<DocumentOrigin>("home");
     const focus = ref<Focus | null>(null);
     const layers = ref<LayerToggles>({
         points: true,
@@ -180,7 +182,11 @@ export const useExplorerStore = defineStore("explorer", () => {
         focus.value = null;
     }
 
+    /** Opens a document screen, remembering the Corpus screen it was opened from. */
     function openDocument(id: string, canvas: string | null = null): void {
+        if (corpusScreen.value !== "document") {
+            documentOrigin.value = corpusScreen.value;
+        }
         view.value = "corpus";
         corpusScreen.value = "document";
         document.value = { id, canvas };
@@ -319,6 +325,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         corpusScreen,
         filters,
         document,
+        documentOrigin,
         focus,
         layers,
         overlays,

@@ -29,7 +29,7 @@ function pageLabel(label: string, count: number): string {
 }
 
 function back(): void {
-    store.setCorpusScreen("results");
+    store.setCorpusScreen(store.documentOrigin);
 }
 
 function goHome(): void {
@@ -44,7 +44,10 @@ function goHome(): void {
             class="back"
             @click="back"
         >
-            <span>{{ $gettext("Back to the results") }}</span>
+            <span v-if="store.documentOrigin === 'results'">{{
+                $gettext("Back to the results")
+            }}</span>
+            <span v-else>{{ $gettext("Back to the explorer home") }}</span>
         </button>
         <UnavailableState
             v-if="

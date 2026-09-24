@@ -4,6 +4,8 @@ import type { EventType } from "@/manuspectrum/pages/AnalysisExplorer/api/types.
 export type ItemKey = string;
 export type ExplorerView = "corpus" | "map" | "compare";
 export type CorpusScreen = "home" | "results" | "document";
+// the Corpus screen a document screen was entered from
+export type DocumentOrigin = Exclude<CorpusScreen, "document">;
 export type BasketKind = "analysis-file" | "imaging" | "characterization";
 export type ListFilterKey =
     | "technique"

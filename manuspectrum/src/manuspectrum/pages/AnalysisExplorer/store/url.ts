@@ -188,12 +188,19 @@ export function historyMode(
     return "replace";
 }
 
+/** Applies a URL snapshot; entering the document screen records the screen left as its origin. */
 export function applySnapshot(
     store: ExplorerStore,
     snapshot: UrlSnapshot,
 ): void {
     store.$patch((state) => {
         state.view = isViewAvailable(snapshot.view) ? snapshot.view : "corpus";
+        if (
+            snapshot.corpusScreen === "document" &&
+            state.corpusScreen !== "document"
+        ) {
+            state.documentOrigin = state.corpusScreen;
+        }
         state.corpusScreen = snapshot.corpusScreen;
         state.document = snapshot.document;
         state.focus = snapshot.focus;
