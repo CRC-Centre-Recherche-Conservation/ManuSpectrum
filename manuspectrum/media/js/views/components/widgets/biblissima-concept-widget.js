@@ -10,6 +10,8 @@ import {
     isReferentialUrl,
     isPortalArk,
     suggestAjaxOptions,
+    suggestInputTooLong,
+    SUGGEST_MAX_INPUT_LENGTH,
 } from 'views/components/widgets/biblissima-concept-utils';
 import biblissimaConceptWidgetTemplate from 'templates/views/components/widgets/biblissima-concept-widget.htm';
 
@@ -124,6 +126,7 @@ const viewModel = function(params) {
         closeOnSelect: true,
         allowClear: false,
         minimumInputLength: 2,
+        maximumInputLength: SUGGEST_MAX_INPUT_LENGTH,
         placeholder: ko.unwrap(self.placeholder) || arches.translations.biblissimaConceptPlaceholder,
         ajax: {
             ...suggestAjaxOptions({
@@ -151,6 +154,7 @@ const viewModel = function(params) {
             searching: () => arches.translations.biblissimaConceptSearching,
             errorLoading: () => arches.translations.biblissimaConceptUnavailable,
             inputTooShort: () => arches.translations.biblissimaConceptInputTooShort,
+            inputTooLong: suggestInputTooLong(arches.translations.biblissimaConceptInputTooLong),
             noResults: () => (self.searchDegraded()
                 ? arches.translations.biblissimaConceptUnavailable
                 : arches.translations.biblissimaConceptNoResults),

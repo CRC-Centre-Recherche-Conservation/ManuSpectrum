@@ -33,7 +33,11 @@ import 'bindings/select2-query';
 import 'bindings/thumb-fallback';
 import noUiSlider from 'nouislider';
 import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
-import { suggestAjaxOptions } from 'views/components/widgets/biblissima-concept-utils';
+import {
+    suggestAjaxOptions,
+    suggestInputTooLong,
+    SUGGEST_MAX_INPUT_LENGTH,
+} from 'views/components/widgets/biblissima-concept-utils';
 import biblissimaSearchStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm';
 
 const DATE_MIN = -2000;
@@ -557,6 +561,10 @@ const viewModel = function(params) {
         allowClear: true,
         placeholder: arches.translations.biblissimaSearchManuscriptForComponent || 'Search a manuscript to see its illuminations...',
         minimumInputLength: 3,
+        maximumInputLength: SUGGEST_MAX_INPUT_LENGTH,
+        language: {
+            inputTooLong: suggestInputTooLong(arches.translations.biblissimaConceptInputTooLong),
+        },
         ajax: {
             ...suggestAjaxOptions({
                 url: generateArchesURL('manuspectrum:biblissima-suggest'),
@@ -787,6 +795,10 @@ const viewModel = function(params) {
         allowClear: true,
         placeholder: arches.translations.biblissimaSearchDescriptors || 'Search iconographic descriptors...',
         minimumInputLength: 2,
+        maximumInputLength: SUGGEST_MAX_INPUT_LENGTH,
+        language: {
+            inputTooLong: suggestInputTooLong(arches.translations.biblissimaConceptInputTooLong),
+        },
         ajax: {
             ...suggestAjaxOptions({
                 url: generateArchesURL('manuspectrum:biblissima-suggest'),

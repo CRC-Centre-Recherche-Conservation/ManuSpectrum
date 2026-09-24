@@ -8,6 +8,7 @@ Run:
 
 import json
 import os
+import socket
 import threading
 import time
 from collections import namedtuple
@@ -16,6 +17,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 import requests
 from django.core.cache import cache
+from urllib3.exceptions import ReadTimeoutError
 from django.test import RequestFactory, TestCase
 
 from manuspectrum.views import biblissima_proxy as bp
@@ -284,10 +286,30 @@ class HostBreakerTests(BudgetTestCase):
             )
             bp._bib_request(wikibase_again, WIKIBASE, timeout=bp.REQUEST_TIMEOUT)
 
-        self.assertIsInstance(budget.error, requests.exceptions.HTTPError)
-        self.assertEqual(budget.error.response.status_code, 200)
+        self.assertIsInstance(budget.error, bp.BiblissimaApiError)
+        self.assertEqual(budget.error.code, "ratelimited")
         self.assertEqual(budget.down, set())
         self.assertEqual(wikibase_again.get.call_count, 1)
+
+    def test_a_4xx_is_recorded_without_tripping_the_host(self):
+        wikibase_again = self.fake_session()
+
+        with bp._upstream_budget(50) as budget:
+            response = bp._bib_request(
+                self.fake_session(status_code=400), WIKIBASE, timeout=5
+            )
+            bp._bib_request(wikibase_again, WIKIBASE, timeout=5)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(budget.error.response.status_code, 400)
+        self.assertEqual(budget.down, set())
+        self.assertEqual(wikibase_again.get.call_count, 1)
+
+    def test_a_wikibase_404_is_recorded(self):
+        with bp._upstream_budget(50) as budget:
+            bp._bib_request(self.fake_session(status_code=404), WIKIBASE, timeout=5)
+
+        self.assertEqual(budget.error.response.status_code, 404)
 
     def test_a_portal_404_is_not_recorded(self):
         with bp._upstream_budget(50) as budget:
@@ -353,6 +375,62 @@ class HostBreakerTests(BudgetTestCase):
         self.assertEqual(self.sent_timeout(session), bp.REQUEST_TIMEOUT)
 
 
+class JsonReadTests(BudgetTestCase):
+    def read(self, text="", headers=None):
+        session = MagicMock(name="session")
+        session.get.return_value = _response(WIKIBASE, text=text, headers=headers)
+        response = bp._bib_request(session, WIKIBASE, timeout=5)
+        return bp._bib_json(response)
+
+    def test_a_json_object_is_returned(self):
+        with bp._upstream_budget(50) as budget:
+            payload = self.read('{"entities": {}}')
+
+        self.assertEqual(payload, {"entities": {}})
+        self.assertIsNone(budget.error)
+
+    def test_a_body_that_is_not_json_is_a_recorded_failure(self):
+        with bp._upstream_budget(50) as budget:
+            with self.assertRaises(bp.BiblissimaApiError) as raised:
+                self.read("<html>maintenance</html>")
+
+        self.assertIsNone(raised.exception.code)
+        self.assertIs(budget.error, raised.exception)
+        self.assertEqual(budget.down, set())
+
+    def test_a_json_list_is_a_recorded_failure(self):
+        with bp._upstream_budget(50) as budget:
+            with self.assertRaises(bp.BiblissimaApiError):
+                self.read("[]")
+
+        self.assertIsInstance(budget.error, bp.BiblissimaApiError)
+
+    def test_an_error_key_is_a_recorded_failure_with_its_code(self):
+        with bp._upstream_budget(50) as budget:
+            with self.assertRaises(bp.BiblissimaApiError) as raised:
+                self.read('{"error": {"code": "badvalue"}}')
+
+        self.assertEqual(raised.exception.code, "badvalue")
+        self.assertEqual(budget.error.code, "badvalue")
+
+    def test_an_api_error_header_is_recorded_once(self):
+        with bp._upstream_budget(50) as budget:
+            with patch.object(bp._UpstreamBudget, "record", autospec=True) as record:
+                with self.assertRaises(bp.BiblissimaApiError) as raised:
+                    self.read(
+                        '{"error": {"code": "ratelimited"}}',
+                        headers={"MediaWiki-API-Error": "ratelimited"},
+                    )
+
+        self.assertEqual(raised.exception.code, "ratelimited")
+        self.assertEqual(record.call_count, 1)
+        self.assertIs(record.call_args.args[0], budget)
+
+    def test_outside_a_budget_nothing_is_recorded(self):
+        with self.assertRaises(bp.BiblissimaApiError):
+            self.read("not json")
+
+
 class EnrichmentPoolBudgetTests(BudgetTestCase):
     def test_pool_threads_see_the_budget(self):
         retries = []
@@ -412,6 +490,51 @@ class UpstreamErrorMappingTests(BudgetTestCase):
         self.assertEqual(response.status_code, 504)
         self.assertEqual(json.loads(response.content)["error"], "timeout")
 
+    def test_a_read_timeout_during_the_body_answers_504(self):
+        with self.assertRaises(requests.exceptions.ConnectionError) as raised:
+            _stalled_response(WIKIBASE)
+
+        with self.assertLogs(bp.logger.name, level="WARNING"):
+            response = bp._biblissima_upstream_error(raised.exception, "ctx")
+
+        self.assertEqual(response.status_code, 504)
+        self.assertEqual(json.loads(response.content)["error"], "timeout")
+
+    def test_a_read_timeout_before_the_headers_answers_504(self):
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        self.addCleanup(server.close)
+
+        def stall():
+            client, _ = server.accept()
+            client.recv(4096)
+            time.sleep(1)
+            client.close()
+
+        threading.Thread(target=stall, daemon=True).start()
+        session = bp._build_biblissima_session(retry=bp._NO_RETRY)
+        self.addCleanup(session.close)
+        with self.assertRaises(requests.exceptions.ConnectionError) as raised:
+            session.get(
+                f"http://127.0.0.1:{server.getsockname()[1]}/", timeout=(1, 0.2)
+            )
+
+        with self.assertLogs(bp.logger.name, level="WARNING"):
+            response = bp._biblissima_upstream_error(raised.exception, "ctx")
+
+        self.assertEqual(response.status_code, 504)
+        self.assertEqual(json.loads(response.content)["error"], "timeout")
+
+    def test_a_refused_connection_still_answers_502(self):
+        with self.assertLogs(bp.logger.name, level="WARNING"):
+            response = bp._biblissima_upstream_error(
+                requests.exceptions.ConnectionError("refused"), "ctx"
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(json.loads(response.content)["error"], "connection_error")
+
     def test_a_host_down_answers_502(self):
         with self.assertLogs(bp.logger.name, level="WARNING"):
             response = bp._biblissima_upstream_error(
@@ -427,13 +550,39 @@ def _read_fixture(name):
         return fixture.read()
 
 
-def _response(url, status_code=200, payload=None, text=""):
+def _response(url, status_code=200, payload=None, text="", headers=None):
     response = requests.Response()
     response.status_code = status_code
     response.url = url
     response.encoding = "utf-8"
+    response.headers.update(headers or {})
     body = json.dumps(payload) if payload is not None else text
     response._content = body.encode("utf-8")
+    return response
+
+
+class _StalledBody:
+    """``Response.raw`` whose body read times out, as urllib3 reports it."""
+
+    def __init__(self, url):
+        self.url = url
+
+    def stream(self, chunk_size, decode_content=True):
+        raise ReadTimeoutError(None, self.url, "Read timed out.")
+        yield b""
+
+
+def _stalled_response(url):
+    """Headers received, then a read timeout during the body download.
+
+    Reads the body as ``requests`` does for a non-streamed call, so what
+    escapes is what ``session.get`` raises in that case.
+    """
+    response = requests.Response()
+    response.status_code = 200
+    response.url = url
+    response.raw = _StalledBody(url)
+    response.content
     return response
 
 
@@ -458,9 +607,10 @@ class FakeUpstream:
     Stands for the shared sessions, for ``safe_fetch`` and, through
     ``build``, for every session a view or a pool thread builds. A request it
     does not serve raises ``AssertionError`` and is kept in ``unexpected``.
-    ``fail`` makes a route answer a status, raise an error, or behave as a
-    dead host: sleep for the connect timeout it received (10 s at most), then
-    raise ``ConnectTimeout``.
+    ``answer`` replaces a route's body (a JSON payload or a text) and can add
+    headers. ``fail`` makes a route answer a status, raise an error, stall
+    during the body download, or behave as a dead host: sleep for the connect
+    timeout it received (10 s at most), then raise ``ConnectTimeout``.
     """
 
     def __init__(self):
@@ -472,11 +622,11 @@ class FakeUpstream:
         self.close = MagicMock(name="shared-session.close")
         self._lock = threading.Lock()
 
-    def answer(self, route, payload):
-        self.answers[route] = payload
+    def answer(self, route, payload=None, *, text="", headers=None):
+        self.answers[route] = (payload, text, headers)
 
-    def fail(self, route, *, status=None, error=None, dead=False):
-        self.failures[route] = (status, error, dead)
+    def fail(self, route, *, status=None, error=None, dead=False, stalled=False):
+        self.failures[route] = (status, error, dead, stalled)
 
     def build(self, retry=None):
         session = _ThreadSession(self, retry)
@@ -506,7 +656,11 @@ class FakeUpstream:
         timeout = kwargs.get("timeout")
         with self._lock:
             self.calls.append(UpstreamCall(route, url, query, timeout, via))
-        status, error, dead = self.failures.get(route, (None, None, False))
+        status, error, dead, stalled = self.failures.get(
+            route, (None, None, False, False)
+        )
+        if stalled:
+            return _stalled_response(url)
         if dead:
             connect = timeout[0] if isinstance(timeout, tuple) else timeout
             time.sleep(min(10, connect))
@@ -516,7 +670,8 @@ class FakeUpstream:
         if status is not None:
             return _response(url, status, text="upstream failure")
         if route in self.answers:
-            return _response(url, payload=self.answers[route])
+            payload, text, headers = self.answers[route]
+            return _response(url, payload=payload, text=text, headers=headers)
         return default()
 
     def _route(self, url, parts, query):
@@ -579,12 +734,21 @@ class ViewBudgetTestCase(BudgetTestCase):
         request = RequestFactory().get(path, params or {})
         return view_class().get(request, **kwargs)
 
-    def assert_partial_and_uncached(self, response):
+    def assert_partial_and_uncached(self, send):
+        """Send the request twice: a partial answer, not served by the page cache.
+
+        Returns the first response.
+        """
+        response = send()
+        calls = len(self.upstream.calls)
+        again = send()
+
         self.assertEqual(response.status_code, 200)
         self.assertIs(json.loads(response.content).get("partial"), True)
-        cache_control = response["Cache-Control"]
-        self.assertIn("private", cache_control)
-        self.assertIn("max-age=0", cache_control)
+        self.assertIn("max-age=0", response["Cache-Control"])
+        self.assertIs(json.loads(again.content).get("partial"), True)
+        self.assertGreater(len(self.upstream.calls), calls)
+        return response
 
 
 class EntityViewBudgetTests(ViewBudgetTestCase):
@@ -602,6 +766,63 @@ class EntityViewBudgetTests(ViewBudgetTestCase):
         self.assertIn(response.status_code, (502, 504))
         self.assertLess(time.monotonic() - started, 7)
 
+    def test_a_body_that_is_not_json_answers_502(self):
+        self.upstream.answer("wbgetentities", text="<html>maintenance</html>")
+
+        response = self.entity("Q352422")
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(json.loads(response.content)["error"], "invalid_response")
+
+    def test_a_no_such_entity_error_is_a_404(self):
+        self.upstream.answer(
+            "wbgetentities",
+            {"error": {"code": "no-such-entity"}},
+            headers={"MediaWiki-API-Error": "no-such-entity"},
+        )
+
+        response = self.entity("Q352422")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_another_api_error_answers_502_with_its_code(self):
+        self.upstream.answer(
+            "wbgetentities",
+            {"error": {"code": "ratelimited"}},
+            headers={"MediaWiki-API-Error": "ratelimited"},
+        )
+
+        response = self.entity("Q352422")
+
+        self.assertEqual(response.status_code, 502)
+        payload = json.loads(response.content)
+        self.assertEqual(
+            (payload["error"], payload["code"]), ("invalid_response", "ratelimited")
+        )
+
+    def test_a_4xx_answers_502(self):
+        self.upstream.fail("wbgetentities", status=400)
+
+        response = self.entity("Q352422")
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(json.loads(response.content)["status"], 400)
+
+    def test_a_read_timeout_during_the_body_answers_504(self):
+        self.upstream.fail("wbgetentities", stalled=True)
+
+        response = self.entity("Q352422")
+
+        self.assertEqual(response.status_code, 504)
+        self.assertEqual(json.loads(response.content)["error"], "timeout")
+
+    def test_a_malformed_id_is_refused_without_a_call(self):
+        for qid in ("Q0", "Q01", "Q", "q1"):
+            response = self.entity(qid)
+
+            self.assertEqual(response.status_code, 400, qid)
+        self.assertEqual(self.upstream.calls, [])
+
     def test_a_missing_entity_is_a_404(self):
         response = self.entity("Q999999")
 
@@ -611,15 +832,11 @@ class EntityViewBudgetTests(ViewBudgetTestCase):
     def test_a_partial_entity_is_not_stored_by_the_page_cache(self):
         self.upstream.fail("claims", status=503)
 
-        response = self.entity("Q352422")
-        calls = len(self.upstream.calls)
-        self.entity("Q352422")
+        response = self.assert_partial_and_uncached(lambda: self.entity("Q352422"))
 
-        self.assert_partial_and_uncached(response)
         payload = json.loads(response.content)
         self.assertEqual(payload["collectionQid"], "Q32812")
         self.assertEqual(payload["locationQid"], "")
-        self.assertGreater(len(self.upstream.calls), calls)
 
     def test_a_complete_entity_is_stored_by_the_page_cache(self):
         response = self.entity("Q352422")
@@ -645,10 +862,9 @@ class EntityViewBudgetTests(ViewBudgetTestCase):
         self.upstream.fail("wbgetentities", dead=True)
         self.upstream.fail("claims", dead=True)
 
-        response = self.entity("Q352422")
+        self.assert_partial_and_uncached(lambda: self.entity("Q352422"))
 
-        self.assertEqual(len(self.upstream.calls), 1)
-        self.assert_partial_and_uncached(response)
+        self.assertEqual(len(self.upstream.calls), 2)
 
 
 class SearchManuscriptsViewBudgetTests(ViewBudgetTestCase):
@@ -683,6 +899,44 @@ class SearchManuscriptsViewBudgetTests(ViewBudgetTestCase):
         payload = json.loads(response.content)
         self.assertEqual((payload["error"], payload["status"]), ("upstream_error", 503))
 
+    def test_a_lost_prefix_branch_makes_the_answer_partial(self):
+        self.upstream.answer(
+            "query", {"query": {"search": [{"title": "Item:Q352422"}]}}
+        )
+        for failure in (
+            {"text": "<html>maintenance</html>"},
+            {
+                "payload": {"error": {"code": "ratelimited"}},
+                "headers": {"MediaWiki-API-Error": "ratelimited"},
+            },
+        ):
+            with self.subTest(failure=failure):
+                cache.clear()
+                self.upstream.answer("wbsearchentities", **failure)
+
+                response = self.assert_partial_and_uncached(
+                    lambda: self.search(q="Latin 9926")
+                )
+
+                self.assertEqual(json.loads(response.content)["total"], 1)
+
+    def test_a_4xx_on_the_prefix_branch_makes_the_answer_partial(self):
+        self.upstream.answer(
+            "query", {"query": {"search": [{"title": "Item:Q352422"}]}}
+        )
+        self.upstream.fail("wbsearchentities", status=400)
+
+        self.assert_partial_and_uncached(lambda: self.search(q="Latin 9926"))
+
+    def test_every_200_carries_partial(self):
+        short = self.search(q="La")
+        empty = self.search(q="Latin 9926")
+
+        self.assertEqual(json.loads(short.content), {"results": [], "partial": False})
+        self.assertEqual(
+            json.loads(empty.content), {"total": 0, "results": [], "partial": False}
+        )
+
     def test_a_garbage_limit_does_not_500(self):
         response = self.search(q="Latin 9926", limit="many")
 
@@ -715,10 +969,9 @@ class SearchViewBudgetTests(ViewBudgetTestCase):
     def test_a_failed_enrichment_marks_the_page_partial(self):
         self.upstream.fail("query", status=503)
 
-        response = self.search()
+        response = self.assert_partial_and_uncached(self.search)
 
-        self.assertEqual(self.upstream.routes(), ["iiif", "query"])
-        self.assert_partial_and_uncached(response)
+        self.assertEqual(self.upstream.routes(), ["iiif", "query", "query"])
         self.assertEqual(json.loads(response.content)["total"], 1)
 
 
@@ -752,13 +1005,25 @@ class IlluminationDetailViewBudgetTests(ViewBudgetTestCase):
     def test_a_failed_english_page_marks_the_answer_partial_and_uncached(self):
         self.upstream.fail("portal-en", status=503)
 
-        response = self.detail()
-        calls = len(self.upstream.calls)
-        self.detail()
+        response = self.assert_partial_and_uncached(self.detail)
 
-        self.assert_partial_and_uncached(response)
         self.assertEqual(json.loads(response.content)["folio"], "323v")
-        self.assertGreater(len(self.upstream.calls), calls)
+
+    def test_an_api_error_on_the_manuscript_lookup_is_not_memoised(self):
+        self.upstream.answer(
+            "query",
+            {"error": {"code": "search-backend-error"}},
+            headers={"MediaWiki-API-Error": "search-backend-error"},
+        )
+
+        response = self.assert_partial_and_uncached(self.detail)
+
+        manuscript_hash = json.loads(response.content)["manuscriptHash"]
+        self.assertIsNone(
+            cache.get(
+                bp._BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=manuscript_hash)
+            )
+        )
 
     def test_a_failed_third_party_manifest_does_not_mark_it_partial(self):
         self.upstream.fail(

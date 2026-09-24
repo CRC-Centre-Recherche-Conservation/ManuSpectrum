@@ -99,7 +99,7 @@ class InputShapeTests(TestCase):
         fetch.assert_not_called()
 
     def test_a_well_formed_qid_reaches_the_wikibase(self):
-        resp = MagicMock()
+        resp = MagicMock(headers={})
         resp.json.return_value = {"entities": {"Q27392": {}}}
         with patch.object(bp, "_bib_request", return_value=resp) as fetch:
             page = self.client.get("/api/biblissima/entity/Q27392")

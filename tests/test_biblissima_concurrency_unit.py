@@ -168,7 +168,7 @@ class EnrichmentCacheTests(ConcurrencyTestCase):
         )
 
     def _search_finds_q1(self):
-        response = MagicMock()
+        response = MagicMock(headers={})
         response.json.return_value = {"query": {"search": [{"title": "Item:Q1"}]}}
         self._start(patch.object(bp, "_bib_request", return_value=response))
 
@@ -232,7 +232,7 @@ class EnrichmentCacheTests(ConcurrencyTestCase):
         self.assertIsNone(self._cached_record())
 
     def test_a_candidate_missing_after_the_match_does_not_block_caching(self):
-        response = MagicMock()
+        response = MagicMock(headers={})
         response.json.return_value = {
             "query": {"search": [{"title": "Item:Q1"}, {"title": "Item:Q2"}]}
         }
@@ -323,7 +323,7 @@ class EnrichmentPoolSessionTests(ConcurrencyTestCase):
             time.sleep(0.05)
             with used_lock:
                 used.append((threading.get_ident(), session))
-            response = MagicMock()
+            response = MagicMock(headers={})
             response.json.return_value = {"query": {"search": []}}
             return response
 

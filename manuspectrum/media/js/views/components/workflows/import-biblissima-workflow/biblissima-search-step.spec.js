@@ -13,7 +13,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ko from 'knockout';
 
 vi.mock('arches', () => ({
-    default: { translations: {}, urls: {}, activeLanguage: 'en' },
+    default: {
+        translations: { biblissimaConceptInputTooLong: 'Query too long ({n} characters max)' },
+        urls: {},
+        activeLanguage: 'en',
+    },
 }));
 vi.mock('nouislider', () => ({ default: { create: vi.fn() } }));
 
@@ -25,6 +29,7 @@ const { SUGGEST_URL, generateArchesURL } = vi.hoisted(() => {
 vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL }));
 
 import viewModel from './biblissima-search-step.js';
+import { SUGGEST_MAX_INPUT_LENGTH } from '../../widgets/biblissima-concept-utils.js';
 
 const build = (overrides = {}) => {
     const params = {
@@ -119,5 +124,15 @@ describe('biblissima-search-step suggest selects', () => {
         expect(generateArchesURL).toHaveBeenCalledWith('manuspectrum:biblissima-suggest');
         expect(vm.descriptorSelectConfig.ajax.url).toBe(SUGGEST_URL);
         expect(vm.manuscriptComponentSelectConfig.ajax.url).toBe(SUGGEST_URL);
+    });
+
+    it('stop at the suggest endpoint length limit and say why', () => {
+        const { vm } = build();
+        expect(SUGGEST_MAX_INPUT_LENGTH).toBe(100);
+        [vm.descriptorSelectConfig, vm.manuscriptComponentSelectConfig].forEach((config) => {
+            expect(config.maximumInputLength).toBe(SUGGEST_MAX_INPUT_LENGTH);
+            expect(config.language.inputTooLong({ maximum: SUGGEST_MAX_INPUT_LENGTH }))
+                .toBe('Query too long (100 characters max)');
+        });
     });
 });

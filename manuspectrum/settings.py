@@ -742,11 +742,12 @@ BIBLISSIMA_SUGGEST_DEADLINE = 4
 # BIBLISSIMA_IIIF_CONNECT_TIMEOUT and read within their own timeout, both capped
 # by what is left; no call starts once it is spent, and a host found down is not
 # called again in the same request. Kept under the 60 s abort of the create
-# step's client and under the gunicorn worker timeout.
+# step's client. Requires gunicorn --timeout >= 60 s: the raw-memo waits (10 s)
+# and each read's overshoot come on top of it (prod checklist).
 BIBLISSIMA_VIEW_DEADLINE = 30
 
-# 24h Django-cache TTL for resolved Wikibase entities and manuscript
-# enrichment results.
+# 24h Django-cache TTL for resolved Wikibase entities, manuscript enrichment
+# results and complete suggest prefix entries.
 BIBLISSIMA_CACHE_TTL = 24 * 60 * 60
 
 # Parsed search canvases, scraped illumination lists and manifest canvas

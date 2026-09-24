@@ -2749,7 +2749,7 @@ class ResourceRelationsDatabaseTests(TestCase):
         stamped = self.tile.data[bp.COMP_PARENT_DOC_NODE][0]["resourceXresourceId"]
         self.assertEqual(str(row.resourcexid), stamped)
 
-    def test_the_indexed_document_carries_the_related_id(self):
+    def test_the_document_built_for_indexing_carries_the_related_id(self):
         self._flush()
 
         document, _terms = self.resource.get_documents_to_index(

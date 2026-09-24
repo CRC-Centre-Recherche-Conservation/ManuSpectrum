@@ -94,6 +94,17 @@ export function isPortalArk(url, portalBase) {
 /** Debounce, in ms, of every Biblissima suggest select (selectWoo `ajax.delay`). */
 export const SUGGEST_DELAY_MS = 300;
 
+/** Longest query a suggest select sends (selectWoo `maximumInputLength`); matches the server's `SUGGEST_MAX_QUERY`. */
+export const SUGGEST_MAX_INPUT_LENGTH = 100;
+
+/**
+ * selectWoo `language.inputTooLong` for the suggest selects: the translated
+ * message with `{n}` replaced by the maximum selectWoo reports.
+ */
+export function suggestInputTooLong(message) {
+    return ({ maximum }) => (message || '').replace('{n}', maximum);
+}
+
 /**
  * The search text as the suggest endpoint reads it: trimmed, inner runs of
  * whitespace collapsed, so two selects typing the same words send one URL.

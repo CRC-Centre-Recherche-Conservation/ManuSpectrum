@@ -27,7 +27,9 @@ DESCRIPTOR = "Q304387"
 MANUSCRIPT = "Q32810"
 
 
-_WIKIBASE_LETTERS = str.maketrans({"ı": "i", "ħ": "h", "ŧ": "t", "ə": "e"})
+_WIKIBASE_LETTERS = str.maketrans(
+    {"ı": "i", "ħ": "h", "ŧ": "t", "ə": "e", "ŀ": "l", "ŉ": "'n"}
+)
 _WIKIBASE_SPACES = str.maketrans(dict.fromkeys("'\u2019\u02bc_-", " "))
 
 
@@ -52,8 +54,9 @@ class FakeWikibase:
     ``wbsearchentities``: an entity id typed in full matches that entity
     exactly; otherwise the entities one of whose labels or aliases starts with
     the search, both folded as Wikibase does (case and accents ignored, ``ı``,
-    ``ħ``, ``ŧ`` and ``ə`` read as ``i``, ``h``, ``t`` and ``e``, and ``'``,
-    U+2019, U+02BC, ``_`` and ``-`` as a space), ranked exact match, then label
+    ``ħ``, ``ŧ``, ``ə``, ``ŀ`` and ``ŉ`` read as ``i``, ``h``, ``t``, ``e``,
+    ``l`` and ``'n``, ``'``, U+2019, U+02BC, ``_`` and ``-`` as a space, every
+    other punctuation mark and whitespace kept as is), ranked exact match, then label
     match, then alias match, then corpus order; ``search-continue`` past
     ``limit``. ``query``: the entities whose labels hold every word of the text
     as a whole word. ``slow`` maps an action to seconds slept before
@@ -81,8 +84,10 @@ class FakeWikibase:
             self.kwargs.append(kwargs)
         action = params["action"]
         time.sleep(self.slow.get(action, 0))
+        headers = {}
         if action in self.errors:
             payload = {"error": {"code": self.errors[action]}}
+            headers["MediaWiki-API-Error"] = self.errors[action]
         elif action in self.payloads:
             payload = self.payloads[action]
         elif action == "wbsearchentities":
@@ -91,7 +96,7 @@ class FakeWikibase:
             payload = self._entities(params)
         else:
             payload = self._fulltext(params)
-        response = MagicMock()
+        response = MagicMock(headers=headers)
         response.json.return_value = payload
         response.raise_for_status.return_value = None
         return response
@@ -475,6 +480,28 @@ class SuggestMemoTests(SuggestTestCase):
         self.assertEqual(payload, {"error": "query too long"})
         self.assertEqual(fake.calls, [])
 
+    def test_a_query_that_folds_long_looks_up_a_bounded_number_of_prefixes(self):
+        self.upstream(DRAGONS)
+        get_many = self.start(
+            patch.object(bp.cache, "get_many", wraps=bp.cache.get_many)
+        )
+
+        response, _ = self.suggest(q="dr" + "\ufdfa" * 98, type="descriptor")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(get_many.called)
+        for call in get_many.call_args_list:
+            self.assertLessEqual(len(call.args[0]), bp.SUGGEST_MAX_QUERY + 1)
+
+    def test_the_length_bound_counts_the_raw_query(self):
+        self.upstream(DRAGONS)
+
+        accepted, _ = self.suggest(q="œ" * 100, type="descriptor")
+        refused, _ = self.suggest(q="œ" * 101, type="descriptor")
+
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(refused.status_code, 400)
+
     def test_the_untyped_path_asks_no_batch(self):
         fake = self.upstream({"Q9": entity("mdata" + "a" * 40, types=(MANUSCRIPT,))})
 
@@ -649,6 +676,19 @@ class SuggestPrefixReuseTests(SuggestTestCase):
         self.assertEqual(fake.searches(), ["kil", "kilic arslan ie"])
         self.assertIn("Q24517", [r["id"] for r in payload["results"]])
 
+    def assert_derived_equals_fresh(self, corpus, sequences, limit=10):
+        for sequence in sequences:
+            cache.clear()
+            self.upstream(corpus)
+            typed = [
+                self.suggest(q=q, type="descriptor", limit=limit)[1] for q in sequence
+            ]
+            for q, derived in zip(sequence, typed):
+                cache.clear()
+                self.upstream(corpus)
+                _, fresh = self.suggest(q=q, type="descriptor", limit=limit)
+                self.assertEqual(_by_id(derived), _by_id(fresh), (limit, q))
+
     def test_derived_answers_equal_fresh_answers(self):
         corpus = {
             **DRAGONS,
@@ -656,20 +696,61 @@ class SuggestPrefixReuseTests(SuggestTestCase):
             "Q24517": KILIC_ARSLAN,
             "Q77": entity("Qur\u02bcān"),
         }
-        for sequence in (
-            ["drag", "drago", "dragon"],
-            ["jer", "jero", "jerom", "jerome"],
-            ["hie", "hier", "hieron"],
-            ["sain", "saint", "saint j", "saint jero"],
-            ["q8", "q88", "q884", "q8844"],
-            ["kil", "kili", "kilic"],
-            ["qur", "qur'a"],
-        ):
-            cache.clear()
-            self.upstream(corpus)
-            typed = [self.suggest(q=q, type="descriptor")[1] for q in sequence]
-            for q, derived in zip(sequence, typed):
-                cache.clear()
-                self.upstream(corpus)
-                _, fresh = self.suggest(q=q, type="descriptor")
-                self.assertEqual(_by_id(derived), _by_id(fresh), q)
+        self.assert_derived_equals_fresh(
+            corpus,
+            (
+                ["drag", "drago", "dragon"],
+                ["jer", "jero", "jerom", "jerome"],
+                ["hie", "hier", "hieron"],
+                ["sain", "saint", "saint j", "saint jero"],
+                ["q8", "q88", "q884", "q8844"],
+                ["kil", "kili", "kilic"],
+                ["qur", "qur'a"],
+            ),
+        )
+
+    def test_derived_answers_equal_fresh_answers_when_the_answer_is_full(self):
+        corpus = {
+            "Q1": entity("Jérôme (saint)"),
+            "Q2": entity("Sa Jérôme"),
+            "Q3": entity("Draguignan (Var, France)"),
+            "Q4": entity("Draguignan. Archives départementales du Var"),
+            "Q5": entity("Var draguignan"),
+            "Q6": entity("Psautier : rite byzantin"),
+            "Q7": entity("Rite psautier"),
+            "Q8": entity("A/N 308"),
+            "Q9": entity("N 308 A"),
+            "Q10": entity("Paris, BnF, lat. 7817"),
+            "Q11": entity("BnF Paris"),
+        }
+        sequences = (
+            ["jer", "jero", "jerome", "jerome s", "jerome sa"],
+            ["jer", "jerome (", "jerome (sa"],
+            ["drag", "draguignan", "draguignan v", "draguignan (v"],
+            ["drag", "draguignan a", "draguignan. a"],
+            ["psa", "psautier r", "psautier : r"],
+            ["a/", "a n", "a/n 3"],
+            ["pari", "paris b", "paris, b"],
+        )
+        for limit in (1, 2, 10):
+            self.assert_derived_equals_fresh(corpus, sequences, limit)
+
+    def test_a_punctuated_label_does_not_take_the_fulltext_room(self):
+        corpus = {"Q1": entity("Jérôme (saint)"), "Q2": entity("Sa Jérôme")}
+        fake = self.upstream(corpus)
+        self.suggest(q="jer", type="descriptor", limit=1)
+
+        _, payload = self.suggest(q="jerome sa", type="descriptor", limit=1)
+
+        self.assertEqual(fake.searches(), ["jer", "jerome sa"])
+        self.assertEqual([r["id"] for r in payload["results"]], ["Q2"])
+
+    def test_a_letter_decomposing_to_punctuation_sends_the_query_upstream(self):
+        corpus = {"Q1": entity("Paŀla"), "Q2": entity("Palma")}
+        fake = self.upstream(corpus)
+        self.suggest(q="pal", type="descriptor")
+
+        _, payload = self.suggest(q="pall", type="descriptor")
+
+        self.assertEqual(fake.searches(), ["pal", "pall"])
+        self.assertEqual([r["id"] for r in payload["results"]], ["Q1"])
