@@ -141,6 +141,20 @@ class DiscoverEntryTests(TestCase):
             html = self.client.get("/fr/").content.decode()
         self.assertNotIn("ms-technique-chips", html)
 
+    def test_homepage_survives_a_failing_explorer_search(self):
+        with (
+            mock.patch(
+                "manuspectrum.views.explorer_home.search_payload",
+                side_effect=RuntimeError("broken facet"),
+            ) as search,
+            self.assertLogs("manuspectrum.views.explorer_home", "ERROR"),
+        ):
+            response = self.client.get("/en/")
+            self.client.get("/en/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("ms-technique-chips", response.content.decode())
+        self.assertEqual(search.call_count, 2)
+
     def test_header_offers_the_explorer_on_every_public_page(self):
         html = self.client.get("/en/").content.decode()
         self.assertIn('href="/en/discover"', html)
