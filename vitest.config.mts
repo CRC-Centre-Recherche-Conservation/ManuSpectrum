@@ -111,6 +111,11 @@ function generateConfig(): Promise<UserConfig> {
 
         resolve({
             plugins: [vue() as any, webpackCompatStubs],
+            resolve: {
+                // Bare imports inside Arches application sources resolve from
+                // the project root, as `resolve.modules` does in webpack.common.js.
+                dedupe: ['pinia', 'primevue', 'vue3-gettext', '@primeuix/themes'],
+            },
             test: {
                 alias: alias,
                 coverage: {

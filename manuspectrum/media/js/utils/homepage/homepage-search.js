@@ -3,9 +3,11 @@ import listen, { stopAll } from "./listen";
 /**
  * Homepage search box and suggestion chips.
  *
- * Both navigate to the Arches search page with one string term filter. The
- * base URL is the form's `action`, rendered by `{% url 'search_home' %}`, so
- * it carries the page language.
+ * The default submit and the button chips navigate to the Arches search page
+ * with one string term filter. The base URL is the form's `action`, rendered
+ * by `{% url 'search_home' %}`, so it carries the page language. A submit
+ * button carrying `formaction` (« Discover the data ») submits natively to its
+ * own page with `q`; chips that are links are left to the browser.
  */
 
 /**
@@ -41,9 +43,12 @@ export default function initHomepageSearch(root = document, { navigate = (url) =
         return () => {};
     }
     const input = form.querySelector("#ms-search-input");
-    const chips = Array.from(root.querySelectorAll(".ms-search-chip"));
+    const chips = Array.from(root.querySelectorAll("button.ms-search-chip[data-term]"));
     const go = (query) => navigate(buildSearchUrl(form.getAttribute("action"), query));
     const onSubmit = (event) => {
+        if (event.submitter && event.submitter.hasAttribute("formaction")) {
+            return;
+        }
         event.preventDefault();
         go(input ? input.value : "");
     };

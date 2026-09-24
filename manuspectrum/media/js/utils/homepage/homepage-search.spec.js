@@ -70,4 +70,34 @@ describe("initHomepageSearch", () => {
         document.body.innerHTML = "";
         expect(initHomepageSearch(document)).toBeTypeOf("function");
     });
+
+    it("lets a submitter with formaction go to its own page natively", () => {
+        document.body.innerHTML = `
+            <form id="ms-search-form" action="${BASE}" method="get">
+                <input id="ms-search-input" name="q">
+                <button type="submit" class="plain">Search</button>
+                <button type="submit" class="discover" formaction="/en/discover">Discover</button>
+            </form>`;
+        const navigate = vi.fn();
+        initHomepageSearch(document, { navigate });
+        const form = document.getElementById("ms-search-form");
+        const discover = new SubmitEvent("submit", { cancelable: true, submitter: form.querySelector(".discover") });
+        form.dispatchEvent(discover);
+        expect(discover.defaultPrevented).toBe(false);
+        expect(navigate).not.toHaveBeenCalled();
+        const plain = new SubmitEvent("submit", { cancelable: true, submitter: form.querySelector(".plain") });
+        form.dispatchEvent(plain);
+        expect(plain.defaultPrevented).toBe(true);
+        expect(navigate).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves chip links alone", () => {
+        document.body.innerHTML = `
+            <form id="ms-search-form" action="${BASE}"><input id="ms-search-input" name="q"></form>
+            <a class="ms-search-chip ms-technique-chip" href="/en/discover?grain=analyses&technique=http%3A%2F%2Fexample.org%2Ftechnique%2Fa">Technique A</a>`;
+        const navigate = vi.fn();
+        initHomepageSearch(document, { navigate });
+        document.querySelector(".ms-search-chip").dispatchEvent(new MouseEvent("click", { cancelable: true }));
+        expect(navigate).not.toHaveBeenCalled();
+    });
 });

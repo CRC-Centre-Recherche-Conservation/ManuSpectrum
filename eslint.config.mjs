@@ -87,6 +87,32 @@ export default [
         },
         "rules": {
             "@typescript-eslint/no-this-alias": "off",
+            "no-restricted-imports": ["error", {
+                "patterns": [{
+                    "regex": "^@/manuspectrum/pages/",
+                    "message": "Load a public page with import() from its shim: a static import is pulled into every admin entry.",
+                }],
+            }],
+        },
+    },
+    {
+        // Public Vue pages run without the Knockout runtime: none of its
+        // modules may reach their bundle.
+        "files": [`${APP_RELATIVE_PATH}/src/manuspectrum/pages/**/*.{ts,vue}`],
+        "rules": {
+            "no-restricted-imports": ["error", {
+                "paths": ["knockout", "jquery", "arches"],
+                "patterns": [
+                    {
+                        "regex": "^(bindings|viewmodels|views|templates)/",
+                        "message": "Knockout-side modules are not available to public Vue pages.",
+                    },
+                    {
+                        "regex": "^utils/(renderer-cache|summary-popup)$",
+                        "message": "This module imports Knockout; public Vue pages cannot use it.",
+                    },
+                ],
+            }],
         },
     },
 ];

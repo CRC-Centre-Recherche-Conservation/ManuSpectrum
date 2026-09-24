@@ -13,6 +13,7 @@
     {# scheme+host+path only: build_absolute_uri kept the query string, so #}
     {# /about/team?utm_source=x canonicalised to itself. #}
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% if robots_noindex %}<meta name="robots" content="noindex, follow">{% endif %}
     {% get_available_languages as MS_LANGS %}
     {% for lang_code, lang_name in MS_LANGS %}
     <link rel="alternate" hreflang="{{ lang_code }}" href="{% translated_page_url lang_code %}">
@@ -44,8 +45,8 @@
     {% render_bundle 'css/pages' 'css' %}
     {% block extra_head %}{% endblock %}
 </head>
-<body class="ms-page">
-    {% include 'javascript.htm' %}
+<body class="{% block body_class %}ms-page{% endblock %}">
+    {% block arches_js_data %}{% include 'javascript.htm' %}{% endblock %}
     {% include 'includes/ms_header.htm' %}
     <main id="ms-main">
         {% block content %}{% endblock %}

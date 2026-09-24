@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 16:57-0500\n"
+"POT-Creation-Date: 2026-09-24 15:42-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,39 +18,39 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: constants/licenses.py:26
+#: constants/licenses.py:28
 msgid "CC BY-SA 4.0"
 msgstr "CC BY-SA 4.0"
 
-#: constants/licenses.py:31
+#: constants/licenses.py:33
 msgid "CC BY 4.0"
 msgstr "CC BY 4.0"
 
-#: constants/licenses.py:36
+#: constants/licenses.py:38
 msgid "CC BY-NC 4.0"
 msgstr "CC BY-NC 4.0"
 
-#: constants/licenses.py:41
+#: constants/licenses.py:43
 msgid "CC BY-NC-SA 4.0"
 msgstr "CC BY-NC-SA 4.0"
 
-#: constants/licenses.py:46
+#: constants/licenses.py:48
 msgid "CC BY-ND 4.0"
 msgstr "CC BY-ND 4.0"
 
-#: constants/licenses.py:51
+#: constants/licenses.py:53
 msgid "CC0 1.0 (public domain dedication)"
 msgstr "CC0 1.0 (public domain dedication)"
 
-#: constants/licenses.py:56
+#: constants/licenses.py:58
 msgid "Licence Ouverte / Etalab 2.0"
 msgstr "Licence Ouverte / Etalab 2.0"
 
-#: constants/licenses.py:61
+#: constants/licenses.py:63
 msgid "ODbL 1.0"
 msgstr "ODbL 1.0"
 
-#: constants/licenses.py:66
+#: constants/licenses.py:68
 msgid "Other licence…"
 msgstr "Other licence…"
 
@@ -209,7 +209,7 @@ msgid ""
 msgstr ""
 
 #: templates/errors/403.htm:18 templates/includes/ms_footer.htm:20
-#: templates/includes/ms_header.htm:63 templates/includes/ms_header.htm:119
+#: templates/includes/ms_header.htm:64 templates/includes/ms_header.htm:121
 msgid "Sign In"
 msgstr "Sign In"
 
@@ -265,7 +265,8 @@ msgid "Platform"
 msgstr "Platform"
 
 #: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:18
-#: templates/includes/ms_header.htm:93 templates/index.htm:588
+#: templates/includes/ms_header.htm:94 templates/index.htm:589
+#: templates/index.htm:610
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:49
 msgid "Search"
 msgstr "Search"
@@ -274,13 +275,13 @@ msgstr "Search"
 msgid "My Profile"
 msgstr "My Profile"
 
-#: templates/includes/ms_footer.htm:27 templates/includes/ms_header.htm:22
-#: templates/includes/ms_header.htm:96
+#: templates/includes/ms_footer.htm:27 templates/includes/ms_header.htm:23
+#: templates/includes/ms_header.htm:98
 msgid "About"
 msgstr "About"
 
-#: templates/includes/ms_footer.htm:29 templates/includes/ms_header.htm:32
-#: templates/includes/ms_header.htm:99
+#: templates/includes/ms_footer.htm:29 templates/includes/ms_header.htm:33
+#: templates/includes/ms_header.htm:101
 #: templates/views/pages/conceptual-model.htm:4
 #: templates/views/pages/conceptual-model.htm:6
 #: templates/views/pages/conceptual-model.htm:15
@@ -288,8 +289,8 @@ msgstr "About"
 msgid "Conceptual Model"
 msgstr "Conceptual Model"
 
-#: templates/includes/ms_footer.htm:30 templates/includes/ms_header.htm:36
-#: templates/includes/ms_header.htm:100
+#: templates/includes/ms_footer.htm:30 templates/includes/ms_header.htm:37
+#: templates/includes/ms_header.htm:102
 #: templates/views/pages/graph-explorer.htm:4
 #: templates/views/pages/graph-explorer.htm:6
 #: templates/views/pages/graph-explorer.htm:15
@@ -297,15 +298,15 @@ msgstr "Conceptual Model"
 msgid "Graph Explorer"
 msgstr "Graph Explorer"
 
-#: templates/includes/ms_footer.htm:31 templates/includes/ms_header.htm:40
-#: templates/includes/ms_header.htm:101 templates/views/pages/team.htm:4
+#: templates/includes/ms_footer.htm:31 templates/includes/ms_header.htm:41
+#: templates/includes/ms_header.htm:103 templates/views/pages/team.htm:4
 #: templates/views/pages/team.htm:6 templates/views/pages/team.htm:15
 #: templates/views/pages/team.htm:36
 msgid "About & Team"
 msgstr "About & Team"
 
-#: templates/includes/ms_footer.htm:32 templates/includes/ms_header.htm:44
-#: templates/includes/ms_header.htm:102 templates/views/pages/contact.htm:4
+#: templates/includes/ms_footer.htm:32 templates/includes/ms_header.htm:45
+#: templates/includes/ms_header.htm:104 templates/views/pages/contact.htm:4
 #: templates/views/pages/contact.htm:6 templates/views/pages/contact.htm:15
 #: templates/views/pages/contact.htm:27
 msgid "Contact"
@@ -357,104 +358,112 @@ msgstr "ManuSpectrum — Home"
 msgid "Main Navigation"
 msgstr "Main Navigation"
 
-#: templates/includes/ms_header.htm:15 templates/includes/ms_header.htm:90
-#: templates/index.htm:261
+#: templates/includes/ms_header.htm:15 templates/includes/ms_header.htm:91
+#: templates/index.htm:262
 msgid "The Project"
 msgstr "The Project"
 
-#: templates/includes/ms_header.htm:16 templates/includes/ms_header.htm:91
-#: templates/index.htm:404
+#: templates/includes/ms_header.htm:16 templates/includes/ms_header.htm:92
+#: templates/index.htm:405
 msgid "Explore"
 msgstr "Explore"
 
-#: templates/includes/ms_header.htm:17 templates/includes/ms_header.htm:92
-#: templates/index.htm:470
+#: templates/includes/ms_header.htm:17 templates/includes/ms_header.htm:93
+#: templates/index.htm:471
 msgid "Analyses"
 msgstr "Analyses"
 
-#: templates/includes/ms_header.htm:32
+#: templates/includes/ms_header.htm:19 templates/includes/ms_header.htm:95
+#: templates/index.htm:611 templates/views/pages/analysis-explorer.htm:4
+#: templates/views/pages/analysis-explorer.htm:6
+#: templates/views/pages/analysis-explorer.htm:15
+#: templates/views/pages/analysis-explorer.htm:30
+msgid "Discover the data"
+msgstr "Discover the data"
+
+#: templates/includes/ms_header.htm:33
 msgid "The data model behind ManuSpectrum"
 msgstr "The data model behind ManuSpectrum"
 
-#: templates/includes/ms_header.htm:36
+#: templates/includes/ms_header.htm:37
 msgid "Explore models and relationships interactively"
 msgstr "Explore models and relationships interactively"
 
-#: templates/includes/ms_header.htm:40
+#: templates/includes/ms_header.htm:41
 msgid "The project and the people behind it"
 msgstr "The project and the people behind it"
 
-#: templates/includes/ms_header.htm:44
+#: templates/includes/ms_header.htm:45
 msgid "Submit a project or ask a question"
 msgstr "Submit a project or ask a question"
 
-#: templates/includes/ms_header.htm:51 templates/includes/ms_header.htm:106
+#: templates/includes/ms_header.htm:52 templates/includes/ms_header.htm:108
 msgid "Management"
 msgstr "Management"
 
-#: templates/includes/ms_header.htm:56 templates/views/pages/team.htm:179
+#: templates/includes/ms_header.htm:57 templates/views/pages/team.htm:179
 msgid "Source code on GitHub"
 msgstr "Source code on GitHub"
 
-#: templates/includes/ms_header.htm:65
+#: templates/includes/ms_header.htm:66
 msgid "User Profile"
 msgstr "User Profile"
 
-#: templates/includes/ms_header.htm:65
+#: templates/includes/ms_header.htm:66
 #, python-format
 msgid "Welcome, %(name)s"
 msgstr "Welcome, %(name)s"
 
-#: templates/includes/ms_header.htm:66 templates/includes/ms_header.htm:122
+#: templates/includes/ms_header.htm:67 templates/includes/ms_header.htm:124
 msgid "Sign Out"
 msgstr "Sign Out"
 
-#: templates/includes/ms_header.htm:77 templates/includes/ms_header.htm:111
+#: templates/includes/ms_header.htm:78 templates/includes/ms_header.htm:113
 #: views/model_graph_service.py:121
 msgid "Language"
 msgstr ""
 
-#: templates/includes/ms_header.htm:85
+#: templates/includes/ms_header.htm:86
 msgid "Open Menu"
 msgstr "Open Menu"
 
-#: templates/index.htm:13
+#: templates/index.htm:14
 msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
 msgstr "ManuSpectrum — Physicochemical Analysis of Heritage"
 
-#: templates/index.htm:14
+#: templates/index.htm:15
 msgid ""
 "Open heritage science database of physicochemical analyses — XRF, Raman, "
 "FTIR, FORS — of manuscripts, printed books and inscriptions: pigments, inks, "
 "supports."
 msgstr ""
 
-#: templates/index.htm:205
+#: templates/index.htm:206
 msgid "Enlarge the spectral plot"
 msgstr ""
 
-#: templates/index.htm:212 templates/javascript.htm:230
+#: templates/index.htm:213 templates/javascript.htm:230
 #: templates/views/pages/graph-explorer.htm:204
 msgid "Close"
 msgstr "Close"
 
-#: templates/index.htm:216
+#: templates/index.htm:217
 msgid "ManuSpectrum — Spectral Analysis Plot"
 msgstr "ManuSpectrum — Spectral Analysis Plot"
 
-#: templates/index.htm:217
+#: templates/index.htm:218
 msgid "interactive"
 msgstr ""
 
-#: templates/index.htm:221
+#: templates/index.htm:222
 msgid "Channel 1 (XRF)"
 msgstr ""
 
-#: templates/index.htm:222
+#: templates/index.htm:223
 msgid "Channel 2 (FORS)"
 msgstr ""
 
-#: templates/index.htm:229
+#: templates/index.htm:230
 msgid ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
@@ -462,7 +471,7 @@ msgstr ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
 
-#: templates/index.htm:233
+#: templates/index.htm:234
 msgid ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
@@ -470,23 +479,23 @@ msgstr ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
 
-#: templates/index.htm:238 templates/index.htm:589
+#: templates/index.htm:239 templates/index.htm:590
 msgid "Explore the database"
 msgstr "Explore the database"
 
-#: templates/index.htm:241
+#: templates/index.htm:242
 msgid "Learn more"
 msgstr "Learn more"
 
-#: templates/index.htm:248
+#: templates/index.htm:249
 msgid "scroll"
 msgstr "scroll"
 
-#: templates/index.htm:262
+#: templates/index.htm:263
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Thinking and modeling written cultural heritage materials"
 
-#: templates/index.htm:268
+#: templates/index.htm:269
 msgid ""
 "ManuSpectrum was developed within Cluster 2 — “Consideration and "
 "searchability of materials analysis data” — of the ANR Biblissima+ "
@@ -500,7 +509,7 @@ msgstr ""
 "physicochemical analysis data for manuscripts, inscriptions, seals and other "
 "heritage objects, in partnership with Huma-Num."
 
-#: templates/index.htm:271
+#: templates/index.htm:272
 msgid ""
 "Through structuring and standardizing data according to shared models, the "
 "project provides reliable, easy-to-use tools accessible to non-specialists. "
@@ -514,7 +523,7 @@ msgstr ""
 "ManuSpectrum facilitates data access and collaboration between researchers "
 "from different disciplines."
 
-#: templates/index.htm:274
+#: templates/index.htm:275
 msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
 "object, its context, the analyses, and their interpretations, using thesauri "
@@ -526,12 +535,12 @@ msgstr ""
 "and authority databases to contextualize information on heterogeneous "
 "documents."
 
-#: templates/index.htm:282 templates/views/pages/contact.htm:146
+#: templates/index.htm:283 templates/views/pages/contact.htm:146
 #: templates/views/pages/team.htm:173
 msgid "Biblissima+ — Cluster 2"
 msgstr "Biblissima+ — Cluster 2"
 
-#: templates/index.htm:284
+#: templates/index.htm:285
 msgid ""
 "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
 "written cultures. Within Cluster 2, the objective is to archive, share and "
@@ -545,88 +554,88 @@ msgstr ""
 "interoperability with the Biblissima portal and written cultural heritage "
 "standards."
 
-#: templates/index.htm:301 templates/index.htm:485
+#: templates/index.htm:302 templates/index.htm:486
 msgid "X-ray Fluorescence"
 msgstr "X-ray Fluorescence"
 
-#: templates/index.htm:306
+#: templates/index.htm:307
 msgid "X-ray Micro-Fluorescence"
 msgstr "X-ray Micro-Fluorescence"
 
-#: templates/index.htm:311
+#: templates/index.htm:312
 msgid "Fiber Optic Reflectance"
 msgstr "Fiber Optic Reflectance"
 
-#: templates/index.htm:316
+#: templates/index.htm:317
 msgid "Raman Spectroscopy"
 msgstr "Raman Spectroscopy"
 
-#: templates/index.htm:321
+#: templates/index.htm:322
 msgid "IR Spectroscopy"
 msgstr "IR Spectroscopy"
 
-#: templates/index.htm:326
+#: templates/index.htm:327
 msgid "Hyperspectral Imaging"
 msgstr "Hyperspectral Imaging"
 
-#: templates/index.htm:331 templates/index.htm:559
+#: templates/index.htm:332 templates/index.htm:560
 msgid "Multispectral Imaging"
 msgstr "Multispectral Imaging"
 
-#: templates/index.htm:336
+#: templates/index.htm:337
 msgid "Proteomics (MALDI-TOF)"
 msgstr "Proteomics (MALDI-TOF)"
 
-#: templates/index.htm:341
+#: templates/index.htm:342
 msgid "And many more"
 msgstr "And many more"
 
-#: templates/index.htm:346
+#: templates/index.htm:347
 msgctxt "aria-roledescription"
 msgid "carousel"
 msgstr ""
 
-#: templates/index.htm:346
+#: templates/index.htm:347
 msgid "Analysis techniques in pictures"
 msgstr ""
 
-#: templates/index.htm:348 templates/index.htm:356 templates/index.htm:364
+#: templates/index.htm:349 templates/index.htm:357 templates/index.htm:365
 msgctxt "aria-roledescription"
 msgid "slide"
 msgstr ""
 
-#: templates/index.htm:348 templates/index.htm:356 templates/index.htm:364
+#: templates/index.htm:349 templates/index.htm:357 templates/index.htm:365
 #, python-format
 msgid "%(n)s of %(total)s"
 msgstr ""
 
-#: templates/index.htm:349
+#: templates/index.htm:350
 msgid ""
 "A manuscript on the motorised stage of a macro-XRF scanner, which maps "
 "chemical elements across the page without touching it"
 msgstr ""
 
-#: templates/index.htm:351
+#: templates/index.htm:352
 msgid "Macro-XRF scanning of a manuscript"
 msgstr "Macro-XRF scanning of a manuscript"
 
-#: templates/index.htm:352
+#: templates/index.htm:353
 msgid ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 msgstr ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 
-#: templates/index.htm:357
+#: templates/index.htm:358
 msgid ""
 "An optical fibre held over a manuscript for FORS analysis — the reflected "
 "light carries the spectral signature of the pigments"
 msgstr ""
 
-#: templates/index.htm:359
+#: templates/index.htm:360
 msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgstr "Fiber optic reflectance spectroscopy (FORS)"
 
-#: templates/index.htm:360
+#: templates/index.htm:361
 msgid ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
@@ -634,7 +643,7 @@ msgstr ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
 
-#: templates/index.htm:365
+#: templates/index.htm:366
 msgid ""
 "A manuscript under ultraviolet light during hyperspectral imaging, revealing "
 "inks and retouches invisible to the naked eye"
@@ -642,11 +651,11 @@ msgstr ""
 "A manuscript under ultraviolet light during hyperspectral imaging, revealing "
 "inks and retouches invisible to the naked eye"
 
-#: templates/index.htm:367
+#: templates/index.htm:368
 msgid "UV hyperspectral imaging"
 msgstr "UV hyperspectral imaging"
 
-#: templates/index.htm:368
+#: templates/index.htm:369
 msgid ""
 "Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
 "eye"
@@ -654,35 +663,35 @@ msgstr ""
 "Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
 "eye"
 
-#: templates/index.htm:376
+#: templates/index.htm:377
 msgid "Previous"
 msgstr "Previous"
 
-#: templates/index.htm:379
+#: templates/index.htm:380
 msgid "Next"
 msgstr "Next"
 
-#: templates/index.htm:385
+#: templates/index.htm:386
 msgid "Choose a slide"
 msgstr ""
 
-#: templates/index.htm:386
+#: templates/index.htm:387
 msgid "Slide 1 of 3 — Macro-XRF scanning"
 msgstr ""
 
-#: templates/index.htm:387
+#: templates/index.htm:388
 msgid "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
 msgstr "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
 
-#: templates/index.htm:388
+#: templates/index.htm:389
 msgid "Slide 3 of 3 — UV hyperspectral imaging"
 msgstr "Slide 3 of 3 — UV hyperspectral imaging"
 
-#: templates/index.htm:405
+#: templates/index.htm:406
 msgid "What you can discover"
 msgstr "What you can discover"
 
-#: templates/index.htm:407
+#: templates/index.htm:408
 msgid ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
@@ -690,11 +699,11 @@ msgstr ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
 
-#: templates/index.htm:414
+#: templates/index.htm:415
 msgid "Spectra and analysis data"
 msgstr "Spectra and analysis data"
 
-#: templates/index.htm:415
+#: templates/index.htm:416
 msgid ""
 "Visualize and compare reference spectra and analysis datasets. Explore XRF, "
 "FTIR, Raman, and other analysis results directly on the platform."
@@ -702,11 +711,11 @@ msgstr ""
 "Visualize and compare reference spectra and analysis datasets. Explore XRF, "
 "FTIR, Raman, and other analysis results directly on the platform."
 
-#: templates/index.htm:426
+#: templates/index.htm:427
 msgid "IIIF Annotations"
 msgstr "IIIF Annotations"
 
-#: templates/index.htm:427
+#: templates/index.htm:428
 msgid ""
 "Analysis data is exposed as IIIF annotations, making it accessible from any "
 "compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
@@ -718,11 +727,11 @@ msgstr ""
 "allows any external site to visualize ManuSpectrum's spectral data (XRF, "
 "Raman, FTIR, UV-Vis) directly overlaid on high-resolution document images."
 
-#: templates/index.htm:438
+#: templates/index.htm:439
 msgid "Interoperability and Standards"
 msgstr "Interoperability and Standards"
 
-#: templates/index.htm:439
+#: templates/index.htm:440
 msgid ""
 "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
 "ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
@@ -734,15 +743,15 @@ msgstr ""
 "interoperability with international heritage systems and the Biblissima "
 "portal."
 
-#: templates/index.htm:443
+#: templates/index.htm:444
 msgid "AGORHA thesaurus"
 msgstr "AGORHA thesaurus"
 
-#: templates/index.htm:450
+#: templates/index.htm:451
 msgid "Material Characterization"
 msgstr "Material Characterization"
 
-#: templates/index.htm:451
+#: templates/index.htm:452
 msgid ""
 "Explore the layers, materials and chemical elements identified on "
 "manuscripts, printed books and other written heritage — pigments, inks, "
@@ -754,27 +763,27 @@ msgstr ""
 "binders, parchment and paper supports — with different levels of reliability "
 "and characterization."
 
-#: templates/index.htm:453
+#: templates/index.htm:454
 msgid "Pigments"
 msgstr "Pigments"
 
-#: templates/index.htm:454
+#: templates/index.htm:455
 msgid "Layers"
 msgstr "Layers"
 
-#: templates/index.htm:455
+#: templates/index.htm:456
 msgid "Binders"
 msgstr "Binders"
 
-#: templates/index.htm:456
+#: templates/index.htm:457
 msgid "Substrates"
 msgstr "Substrates"
 
-#: templates/index.htm:471
+#: templates/index.htm:472
 msgid "Visualize physicochemical analyses"
 msgstr "Visualize physicochemical analyses"
 
-#: templates/index.htm:473
+#: templates/index.htm:474
 msgid ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to written cultural heritage objects."
@@ -782,27 +791,27 @@ msgstr ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to written cultural heritage objects."
 
-#: templates/index.htm:479
+#: templates/index.htm:480
 msgid ""
 "Macro-XRF map of calcium (Ca) on an ornate letter — bright areas mark "
 "calcium-rich zones"
 msgstr ""
 
-#: templates/index.htm:480
+#: templates/index.htm:481
 msgid ""
 "Macro-XRF map of mercury (Hg) on the same ornate letter — bright areas "
 "reveal vermilion, a mercury pigment"
 msgstr ""
 
-#: templates/index.htm:483
+#: templates/index.htm:484
 msgid "Position of the divide between the mercury map and the calcium map"
 msgstr ""
 
-#: templates/index.htm:486
+#: templates/index.htm:487
 msgid "Macro-XRF mapping"
 msgstr "Macro-XRF mapping"
 
-#: templates/index.htm:487
+#: templates/index.htm:488
 msgid ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
@@ -810,88 +819,88 @@ msgstr ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
 
-#: templates/index.htm:492
+#: templates/index.htm:493
 msgid "Manuscript analysis"
 msgstr "Manuscript analysis"
 
-#: templates/index.htm:494 templates/index.htm:495 templates/index.htm:496
-#: templates/index.htm:497
+#: templates/index.htm:495 templates/index.htm:496 templates/index.htm:497
+#: templates/index.htm:498
 #, python-format
 msgid "Analysis point %(n)s"
 msgstr ""
 
-#: templates/index.htm:506 templates/index.htm:519 templates/index.htm:532
-#: templates/index.htm:545
+#: templates/index.htm:507 templates/index.htm:520 templates/index.htm:533
+#: templates/index.htm:546
 msgid "Material"
 msgstr "Material"
 
-#: templates/index.htm:506
+#: templates/index.htm:507
 msgid "Lapis lazuli"
 msgstr "Lapis lazuli"
 
-#: templates/index.htm:507 templates/index.htm:520 templates/index.htm:533
-#: templates/index.htm:546
+#: templates/index.htm:508 templates/index.htm:521 templates/index.htm:534
+#: templates/index.htm:547
 msgid "Layer"
 msgstr "Layer"
 
-#: templates/index.htm:507
+#: templates/index.htm:508
 msgid "Pigment"
 msgstr "Pigment"
 
-#: templates/index.htm:508 templates/index.htm:521 templates/index.htm:534
-#: templates/index.htm:547
+#: templates/index.htm:509 templates/index.htm:522 templates/index.htm:535
+#: templates/index.htm:548
 msgid "Range"
 msgstr "Range"
 
-#: templates/index.htm:519
+#: templates/index.htm:520
 msgid "Vermilion (HgS)"
 msgstr "Vermilion (HgS)"
 
-#: templates/index.htm:520
+#: templates/index.htm:521
 msgid "Paint"
 msgstr "Paint"
 
-#: templates/index.htm:532
+#: templates/index.htm:533
 msgid "Gold leaf"
 msgstr "Gold leaf"
 
-#: templates/index.htm:533
+#: templates/index.htm:534
 msgid "Gilding"
 msgstr "Gilding"
 
-#: templates/index.htm:545
+#: templates/index.htm:546
 msgid "Iron gall ink"
 msgstr "Iron gall ink"
 
-#: templates/index.htm:546
+#: templates/index.htm:547
 msgid "Text"
 msgstr "Text"
 
-#: templates/index.htm:552
+#: templates/index.htm:553
 msgid "Spectroscopy"
 msgstr "Spectroscopy"
 
-#: templates/index.htm:553
+#: templates/index.htm:554
 msgid "Point Analysis"
 msgstr "Point Analysis"
 
-#: templates/index.htm:554
+#: templates/index.htm:555
 msgid "Click on analysis points to explore spectral data"
 msgstr "Click on analysis points to explore spectral data"
 
-#: templates/index.htm:569
+#: templates/index.htm:570
 msgid "Imaging"
 msgstr "Imaging"
 
-#: templates/index.htm:570
+#: templates/index.htm:571
 msgid "Multispectral"
 msgstr "Multispectral"
 
-#: templates/index.htm:571
+#: templates/index.htm:572
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Spectral band scanning and false-color composites via IIIF"
 
-#: templates/index.htm:591
+#: templates/index.htm:592
 msgid ""
 "Search by material — a pigment, an ink, a support —, analysis technique, "
 "written cultural heritage object, or chemical element. Advanced filters "
@@ -901,55 +910,51 @@ msgstr ""
 "written cultural heritage object, or chemical element. Advanced filters "
 "available in the search interface."
 
-#: templates/index.htm:604
+#: templates/index.htm:605
 msgid "Search materials, techniques, objects..."
 msgstr "Search materials, techniques, objects..."
 
-#: templates/index.htm:611
+#: templates/index.htm:616
 msgid "Vermilion"
 msgstr "Vermilion"
 
-#: templates/index.htm:612
+#: templates/index.htm:617
 msgid "manuscript"
 msgstr "manuscript"
 
-#: templates/index.htm:612
+#: templates/index.htm:617
 msgid "Manuscripts"
 msgstr "Manuscripts"
 
-#: templates/index.htm:613
-msgid "XRF"
-msgstr "XRF"
-
-#: templates/index.htm:614
+#: templates/index.htm:618
 msgid "parchment"
 msgstr "parchment"
 
-#: templates/index.htm:614
+#: templates/index.htm:618
 msgid "Parchment"
 msgstr "Parchment"
 
-#: templates/index.htm:615
+#: templates/index.htm:619
 msgid "illumination"
 msgstr "illumination"
 
-#: templates/index.htm:615
+#: templates/index.htm:619
 msgid "Illuminations"
 msgstr "Illuminations"
 
-#: templates/index.htm:616
-msgid "Raman"
-msgstr "Raman"
+#: templates/index.htm:624
+msgid "Explore by technique"
+msgstr "Explore by technique"
 
-#: templates/index.htm:621
+#: templates/index.htm:633
 msgid "Access advanced search"
 msgstr "Access advanced search"
 
-#: templates/index.htm:634 templates/views/pages/team.htm:190
+#: templates/index.htm:646 templates/views/pages/team.htm:190
 msgid "Our Partners"
 msgstr "Our Partners"
 
-#: templates/index.htm:638 templates/views/pages/team.htm:193
+#: templates/index.htm:650 templates/views/pages/team.htm:193
 msgid "Ministry of Culture"
 msgstr "Ministry of Culture"
 
@@ -1871,7 +1876,7 @@ msgstr "+{n}"
 msgid "Spectrum"
 msgstr "Spectrum"
 
-#: templates/ms_base.htm:11 templates/ms_base.htm:28
+#: templates/ms_base.htm:11 templates/ms_base.htm:29
 msgid ""
 "ManuSpectrum — interoperable database for physicochemical analysis of "
 "written cultural heritage."
@@ -3158,6 +3163,55 @@ msgstr "See step 3 for details."
 msgid "Open project"
 msgstr "Open project"
 
+#: templates/views/pages/analysis-explorer.htm:4
+#: templates/views/pages/analysis-explorer.htm:6
+#: templates/views/pages/analysis-explorer.htm:17
+#: templates/views/pages/analysis-explorer.htm:31
+msgid "Analysis explorer"
+msgstr "Analysis explorer"
+
+#: templates/views/pages/analysis-explorer.htm:5
+#: templates/views/pages/analysis-explorer.htm:7
+msgid ""
+"Browse the physicochemical analyses of manuscripts: search by technique, "
+"material, project or year, and open each document where it was analysed."
+msgstr ""
+"Browse the physicochemical analyses of manuscripts: search by technique, "
+"material, project or year, and open each document where it was analysed."
+
+#: templates/views/pages/analysis-explorer.htm:14
+#: templates/views/pages/conceptual-model.htm:14
+#: templates/views/pages/contact.htm:14
+#: templates/views/pages/graph-explorer.htm:14
+#: templates/views/pages/team.htm:14
+msgid "Home"
+msgstr ""
+
+#: templates/views/pages/analysis-explorer.htm:34
+msgid ""
+"Search the analyses of written heritage by technique, material, project or "
+"year, then open a document to see where each analysis was made."
+msgstr ""
+"Search the analyses of written heritage by technique, material, project or "
+"year, then open a document to see where each analysis was made."
+
+#: templates/views/pages/analysis-explorer.htm:41
+msgid "Loading the explorer…"
+msgstr "Loading the explorer…"
+
+#: templates/views/pages/analysis-explorer.htm:44
+msgid "The explorer could not start in this browser."
+msgstr "The explorer could not start in this browser."
+
+#: templates/views/pages/analysis-explorer.htm:45
+#: templates/views/pages/analysis-explorer.htm:50
+msgid "Use the advanced search instead"
+msgstr "Use the advanced search instead"
+
+#: templates/views/pages/analysis-explorer.htm:49
+msgid "The explorer needs JavaScript."
+msgstr "The explorer needs JavaScript."
+
 #: templates/views/pages/conceptual-model.htm:5
 #: templates/views/pages/conceptual-model.htm:7
 msgid ""
@@ -3166,13 +3220,6 @@ msgid ""
 msgstr ""
 "The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
 "of written heritage, its analyses and the knowledge inferred from them."
-
-#: templates/views/pages/conceptual-model.htm:14
-#: templates/views/pages/contact.htm:14
-#: templates/views/pages/graph-explorer.htm:14
-#: templates/views/pages/team.htm:14
-msgid "Home"
-msgstr ""
 
 #: templates/views/pages/conceptual-model.htm:24
 msgid "A model for describing written heritage scientifically"
@@ -4098,8 +4145,11 @@ msgid ""
 "it before saving."
 msgstr ""
 
-#~ msgid "Analysis point"
-#~ msgstr "Analysis point"
+#~ msgid "XRF"
+#~ msgstr "XRF"
+
+#~ msgid "Raman"
+#~ msgstr "Raman"
 
 #~ msgid ""
 #~ "Specify how to process the data files for viewing.  Any additional files "

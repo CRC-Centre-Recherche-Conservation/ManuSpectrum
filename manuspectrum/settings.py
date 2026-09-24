@@ -773,6 +773,8 @@ RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa")
 EXPLORER_LEGACY_HOSTS = ()
 EXPLORER_SEARCH_PAGE_SIZE = 50
 EXPLORER_ITEMS_MAX = 30
+# Seconds the homepage technique list is kept per language.
+EXPLORER_TECHNIQUES_TTL = 600
 
 try:
     from .package_settings import *
