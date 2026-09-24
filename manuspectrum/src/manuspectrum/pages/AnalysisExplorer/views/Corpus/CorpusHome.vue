@@ -198,8 +198,8 @@ function hrefFor(id: string): string {
                 overview.status.value === 'unavailable'
             "
             :status="overview.status.value"
+            :hide-home="true"
             @retry="overview.retry"
-            @home="overview.retry"
         />
         <p
             v-else-if="nothingPublished"

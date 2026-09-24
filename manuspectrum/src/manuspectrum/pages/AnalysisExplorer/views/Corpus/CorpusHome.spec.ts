@@ -70,6 +70,17 @@ describe("CorpusHome", () => {
         );
     });
 
+    it("offers Retry, not the way home, when the overview is unavailable", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => jsonResponse({}, 404)),
+        );
+        const wrapper = mountHome();
+        await flushPromises();
+        expect(wrapper.find(".unavailable-state .retry").exists()).toBe(true);
+        expect(wrapper.find(".unavailable-state .home").exists()).toBe(false);
+    });
+
     it("aborts the other overview pages as soon as one fails", async () => {
         const signals: AbortSignal[] = [];
         vi.stubGlobal(

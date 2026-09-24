@@ -49,16 +49,18 @@ function open(event: MouseEvent): void {
                     :href="props.href"
                     :lang="props.hit.name.lang"
                     @click="open"
-                    >{{ props.hit.name.value }}</a
                 >
+                    <span>{{ props.hit.name.value }}</span>
+                </a>
             </h3>
             <p class="meta">
                 <span>{{ countText }}</span>
                 <span
                     v-if="props.hit.unpublished"
                     class="badge"
-                    >{{ $gettext("Draft") }}</span
                 >
+                    <span>{{ $gettext("Draft") }}</span>
+                </span>
             </p>
         </div>
     </article>

@@ -64,7 +64,7 @@ function open(): void {
             </li>
         </ul>
         <p class="raw-name">
-            <span>{{ props.hit.name.value }}</span>
+            <span :lang="props.hit.name.lang">{{ props.hit.name.value }}</span>
         </p>
     </article>
 </template>

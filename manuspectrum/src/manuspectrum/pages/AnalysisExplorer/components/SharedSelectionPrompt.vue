@@ -33,11 +33,11 @@ const heading = computed(() =>
 const truncatedNotice = computed(() =>
     interpolate(
         $ngettext(
-            "Only the first 30 items were kept; %{n} more was left out.",
-            "Only the first 30 items were kept; %{n} more were left out.",
+            "Only the first %{limit} items were kept; %{n} more was left out.",
+            "Only the first %{limit} items were kept; %{n} more were left out.",
             props.selection.truncated,
         ),
-        { n: props.selection.truncated },
+        { n: props.selection.truncated, limit: BASKET_LIMIT },
         true,
     ),
 );

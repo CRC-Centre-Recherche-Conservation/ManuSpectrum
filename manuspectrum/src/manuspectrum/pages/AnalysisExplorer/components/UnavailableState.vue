@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { useGettext } from "vue3-gettext";
 
-const props = defineProps<{ status: "unavailable" | "error" }>();
+/** `hideHome` replaces the way home by Retry, for a screen that is the explorer home. */
+const props = withDefaults(
+    defineProps<{ status: "unavailable" | "error"; hideHome?: boolean }>(),
+    { hideHome: false },
+);
 const emit = defineEmits<{ retry: []; home: [] }>();
 
 const { $gettext } = useGettext();
@@ -41,7 +45,7 @@ function goHome(): void {
             }}</span>
         </p>
         <button
-            v-if="props.status === 'error'"
+            v-if="props.status === 'error' || props.hideHome"
             type="button"
             class="retry"
             @click="retry"

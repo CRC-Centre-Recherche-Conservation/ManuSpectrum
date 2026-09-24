@@ -83,14 +83,14 @@ function goHome(): void {
                 tabindex="-1"
                 :lang="payload.data.value.name.lang"
             >
-                {{ payload.data.value.name.value }}
+                <span>{{ payload.data.value.name.value }}</span>
             </h2>
             <p
                 v-if="payload.data.value.holding"
                 class="holding"
                 :lang="payload.data.value.holding.lang"
             >
-                {{ payload.data.value.holding.value }}
+                <span>{{ payload.data.value.holding.value }}</span>
             </p>
             <DraftBanner :count="payload.data.value.unpublishedCount" />
             <section

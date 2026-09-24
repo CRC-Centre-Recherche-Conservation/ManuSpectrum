@@ -24,4 +24,13 @@ describe("UnavailableState", () => {
         await wrapper.find(".retry").trigger("click");
         expect(wrapper.emitted("retry")).toHaveLength(1);
     });
+
+    it("offers Retry instead of the way home when the home is hidden", async () => {
+        const wrapper = mount(UnavailableState, {
+            props: { status: "unavailable", hideHome: true },
+        });
+        expect(wrapper.find(".home").exists()).toBe(false);
+        await wrapper.find(".retry").trigger("click");
+        expect(wrapper.emitted("retry")).toHaveLength(1);
+    });
 });
