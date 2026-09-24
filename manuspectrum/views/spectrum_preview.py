@@ -13,10 +13,11 @@ a file with another preset is another entry rather than a stale drawing.
 
 The resource a file hangs from never changes, so its row is memoised under the
 file id for as long as a summary payload lives (``SUMMARY_CACHE_TTL``). Two
-read permissions are still checked on every request, before anything is read
-from disk or from the series memo: the one on that resource, then the one on
-the nodegroup of the tile holding the file, through ``readable_nodegroups``,
-the rule the summary popup filters its fields with. Either refusal is a 403.
+gates are still checked on every request, before anything is read from disk or
+from the series memo: whether the resource is in the reader's ``visible_set``,
+then whether the nodegroup of the tile holding the file is one
+``readable_nodegroups`` lets through — the rule the summary popup filters its
+fields with. Either refusal answers the same bodyless 404 as an unknown file.
 The renderer configuration id and the nodegroup id travel in the memo with the
 join, and the configuration id keeps keying the series memo: a file restamped
 with another preset is drawn with it once the join entry expires, within the
@@ -40,15 +41,20 @@ import os
 import orjson
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.http import HttpResponse, HttpResponseNotModified, JsonResponse
+from django.http import (
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseNotFound,
+    HttpResponseNotModified,
+)
 from django.utils.cache import patch_cache_control
 from django.views import View
 
 from arches.app.models.models import File
-from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.models import RendererConfig
 from manuspectrum.utils.cache import etag_already_held, get_or_build
+from manuspectrum.utils.public_visibility import visible_set
 from manuspectrum.utils.spectrum_preview import build_preview, is_supported
 from manuspectrum.views.summary_service import readable_nodegroups
 
@@ -176,9 +182,9 @@ def _series(path, n, config):
         return None
 
 
-def _private(data, status):
-    """A refusal that depends on the reader, which no cache may keep."""
-    response = JsonResponse(data, status=status)
+def _not_found():
+    """The answer for an unknown file and for one the reader may not see alike."""
+    response = HttpResponseNotFound()
     response["Cache-Control"] = "private, no-store"
     return response
 
@@ -193,17 +199,31 @@ class SpectrumPreviewView(View):
     """
 
     def get(self, request, file_id):
+        """Serve the series of one file to a reader who may see its analysis.
+
+        ``n`` picks a point budget among ``SPECTRUM_PREVIEW_TIERS`` (default the
+        first). A file whose resource is outside ``visible_set`` (embargo,
+        Draft, hidden chain or Project) or whose nodegroup is unreadable
+        answers the same bodyless 404 as an unknown file.
+        """
+        raw_n = request.GET.get("n")
+        tiers = settings.SPECTRUM_PREVIEW_TIERS
+        try:
+            n = int(raw_n) if raw_n is not None else tiers[0]
+        except ValueError:
+            return HttpResponseBadRequest()
+        if n not in tiers:
+            return HttpResponseBadRequest()
         record = file_record(file_id)
         if record is None:
-            return _private({"error": "not_found"}, 404)
+            return _not_found()
         path, resourceid, config_id, nodegroup_id = record
-        if not user_can_read_resource(request.user, resourceid=resourceid):
-            return _private({"error": "forbidden"}, 403)
+        if resourceid not in visible_set(request.user).ids:
+            return _not_found()
         nodegroups = readable_nodegroups(request.user)
         if nodegroups is not None and nodegroup_id not in nodegroups:
-            return _private({"error": "forbidden"}, 403)
+            return _not_found()
 
-        n = settings.SPECTRUM_PREVIEW_POINTS
         payload = get_or_build(
             f"spectrum-preview:{file_id}:{n}:{config_id}",
             lambda: _series(path, n, renderer_config(config_id)),

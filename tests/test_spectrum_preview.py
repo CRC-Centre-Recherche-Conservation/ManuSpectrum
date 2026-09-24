@@ -26,6 +26,7 @@ from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import Resolver404, resolve, reverse
 
 from manuspectrum.constants.xy_presets import XY_PRESETS
+from manuspectrum.utils.public_visibility import VisibleSet
 from manuspectrum.utils.spectrum_preview import (
     build_preview,
     decimate,
@@ -372,8 +373,10 @@ class SpectrumPreviewViewTests(SimpleTestCase):
                 "manuspectrum.views.spectrum_preview.file_record", return_value=record
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.user_can_read_resource",
-                return_value=readable,
+                "manuspectrum.views.spectrum_preview.visible_set",
+                return_value=VisibleSet(
+                    analyses=frozenset({RESOURCE_ID} if readable else set())
+                ),
             ),
             mock.patch(
                 "manuspectrum.views.spectrum_preview.readable_nodegroups",
@@ -507,15 +510,15 @@ class SpectrumPreviewViewTests(SimpleTestCase):
     def test_a_reader_without_the_right_is_refused(self):
         response = self.get(self.written(".csv"), readable=False)
 
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(json.loads(response.content), {"error": "forbidden"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"")
         self.assertIn("no-store", response.headers["Cache-Control"])
 
     def test_a_file_no_row_names_is_a_404(self):
         response = self.get(None)
 
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(json.loads(response.content), {"error": "not_found"})
+        self.assertEqual(response.content, b"")
 
     def test_the_guard_runs_before_the_file_is_read(self):
         with mock.patch(
@@ -640,8 +643,11 @@ class SpectrumPreviewGuardTests(SimpleTestCase):
                 return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
             ) as load,
             mock.patch(
-                "manuspectrum.views.spectrum_preview.user_can_read_resource",
-                side_effect=[True, False],
+                "manuspectrum.views.spectrum_preview.visible_set",
+                side_effect=[
+                    VisibleSet(analyses=frozenset({"r-1"})),
+                    VisibleSet(analyses=frozenset()),
+                ],
             ) as guard,
             mock.patch(
                 "manuspectrum.views.spectrum_preview.readable_nodegroups",
@@ -656,7 +662,7 @@ class SpectrumPreviewGuardTests(SimpleTestCase):
                 self.view(self.request(), file_id=FILE_ID).status_code, 200
             )
             self.assertEqual(
-                self.view(self.request(), file_id=FILE_ID).status_code, 403
+                self.view(self.request(), file_id=FILE_ID).status_code, 404
             )
 
         load.assert_called_once()
@@ -681,8 +687,10 @@ class SpectrumPreviewNodegroupGuardTests(SimpleTestCase):
                 return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.user_can_read_resource",
-                return_value=readable,
+                "manuspectrum.views.spectrum_preview.visible_set",
+                return_value=VisibleSet(
+                    analyses=frozenset({"r-1"} if readable else set())
+                ),
             ),
             mock.patch(
                 "manuspectrum.views.spectrum_preview.readable_nodegroups",
@@ -698,8 +706,8 @@ class SpectrumPreviewNodegroupGuardTests(SimpleTestCase):
     def test_a_file_in_a_nodegroup_the_reader_may_not_read_is_refused(self):
         response, _, series = self.get({"other-ng"})
 
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(json.loads(response.content), {"error": "forbidden"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"")
         self.assertIn("no-store", response.headers["Cache-Control"])
         series.assert_not_called()
 
@@ -716,14 +724,14 @@ class SpectrumPreviewNodegroupGuardTests(SimpleTestCase):
     def test_a_reader_who_reads_no_nodegroup_is_refused(self):
         response, _, series = self.get(set())
 
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(json.loads(response.content), {"error": "forbidden"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"")
         series.assert_not_called()
 
     def test_the_nodegroup_is_checked_after_the_resource(self):
         response, allowed, series = self.get({"ng-1"}, readable=False)
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         allowed.assert_not_called()
         series.assert_not_called()
 

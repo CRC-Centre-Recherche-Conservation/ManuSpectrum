@@ -762,8 +762,10 @@ SUMMARY_CACHE_TTL = 300
 SUMMARY_ES_TIMEOUT = 3
 SUMMARY_MAX_LIMIT = 10
 SUMMARY_MAX_VALUES = 10
-SPECTRUM_PREVIEW_POINTS = 200
 SPECTRUM_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
+# Point budgets a spectrum preview may be asked for (?n=); the first is the
+# default. 4096 keeps a FORS spectrum (~2151 points) undecimated.
+SPECTRUM_PREVIEW_TIERS = (200, 4096)
 
 try:
     from .package_settings import *
