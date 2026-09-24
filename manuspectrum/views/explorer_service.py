@@ -8,6 +8,7 @@ reaches a payload, a facet or a name.
 
 import logging
 import re
+import sys
 import unicodedata
 from collections import Counter, defaultdict
 
@@ -27,6 +28,7 @@ from manuspectrum.models import RendererConfig
 from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.utils.public_visibility import (
     hidden_resource_ids,
+    readable_graph_ids,
     readable_nodegroup_ids,
     visible_set,
 )
@@ -122,7 +124,7 @@ class Values:
             TileModel.objects.filter(
                 resourceinstance_id__in=ids, nodegroup_id__in=list(by_group)
             )
-            .order_by("sortorder")
+            .order_by("sortorder", "tileid")
             .values_list("resourceinstance_id", "nodegroup_id", "data")
         )
         for rid, nodegroup_id, data in rows:
@@ -157,8 +159,14 @@ def fold(text):
     return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
 
 
-def names(resource_ids, language):
-    """``{id: Label}`` of resources of any model, from their ``label_of_name`` (fallback in ``name_of``)."""
+def names(resource_ids, language, user):
+    """``{id: Label}`` of the existing resources among *resource_ids*, of any model.
+
+    The name is read off ``label_of_name`` when its nodegroup is readable by
+    *user*, else it is the ``name_of`` placeholder. An id without a resource
+    is left out.
+    """
+    readable = readable_nodegroup_ids(user)
     by_graph = defaultdict(list)
     for rid, graph_id in ResourceInstance.objects.filter(
         pk__in=[str(i) for i in resource_ids]
@@ -169,12 +177,12 @@ def names(resource_ids, language):
         index = GraphIndex.for_graph(graph_id)
         node = index.nodes.get("label_of_name") if index else None
         values = defaultdict(list)
-        if node:
+        if node and node.nodegroup_id in readable:
             for rid, value in (
                 TileModel.objects.filter(
                     resourceinstance_id__in=rids, nodegroup_id=node.nodegroup_id
                 )
-                .order_by("sortorder")
+                .order_by("sortorder", "tileid")
                 .values_list("resourceinstance_id", f"data__{node.nodeid}")
             ):
                 if value not in _EMPTY:
@@ -184,6 +192,34 @@ def names(resource_ids, language):
                 values[rid], index.name if index else {}, rid, language
             )
     return found
+
+
+def linkable(resource_ids, user):
+    """The ids among *resource_ids* a linked reference may show, sorted.
+
+    A kept id names an existing resource, outside ``hidden_resource_ids`` and
+    of a model in ``readable_graph_ids``.
+    """
+    hidden = hidden_resource_ids(user)
+    graphs = readable_graph_ids(user)
+    wanted = {str(i) for i in resource_ids if i} - hidden
+    if not wanted:
+        return []
+    return sorted(
+        str(rid)
+        for rid, graph_id in ResourceInstance.objects.filter(
+            pk__in=list(wanted)
+        ).values_list("resourceinstanceid", "graph_id")
+        if str(graph_id) in graphs
+    )
+
+
+def _resource_refs(values):
+    return {
+        str(v.get("resourceId"))
+        for v in values
+        if isinstance(v, dict) and v.get("resourceId")
+    }
 
 
 def model_of(resource_ids):
@@ -291,7 +327,10 @@ def corpus_rows(user, language, chains=None):
     for characterization, evidence in visible.evidence.items():
         for analysis in evidence:
             cited_by[analysis].append(characterization)
-    hidden = hidden_resource_ids(user)
+    operators_of = {a: _resource_refs(values.get(a, "operators")) for a in analyses}
+    shown_operators = set(
+        linkable({o for ops in operators_of.values() for o in ops}, user)
+    )
     analysis_index = GraphIndex.for_slug("analysis")
     analysis_model = analysis_index.name if analysis_index else {}
     technique_ids = {
@@ -301,14 +340,14 @@ def corpus_rows(user, language, chains=None):
     }
     ancestors = ancestor_terms(technique_ids)
     related = {d for d, _ in chains.values()} | {c for _, c in chains.values() if c}
-    label_of = names(related, language)
+    label_of = names(related, language, user)
     rows = []
     for a in analyses:
         document, component = chains[a]
         technique_value = values.first(a, "technique")
         techniques = value_refs(technique_value, language)
         technique = techniques[0] if techniques else None
-        cited = cited_by[a]
+        cited = sorted(cited_by[a])
 
         def refs_of(key):
             return [
@@ -357,19 +396,12 @@ def corpus_rows(user, language, chains=None):
                 "technique": technique,
                 "document": document,
                 "component": component,
-                "canvas": _canvas_of(values.first(a, "zone")),
+                "canvas": rewrite_legacy_url(_canvas_of(values.first(a, "zone")) or "")
+                or None,
                 "date": date,
                 "year": int(date[:4]) if date and date[:4].isdigit() else None,
                 "projects": sorted(p for p in projects_of[a] if p in visible.projects),
-                "operators": sorted(
-                    {
-                        str(v.get("resourceId"))
-                        for v in values.get(a, "operators")
-                        if isinstance(v, dict)
-                        and v.get("resourceId")
-                        and str(v.get("resourceId")) not in hidden
-                    }
-                ),
+                "operators": sorted(operators_of[a] & shown_operators),
                 "materials": _unique(materials),
                 "colours": _unique(colours),
                 "layers": _unique(refs_of("layer")),
@@ -395,7 +427,12 @@ def parse_filters(query):
     """Filters and page number of a search query; lists come as repeated or comma-separated parameters."""
     filters = {
         key: sorted(
-            {v for raw in query.getlist(key) for v in raw.split(",") if v.strip()}
+            {
+                v.strip()
+                for raw in query.getlist(key)
+                for v in raw.split(",")
+                if v.strip()
+            }
         )
         for key in FACET_KEYS
     }
@@ -431,7 +468,7 @@ def _facet_values(row, key):
     return [ref["uri"] for ref in row[plural]]
 
 
-def _facet_labels(rows, language):
+def _facet_labels(rows, language, user):
     labels = defaultdict(dict)
     for row in rows:
         if row["technique"]:
@@ -455,7 +492,7 @@ def _facet_labels(rows, language):
         for key in ("part", "project", "operator")
         for v in _facet_values(row, key)
     }
-    named = names(ids, language)
+    named = names(ids, language, user)
     for row in rows:
         for key in ("part", "project", "operator"):
             for v in _facet_values(row, key):
@@ -514,7 +551,7 @@ def search_payload(query, user, language):
         return not needle or needle in row["text"]
 
     matching = [row for row in rows if keep(row)]
-    labels = _facet_labels(rows, language)
+    labels = _facet_labels(rows, language, user)
     facets = []
     for key in FACET_KEYS:
         if not universe[key]:
@@ -536,7 +573,7 @@ def search_payload(query, user, language):
             key=(
                 (lambda item: item["id"])
                 if key == "year"
-                else (lambda item: fold(item["label"]["value"]))
+                else (lambda item: (fold(item["label"]["value"]), item["id"]))
             )
         )
         facets.append({"key": key, "values": values})
@@ -547,10 +584,13 @@ def search_payload(query, user, language):
         | {r["component"] for r in rows if r["component"]}
         | visible.documents,
         language,
+        user,
     )
     if filters["grain"] == "documents":
         per_document = Counter(row["document"] for row in matching)
-        candidates = sorted(visible.documents, key=lambda d: fold(label_of[d]["value"]))
+        candidates = sorted(
+            visible.documents, key=lambda d: (fold(label_of[d]["value"]), d)
+        )
         results = [
             {
                 "type": "document",
@@ -575,6 +615,7 @@ def search_payload(query, user, language):
                 fold(label_of[r["document"]]["value"]),
                 r["component"] or "",
                 fold(r["name"]["value"]),
+                r["id"],
             )
         )
         results = [analysis_hit(row, label_of) for row in matching]
@@ -695,30 +736,40 @@ def certainty_scale(language):
 
 
 def _canvas_and_shape(vw, dims):
-    """Canvas id and pixel ``Shape`` of one ``VwAnnotation`` row; canvas empty and shape None when unresolved."""
+    """Canvas id and pixel ``Shape`` of one ``VwAnnotation`` row; canvas empty and shape None when unresolved.
+
+    A canvas missing from *dims* is not clamped to any size, so a zone has
+    the same coordinates whether its canvas dimensions are known or not.
+    """
     feature = vw.feature or {}
     canvas = rewrite_legacy_url(
         vw.canvas or (feature.get("properties") or {}).get("canvas") or ""
     )
-    width, height = dims.get(canvas, (1000, 1000))
+    width, height = dims.get(canvas) or (sys.maxsize, sys.maxsize)
     shape = shape_of(feature.get("geometry"), width, height)
     return canvas, shape
 
 
-def _zone(node, resource_ids, dims):
-    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*."""
-    zones = {}
-    if node is None:
-        return zones
+def _annotations(node, resource_ids, dims, readable):
+    """``(resource id, feature id, canvas, shape)`` of every resolved annotation feature of *node*, by feature id.
+
+    Nothing when the node is unresolved or its nodegroup is not in *readable*.
+    """
+    if node is None or node.nodegroup_id not in readable:
+        return
     for vw in VwAnnotation.objects.filter(
         resourceinstance_id__in=list(resource_ids), node_id=node.nodeid
     ).order_by("feature_id"):
-        rid = str(vw.resourceinstance_id)
-        if rid in zones:
-            continue
         canvas, shape = _canvas_and_shape(vw, dims)
         if canvas and shape:
-            zones[rid] = {"canvas": canvas, "shape": shape}
+            yield str(vw.resourceinstance_id), vw.feature_id, canvas, shape
+
+
+def _zone(node, resource_ids, dims, readable):
+    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*; ``{}`` when its nodegroup is not in *readable*."""
+    zones = {}
+    for rid, _, canvas, shape in _annotations(node, resource_ids, dims, readable):
+        zones.setdefault(rid, {"canvas": canvas, "shape": shape})
     return zones
 
 
@@ -743,37 +794,32 @@ def characterization_summaries(ids, visible, user, language, dims):
     values = Values(ids, keys, user)
     readable = readable_nodegroup_ids(user)
     objects_of = _links("characterization", "object_observed", readable)
-    hidden = hidden_resource_ids(user)
     objects = {
         c: sorted(
             o for o in objects_of[c] if o in visible.documents | visible.components
         )
         for c in ids
     }
-    authors = {
-        c: sorted(
-            {
-                str(v.get("resourceId"))
-                for v in values.get(c, "ch_authors")
-                if isinstance(v, dict) and v.get("resourceId")
-            }
-            - hidden
-        )
-        for c in ids
-    }
+    authors_of = {c: _resource_refs(values.get(c, "ch_authors")) for c in ids}
+    shown_authors = set(linkable({a for v in authors_of.values() for a in v}, user))
+    authors = {c: sorted(authors_of[c] & shown_authors) for c in ids}
     label_of = names(
         set(ids)
         | {o for v in objects.values() for o in v}
         | {a for v in authors.values() for a in v},
         language,
+        user,
     )
     slug_of = model_of(
         {o for v in objects.values() for o in v}
         | {a for v in authors.values() for a in v}
     )
-    own_zone = _zone(role_node(*ROLES["ch_zone"]), ids, dims)
+    own_zone = _zone(role_node(*ROLES["ch_zone"]), ids, dims, readable)
     component_zone = _zone(
-        role_node(*ROLES["comp_zone"]), {o for v in objects.values() for o in v}, dims
+        role_node(*ROLES["comp_zone"]),
+        {o for v in objects.values() for o in v},
+        dims,
+        readable,
     )
     material_node, confidence_node = values.node("material"), values.node("confidence")
     element_node, level_node = values.node("elements"), values.node("element_level")
@@ -888,7 +934,9 @@ def document_payload(document_id, user, language):
         return None
     chains = structure(visible, user)
     analyses = sorted(a for a, (d, _) in chains.items() if d == document_id)
-    components = {c for a, (d, c) in chains.items() if d == document_id and c}
+    readable = readable_nodegroup_ids(user)
+    part_of = _links("component", "item_visual_is_part_of_document", readable)
+    components = {c for c in visible.components if document_id in part_of[c]}
     values = Values([document_id], ["doc_name", "doc_manifest", "doc_owner"], user)
     manifest_url = (
         rewrite_legacy_url(values.first(document_id, "doc_manifest") or "") or None
@@ -901,27 +949,23 @@ def document_payload(document_id, user, language):
         if r["document"] == document_id
     }
     annotations = []
-    zone_node = role_node(*ROLES["zone"])
-    if zone_node and zone_node.nodegroup_id in readable_nodegroup_ids(user):
-        for vw in VwAnnotation.objects.filter(
-            resourceinstance_id__in=analyses, node_id=zone_node.nodeid
-        ).order_by("feature_id"):
-            canvas, shape = _canvas_and_shape(vw, dims)
-            analysis = str(vw.resourceinstance_id)
-            row = rows.get(analysis)
-            if not canvas or not shape or row is None:
-                continue
-            annotations.append(
-                {
-                    "key": f"an:{analysis}:{vw.feature_id}",
-                    "analysis": analysis,
-                    "canvas": canvas,
-                    "shape": shape,
-                    "technique": row["technique"],
-                    "dataKind": (row["dataKinds"] or ["file"])[0],
-                    "unpublished": row["unpublished"],
-                }
-            )
+    for analysis, feature_id, canvas, shape in _annotations(
+        role_node(*ROLES["zone"]), analyses, dims, readable
+    ):
+        row = rows.get(analysis)
+        if row is None:
+            continue
+        annotations.append(
+            {
+                "key": f"an:{analysis}:{feature_id}",
+                "analysis": analysis,
+                "canvas": canvas,
+                "shape": shape,
+                "technique": row["technique"],
+                "dataKind": (row["dataKinds"] or ["file"])[0],
+                "unpublished": row["unpublished"],
+            }
+        )
     located = {a["analysis"] for a in annotations}
     unlocated = [
         {
@@ -934,7 +978,6 @@ def document_payload(document_id, user, language):
         for a in analyses
         if a in rows and a not in located
     ]
-    readable = readable_nodegroup_ids(user)
     objects_of = _links("characterization", "object_observed", readable)
     related = [
         c
@@ -942,15 +985,13 @@ def document_payload(document_id, user, language):
         if set(objects_of[c]) & ({document_id} | components)
     ]
     summaries = characterization_summaries(related, visible, user, language, dims)
-    hidden = hidden_resource_ids(user)
+    shown = set(linkable(_resource_refs(values.get(document_id, "doc_owner")), user))
     owners = [
         str(v.get("resourceId"))
         for v in values.get(document_id, "doc_owner")
-        if isinstance(v, dict)
-        and v.get("resourceId")
-        and str(v.get("resourceId")) not in hidden
+        if isinstance(v, dict) and str(v.get("resourceId")) in shown
     ]
-    label_of = names({document_id} | set(owners[:1]), language)
+    label_of = names({document_id} | set(owners[:1]), language, user)
     per_canvas = Counter(
         a["canvas"] for a in {a["analysis"]: a for a in annotations}.values()
     )
@@ -1125,7 +1166,6 @@ def analysis_payload(analysis_id, user, language):
         user,
     )
     readable = readable_nodegroup_ids(user)
-    hidden = hidden_resource_ids(user)
     projects = sorted(
         p
         for p in _links("analysis", "analysis_by_project", readable)[analysis_id]
@@ -1136,11 +1176,9 @@ def analysis_payload(analysis_id, user, language):
         for s in _links("analysis", "sample_used", readable)[analysis_id]
         if s in visible.samples
     )
-    instruments = [
-        i
-        for i in _links("analysis", "instrument", readable)[analysis_id]
-        if i not in hidden
-    ]
+    instruments = linkable(
+        _links("analysis", "instrument", readable)[analysis_id], user
+    )
     ids = (
         {document}
         | ({component} if component else set())
@@ -1149,7 +1187,7 @@ def analysis_payload(analysis_id, user, language):
         | set(row["operators"])
         | set(instruments[:1])
     )
-    label_of = names(ids, language)
+    label_of = names(ids, language, user)
     slug_of = model_of(ids)
     ref = lambda rid: {"id": rid, "model": slug_of.get(rid, ""), "name": label_of[rid]}
     type_node, content_node = values.node("statement_type"), values.node(
@@ -1224,6 +1262,7 @@ def items_payload(keys, user, language):
         {r["document"] for r in rows.values()}
         | {r["component"] for r in rows.values() if r["component"]},
         language,
+        user,
     )
     parsed = [(key, ITEM_KEY.match(key)) for key in keys]
     ch_ids = sorted(
