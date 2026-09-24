@@ -120,6 +120,34 @@ class VisibleSetTests(ExplorerCase):
         reader = User.objects.get(pk=self.anonymous.pk)
         self.assertNotIn(str(self.analyses["open"].pk), visible_set(reader).analyses)
 
+    def hide_project_links(self):
+        nodegroup = NodeGroup.objects.get(
+            pk=self.nodes[("analysis", "analysis_by_project")].nodegroup_id
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+        return User.objects.get(pk=self.anonymous.pk)
+
+    def test_an_unreadable_project_link_still_hides_the_analysis_of_an_embargoed_project(
+        self,
+    ):
+        self.embargo(self.projects["side"])
+        reader = self.hide_project_links()
+
+        self.assertNotIn(
+            str(self.analyses["on_document"].pk), visible_set(reader).analyses
+        )
+
+    def test_an_unreadable_project_link_still_hides_the_analysis_of_a_draft_project(
+        self,
+    ):
+        self.make_draft(self.projects["side"])
+        reader = self.hide_project_links()
+
+        self.assertNotIn(
+            str(self.analyses["on_document"].pk), visible_set(reader).analyses
+        )
+
     def test_an_identification_whose_evidence_is_all_hidden_is_hidden(self):
         self.embargo(self.analyses["open"])
         self.embargo(self.analyses["on_document"])
