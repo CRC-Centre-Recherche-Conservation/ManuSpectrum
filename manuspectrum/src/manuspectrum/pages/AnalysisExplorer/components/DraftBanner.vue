@@ -2,20 +2,32 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
-const props = defineProps<{ count: number }>();
+const props = withDefaults(
+    defineProps<{
+        count: number;
+        /** `results`: the count covers a whole search result set; `page`: the displayed document. */
+        scope?: "page" | "results";
+    }>(),
+    { scope: "page" },
+);
 
 const { $ngettext, interpolate } = useGettext();
 
-const message = computed(() =>
-    interpolate(
-        $ngettext(
-            "%{n} draft on this page; it is marked “Draft”.",
-            "%{n} drafts on this page; they are marked “Draft”.",
-            props.count,
-        ),
-        { n: props.count },
-    ),
-);
+const message = computed(() => {
+    const text =
+        props.scope === "results"
+            ? $ngettext(
+                  "%{n} draft in these results; it is marked “Draft”.",
+                  "%{n} drafts in these results; they are marked “Draft”.",
+                  props.count,
+              )
+            : $ngettext(
+                  "%{n} draft on this page; it is marked “Draft”.",
+                  "%{n} drafts on this page; they are marked “Draft”.",
+                  props.count,
+              );
+    return interpolate(text, { n: props.count });
+});
 </script>
 
 <template>
