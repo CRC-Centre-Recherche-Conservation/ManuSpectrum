@@ -259,10 +259,14 @@ def _canvas_of(annotation):
     return None
 
 
-def corpus_rows(user, language):
-    """One row per visible analysis: what search filters, counts and lists."""
+def corpus_rows(user, language, chains=None):
+    """One row per visible analysis: what search filters, counts and lists.
+
+    *chains* skips a repeat of ``structure()`` when the caller already has it.
+    """
     visible = visible_set(user)
-    chains = structure(visible, user)
+    if chains is None:
+        chains = structure(visible, user)
     analyses = sorted(chains)
     values = Values(
         analyses,
@@ -892,7 +896,9 @@ def document_payload(document_id, user, language):
     canvases = canvases_of(manifest_json(manifest_url)) if manifest_url else []
     dims = {c["id"]: (c["image"]["width"], c["image"]["height"]) for c in canvases}
     rows = {
-        r["id"]: r for r in corpus_rows(user, language) if r["document"] == document_id
+        r["id"]: r
+        for r in corpus_rows(user, language, chains=chains)
+        if r["document"] == document_id
     }
     annotations = []
     zone_node = role_node(*ROLES["zone"])
@@ -1059,9 +1065,14 @@ def imaging_entries(analysis_id, manifest_values, language):
     return entries
 
 
-def analysis_files(analysis_id, user, language):
-    """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging."""
-    values = Values([analysis_id], ["files", "micro", "imaging"], user)
+def analysis_files(analysis_id, user, language, values=None):
+    """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging.
+
+    *values* lets a caller with several analyses share one batched ``Values``
+    lookup instead of one tile query per analysis.
+    """
+    if values is None:
+        values = Values([analysis_id], ["files", "micro", "imaging"], user)
     config_ids = {
         e.get("rendererConfig")
         for e in values.get(analysis_id, "files")
@@ -1097,7 +1108,9 @@ def analysis_payload(analysis_id, user, language):
     chains = structure(visible, user)
     if analysis_id not in visible.analyses or analysis_id not in chains:
         return None
-    row = next(r for r in corpus_rows(user, language) if r["id"] == analysis_id)
+    row = next(
+        r for r in corpus_rows(user, language, chains=chains) if r["id"] == analysis_id
+    )
     document, component = chains[analysis_id]
     values = Values(
         [analysis_id],
@@ -1212,25 +1225,38 @@ def items_payload(keys, user, language):
         | {r["component"] for r in rows.values() if r["component"]},
         language,
     )
+    parsed = [(key, ITEM_KEY.match(key)) for key in keys]
+    ch_ids = sorted(
+        {
+            m.group(2)
+            for _, m in parsed
+            if m and m.group(1) == "ch" and m.group(3) == "-"
+        }
+    )
+    summary_of = {
+        s["id"]: s
+        for s in characterization_summaries(ch_ids, visible, user, language, {})
+    }
+    file_ids = sorted(
+        {m.group(2) for _, m in parsed if m and m.group(1) in ("af", "im")} & set(rows)
+    )
+    shared_values = (
+        Values(file_ids, ["files", "micro", "imaging"], user) if file_ids else None
+    )
     files_of, items, missing = {}, [], []
-    for key in keys:
-        match = ITEM_KEY.match(key)
+    for key, match in parsed:
         if not match:
             missing.append(key)
             continue
         kind, rid, sub = match.groups()
         if kind == "ch":
-            summary = (
-                characterization_summaries([rid], visible, user, language, {})
-                if sub == "-"
-                else []
-            )
+            summary = summary_of.get(rid) if sub == "-" else None
             if summary:
                 items.append(
                     {
                         "key": key,
                         "kind": "characterization",
-                        "characterization": summary[0],
+                        "characterization": summary,
                     }
                 )
             else:
@@ -1240,7 +1266,7 @@ def items_payload(keys, user, language):
             missing.append(key)
             continue
         if rid not in files_of:
-            files_of[rid] = analysis_files(rid, user, language)
+            files_of[rid] = analysis_files(rid, user, language, values=shared_values)
         if kind == "af":
             found = next(
                 (
