@@ -855,6 +855,7 @@ class TestAnalysisPaths(TestCase):
         self.assertEqual(paths, [])
 
     def test_an_analysis_is_readable_through_any_open_path(self):
+        from manuspectrum.utils.public_visibility import VisibleSet
         from manuspectrum.views.iiif_annotation import _through_readable_path
 
         paths = [
@@ -865,8 +866,8 @@ class TestAnalysisPaths(TestCase):
         ]
         with (
             patch(
-                "manuspectrum.views.iiif_annotation.hidden_resource_ids",
-                return_value={"c-hidden"},
+                "manuspectrum.views.iiif_annotation.visible_set",
+                return_value=VisibleSet(analyses=frozenset({"a1", "a2", "a3"})),
             ),
             patch(
                 "manuspectrum.views.iiif_annotation.readable_nodegroup_ids",
@@ -1741,13 +1742,18 @@ class TestChildPermissionsInViews(TestCase):
 
     def _related(self, decide):
         """Patches relating both analyses to the document, readable per *decide*."""
+        from manuspectrum.utils.public_visibility import VisibleSet
         from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
 
         analyses = [self.public_analysis, self.private_analysis]
         by_id = {a.resourceinstanceid: a for a in analyses}
 
-        def hidden(u):
-            return {a.resourceinstanceid for a in analyses if not decide(u, resource=a)}
+        def visible(u):
+            return VisibleSet(
+                analyses=frozenset(
+                    a.resourceinstanceid for a in analyses if decide(u, resource=a)
+                )
+            )
 
         def fetched(resourceinstanceid__in):
             kept = MagicMock()
@@ -1766,8 +1772,8 @@ class TestChildPermissionsInViews(TestCase):
                 return_value=[(a, ((a, "ng"),)) for a in by_id],
             ),
             patch(
-                "manuspectrum.views.iiif_annotation.hidden_resource_ids",
-                side_effect=hidden,
+                "manuspectrum.views.iiif_annotation.visible_set",
+                side_effect=visible,
             ),
             patch(
                 "manuspectrum.views.iiif_annotation.readable_nodegroup_ids",

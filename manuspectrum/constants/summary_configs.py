@@ -177,7 +177,7 @@ SEED_CONFIGS = {
                 "analyses",
                 "Analyses",
                 "Analyses",
-                [_hop("analysis", "analysis_observed", "incoming")],
+                [_hop("analysis", "sample_used", "incoming")],
                 distinct="analysis_technique_used",
             ),
         ],

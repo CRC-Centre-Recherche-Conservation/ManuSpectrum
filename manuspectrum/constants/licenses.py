@@ -12,7 +12,9 @@ in ``media/js/utils/file-license.js``.
 """
 
 import json
+from urllib.parse import urlparse
 
+from django.utils import translation
 from django.utils.translation import gettext_lazy as _
 
 LICENSE_KEY = "license"
@@ -85,6 +87,46 @@ def stored_license(license_id):
 def default_license():
     """The licence stored on a file that has none."""
     return stored_license(DEFAULT_LICENSE_ID)
+
+
+RIGHTS_REGISTRY_HOSTS = ("creativecommons.org", "rightsstatements.org")
+
+
+def effective_license(entry, language):
+    """The licence of a file entry as the Explorer shows it (spec §5 ``FileEntry.license``).
+
+    A missing licence resolves to the default one, flagged ``isDefault``. The
+    label comes from the catalogue in *language*; a custom licence keeps the
+    label the curator typed. ``attribution`` is the entry's attribution text
+    in *language*, else English, else the first one.
+    """
+    entry = entry if isinstance(entry, dict) else {}
+    stored = entry.get(LICENSE_KEY)
+    is_default = not (isinstance(stored, dict) and stored.get("id"))
+    licence = default_license() if is_default else stored
+    catalogue = _BY_ID.get(licence["id"])
+    url = licence.get("url") or (catalogue or {}).get("url")
+    if catalogue and licence["id"] != CUSTOM_LICENSE_ID:
+        with translation.override(language):
+            text = str(catalogue["label"])
+    else:
+        text = licence.get("label") or licence["id"]
+    attribution = entry.get("attribution")
+    if isinstance(attribution, dict):
+        attribution = next(
+            (attribution[lang] for lang in (language, "en") if attribution.get(lang)),
+            next((v for v in attribution.values() if v), None),
+        )
+    return {
+        "id": licence["id"],
+        "url": url,
+        "label": {"value": text, "lang": language},
+        "attribution": attribution or None,
+        "noDerivatives": "-ND" in licence["id"].upper(),
+        "inRightsRegistry": bool(url)
+        and (urlparse(url).hostname or "") in RIGHTS_REGISTRY_HOSTS,
+        "isDefault": is_default,
+    }
 
 
 def catalogue_json():

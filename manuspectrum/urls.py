@@ -30,6 +30,12 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationPageViewV2,
     IIIFAnnotationViewV2,
 )
+from manuspectrum.views.explorer_api import (
+    ExplorerAnalysisView,
+    ExplorerDocumentView,
+    ExplorerItemsView,
+    ExplorerSearchView,
+)
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
@@ -183,6 +189,30 @@ urlpatterns.append(
 )
 urlpatterns.append(
     path("api/summary", SummaryBatchView.as_view(), name="api-summary-batch")
+)
+
+### Explorer (« Découvrir les données ») Corpus APIs. Wrapped like api/summary:
+### the payloads carry names and labels of the request language, and the path
+### keys the browser cache. GET only.
+urlpatterns.append(
+    path("api/explorer/search", ExplorerSearchView.as_view(), name="explorer-search")
+)
+urlpatterns.append(
+    path(
+        "api/explorer/document/<uuid:resourceid>",
+        ExplorerDocumentView.as_view(),
+        name="explorer-document",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/analysis/<uuid:resourceid>",
+        ExplorerAnalysisView.as_view(),
+        name="explorer-analysis",
+    )
+)
+urlpatterns.append(
+    path("api/explorer/items", ExplorerItemsView.as_view(), name="explorer-items")
 )
 
 if settings.ROOT_URLCONF == __name__:
