@@ -20,16 +20,30 @@ Two surface areas:
   but the endpoints are generic: they take a ``resourceType`` + payload
   and don't assume a specific UI flow.
 
-Outbound HTTP goes through ``_bib_request()``. The search view and the
-enrichment use the process-wide ``_get_biblissima_session()`` (retries with
-backoff); the suggest view uses the no-retry ``_get_besteffort_session()``
-through the guarded fetch, under one whole-request deadline.
-``_bib_request()`` holds a slot of a concurrency semaphore that is per worker
-process: a request that waits longer than ``BIBLISSIMA_SLOT_TIMEOUT`` for a
-slot gets ``BiblissimaBusy``, answered 503. Sessions force
-``Accept-Language: fr`` so that scraped portal field labels (``Type :``,
-``Lieu de fabrication :``, …) always match our French field map regardless of
-the end-user's browser locale.
+Outbound HTTP goes through ``_bib_request()``, which holds a slot of a
+concurrency semaphore that is per worker process: a request that waits longer
+than ``BIBLISSIMA_SLOT_TIMEOUT`` for a slot gets ``BiblissimaBusy``, answered
+503.
+
+- The suggest view uses the no-retry ``_get_besteffort_session()`` through
+  the guarded fetch, under its own whole-request deadline
+  (``BIBLISSIMA_SUGGEST_DEADLINE``).
+- The entity, search, manuscript-search, manuscript-illuminations and
+  illumination views run their upstream calls under one request budget
+  (``_upstream_budget(VIEW_DEADLINE)``): no retry, a connect within
+  ``BIBLISSIMA_IIIF_CONNECT_TIMEOUT``, a Biblissima host found unreachable or
+  answering 403, 429 or 503 is not called again in the same request, and no
+  call starts after the ``BIBLISSIMA_VIEW_DEADLINE`` backstop. An answer built while a call failed
+  says ``"partial": true`` and is not stored by ``cache_page``
+  (``_budgeted_answer``); when nothing usable came back, the view answers the
+  failure.
+- The write path and the management commands keep the retry policy of
+  ``_build_biblissima_session()`` (the shared ``_get_biblissima_session()``
+  or a session of their own), which does not honour ``Retry-After``.
+
+Sessions force ``Accept-Language: fr`` so that scraped portal field labels
+(``Type :``, ``Lieu de fabrication :``, …) always match our French field map
+regardless of the end-user's browser locale.
 
 ## Attention points for devs
 
@@ -37,9 +51,11 @@ the end-user's browser locale.
   ``BiblissimaIlluminationDetailView``). Regex is only used for URL-level
   string transformations on already-extracted values, never to find
   content inside HTML.
-- **Caching**: every scraping view is wrapped with ``@cache_page(3600)``.
-  Code changes to any parser are **invisible** until the cache expires or
-  is flushed::
+- **Caching**: the entity and manuscript-search views are wrapped with
+  ``@cache_page(1800)``, the manuscript-illuminations and illumination views
+  with ``@cache_page(3600)``; the descriptor search view has no page cache and
+  memoises only the parsed IIIF manifest. Code changes to any parser are
+  **invisible** until the cache expires or is flushed::
 
       redis-cli --scan --pattern "*biblissima*" | xargs -r redis-cli DEL
       redis-cli --scan --pattern "*views.decorators.cache*" | xargs -r redis-cli DEL
@@ -52,6 +68,7 @@ the end-user's browser locale.
   needing user review must check the flag, not compare valueids.
 """
 
+import contextvars
 import logging
 import re
 import threading
@@ -62,7 +79,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from html import unescape
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import requests
 from lxml import html as lxml_html
@@ -123,16 +140,19 @@ PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
 _BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
 _BIBLISSIMA_SLOT_TIMEOUT = settings.BIBLISSIMA_SLOT_TIMEOUT
 SUGGEST_DEADLINE = settings.BIBLISSIMA_SUGGEST_DEADLINE
+VIEW_DEADLINE = settings.BIBLISSIMA_VIEW_DEADLINE
 _BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
 _BIBLISSIMA_RAW_CACHE_TTL = settings.BIBLISSIMA_RAW_CACHE_TTL
 
 
 def _build_biblissima_session(retry=None):
-    """Requests session with retry/backoff on transient upstream failures.
+    """Requests session that retries transient upstream failures.
 
-    The Retry adapter honors Retry-After headers by default
-    (respect_retry_after_header=True), so upstream explicit backoff requests
-    on 429/503 are respected transparently.
+    The default policy retries a failed connect or read (twice at most) and a
+    429, 502, 503 or 504 answer, three retries at most in all, sleeping 0, 3
+    then 6 s before them. ``Retry-After`` is not honoured: urllib3 would sleep
+    whatever the server asks while the worker and the concurrency slot are
+    held.
 
     ``Accept-Language: fr`` is forced on every outbound request: the portal
     URLs themselves are already locked to ``/fr/`` paths, but this header
@@ -142,9 +162,8 @@ def _build_biblissima_session(retry=None):
     matches French labels. Whatever locale the end-user's browser runs in
     is irrelevant, only what *this server* sends to Biblissima counts.
 
-    *retry* lets callers override the default retry policy — used by the
-    best-effort session (see ``_get_besteffort_session``) which disables
-    retries so optional enrichment fetches fail fast.
+    *retry* replaces the default policy: ``_NO_RETRY`` for the calls that must
+    fail fast (see ``_get_besteffort_session``).
     """
     session = requests.Session()
     session.headers.update(
@@ -162,6 +181,7 @@ def _build_biblissima_session(retry=None):
             backoff_factor=1.5,
             status_forcelist=(429, 502, 503, 504),
             allowed_methods=frozenset(["GET", "HEAD"]),
+            respect_retry_after_header=False,
             raise_on_status=False,
         )
     adapter = HTTPAdapter(max_retries=retry)
@@ -170,36 +190,35 @@ def _build_biblissima_session(retry=None):
     return session
 
 
-# Dedicated no-retry session for calls that must fail fast: OPTIONAL
-# best-effort enrichment fetches (IIIF manifests -> canvas dimensions +
-# thumbnail) and the typeahead suggest path, which runs under a whole-request
-# deadline. A dead host must never hold a gunicorn worker + concurrency slot
-# for minutes.
-# Unlike the shared session it does NOT retry (``total=0``); paired with the
-# short ``IIIF_CONNECT_TIMEOUT`` connect timeout, an unreachable host errors in
-# seconds instead of ~138 s (which was 3 connect retries x a 45 s timeout).
-# The data is optional, so the caller degrades to ``{}`` on failure.
+_NO_RETRY = Retry(
+    total=0,
+    connect=0,
+    read=0,
+    redirect=0,
+    status=0,
+    backoff_factor=0,
+    raise_on_status=False,
+)
+"""Retry policy of the calls that must fail fast: one attempt, no sleep."""
+
+# The no-retry session serves the calls that must fail fast: the optional
+# best-effort IIIF fetches (canvas dimensions, thumbnail), the typeahead
+# suggest path and every call made under a request budget (``_upstream_budget``).
+# Paired with the short ``IIIF_CONNECT_TIMEOUT``, an unreachable host errors in
+# seconds instead of holding a gunicorn worker and a concurrency slot through
+# the retries of the shared session.
 _besteffort_session = None
 _besteffort_session_lock = threading.Lock()
 
 
 def _get_besteffort_session():
-    """Lazily build and cache the no-retry best-effort session (thread-safe)."""
+    """Lazily build and cache the no-retry session (thread-safe). Callers never
+    close it."""
     global _besteffort_session
     if _besteffort_session is None:
         with _besteffort_session_lock:
             if _besteffort_session is None:
-                _besteffort_session = _build_biblissima_session(
-                    retry=Retry(
-                        total=0,
-                        connect=0,
-                        read=0,
-                        redirect=0,
-                        status=0,
-                        backoff_factor=0,
-                        raise_on_status=False,
-                    )
-                )
+                _besteffort_session = _build_biblissima_session(retry=_NO_RETRY)
     return _besteffort_session
 
 
@@ -234,6 +253,89 @@ class BiblissimaBusy(Exception):
 
 class BiblissimaBudgetSpent(Exception):
     """The request's deadline passed before this call could start."""
+
+
+class BiblissimaHostDown(Exception):
+    """An earlier call of the same request found this Biblissima host unreachable."""
+
+
+_BREAKER_STATUSES = frozenset((403, 429, 503))
+
+
+class _UpstreamBudget:
+    """Backstop deadline of one request's Biblissima calls, the hosts found
+    down, and the first failure met."""
+
+    def __init__(self, seconds):
+        self.deadline = time.monotonic() + seconds
+        self.down = set()
+        self.error = None
+
+    def record(self, exc, host=None):
+        if self.error is None:
+            self.error = exc
+        if host is not None:
+            self.down.add(host)
+
+
+_upstream_budget_var = contextvars.ContextVar(
+    "biblissima_upstream_budget", default=None
+)
+
+
+@contextmanager
+def _upstream_budget(seconds):
+    """Bound every Biblissima call made in this block, pool threads included.
+
+    Calls never retry, connect within ``IIIF_CONNECT_TIMEOUT``, read within
+    their own timeout, and neither waits past the backstop *seconds*. The first
+    connection-level failure or 403/429/503 on a Biblissima host trips that host
+    for the rest of the block (``BiblissimaHostDown``). The first failure of a
+    call to a Biblissima host is kept on the yielded budget's ``error``; a
+    portal 404 and third-party IIIF failures are not.
+    """
+    budget = _UpstreamBudget(seconds)
+    token = _upstream_budget_var.set(budget)
+    try:
+        yield budget
+    finally:
+        _upstream_budget_var.reset(token)
+
+
+def _default_session():
+    """Session of a Biblissima call made without one: the no-retry session
+    inside a request budget, the shared retrying session otherwise. Callers
+    never close it."""
+    if _upstream_budget_var.get() is not None:
+        return _get_besteffort_session()
+    return _get_biblissima_session()
+
+
+_BIBLISSIMA_HOSTS = frozenset(
+    urlsplit(url).hostname
+    for url in (
+        BIBLISSIMA_WIKIBASE,
+        BIBLISSIMA_PORTAL,
+        BIBLISSIMA_PORTAL_EN,
+        BIBLISSIMA_IIIF_MANIFEST,
+    )
+)
+
+
+def _biblissima_host(url):
+    """The host of *url* when it is a settings-pinned Biblissima host, else ``None``."""
+    host = urlsplit(url).hostname
+    return host if host in _BIBLISSIMA_HOSTS else None
+
+
+def _capped_timeout(timeout, left, connect_cap=None):
+    """``(connect, read)`` of *timeout* (a number or a pair), each at most
+    *left*; the connect also at most *connect_cap* when one is given."""
+    connect, read = timeout if isinstance(timeout, tuple) else (timeout, timeout)
+    connect = min(connect, left)
+    if connect_cap is not None:
+        connect = min(connect, connect_cap)
+    return connect, min(read, left)
 
 
 # Lightweight counters for observing upstream health via /api/biblissima/stats.
@@ -278,12 +380,10 @@ def _biblissima_slot(timeout=None):
 def _bib_request(
     session, url, *, guarded=False, slot_timeout=None, deadline=None, **kwargs
 ):
-    """Wrapper around session.get bounding concurrency and recording metrics.
+    """GET *url* on *session* while holding a concurrency slot, and count it.
 
-    The session's HTTPAdapter already handles Retry-After and transient 5xx/429
-    retries with backoff, so this wrapper only counts the final response that
-    reaches the caller. Retries inside the adapter are invisible here by design
-    (otherwise we'd double-count them).
+    Only the final response that reaches the caller is counted: retries are the
+    session's policy, run inside its adapter and are invisible here.
 
     ``guarded=True`` sends the call through ``utils.http.safe_fetch`` instead:
     required whenever the URL is a third party's rather than one of the
@@ -295,31 +395,68 @@ def _bib_request(
 
     ``slot_timeout`` bounds the wait for a concurrency slot
     (``_BIBLISSIMA_SLOT_TIMEOUT`` when None). ``deadline``, a
-    ``time.monotonic()`` instant, sets the connect and read timeouts to the
-    seconds left once the slot is held (at most ``REQUEST_TIMEOUT``) and raises
-    ``BiblissimaBudgetSpent`` when none are left. The read timeout applies to
-    each read of the body, not to the whole of it.
+    ``time.monotonic()`` instant, also caps that wait when no ``slot_timeout``
+    is given; once the slot is held it caps the connect and read timeouts of
+    the caller's ``timeout`` (``REQUEST_TIMEOUT`` when none is given) by the
+    seconds left, and raises ``BiblissimaBudgetSpent`` when none are left. The
+    read timeout applies to each read of the body, not to the whole of it.
+
+    Inside a request budget (``_upstream_budget``) the budget's deadline
+    applies when no ``deadline`` is given, the connect is also capped by
+    ``IIIF_CONNECT_TIMEOUT``, a Biblissima host found down earlier in the
+    request raises ``BiblissimaHostDown`` without being called, and failures
+    are recorded on the budget.
     """
-    with _biblissima_slot(slot_timeout):
-        if deadline is not None:
-            left = min(deadline - time.monotonic(), REQUEST_TIMEOUT)
-            if left <= 0:
-                raise BiblissimaBudgetSpent()
-            kwargs["timeout"] = (left, left)
-        _incr_stat("requests_total", 1)
-        try:
-            if guarded:
-                resp = safe_fetch(url, session=session, throttle=False, **kwargs)
-            else:
-                resp = session.get(url, **kwargs)
-        except Exception:
-            _incr_stat("errors_total", 1)
-            raise
+    budget = _upstream_budget_var.get()
+    host = _biblissima_host(url) if budget is not None else None
+    if host is not None and host in budget.down:
+        raise BiblissimaHostDown(host)
+    if deadline is None and budget is not None:
+        deadline = budget.deadline
+    if deadline is not None and slot_timeout is None:
+        slot_timeout = max(
+            0, min(deadline - time.monotonic(), _BIBLISSIMA_SLOT_TIMEOUT)
+        )
+    try:
+        with _biblissima_slot(slot_timeout):
+            if deadline is not None:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise BiblissimaBudgetSpent()
+                kwargs["timeout"] = _capped_timeout(
+                    kwargs.get("timeout", REQUEST_TIMEOUT),
+                    left,
+                    connect_cap=IIIF_CONNECT_TIMEOUT if budget is not None else None,
+                )
+            _incr_stat("requests_total", 1)
+            try:
+                if guarded:
+                    resp = safe_fetch(url, session=session, throttle=False, **kwargs)
+                else:
+                    resp = session.get(url, **kwargs)
+            except Exception:
+                _incr_stat("errors_total", 1)
+                raise
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        if host is not None:
+            budget.record(exc, host)
+        raise
+    except Exception as exc:
+        if host is not None:
+            budget.record(exc)
+        raise
     status = resp.status_code
     if status == 429:
         _incr_stat("responses_429", 1)
     elif 500 <= status < 600:
         _incr_stat("responses_5xx", 1)
+    if host is not None:
+        failed = status >= 500 or status in _BREAKER_STATUSES
+        if failed or resp.headers.get("MediaWiki-API-Error"):
+            budget.record(
+                requests.exceptions.HTTPError(str(status), response=resp),
+                host if status in _BREAKER_STATUSES else None,
+            )
     return resp
 
 
@@ -356,7 +493,7 @@ def _biblissima_upstream_error(exc, context):
         )
         response["Retry-After"] = str(_BIBLISSIMA_SLOT_TIMEOUT)
         return response
-    if isinstance(exc, requests.exceptions.Timeout):
+    if isinstance(exc, (requests.exceptions.Timeout, BiblissimaBudgetSpent)):
         logger.warning("%s timed out", context)
         return JsonResponse(
             {
@@ -367,7 +504,7 @@ def _biblissima_upstream_error(exc, context):
             },
             status=504,
         )
-    if isinstance(exc, requests.exceptions.ConnectionError):
+    if isinstance(exc, (requests.exceptions.ConnectionError, BiblissimaHostDown)):
         logger.warning("%s connection error", context)
         return JsonResponse(
             {
@@ -409,6 +546,20 @@ def _biblissima_upstream_error(exc, context):
         },
         status=502,
     )
+
+
+def _budgeted_answer(payload, budget):
+    """JSON answer of a view run under a request budget.
+
+    ``partial`` says whether a Biblissima call failed while it was built; a
+    partial answer is marked private with ``max-age=0``, which ``cache_page``
+    never stores, so the next request retries the lookups that failed.
+    """
+    payload["partial"] = budget.error is not None
+    response = JsonResponse(payload)
+    if payload["partial"]:
+        patch_cache_control(response, private=True, max_age=0)
+    return response
 
 
 def _parse_html_fragment(text):
@@ -526,8 +677,8 @@ def _get_wikibase_entity(qid, session=None):
     """Fetch a single Wikibase entity and extract relevant properties.
 
     Cached for ``BIBLISSIMA_CACHE_TTL`` by QID; a miss is fetched by one
-    worker while concurrent callers wait for its result. ``None`` on failure,
-    never cached.
+    worker while concurrent callers wait for its result. ``None`` when the fetch
+    fails or Wikibase answers the entity missing; ``None`` is never cached.
     """
     cache_key = _BIBLISSIMA_ENTITY_CACHE_KEY.format(qid=qid)
     cached = cache.get(cache_key)
@@ -537,10 +688,9 @@ def _get_wikibase_entity(qid, session=None):
     _incr_stat("cache_misses", 1)
 
     def fetch():
-        s = session or _build_biblissima_session()
         try:
             resp = _bib_request(
-                s,
+                session or _default_session(),
                 BIBLISSIMA_WIKIBASE,
                 params={
                     "action": "wbgetentities",
@@ -554,6 +704,8 @@ def _get_wikibase_entity(qid, session=None):
             raw = resp.json().get("entities", {}).get(qid, {})
         except Exception:
             logger.warning("Failed to fetch Wikibase entity %s", qid)
+            return None
+        if not raw or "missing" in raw:
             return None
         return _extract_entity_props(qid, raw)
 
@@ -584,7 +736,7 @@ def _batch_get_wikibase_entities(qids, session=None):
     if not uncached:
         return results
 
-    s = session or _build_biblissima_session()
+    s = session or _default_session()
     # wbgetentities supports up to 50 IDs per call
     for i in range(0, len(uncached), 50):
         batch = uncached[i : i + 50]
@@ -630,7 +782,7 @@ def _fetch_wikibase_claims(qid, session=None):
         {"action": "wbgetentities", "ids": qid, "format": "json", "props": "claims"}
     )
     resp = _bib_request(
-        session or _get_biblissima_session(),
+        session or _default_session(),
         f"{BIBLISSIMA_WIKIBASE}?{query}",
         guarded=True,
         timeout=REQUEST_TIMEOUT,
@@ -1425,6 +1577,10 @@ class BiblissimaEntityView(View):
     and locale middlewares add their ``Vary`` headers: the payload must depend
     neither on the user nor on the active language. A per-user or localised
     field here would be served to every editor.
+
+    Upstream calls run under one request budget. An entity that could not be
+    fetched answers the failure, one Wikibase marks missing answers 404, and a
+    failed lookup of a linked entity makes the answer ``partial``.
     """
 
     @method_decorator(cache_control(private=True))
@@ -1433,35 +1589,42 @@ class BiblissimaEntityView(View):
         if not _QID_RE.fullmatch(qid):
             return JsonResponse({"error": "invalid qid"}, status=400)
 
-        entity = _get_wikibase_entity(qid)
-        if entity is None:
-            return JsonResponse({"error": "Entity not found"}, status=404)
+        with _upstream_budget(VIEW_DEADLINE) as budget:
+            entity = _get_wikibase_entity(qid)
+            if entity is None:
+                if budget.error is not None:
+                    return _biblissima_upstream_error(
+                        budget.error, f"Biblissima entity ({qid})"
+                    )
+                return JsonResponse({"error": "Entity not found"}, status=404)
 
-        # Resolve P2 nature label and pre-compute Document Type valueid
-        # (helper is idempotent and used by SearchManuscriptsView too).
-        _attach_document_type(entity)
+            # Resolve P2 nature label and pre-compute Document Type valueid
+            # (helper is idempotent and used by SearchManuscriptsView too).
+            _attach_document_type(entity)
 
-        # If author is a QID, resolve its label
-        if entity.get("author"):
-            author_entity = _get_wikibase_entity(entity["author"])
-            if author_entity:
-                entity["authorLabel"] = author_entity["label"]
-                entity["authorQid"] = entity["author"]
+            # If author is a QID, resolve its label
+            if entity.get("author"):
+                author_entity = _get_wikibase_entity(entity["author"])
+                if author_entity:
+                    entity["authorLabel"] = author_entity["label"]
+                    entity["authorQid"] = entity["author"]
 
-        # If collection is a QID, resolve full collection data (owner + location)
-        if entity.get("collection"):
-            coll_data = _resolve_collection(entity["collection"])
-            entity["collectionLabel"] = coll_data.get("ownerLabel", "")
-            entity["collectionQid"] = entity["collection"]
-            entity["locationLabel"] = coll_data.get("locationLabel", "")
-            entity["locationQid"] = coll_data.get("locationQid", "")
-            entity["geonamesId"] = coll_data.get("geonamesId", "")
-            entity["parentInstitutionLabel"] = coll_data.get(
-                "parentInstitutionLabel", ""
-            )
-            entity["parentInstitutionQid"] = coll_data.get("parentInstitutionQid", "")
+            # If collection is a QID, resolve full collection data (owner + location)
+            if entity.get("collection"):
+                coll_data = _resolve_collection(entity["collection"])
+                entity["collectionLabel"] = coll_data.get("ownerLabel", "")
+                entity["collectionQid"] = entity["collection"]
+                entity["locationLabel"] = coll_data.get("locationLabel", "")
+                entity["locationQid"] = coll_data.get("locationQid", "")
+                entity["geonamesId"] = coll_data.get("geonamesId", "")
+                entity["parentInstitutionLabel"] = coll_data.get(
+                    "parentInstitutionLabel", ""
+                )
+                entity["parentInstitutionQid"] = coll_data.get(
+                    "parentInstitutionQid", ""
+                )
 
-        return JsonResponse(entity)
+        return _budgeted_answer(entity, budget)
 
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
@@ -1479,6 +1642,10 @@ class BiblissimaSearchManuscriptsView(View):
     and locale middlewares add their ``Vary`` headers: the payload must depend
     neither on the user nor on the active language. A per-user or localised
     field here would be served to every editor.
+
+    Upstream calls run under one request budget. A search that found nothing
+    while a call failed answers the failure; results assembled while a call
+    failed are ``partial``.
     """
 
     TYPE_FILTERS = BiblissimaSuggestView.TYPE_FILTERS
@@ -1490,145 +1657,155 @@ class BiblissimaSearchManuscriptsView(View):
         if len(query) < 3:
             return JsonResponse({"results": []})
 
-        limit = max(1, int(request.GET.get("limit", 50)))
-        session = _build_biblissima_session()
-
-        # --- Step 1: Suggest (reuse SuggestView logic inline) ---
-        type_qid = self.TYPE_FILTERS.get("manuscript", "")
-        seen_ids = set()
-        suggest_results = []
-
-        # Prefix search
         try:
-            fetch_limit = limit * 3
-            resp = _bib_request(
-                session,
-                BIBLISSIMA_WIKIBASE,
-                params={
-                    "action": "wbsearchentities",
-                    "search": query,
-                    "language": "fr",
-                    "format": "json",
-                    "limit": fetch_limit,
-                },
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            prefix_items = resp.json().get("search", [])
+            limit = int(request.GET.get("limit", 50))
+        except (TypeError, ValueError):
+            limit = 50
+        limit = max(1, min(limit, 50))
 
-            if prefix_items:
-                batch_ids = [item["id"] for item in prefix_items]
-                type_resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "wbgetentities",
-                        "ids": "|".join(batch_ids),
-                        "format": "json",
-                        "props": "claims",
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                type_resp.raise_for_status()
-                entities = type_resp.json().get("entities", {})
-                for item in prefix_items:
-                    qid = item["id"]
-                    for claim in entities.get(qid, {}).get("claims", {}).get(P2, []):
-                        val = (
-                            claim.get("mainsnak", {})
-                            .get("datavalue", {})
-                            .get("value", {})
-                        )
-                        if isinstance(val, dict) and val.get("id") == type_qid:
-                            if qid not in seen_ids:
-                                seen_ids.add(qid)
-                                suggest_results.append(qid)
-                            break
-                    if len(suggest_results) >= limit:
-                        break
-        except Exception:
-            logger.warning("Manuscript search prefix failed for: %s", query)
+        with _upstream_budget(VIEW_DEADLINE) as budget:
+            session = _default_session()
 
-        # Fulltext search
-        if len(suggest_results) < limit:
+            # --- Step 1: Suggest (reuse SuggestView logic inline) ---
+            type_qid = self.TYPE_FILTERS.get("manuscript", "")
+            seen_ids = set()
+            suggest_results = []
+
+            # Prefix search
             try:
-                srsearch = f"{query} haswbstatement:P2={type_qid}"
+                fetch_limit = limit * 3
                 resp = _bib_request(
                     session,
                     BIBLISSIMA_WIKIBASE,
                     params={
-                        "action": "query",
-                        "list": "search",
-                        "srsearch": srsearch,
-                        "srnamespace": 120,
+                        "action": "wbsearchentities",
+                        "search": query,
+                        "language": "fr",
                         "format": "json",
-                        "srlimit": limit,
+                        "limit": fetch_limit,
                     },
                     timeout=REQUEST_TIMEOUT,
                 )
                 resp.raise_for_status()
-                for r in resp.json().get("query", {}).get("search", []):
-                    qid = r["title"].replace("Item:", "")
-                    if qid not in seen_ids:
-                        seen_ids.add(qid)
-                        suggest_results.append(qid)
+                prefix_items = resp.json().get("search", [])
+
+                if prefix_items:
+                    batch_ids = [item["id"] for item in prefix_items]
+                    type_resp = _bib_request(
+                        session,
+                        BIBLISSIMA_WIKIBASE,
+                        params={
+                            "action": "wbgetentities",
+                            "ids": "|".join(batch_ids),
+                            "format": "json",
+                            "props": "claims",
+                        },
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    type_resp.raise_for_status()
+                    entities = type_resp.json().get("entities", {})
+                    for item in prefix_items:
+                        qid = item["id"]
+                        for claim in (
+                            entities.get(qid, {}).get("claims", {}).get(P2, [])
+                        ):
+                            val = (
+                                claim.get("mainsnak", {})
+                                .get("datavalue", {})
+                                .get("value", {})
+                            )
+                            if isinstance(val, dict) and val.get("id") == type_qid:
+                                if qid not in seen_ids:
+                                    seen_ids.add(qid)
+                                    suggest_results.append(qid)
+                                break
                         if len(suggest_results) >= limit:
                             break
             except Exception:
-                logger.warning("Manuscript search fulltext failed for: %s", query)
+                logger.warning("Manuscript search prefix failed for: %s", query)
 
-        if not suggest_results:
-            session.close()
+            # Fulltext search
+            if len(suggest_results) < limit:
+                try:
+                    srsearch = f"{query} haswbstatement:P2={type_qid}"
+                    resp = _bib_request(
+                        session,
+                        BIBLISSIMA_WIKIBASE,
+                        params={
+                            "action": "query",
+                            "list": "search",
+                            "srsearch": srsearch,
+                            "srnamespace": 120,
+                            "format": "json",
+                            "srlimit": limit,
+                        },
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    resp.raise_for_status()
+                    for r in resp.json().get("query", {}).get("search", []):
+                        qid = r["title"].replace("Item:", "")
+                        if qid not in seen_ids:
+                            seen_ids.add(qid)
+                            suggest_results.append(qid)
+                            if len(suggest_results) >= limit:
+                                break
+                except Exception:
+                    logger.warning("Manuscript search fulltext failed for: %s", query)
+
+            # --- Step 2: Batch entity fetch (1 call instead of N) ---
+            entities = _batch_get_wikibase_entities(suggest_results, session=session)
+
+            # --- Step 3: Batch author resolution (1 call for unique authors) ---
+            author_qids = list(
+                {e["author"] for e in entities.values() if e.get("author")}
+            )
+            authors = _batch_get_wikibase_entities(author_qids, session=session)
+
+            # --- Step 4: Deduplicated collection resolution ---
+            collection_qids = list(
+                {e["collection"] for e in entities.values() if e.get("collection")}
+            )
+            collections = {}
+            for coll_qid in collection_qids:
+                collections[coll_qid] = _resolve_collection(coll_qid, session=session)
+
+            # --- Assemble results ---
+            results = []
+            for qid in suggest_results:
+                e = entities.get(qid)
+                if not e:
+                    continue
+
+                # Author
+                author_qid = e.get("author")
+                if author_qid and author_qid in authors:
+                    e["authorLabel"] = authors[author_qid].get("label", "")
+                    e["authorQid"] = author_qid
+
+                # Collection
+                coll_qid = e.get("collection")
+                if coll_qid and coll_qid in collections:
+                    coll = collections[coll_qid]
+                    e["collectionLabel"] = coll.get("ownerLabel", "")
+                    e["locationLabel"] = coll.get("locationLabel", "")
+                    e["locationQid"] = coll.get("locationQid", "")
+                    e["geonamesId"] = coll.get("geonamesId", "")
+                    e["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
+                    e["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
+
+                # Document Type — resolve P2 nature → label → Arches valueid
+                # (idempotent; cached lookup on _get_wikibase_entity).
+                _attach_document_type(e)
+
+                results.append(e)
+
+        if not results:
+            if budget.error is not None:
+                return _biblissima_upstream_error(
+                    budget.error, "Biblissima manuscript search"
+                )
             return JsonResponse({"total": 0, "results": []})
-
-        # --- Step 2: Batch entity fetch (1 call instead of N) ---
-        entities = _batch_get_wikibase_entities(suggest_results, session=session)
-
-        # --- Step 3: Batch author resolution (1 call for unique authors) ---
-        author_qids = list({e["author"] for e in entities.values() if e.get("author")})
-        authors = _batch_get_wikibase_entities(author_qids, session=session)
-
-        # --- Step 4: Deduplicated collection resolution ---
-        collection_qids = list(
-            {e["collection"] for e in entities.values() if e.get("collection")}
-        )
-        collections = {}
-        for coll_qid in collection_qids:
-            collections[coll_qid] = _resolve_collection(coll_qid, session=session)
-
-        session.close()
-
-        # --- Assemble results ---
-        results = []
-        for qid in suggest_results:
-            e = entities.get(qid)
-            if not e:
-                continue
-
-            # Author
-            author_qid = e.get("author")
-            if author_qid and author_qid in authors:
-                e["authorLabel"] = authors[author_qid].get("label", "")
-                e["authorQid"] = author_qid
-
-            # Collection
-            coll_qid = e.get("collection")
-            if coll_qid and coll_qid in collections:
-                coll = collections[coll_qid]
-                e["collectionLabel"] = coll.get("ownerLabel", "")
-                e["locationLabel"] = coll.get("locationLabel", "")
-                e["locationQid"] = coll.get("locationQid", "")
-                e["geonamesId"] = coll.get("geonamesId", "")
-                e["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
-                e["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
-
-            # Document Type — resolve P2 nature → label → Arches valueid
-            # (idempotent; cached lookup on _get_wikibase_entity).
-            _attach_document_type(e)
-
-            results.append(e)
-
-        return JsonResponse({"total": len(results), "results": results})
+        return _budgeted_answer({"total": len(results), "results": results}, budget)
 
 
 # Canvas labels from Biblissima IIIF descriptor manifests look like
@@ -1672,14 +1849,14 @@ def _enrich_canvases(canvases, session=None):
     A manuscript record is cached only when its lookup, its candidate entities
     up to the matching one and its author and nature entities all resolved.
 
-    *session* (default: the shared session) serves the caller-thread batch
+    *session* (default: ``_default_session()``) serves the caller-thread batch
     calls and is not closed here; the CirrusSearch pool uses one session per
     thread.
     """
     if not canvases:
         return
 
-    session = session or _get_biblissima_session()
+    session = session or _default_session()
 
     # Phase 1: collect unique manuscripts. The "name" we keep here is the
     # query string used to look up the manuscript in Wikibase later — we
@@ -1720,7 +1897,9 @@ def _enrich_canvases(canvases, session=None):
     # positive — so reconciliation is done without scraping.
 
     # requests.Session is not thread-safe: each pool thread gets its own,
-    # closed once the pool has finished.
+    # closed once the pool has finished, without retries under a request
+    # budget. Each task runs in its own copy of the request's context, so the
+    # budget reaches the pool threads.
     thread_local = threading.local()
     thread_sessions = []
     thread_sessions_lock = threading.Lock()
@@ -1728,7 +1907,9 @@ def _enrich_canvases(canvases, session=None):
     def _thread_session():
         thread_session = getattr(thread_local, "session", None)
         if thread_session is None:
-            thread_session = thread_local.session = _build_biblissima_session()
+            thread_session = thread_local.session = _build_biblissima_session(
+                retry=_NO_RETRY if _upstream_budget_var.get() is not None else None
+            )
             with thread_sessions_lock:
                 thread_sessions.append(thread_session)
         return thread_session
@@ -1775,11 +1956,15 @@ def _enrich_canvases(canvases, session=None):
     incomplete = set()
     if to_resolve:
         max_workers = min(6, len(to_resolve))
+        context = contextvars.copy_context()
         try:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                for ark_hash, candidate_qids, failure in executor.map(
-                    _search_candidates, to_resolve.items()
-                ):
+                futures = [
+                    executor.submit(context.copy().run, _search_candidates, item)
+                    for item in to_resolve.items()
+                ]
+                for future in futures:
+                    ark_hash, candidate_qids, failure = future.result()
                     candidates_by_ark_hash[ark_hash] = candidate_qids
                     if failure:
                         cirrus_failures.append(failure)
@@ -2003,7 +2188,11 @@ class BiblissimaSearchView(View):
     ``BIBLISSIMA_RAW_CACHE_TTL`` under the normalized descriptor key, so
     paginated follow-up requests skip the IIIF fetch and only enrich the
     requested slice. One worker fetches a miss while concurrent callers wait
-    for its result; the lock outlives a slot wait plus a retried fetch.
+    for its result; the lock outlives the request budget.
+
+    Upstream calls run under one request budget. A failed manifest fetch
+    answers the failure; a page whose enrichment met a failed call is
+    ``partial``.
     """
 
     def get(self, request):
@@ -2047,36 +2236,38 @@ class BiblissimaSearchView(View):
             "biblissima:search:raw", ",".join(sorted(desc_hashes))
         )
 
-        session = _get_biblissima_session()
-        try:
-            all_canvases = get_or_build(
-                raw_cache_key,
-                lambda: _fetch_biblissima_canvases(desc_hashes, session),
-                _BIBLISSIMA_RAW_CACHE_TTL,
-                lock_timeout=240,
-                wait=10.0,
-            )
-        except Exception as exc:
-            return _biblissima_upstream_error(exc, "Biblissima IIIF search")
+        with _upstream_budget(VIEW_DEADLINE) as budget:
+            session = _default_session()
+            try:
+                all_canvases = get_or_build(
+                    raw_cache_key,
+                    lambda: _fetch_biblissima_canvases(desc_hashes, session),
+                    _BIBLISSIMA_RAW_CACHE_TTL,
+                    lock_timeout=240,
+                    wait=10.0,
+                )
+            except Exception as exc:
+                return _biblissima_upstream_error(exc, "Biblissima IIIF search")
 
-        total = len(all_canvases)
-        total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
+            total = len(all_canvases)
+            total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
 
-        start = (page - 1) * page_size
-        end = start + page_size
-        page_canvases = all_canvases[start:end]
+            start = (page - 1) * page_size
+            end = start + page_size
+            page_canvases = all_canvases[start:end]
 
-        # Enrich in place on the slice we're about to return.
-        _enrich_canvases(page_canvases, session=session)
+            # Enrich in place on the slice we're about to return.
+            _enrich_canvases(page_canvases, session=session)
 
-        return JsonResponse(
+        return _budgeted_answer(
             {
                 "total": total,
                 "page": page,
                 "page_size": page_size,
                 "total_pages": total_pages,
                 "results": page_canvases,
-            }
+            },
+            budget,
         )
 
 
@@ -2577,8 +2768,8 @@ class BiblissimaManuscriptIlluminationsView(View):
     Raw parsed illuminations are cached for ``BIBLISSIMA_RAW_CACHE_TTL``
     under the manuscript portal hash so follow-up page requests skip the
     (slow) HTML scrape; one worker scrapes a miss while concurrent callers
-    wait for its result, and the lock outlives a slot wait plus a retried
-    fetch.
+    wait for its result, and the lock outlives the request budget under which
+    the page is fetched.
 
     ``get`` is cached by ``cache_page`` on the URL alone, before the session
     and locale middlewares add their ``Vary`` headers: the payload must depend
@@ -2618,27 +2809,23 @@ class BiblissimaManuscriptIlluminationsView(View):
         )
 
         def scrape():
-            session = _build_biblissima_session()
-            try:
-                resp = _bib_request(
-                    session,
-                    f"{BIBLISSIMA_PORTAL}/{portal_hash}",
-                    timeout=PORTAL_REQUEST_TIMEOUT,
-                )
-                resp.raise_for_status()
-                html = resp.text
-            finally:
-                session.close()
-            return _parse_manuscript_illuminations(html)
+            resp = _bib_request(
+                _default_session(),
+                f"{BIBLISSIMA_PORTAL}/{portal_hash}",
+                timeout=PORTAL_REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            return _parse_manuscript_illuminations(resp.text)
 
         try:
-            all_illuminations = get_or_build(
-                raw_cache_key,
-                scrape,
-                _BIBLISSIMA_RAW_CACHE_TTL,
-                lock_timeout=240,
-                wait=10.0,
-            )
+            with _upstream_budget(VIEW_DEADLINE):
+                all_illuminations = get_or_build(
+                    raw_cache_key,
+                    scrape,
+                    _BIBLISSIMA_RAW_CACHE_TTL,
+                    lock_timeout=240,
+                    wait=10.0,
+                )
         except Exception as exc:
             return _biblissima_upstream_error(
                 exc, f"Biblissima portal fetch ({portal_hash})"
@@ -2960,7 +3147,9 @@ class BiblissimaIlluminationDetailView(View):
 
         The /en/ fetch is best-effort: if it fails the French-only
         result is returned and date parsing may degrade for century
-        idioms, but the create step still works.
+        idioms, but the create step still works. Its failure makes the
+        answer ``partial``, like a failed manuscript lookup; a failed
+        fetch of the third-party IIIF manifest does not.
 
         Cached by ``cache_page`` on the URL alone, before the session and locale
         middlewares add their ``Vary`` headers: the payload must depend neither
@@ -2970,8 +3159,8 @@ class BiblissimaIlluminationDetailView(View):
         if not _IFDATA_HASH_RE.fullmatch(ifdata_hash):
             return JsonResponse({"error": "invalid identifier"}, status=400)
 
-        session = _build_biblissima_session()
-        try:
+        with _upstream_budget(VIEW_DEADLINE) as budget:
+            session = _default_session()
             try:
                 fr_resp = _bib_request(
                     session,
@@ -3054,9 +3243,8 @@ class BiblissimaIlluminationDetailView(View):
                 if centuries:
                     result["centuryConcept"] = centuries
 
-            # Canvas dimensions + thumbnail via one cached manifest fetch.
-            # Uses its own no-retry best-effort session (fast-fail on a dead
-            # IIIF host) — the shared ``session`` is intentionally not passed.
+            # Canvas dimensions + thumbnail via one cached fetch of the
+            # third-party manifest, on the no-retry best-effort session.
             if result.get("manifestUrl"):
                 canvas_info = _fetch_canvas_dimensions(
                     result["manifestUrl"], result.get("folio", "")
@@ -3080,9 +3268,7 @@ class BiblissimaIlluminationDetailView(View):
                 if not result.get("manifestUrl") and manifest_before:
                     result["manifestUrl"] = manifest_before
 
-            return JsonResponse(result)
-        finally:
-            session.close()
+        return _budgeted_answer(result, budget)
 
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")

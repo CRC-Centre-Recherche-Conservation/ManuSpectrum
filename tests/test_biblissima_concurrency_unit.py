@@ -26,6 +26,7 @@ class ConcurrencyTestCase(TestCase):
         self.addCleanup(cache.clear)
         self._start(patch.dict(bp._biblissima_stats))
         self._start(patch.object(bp, "_biblissima_session", None))
+        self._start(patch.object(bp, "_besteffort_session", None))
 
     def _start(self, patcher):
         mock = patcher.start()
@@ -289,7 +290,7 @@ class SharedSessionTests(ConcurrencyTestCase):
             patch.object(
                 bp,
                 "_build_biblissima_session",
-                return_value=MagicMock(name="shared-session"),
+                side_effect=lambda retry=None: MagicMock(name="built-session"),
             )
         )
         self._start(patch.object(bp, "_fetch_biblissima_canvases", side_effect=fetch))
@@ -303,7 +304,7 @@ class SharedSessionTests(ConcurrencyTestCase):
 
         self.assertEqual(len(seen), 2)
         self.assertIs(seen[0], seen[1])
-        self.assertIs(seen[0], bp._get_biblissima_session())
+        self.assertIs(seen[0], bp._get_besteffort_session())
         seen[0].close.assert_not_called()
 
 

@@ -354,17 +354,10 @@ class GetWikibaseEntityTests(TestCase):
 
     def test_handles_missing_entity(self):
         session = MagicMock()
-        # API returns no entity for the QID.
         resp = _make_response(json_data={"entities": {}})
         with patch.object(bp, "_bib_request", return_value=resp):
             result = bp._get_wikibase_entity("Q999", session=session)
-        # _extract_entity_props with empty raw still returns a dict with
-        # qid + empty label and None claims — that's acceptable, but it
-        # should NOT cache an empty dict for too long. The current
-        # implementation does cache it; assert it's at least not None
-        # and shaped right.
-        self.assertIsNotNone(result)
-        self.assertEqual(result["biblissimaQid"], "Q999")
+        self.assertIsNone(result)
 
 
 class BatchGetWikibaseEntitiesTests(TestCase):
@@ -1194,6 +1187,7 @@ class BuildBiblissimaSessionTests(TestCase):
             self.assertEqual(retry.total, 3)
             self.assertIn(429, retry.status_forcelist)
             self.assertIn(503, retry.status_forcelist)
+            self.assertIs(retry.respect_retry_after_header, False)
         finally:
             session.close()
 
@@ -1925,6 +1919,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
 
         cache.clear()
 
+    @patch("manuspectrum.views.biblissima_proxy._besteffort_session", None)
     @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
     @patch("manuspectrum.views.biblissima_proxy._batch_get_wikibase_entities")
     @patch("manuspectrum.views.biblissima_proxy._bib_request")
