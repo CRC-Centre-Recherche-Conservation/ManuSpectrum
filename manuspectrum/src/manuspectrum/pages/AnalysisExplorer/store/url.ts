@@ -1,3 +1,5 @@
+import { validate as isUuid } from "uuid";
+
 import {
     emptyFilters,
     hasActiveFilters,
@@ -38,7 +40,6 @@ const EVENT_TYPES: readonly EventType[] = [
     "analysis",
     "sampling",
 ];
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const YEAR = /^\d{1,4}$/;
 const MAX_TEXT = 200;
 const MAX_VALUE = 2048;
@@ -46,7 +47,7 @@ const MAX_VALUES = 50;
 
 function uuidOrNull(raw: string | null): string | null {
     const value = (raw ?? "").trim().toLowerCase();
-    return UUID.test(value) ? value : null;
+    return isUuid(value) ? value : null;
 }
 
 function listOf(query: URLSearchParams, key: string): string[] {

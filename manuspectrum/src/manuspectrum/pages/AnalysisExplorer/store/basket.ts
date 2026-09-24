@@ -1,3 +1,5 @@
+import { validate as isUuid } from "uuid";
+
 import type {
     BasketItem,
     BasketKind,
@@ -6,19 +8,32 @@ import type {
 
 export const BASKET_LIMIT = 30;
 
-const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const ITEM_KEY = new RegExp(
-    `^(?:af:${UUID}:${UUID}|im:${UUID}:\\d{1,4}|ch:${UUID}:-)$`,
-);
+const PAGE = /^\d{1,4}$/;
+const KEY_SHAPE = /^(af|im|ch):([^:]+):([^:]+)$/;
 const KIND_BY_PREFIX: Record<string, BasketKind> = {
     af: "analysis-file",
     im: "imaging",
     ch: "characterization",
 };
 
+/** Whether the second segment matches its kind: a file id for `af`, a page number for `im`, the literal `-` for `ch`. */
+function hasValidSecondSegment(kind: string, second: string): boolean {
+    if (kind === "af") return isUuid(second);
+    if (kind === "im") return PAGE.test(second);
+    return second === "-";
+}
+
 export function normalizeItemKey(raw: string): ItemKey | null {
     const key = raw.trim().toLowerCase();
-    return ITEM_KEY.test(key) ? key : null;
+    const match = KEY_SHAPE.exec(key);
+    if (!match) {
+        return null;
+    }
+    const [, kind, id, second] = match;
+    if (!isUuid(id) || !hasValidSecondSegment(kind, second)) {
+        return null;
+    }
+    return key as ItemKey;
 }
 
 export function kindOf(key: ItemKey): BasketKind {

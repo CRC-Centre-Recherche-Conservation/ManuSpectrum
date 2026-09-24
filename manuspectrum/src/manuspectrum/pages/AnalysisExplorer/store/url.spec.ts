@@ -94,6 +94,21 @@ describe("toQuery / fromQuery", () => {
         expect(snapshot.filters.q).toHaveLength(200);
     });
 
+    it("accepts an uppercase doc id and normalizes it to lowercase", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams(`doc=${DOC.toUpperCase()}`),
+        );
+        expect(snapshot.document).toEqual({ id: DOC, canvas: null });
+    });
+
+    it("rejects a right-shaped id whose version nibble is not a recognized UUID version", () => {
+        // "9" is not a UUID version (uuid's validate() accepts 1-8): right shape, still rejected.
+        const badVersion = "0b3c6f4e-6a39-9e3c-9f7e-1d2c3b4a5f60";
+        expect(
+            fromQuery(new URLSearchParams(`doc=${badVersion}`)).document,
+        ).toBeNull();
+    });
+
     it("accepts comma-separated lists like the API", () => {
         expect(
             fromQuery(new URLSearchParams("part=b,a&part=c")).filters.part,

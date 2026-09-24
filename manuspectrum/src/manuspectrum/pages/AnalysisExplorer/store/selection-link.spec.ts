@@ -33,4 +33,14 @@ describe("parseSelection", () => {
         const raw = `${key(1)},${"a".repeat(5000)},${key(2)}`;
         expect(parseSelection(raw)?.keys).toEqual([key(1)]);
     });
+
+    it("accepts an uppercase key and normalizes it to lowercase", () => {
+        expect(parseSelection(key(1).toUpperCase())?.keys).toEqual([key(1)]);
+    });
+
+    it("rejects a right-shaped id whose version nibble is not a recognized UUID version", () => {
+        // "9" is not a UUID version (uuid's validate() accepts 1-8): right shape, still rejected.
+        const badVersion = "ch:00000000-0000-9000-8000-000000000001:-";
+        expect(parseSelection(badVersion)).toBeNull();
+    });
 });

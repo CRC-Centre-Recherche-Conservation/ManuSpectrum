@@ -11,6 +11,8 @@ import {
 
 const A = "0b3c6f4e-6a39-4e3c-9f7e-1d2c3b4a5f60";
 const F = "7d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
+// Right shape, version nibble "9" is not a UUID version (uuid's validate() accepts 1-8).
+const BAD_VERSION = "0b3c6f4e-6a39-9e3c-9f7e-1d2c3b4a5f60";
 
 describe("item keys", () => {
     it("accepts the three key shapes, trimmed and lower-cased", () => {
@@ -34,6 +36,16 @@ describe("item keys", () => {
         ]) {
             expect(normalizeItemKey(raw)).toBeNull();
         }
+    });
+
+    it("accepts an uppercase key and normalizes it to lowercase", () => {
+        expect(normalizeItemKey(`IM:${A.toUpperCase()}:3`)).toBe(`im:${A}:3`);
+    });
+
+    it("rejects a right-shaped id whose version nibble is not a recognized UUID version", () => {
+        expect(normalizeItemKey(`ch:${BAD_VERSION}:-`)).toBeNull();
+        expect(normalizeItemKey(`af:${BAD_VERSION}:${F}`)).toBeNull();
+        expect(normalizeItemKey(`af:${A}:${BAD_VERSION}`)).toBeNull();
     });
 
     it("derives the kind from the prefix", () => {
