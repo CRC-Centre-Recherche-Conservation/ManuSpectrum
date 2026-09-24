@@ -25,8 +25,12 @@ from django.test import RequestFactory, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from arches.app.models.models import File, Node, NodeGroup, ResourceInstance
-from arches.app.utils.permission_backend import assign_perm, user_can_read_resource
+from arches.app.models.models import File, Node, NodeGroup
+from arches.app.utils.permission_backend import (
+    assign_perm,
+    remove_perm,
+    user_can_read_resource,
+)
 
 from manuspectrum.constants.xy_presets import (
     DATA_FILE_NODE_ID,
@@ -37,7 +41,7 @@ from manuspectrum.constants.xy_presets import (
 from manuspectrum.utils.public_visibility import VisibleSet
 from manuspectrum.views.spectrum_preview import SpectrumPreviewView
 from manuspectrum.views.summary_service import readable_nodegroups
-from tests.explorer_fixtures import ACTIVE, ExplorerCase
+from tests.explorer_fixtures import ExplorerCase
 from tests.test_xy_config_trigger import XYTriggerTestCase
 
 FILE_ID = "9e4a2d6b-3c71-4f58-b0e9-7a2c5d8f1b36"
@@ -220,19 +224,19 @@ class PreviewRulesTests(TestCase):
 
 
 class RealVisibleSetPreviewTests(ExplorerCase):
-    """The 404 a Draft analysis gets, and only that, is decided by the real ``visible_set``.
+    """The 404 an embargoed analysis gets, and only that, is decided by the real ``visible_set``.
 
-    No mock of ``visible_set`` here: the fixture's ``analyses["draft"]`` observes
-    a visible component, so a Draft state alone is what hides it from the
-    anonymous visitor (spec cascade, C11).
+    No mock of ``visible_set`` here: the fixture's analyses observe a visible
+    component, so a read restriction alone is what hides one from the
+    anonymous visitor (spec cascade, C11); a Draft state hides nothing.
     """
 
     FILE_ID = "6a1b2c3d-4e5f-4071-8a9b-0c1d2e3f4a5b"
 
-    def get(self):
+    def get(self, analysis):
         request = RequestFactory().get(f"/api/spectrum-preview/{self.FILE_ID}")
-        request.user = self.anonymous
-        record = ("/tmp/nowhere.csv", str(self.analyses["draft"].pk), None, "ng")
+        request.user = User.objects.get(pk=self.anonymous.pk)
+        record = ("/tmp/nowhere.csv", str(analysis.pk), None, "ng")
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview.file_record",
@@ -245,15 +249,21 @@ class RealVisibleSetPreviewTests(ExplorerCase):
         ):
             return SpectrumPreviewView.as_view()(request, file_id=self.FILE_ID)
 
-    def test_a_draft_analysis_is_refused_then_served_once_active(self):
-        refused = self.get()
+    def test_an_embargoed_analysis_is_refused_then_served_once_lifted(self):
+        self.embargo(self.analyses["open"])
+        refused = self.get(self.analyses["open"])
 
         self.assertEqual(refused.status_code, 404)
 
-        ResourceInstance.objects.filter(pk=self.analyses["draft"].pk).update(
-            resource_instance_lifecycle_state_id=ACTIVE
-        )
-        cache.clear()
-        served = self.get()
+        with self.captureOnCommitCallbacks(execute=True):
+            remove_perm(
+                "no_access_to_resourceinstance", self.anonymous, self.analyses["open"]
+            )
+        served = self.get(self.analyses["open"])
+
+        self.assertNotEqual(served.status_code, 404)
+
+    def test_a_draft_analysis_is_served_to_the_visitor(self):
+        served = self.get(self.analyses["draft"])
 
         self.assertNotEqual(served.status_code, 404)

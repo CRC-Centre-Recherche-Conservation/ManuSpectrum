@@ -59,8 +59,14 @@ class RowsTests(ServiceCase):
 
         self.assertEqual(
             set(rows),
-            {str(self.analyses["open"].pk), str(self.analyses["on_document"].pk)},
+            {
+                str(self.analyses["open"].pk),
+                str(self.analyses["on_document"].pk),
+                str(self.analyses["draft"].pk),
+            },
         )
+        self.assertIs(rows[str(self.analyses["draft"].pk)]["unpublished"], True)
+        self.assertIs(rows[str(self.analyses["open"].pk)]["unpublished"], False)
         opened = rows[str(self.analyses["open"].pk)]
         self.assertEqual(opened["document"], str(self.documents["open"].pk))
         self.assertEqual(opened["component"], str(self.components["open"].pk))
@@ -134,7 +140,7 @@ class FacetTests(ServiceCase):
 
         self.assertEqual(
             [(r["id"], r["analysisCount"]) for r in payload["results"]],
-            [(str(self.documents["open"].pk), 2)],
+            [(str(self.documents["open"].pk), 3)],
         )
 
 

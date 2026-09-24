@@ -203,7 +203,7 @@ class SpectrumPreviewView(View):
 
         ``n`` picks a point budget among ``SPECTRUM_PREVIEW_TIERS`` (default the
         first). A file whose resource is outside ``visible_set`` (embargo,
-        Draft, hidden chain or Project) or whose nodegroup is unreadable
+        hidden chain or Project) or whose nodegroup is unreadable
         answers the same bodyless 404 as an unknown file.
         """
         raw_n = request.GET.get("n")

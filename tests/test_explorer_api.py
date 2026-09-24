@@ -6,6 +6,7 @@ Usage:
 
 from unittest import mock
 
+from django.contrib.auth.models import Group, User
 from django.http import QueryDict
 from django.test import SimpleTestCase
 
@@ -45,6 +46,22 @@ class SearchRouteTests(ServiceCase):
         self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertNotIn("ETag", response)
         self.assertIn("Cookie", response.get("Vary", ""))
+
+    def test_a_draft_analysis_is_found_by_the_visitor_marked_unpublished_in_a_public_answer(
+        self,
+    ):
+        visitor = self.get()
+        guest = User.objects.create_user("guest_reader", password="pw")
+        guest.groups.add(Group.objects.get(name="Guest"))
+        self.client.force_login(guest)
+        reader = self.get()
+
+        marked = {r["id"]: r["unpublished"] for r in visitor.json()["results"]}
+        self.assertIs(marked[str(self.analyses["draft"].pk)], True)
+        self.assertIs(marked[str(self.analyses["open"].pk)], False)
+        self.assertGreaterEqual(visitor.json()["unpublishedCount"], 1)
+        self.assertEqual(visitor["Cache-Control"], "public, no-cache")
+        self.assertEqual(reader.json(), visitor.json())
 
     def test_a_filter_on_a_hidden_project_is_ignored_without_leaking_its_name(self):
         self.embargo(self.projects["side"])
@@ -157,19 +174,20 @@ class DocumentRouteTests(CorpusCase):
         for summary in payload["characterizations"]:
             assert_shape(self, summary, "CharacterizationSummary")
 
-    def test_the_visitor_sees_no_draft_annotation_and_the_editor_sees_it_marked(self):
-        visitor = {
-            a["analysis"]
-            for a in self.get(self.documents["open"].pk).json()["annotations"]
-        }
+    def test_every_reader_sees_the_draft_annotation_marked_unpublished(self):
+        visitor = self.get(self.documents["open"].pk)
         self.client.force_login(self.editor)
         editor = self.get(self.documents["open"].pk)
 
-        self.assertNotIn(str(self.analyses["draft"].pk), visitor)
-        marked = {a["analysis"]: a["unpublished"] for a in editor.json()["annotations"]}
-        self.assertTrue(marked[str(self.analyses["draft"].pk)])
+        for response in (visitor, editor):
+            marked = {
+                a["analysis"]: a["unpublished"] for a in response.json()["annotations"]
+            }
+            self.assertIs(marked[str(self.analyses["draft"].pk)], True)
+            self.assertIs(marked[str(self.analyses["open"].pk)], False)
+            self.assertGreater(response.json()["unpublishedCount"], 0)
+        self.assertEqual(visitor["Cache-Control"], "public, no-cache")
         self.assertEqual(editor["Cache-Control"], "private, no-store")
-        self.assertGreater(editor.json()["unpublishedCount"], 0)
 
     def test_an_analysis_without_a_position_is_listed_as_unlocated_not_dropped(self):
         unplaced = self.new_resource("analysis", "FORS_014 — f. 1v, no zone")

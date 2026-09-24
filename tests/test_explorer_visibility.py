@@ -87,29 +87,43 @@ class VisibleSetTests(ExplorerCase):
         self.assertNotIn(str(self.analyses["on_document"].pk), vs.analyses)
         self.assertIn(str(self.analyses["open"].pk), vs.analyses)
 
-    def test_a_draft_project_hides_its_analyses_from_the_visitor_not_from_the_editor(
-        self,
-    ):
+    def test_a_draft_project_does_not_hide_its_analyses(self):
         self.make_draft(self.projects["side"])
+        on_document = str(self.analyses["on_document"].pk)
 
-        self.assertNotIn(
-            str(self.analyses["on_document"].pk), visible_set(self.anonymous).analyses
-        )
-        editor = visible_set(self.editor)
-        self.assertIn(str(self.analyses["on_document"].pk), editor.analyses)
-        self.assertIn(str(self.analyses["on_document"].pk), editor.unpublished)
+        for reader in (self.anonymous, self.editor):
+            vs = visible_set(reader)
+            self.assertIn(on_document, vs.analyses)
+            self.assertIn(str(self.projects["side"].pk), vs.unpublished)
+            self.assertNotIn(on_document, vs.unpublished)
 
-    def test_a_draft_analysis_is_kept_for_the_editor_and_marked(self):
+    def test_a_draft_analysis_is_shown_to_every_reader_as_unpublished(self):
         draft = str(self.analyses["draft"].pk)
 
-        self.assertNotIn(draft, visible_set(self.anonymous).analyses)
-        self.assertIn(draft, visible_set(self.editor).unpublished)
+        for reader in (self.anonymous, self.editor):
+            vs = visible_set(reader)
+            self.assertIn(draft, vs.analyses)
+            self.assertIn(draft, vs.unpublished)
+        self.assertNotIn(
+            str(self.analyses["open"].pk), visible_set(self.anonymous).unpublished
+        )
 
-    def test_a_resource_in_the_initial_state_is_hidden_from_the_visitor(self):
+    def test_a_resource_in_the_initial_state_is_shown_to_the_visitor_as_unpublished(
+        self,
+    ):
         stray = ResourceInstance.objects.create(graph=self.graphs["document"])
 
         self.assertNotEqual(str(stray.resource_instance_lifecycle_state_id), ACTIVE)
-        self.assertNotIn(str(stray.pk), visible_set(self.anonymous).documents)
+        vs = visible_set(self.anonymous)
+        self.assertIn(str(stray.pk), vs.documents)
+        self.assertIn(str(stray.pk), vs.unpublished)
+
+    def test_a_draft_characterization_is_shown_to_the_visitor_as_unpublished(self):
+        self.make_draft(self.characterization)
+
+        vs = visible_set(self.anonymous)
+        self.assertIn(str(self.characterization.pk), vs.characterizations)
+        self.assertIn(str(self.characterization.pk), vs.unpublished)
 
     def test_an_unreadable_relation_nodegroup_breaks_the_chain(self):
         nodegroup = NodeGroup.objects.get(
@@ -133,16 +147,6 @@ class VisibleSetTests(ExplorerCase):
         self,
     ):
         self.embargo(self.projects["side"])
-        reader = self.hide_project_links()
-
-        self.assertNotIn(
-            str(self.analyses["on_document"].pk), visible_set(reader).analyses
-        )
-
-    def test_an_unreadable_project_link_still_hides_the_analysis_of_a_draft_project(
-        self,
-    ):
-        self.make_draft(self.projects["side"])
         reader = self.hide_project_links()
 
         self.assertNotIn(
@@ -206,8 +210,8 @@ class CollectionUnderVisibleSetTests(ExplorerCase):
         self.assertIn(str(self.analyses["open"].pk), reached)
         self.assertFalse(public)
 
-    def test_a_draft_analysis_is_not_served_to_the_visitor(self):
+    def test_a_draft_analysis_is_served_to_the_visitor_in_a_public_collection(self):
         reached, public = self.readable(self.anonymous, self.documents["open"])
 
-        self.assertNotIn(str(self.analyses["draft"].pk), reached)
-        self.assertFalse(public)
+        self.assertIn(str(self.analyses["draft"].pk), reached)
+        self.assertTrue(public)

@@ -231,31 +231,32 @@ class VisibleSet:
 
 
 def visible_set(user):
-    """The resources *user* may see in the Explorer, decided once (spec §4, D33, D37).
+    """The resources *user* may see in the Explorer, decided once (spec §4, D33, D37, D50).
 
-    A resource must be readable (not in ``hidden_resource_ids``) and, in a
-    Draft state, editable by a signed-in reader, which marks it unpublished.
-    A Component needs a visible Document, an Analysis a visible Component or
-    Document through a readable relation nodegroup and no hidden or Draft
-    Project, a Sample a visible Analysis using it, an identified material a
-    visible object observed and at least one visible analysis cited in
-    evidence. Links are read off the tiles. Memoised per reader and
-    permission epoch for ``PERM_SCOPE_TTL``: a lifecycle change or a new link
-    shows within that delay.
+    A resource is hidden only by a read restriction: it is in
+    ``hidden_resource_ids(user)``, or a link it needs runs through a nodegroup
+    outside ``readable_nodegroup_ids(user)``. A resource in a Draft lifecycle
+    state is visible to every reader, the visitor included, and belongs to
+    ``unpublished``; an analysis whose visible objects observed are all
+    unpublished is unpublished too. A Component needs a visible Document, an
+    Analysis a visible Component or Document through a readable relation
+    nodegroup and no hidden Project (a Draft Project hides nothing), a Sample
+    a visible Analysis using it, an identified material a visible object
+    observed and at least one visible analysis cited in evidence. Links are
+    read off the tiles. Memoised per reader and permission epoch for
+    ``PERM_SCOPE_TTL``: a lifecycle change or a new link shows within that
+    delay.
     """
     key = f"public-visibility:visible:{_epoch()}:{reader_scope(user)}"
     return get_or_build(key, lambda: _visible_for(user), PERM_SCOPE_TTL)
 
 
 def _visible_for(user):
-    from arches.app.utils.permission_backend import user_can_edit_resource
-
     from manuspectrum.utils.role_links import graph_id_of, readable_links
 
     hidden = hidden_resource_ids(user)
     nodegroups = readable_nodegroup_ids(user)
     drafts = draft_state_id_set()
-    connected = is_connected(user)
     slug_of = {graph_id_of(slug): slug for slug in EXPLORER_MODELS}
     slug_of.pop(None, None)
 
@@ -272,8 +273,6 @@ def _visible_for(user):
         if rid in hidden:
             continue
         if state is not None and str(state) in drafts:
-            if not (connected and user_can_edit_resource(user, resourceid=rid)):
-                continue
             unpublished.add(rid)
         candidates[slug].add(rid)
 
@@ -309,11 +308,7 @@ def _visible_for(user):
         if c not in unpublished and part_of[c] & documents - unpublished
     }
     for a in analyses:
-        if (
-            a in unpublished
-            or project_of[a] & unpublished
-            or not (observed[a] & published_objects)
-        ):
+        if not (observed[a] & published_objects):
             unpublished.add(a)
 
     return VisibleSet(

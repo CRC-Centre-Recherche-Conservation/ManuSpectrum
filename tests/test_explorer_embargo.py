@@ -13,8 +13,6 @@ from unittest import mock
 
 from django.contrib.auth.models import Group
 
-from arches.app.utils.permission_backend import assign_perm
-
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 
 
@@ -54,6 +52,8 @@ class EmbargoMatrixTests(CorpusCase):
                 self.assertNotIn(text, body.decode(), channel)
 
     def test_a_signed_in_reader_never_fills_the_visitors_answer(self):
+        hidden = str(self.analyses["on_document"].pk)
+        self.embargo(self.analyses["on_document"])
         self.client.force_login(self.editor)
         editor = self.client.get("/en/api/explorer/search")
         self.client.logout()
@@ -61,24 +61,22 @@ class EmbargoMatrixTests(CorpusCase):
 
         self.assertEqual(editor["Cache-Control"], "private, no-store")
         self.assertEqual(visitor["Cache-Control"], "public, no-cache")
-        self.assertNotIn(str(self.analyses["draft"].pk), visitor.content.decode())
-        self.assertIn(str(self.analyses["draft"].pk), editor.content.decode())
+        self.assertIn(hidden, editor.content.decode())
+        self.assertNotIn(hidden, visitor.content.decode())
 
-    def test_an_editor_without_extra_rights_reads_the_visitors_data_privately(self):
-        """A Guest-only account still needs an explicit read grant on the Draft to
-        draw a real refusal from ``user_can_edit_resource``: this fixture sets no
-        nodegroup permission anywhere, and the deployed
-        ``ArchesDefaultAllowPermissionFramework`` answers such an unconfigured
-        nodegroup "unknown", then default-allows edit to any other signed-in
-        account (``arches.app.permissions.arches_permission_base
-        .get_nodegroups_by_perm_for_user_or_group``).
-        """
+    def test_the_visitor_sees_the_draft_analysis_marked_unpublished(self):
+        visitor = json.loads(self.client.get("/en/api/explorer/search").content)
+
+        marked = {r["id"]: r["unpublished"] for r in visitor["results"]}
+        self.assertIs(marked[str(self.analyses["draft"].pk)], True)
+
+    def test_a_guest_account_reads_the_visitors_data_privately(self):
         plain = self.editor.__class__.objects.create_user("plain_reader", password="pw")
         plain.groups.add(Group.objects.get(name="Guest"))
-        assign_perm("view_resourceinstance", plain, self.analyses["draft"])
         self.client.force_login(plain)
-        reader = json.loads(self.client.get("/en/api/explorer/search").content)
+        response = self.client.get("/en/api/explorer/search")
         self.client.logout()
         visitor = json.loads(self.client.get("/en/api/explorer/search").content)
 
-        self.assertEqual(reader, visitor)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertEqual(json.loads(response.content), visitor)

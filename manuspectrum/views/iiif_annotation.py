@@ -140,7 +140,7 @@ def _referencing(node, target_ids):
 def _through_readable_path(paths, user):
     """Ids of the analyses *user* reaches through at least one visible path.
 
-    An analysis must be in ``visible_set(user).analyses`` (embargo, Draft and
+    An analysis must be in ``visible_set(user).analyses`` (restrictions and
     D33 decided there) and one of its paths must have every resource visible
     and every relation nodegroup readable.
     """
@@ -219,8 +219,8 @@ class IIIFAnnotationMixin:
         An analysis is reached through a path of links read off the tiles
         (``_analysis_paths``) and is readable through a path whose resources
         are all in ``visible_set(user)`` and whose relation nodegroups are all
-        readable: an analysis of a hidden Component, a Draft resource or a
-        hidden or Draft Project is hidden with it (D33). The payload is
+        readable: an analysis of a hidden Component or of a hidden
+        Project is hidden with it (D33). The payload is
         public, the same for every reader, when the anonymous reader may read
         *resource* and every analysis reached, and *user* reads them all too;
         a restricted analysis anywhere makes it reader-dependent.
