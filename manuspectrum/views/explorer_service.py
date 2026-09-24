@@ -1191,3 +1191,84 @@ def analysis_payload(analysis_id, user, language):
         "certaintyScale": certainty_scale(language),
         "unpublished": row["unpublished"],
     }
+
+
+ITEM_KEY = re.compile(r"^(af|im|ch):([0-9a-f-]{36}):([^:]+)$")
+
+
+def parse_keys(query):
+    """Selection keys of an ``ids`` parameter, repeated or comma-separated, unique and sorted."""
+    return sorted(
+        {k.strip() for raw in query.getlist("ids") for k in raw.split(",") if k.strip()}
+    )
+
+
+def items_payload(keys, user, language):
+    """``ItemsResponse``: the items still visible and the keys that are not, without saying why."""
+    visible = visible_set(user)
+    rows = {r["id"]: r for r in corpus_rows(user, language)}
+    label_of = names(
+        {r["document"] for r in rows.values()}
+        | {r["component"] for r in rows.values() if r["component"]},
+        language,
+    )
+    files_of, items, missing = {}, [], []
+    for key in keys:
+        match = ITEM_KEY.match(key)
+        if not match:
+            missing.append(key)
+            continue
+        kind, rid, sub = match.groups()
+        if kind == "ch":
+            summary = (
+                characterization_summaries([rid], visible, user, language, {})
+                if sub == "-"
+                else []
+            )
+            if summary:
+                items.append(
+                    {
+                        "key": key,
+                        "kind": "characterization",
+                        "characterization": summary[0],
+                    }
+                )
+            else:
+                missing.append(key)
+            continue
+        if rid not in rows:
+            missing.append(key)
+            continue
+        if rid not in files_of:
+            files_of[rid] = analysis_files(rid, user, language)
+        if kind == "af":
+            found = next(
+                (
+                    f
+                    for f in files_of[rid]
+                    if f["id"] == sub and f["dataKind"] != "chemical-imaging"
+                ),
+                None,
+            )
+        else:
+            found = next(
+                (
+                    f
+                    for f in files_of[rid]
+                    if f["dataKind"] == "chemical-imaging"
+                    and any(str(layer["index"]) == sub for layer in f["layers"])
+                ),
+                None,
+            )
+        if found is None:
+            missing.append(key)
+            continue
+        items.append(
+            {
+                "key": key,
+                "kind": "analysis-file" if kind == "af" else "imaging",
+                "analysis": analysis_hit(rows[rid], label_of),
+                "file": found,
+            }
+        )
+    return {"items": items, "missing": sorted(missing)}

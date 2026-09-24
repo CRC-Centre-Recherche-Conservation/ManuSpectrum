@@ -10,7 +10,13 @@ Unknown and refused alike answer a bodyless 404.
 import hashlib
 
 import orjson
-from django.http import HttpResponse, HttpResponseNotFound, HttpResponseNotModified
+from django.conf import settings
+from django.http import (
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseNotFound,
+    HttpResponseNotModified,
+)
 from django.utils import translation
 from django.views import View
 
@@ -19,6 +25,8 @@ from manuspectrum.utils.public_visibility import is_connected
 from manuspectrum.views.explorer_service import (
     analysis_payload,
     document_payload,
+    items_payload,
+    parse_keys,
     search_payload,
 )
 
@@ -71,4 +79,16 @@ class ExplorerAnalysisView(View):
         return _answer(
             request,
             analysis_payload(resourceid, request.user, translation.get_language()),
+        )
+
+
+class ExplorerItemsView(View):
+    """``GET /{lang}/api/explorer/items?ids=``: the Selection's items, at most ``EXPLORER_ITEMS_MAX`` keys."""
+
+    def get(self, request):
+        keys = parse_keys(request.GET)
+        if len(keys) > settings.EXPLORER_ITEMS_MAX:
+            return HttpResponseBadRequest()
+        return _answer(
+            request, items_payload(keys, request.user, translation.get_language())
         )

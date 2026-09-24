@@ -246,6 +246,71 @@ class AnalysisRouteTests(CorpusCase):
         self.assertEqual(refused.status_code, 404)
 
 
+class ItemsRouteTests(CorpusCase):
+    CSV = "11111111-1111-4111-8111-111111111111"
+    IMAGING_MANIFEST = {
+        "@context": "http://iiif.io/api/presentation/3/context.json",
+        "id": "https://example.org/iiif/imaging/x",
+        "items": [
+            {
+                "id": "https://example.org/iiif/imaging/x/canvas/pb",
+                "type": "Canvas",
+                "label": {"none": ["Pb"]},
+            }
+        ],
+    }
+
+    def get(self, keys):
+        return self.client.get("/en/api/explorer/items", {"ids": ",".join(keys)})
+
+    def test_a_readable_file_key_restores_its_item(self):
+        key = f"af:{self.analyses['open'].pk}:{self.CSV}"
+
+        payload = self.get([key]).json()
+
+        assert_shape(self, payload, "ItemsResponse")
+        self.assertEqual([i["key"] for i in payload["items"]], [key])
+        assert_shape(self, payload["items"][0]["analysis"], "AnalysisHit")
+        assert_shape(self, payload["items"][0]["file"], "FileEntry")
+
+    def test_an_im_key_restores_its_layer_and_an_unknown_index_is_missing(self):
+        self.tile(
+            self.analyses["open"],
+            "chemical_imaging_manifest",
+            "https://example.org/iiif/imaging/x",
+        )
+        key = f"im:{self.analyses['open'].pk}:0"
+        unknown = f"im:{self.analyses['open'].pk}:99"
+
+        with mock.patch(
+            "manuspectrum.views.explorer_service.manifest_json",
+            return_value=self.IMAGING_MANIFEST,
+        ):
+            payload = self.get([key, unknown]).json()
+
+        self.assertEqual(payload["missing"], [unknown])
+        self.assertEqual([i["kind"] for i in payload["items"]], ["imaging"])
+        assert_shape(self, payload["items"][0]["file"], "FileEntry")
+
+    def test_malformed_and_hidden_keys_are_missing_alike(self):
+        self.embargo(self.analyses["open"])
+        hidden = f"af:{self.analyses['open'].pk}:{self.CSV}"
+
+        payload = self.get(
+            [hidden, "nonsense", f"ch:{self.characterization.pk}:-", hidden]
+        ).json()
+
+        self.assertEqual(payload["missing"], sorted([hidden, "nonsense"]))
+        self.assertEqual([i["kind"] for i in payload["items"]], ["characterization"])
+
+    def test_items_rejects_more_than_thirty_keys(self):
+        keys = [f"ch:{i:08d}-0000-4000-8000-000000000000:-" for i in range(31)]
+
+        response = self.get(keys)
+
+        self.assertEqual((response.status_code, response.content), (400, b""))
+
+
 class LayerOfTests(SimpleTestCase):
     def test_an_element_symbol_gives_an_element_layer(self):
         layer = layer_of(0, "Pb", {"url": None})

@@ -33,6 +33,7 @@ from manuspectrum.views.iiif_annotation import (
 from manuspectrum.views.explorer_api import (
     ExplorerAnalysisView,
     ExplorerDocumentView,
+    ExplorerItemsView,
     ExplorerSearchView,
 )
 from manuspectrum.views.graph_nodes import RelatableNodesView
@@ -209,6 +210,9 @@ urlpatterns.append(
         ExplorerAnalysisView.as_view(),
         name="explorer-analysis",
     )
+)
+urlpatterns.append(
+    path("api/explorer/items", ExplorerItemsView.as_view(), name="explorer-items")
 )
 
 if settings.ROOT_URLCONF == __name__:
