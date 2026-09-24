@@ -9,7 +9,74 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:423
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts:41
+msgid "%{facet}: %{value}"
+msgstr "%{facet} : %{value}"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:102
+msgid "%{label} (%{count})"
+msgstr "%{label} (%{count})"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue:14
+msgid "%{n} analysis"
+msgid_plural "%{n} analyses"
+msgstr[0] "%{n} analyse"
+msgstr[1] "%{n} analyses"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue:19
+msgid "%{n} draft in these results; it is marked “Draft”."
+msgid_plural "%{n} drafts in these results; they are marked “Draft”."
+msgstr[0] "%{n} brouillon dans ces résultats ; il est signalé « Brouillon »."
+msgstr[1] "%{n} brouillons dans ces résultats ; ils sont signalés « Brouillon »."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue:24
+msgid "%{n} draft on this page; it is marked “Draft”."
+msgid_plural "%{n} drafts on this page; they are marked “Draft”."
+msgstr[0] "%{n} brouillon sur cette page ; il est signalé « Brouillon »."
+msgstr[1] "%{n} brouillons sur cette page ; ils sont signalés « Brouillon »."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:83
+msgid "%{n} item added."
+msgid_plural "%{n} items added."
+msgstr[0] "%{n} élément ajouté."
+msgstr[1] "%{n} éléments ajoutés."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:91
+msgid "%{n} item could not be added: the Selection is full (%{limit})."
+msgid_plural "%{n} items could not be added: the Selection is full (%{limit})."
+msgstr[0] "%{n} élément n'a pas pu être ajouté : la Sélection est pleine (%{limit})."
+msgstr[1] "%{n} éléments n'ont pas pu être ajoutés : la Sélection est pleine (%{limit})."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:45
+msgid "%{n} item is no longer available."
+msgid_plural "%{n} items are no longer available."
+msgstr[0] "%{n} élément n'est plus disponible."
+msgstr[1] "%{n} éléments ne sont plus disponibles."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:60
+#: manuspectrum/src/manuspectrum/public/gettext-mock.spec.ts:7
+#: manuspectrum/src/manuspectrum/public/gettext-mock.spec.ts:8
+#: manuspectrum/src/manuspectrum/public/gettext-mock.spec.ts:9
+msgid "%{n} result"
+msgid_plural "%{n} results"
+msgstr[0] "%{n} résultat"
+msgstr[1] "%{n} résultats"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:24
+msgid "%{page} (%{count})"
+msgstr "%{page} (%{count})"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:24
+msgid "A shared Selection of %{n} item"
+msgid_plural "A shared Selection of %{n} items"
+msgstr[0] "Une Sélection partagée de %{n} élément"
+msgstr[1] "Une Sélection partagée de %{n} éléments"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue:18
+msgid "Active filters"
+msgstr "Filtres actifs"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:446
 msgid "Add a field"
 msgstr "Ajouter un champ"
 
@@ -17,7 +84,7 @@ msgstr "Ajouter un champ"
 msgid "Add a hop"
 msgstr "Ajouter un saut"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:455
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:478
 msgid "Add a related count"
 msgstr "Ajouter un agrégat"
 
@@ -37,7 +104,35 @@ msgstr "Alias dont les valeurs distinctes sont listées"
 msgid "All"
 msgstr "Toutes"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:127
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:190
+msgid "Analyses"
+msgstr "Analyses"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue:20
+msgid "Analysis"
+msgstr "Analyse"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:74
+msgid "at least one of"
+msgstr "au moins un de"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue:57
+msgid "Back to the explorer home"
+msgstr "Retour à l'accueil de l'explorateur"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:43
+msgid "Back to the results"
+msgstr "Retour aux résultats"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:243
+msgid "By project"
+msgstr "Par projet"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:216
+msgid "By technique"
+msgstr "Par technique"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:131
 msgid "Cancel"
 msgstr "Annuler"
 
@@ -45,9 +140,29 @@ msgstr "Annuler"
 msgid "Chips"
 msgstr "Puces"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:361
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue:41
+msgid "Clear all"
+msgstr "Tout effacer"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:26
+msgid "Colour"
+msgstr "Couleur"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:60
+msgid "Compare"
+msgstr "Comparer"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.vue:19
+msgid "Compare (%{count})"
+msgstr "Comparer (%{count})"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:384
 msgid "Configuration saved."
 msgstr "Configuration enregistrée."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:56
+msgid "Corpus"
+msgstr "Corpus"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:58
 msgid "Date"
@@ -61,6 +176,19 @@ msgstr "Sens de la relation"
 msgid "Display style"
 msgstr "Style d’affichage"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:180
+msgid "Documents"
+msgstr "Documents"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue:63
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue:59
+msgid "Draft"
+msgstr "Brouillon"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:28
+msgid "Element"
+msgstr "Élément"
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:131
 msgid "English label"
 msgstr "Libellé anglais"
@@ -73,13 +201,37 @@ msgstr "Libellé anglais de cet agrégat"
 msgid "English label override"
 msgstr "Libellé anglais de remplacement"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts:95
+msgid "Event"
+msgstr "Événement"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:137
+msgid "Explore what the analyses of written heritage revealed."
+msgstr "Explorez ce que les analyses du patrimoine écrit ont révélé."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.vue:35
+msgid "Explorer views"
+msgstr "Vues de l'explorateur"
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:102
 msgid "Field"
 msgstr "Champ"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:397
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:420
 msgid "Fields"
 msgstr "Champs"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:49
+msgid "file"
+msgstr "fichier"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:150
+msgid "Filters"
+msgstr "Filtres"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:71
+msgid "Filters (%{count})"
+msgstr "Filtres (%{count})"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:140
 msgid "French label"
@@ -96,6 +248,18 @@ msgstr "Libellé français de remplacement"
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:293
 msgid "How many distinct values to show"
 msgstr "Nombre de valeurs distinctes à afficher"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:24
+msgid "Identified material"
+msgstr "Matériau identifié"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:161
+msgid "Ignore"
+msgstr "Ignorer"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:242
+msgid "Include documents without analyses (%{n})"
+msgstr "Inclure les documents sans analyses (%{n})"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:68
 msgid "Incoming — that model carries the link"
@@ -117,6 +281,10 @@ msgstr "Libellé (EN)"
 msgid "Label (FR)"
 msgstr "Libellé (FR)"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:30
+msgid "Layer"
+msgstr "Couche"
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:61
 msgid "Link to the report"
 msgstr "Lien vers le rapport"
@@ -125,9 +293,21 @@ msgstr "Lien vers le rapport"
 msgid "List distinct values"
 msgstr "Lister les valeurs distinctes"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:325
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:348
 msgid "Loading the configuration…"
 msgstr "Chargement de la configuration…"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:45
+msgid "map"
+msgstr "carte"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:58
+msgid "Map & timeline"
+msgstr "Carte et chronologie"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:160
+msgid "Material, technique, document…"
+msgstr "Matériau, technique, document…"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:265
 msgid "Maximum number of intermediate resources"
@@ -136,6 +316,14 @@ msgstr "Nombre maximal de ressources intermédiaires"
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:147
 msgid "Maximum number of values"
 msgstr "Nombre maximal de valeurs"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:154
+msgid "Merge into my Selection"
+msgstr "Fusionner avec ma Sélection"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:47
+msgid "micro-image"
+msgstr "micro-image"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:201
 msgid "Model"
@@ -153,19 +341,81 @@ msgstr "Descendre"
 msgid "Move up"
 msgstr "Monter"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:270
+msgid "Narrow the results by technique, material, project or year."
+msgstr "Affinez les résultats par technique, matériau, projet ou année."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:315
+msgid "Next page"
+msgstr "Page suivante"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:183
+msgid "No analysis published"
+msgstr "Aucune analyse publiée"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:231
+msgid "No result."
+msgstr "Aucun résultat."
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:60
 msgid "Number"
 msgstr "Nombre"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:34
+msgid "Only the first 30 items were kept; %{n} more was left out."
+msgid_plural "Only the first 30 items were kept; %{n} more were left out."
+msgstr[0] "Seuls les 30 premiers éléments ont été gardés ; %{n} autre a été laissé de côté."
+msgstr[1] "Seuls les 30 premiers éléments ont été gardés ; %{n} autres ont été laissés de côté."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:202
+msgid "Only with analyses"
+msgstr "Seulement avec analyses"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:277
+msgid "Open a document to see where each analysis was made."
+msgstr "Ouvrez un document pour voir où chaque analyse a été faite."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:34
+msgid "Operator"
+msgstr "Opérateur"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:72
 msgid "Outgoing — this model carries the link"
 msgstr "Sortant — c’est ce modèle qui porte le lien"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:304
+msgid "Page %{page} of %{pages}"
+msgstr "Page %{page} sur %{pages}"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:293
+msgid "Pages"
+msgstr "Pages"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:79
+msgid "Pages with analyses"
+msgstr "Pages analysées"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts:84
+msgid "Period: %{start}–%{end}"
+msgstr "Période : %{start}–%{end}"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts:77
+msgid "Place"
+msgstr "Lieu"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:301
+msgid "Previous page"
+msgstr "Page précédente"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:32
+msgid "Project"
+msgstr "Projet"
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:152
 msgid "Related count"
 msgstr "Agrégat"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:429
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:452
 msgid "Related counts"
 msgstr "Agrégats"
 
@@ -173,15 +423,19 @@ msgstr "Agrégats"
 msgid "Relation alias"
 msgstr "Alias de la relation"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:349
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:372
 msgid "Reload the configuration"
 msgstr "Recharger la configuration"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:126
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:130
 msgid "Remove"
 msgstr "Retirer"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:123
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue:10
+msgid "Remove filter: %{label}"
+msgstr "Retirer le filtre : %{label}"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:127
 msgid ""
 "Remove the summary configuration of this model? Its popups fall back to the "
 "name and the default popup. The page reloads afterwards; unsaved edits to "
@@ -192,8 +446,8 @@ msgstr ""
 "non enregistrées des autres fonctions de la page demandent d’abord une "
 "confirmation."
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:122
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:476
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:126
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:499
 msgid "Remove this configuration"
 msgstr "Retirer cette configuration"
 
@@ -209,15 +463,55 @@ msgstr "Supprimer ce saut"
 msgid "Remove this related count"
 msgstr "Supprimer cet agrégat"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:465
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:260
+msgid "Remove: %{label}"
+msgstr "Retirer : %{label}"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:147
+msgid "Replace my Selection"
+msgstr "Remplacer ma Sélection"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:165
+msgid "Results"
+msgstr "Résultats"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue:49
+msgid "Retry"
+msgstr "Réessayer"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:488
 msgid "Save this configuration"
 msgstr "Enregistrer cette configuration"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:384
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:166
+msgid "Search"
+msgstr "Rechercher"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:151
+msgid "Search the analyses"
+msgstr "Rechercher dans les analyses"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:265
+msgid "Search, or open one of the doors above."
+msgstr "Cherchez, ou ouvrez l'une des portes ci-dessus."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:170
+msgid "Show"
+msgstr "Afficher"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:49
+msgid "Show all (%{count})"
+msgstr "Tout afficher (%{count})"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:48
+msgid "Show fewer"
+msgstr "Afficher moins"
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:407
 msgid "Some entries were dropped:"
 msgstr "Des entrées ont été écartées :"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:171
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:176
 msgid ""
 "Someone else changed this configuration since you opened it. Your changes "
 "are not saved: reload it to see their version."
@@ -225,6 +519,10 @@ msgstr ""
 "Quelqu’un d’autre a modifié cette configuration depuis que vous l’avez "
 "ouverte. Vos modifications ne sont pas enregistrées : rechargez-la pour voir "
 "la version enregistrée."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:43
+msgid "spectrum"
+msgstr "spectre"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:62
 msgid "Spectrum thumbnail"
@@ -234,23 +532,47 @@ msgstr "Miniature du spectre"
 msgid "Stop listing distinct values"
 msgstr "Ne plus lister les valeurs distinctes"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:22
+msgid "Studied area"
+msgstr "Zone étudiée"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:20
+msgid "Technique"
+msgstr "Technique"
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:57
 msgid "Text"
 msgstr "Texte"
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:90
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts:50
+msgid "Text: %{text}"
+msgstr "Texte : %{text}"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:199
+msgid "The most analysed document"
+msgstr "Le document le plus analysé"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue:40
+msgid "The service is not answering right now."
+msgstr "Le service ne répond pas pour le moment."
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:93
 msgid "This configuration could not be read."
 msgstr "Cette configuration n’a pas pu être lue."
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:152
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:156
 msgid "This configuration could not be removed."
 msgstr "Cette configuration n’a pas pu être retirée."
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:112
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:116
 msgid "This configuration could not be saved."
 msgstr "Cette configuration n’a pas pu être enregistrée."
 
-#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:372
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue:29
+msgid "This item is not available. It may not exist, or it may not be public."
+msgstr "Cet élément n'est pas disponible. Il n'existe peut-être pas, ou n'est pas public."
+
+#: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:395
 msgid "This model has no summary configuration yet. Saving creates one."
 msgstr ""
 "Ce modèle n’a pas encore de configuration de fiche. L’enregistrement en crée "
@@ -259,3 +581,18 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:112
 msgid "This node no longer exists in the model."
 msgstr "Ce nœud n’existe plus dans le modèle."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:36
+msgid "Year"
+msgstr "Année"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:69
+msgid "Your Selection now holds the %{n} shared item."
+msgid_plural "Your Selection now holds the %{n} shared items."
+msgstr[0] "Votre Sélection contient maintenant l'élément partagé."
+msgstr[1] "Votre Sélection contient maintenant les %{n} éléments partagés."
+
+#: manuspectrum/src/manuspectrum/public/gettext-mock.spec.ts:20
+msgctxt "explorer"
+msgid "Corpus"
+msgstr "Corpus"
