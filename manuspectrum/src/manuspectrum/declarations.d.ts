@@ -16,3 +16,11 @@ declare module "utils/leaflet-stack" {
         isPinned?: (layer: Layer) => boolean,
     ): void;
 }
+
+declare module "utils/iiif-image" {
+    export function infoJsonUrl(service: string): string;
+    export function imageUrl(
+        service: string,
+        options?: { region?: string; size?: string },
+    ): string;
+}
