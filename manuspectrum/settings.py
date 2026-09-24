@@ -767,6 +767,13 @@ SPECTRUM_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
 # default. 4096 keeps a FORS spectrum (~2151 points) undecimated.
 SPECTRUM_PREVIEW_TIERS = (200, 4096)
 
+# Explorer (spec v3). Raw instrument formats are downloads only, never parsed.
+RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa")
+# A stored URL whose host is one of these is rewritten to PUBLIC_SERVER_ADDRESS.
+EXPLORER_LEGACY_HOSTS = ()
+EXPLORER_SEARCH_PAGE_SIZE = 50
+EXPLORER_ITEMS_MAX = 30
+
 try:
     from .package_settings import *
 except ImportError:
