@@ -11,6 +11,7 @@
 @import 'homepage/fa-subset';
 
 @import 'ms-chrome';
+@import 'ms-tokens';
 
 // Section headings + .spectral-line-thin now live in _ms-chrome.scss
 // (shared with the css/pages bundle — they had drifted apart, including a
@@ -22,13 +23,8 @@
     position: relative;
 }
 
-// --- SCROLL REVEAL ANIMATIONS ---
-.reveal {
-    opacity: 0;
-    transform: translateY(28px);
-    transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo);
-}
-.reveal.is-visible { opacity: 1; transform: translateY(0); }
+// --- SCROLL REVEAL (see the ms-reveal mixin) ---
+.reveal { @include ms-reveal(0.8s, var(--ease-out-expo), translateY(28px)); }
 .reveal-d1 { transition-delay: 0.08s; }
 .reveal-d2 { transition-delay: 0.16s; }
 .reveal-d3 { transition-delay: 0.24s; }
@@ -39,12 +35,7 @@
 .reveal-d8 { transition-delay: 0.64s; }
 .reveal-d9 { transition-delay: 0.72s; }
 
-.reveal-scale {
-    opacity: 0;
-    transform: scale(0.97);
-    transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
-}
-.reveal-scale.is-visible { opacity: 1; transform: scale(1); }
+.reveal-scale { @include ms-reveal(0.9s, var(--ease-out-expo), scale(0.97)); }
 
 
 // ============================================================
@@ -154,6 +145,7 @@
 
 .ms-hero-logo {
     width: clamp(280px, 40vw, 480px);
+    aspect-ratio: 600 / 95;
     margin: 0 auto 2.5rem;
     opacity: 0;
     transform: translateY(20px);
@@ -183,6 +175,12 @@
     to { opacity: 1; }
 }
 
+#ms-logo-svg { touch-action: pan-y pinch-zoom; display: block; }
+// The logo is marked drawn when it first moves into the zoom dialog, so the
+// draw-in never replays when it moves back into the hero.
+#ms-logo-svg.is-drawn .ms-logo-curve { animation: none; stroke-dashoffset: 0; }
+#ms-logo-svg.is-drawn #ms-peak-markers { animation: none; opacity: 1; }
+
 // Hover glow on curves
 #ms-logo-svg:hover #curve-blue { filter: drop-shadow(0 0 3px rgba(59,130,246,0.4)); }
 #ms-logo-svg:hover #curve-red  { filter: drop-shadow(0 0 3px rgba(220,53,69,0.35)); }
@@ -208,23 +206,43 @@
 }
 .ms-hero-logo:hover .ms-logo-zoom-btn { opacity: 0.7; }
 .ms-logo-zoom-btn:hover { opacity: 1 !important; background: rgba(255,255,255,0.95); transform: scale(1.08); }
+.ms-logo-zoom-btn:focus-visible { opacity: 1; outline: 2px solid var(--blue-text); outline-offset: 2px; }
 .ms-logo-zoom-btn svg { width: 14px; height: 14px; stroke: #1a1a2e; fill: none; stroke-width: 2; stroke-linecap: round; }
+@media (hover: none) {
+    .ms-logo-zoom-btn { opacity: 0.7; }
+}
 
-// Fullscreen overlay
-.ms-logo-overlay {
-    display: none;
+// Zoom dialog: full-viewport box, so a click that lands on the dialog itself is
+// a click beside the card. `display` only applies while open.
+.ms-logo-dialog {
+    padding: 0;
+    border: 0;
+    margin: 0;
+    background: transparent;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+}
+.ms-logo-dialog[open] {
     position: fixed;
     inset: 0;
-    z-index: 10000;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+// Literal colours: before Chrome 122 / Firefox 120 / Safari 17.4, ::backdrop
+// does not inherit custom properties.
+.ms-logo-dialog::backdrop {
     background: rgba(10,10,20,0.55);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
     animation: overlay-in 0.3s ease forwards;
 }
-.ms-logo-overlay.active { display: flex; }
+body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 @keyframes overlay-in {
     from { opacity: 0; }
     to   { opacity: 1; }
@@ -922,7 +940,7 @@ a.ms-feature-tag--link i {
 
 .ms-gallery-compare .ms-compare-top {
     z-index: 1;
-    clip-path: inset(0 0 0 0);
+    clip-path: inset(0 calc(100% - var(--split, 100%)) 0 0);
     transition: clip-path 0.5s var(--ease-out-expo);
 }
 
@@ -935,6 +953,26 @@ a.ms-feature-tag--link i {
 .ms-gallery-compare:hover .ms-compare-img {
     transform: none;
 }
+
+.ms-gallery-compare { touch-action: pan-y pinch-zoom; }
+.ms-gallery-compare:focus-within { outline: 2px solid var(--blue-text); outline-offset: 3px; }
+
+.ms-compare-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--split, 100%);
+    width: 2px;
+    margin-left: -1px;
+    background: rgba(255,255,255,0.9);
+    box-shadow: 0 0 6px rgba(0,0,0,0.35);
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.ms-gallery-compare.is-comparing .ms-compare-divider,
+.ms-gallery-compare:focus-within .ms-compare-divider { opacity: 1; }
 
 // --- Interactive Analysis Points ---
 .ms-gallery-analysis .ms-analysis-points {
@@ -1122,6 +1160,17 @@ a.ms-feature-tag--link i {
     color: var(--spectral-3);
     background: rgba(240,180,41,0.06);
 }
+
+.ms-analysis-popup--blue   { --popup-color: var(--spectral-5); }
+.ms-analysis-popup--red    { --popup-color: var(--spectral-1); }
+.ms-analysis-popup--green  { --popup-color: var(--spectral-4); }
+.ms-analysis-popup--purple { --popup-color: var(--spectral-6); }
+.ms-analysis-popup .ms-popup-technique {
+    color: var(--popup-color);
+    background: color-mix(in srgb, var(--popup-color) 8%, transparent);
+}
+.ms-popup-area { fill: var(--popup-color); opacity: 0.12; }
+.ms-popup-line { fill: none; stroke: var(--popup-color); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 
 // --- Multispectral Imaging (spectral scan effect) ---
 // Base image stays in flow to give the container height
