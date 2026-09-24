@@ -5,6 +5,7 @@ Usage:
 """
 
 from django.http import QueryDict
+from django.test import SimpleTestCase
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
@@ -12,6 +13,7 @@ from manuspectrum.views.explorer_service import (
     ancestor_terms,
     corpus_rows,
     fold,
+    row_filter,
     search_payload,
 )
 from tests.explorer_fixtures import ExplorerCase
@@ -156,3 +158,45 @@ class AncestorTermsTests(ServiceCase):
         )
 
         self.assertIn("XRF", ancestor_terms([str(child.pk)])[str(child.pk)])
+
+
+class RowFilterTests(SimpleTestCase):
+    def rows(self):
+        return [
+            {
+                "technique": {"uri": "t:xrf"},
+                "component": None,
+                "year": 2023,
+                "projects": [],
+                "operators": [],
+                "materials": [],
+                "colours": [],
+                "elements": [],
+                "layers": [],
+                "text": "ms 59 xrf",
+            },
+            {
+                "technique": {"uri": "t:fors"},
+                "component": None,
+                "year": 2024,
+                "projects": [],
+                "operators": [],
+                "materials": [],
+                "colours": [],
+                "elements": [],
+                "layers": [],
+                "text": "ms 59 fors",
+            },
+        ]
+
+    def test_keeps_rows_carrying_one_of_the_selected_values(self):
+        keep, *_ = row_filter(self.rows(), QueryDict("technique=t:xrf"))
+        self.assertEqual([keep(r) for r in self.rows()], [True, False])
+
+    def test_ignores_a_selected_value_outside_the_rows(self):
+        keep, *_ = row_filter(self.rows(), QueryDict("technique=t:unknown"))
+        self.assertEqual([keep(r) for r in self.rows()], [True, True])
+
+    def test_matches_the_folded_text(self):
+        keep, *_ = row_filter(self.rows(), QueryDict("q=FORS"))
+        self.assertEqual([keep(r) for r in self.rows()], [False, True])

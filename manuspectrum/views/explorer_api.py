@@ -68,7 +68,12 @@ class ExplorerDocumentView(View):
     def get(self, request, resourceid):
         return _answer(
             request,
-            document_payload(resourceid, request.user, translation.get_language()),
+            document_payload(
+                resourceid,
+                request.user,
+                translation.get_language(),
+                request.GET,
+            ),
         )
 
 

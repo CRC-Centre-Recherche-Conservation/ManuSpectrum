@@ -13,6 +13,7 @@ import unicodedata
 from collections import Counter, defaultdict
 
 from django.conf import settings
+from django.http import QueryDict
 from django.urls import reverse
 
 from arches.app.models.models import (
@@ -522,15 +523,13 @@ def analysis_hit(row, label_of):
     }
 
 
-def search_payload(query, user, language):
-    """``SearchResponse`` (spec §5): results of one page, open facet counts, unpublished count.
+def row_filter(rows, query):
+    """The Corpus filter rule over *rows*: ``(keep, active, filters, page)``.
 
-    Facet counts are "open to the other selections": OR inside a facet, AND
-    across facets. A facet is absent when no value has a count on the whole
-    visible set; a selected value that is not in the visible set is ignored
-    without a word.
+    ``keep(row, skip=None)`` is OR inside a facet and AND across facets, and
+    the folded free text; ``skip`` leaves one facet out (open facet counts). A
+    selected value that no row carries is ignored (§3.3).
     """
-    rows = corpus_rows(user, language)
     filters, page = parse_filters(query)
     universe = {
         key: {v for row in rows for v in _facet_values(row, key)} for key in FACET_KEYS
@@ -549,6 +548,24 @@ def search_payload(query, user, language):
             ):
                 return False
         return not needle or needle in row["text"]
+
+    return keep, active, filters, page
+
+
+def search_payload(query, user, language):
+    """``SearchResponse`` (spec §5): results of one page, open facet counts, unpublished count.
+
+    Facet counts are "open to the other selections": OR inside a facet, AND
+    across facets. A facet is absent when no value has a count on the whole
+    visible set; a selected value that is not in the visible set is ignored
+    without a word.
+    """
+    rows = corpus_rows(user, language)
+    keep, active, filters, page = row_filter(rows, query)
+    needle = fold(filters["q"])
+    universe = {
+        key: {v for row in rows for v in _facet_values(row, key)} for key in FACET_KEYS
+    }
 
     matching = [row for row in rows if keep(row)]
     labels = _facet_labels(rows, language, user)
@@ -926,8 +943,12 @@ def characterization_summaries(ids, visible, user, language, dims):
     return summaries
 
 
-def document_payload(document_id, user, language):
-    """``DocumentPayload`` of a visible document; None when it is unknown or not visible."""
+def document_payload(document_id, user, language, query=None):
+    """``DocumentPayload`` of a visible document; None when it is unknown or not visible.
+
+    *query* carries the Corpus filters; each analysis says whether they keep
+    it (``match``), by the rule of the search.
+    """
     visible = visible_set(user)
     document_id = str(document_id)
     if document_id not in visible.documents:
@@ -943,11 +964,9 @@ def document_payload(document_id, user, language):
     )
     canvases = canvases_of(manifest_json(manifest_url)) if manifest_url else []
     dims = {c["id"]: (c["image"]["width"], c["image"]["height"]) for c in canvases}
-    rows = {
-        r["id"]: r
-        for r in corpus_rows(user, language, chains=chains)
-        if r["document"] == document_id
-    }
+    all_rows = corpus_rows(user, language, chains=chains)
+    keep, *_ = row_filter(all_rows, query or QueryDict(""))
+    rows = {r["id"]: r for r in all_rows if r["document"] == document_id}
     annotations = []
     for analysis, feature_id, canvas, shape in _annotations(
         role_node(*ROLES["zone"]), analyses, dims, readable
@@ -959,11 +978,13 @@ def document_payload(document_id, user, language):
             {
                 "key": f"an:{analysis}:{feature_id}",
                 "analysis": analysis,
+                "name": row["name"],
                 "canvas": canvas,
                 "shape": shape,
                 "technique": row["technique"],
                 "dataKind": (row["dataKinds"] or ["file"])[0],
                 "unpublished": row["unpublished"],
+                "match": keep(row),
             }
         )
     located = {a["analysis"] for a in annotations}
@@ -974,6 +995,7 @@ def document_payload(document_id, user, language):
             "technique": rows[a]["technique"],
             "dataKind": (rows[a]["dataKinds"] or ["file"])[0],
             "unpublished": rows[a]["unpublished"],
+            "match": keep(rows[a]),
         }
         for a in analyses
         if a in rows and a not in located
@@ -1091,6 +1113,8 @@ def imaging_entries(analysis_id, manifest_values, language):
                 "dataKind": "chemical-imaging",
                 "viewer": {
                     "rendererConfigId": None,
+                    "xLabel": None,
+                    "yLabel": None,
                     "axisKey": None,
                     "axisTitle": None,
                     "points": None,

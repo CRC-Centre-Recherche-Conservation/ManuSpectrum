@@ -242,9 +242,37 @@ class ReadRightsTests(ReadRightsCase):
 
 
 class DocumentRouteTests(CorpusCase):
-    def get(self, resource):
+    def get(self, resource, query=""):
         with mock.patch(FETCH, return_value=MANIFEST_JSON):
-            return self.client.get(f"/en/api/explorer/document/{resource}")
+            return self.client.get(f"/en/api/explorer/document/{resource}{query}")
+
+    def test_every_analysis_matches_when_no_filter_is_set(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertTrue(payload["annotations"])
+        self.assertTrue(all(a["match"] for a in payload["annotations"]))
+
+    def test_an_analysis_the_search_would_drop_does_not_match(self):
+        payload = self.get(self.documents["open"].pk, f"?technique={FORS}").json()
+
+        self.assertTrue(payload["annotations"])
+        matched = {a["analysis"]: a["match"] for a in payload["annotations"]}
+        self.assertTrue(matched[str(self.analyses["on_document"].pk)])
+        self.assertFalse(matched[str(self.analyses["open"].pk)])
+        self.assertFalse(matched[str(self.analyses["draft"].pk)])
+
+    def test_the_document_and_the_search_apply_the_same_filters(self):
+        query = f"?technique={XRF}"
+        search = self.client.get(
+            f"/en/api/explorer/search{query}&grain=analyses"
+        ).json()
+        payload = self.get(self.documents["open"].pk, query).json()
+
+        matched = {a["analysis"] for a in payload["annotations"] if a["match"]}
+        found = {r["id"] for r in search["results"]}
+        document_analyses = {a["analysis"] for a in payload["annotations"]}
+        self.assertTrue(matched)
+        self.assertEqual(matched, found & document_analyses)
 
     def test_the_document_payload_has_the_contract_shape(self):
         response = self.get(self.documents["open"].pk)

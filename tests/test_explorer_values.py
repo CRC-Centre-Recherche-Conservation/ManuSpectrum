@@ -239,3 +239,22 @@ class FileEntryTests(SimpleTestCase):
         }
 
         self.assertTrue(effective_license(entry, "en")["noDerivatives"])
+
+    def test_a_readable_file_carries_its_axis_labels(self):
+        config_id = "c0000000-0000-4000-8000-000000000001"
+        entries = [
+            {
+                "file_id": "11111111-1111-4111-8111-111111111111",
+                "name": "a.csv",
+                "url": "/files/a",
+                "rendererConfig": config_id,
+            }
+        ]
+        configs = {config_id: {"presetKey": "fors", "display": {}}}
+
+        viewer = file_entries(
+            entries, language="en", configs=configs, kind="measurement"
+        )[0]["viewer"]
+
+        self.assertTrue(viewer["xLabel"])
+        self.assertTrue(viewer["yLabel"])

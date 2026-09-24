@@ -74,6 +74,8 @@ SHAPES = {
         "technique": ("ValueRef", None),
         "dataKind": str,
         "unpublished": bool,
+        "match": bool,
+        "name": "Label",
     },
     "UnlocatedAnalysis": {
         "analysis": str,
@@ -81,6 +83,7 @@ SHAPES = {
         "technique": ("ValueRef", None),
         "dataKind": str,
         "unpublished": bool,
+        "match": bool,
     },
     "CharacterizationSummary": {
         "id": str,

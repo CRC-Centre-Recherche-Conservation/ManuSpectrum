@@ -82,11 +82,13 @@ export interface SearchResponse {
 export interface Annotation {
     key: string;
     analysis: string;
+    name: Label;
     canvas: string;
     shape: Shape;
     technique: ValueRef | null;
     dataKind: DataKind;
     unpublished: boolean;
+    match: boolean;
 }
 
 export interface UnlocatedAnalysis {
@@ -95,6 +97,7 @@ export interface UnlocatedAnalysis {
     technique: ValueRef | null;
     dataKind: DataKind;
     unpublished: boolean;
+    match: boolean;
 }
 
 export interface HistoryLine {
@@ -170,6 +173,8 @@ export interface FileEntry {
     dataKind: DataKind;
     viewer: {
         rendererConfigId: string | null;
+        xLabel: string | null;
+        yLabel: string | null;
         axisKey: string | null;
         axisTitle: Label | null;
         points: number | null;
@@ -308,11 +313,13 @@ export const SHAPE_KEYS = {
     Annotation: {
         key: true,
         analysis: true,
+        name: true,
         canvas: true,
         shape: true,
         technique: true,
         dataKind: true,
         unpublished: true,
+        match: true,
     } satisfies Record<keyof Annotation, true>,
     UnlocatedAnalysis: {
         analysis: true,
@@ -320,6 +327,7 @@ export const SHAPE_KEYS = {
         technique: true,
         dataKind: true,
         unpublished: true,
+        match: true,
     } satisfies Record<keyof UnlocatedAnalysis, true>,
     CharacterizationSummary: {
         id: true,
