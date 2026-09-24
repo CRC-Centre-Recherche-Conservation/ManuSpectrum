@@ -1,8 +1,23 @@
 import re
+from unittest import mock
 
+from django.core.cache import cache
+from django.http import QueryDict
 from django.test import TestCase, override_settings
 
+from manuspectrum.utils.public_visibility import anonymous_user
+from manuspectrum.views.explorer_service import search_payload
+from tests.explorer_fixtures import ExplorerCase
+
 NOSCRIPT = re.compile(r"<noscript>(.*?)</noscript>", re.S)
+
+
+def _technique_facet_values_for_visitor():
+    payload = search_payload(QueryDict("grain=analyses"), anonymous_user(), "en")
+    facet = next(
+        (f for f in payload["facets"] if f["key"] == "technique"), {"values": []}
+    )
+    return [v for v in facet["values"] if v["count"] > 0]
 
 
 def noscript_blocks(html):
@@ -77,3 +92,129 @@ class ArchesPayloadTests(TestCase):
             html = self.client.get(f"/{lang}/").content.decode()
             for marker in ("arches-translations", "arches-urls", "CKEDITOR_BASEPATH"):
                 self.assertNotIn(marker, html, f"{marker} on /{lang}/")
+
+
+class DiscoverEntryTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_search_form_has_a_default_submit_then_the_discover_button(self):
+        html = self.client.get("/en/").content.decode()
+        form = html[
+            html.index('id="ms-search-form"') : html.index(
+                "</form>", html.index('id="ms-search-form"')
+            )
+        ]
+        buttons = re.findall(r"<button[^>]*>", form)
+        self.assertEqual(len(buttons), 2)
+        self.assertNotIn("formaction", buttons[0])
+        self.assertIn('formaction="/en/discover"', buttons[1])
+
+    def test_technique_chips_link_each_visible_technique_by_its_thesaurus_reference(
+        self,
+    ):
+        techniques = [
+            {
+                "id": "http://example.org/technique/a",
+                "label": {"value": "Technique A", "lang": "fr"},
+                "count": 3,
+            },
+        ]
+        with mock.patch(
+            "manuspectrum.templatetags.explorer_home.homepage_techniques",
+            return_value=techniques,
+        ):
+            html = self.client.get("/fr/").content.decode()
+        self.assertIn(
+            'class="ms-search-chip ms-technique-chip" lang="fr" '
+            'href="/fr/discover?grain=analyses&amp;technique=http%3A%2F%2Fexample.org%2Ftechnique%2Fa"',
+            html,
+        )
+        self.assertNotIn('data-term="Raman"', html)
+        self.assertNotIn('data-term="XRF"', html)
+
+    def test_no_technique_chip_row_without_visible_techniques(self):
+        with mock.patch(
+            "manuspectrum.templatetags.explorer_home.homepage_techniques",
+            return_value=[],
+        ):
+            html = self.client.get("/fr/").content.decode()
+        self.assertNotIn("ms-technique-chips", html)
+
+    def test_header_offers_the_explorer_on_every_public_page(self):
+        html = self.client.get("/en/").content.decode()
+        self.assertIn('href="/en/discover"', html)
+        self.assertNotIn('href="/en/discover" aria-current="page"', html)
+
+
+class HomepageTechniquesTests(ExplorerCase):
+    """The list comes from the Explorer facet for the visitor; nothing is hard-coded."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.tile(
+            cls.analyses["open"],
+            "analysis_technique_used",
+            cls.reference_value(
+                "http://example.org/technique/fixture",
+                "Fixture technique",
+                "Technique de test",
+            ),
+        )
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+
+    def test_only_techniques_with_visible_analyses_are_listed(self):
+        from manuspectrum.views.explorer_home import homepage_techniques
+
+        facet = {
+            "key": "technique",
+            "values": [
+                {
+                    "id": "http://example.org/technique/a",
+                    "label": {"value": "A", "lang": "en"},
+                    "count": 2,
+                    "selected": False,
+                },
+                {
+                    "id": "http://example.org/technique/b",
+                    "label": {"value": "B", "lang": "en"},
+                    "count": 0,
+                    "selected": False,
+                },
+            ],
+        }
+        with mock.patch(
+            "manuspectrum.views.explorer_home.search_payload",
+            return_value={"facets": [facet]},
+        ) as search:
+            listed = homepage_techniques("en")
+        self.assertEqual([t["id"] for t in listed], ["http://example.org/technique/a"])
+        self.assertEqual(search.call_args.args[1].username, "anonymous")
+        self.assertEqual(search.call_args.args[0].get("grain"), "analyses")
+
+    def test_the_list_follows_the_real_facet_of_the_fixture(self):
+        from manuspectrum.views.explorer_home import homepage_techniques
+
+        listed = homepage_techniques("en")
+        uris = {t["id"] for t in listed}
+        self.assertIn("http://example.org/technique/fixture", uris)
+        self.assertTrue(all(t["count"] > 0 for t in listed))
+        self.assertEqual(
+            uris, {row["id"] for row in _technique_facet_values_for_visitor()}
+        )
+
+    def test_the_list_is_memoised_per_language(self):
+        from manuspectrum.views.explorer_home import homepage_techniques
+
+        with mock.patch(
+            "manuspectrum.views.explorer_home.search_payload",
+            return_value={"facets": []},
+        ) as search:
+            homepage_techniques("en")
+            homepage_techniques("en")
+            homepage_techniques("fr")
+        self.assertEqual(search.call_count, 2)

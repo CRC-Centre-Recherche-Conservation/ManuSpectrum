@@ -29,6 +29,10 @@ CACHE_SHAPE_MODULES = (
     "utils/xy_transforms.py",
     # The per-reader visibility memos: hidden resources, readable nodegroups.
     "utils/public_visibility.py",
+    # The Explorer's Corpus payloads: results, facets, unpublished count.
+    "views/explorer_service.py",
+    # The homepage technique list memo.
+    "views/explorer_home.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

@@ -6,6 +6,7 @@ Homepage — Prismatic Luminescence aesthetic
 {% load template_tags %}
 {% load i18n %}
 {% load manuspectrum_settings %}
+{% load explorer_home %}
 {% load render_bundle from webpack_loader %}
 {% load webpack_static from webpack_loader %}
 {% get_current_language as LANGUAGE_CODE %}
@@ -605,16 +606,27 @@ Homepage — Prismatic Luminescence aesthetic
                             autocomplete="off"
                         >
                     </div>
+                    <div class="ms-search-actions">
+                        <button type="submit" class="ms-btn ms-btn-primary ms-search-submit">{% trans "Search" %}</button>
+                        <button type="submit" class="ms-btn ms-search-discover" formaction="{% url 'analysis-explorer' %}">{% trans "Discover the data" %}</button>
+                    </div>
                 </form>
 
                 <div class="ms-search-chips">
                     <button type="button" class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
-                    <button type="button" class="ms-search-chip" data-term="{% trans 'XRF' %}">{% trans "XRF" %}</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
-                    <button type="button" class="ms-search-chip" data-term="{% trans 'Raman' %}">{% trans "Raman" %}</button>
                 </div>
+
+                {% homepage_techniques as techniques %}
+                {% if techniques %}
+                <div class="ms-technique-chips" role="group" aria-label="{% trans 'Explore by technique' %}">
+                    {% for technique in techniques %}
+                    <a class="ms-search-chip ms-technique-chip" lang="{{ technique.label.lang }}" href="{% url 'analysis-explorer' %}?grain=analyses&amp;technique={{ technique.id|urlencode:'' }}">{{ technique.label.value }}</a>
+                    {% endfor %}
+                </div>
+                {% endif %}
 
                 <div class="ms-search-cta">
                     <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">

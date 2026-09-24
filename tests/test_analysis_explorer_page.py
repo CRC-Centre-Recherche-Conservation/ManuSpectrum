@@ -85,6 +85,16 @@ class AnalysisExplorerPageTests(TestCase):
             html, r'<link href="[^"]*/css/explorer\.\w+\.css" rel="stylesheet" />'
         )
 
+    def test_header_tab_is_current_on_the_page(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertEqual(
+            html.count(f'href="{reverse("analysis-explorer")}" aria-current="page"'), 1
+        )
+        self.assertIn(
+            f'href="{reverse("analysis-explorer")}" class="ms-mobile-nav-link" aria-current="page"',
+            html,
+        )
+
 
 class AnalysisExplorerIndexingTests(TestCase):
     def test_sitemap_lists_the_explorer_with_its_french_alternate(self):
