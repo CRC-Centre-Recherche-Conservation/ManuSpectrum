@@ -156,3 +156,39 @@ def _nodegroups_of(user):
     except (AttributeError, ObjectDoesNotExist) as error:
         logger.warning("visibility: no profile for reader %s: %s", user, error)
         return None
+
+
+def is_connected(user):
+    """Whether *user* is a signed-in account, not the visitor.
+
+    ``SetAnonymousUser`` installs the ``anonymous`` database row on a visitor,
+    whose ``is_authenticated`` is True, so the test compares primary keys.
+    """
+    if (
+        not getattr(user, "is_authenticated", False)
+        or getattr(user, "pk", None) is None
+    ):
+        return False
+    anonymous = anonymous_user()
+    return user.pk != getattr(anonymous, "pk", None)
+
+
+def reader_scope(user):
+    """``"anonymous"`` for a visitor, else the user id: the key of what a reader sees."""
+    return str(user.pk) if is_connected(user) else "anonymous"
+
+
+def draft_state_id_set():
+    """Ids, as strings, of the lifecycle states that mean "not published yet"."""
+    from arches.app.models.models import ResourceInstanceLifecycleState
+
+    from manuspectrum.views.model_graph_service import draft_state_ids
+
+    return frozenset(
+        str(state_id)
+        for state_id in draft_state_ids(
+            ResourceInstanceLifecycleState.objects.values(
+                "id", "is_initial_state", "resource_instance_lifecycle_id"
+            )
+        )
+    )
