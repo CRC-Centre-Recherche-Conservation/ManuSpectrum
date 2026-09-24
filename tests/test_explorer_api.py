@@ -10,6 +10,9 @@ from django.contrib.auth.models import Group, User
 from django.http import QueryDict
 from django.test import SimpleTestCase
 
+from arches.app.models.models import NodeGroup
+from arches.app.utils.permission_backend import assign_perm
+
 from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import CANVAS, MANIFEST, XY_CONFIG_ID
 from tests.test_explorer_service import FORS, XRF, ServiceCase
@@ -62,6 +65,15 @@ class SearchRouteTests(ServiceCase):
         self.assertGreaterEqual(visitor.json()["unpublishedCount"], 1)
         self.assertEqual(visitor["Cache-Control"], "public, no-cache")
         self.assertEqual(reader.json(), visitor.json())
+
+    def test_a_visitor_whose_csrf_cookie_is_renewed_gets_a_private_answer(self):
+        self.client.cookies["csrftoken"] = "malformed"
+
+        response = self.get()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertNotIn("ETag", response)
 
     def test_a_filter_on_a_hidden_project_is_ignored_without_leaking_its_name(self):
         self.embargo(self.projects["side"])
@@ -154,6 +166,81 @@ class CorpusCase(ServiceCase):
         )
 
 
+class ReadRightsCase(CorpusCase):
+    def deny(self, *roles):
+        """Take read access to the nodegroups of *roles* ``(slug, alias)`` away from the visitor."""
+        for role in roles:
+            nodegroup = NodeGroup.objects.get(pk=self.nodes[role].nodegroup_id)
+            with self.captureOnCommitCallbacks(execute=True):
+                assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+    def document(self, resource):
+        with mock.patch(FETCH, return_value=MANIFEST_JSON):
+            return self.client.get(f"/en/api/explorer/document/{resource}").json()
+
+    def analysis(self, resource):
+        return self.client.get(f"/en/api/explorer/analysis/{resource}")
+
+
+class ReadRightsTests(ReadRightsCase):
+    def test_a_value_nodegroup_the_visitor_cannot_read_leaves_its_values_out(self):
+        self.deny(("analysis", "analysis_technique_used"))
+
+        search = self.client.get("/en/api/explorer/search").json()
+        payload = self.analysis(self.analyses["open"].pk).json()
+
+        self.assertNotIn("technique", [f["key"] for f in search["facets"]])
+        self.assertEqual({r["technique"] for r in search["results"]}, {None})
+        self.assertIsNone(payload["technique"])
+        self.assertNotIn("Portable XRF", str(payload))
+
+    def test_a_zone_nodegroup_the_visitor_cannot_read_gives_no_zone(self):
+        self.tile(
+            self.components["open"],
+            "location_in_document",
+            self.annotation_value(CANVAS, {"type": "Point", "coordinates": [10, -20]}),
+        )
+        self.deny(("component", "location_in_document"))
+
+        payload = self.document(self.documents["open"].pk)
+
+        self.assertEqual([s["zone"] for s in payload["characterizations"]], [None])
+        self.assertEqual([c["characterizationCount"] for c in payload["canvases"]], [0])
+
+    def test_a_person_model_the_visitor_cannot_read_names_no_operator(self):
+        self.deny(("person", "label_of_name"))
+
+        search = self.client.get("/en/api/explorer/search").json()
+        payload = self.analysis(self.analyses["open"].pk).json()
+
+        self.assertNotIn("operator", [f["key"] for f in search["facets"]])
+        self.assertEqual(payload["operators"], [])
+        self.assertNotIn("Robinet", str(search) + str(payload))
+
+    def test_an_unreadable_name_nodegroup_gives_the_placeholder_name(self):
+        self.deny(("component", "label_of_name"))
+
+        payload = self.analysis(self.analyses["open"].pk).json()
+
+        self.assertEqual(payload["component"]["id"], str(self.components["open"].pk))
+        self.assertNotIn("initial", payload["component"]["name"]["value"])
+
+    def test_a_document_of_a_model_the_visitor_cannot_read_is_not_listed(self):
+        self.deny(
+            ("document", "label_of_name"),
+            ("document", "facsimiles"),
+            ("document", "current_owner"),
+        )
+
+        search = self.client.get(
+            "/en/api/explorer/search",
+            {"grain": "documents", "onlyWithAnalyses": "false"},
+        ).json()
+
+        self.assertEqual(search["results"], [])
+        self.assertNotIn("Ms 59", str(search))
+
+
 class DocumentRouteTests(CorpusCase):
     def get(self, resource):
         with mock.patch(FETCH, return_value=MANIFEST_JSON):
@@ -209,6 +296,25 @@ class DocumentRouteTests(CorpusCase):
         search_results = search_payload(QueryDict(""), self.anonymous, "en")["results"]
         self.assertIn(str(unplaced.pk), {r["id"] for r in search_results})
 
+    def test_an_identified_material_on_another_component_of_the_document_is_shown(
+        self,
+    ):
+        second = self.new_resource("component", "f. 2r — border")
+        self.tile(
+            second,
+            "item_visual_is_part_of_document",
+            self.refs(self.documents["open"]),
+        )
+        vermilion = self.new_resource("characterization", "Vermilion, red border")
+        self.tile(vermilion, "object_observed", self.refs(second))
+        self.tile(vermilion, "evidence_analyses", self.refs(self.analyses["open"]))
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertIn(
+            str(vermilion.pk), {s["id"] for s in payload["characterizations"]}
+        )
+
     def test_an_embargoed_document_answers_like_an_unknown_one(self):
         self.embargo(self.documents["embargoed"])
 
@@ -250,6 +356,17 @@ class AnalysisRouteTests(CorpusCase):
             payload["permalink"].endswith(f"report/{self.analyses['open'].pk}")
         )
         self.assertIsNone(payload["citation"])
+
+    def test_an_operator_whose_resource_is_gone_is_left_out(self):
+        gone = "00000000-0000-4000-8000-0000000000de"
+        self.tile(self.analyses["open"], "performed_by_actor", [{"resourceId": gone}])
+
+        response = self.get(self.analyses["open"].pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [o["id"] for o in response.json()["operators"]], [str(self.operator.pk)]
+        )
 
     def test_an_analysis_of_an_embargoed_project_answers_like_an_unknown_one(self):
         self.embargo(self.projects["side"])
@@ -321,12 +438,48 @@ class ItemsRouteTests(CorpusCase):
         self.assertEqual(payload["missing"], sorted([hidden, "nonsense"]))
         self.assertEqual([i["kind"] for i in payload["items"]], ["characterization"])
 
+    def test_a_ch_key_restores_a_characterization_summary(self):
+        key = f"ch:{self.characterization.pk}:-"
+
+        payload = self.get([key]).json()
+
+        self.assertEqual(set(payload["items"][0]), {"key", "kind", "characterization"})
+        self.assertEqual(payload["items"][0]["kind"], "characterization")
+        assert_shape(
+            self, payload["items"][0]["characterization"], "CharacterizationSummary"
+        )
+
     def test_items_rejects_more_than_thirty_keys(self):
         keys = [f"ch:{i:08d}-0000-4000-8000-000000000000:-" for i in range(31)]
 
         response = self.get(keys)
 
         self.assertEqual((response.status_code, response.content), (400, b""))
+
+
+class ZoneCoordinatesTests(ReadRightsCase):
+    def test_a_zone_has_the_same_coordinates_on_every_route(self):
+        self.tile(
+            self.components["open"],
+            "location_in_document",
+            self.annotation_value(
+                CANVAS, {"type": "Point", "coordinates": [78.125, -100]}
+            ),
+        )
+        mine = str(self.characterization.pk)
+
+        document = self.document(self.documents["open"].pk)
+        analysis = self.analysis(self.analyses["open"].pk).json()
+        items = self.client.get("/en/api/explorer/items", {"ids": f"ch:{mine}:-"})
+
+        zones = [
+            next(s["zone"] for s in document["characterizations"] if s["id"] == mine),
+            next(s["zone"] for s in analysis["evidenceOf"] if s["id"] == mine),
+            items.json()["items"][0]["characterization"]["zone"],
+        ]
+        self.assertEqual(zones[0]["shape"], {"type": "point", "x": 2500, "y": 3200})
+        self.assertEqual(zones[1], zones[0])
+        self.assertEqual(zones[2], zones[0])
 
 
 class LayerOfTests(SimpleTestCase):
