@@ -75,6 +75,7 @@ def _make_response(json_data=None, status_code=200, text=""):
     """Build a Mock that quacks enough like a ``requests.Response``."""
     resp = MagicMock(spec=requests.Response)
     resp.status_code = status_code
+    resp.headers = requests.structures.CaseInsensitiveDict()
     resp.text = text
     resp.json.return_value = json_data if json_data is not None else {}
     if status_code >= 400:
@@ -1793,7 +1794,7 @@ class EnrichCanvasesDocumentNatureTests(TestCase):
 
         # _bib_request is used for the CirrusSearch fulltext call
         # (action=query, list=search) — return a single matching item.
-        bib_resp = MagicMock()
+        bib_resp = MagicMock(headers={})
         bib_resp.raise_for_status = MagicMock()
         bib_resp.json.return_value = {"query": {"search": [{"title": "Item:Q123"}]}}
         mock_bib.return_value = bib_resp
@@ -1945,11 +1946,11 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
 
         ms_type_qid = BiblissimaSearchManuscriptsView.TYPE_FILTERS["manuscript"]
 
-        search_resp = MagicMock()
+        search_resp = MagicMock(headers={})
         search_resp.raise_for_status = MagicMock()
         search_resp.json.return_value = {"search": [{"id": "Q123"}]}
 
-        claims_resp = MagicMock()
+        claims_resp = MagicMock(headers={})
         claims_resp.raise_for_status = MagicMock()
         claims_resp.json.return_value = {
             "entities": {
@@ -1964,7 +1965,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
         }
 
         # Fulltext search response (used as the second-pass; can be empty)
-        fulltext_resp = MagicMock()
+        fulltext_resp = MagicMock(headers={})
         fulltext_resp.raise_for_status = MagicMock()
         fulltext_resp.json.return_value = {"query": {"search": []}}
 

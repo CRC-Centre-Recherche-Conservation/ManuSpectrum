@@ -79,6 +79,22 @@ class SuggestPrefixContractTests(LiveContractTestCase):
         self.assertIn("Q24517", self._search("kilic"))
         self.assertIn("Q24517", self._search("kılıç"))
 
+    def test_punctuation_is_kept_as_our_strict_form_keeps_it(self):
+        for query, qid, label, found in (
+            ("draguignan (v", "Q31632", "Draguignan (Var, France)", True),
+            ("draguignan v", "Q31632", "Draguignan (Var, France)", False),
+            ("draguignan (var, fr", "Q31632", "Draguignan (Var, France)", True),
+            ("draguignan (var fr", "Q31632", "Draguignan (Var, France)", False),
+            ("psautier : r", "Q284136", "Psautier : rite byzantin", True),
+            ("psautier r", "Q284136", "Psautier : rite byzantin", False),
+            ("psautier  : r", "Q284136", "Psautier : rite byzantin", False),
+            ("a/n 3", "Q219061", "A/N 308", True),
+            ("a n 3", "Q219061", "A/N 308", False),
+        ):
+            with self.subTest(query=query):
+                self.assertEqual(qid in self._search(query), found)
+                self.assertEqual(bp._strict(label).startswith(bp._strict(query)), found)
+
     def test_a_derived_answer_holds_every_upstream_hit(self):
         entry = bp._suggest_prefix_entry("drag", "fr", time.monotonic() + 10)
         self.assertTrue(

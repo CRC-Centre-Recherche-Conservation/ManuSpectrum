@@ -84,6 +84,7 @@ from urllib.parse import urlencode, urlsplit
 import requests
 from lxml import html as lxml_html
 from requests.adapters import HTTPAdapter
+from urllib3.exceptions import ReadTimeoutError
 from urllib3.util.retry import Retry
 from django.core.cache import cache
 from django.http import JsonResponse
@@ -283,6 +284,25 @@ _upstream_budget_var = contextvars.ContextVar(
 )
 
 
+class BiblissimaApiError(ValueError):
+    """A Biblissima answer that is not the JSON object asked for.
+
+    ``code`` is the MediaWiki API error code (``no-such-entity``,
+    ``ratelimited`` …), ``None`` for a body that is not a JSON object.
+    """
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
+
+
+def _record_failure(exc):
+    """Record *exc* on the active request budget, if any, without tripping a host."""
+    budget = _upstream_budget_var.get()
+    if budget is not None:
+        budget.record(exc)
+
+
 @contextmanager
 def _upstream_budget(seconds):
     """Bound every Biblissima call made in this block, pool threads included.
@@ -291,8 +311,10 @@ def _upstream_budget(seconds):
     their own timeout, and neither waits past the backstop *seconds*. The first
     connection-level failure or 403/429/503 on a Biblissima host trips that host
     for the rest of the block (``BiblissimaHostDown``). The first failure of a
-    call to a Biblissima host is kept on the yielded budget's ``error``; a
-    portal 404 and third-party IIIF failures are not.
+    call to a Biblissima host is kept on the yielded budget's ``error``: a
+    connection failure, a status of 400 or more, a MediaWiki API error, or a
+    body ``_bib_json`` refuses. A 404 of the portal host and third-party IIIF
+    failures are not.
     """
     budget = _UpstreamBudget(seconds)
     token = _upstream_budget_var.set(budget)
@@ -320,6 +342,9 @@ _BIBLISSIMA_HOSTS = frozenset(
         BIBLISSIMA_IIIF_MANIFEST,
     )
 )
+
+
+_PORTAL_HOST = urlsplit(BIBLISSIMA_PORTAL).hostname
 
 
 def _biblissima_host(url):
@@ -451,13 +476,49 @@ def _bib_request(
     elif 500 <= status < 600:
         _incr_stat("responses_5xx", 1)
     if host is not None:
-        failed = status >= 500 or status in _BREAKER_STATUSES
-        if failed or resp.headers.get("MediaWiki-API-Error"):
+        api_error = resp.headers.get("MediaWiki-API-Error")
+        if status >= 400 and not (status == 404 and host == _PORTAL_HOST):
             budget.record(
                 requests.exceptions.HTTPError(str(status), response=resp),
                 host if status in _BREAKER_STATUSES else None,
             )
+        elif api_error:
+            budget.record(
+                BiblissimaApiError(
+                    f"Wikibase answered the API error {api_error}", code=api_error
+                )
+            )
     return resp
+
+
+def _bib_json(resp):
+    """The JSON object of a Biblissima answer read through ``_bib_request``.
+
+    Raises ``BiblissimaApiError`` for a body that is not a JSON object or that
+    reports a MediaWiki API error (``MediaWiki-API-Error`` header or ``error``
+    key). Inside a request budget the failure is recorded on it without
+    tripping the host; one the header names is already recorded by
+    ``_bib_request``.
+    """
+    api_error = resp.headers.get("MediaWiki-API-Error")
+    if api_error:
+        raise BiblissimaApiError(
+            f"Wikibase answered the API error {api_error}", code=api_error
+        )
+    try:
+        payload = resp.json()
+    except ValueError as exc:
+        error = BiblissimaApiError(
+            f"Biblissima answered a body that is not JSON: {exc}"
+        )
+    else:
+        if isinstance(payload, dict) and "error" not in payload:
+            return payload
+        body_error = payload.get("error") if isinstance(payload, dict) else None
+        code = body_error.get("code") if isinstance(body_error, dict) else None
+        error = BiblissimaApiError(f"Biblissima answered an error: {code}", code=code)
+    _record_failure(error)
+    raise error
 
 
 def _annotation_targets_are_safe(canvas_url, manifest_url):
@@ -478,6 +539,19 @@ def _annotation_targets_are_safe(canvas_url, manifest_url):
     return True
 
 
+def _is_timeout(exc):
+    """Whether *exc* is a timeout, one met while reading the body included.
+
+    ``requests`` reports a read timeout during the body download as a
+    ``ConnectionError`` wrapping urllib3's ``ReadTimeoutError``.
+    """
+    if isinstance(exc, (requests.exceptions.Timeout, BiblissimaBudgetSpent)):
+        return True
+    return isinstance(exc, requests.exceptions.ConnectionError) and any(
+        isinstance(arg, ReadTimeoutError) for arg in exc.args
+    )
+
+
 def _biblissima_upstream_error(exc, context):
     """Map an outbound-call exception to a JSON error response with a user-facing message."""
     if isinstance(exc, BiblissimaBusy):
@@ -493,7 +567,7 @@ def _biblissima_upstream_error(exc, context):
         )
         response["Retry-After"] = str(_BIBLISSIMA_SLOT_TIMEOUT)
         return response
-    if isinstance(exc, (requests.exceptions.Timeout, BiblissimaBudgetSpent)):
+    if _is_timeout(exc):
         logger.warning("%s timed out", context)
         return JsonResponse(
             {
@@ -526,6 +600,16 @@ def _biblissima_upstream_error(exc, context):
                     "The Biblissima portal returned an error (%(status)s). Please try again in a moment."
                 )
                 % {"status": status},
+            },
+            status=502,
+        )
+    if isinstance(exc, BiblissimaApiError):
+        logger.warning("%s answered %s", context, exc)
+        return JsonResponse(
+            {
+                "error": "invalid_response",
+                "code": exc.code,
+                "message": _("Invalid response from the Biblissima portal."),
             },
             status=502,
         )
@@ -701,7 +785,7 @@ def _get_wikibase_entity(qid, session=None):
                 timeout=REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
-            raw = resp.json().get("entities", {}).get(qid, {})
+            raw = _bib_json(resp).get("entities", {}).get(qid, {})
         except Exception:
             logger.warning("Failed to fetch Wikibase entity %s", qid)
             return None
@@ -753,7 +837,7 @@ def _batch_get_wikibase_entities(qids, session=None):
                 timeout=REQUEST_TIMEOUT * 2,
             )
             resp.raise_for_status()
-            entities = resp.json().get("entities", {})
+            entities = _bib_json(resp).get("entities", {})
             for qid in batch:
                 raw = entities.get(qid, {})
                 if raw and "missing" not in raw:
@@ -774,9 +858,9 @@ def _fetch_wikibase_claims(qid, session=None):
     """Claims of one Wikibase entity, read through the guarded fetch.
 
     Returns ``{}`` for an entity Wikibase marks missing or that has no claims.
-    Raises ``ValueError`` for an answer that carries an ``error`` or no
-    ``entities``, ``HTTPError`` for an error status, and what the fetch raises
-    (``BiblissimaBusy``, ``UnsafeURLError``, ``requests`` errors).
+    Raises ``BiblissimaApiError`` for an answer ``_bib_json`` refuses or that
+    carries no ``entities``, ``HTTPError`` for an error status, and what the
+    fetch raises (``BiblissimaBusy``, ``UnsafeURLError``, ``requests`` errors).
     """
     query = urlencode(
         {"action": "wbgetentities", "ids": qid, "format": "json", "props": "claims"}
@@ -788,11 +872,11 @@ def _fetch_wikibase_claims(qid, session=None):
         timeout=REQUEST_TIMEOUT,
     )
     resp.raise_for_status()
-    payload = resp.json()
-    if not isinstance(payload, dict) or "error" in payload or "entities" not in payload:
-        error = payload.get("error") if isinstance(payload, dict) else None
-        code = error.get("code") if isinstance(error, dict) else error
-        raise ValueError(f"Wikibase answered no entities for {qid}: {code}")
+    payload = _bib_json(resp)
+    if not isinstance(payload.get("entities"), dict):
+        error = BiblissimaApiError(f"Wikibase answered no entities for {qid}")
+        _record_failure(error)
+        raise error
     return payload["entities"].get(qid, {}).get("claims", {})
 
 
@@ -1103,10 +1187,9 @@ def _suggest_call(params, deadline):
     seconds left, the connect and each read by what is left once the slot is
     held, and no call starts once they are spent (``BiblissimaBudgetSpent``).
     The DNS lookups of the SSRF guard are not covered by the budget. Returns
-    the decoded JSON object. Raises ``ValueError`` for a body that is not an
-    object or that carries a MediaWiki ``error`` (reported inside an HTTP 200),
-    and what the fetch raises otherwise; a read timeout surfaces as
-    ``requests.ConnectionError``.
+    the decoded JSON object. Raises ``BiblissimaApiError`` (a ``ValueError``)
+    for a body ``_bib_json`` refuses, and what the fetch raises otherwise; a
+    read timeout during the body surfaces as ``requests.ConnectionError``.
     """
     left = deadline - time.monotonic()
     if left <= 0:
@@ -1119,14 +1202,12 @@ def _suggest_call(params, deadline):
         deadline=deadline,
     )
     resp.raise_for_status()
-    payload = resp.json()
-    if not isinstance(payload, dict) or "error" in payload:
-        raise ValueError(f"Wikibase {params.get('action')} answered an error")
-    return payload
+    return _bib_json(resp)
 
 
 SUGGEST_MAX_QUERY = 100
-"""Longest folded query the suggest endpoint forwards upstream."""
+"""Longest ``q`` the suggest endpoint accepts, counted on the raw parameter as
+the selects count their input."""
 
 SUGGEST_PARTIAL_TTL = 60
 """Seconds a partial or degraded suggest answer stays memoised."""
@@ -1144,6 +1225,16 @@ _FOLD_LETTERS = str.maketrans(
 )
 
 
+_WIKIBASE_SPACES = str.maketrans(dict.fromkeys("'\u2019\u02bc_-", " "))
+"""The characters Wikibase's prefix search reads as a space."""
+
+
+def _decompose(text):
+    """*text* without case or accents (NFKD), its whitespace untouched."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold().translate(_FOLD_LETTERS))
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
 def _fold(text):
     """*text* without case, accents or extra whitespace.
 
@@ -1153,22 +1244,46 @@ def _fold(text):
     the upstream receives it, so a stored answer is always the upstream's
     answer for its own key.
     """
-    decomposed = unicodedata.normalize("NFKD", text.casefold().translate(_FOLD_LETTERS))
-    return " ".join(
-        "".join(c for c in decomposed if not unicodedata.combining(c)).split()
-    )
+    return " ".join(_decompose(text).split())
 
 
 def _loose(text):
     """The folded *text* with every run of punctuation read as one space.
 
-    Punctuation includes ``_`` and U+02BC: a superset of what Wikibase's
-    prefix search reads as a space (``'``, U+2019, U+02BC, ``_``, ``-``). It
-    does not fold the letters Wikibase's ASCII folding maps and ``_fold``
-    keeps (ı, ħ, ə …): ``_suggest_typed_hits`` reports a comparison on one of
-    them as undecidable.
+    Punctuation includes ``_`` and U+02BC. A label whose loose form does not
+    start with the loose needle is not a Wikibase prefix hit, except through
+    the letters Wikibase's ASCII folding maps and ``_fold`` keeps (ı, ħ, ə …)
+    and the characters whose decomposition holds punctuation (ŀ → l·,
+    ŉ → ʼn): ``_suggest_typed_hits`` reports both as undecidable.
     """
     return " ".join(re.sub(r"[\W_ʼ]+", " ", _fold(text)).split())
+
+
+def _strict(text):
+    """*text* as Wikibase's prefix search compares it.
+
+    Case and accents are ignored and ``'``, U+2019, U+02BC, ``_`` and ``-``
+    read as a space; every other punctuation mark and every whitespace run is
+    kept as it is. Measured on data.biblissima.fr: ``draguignan (v`` finds
+    "Draguignan (Var, France)" and ``draguignan v`` does not; ``,``, ``.``,
+    ``:`` and ``/`` behave the same, and a doubled space does not match a
+    single one.
+    """
+    return _decompose(text).translate(_WIKIBASE_SPACES)
+
+
+def _decomposes_to_punctuation(text):
+    """Whether a character of *text* decomposes into a sequence holding
+    punctuation, a symbol or U+02BC (ŀ → l·, ŉ → ʼn, ½ → 1⁄2)."""
+    for char in text:
+        decomposed = unicodedata.normalize(
+            "NFKD", char.casefold().translate(_FOLD_LETTERS)
+        )
+        if decomposed != char and any(
+            c == "ʼ" or unicodedata.category(c)[0] in "PS" for c in decomposed
+        ):
+            return True
+    return False
 
 
 def _suggest_key(folded, type_qid, lang, limit):
@@ -1182,11 +1297,16 @@ def _suggest_prefix_key(folded, lang):
 
 
 def _suggest_terms(entity):
-    """Loose forms of every label and alias of *entity*, in every language."""
+    """``(loose, strict, unsure)`` of every label and alias of *entity*, in
+    every language; ``unsure`` when ``_decomposes_to_punctuation``."""
     values = [v.get("value", "") for v in (entity.get("labels") or {}).values()]
     for aliases in (entity.get("aliases") or {}).values():
         values.extend(alias.get("value", "") for alias in aliases)
-    return {term for term in map(_loose, values) if term}
+    return {
+        (_loose(value), _strict(value), _decomposes_to_punctuation(value))
+        for value in values
+        if _loose(value)
+    }
 
 
 def _suggest_prefix_entry(folded, lang, deadline):
@@ -1251,16 +1371,18 @@ def _suggest_prefix_entry(folded, lang, deadline):
 def _suggest_cached_entry(folded, lang):
     """The stored prefix entry that answers *folded*, and the needle to narrow it with.
 
-    ``(entry, None)`` for the query's own entry; ``(entry, needle)`` for the
+    ``(entry, None)`` for the query's own entry; ``(entry, folded)`` for the
     entry of its longest proper prefix of two characters or more (only complete
     entries are stored); ``(None, None)`` when the upstream has to be asked.
     Never an ancestor's entry for a query holding an entity id (``q884``):
-    Wikibase matches ids exactly, not by prefix. One cache round trip.
+    Wikibase matches ids exactly, not by prefix. One cache round trip, over
+    at most ``SUGGEST_MAX_QUERY`` proper prefixes (the longest ones are skipped).
     """
+    sizes = range(min(len(folded) - 1, SUGGEST_MAX_QUERY), 1, -1)
     prefixes = [
         prefix
         for prefix in dict.fromkeys(
-            folded[:size].rstrip() for size in range(len(folded), 1, -1)
+            [folded, *(folded[:size].rstrip() for size in sizes)]
         )
         if len(prefix) >= 2
     ]
@@ -1268,26 +1390,35 @@ def _suggest_cached_entry(folded, lang):
     found = cache.get_many(keys)
     if keys[0] in found:
         return found[keys[0]], None
-    needle = _loose(folded)
-    if not needle or any(_ENTITY_ID_TOKEN.fullmatch(t) for t in needle.split()):
+    loose = _loose(folded)
+    if not loose or any(_ENTITY_ID_TOKEN.fullmatch(t) for t in loose.split()):
         return None, None
     for key in keys[1:]:
         entry = found.get(key)
         if entry is not None and entry["complete"]:
-            return entry, needle
+            return entry, folded
     return None, None
 
 
 def _suggest_typed_hits(entry, type_qid, needle=None):
     """``(item, entity)`` pairs of *entry* whose P2 claims name *type_qid*.
 
-    In entry order; with *needle*, only the entities one of whose labels or
-    aliases starts with it, exact matches first. ``None`` when a typed entity
-    has no label or alias starting with *needle* and that cannot be decided
-    here: one of them first differs from the needle on a non-ASCII Latin
-    letter, which Wikibase's ASCII folding may map (ı→i, ħ→h, ə→e …) where
-    ``_fold`` keeps it.
+    In entry order; with *needle* (a folded query), only the entities one of
+    whose labels or aliases starts with it as Wikibase compares them
+    (``_strict``), exact matches first. ``None`` when a typed entity is not
+    such a hit and that cannot be decided here:
+
+    - one of its terms starts with the needle once punctuation is read as
+      space (``_loose``) but not under ``_strict``: ranking it would change
+      what the fulltext search is left room for, so the answer is refetched;
+    - one of its terms first differs from the needle on a non-ASCII Latin
+      letter, which Wikibase's ASCII folding may map (ı→i, ħ→h, ə→e …) where
+      ``_fold`` keeps it;
+    - one of its terms holds a character whose decomposition introduces
+      punctuation (``_decomposes_to_punctuation``).
     """
+    if needle is not None:
+        loose_needle, strict_needle = _loose(needle), _strict(needle)
     ranked, seen = [], set()
     for item in entry["items"]:
         entity = entry["entities"].get(item["id"])
@@ -1302,9 +1433,15 @@ def _suggest_typed_hits(entry, type_qid, needle=None):
             ranked.append((False, item, entity))
             continue
         terms = _suggest_terms(entity)
-        if any(term.startswith(needle) for term in terms):
-            ranked.append((needle not in terms, item, entity))
-        elif any(_differs_on_latin_letter(term, needle) for term in terms):
+        strict = {term for _, term, unsure in terms if not unsure}
+        if any(term.startswith(strict_needle) for term in strict):
+            ranked.append((strict_needle not in strict, item, entity))
+        elif any(
+            unsure
+            or term.startswith(loose_needle)
+            or _differs_on_latin_letter(term, loose_needle)
+            for term, _, unsure in terms
+        ):
             return None
     ranked.sort(key=lambda row: row[0])
     return [(item, entity) for _, item, entity in ranked]
@@ -1367,9 +1504,10 @@ def _suggest_prefix_results(folded, lang, type_qid, limit, deadline):
     """Typed suggestions of ``wbsearchentities``, from a prefix entry.
 
     A complete ancestor's entry answers only when its narrowed typed hits fit
-    in *limit* and every comparison that narrowed them was decidable
-    (``_suggest_typed_hits``): they are then every hit a fresh search would
-    keep, in the ancestor's order. Otherwise a fresh entry is fetched and, when
+    in *limit* and every comparison that narrowed them was decidable under
+    Wikibase's own comparison (``_suggest_typed_hits``): they are then exactly
+    the hits a fresh search would keep, in the ancestor's order, and leave the
+    fulltext search the same room. Otherwise a fresh entry is fetched and, when
     it is complete, stored for ``BIBLISSIMA_CACHE_TTL``, or for
     ``SUGGEST_ANSWER_TTL`` when it holds no hit. Kept: up to *limit* hits
     whose P2 claims name *type_qid*.
@@ -1524,11 +1662,12 @@ class BiblissimaSuggestView(View):
 
     @method_decorator(cache_control(private=True))
     def get(self, request):
-        folded = _fold(request.GET.get("q", ""))
+        raw = request.GET.get("q", "")
+        if len(raw) > SUGGEST_MAX_QUERY:
+            return JsonResponse({"error": "query too long"}, status=400)
+        folded = _fold(raw)
         if len(folded) < 2:
             return JsonResponse({"results": [], "degraded": False, "partial": False})
-        if len(folded) > SUGGEST_MAX_QUERY:
-            return JsonResponse({"error": "query too long"}, status=400)
         lang = request.GET.get("lang", "fr")
         if lang not in dict(settings.LANGUAGES):
             lang = "fr"
@@ -1555,8 +1694,8 @@ class BiblissimaSuggestView(View):
             build,
             SUGGEST_ANSWER_TTL,
             lock_timeout=3 * SUGGEST_DEADLINE,
-            # A holder's call caps its connect and each read by the time left:
-            # it can run to about twice the deadline.
+            # A holder's build typically ends within twice the deadline;
+            # redirects, trickled bodies and DNS lookups are not bounded.
             wait=2 * SUGGEST_DEADLINE + 0.5,
             kept=shorten_partial,
         )
@@ -1579,8 +1718,9 @@ class BiblissimaEntityView(View):
     field here would be served to every editor.
 
     Upstream calls run under one request budget. An entity that could not be
-    fetched answers the failure, one Wikibase marks missing answers 404, and a
-    failed lookup of a linked entity makes the answer ``partial``.
+    fetched answers the failure; an id Wikibase marks missing or rejects with
+    ``no-such-entity`` answers 404; a failed lookup of a linked entity makes
+    the answer ``partial``. The id must match ``Q[1-9]\d*``, else 400.
     """
 
     @method_decorator(cache_control(private=True))
@@ -1592,7 +1732,10 @@ class BiblissimaEntityView(View):
         with _upstream_budget(VIEW_DEADLINE) as budget:
             entity = _get_wikibase_entity(qid)
             if entity is None:
-                if budget.error is not None:
+                if (
+                    budget.error is not None
+                    and getattr(budget.error, "code", None) != "no-such-entity"
+                ):
                     return _biblissima_upstream_error(
                         budget.error, f"Biblissima entity ({qid})"
                     )
@@ -1655,7 +1798,7 @@ class BiblissimaSearchManuscriptsView(View):
     def get(self, request):
         query = request.GET.get("q", "").strip()
         if len(query) < 3:
-            return JsonResponse({"results": []})
+            return JsonResponse({"results": [], "partial": False})
 
         try:
             limit = int(request.GET.get("limit", 50))
@@ -1687,7 +1830,7 @@ class BiblissimaSearchManuscriptsView(View):
                     timeout=REQUEST_TIMEOUT,
                 )
                 resp.raise_for_status()
-                prefix_items = resp.json().get("search", [])
+                prefix_items = _bib_json(resp).get("search", [])
 
                 if prefix_items:
                     batch_ids = [item["id"] for item in prefix_items]
@@ -1703,7 +1846,7 @@ class BiblissimaSearchManuscriptsView(View):
                         timeout=REQUEST_TIMEOUT,
                     )
                     type_resp.raise_for_status()
-                    entities = type_resp.json().get("entities", {})
+                    entities = _bib_json(type_resp).get("entities", {})
                     for item in prefix_items:
                         qid = item["id"]
                         for claim in (
@@ -1742,7 +1885,7 @@ class BiblissimaSearchManuscriptsView(View):
                         timeout=REQUEST_TIMEOUT,
                     )
                     resp.raise_for_status()
-                    for r in resp.json().get("query", {}).get("search", []):
+                    for r in _bib_json(resp).get("query", {}).get("search", []):
                         qid = r["title"].replace("Item:", "")
                         if qid not in seen_ids:
                             seen_ids.add(qid)
@@ -1804,7 +1947,6 @@ class BiblissimaSearchManuscriptsView(View):
                 return _biblissima_upstream_error(
                     budget.error, "Biblissima manuscript search"
                 )
-            return JsonResponse({"total": 0, "results": []})
         return _budgeted_answer({"total": len(results), "results": results}, budget)
 
 
@@ -1933,7 +2075,7 @@ def _enrich_canvases(canvases, session=None):
                 timeout=REQUEST_TIMEOUT,
             )
             resp.raise_for_status()
-            hits = resp.json().get("query", {}).get("search", [])
+            hits = _bib_json(resp).get("query", {}).get("search", [])
             qids = []
             for hit in hits:
                 title = hit.get("title", "")
@@ -2167,7 +2309,7 @@ def _fetch_biblissima_canvases(desc_hashes, session):
             timeout=IIIF_REQUEST_TIMEOUT,
         )
     resp.raise_for_status()
-    return _parse_iiif_canvases(resp.json())
+    return _parse_iiif_canvases(_bib_json(resp))
 
 
 _DEFAULT_SEARCH_PAGE_SIZE = 50
