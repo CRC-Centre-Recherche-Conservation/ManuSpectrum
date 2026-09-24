@@ -7,24 +7,36 @@ reaches a payload, a facet or a name.
 """
 
 import logging
+import re
 import unicodedata
 from collections import Counter, defaultdict
 
 from django.conf import settings
 from django.urls import reverse
 
-from arches.app.models.models import ResourceInstance, TileModel
+from arches.app.models.models import (
+    IIIFManifest,
+    ResourceInstance,
+    TileModel,
+    VwAnnotation,
+)
 from arches_controlled_lists.models import ListItem, ListItemValue
 
+from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.utils.public_visibility import (
     hidden_resource_ids,
     readable_nodegroup_ids,
     visible_set,
 )
 from manuspectrum.utils.role_links import readable_links, role_node
+from manuspectrum.views.explorer_conditions import clean_html
 from manuspectrum.views.explorer_values import (
+    dataset_of,
+    label,
     name_of,
     reference_terms,
+    rewrite_legacy_url,
+    shape_of,
     string_texts,
     value_refs,
 )
@@ -567,4 +579,392 @@ def search_payload(query, user, language):
         "results": chunk,
         "facets": facets,
         "unpublishedCount": sum(1 for r in results if r["unpublished"]),
+    }
+
+
+_LOCAL_MANIFEST = re.compile(r"/manifest/(?P<uuid>[0-9a-fA-F-]{36})/?$")
+
+
+def manifest_json(url):
+    """Manifest JSON of *url*: a local ``/manifest/<uuid>`` is read from ``IIIFManifest`` in the database, never over HTTP."""
+    url = rewrite_legacy_url(url or "")
+    if not url:
+        return None
+    match = _LOCAL_MANIFEST.search(url)
+    if match and (
+        url.startswith("/") or url.startswith(settings.PUBLIC_SERVER_ADDRESS)
+    ):
+        stored = (
+            IIIFManifest.objects.filter(globalid=match["uuid"])
+            .values_list("manifest", flat=True)
+            .first()
+        )
+        return stored if isinstance(stored, dict) else None
+    return CanvasIIIF.fetch_manifest(url)
+
+
+def _canvas_label(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for texts in value.values():
+            if isinstance(texts, list) and texts:
+                return str(texts[0])
+    return ""
+
+
+def canvases_of(manifest):
+    """``{"id", "label", "image"}`` of every canvas of a v2 or v3 manifest; legacy hosts rewritten."""
+    if not isinstance(manifest, dict):
+        return []
+    version = CanvasIIIF.detect_version(manifest)
+    if version == 3:
+        raw = manifest.get("items") or []
+    else:
+        raw = ((manifest.get("sequences") or [{}])[0] or {}).get("canvases") or []
+    found = []
+    for canvas in raw:
+        canvas_id = canvas.get("id") or canvas.get("@id")
+        if not canvas_id:
+            continue
+        service = (
+            CanvasIIIF._get_image_service_url_v3(canvas)
+            if version == 3
+            else CanvasIIIF._get_image_service_url_v2(canvas)
+        )
+        width, height = CanvasIIIF.get_canvas_dimensions(canvas)
+        found.append(
+            {
+                "id": rewrite_legacy_url(canvas_id),
+                "label": _canvas_label(canvas.get("label")),
+                "image": {
+                    "service": rewrite_legacy_url(service) if service else None,
+                    "url": None,
+                    "width": int(width),
+                    "height": int(height),
+                },
+            }
+        )
+    return found
+
+
+def _ranks(item_ids):
+    return {
+        str(i): int(order or 0)
+        for i, order in ListItem.objects.filter(
+            pk__in=[i for i in item_ids if i]
+        ).values_list("id", "sortorder")
+    }
+
+
+def certainty_scale(language):
+    """The levels of the certainty list of identified materials, by ``sortorder`` (rank 0 = most certain)."""
+    index = GraphIndex.for_slug("characterization")
+    list_id = index.lists.get("material_confidence") if index else None
+    if not list_id:
+        return {"levels": []}
+    items = list(
+        ListItem.objects.filter(list_id=list_id)
+        .order_by("sortorder")
+        .values_list("id", "uri", "sortorder")
+    )
+    texts = defaultdict(dict)
+    for item, lang, value in ListItemValue.objects.filter(
+        list_item_id__in=[i for i, _, _ in items], valuetype_id="prefLabel"
+    ).values_list("list_item_id", "language_id", "value"):
+        texts[str(item)][lang] = value
+    return {
+        "levels": [
+            {
+                "id": str(i),
+                "uri": uri or "",
+                "label": label(texts[str(i)], language)
+                or {"value": uri or "", "lang": language},
+                "rank": int(order or 0),
+            }
+            for i, uri, order in items
+        ]
+    }
+
+
+def _canvas_and_shape(vw, dims):
+    """Canvas id and pixel ``Shape`` of one ``VwAnnotation`` row; canvas empty and shape None when unresolved."""
+    feature = vw.feature or {}
+    canvas = rewrite_legacy_url(
+        vw.canvas or (feature.get("properties") or {}).get("canvas") or ""
+    )
+    width, height = dims.get(canvas, (1000, 1000))
+    shape = shape_of(feature.get("geometry"), width, height)
+    return canvas, shape
+
+
+def _zone(node, resource_ids, dims):
+    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*."""
+    zones = {}
+    if node is None:
+        return zones
+    for vw in VwAnnotation.objects.filter(
+        resourceinstance_id__in=list(resource_ids), node_id=node.nodeid
+    ).order_by("feature_id"):
+        rid = str(vw.resourceinstance_id)
+        if rid in zones:
+            continue
+        canvas, shape = _canvas_and_shape(vw, dims)
+        if canvas and shape:
+            zones[rid] = {"canvas": canvas, "shape": shape}
+    return zones
+
+
+def characterization_summaries(ids, visible, user, language, dims):
+    """``CharacterizationSummary`` of the visible identified materials among *ids*."""
+    ids = sorted(i for i in ids if i in visible.characterizations)
+    if not ids:
+        return []
+    keys = [
+        "material",
+        "confidence",
+        "colour",
+        "layer",
+        "elements",
+        "element_level",
+        "ch_note",
+        "ch_authors",
+        "ch_start",
+        "ch_end",
+        "ch_source",
+    ]
+    values = Values(ids, keys, user)
+    readable = readable_nodegroup_ids(user)
+    objects_of = _links("characterization", "object_observed", readable)
+    hidden = hidden_resource_ids(user)
+    objects = {
+        c: sorted(
+            o for o in objects_of[c] if o in visible.documents | visible.components
+        )
+        for c in ids
+    }
+    authors = {
+        c: sorted(
+            {
+                str(v.get("resourceId"))
+                for v in values.get(c, "ch_authors")
+                if isinstance(v, dict) and v.get("resourceId")
+            }
+            - hidden
+        )
+        for c in ids
+    }
+    label_of = names(
+        set(ids)
+        | {o for v in objects.values() for o in v}
+        | {a for v in authors.values() for a in v},
+        language,
+    )
+    slug_of = model_of(
+        {o for v in objects.values() for o in v}
+        | {a for v in authors.values() for a in v}
+    )
+    own_zone = _zone(role_node(*ROLES["ch_zone"]), ids, dims)
+    component_zone = _zone(
+        role_node(*ROLES["comp_zone"]), {o for v in objects.values() for o in v}, dims
+    )
+    material_node, confidence_node = values.node("material"), values.node("confidence")
+    element_node, level_node = values.node("elements"), values.node("element_level")
+    rank_ids = set()
+    for c in ids:
+        for data in values.tiles(c, "material") + values.tiles(c, "elements"):
+            for node in (confidence_node, level_node):
+                if node:
+                    rank_ids |= {
+                        r["id"] for r in value_refs(data.get(node.nodeid), language)
+                    }
+    ranks = _ranks(rank_ids)
+    ranked = lambda refs: (
+        {**refs[0], "rank": ranks.get(refs[0]["id"], 0)} if refs else None
+    )
+    summaries = []
+    for c in ids:
+        materials = []
+        for data in values.tiles(c, "material"):
+            for ref in value_refs(
+                data.get(material_node.nodeid) if material_node else None, language
+            ):
+                confidence = (
+                    value_refs(data.get(confidence_node.nodeid), language)
+                    if confidence_node
+                    else []
+                )
+                materials.append(
+                    {"value": ref, "confidence": ranked(confidence), "proportion": None}
+                )
+        elements = []
+        for data in values.tiles(c, "elements"):
+            found = (
+                value_refs(data.get(element_node.nodeid), language)
+                if element_node
+                else []
+            )
+            if found:
+                level = (
+                    value_refs(data.get(level_node.nodeid), language)
+                    if level_node
+                    else []
+                )
+                elements.append({"level": ranked(level), "values": found})
+        if c in own_zone:
+            zone = {**own_zone[c], "source": "own"}
+        else:
+            first = next((o for o in objects[c] if o in component_zone), None)
+            zone = {**component_zone[first], "source": "component"} if first else None
+        note_value = values.first(c, "ch_note")
+        note_text = label(string_texts(note_value), language) if note_value else None
+        start, end = values.first(c, "ch_start"), values.first(c, "ch_end")
+        summaries.append(
+            {
+                "id": c,
+                "name": label_of[c],
+                "objects": [
+                    {"id": o, "model": slug_of.get(o, ""), "name": label_of[o]}
+                    for o in objects[c]
+                ],
+                "materials": materials,
+                "colours": _unique(
+                    [
+                        r
+                        for v in values.get(c, "colour")
+                        for r in value_refs(v, language)
+                    ]
+                ),
+                "layers": _unique(
+                    [r for v in values.get(c, "layer") for r in value_refs(v, language)]
+                ),
+                "elements": elements,
+                "zone": zone,
+                "evidence": list(visible.evidence.get(c, ())),
+                "note": (
+                    {"html": clean_html(note_text["value"]), "lang": note_text["lang"]}
+                    if note_text
+                    else None
+                ),
+                "sources": [
+                    {
+                        "title": (
+                            {"value": d["label"], "lang": language}
+                            if d["label"]
+                            else None
+                        ),
+                        "url": d["url"],
+                        "ref": None,
+                    }
+                    for d in (dataset_of(v) for v in values.get(c, "ch_source"))
+                    if d
+                ],
+                "authors": [
+                    {"id": a, "model": slug_of.get(a, ""), "name": label_of[a]}
+                    for a in authors[c]
+                ],
+                "date": {
+                    "start": _date(start) if isinstance(start, str) else None,
+                    "end": _date(end) if isinstance(end, str) else None,
+                },
+                "unpublished": c in visible.unpublished,
+            }
+        )
+    return summaries
+
+
+def document_payload(document_id, user, language):
+    """``DocumentPayload`` of a visible document; None when it is unknown or not visible."""
+    visible = visible_set(user)
+    document_id = str(document_id)
+    if document_id not in visible.documents:
+        return None
+    chains = structure(visible, user)
+    analyses = sorted(a for a, (d, _) in chains.items() if d == document_id)
+    components = {c for a, (d, c) in chains.items() if d == document_id and c}
+    values = Values([document_id], ["doc_name", "doc_manifest", "doc_owner"], user)
+    manifest_url = (
+        rewrite_legacy_url(values.first(document_id, "doc_manifest") or "") or None
+    )
+    canvases = canvases_of(manifest_json(manifest_url)) if manifest_url else []
+    dims = {c["id"]: (c["image"]["width"], c["image"]["height"]) for c in canvases}
+    rows = {
+        r["id"]: r for r in corpus_rows(user, language) if r["document"] == document_id
+    }
+    annotations = []
+    zone_node = role_node(*ROLES["zone"])
+    if zone_node and zone_node.nodegroup_id in readable_nodegroup_ids(user):
+        for vw in VwAnnotation.objects.filter(
+            resourceinstance_id__in=analyses, node_id=zone_node.nodeid
+        ).order_by("feature_id"):
+            canvas, shape = _canvas_and_shape(vw, dims)
+            analysis = str(vw.resourceinstance_id)
+            row = rows.get(analysis)
+            if not canvas or not shape or row is None:
+                continue
+            annotations.append(
+                {
+                    "key": f"an:{analysis}:{vw.feature_id}",
+                    "analysis": analysis,
+                    "canvas": canvas,
+                    "shape": shape,
+                    "technique": row["technique"],
+                    "dataKind": (row["dataKinds"] or ["file"])[0],
+                    "unpublished": row["unpublished"],
+                }
+            )
+    located = {a["analysis"] for a in annotations}
+    unlocated = [
+        {
+            "analysis": a,
+            "name": rows[a]["name"],
+            "technique": rows[a]["technique"],
+            "dataKind": (rows[a]["dataKinds"] or ["file"])[0],
+            "unpublished": rows[a]["unpublished"],
+        }
+        for a in analyses
+        if a in rows and a not in located
+    ]
+    readable = readable_nodegroup_ids(user)
+    objects_of = _links("characterization", "object_observed", readable)
+    related = [
+        c
+        for c in visible.characterizations
+        if set(objects_of[c]) & ({document_id} | components)
+    ]
+    summaries = characterization_summaries(related, visible, user, language, dims)
+    hidden = hidden_resource_ids(user)
+    owners = [
+        str(v.get("resourceId"))
+        for v in values.get(document_id, "doc_owner")
+        if isinstance(v, dict)
+        and v.get("resourceId")
+        and str(v.get("resourceId")) not in hidden
+    ]
+    label_of = names({document_id} | set(owners[:1]), language)
+    per_canvas = Counter(
+        a["canvas"] for a in {a["analysis"]: a for a in annotations}.values()
+    )
+    per_canvas_char = Counter(s["zone"]["canvas"] for s in summaries if s["zone"])
+    return {
+        "id": document_id,
+        "name": label_of[document_id],
+        "holding": label_of[owners[0]] if owners else None,
+        "manifest": manifest_url,
+        "canvases": [
+            {
+                **c,
+                "analysisCount": per_canvas[c["id"]],
+                "characterizationCount": per_canvas_char[c["id"]],
+            }
+            for c in canvases
+        ],
+        "annotations": annotations,
+        "characterizations": summaries,
+        "history": [],
+        "unpublishedCount": sum(1 for a in analyses if a in visible.unpublished)
+        + sum(1 for s in summaries if s["unpublished"]),
+        "unpublished": document_id in visible.unpublished,
+        "certaintyScale": certainty_scale(language),
+        "unlocated": unlocated,
     }

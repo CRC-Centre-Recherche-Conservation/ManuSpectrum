@@ -30,7 +30,7 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationPageViewV2,
     IIIFAnnotationViewV2,
 )
-from manuspectrum.views.explorer_api import ExplorerSearchView
+from manuspectrum.views.explorer_api import ExplorerDocumentView, ExplorerSearchView
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
@@ -191,6 +191,13 @@ urlpatterns.append(
 ### keys the browser cache. GET only.
 urlpatterns.append(
     path("api/explorer/search", ExplorerSearchView.as_view(), name="explorer-search")
+)
+urlpatterns.append(
+    path(
+        "api/explorer/document/<uuid:resourceid>",
+        ExplorerDocumentView.as_view(),
+        name="explorer-document",
+    )
 )
 
 if settings.ROOT_URLCONF == __name__:

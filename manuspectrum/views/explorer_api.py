@@ -16,7 +16,7 @@ from django.views import View
 
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import is_connected
-from manuspectrum.views.explorer_service import search_payload
+from manuspectrum.views.explorer_service import document_payload, search_payload
 
 
 def _answer(request, payload):
@@ -47,4 +47,14 @@ class ExplorerSearchView(View):
         return _answer(
             request,
             search_payload(request.GET, request.user, translation.get_language()),
+        )
+
+
+class ExplorerDocumentView(View):
+    """``GET /{lang}/api/explorer/document/<uuid>``: canvases, annotations and identified materials of one document."""
+
+    def get(self, request, resourceid):
+        return _answer(
+            request,
+            document_payload(resourceid, request.user, translation.get_language()),
         )
