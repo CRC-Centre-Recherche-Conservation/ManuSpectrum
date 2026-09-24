@@ -29,8 +29,9 @@ const { $gettext, interpolate } = useGettext();
 
 /**
  * Fetches page 1 of the Documents overview (grain "documents",
- * `onlyWithAnalyses`), then every remaining page in parallel on the same
- * signal, and merges their hits. `featured` reduces over the merged set, so
+ * `onlyWithAnalyses`), then every remaining page in parallel, and merges
+ * their hits. The remaining pages follow `signal` and are all aborted as soon
+ * as one of them fails. `featured` reduces over the merged set, so
  * it compares analysis counts across the whole corpus, not one page of it.
  * Facets are read from page 1 only.
  */
@@ -47,18 +48,31 @@ async function loadOverview(
     if (pageCount <= 1) {
         return first;
     }
-    const rest = await Promise.all(
-        Array.from({ length: pageCount - 1 }, (_placeholder, index) =>
-            getJson<SearchResponse>("manuspectrum:explorer-search", {
-                query: searchQuery(emptyFilters(), index + 2),
-                signal,
-            }),
-        ),
-    );
-    return {
-        ...first,
-        results: [first, ...rest].flatMap((page) => page.results),
-    };
+    const pages = new AbortController();
+    const abortPages = (): void => pages.abort();
+    signal.addEventListener("abort", abortPages);
+    if (signal.aborted) {
+        pages.abort();
+    }
+    try {
+        const rest = await Promise.all(
+            Array.from({ length: pageCount - 1 }, (_placeholder, index) =>
+                getJson<SearchResponse>("manuspectrum:explorer-search", {
+                    query: searchQuery(emptyFilters(), index + 2),
+                    signal: pages.signal,
+                }),
+            ),
+        );
+        return {
+            ...first,
+            results: [first, ...rest].flatMap((page) => page.results),
+        };
+    } catch (error) {
+        pages.abort();
+        throw error;
+    } finally {
+        signal.removeEventListener("abort", abortPages);
+    }
 }
 
 const overview = useRequest<SearchResponse>(
