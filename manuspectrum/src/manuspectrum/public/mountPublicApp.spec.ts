@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 
-import { mountPublicApp } from "@/manuspectrum/public/mountPublicApp.ts";
+import {
+    mountPublicApp,
+    primeVueLocale,
+} from "@/manuspectrum/public/mountPublicApp.ts";
 
 const ORIGINAL = Object.getOwnPropertyDescriptor(window, "localStorage");
 const I18N_ROUTE = "arches:get_frontend_i18n_data";
@@ -96,5 +99,15 @@ describe("mountPublicApp", () => {
             mountPublicApp({ component: Probe, mountPoint }),
         ).rejects.toThrow();
         expect(mountPoint.getAttribute("aria-busy")).toBe("true");
+    });
+});
+
+describe("primeVueLocale", () => {
+    it("gives the French PrimeVue strings on a French page", () => {
+        expect(primeVueLocale("fr").aria).toMatchObject({ close: "Fermer" });
+    });
+
+    it("falls back to English for any other language", () => {
+        expect(primeVueLocale("de-CH").aria).toMatchObject({ close: "Close" });
     });
 });

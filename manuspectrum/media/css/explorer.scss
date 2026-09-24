@@ -3,6 +3,8 @@
 // come from _ms-chrome's :root (css/pages). Imports tokens only: css/pages
 // already ships the chrome, and a second copy would duplicate the reset.
 @import 'ms-tokens';
+@import url(node_modules/leaflet/dist/leaflet.css);
+@import url(node_modules/leaflet.markercluster/dist/MarkerCluster.css);
 
 // The paper grain sits over the page at z-index 10000; over an application it
 // swallows the contrast of every control.
