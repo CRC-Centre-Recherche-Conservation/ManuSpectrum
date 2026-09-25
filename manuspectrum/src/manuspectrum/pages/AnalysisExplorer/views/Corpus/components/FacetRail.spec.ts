@@ -175,7 +175,7 @@ describe("FacetRail", () => {
         const levels = wrapper.findAll(".level-button");
         expect(
             levels.map((level) => level.find(".level-label").text()),
-        ).toEqual(["Seen on the part", "Identified by analysis"]);
+        ).toEqual(["Part", "Analysis"]);
         expect(levels[1].attributes("aria-pressed")).toBe("true");
         expect(wrapper.findAll(".value")).toHaveLength(3);
         expect(levels[0].find(".ticks").text()).toBe("1");

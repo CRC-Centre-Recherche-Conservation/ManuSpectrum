@@ -16,6 +16,7 @@ export function useVocabulary(): {
     filterTitle: (key: FacetKey) => string;
     groupTitle: (group: FacetGroup) => string;
     levelLabel: (level: ColourLevel) => string;
+    levelOption: (level: ColourLevel) => string;
     levelHint: (level: ColourLevel) => string;
     dataKindBadge: (kind: DataKind) => string;
     viewTitle: (view: ExplorerView) => string;
@@ -82,6 +83,11 @@ export function useVocabulary(): {
             : $gettext("Identified by analysis");
     }
 
+    /** The short name of a colour level on its toggle option; `levelHint` explains it. */
+    function levelOption(level: ColourLevel): string {
+        return level === "partColour" ? $gettext("Part") : $gettext("Analysis");
+    }
+
     function levelHint(level: ColourLevel): string {
         return level === "partColour"
             ? $gettext(
@@ -121,6 +127,7 @@ export function useVocabulary(): {
         filterTitle,
         groupTitle,
         levelLabel,
+        levelOption,
         levelHint,
         dataKindBadge,
         viewTitle,

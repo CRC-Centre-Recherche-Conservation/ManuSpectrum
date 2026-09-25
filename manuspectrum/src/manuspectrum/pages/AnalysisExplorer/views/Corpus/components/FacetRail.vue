@@ -55,7 +55,8 @@ const emit = defineEmits<{ change: [key: FacetKey, ids: string[]] }>();
 const vTooltip = Tooltip;
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
-const { facetTitle, groupTitle, levelLabel, levelHint } = useVocabulary();
+const { facetTitle, groupTitle, levelLabel, levelOption, levelHint } =
+    useVocabulary();
 const baseId = useId();
 
 const expanded = ref<Set<FacetKey>>(new Set());
@@ -345,7 +346,7 @@ function onChange(facet: Facet, id: string, event: Event): void {
                                 @update:model-value="chooseLevel(level)"
                             >
                                 <span class="level-label">{{
-                                    levelLabel(level)
+                                    levelOption(level)
                                 }}</span>
                                 <span
                                     v-if="hiddenTicks(level) > 0"
@@ -509,9 +510,9 @@ function onChange(facet: Facet, id: string, event: Event): void {
     flex: 1 1 auto;
     gap: 0.25rem;
     padding: 0.25rem 0.375rem;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     line-height: 1.2;
-    white-space: normal;
+    white-space: nowrap;
 }
 
 .facet-rail .ticks {
