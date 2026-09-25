@@ -577,6 +577,57 @@ describe("FolioMap", () => {
             wrapper.unmount();
         });
 
+        it("counts in a group the analyses the filters keep, and dims a group with none", async () => {
+            const dropped = NEAR.map((entry) => ({ ...entry, match: false }));
+            const wrapper = mountFolio({ annotations: dropped });
+            await afterRegrouping();
+            const group = wrapper.find(".folio-cluster");
+            expect(group.text()).toBe("0/2");
+            expect(group.classes()).toContain("is-dimmed");
+            expect(group.attributes("aria-label")).toBe(
+                "2 analyses here, none in the filters",
+            );
+            await wrapper.setProps({
+                annotations: [NEAR[0], dropped[1]],
+            });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").text()).toBe("1/2");
+            expect(wrapper.find(".folio-cluster").classes()).not.toContain(
+                "is-dimmed",
+            );
+            wrapper.unmount();
+        });
+
+        it("keeps the open analysis out of any group, ringed", async () => {
+            const three = [
+                ...NEAR,
+                annotation(3, { shape: { type: "point", x: 200, y: 150 } }),
+            ];
+            const wrapper = mountFolio({ annotations: three });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").text()).toBe("3");
+            await wrapper.setProps({
+                focus: { kind: "analysis", id: uuid(101) },
+            });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").text()).toBe("2");
+            const marker = wrapper.find(`[data-target="${uuid(101)}"]`);
+            expect(marker.classes()).toContain("is-focused");
+            wrapper.unmount();
+        });
+
+        it("keeps the evidence of an open identified material out of any group", async () => {
+            const wrapper = mountFolio({
+                annotations: NEAR,
+                view: "characterizations",
+                lit: new Set([uuid(101), uuid(102)]),
+            });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").exists()).toBe(false);
+            expect(wrapper.findAll(".folio-marker.is-lit")).toHaveLength(2);
+            wrapper.unmount();
+        });
+
         it("spreads a group at the last zoom and moves through its markers", async () => {
             const wrapper = mountFolio({
                 annotations: SAME_SPOT,

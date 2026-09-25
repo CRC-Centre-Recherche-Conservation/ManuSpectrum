@@ -62,6 +62,10 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const CLUSTER_PREFIX = "cluster:";
 const SAMPLE_PREFIX = "sample:";
 const FOCUS_PADDING = 48;
+const PINNED_PANE = "folio-pinned";
+// Above Leaflet's marker pane (600), below its tooltips (650).
+const PINNED_PANE_Z_INDEX = "620";
+const MARKER_PANE = "markerPane";
 
 /** The leaflet-iiif 3.0.0 state the folio reads: the info.json request, the image sizes it yields, the tile container. */
 type IiifLayer = L.TileLayer & {
@@ -102,6 +106,9 @@ const active = ref<string | null>(null);
 let map: L.Map | null = null;
 let page: IiifLayer | null = null;
 let cluster: L.MarkerClusterGroup | null = null;
+// The open analysis or sample and the lit evidence: drawn above the groups, never inside one.
+let pinned: L.LayerGroup | null = null;
+const matchOf = new Map<L.Marker, boolean>();
 let frames: L.GeoJSON | null = null;
 let materials: L.GeoJSON | null = null;
 let sampleZones: L.GeoJSON | null = null;
@@ -131,7 +138,13 @@ watch(
     ],
     drawMarks,
 );
-watch(() => props.focus, refreshStates);
+watch(
+    () => props.focus,
+    () => {
+        repin();
+        computeTargets();
+    },
+);
 watch(() => [props.overlays, props.curtain], drawOverlays);
 
 onMounted(() => {
@@ -147,6 +160,8 @@ onMounted(() => {
         zoomSnap: 0.25,
     });
     map.setView([0, 0], INITIAL_ZOOM);
+    map.createPane(PINNED_PANE).style.zIndex = PINNED_PANE_Z_INDEX;
+    pinned = L.layerGroup().addTo(map);
     stackSmallestOnTop(map);
     map.on("zoomend moveend", computeTargets);
     drawPage();
@@ -224,26 +239,56 @@ function markerIcon(annotation: Annotation): L.DivIcon {
     });
 }
 
-/** The group's icon host takes no tab stop: the roving `span` inside is the target. */
+/** The label of a marker group: how many analyses it holds and how many of them the filters keep. */
+function clusterLabel(count: number, matching: number): string {
+    if (props.view === "samples") {
+        return interpolate(
+            $gettext("%{n} samples here, zoom in"),
+            { n: count },
+            true,
+        );
+    }
+    if (matching === 0) {
+        return interpolate(
+            $gettext("%{n} analyses here, none in the filters"),
+            { n: count },
+            true,
+        );
+    }
+    if (matching < count) {
+        return interpolate(
+            $gettext("%{n} analyses here, %{kept} in the filters, zoom in"),
+            { n: count, kept: matching },
+            true,
+        );
+    }
+    return interpolate(
+        $gettext("%{n} analyses here, zoom in"),
+        { n: count },
+        true,
+    );
+}
+
+/**
+ * The group's icon host takes no tab stop: the roving `span` inside is the
+ * target. A group writes « kept/all » when the filters drop some of its
+ * analyses, and is dimmed when they drop them all.
+ */
 function clusterIcon(group: L.MarkerCluster): L.DivIcon {
     group.options.keyboard = false;
-    const count = group.getChildCount();
+    const children = group.getAllChildMarkers();
+    const count = children.length;
+    const matching = children.filter(
+        (marker) => matchOf.get(marker) !== false,
+    ).length;
     const element = document.createElement("span");
     element.dataset.target = `${CLUSTER_PREFIX}${L.stamp(group)}`;
     element.setAttribute("role", "button");
-    element.setAttribute(
-        "aria-label",
-        interpolate(
-            props.view === "samples"
-                ? $gettext("%{n} samples here, zoom in")
-                : $gettext("%{n} analyses here, zoom in"),
-            { n: count },
-            true,
-        ),
-    );
+    element.setAttribute("aria-label", clusterLabel(count, matching));
     element.tabIndex = -1;
-    element.className = "folio-cluster";
-    element.textContent = String(count);
+    element.className = `folio-cluster${matching === 0 ? " is-dimmed" : ""}`;
+    element.textContent =
+        matching < count ? `${matching}/${count}` : String(count);
     return L.divIcon({
         html: element,
         className: "folio-marker-host",
@@ -343,9 +388,38 @@ function drawPage(): void {
     });
 }
 
+/** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
+function pinnedTargets(): Set<string> {
+    const targets = new Set<string>(props.lit ?? []);
+    if (props.focus?.kind === "analysis") targets.add(props.focus.id);
+    if (props.focus?.kind === "sample")
+        targets.add(`${SAMPLE_PREFIX}${props.focus.id}`);
+    return targets;
+}
+
+/** Moves each marker between the groups and the pinned layer as `pinnedTargets` says. */
+function repin(): void {
+    if (!cluster || !pinned) return;
+    const wanted = pinnedTargets();
+    for (const [id, marker] of markers) {
+        const isPinned = pinned.hasLayer(marker);
+        if (wanted.has(id) && !isPinned) {
+            cluster.removeLayer(marker);
+            marker.options.pane = PINNED_PANE;
+            pinned.addLayer(marker);
+        } else if (!wanted.has(id) && isPinned) {
+            pinned.removeLayer(marker);
+            marker.options.pane = MARKER_PANE;
+            cluster.addLayer(marker);
+        }
+    }
+}
+
 function drawMarks(): void {
     if (!map) return;
     openedGroup = null;
+    pinned?.clearLayers();
+    matchOf.clear();
     cluster?.remove();
     frames?.remove();
     materials?.remove();
@@ -369,6 +443,7 @@ function drawMarks(): void {
         });
         marker.on("click", () => activate(annotation.analysis));
         markers.set(annotation.analysis, marker);
+        matchOf.set(marker, annotation.match);
     }
     const shownSamples = props.view === "samples" ? props.samples : [];
     for (const sample of shownSamples) {
@@ -398,7 +473,18 @@ function drawMarks(): void {
         });
         if (feature) frameFeatures.push(feature);
     }
-    cluster.addLayers([...markers.values()]);
+    const wanted = pinnedTargets();
+    for (const [id, marker] of markers) {
+        if (wanted.has(id)) {
+            marker.options.pane = PINNED_PANE;
+            pinned?.addLayer(marker);
+        }
+    }
+    cluster.addLayers(
+        [...markers]
+            .filter(([id]) => !wanted.has(id))
+            .map(([, marker]) => marker),
+    );
     cluster.on("animationend spiderfied unspiderfied", settleGroups);
     map.addLayer(cluster);
 
@@ -965,15 +1051,27 @@ function wholePage(): void {
     background: var(--accent-text);
 }
 
-.folio :deep(.folio-marker.is-dimmed),
+.folio :deep(.folio-marker.is-dimmed) {
+    border-color: color-mix(in srgb, var(--surface) 75%, transparent);
+    background: color-mix(in srgb, var(--stage) 40%, transparent);
+    color: var(--surface);
+    opacity: 0.6;
+}
+
 .folio :deep(.folio-material.is-dimmed) {
     opacity: 0.35;
 }
 
-.folio :deep(.folio-marker.is-lit),
-.folio :deep(.folio-marker.is-focused) {
+.folio :deep(.folio-marker.is-lit) {
     box-shadow: 0 0 0 0.25rem
         color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.folio :deep(.folio-marker.is-focused),
+.folio :deep(.folio-sample.is-focused) {
+    box-shadow:
+        0 0 0 0.1875rem var(--ink),
+        0 0 0 0.375rem var(--surface);
 }
 
 .folio :deep(.folio-sample) {
@@ -999,11 +1097,6 @@ function wholePage(): void {
     background: var(--accent-text);
 }
 
-.folio :deep(.folio-sample.is-focused) {
-    box-shadow: 0 0 0 0.25rem
-        color-mix(in srgb, var(--surface) 60%, transparent);
-}
-
 .folio :deep(.folio-sample-zone) {
     stroke: var(--ink);
 }
@@ -1019,6 +1112,13 @@ function wholePage(): void {
     color: var(--ink);
     font: 600 0.75rem var(--font-mono);
     cursor: pointer;
+}
+
+.folio :deep(.folio-cluster.is-dimmed) {
+    border-color: color-mix(in srgb, var(--surface) 75%, transparent);
+    background: color-mix(in srgb, var(--stage) 40%, transparent);
+    color: var(--surface);
+    opacity: 0.6;
 }
 
 .folio :deep(.folio-frame) {
