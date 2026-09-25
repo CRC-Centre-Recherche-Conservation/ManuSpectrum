@@ -1,4 +1,4 @@
-import { validate as isUuid } from "uuid";
+import { validate as isUuid } from "uuid-esm";
 
 import type {
     BasketItem,

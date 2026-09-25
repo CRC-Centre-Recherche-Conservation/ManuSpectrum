@@ -32,3 +32,10 @@ declare module "utils/iiif-image" {
 declare module "leaflet" {
     export = L;
 }
+
+// Arches' `nodeModulesPaths` sends the bare `uuid` specifier to `uuidjs`, a
+// different library; the `uuid` package is reached through the project alias
+// `uuid-esm` (package.json), with the `uuid` package's own types.
+declare module "uuid-esm" {
+    export * from "uuid";
+}

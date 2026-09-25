@@ -54,7 +54,9 @@
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.1.4",
         "webpack": "^5.110.3"
     },
-    "nodeModulesPaths": {},
+    "nodeModulesPaths": {
+        "uuid-esm": "node_modules/uuid/dist/esm-browser/index.js"
+    },
     "overrides": {
         "arches": "archesproject/arches#stable/8.1.4",
         "moment-timezone": "^0.5.45",

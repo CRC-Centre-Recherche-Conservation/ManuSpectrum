@@ -101,7 +101,15 @@ export default [
         "files": [`${APP_RELATIVE_PATH}/src/manuspectrum/pages/**/*.{ts,vue}`],
         "rules": {
             "no-restricted-imports": ["error", {
-                "paths": ["knockout", "jquery", "arches"],
+                "paths": [
+                    "knockout",
+                    "jquery",
+                    "arches",
+                    {
+                        "name": "uuid",
+                        "message": "Arches aliases `uuid` to uuidjs in webpack; import the uuid package from `uuid-esm`.",
+                    },
+                ],
                 "patterns": [
                     {
                         "regex": "^(bindings|viewmodels|views|templates)/",
