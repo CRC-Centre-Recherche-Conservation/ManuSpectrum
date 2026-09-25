@@ -895,6 +895,58 @@ class FacetRouteTests(CorpusCase):
 
         self.assertEqual((response.status_code, response.content), (404, b""))
 
+    def test_a_document_scope_counts_only_the_rows_of_the_document(self):
+        document = self.documents["open"].pk
+        corpus = self.get("part").json()
+        scoped = self.get("part", f"?document={document}").json()
+        match = self.client.get(f"/en/api/explorer/document/{document}/match").json()
+
+        self.assertEqual(
+            {v["id"] for v in corpus["values"]},
+            {str(self.components["open"].pk), str(self.components["embargoed"].pk)},
+        )
+        self.assertEqual(
+            {v["id"] for v in scoped["values"]}, {str(self.components["open"].pk)}
+        )
+        self.assertEqual(scoped, next(f for f in match["facets"] if f["key"] == "part"))
+
+    def test_find_narrows_a_document_scoped_facet(self):
+        found = self.get(
+            "technique", f"?document={self.documents['open'].pk}&find=reflectance"
+        ).json()
+
+        self.assertEqual([v["id"] for v in found["values"]], [FORS])
+        self.assertEqual(found["total"], 2)
+
+    def test_a_document_hidden_unknown_or_malformed_answers_a_bodyless_404(self):
+        self.embargo(self.documents["embargoed"])
+
+        for document in (
+            self.documents["embargoed"].pk,
+            "00000000-0000-4000-8000-000000000001",
+            "not-a-uuid",
+            "",
+        ):
+            response = self.get("part", f"?document={document}")
+            self.assertEqual(
+                (response.status_code, response.content), (404, b""), document
+            )
+
+    def test_a_facet_the_document_lacks_answers_a_bodyless_404(self):
+        response = self.get("technique", f"?document={self.documents['embargoed'].pk}")
+
+        self.assertEqual((response.status_code, response.content), (404, b""))
+
+    def test_the_etag_of_the_whole_corpus_does_not_revalidate_a_document_scope(self):
+        etag = self.get("part")["ETag"]
+
+        scoped = self.client.get(
+            f"/en/api/explorer/facet/part?document={self.documents['open'].pk}",
+            HTTP_IF_NONE_MATCH=etag,
+        )
+
+        self.assertEqual(scoped.status_code, 200)
+
 
 class HomeRouteTests(CorpusCase):
     def get(self, day=None, **headers):
@@ -971,6 +1023,7 @@ class RevalidationTests(CorpusCase):
     ROUTES = (
         "/en/api/explorer/search?grain=analyses",
         "/en/api/explorer/facet/technique",
+        "/en/api/explorer/facet/technique?document={document}",
         "/en/api/explorer/home?day={today}",
         "/en/api/explorer/document/{document}/match?technique=" + XRF,
     )

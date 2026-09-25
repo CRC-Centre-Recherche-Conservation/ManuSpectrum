@@ -11,7 +11,6 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     facet,
     facetValue,
-    label,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
@@ -96,24 +95,12 @@ describe("FacetRail", () => {
         expect(checkedIds(wrapper)).toEqual(["colour-0"]);
     });
 
-    it("filters a long facet by a search box, ignoring accents and case", async () => {
-        const part: Facet = facet("part", 12);
-        part.values[10].label = label("Initiale « É » ornée");
+    it("has no search box without the filters of the facets", () => {
         const wrapper = mountRail({
-            facets: [part, facet("colour", 3)],
+            facets: [facet("part", 12)],
             selected: {},
         });
-        const boxes = wrapper.findAll("input[type=search]");
-        expect(boxes).toHaveLength(1);
-        await boxes[0].setValue("ORNÉE");
-        expect(
-            wrapper.findAll(".facet")[0].findAll("input[type=checkbox]"),
-        ).toHaveLength(1);
-        expect(wrapper.findAll(".facet")[0].text()).toContain(
-            "Initiale « É » ornée",
-        );
-        await boxes[0].setValue("zzz");
-        expect(wrapper.findAll(".facet")[0].text()).toContain("No match");
+        expect(wrapper.find("input[type=search]").exists()).toBe(false);
     });
 
     it("draws the swatch the server gives a colour and none without one", () => {
@@ -325,6 +312,76 @@ describe("FacetRail with a facet the server cut short", () => {
         expect(
             wrapper.findAll(".value .label").map((item) => item.text()),
         ).toEqual(["part 17"]);
+    });
+
+    it("shows the server's answer to a search in a facet it holds whole", async () => {
+        const whole = facet("part", 12);
+        fetchMock.mockImplementation(async () =>
+            jsonResponse({ ...whole, values: [whole.values[3]] }),
+        );
+        const wrapper = mountRail({
+            facets: [whole],
+            selected: {},
+            facetQuery: "",
+        });
+        await wrapper.find("input[type=search]").setValue("ORNÉE");
+        await flushPromises();
+        expect(asked()).toEqual([
+            "/en/manuspectrum:explorer-facet/part?find=ORN%C3%89E",
+        ]);
+        expect(
+            wrapper.findAll(".value .label").map((item) => item.text()),
+        ).toEqual(["part 3"]);
+    });
+
+    it("keeps a ticked value shown when the server's answer lacks it", async () => {
+        const wrapper = mountRail({
+            facets: [cut],
+            selected: { part: ["part-15"] },
+            facetQuery: "",
+        });
+        await wrapper.find("input[type=search]").setValue("17");
+        await flushPromises();
+        expect(
+            wrapper.findAll(".value .label").map((item) => item.text()),
+        ).toEqual(["part 17", "part 15"]);
+        expect(checkedIds(wrapper)).toEqual(["part-15"]);
+    });
+
+    it("marks the values busy until the server answers the typed text", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const wrapper = mountRail({
+            facets: [cut],
+            selected: {},
+            facetQuery: "",
+        });
+        const search = wrapper.find("input[type=search]");
+        await search.setValue("1");
+        await flushPromises();
+        expect(wrapper.find(".values").classes()).not.toContain("busy");
+        await search.setValue("17");
+        expect(wrapper.find(".values").classes()).toContain("busy");
+        expect(wrapper.find(".values").attributes("aria-busy")).toBe("true");
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        await flushPromises();
+        expect(wrapper.find(".values").classes()).not.toContain("busy");
+    });
+
+    it("searches one document's facet under its scope and unfolds it without asking", async () => {
+        const whole = facet("part", 12);
+        const wrapper = mountRail({
+            facets: [whole],
+            selected: {},
+            facetQuery: "technique=t1&document=d1",
+        });
+        await wrapper.find(".more").trigger("click");
+        await flushPromises();
+        expect(fetchMock).not.toHaveBeenCalled();
+        await wrapper.find("input[type=search]").setValue("11");
+        await flushPromises();
+        expect(asked()).toEqual([
+            "/en/manuspectrum:explorer-facet/part?technique=t1&document=d1&find=11",
+        ]);
     });
 
     it("shows what it holds without the filters of the facets", async () => {

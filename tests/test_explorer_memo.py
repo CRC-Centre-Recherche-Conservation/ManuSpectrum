@@ -4,6 +4,7 @@ Usage:
     python manage.py test tests.test_explorer_memo --settings="tests.test_settings"
 """
 
+import pickle
 import threading
 import time
 from unittest import mock
@@ -315,8 +316,22 @@ class RememberTests(SimpleTestCase):
         for key in keys[1:] + ["k-other"]:
             self.assertIsNotNone(cache.get(key))
 
+    def test_a_stored_bundle_is_compressed_and_round_trips(self):
+        bundle = {"rows": ["same row"] * 500}
+        explorer_memo.remember("k-packed", "public", "en", lambda: bundle)
+        explorer_memo.forget_local()
+
+        stored = cache.get("k-packed")
+        found = explorer_memo.remember(
+            "k-packed", "public", "en", mock.Mock(side_effect=AssertionError)
+        )
+
+        self.assertIsInstance(stored, bytes)
+        self.assertLess(len(stored), len(pickle.dumps(bundle)))
+        self.assertEqual(found, bundle)
+
     def test_a_stored_bundle_is_read_without_building(self):
-        cache.set("k-stored", {"stored": True})
+        cache.set("k-stored", explorer_memo.pack({"stored": True}))
 
         found = explorer_memo.remember(
             "k-stored", "public", "en", mock.Mock(side_effect=AssertionError)

@@ -21,6 +21,7 @@ import {
     characterization,
     documentPayload,
     documentResponses,
+    facet,
     facetValue,
     label,
     sample,
@@ -44,7 +45,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     ) =>
         name === "manuspectrum:explorer-search"
             ? "/en/api/explorer/search"
-            : `/en/api/explorer/${name.split("explorer-")[1]}/${parameters.resourceid}`,
+            : `/en/api/explorer/${name.split("explorer-")[1]}/${parameters.resourceid ?? parameters.key}`,
 }));
 
 const loadPlotly = vi.hoisted(() => vi.fn(async () => ({})));
@@ -147,6 +148,18 @@ function stubFetch(
     const fetchMock = vi.fn(async (url: string) => {
         if (url.includes("/document-match/")) {
             return jsonResponse(structuredClone(match), status);
+        }
+        if (url.includes("/facet/")) {
+            const find = new URL(url, "http://x").searchParams.get("find");
+            const asked = match.facets.find((entry) =>
+                url.includes(`/facet/${entry.key}?`),
+            )!;
+            return jsonResponse({
+                ...asked,
+                values: asked.values.filter((value) =>
+                    value.label.value.endsWith(find ?? ""),
+                ),
+            });
         }
         if (url.includes("/analysis/")) {
             const id = url.split("/analysis/")[1].split("?")[0];
@@ -589,6 +602,31 @@ describe("CorpusDocument", () => {
         expect(wrapper.find(".rail .rail-title").text()).toBe(
             "Filters of this document",
         );
+    });
+
+    it("searches a facet of this document through the server under the filters it shows", async () => {
+        const fetchMock = stubFetch({
+            annotations: [annotation(1)],
+            facets: [facet("project", 12)],
+        });
+        const { wrapper, store } = mountScreen();
+        await changeFilters(() => store.setFilter("technique", ["t1"]));
+        await wrapper.find(".rail input[type=search]").setValue("11");
+        await flushPromises();
+        const asked = fetchMock.mock.calls
+            .map(([url]) => String(url))
+            .filter((url) => url.includes("/facet/"));
+        expect(asked).toHaveLength(1);
+        const [path, search] = asked[0].split("?");
+        expect(path).toBe("/en/api/explorer/facet/project");
+        const query = new URLSearchParams(search);
+        expect(query.get("document")).toBe(uuid(1));
+        expect(query.get("technique")).toBe("t1");
+        expect(query.get("find")).toBe("11");
+        expect(query.get("grain")).toBeNull();
+        expect(
+            wrapper.findAll(".rail .value .label").map((item) => item.text()),
+        ).toEqual(["project 11"]);
     });
 
     it("goes back to the explorer home when opened from it", async () => {

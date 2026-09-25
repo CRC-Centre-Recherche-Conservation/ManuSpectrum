@@ -24,6 +24,14 @@ export function matchRequest(
     return { urlParameters: { resourceid }, query };
 }
 
+/** The query of `GET facet/<key>` for the facets of the match `source` answers: its filters, scoped to its document (`document=`). */
+export function facetQueryOf(source: string): string {
+    const [resourceid, search] = source.split("?");
+    const query = new URLSearchParams(search);
+    query.set("document", resourceid);
+    return query.toString();
+}
+
 function requestOf(source: string): JsonRequestOptions {
     const [resourceid, search] = source.split("?");
     return matchRequest(resourceid, new URLSearchParams(search));

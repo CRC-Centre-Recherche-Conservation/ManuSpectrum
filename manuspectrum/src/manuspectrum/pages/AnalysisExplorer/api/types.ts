@@ -65,7 +65,8 @@ export interface FacetValue {
 /**
  * A facet of the search. On the whole-corpus search a lazy facet (`part`)
  * lists its first values and the selected ones; `total` is the number of
- * values it has, which `GET facet/<key>` lists in full.
+ * values it has, which `GET facet/<key>` lists in full; with `document=<id>`
+ * that route answers the facet of one document's match.
  */
 export interface Facet {
     key: FacetKey;

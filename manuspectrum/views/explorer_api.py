@@ -38,6 +38,7 @@ from manuspectrum.views.explorer_service import (
     FACET_KEYS,
     analysis_payload,
     document_payload,
+    document_scope,
     facet_payload,
     home_payload,
     items_payload,
@@ -119,7 +120,10 @@ def _ticket(request):
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerSearchView(View):
-    """``GET /{lang}/api/explorer/search``: results, facets and counts for the reader."""
+    """``GET /{lang}/api/explorer/search``: results, facets and counts for the reader.
+
+    The visitor's ETag is computed before building, from the bundle key, the route and the filters, page and facet request: a revalidation answers 304 without building.
+    """
 
     def get(self, request):
         ticket, language = _ticket(request), translation.get_language()
@@ -134,16 +138,22 @@ class ExplorerSearchView(View):
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerFacetView(View):
-    """``GET /{lang}/api/explorer/facet/<key>``: every value of one facet under the filters, narrowed by ``find``."""
+    """``GET /{lang}/api/explorer/facet/<key>``: every value of one facet under the filters, narrowed by ``find``.
+
+    Over the whole corpus, or over one document with ``document=<uuid>``.
+    The visitor's ETag is computed before building, from the bundle key, the route and the key, document, filters and ``find``: a revalidation answers 304 without building.
+    """
 
     def get(self, request, key):
-        if key not in FACET_KEYS:
+        document_id = document_scope(request.GET)
+        if key not in FACET_KEYS or document_id is None:
             return _not_found()
         ticket, language = _ticket(request), translation.get_language()
         token = _token(
             "facet",
             ticket,
             key,
+            document_id,
             _filters(request.GET),
             request.GET.get("find", "").strip(),
         )
@@ -159,7 +169,9 @@ class ExplorerHomeView(View):
     """``GET /{lang}/api/explorer/home?day=YYYY-MM-DD``: the explorer home of the reader's day.
 
     *day* is the reader's local date; one more than a day away from the
-    server's date is a bad request.
+    server's date is a bad request. The visitor's ETag is computed before
+    building, from the bundle key, the route and *day*: a revalidation
+    answers 304 without building.
     """
 
     def get(self, request):
@@ -182,7 +194,10 @@ class ExplorerHomeView(View):
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerDocumentView(View):
-    """``GET /{lang}/api/explorer/document/<uuid>``: canvases, analyses and identified materials of one document."""
+    """``GET /{lang}/api/explorer/document/<uuid>``: canvases, analyses and identified materials of one document.
+
+    The visitor's ETag is the digest of the body: the payload embeds IIIF manifests the data version does not follow, so a revalidation builds it.
+    """
 
     def get(self, request, resourceid):
         language = translation.get_language()
@@ -194,7 +209,10 @@ class ExplorerDocumentView(View):
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerDocumentMatchView(View):
-    """``GET /{lang}/api/explorer/document/<uuid>/match``: what the Corpus filters keep in one document."""
+    """``GET /{lang}/api/explorer/document/<uuid>/match``: what the Corpus filters keep in one document.
+
+    The visitor's ETag is computed before building, from the bundle key, the route and the document and filters: a revalidation answers 304 without building.
+    """
 
     def get(self, request, resourceid):
         ticket, language = _ticket(request), translation.get_language()
@@ -210,7 +228,10 @@ class ExplorerDocumentMatchView(View):
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerAnalysisView(View):
-    """``GET /{lang}/api/explorer/analysis/<uuid>``: one analysis with its files, conditions, evidence and dataset."""
+    """``GET /{lang}/api/explorer/analysis/<uuid>``: one analysis with its files, conditions, evidence and dataset.
+
+    The visitor's ETag is the digest of the body: the payload embeds IIIF manifests the data version does not follow, so a revalidation builds it.
+    """
 
     def get(self, request, resourceid):
         language = translation.get_language()
@@ -222,7 +243,10 @@ class ExplorerAnalysisView(View):
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerItemsView(View):
-    """``GET /{lang}/api/explorer/items?ids=``: the Selection's items, at most ``EXPLORER_ITEMS_MAX`` keys."""
+    """``GET /{lang}/api/explorer/items?ids=``: the Selection's items, at most ``EXPLORER_ITEMS_MAX`` keys.
+
+    The visitor's ETag is the digest of the body: the payload embeds IIIF manifests the data version does not follow, so a revalidation builds it.
+    """
 
     def get(self, request):
         keys = parse_keys(request.GET)

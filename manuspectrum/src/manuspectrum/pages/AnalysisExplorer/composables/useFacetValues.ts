@@ -13,7 +13,7 @@ import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/compos
 
 export const FACET_ROUTE = "manuspectrum:explorer-facet";
 
-/** What one facet request asks for: the filters (`filtersOf`) and the text the values must hold. */
+/** What one facet request asks for: the filters (`filtersOf`, with `document=` for one document's facets) and the text the values must hold. */
 export interface FacetLookup {
     filters: string;
     find: string;
@@ -35,8 +35,9 @@ function lookupOf(source: string): FacetLookup {
 }
 
 /**
- * Every value of facet `key` over the whole corpus, for a facet the search
- * sent cut short (its first values and the selected ones). Idle while
+ * Every value of facet `key` over the whole corpus, or over one document
+ * when the filters name it, for a facet sent cut short (its first values
+ * and the selected ones) or searched. Idle while
  * `lookup` is null. After the first load, a new lookup (typed text, other
  * filters) waits for the source to settle (`DEBOUNCE_MS`).
  */

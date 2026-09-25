@@ -29,7 +29,10 @@ import SampleCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/docum
 import { searchOf } from "@/manuspectrum/public/useUrlState.ts";
 import { useAnalysis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnalysis.ts";
 import { useDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocument.ts";
-import { useDocumentMatch } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentMatch.ts";
+import {
+    facetQueryOf,
+    useDocumentMatch,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentMatch.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
@@ -102,6 +105,11 @@ const currentMatch = computed(() =>
         ? match.data.value.match
         : null,
 );
+/** The query the rail searches its facets with: the filters of the match shown, on this document. */
+const facetQuery = computed(() => {
+    const loaded = match.loaded.value;
+    return currentMatch.value && loaded ? facetQueryOf(loaded) : null;
+});
 useFacetLabels(() => currentMatch.value?.facets);
 const focusedAnalysis = computed(() =>
     store.focus?.kind === "analysis" ? store.focus.id : null,
@@ -748,6 +756,7 @@ function goHome(): void {
                         :facets="currentMatch?.facets ?? []"
                         :selected="selectedFacets(store.filters)"
                         :count-hint="$gettext('%{n} in this document')"
+                        :facet-query="facetQuery"
                         @change="onFacetChange"
                     />
                     <p

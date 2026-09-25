@@ -8,7 +8,6 @@ import Tooltip from "primevue/tooltip";
 
 import { useFacetValues } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetValues.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
-import { foldText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { techniqueClass } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
@@ -46,13 +45,16 @@ const RAIL_KEYS: readonly FacetKey[] = [
  * material group, with a toggle choosing the level its ticks apply to; an
  * option with ticks of its own while the other is shown says how many.
  * What is ticked comes from `selected` (the filters in force), never from the
- * payload's `selected`, which lags behind while the next search loads. A
- * facet longer than `SEARCH_THRESHOLD` has a search box that narrows its
- * values as one types (accents and case ignored). `countHint`, a translated
- * text with `%{n}`, says what a count counts (« %{n} in this document »).
- * A facet the server cut short (`total` above its values) asks the server
- * for every value when unfolded or searched, under the filters `facetQuery`
- * (`filtersOf`); without `facetQuery` it shows what it holds.
+ * payload's `selected`, which lags behind while the next search loads.
+ * `countHint`, a translated text with `%{n}`, says what a count counts
+ * (« %{n} in this document »). Under `facetQuery`, the query of the facet
+ * route (the filters, `filtersOf`, and `document=` on a document's rail),
+ * a facet longer than `SEARCH_THRESHOLD` has a search box: the values shown
+ * are the server's answer to the typed text (`facet/<key>?find=`), marked
+ * busy until it arrives, plus the ticked values it lacks. A facet the server
+ * cut short (`total` above its values) asks the server for every value when
+ * unfolded. Without `facetQuery` the rail shows what it holds, with no
+ * search box.
  */
 const props = withDefaults(
     defineProps<{
@@ -164,12 +166,12 @@ function isCut(facet: Facet): boolean {
     return facet.total > facet.values.length;
 }
 
-/** What to ask the server for a cut facet unfolded or searched; null when nothing is to be asked. */
+/** What to ask the server for a facet searched, or cut and unfolded; null when nothing is to be asked. */
 function lookupFor(key: FacetKey): FacetLookup | null {
     const facet = byKey.value.get(key);
-    if (props.facetQuery === null || !facet || !isCut(facet)) return null;
-    const find = queries.value[key] ?? "";
-    if (!expanded.value.has(key) && !find.trim()) return null;
+    if (props.facetQuery === null || !facet) return null;
+    const find = queryOf(key);
+    if (!find && !(expanded.value.has(key) && isCut(facet))) return null;
     return { filters: props.facetQuery, find };
 }
 
@@ -193,27 +195,26 @@ function isLoading(key: FacetKey): boolean {
 }
 
 function isSearchable(facet: Facet): boolean {
-    return facet.total > SEARCH_THRESHOLD;
+    return props.facetQuery !== null && facet.total > SEARCH_THRESHOLD;
 }
 
 function queryOf(key: FacetKey): string {
-    return foldText(queries.value[key] ?? "").trim();
+    return (queries.value[key] ?? "").trim();
 }
 
 function setQuery(key: FacetKey, text: string | undefined): void {
     queries.value = { ...queries.value, [key]: text ?? "" };
 }
 
-/** The values shown: those matching the search, else the first ones, a ticked one, or all once expanded. */
+/** The values shown: the server's answer to the search and the ticked ones, else the first ones, a ticked one, or all once expanded. */
 function visibleValues(facet: Facet): FacetValue[] {
-    const query = queryOf(facet.key);
     const values = valuesOf(facet);
-    if (query) {
-        return values.filter(
-            (value) =>
-                foldText(value.label.value).includes(query) ||
-                isSelected(facet.key, value.id),
+    if (isSearchable(facet) && queryOf(facet.key)) {
+        const shown = new Set(values.map((value) => value.id));
+        const ticked = facet.values.filter(
+            (value) => !shown.has(value.id) && isSelected(facet.key, value.id),
         );
+        return [...values, ...ticked];
     }
     if (isExpanded(facet.key)) {
         return values;
@@ -431,6 +432,7 @@ function onChange(facet: Facet, id: string, event: Event): void {
                     />
                     <ul
                         class="values"
+                        :class="{ busy: isLoading(facet.key) }"
                         :aria-busy="isLoading(facet.key) ? 'true' : 'false'"
                     >
                         <li
@@ -624,6 +626,10 @@ function onChange(facet: Facet, id: string, event: Event): void {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     list-style: none;
+}
+
+.facet-rail .values.busy {
+    opacity: 0.6;
 }
 
 .facet-rail .values li {

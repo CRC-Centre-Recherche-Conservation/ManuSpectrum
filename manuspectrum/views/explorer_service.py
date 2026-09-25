@@ -16,6 +16,7 @@ import re
 import sys
 import textwrap
 import unicodedata
+import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
@@ -1193,30 +1194,77 @@ def search_payload(query, user, language, ticket=None):
     }
 
 
-def facet_payload(key, query, user, language, ticket=None):
-    """``Facet`` *key* over the whole visible corpus under the filters of *query*, every value; None when absent.
+def document_scope(query):
+    """The document ``document`` names in *query*: "" without one, None when it is not a UUID."""
+    if "document" not in query:
+        return ""
+    try:
+        return str(uuid.UUID(query.get("document", "")))
+    except ValueError:
+        return None
 
-    ``find`` narrows the values to those whose folded label holds its folded
-    text, the selected ones kept; ``total`` stays the number of values
-    without it. A key outside ``FACET_KEYS``, or a facet the search would not
-    show (no value on the visible set), is None.
-    """
-    if key not in FACET_KEYS:
+
+def document_rows(bundle, document_id):
+    """The rows of the analyses of a visible document, in ``rows`` order; None when it is not visible."""
+    if document_id not in bundle.visible.documents:
         return None
-    bundle = corpus_bundle(user, language, ticket)
-    if not bundle.universe[key]:
-        return None
-    _, active, *_, counted = row_filter(bundle.rows, query, universe=bundle.universe)
+    return bundle.by_document.get(document_id, [])
+
+
+def document_facet(key, bundle, rows, active, counted):
+    """``Facet`` *key* of one document's *rows*: the values they carry plus the selected ones; None without values."""
     facet = facet_entry(
         key,
-        bundle.rows,
+        rows,
         active,
         counted,
         bundle.labels,
         bundle.marks,
         bundle.swatches,
-        bundle.universe[key],
+        {v for row in rows for v in _facet_values(row, key)},
     )
+    return facet if facet["values"] else None
+
+
+def facet_payload(key, query, user, language, ticket=None):
+    """``Facet`` *key* under the filters of *query*, every value; None when absent.
+
+    Over the whole visible corpus, or over one visible document when
+    ``document`` names it: then the facet is the one ``match_payload`` lists
+    for that document. ``find`` narrows the values to those whose folded
+    label holds its folded text, the selected ones kept; ``total`` stays the
+    number of values without it. A key outside ``FACET_KEYS``, a facet the
+    search or the match would not show (no value), or a ``document`` that is
+    not a UUID or not visible, is None.
+    """
+    document_id = document_scope(query)
+    if key not in FACET_KEYS or document_id is None:
+        return None
+    bundle = corpus_bundle(user, language, ticket)
+    if document_id:
+        rows = document_rows(bundle, document_id)
+        if rows is None:
+            return None
+        _, active, *_, counted = row_filter(rows, query, universe=bundle.universe)
+        facet = document_facet(key, bundle, rows, active, counted)
+        if facet is None:
+            return None
+    else:
+        if not bundle.universe[key]:
+            return None
+        _, active, *_, counted = row_filter(
+            bundle.rows, query, universe=bundle.universe
+        )
+        facet = facet_entry(
+            key,
+            bundle.rows,
+            active,
+            counted,
+            bundle.labels,
+            bundle.marks,
+            bundle.swatches,
+            bundle.universe[key],
+        )
     needle = fold(query.get("find", "").strip())
     if needle:
         selected = set(active[key])
@@ -1255,26 +1303,17 @@ def match_payload(document_id, query, user, language, ticket=None):
     """
     bundle = corpus_bundle(user, language, ticket)
     document_id = str(document_id)
-    if document_id not in bundle.visible.documents:
+    rows = document_rows(bundle, document_id)
+    if rows is None:
         return None
-    rows = bundle.by_document.get(document_id, [])
     keep, active, _, _, needle, _, counted = row_filter(
         rows, query, universe=bundle.universe
     )
-    facets = []
-    for key in FACET_KEYS:
-        facet = facet_entry(
-            key,
-            rows,
-            active,
-            counted,
-            bundle.labels,
-            bundle.marks,
-            bundle.swatches,
-            {v for row in rows for v in _facet_values(row, key)},
-        )
-        if facet["values"]:
-            facets.append(facet)
+    facets = [
+        facet
+        for key in FACET_KEYS
+        if (facet := document_facet(key, bundle, rows, active, counted))
+    ]
     kept = sorted(row["id"] for row in rows if keep(row))
     filtered = bool(needle) or any(active.values())
     wanted = characterization_wanted(active)
@@ -1838,7 +1877,9 @@ def document_payload(document_id, user, language, ticket=None):
     names its technique by that uri and lists its zones, each on a canvas
     given by its position in ``canvases``. A zone on a canvas the manifest
     does not list is left out; an analysis without zones is not located on
-    a page. ``document_match`` says what the filters keep.
+    a page. ``document_match`` says what the filters keep. ``history`` (the
+    document's dated and placed events, spec §5) is empty until the map and
+    timeline API fills it.
     """
     bundle = corpus_bundle(user, language, ticket)
     visible = bundle.visible
