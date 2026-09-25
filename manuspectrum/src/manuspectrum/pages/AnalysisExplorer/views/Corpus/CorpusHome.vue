@@ -2,6 +2,7 @@
 import { computed, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue";
 
@@ -109,6 +110,9 @@ const projects = computed<FacetValue[]>(
         overview.data.value?.facets.find((facet) => facet.key === "project")
             ?.values ?? [],
 );
+const firstLoad = computed(
+    () => overview.status.value === "loading" && overview.data.value === null,
+);
 const nothingPublished = computed(
     () =>
         overview.status.value === "ready" &&
@@ -192,6 +196,10 @@ function hrefFor(id: string): string {
                 </button>
             </div>
         </form>
+        <BusyStatus
+            :busy="overview.status.value === 'loading'"
+            :first="firstLoad"
+        />
         <UnavailableState
             v-if="
                 overview.status.value === 'error' ||
@@ -201,6 +209,20 @@ function hrefFor(id: string): string {
             :hide-home="true"
             @retry="overview.retry"
         />
+        <div
+            v-else-if="firstLoad"
+            class="doors"
+            aria-hidden="true"
+        >
+            <div
+                v-for="door in 3"
+                :key="door"
+                class="door door-skeleton"
+            >
+                <span class="ms-skeleton heading"></span>
+                <span class="ms-skeleton block"></span>
+            </div>
+        </div>
         <p
             v-else-if="nothingPublished"
             class="nothing"
@@ -312,13 +334,13 @@ function hrefFor(id: string): string {
 .corpus-home {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 2rem;
+    gap: 1.5rem;
     padding-block: 1rem 2rem;
 }
 
 .corpus-home .promise {
     font-family: var(--font-display);
-    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-size: clamp(1.375rem, 2.5vw, 1.75rem);
     font-weight: 400;
     color: var(--ink);
 }
@@ -326,8 +348,16 @@ function hrefFor(id: string): string {
 .corpus-home .search {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.5rem;
-    max-inline-size: 48rem;
+    gap: 0.375rem;
+    max-inline-size: 44rem;
+}
+
+.corpus-home .label {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .corpus-home .row {
@@ -338,7 +368,7 @@ function hrefFor(id: string): string {
 .corpus-home .input {
     flex: 1;
     min-inline-size: 0;
-    min-block-size: 3rem;
+    min-block-size: 2.5rem;
     padding-inline: 1rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
@@ -349,9 +379,9 @@ function hrefFor(id: string): string {
 
 .corpus-home .submit,
 .corpus-home .choice {
-    min-block-size: 2.75rem;
-    padding-inline: 1.25rem;
-    border: 0.0625rem solid var(--ink);
+    min-block-size: var(--explorer-target);
+    padding-inline: 0.875rem;
+    border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
     background: var(--surface);
     color: var(--ink);
@@ -359,7 +389,18 @@ function hrefFor(id: string): string {
     cursor: pointer;
 }
 
+.corpus-home .choice {
+    text-align: start;
+}
+
+.corpus-home .choice:hover {
+    border-color: var(--ink);
+}
+
 .corpus-home .submit {
+    min-block-size: 2.5rem;
+    padding-inline: 1.25rem;
+    border-color: var(--ink);
     background: var(--ink);
     color: var(--surface);
 }
@@ -367,25 +408,42 @@ function hrefFor(id: string): string {
 .corpus-home .doors {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
-    gap: 1.5rem;
+    gap: 1rem;
+    min-block-size: 14rem;
 }
 
 .corpus-home .door {
     display: grid;
     align-content: start;
     gap: 0.75rem;
+    padding: 1rem;
+    border: 0.0625rem solid var(--border);
+    border-radius: var(--explorer-radius);
+    background: var(--surface);
+}
+
+.corpus-home .door-skeleton .heading {
+    inline-size: 50%;
+    block-size: 1.25rem;
+}
+
+.corpus-home .door-skeleton .block {
+    block-size: 9rem;
 }
 
 .corpus-home .title {
-    font-family: var(--font-display);
-    font-size: 1.375rem;
-    font-weight: 500;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .corpus-home .choices {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.375rem;
     list-style: none;
 }
 

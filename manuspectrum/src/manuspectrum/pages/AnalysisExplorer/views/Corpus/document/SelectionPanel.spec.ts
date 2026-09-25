@@ -50,6 +50,13 @@ function mountPanel() {
 }
 
 describe("SelectionPanel", () => {
+    it("holds a placeholder line in each row until its item is read", () => {
+        const { wrapper } = mountPanel();
+        const row = wrapper.find(`[data-key="${KEY}"]`);
+        expect(row.find(".pending").exists()).toBe(true);
+        expect(row.find(".pending").attributes("aria-label")).toBe("Loading…");
+    });
+
     it("lists the Selection with its A-labels and kinds", async () => {
         const { wrapper } = mountPanel();
         await flushPromises();

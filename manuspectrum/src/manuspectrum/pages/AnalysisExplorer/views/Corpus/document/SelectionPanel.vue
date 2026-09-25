@@ -125,6 +125,12 @@ function removeLabel(slot: number): string {
                     >
                         {{ $gettext("no longer available") }}
                     </span>
+                    <span
+                        v-else
+                        class="pending ms-skeleton"
+                        role="img"
+                        :aria-label="$gettext('Loading…')"
+                    ></span>
                 </span>
                 <button
                     type="button"
@@ -168,8 +174,9 @@ function removeLabel(slot: number): string {
 .selection-panel h3 {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: baseline;
     gap: 0.5rem;
+    font-size: 0.9375rem;
     font-weight: 600;
 }
 
@@ -216,11 +223,16 @@ function removeLabel(slot: number): string {
     font-size: 0.75rem;
 }
 
+.selection-panel .pending {
+    inline-size: 70%;
+    block-size: 0.875rem;
+}
+
 .selection-panel .remove {
     display: inline-grid;
     place-items: center;
-    inline-size: 2.75rem;
-    block-size: 2.75rem;
+    inline-size: var(--explorer-target, 2.75rem);
+    block-size: var(--explorer-target, 2.75rem);
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.25rem;
     background: var(--surface);
@@ -244,7 +256,7 @@ function removeLabel(slot: number): string {
 
 .selection-panel .clear,
 .selection-panel .compare {
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.25rem;

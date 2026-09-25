@@ -5,6 +5,8 @@ import { useGettext } from "vue3-gettext";
 import Column from "primevue/column";
 import DataTable from "primevue/datatable";
 
+import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
+
 import { useSeriesSet } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
 import { fileKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
@@ -225,8 +227,9 @@ function toggleTable(): void {
     >
         <p
             v-if="results.status.value === 'loading' && !results.data.value"
-            class="state"
+            class="state loading"
         >
+            <LoadingSpinner />
             <span>{{ $gettext("Loading the spectra…") }}</span>
         </p>
         <template v-if="curves.length > 0">
@@ -319,6 +322,12 @@ function toggleTable(): void {
 </template>
 
 <style scoped>
+.spectrum-preview .loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .spectrum-preview {
     display: grid;
     gap: 0.5rem;
@@ -347,7 +356,7 @@ function toggleTable(): void {
 
 .spectrum-preview button,
 .spectrum-preview select {
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.25rem;

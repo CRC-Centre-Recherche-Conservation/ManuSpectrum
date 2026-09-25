@@ -62,6 +62,35 @@ describe("CorpusHome", () => {
         );
     });
 
+    it("holds the place of the doors while the overview loads", async () => {
+        let answer: (response: Response) => void = () => undefined;
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(
+                () =>
+                    new Promise<Response>((resolve) => {
+                        answer = resolve;
+                    }),
+            ),
+        );
+        const wrapper = mountHome();
+        await flushPromises();
+        expect(wrapper.findAll(".door-skeleton")).toHaveLength(3);
+        expect(wrapper.find("[role=status]").text()).toBe("Loading…");
+        answer(
+            jsonResponse(
+                searchResponse({
+                    results: [documentHit(2)],
+                    total: 1,
+                    facets: [facet("technique", 2)],
+                }),
+            ),
+        );
+        await flushPromises();
+        expect(wrapper.find(".door-skeleton").exists()).toBe(false);
+        expect(wrapper.find(".door.techniques").exists()).toBe(true);
+    });
+
     it("features the document with the most analyses", async () => {
         const wrapper = mountHome();
         await flushPromises();
