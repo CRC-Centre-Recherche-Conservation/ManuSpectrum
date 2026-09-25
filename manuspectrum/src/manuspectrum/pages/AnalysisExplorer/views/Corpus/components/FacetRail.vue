@@ -6,6 +6,7 @@ import InputText from "primevue/inputtext";
 import ToggleButton from "primevue/togglebutton";
 import Tooltip from "primevue/tooltip";
 
+import { useFacetValues } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetValues.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import { foldText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { techniqueClass } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -17,6 +18,8 @@ import type {
     FacetKey,
     FacetValue,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { FacetLookup } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetValues.ts";
+import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import type { ColourLevel } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const PREVIEW_SIZE = 6;
@@ -29,6 +32,12 @@ const GROUP_KEYS: Readonly<Record<FacetGroup, readonly FacetKey[]>> = {
     analysis: ["project", "technique", "operator", "year"],
     characterization: ["material", "colour", "layer", "element"],
 };
+const RAIL_KEYS: readonly FacetKey[] = [
+    ...GROUP_KEYS.part,
+    ...GROUP_KEYS.analysis,
+    ...GROUP_KEYS.characterization,
+    "partColour",
+];
 
 /**
  * The facets of a Corpus screen, in three groups (studied part, analysis,
@@ -41,14 +50,18 @@ const GROUP_KEYS: Readonly<Record<FacetGroup, readonly FacetKey[]>> = {
  * facet longer than `SEARCH_THRESHOLD` has a search box that narrows its
  * values as one types (accents and case ignored). `countHint`, a translated
  * text with `%{n}`, says what a count counts (« %{n} in this document »).
+ * A facet the server cut short (`total` above its values) asks the server
+ * for every value when unfolded or searched, under the filters `facetQuery`
+ * (`filtersOf`); without `facetQuery` it shows what it holds.
  */
 const props = withDefaults(
     defineProps<{
         facets: Facet[];
         selected: Partial<Record<FacetKey, readonly string[]>>;
         countHint?: string;
+        facetQuery?: string | null;
     }>(),
-    { countHint: "" },
+    { countHint: "", facetQuery: null },
 );
 const emit = defineEmits<{ change: [key: FacetKey, ids: string[]] }>();
 
@@ -82,6 +95,11 @@ const sections = computed(() =>
             return facet ? [facet] : [];
         }),
     })).filter((section) => section.facets.length > 0),
+);
+
+/** The full values of each facet the server cut short, asked for once unfolded or searched. */
+const lazyFacets = new Map<FacetKey, RequestHandle<Facet>>(
+    RAIL_KEYS.map((key) => [key, useFacetValues(key, () => lookupFor(key))]),
 );
 
 function isColour(key: FacetKey): boolean {
@@ -141,8 +159,41 @@ function toggleExpanded(key: FacetKey): void {
     expanded.value = next;
 }
 
+/** Whether the server sent only part of the values of `facet`. */
+function isCut(facet: Facet): boolean {
+    return facet.total > facet.values.length;
+}
+
+/** What to ask the server for a cut facet unfolded or searched; null when nothing is to be asked. */
+function lookupFor(key: FacetKey): FacetLookup | null {
+    const facet = byKey.value.get(key);
+    if (props.facetQuery === null || !facet || !isCut(facet)) return null;
+    const find = queries.value[key] ?? "";
+    if (!expanded.value.has(key) && !find.trim()) return null;
+    return { filters: props.facetQuery, find };
+}
+
+/** Every value of `facet` the rail holds: the server's full list once it answered for these filters, else the values sent. */
+function valuesOf(facet: Facet): FacetValue[] {
+    const lazy = lazyFacets.get(facet.key);
+    const loaded = lazy?.loaded.value;
+    if (
+        !lazy?.data.value ||
+        loaded == null ||
+        lookupFor(facet.key) === null ||
+        (JSON.parse(loaded) as FacetLookup).filters !== props.facetQuery
+    ) {
+        return facet.values;
+    }
+    return lazy.data.value.values;
+}
+
+function isLoading(key: FacetKey): boolean {
+    return lazyFacets.get(key)?.status.value === "loading";
+}
+
 function isSearchable(facet: Facet): boolean {
-    return facet.values.length > SEARCH_THRESHOLD;
+    return facet.total > SEARCH_THRESHOLD;
 }
 
 function queryOf(key: FacetKey): string {
@@ -156,28 +207,33 @@ function setQuery(key: FacetKey, text: string | undefined): void {
 /** The values shown: those matching the search, else the first ones, a ticked one, or all once expanded. */
 function visibleValues(facet: Facet): FacetValue[] {
     const query = queryOf(facet.key);
+    const values = valuesOf(facet);
     if (query) {
-        return facet.values.filter(
+        return values.filter(
             (value) =>
                 foldText(value.label.value).includes(query) ||
                 isSelected(facet.key, value.id),
         );
     }
     if (isExpanded(facet.key)) {
-        return facet.values;
+        return values;
     }
-    return facet.values.filter(
+    return values.filter(
         (value, index) =>
             index < PREVIEW_SIZE || isSelected(facet.key, value.id),
     );
 }
 
 function hasNoMatch(facet: Facet): boolean {
-    return queryOf(facet.key) !== "" && visibleValues(facet).length === 0;
+    return (
+        queryOf(facet.key) !== "" &&
+        !isLoading(facet.key) &&
+        visibleValues(facet).length === 0
+    );
 }
 
 function showsMore(facet: Facet): boolean {
-    return facet.values.length > PREVIEW_SIZE && queryOf(facet.key) === "";
+    return facet.total > PREVIEW_SIZE && queryOf(facet.key) === "";
 }
 
 function moreLabel(facet: Facet): string {
@@ -186,7 +242,7 @@ function moreLabel(facet: Facet): string {
         : interpolate(
               $gettext("Show all (%{count})"),
               {
-                  count: facet.values.length,
+                  count: facet.total,
               },
               true,
           );
@@ -373,7 +429,10 @@ function onChange(facet: Facet, id: string, event: Event): void {
                         :aria-label="searchLabel(facet.key)"
                         @update:model-value="setQuery(facet.key, $event)"
                     />
-                    <ul class="values">
+                    <ul
+                        class="values"
+                        :aria-busy="isLoading(facet.key) ? 'true' : 'false'"
+                    >
                         <li
                             v-for="value in visibleValues(facet)"
                             :key="value.id"

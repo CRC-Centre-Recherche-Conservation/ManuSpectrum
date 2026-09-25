@@ -28,6 +28,7 @@ function mountCard(
     const handle = {
         status: ref(status),
         data: shallowRef(payload),
+        loaded: ref(payload ? analysisId : null),
         retry: () => undefined,
     };
     const wrapper = mount(AnalysisCard, {
@@ -245,6 +246,7 @@ describe("AnalysisCard", () => {
         const handle = {
             status: ref<RequestStatus>("ready"),
             data: shallowRef<AnalysisPayload | null>(analysisPayload()),
+            loaded: ref<string | null>(uuid(101)),
             retry: () => undefined,
         };
         const wrapper = mount(

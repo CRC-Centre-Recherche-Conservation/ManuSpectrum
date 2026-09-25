@@ -9,6 +9,7 @@ import type {
     Facet,
     FacetValue,
     FileEntry,
+    HomeResponse,
     SampleSummary,
     SearchResponse,
     Technique,
@@ -117,6 +118,20 @@ export function facet(key: Facet["key"], count: number): Facet {
             swatch: null,
         })),
         total: count,
+    };
+}
+
+/** The home: two techniques, one project, no document of the day. */
+export function homeResponse(
+    overrides: Partial<HomeResponse> = {},
+): HomeResponse {
+    return {
+        documentCount: 3,
+        techniques: facet("technique", 2).values,
+        projects: facet("project", 1).values,
+        featured: null,
+        unpublishedCount: 0,
+        ...overrides,
     };
 }
 

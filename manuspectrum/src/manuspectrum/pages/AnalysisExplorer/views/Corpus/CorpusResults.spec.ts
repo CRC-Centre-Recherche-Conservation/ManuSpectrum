@@ -6,6 +6,9 @@ import PrimeVue from "primevue/config";
 
 import CorpusResults from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue";
 
+import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import { INTENT_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentPrefetch.ts";
+import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import {
     FACET_LABELS_KEY,
     RESULTS_MEMO_KEY,
@@ -58,6 +61,7 @@ function mountResults({
 }
 
 beforeEach(() => {
+    forgetPayloads();
     pinia = createPinia();
     setActivePinia(pinia);
     labels = ref(new Map());
@@ -264,7 +268,7 @@ describe("CorpusResults", () => {
         });
     });
 
-    it("pages through results and returns to page 1 when a filter changes", async () => {
+    it("pages through results loaded ahead without their facets, and returns to page 1 once a filter change settles", async () => {
         fetchMock.mockResolvedValue(
             jsonResponse(
                 searchResponse({
@@ -279,12 +283,73 @@ describe("CorpusResults", () => {
         expect(wrapper.find(".pagination").text()).toContain("Page 1 of 3");
         await wrapper.find(".pagination .next").trigger("click");
         await flushPromises();
-        expect(queryOf(fetchMock.mock.lastCall!).get("page")).toBe("2");
+        expect(
+            fetchMock.mock.calls.map((call) => [
+                queryOf(call).get("page"),
+                queryOf(call).get("facets"),
+            ]),
+        ).toEqual([
+            [null, null],
+            ["2", "0"],
+            ["3", "0"],
+        ]);
+        expect(wrapper.find(".pagination").text()).toContain("Page 2 of 3");
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
         const callsBefore = fetchMock.mock.calls.length;
         store.setFilter("q", "gold");
         await flushPromises();
-        expect(fetchMock.mock.calls.length).toBe(callsBefore + 1);
-        expect(queryOf(fetchMock.mock.lastCall!).get("page")).toBeNull();
+        expect(wrapper.find(".list").attributes("aria-busy")).toBe("true");
+        expect(fetchMock.mock.calls.length).toBe(callsBefore);
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        await flushPromises();
+        const asked = queryOf(fetchMock.mock.calls[callsBefore]);
+        expect(asked.get("q")).toBe("gold");
+        expect(asked.get("page")).toBeNull();
+        vi.useRealTimers();
+    });
+
+    it("keeps the facets of the filters on a page answered without them", async () => {
+        fetchMock.mockImplementation(async (url: string) =>
+            jsonResponse(
+                searchResponse({
+                    total: 30,
+                    page: { number: 1, size: 10, count: 2 },
+                    facets:
+                        queryOf([url]).get("facets") === "0"
+                            ? null
+                            : [facet("technique", 2)],
+                }),
+            ),
+        );
+        const wrapper = mountResults();
+        await flushPromises();
+        await wrapper.find(".pagination .next").trigger("click");
+        await flushPromises();
+        expect(wrapper.find(".pagination").text()).toContain("Page 2 of 3");
+        expect(
+            wrapper.findAll(".facet-rail input[type=checkbox]"),
+        ).toHaveLength(2);
+    });
+
+    it("loads a document ahead once the reader rests on its card", async () => {
+        fetchMock.mockResolvedValue(
+            jsonResponse(searchResponse({ results: [documentHit(1)] })),
+        );
+        const wrapper = mountResults();
+        await flushPromises();
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const calls = fetchMock.mock.calls.length;
+        await wrapper.find("[data-result]").trigger("pointerenter");
+        vi.advanceTimersByTime(INTENT_MS);
+        expect(
+            fetchMock.mock.calls
+                .slice(calls)
+                .map((call) => String(call[0]).split("?")[0]),
+        ).toEqual([
+            "/en/manuspectrum:explorer-document",
+            "/en/manuspectrum:explorer-document-match",
+        ]);
+        vi.useRealTimers();
     });
 
     it("shows the retry state on a 503 and reloads on Retry", async () => {

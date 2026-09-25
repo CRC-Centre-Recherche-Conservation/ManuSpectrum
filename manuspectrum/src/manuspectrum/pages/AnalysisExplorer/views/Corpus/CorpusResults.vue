@@ -3,8 +3,8 @@ import {
     computed,
     inject,
     nextTick,
-    onMounted,
     ref,
+    shallowRef,
     useTemplateRef,
     watch,
 } from "vue";
@@ -18,7 +18,9 @@ import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/com
 import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue";
 import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
 
+import { peekJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
+import { useDocumentPrefetch } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentPrefetch.ts";
 import {
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
@@ -26,6 +28,8 @@ import {
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import {
+    filterQuery,
+    filtersOf,
     searchQuery,
     useSearch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
@@ -42,7 +46,9 @@ import {
 import type {
     AnalysisHit,
     DocumentHit,
+    Facet,
     FacetKey,
+    SearchResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { PageSize } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
@@ -51,8 +57,12 @@ const SKELETON_CARDS = 4;
 
 /**
  * The results (S1). Coming back from a document opened here shows the same
- * page of the same results again without a request, at the same scroll, with
- * the keyboard focus on the result that was opened (`RESULTS_MEMO_KEY`).
+ * page of the same results again (from the tab memo while it holds them), at
+ * the same scroll, with the keyboard focus on the result that was opened
+ * (`RESULTS_MEMO_KEY`). The facets of a filter set are asked for once: a
+ * page, grain or size change asks for none (`facets=0`). A filter change
+ * waits for the filters to settle; the next page and a card the reader rests
+ * on load ahead.
  */
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
@@ -75,16 +85,33 @@ const pageState = ref({
     number: returning?.page ?? 1,
 });
 const restoring = ref(returning?.opened != null);
+let restored = false;
 const page = computed(() =>
     pageState.value.key === filterKey.value ? pageState.value.number : 1,
 );
 
-useScreenHeading(() => (restoring.value ? null : heading.value));
-const search = useSearch(
-    () => searchQuery(store.filters, page.value),
-    (query) => (memo.value?.query === query ? memo.value.payload : null),
+/** The facets last received, with the filters (`filtersOf`) they count; at first, those of the first page the tab holds. */
+const heldFacets = shallowRef<{ filters: string; facets: Facet[] } | null>(
+    heldFirstPage(),
 );
-useFacetLabels(() => search.data.value?.facets);
+
+useScreenHeading(() => (restoring.value ? null : heading.value));
+const search = useSearch(() => searchQuery(store.filters, page.value), {
+    holdsFacets: (filters) => heldFacets.value?.filters === filters,
+    debounceFilters: true,
+});
+const prefetch = useDocumentPrefetch(() => filterQuery(store.filters));
+
+/** The filters of the payload shown, and of the rail. */
+const shownFilters = computed(() => filtersOf(search.loaded.value ?? ""));
+const facets = computed<Facet[]>(() => {
+    const payload = search.data.value;
+    if (payload?.facets) return payload.facets;
+    return heldFacets.value?.filters === shownFilters.value
+        ? heldFacets.value.facets
+        : [];
+});
+useFacetLabels(() => facets.value);
 
 const total = computed(() => search.data.value?.total ?? 0);
 const pageCount = computed(() => {
@@ -136,25 +163,43 @@ const loading = computed(() => search.status.value === "loading");
 /** Nothing to show yet: the first load of this screen. */
 const firstLoad = computed(() => loading.value && search.data.value === null);
 
+/**
+ * Each payload shown is recorded with the query it answers: its facets for
+ * the next pages of these filters, the memo for the way back, and the next
+ * page is loaded ahead.
+ */
 watch(
-    () => [search.data.value, search.status.value] as const,
-    ([payload, status]) => {
-        if (payload && status === "ready") {
-            memo.value = {
-                query: searchQuery(store.filters, page.value).toString(),
-                filterKey: filterKey.value,
-                page: page.value,
-                payload,
-                scroll: 0,
-                opened: null,
+    () =>
+        [search.data.value, search.status.value, search.loaded.value] as const,
+    ([payload, status, query]) => {
+        if (!payload || status !== "ready" || query === null) return;
+        if (payload.facets) {
+            heldFacets.value = {
+                filters: filtersOf(query),
+                facets: payload.facets,
             };
         }
+        memo.value = {
+            query,
+            filterKey: filterKey.value,
+            page: page.value,
+            total: payload.total,
+            grain: store.filters.grain,
+            scroll: 0,
+            opened: null,
+        };
+        if (page.value < pageCount.value) {
+            search.prefetch(searchQuery(store.filters, page.value + 1));
+        }
+        void restore();
     },
     { immediate: true },
 );
 
-onMounted(async () => {
-    if (!returning || returning.opened === null) return;
+/** Back from a document: once the page it was opened from is shown, its scroll and the focus on the result opened. */
+async function restore(): Promise<void> {
+    if (restored || !returning || returning.opened === null) return;
+    restored = true;
     await nextTick();
     window.scrollTo(0, returning.scroll);
     list.value
@@ -164,10 +209,22 @@ onMounted(async () => {
         ?.focus({ preventScroll: true });
     if (screenFocus) screenFocus.value = false;
     restoring.value = false;
-});
+}
 
 function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
     return hit.type === "document";
+}
+
+function heldFirstPage(): { filters: string; facets: Facet[] } | null {
+    const query = searchQuery(store.filters, 1);
+    const facets = peekJson<SearchResponse>("manuspectrum:explorer-search", {
+        query,
+    })?.facets;
+    return facets ? { filters: filtersOf(query.toString()), facets } : null;
+}
+
+function documentOf(hit: DocumentHit | AnalysisHit): string {
+    return isDocument(hit) ? hit.id : hit.document.id;
 }
 
 function onFacetChange(key: FacetKey, ids: string[]): void {
@@ -229,8 +286,9 @@ function goHome(): void {
             :show-label="showLabel"
         >
             <FacetRail
-                :facets="search.data.value?.facets ?? []"
+                :facets="facets"
                 :selected="selectedFacets(store.filters)"
+                :facet-query="shownFilters"
                 @change="onFacetChange"
             />
         </RailPanel>
@@ -372,6 +430,10 @@ function goHome(): void {
                     v-for="hit in search.data.value?.results ?? []"
                     :key="hit.id"
                     :data-result="hit.id"
+                    @pointerenter="prefetch.intend(documentOf(hit))"
+                    @pointerleave="prefetch.drop"
+                    @focusin="prefetch.intend(documentOf(hit))"
+                    @focusout="prefetch.drop"
                 >
                     <DocumentCard
                         v-if="isDocument(hit)"

@@ -6,86 +6,65 @@ import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusySta
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue";
 
+import { useDocumentPrefetch } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentPrefetch.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
+import { useHome } from "@/manuspectrum/pages/AnalysisExplorer/composables/useHome.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
-import {
-    searchQuery,
-    useSearch,
-} from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
-import {
-    emptyFilters,
-    useExplorerStore,
-} from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     documentHref,
     snapshotOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
-import { dayIndex } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document-of-the-day.ts";
+import { localDay } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document-of-the-day.ts";
 
 import type {
-    DocumentHit,
+    Facet,
     FacetValue,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 /**
- * The explorer home (S0): the doors by technique and by project from the
- * first page of the documents overview, and the document of the day: the
- * document at the day's position (`dayIndex`) among those with analyses,
- * read from its page of the overview once the overview has counted them.
+ * The explorer home (S0): the doors by technique and by project and the
+ * document of the day, from one request for the reader's local day. The
+ * document of the day loads ahead once the reader rests on its card.
  */
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
 
-const overview = useSearch(() => searchQuery(emptyFilters(), 1));
-/** The document of the day's page of the overview, and its place on it. */
-const dayPlace = computed(() => {
-    const payload = overview.data.value;
-    const position = dayIndex(new Date(), payload?.total ?? 0);
-    if (!payload || position === null) return null;
-    const size = payload.page.size || 1;
-    return { page: Math.floor(position / size) + 1, index: position % size };
-});
-const ofTheDay = useSearch(() =>
-    dayPlace.value && dayPlace.value.page > 1
-        ? searchQuery(emptyFilters(), dayPlace.value.page)
-        : null,
-);
+const home = useHome(() => localDay(new Date()));
+const prefetch = useDocumentPrefetch(() => filterQuery(store.filters));
 const text = ref("");
 
-useFacetLabels(() => overview.data.value?.facets);
-
-const featured = computed<DocumentHit | null>(() => {
-    const place = dayPlace.value;
-    if (!place) return null;
-    const payload =
-        place.page === 1 ? overview.data.value : ofTheDay.data.value;
-    if (payload?.page.number !== place.page) return null;
-    const hit = payload.results[place.index];
-    return hit?.type === "document" ? hit : null;
-});
-const featuredLoading = computed(
-    () => ofTheDay.status.value === "loading" && featured.value === null,
-);
 const techniques = computed<FacetValue[]>(
-    () =>
-        overview.data.value?.facets?.find((facet) => facet.key === "technique")
-            ?.values ?? [],
+    () => home.data.value?.techniques ?? [],
 );
-const projects = computed<FacetValue[]>(
-    () =>
-        overview.data.value?.facets?.find((facet) => facet.key === "project")
-            ?.values ?? [],
-);
+const projects = computed<FacetValue[]>(() => home.data.value?.projects ?? []);
+const featured = computed(() => home.data.value?.featured ?? null);
 const firstLoad = computed(
-    () => overview.status.value === "loading" && overview.data.value === null,
+    () => home.status.value === "loading" && home.data.value === null,
 );
 const nothingPublished = computed(
     () =>
-        overview.status.value === "ready" &&
-        (techniques.value.length === 0 || overview.data.value?.total === 0),
+        home.status.value === "ready" &&
+        (techniques.value.length === 0 || home.data.value?.documentCount === 0),
 );
+
+useFacetLabels((): Facet[] => [
+    {
+        key: "technique",
+        group: "analysis",
+        values: techniques.value,
+        total: techniques.value.length,
+    },
+    {
+        key: "project",
+        group: "analysis",
+        values: projects.value,
+        total: projects.value.length,
+    },
+]);
 
 function countLabel(value: FacetValue): string {
     return interpolate(
@@ -178,17 +157,17 @@ function hrefFor(id: string): string {
             </button>
         </p>
         <BusyStatus
-            :busy="overview.status.value === 'loading'"
+            :busy="home.status.value === 'loading'"
             :first="firstLoad"
         />
         <UnavailableState
             v-if="
-                overview.status.value === 'error' ||
-                overview.status.value === 'unavailable'
+                home.status.value === 'error' ||
+                home.status.value === 'unavailable'
             "
-            :status="overview.status.value"
+            :status="home.status.value"
             :hide-home="true"
-            @retry="overview.retry"
+            @retry="home.retry"
         />
         <div
             v-else-if="firstLoad"
@@ -213,10 +192,10 @@ function hrefFor(id: string): string {
         <div
             v-else
             class="doors"
-            :aria-busy="overview.status.value === 'loading' ? 'true' : 'false'"
+            :aria-busy="home.status.value === 'loading' ? 'true' : 'false'"
         >
             <section
-                v-if="featured || featuredLoading"
+                v-if="featured"
                 class="door featured"
                 aria-labelledby="explorer-door-featured"
             >
@@ -227,16 +206,14 @@ function hrefFor(id: string): string {
                     <span>{{ $gettext("Document of the day") }}</span>
                 </h2>
                 <DocumentCard
-                    v-if="featured"
                     :hit="featured"
                     :href="hrefFor(featured.id)"
                     @open="openDocument"
+                    @pointerenter="prefetch.intend(featured.id)"
+                    @pointerleave="prefetch.drop"
+                    @focusin="prefetch.intend(featured.id)"
+                    @focusout="prefetch.drop"
                 />
-                <span
-                    v-else
-                    class="ms-skeleton featured-skeleton"
-                    aria-hidden="true"
-                ></span>
             </section>
             <section
                 v-if="techniques.length > 0"
@@ -407,10 +384,6 @@ function hrefFor(id: string): string {
     border: 0.0625rem solid var(--border);
     border-radius: var(--explorer-radius);
     background: var(--surface);
-}
-
-.corpus-home .featured-skeleton {
-    block-size: 7rem;
 }
 
 .corpus-home .browse-all {

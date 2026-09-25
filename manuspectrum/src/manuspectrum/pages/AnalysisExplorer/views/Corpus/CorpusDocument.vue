@@ -54,6 +54,7 @@ import {
     introBar,
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { warmViewer } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 import {
     hasActiveFilters,
     selectedFacets,
@@ -404,20 +405,21 @@ const backLabel = computed(() => {
     if (store.documentOrigin !== "results") {
         return $gettext("Back to the explorer home");
     }
-    const payload = resultsMemo.value?.payload;
-    if (!payload) return $gettext("Results");
-    const text = payload.results.some((hit) => hit.type === "analysis")
-        ? $ngettext(
-              "Results (%{n} analysis)",
-              "Results (%{n} analyses)",
-              payload.total,
-          )
-        : $ngettext(
-              "Results (%{n} document)",
-              "Results (%{n} documents)",
-              payload.total,
-          );
-    return interpolate(text, { n: payload.total }, true);
+    const shown = resultsMemo.value;
+    if (!shown) return $gettext("Results");
+    const text =
+        shown.grain === "analyses"
+            ? $ngettext(
+                  "Results (%{n} analysis)",
+                  "Results (%{n} analyses)",
+                  shown.total,
+              )
+            : $ngettext(
+                  "Results (%{n} document)",
+                  "Results (%{n} documents)",
+                  shown.total,
+              );
+    return interpolate(text, { n: shown.total }, true);
 });
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
@@ -465,6 +467,24 @@ watch(data, (current) => {
     const first = firstMatchingPage(current.canvases, perPage.value);
     if (first) store.setCanvas(first);
 });
+
+/** The preview of a focused analysis (Plotly for a spectrum) loads alongside its payload. */
+watch(
+    () => {
+        const id = focusedAnalysis.value;
+        const current = data.value;
+        if (id === null || current === null) return null;
+        return (
+            [...current.annotations, ...current.unlocated].find(
+                (entry) => entry.analysis === id,
+            )?.dataKind ?? null
+        );
+    },
+    (kind) => {
+        if (kind !== null) warmViewer(kind);
+    },
+    { immediate: true },
+);
 
 /**
  * Keeps the address of the history entry a card was opened over (the one

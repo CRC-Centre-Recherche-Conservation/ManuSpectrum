@@ -48,4 +48,19 @@ describe("DocumentCard", () => {
         expect(wrapper.find("img").exists()).toBe(false);
         expect(wrapper.find(".thumbnail").exists()).toBe(true);
     });
+
+    it("does not ask again in this tab for a thumbnail that failed", async () => {
+        const first = mount(DocumentCard, {
+            props: { hit: documentHit(2), href: "?doc=x" },
+        });
+        await first.find("img").trigger("error");
+        const again = mount(DocumentCard, {
+            props: { hit: documentHit(2), href: "?doc=x" },
+        });
+        expect(again.find("img").exists()).toBe(false);
+        const other = mount(DocumentCard, {
+            props: { hit: documentHit(4), href: "?doc=y" },
+        });
+        expect(other.find("img").exists()).toBe(true);
+    });
 });

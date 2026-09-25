@@ -6,6 +6,8 @@ import { defineComponent, h, ref } from "vue";
 
 import CorpusDocument from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue";
 
+import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import { RESULTS_MEMO_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
@@ -22,7 +24,6 @@ import {
     facetValue,
     label,
     sample,
-    searchResponse,
     technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -44,6 +45,12 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
         name === "manuspectrum:explorer-search"
             ? "/en/api/explorer/search"
             : `/en/api/explorer/${name.split("explorer-")[1]}/${parameters.resourceid}`,
+}));
+
+const loadPlotly = vi.hoisted(() => vi.fn(async () => ({})));
+
+vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", () => ({
+    loadPlotly,
 }));
 
 const focusTarget = vi.fn();
@@ -102,6 +109,7 @@ let narrow = false;
 let pinia: Pinia;
 
 beforeEach(() => {
+    forgetPayloads();
     narrow = false;
     focusTarget.mockClear();
     focusCurrent.mockClear();
@@ -116,6 +124,15 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.unstubAllGlobals());
+
+/** Runs a change of filters and lets the match wait out its debounce. */
+async function changeFilters(change: () => void): Promise<void> {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    change();
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    vi.useRealTimers();
+    await flushPromises();
+}
 
 function stubFetch(
     shown: DocumentShown = {
@@ -175,8 +192,9 @@ describe("CorpusDocument", () => {
         const fetchMock = stubFetch();
         const { store } = mountScreen();
         await flushPromises();
-        store.setFilter("technique", ["http://example.org/xrf"]);
-        await flushPromises();
+        await changeFilters(() =>
+            store.setFilter("technique", ["http://example.org/xrf"]),
+        );
         const calls = fetchMock.mock.calls.map(([url]) => String(url));
         expect(calls.filter((url) => url.includes("/document/"))).toEqual([
             `/en/api/explorer/document/${uuid(1)}`,
@@ -184,6 +202,48 @@ describe("CorpusDocument", () => {
         expect(
             calls.filter((url) => url.includes("/document-match/")).at(-1),
         ).toContain("technique=http");
+    });
+
+    it("shows the match loading at once and asks for it once for quick filter changes", async () => {
+        const fetchMock = stubFetch();
+        const { wrapper, store } = mountScreen();
+        await flushPromises();
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const before = fetchMock.mock.calls.length;
+        for (const technique of ["t1", "t2", "t3"]) {
+            store.setFilter("technique", [
+                ...store.filters.technique,
+                technique,
+            ]);
+            await flushPromises();
+            expect(wrapper.find("[role=status]").text()).toBe("Updating…");
+        }
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        vi.useRealTimers();
+        await flushPromises();
+        const asked = fetchMock.mock.calls
+            .slice(before)
+            .map(([url]) => String(url));
+        expect(asked).toHaveLength(1);
+        expect(asked[0]).toContain("technique=t1&technique=t2&technique=t3");
+    });
+
+    it("starts loading the spectrum viewer when a spectrum analysis gets the focus", async () => {
+        loadPlotly.mockClear();
+        stubFetch({
+            annotations: [
+                annotation(1, { dataKind: "file" }),
+                annotation(2, { dataKind: "xy" }),
+            ],
+        });
+        const { store } = mountScreen();
+        await flushPromises();
+        store.focusOn({ kind: "analysis", id: uuid(101) });
+        await flushPromises();
+        expect(loadPlotly).not.toHaveBeenCalled();
+        store.focusOn({ kind: "analysis", id: uuid(102) });
+        await flushPromises();
+        expect(loadPlotly).toHaveBeenCalledTimes(1);
     });
 
     it("names the document, its holding and its counts", async () => {
@@ -492,7 +552,8 @@ describe("CorpusDocument", () => {
             query: "grain=documents",
             filterKey: "grain=documents",
             page: 1,
-            payload: searchResponse({ total: 30 }),
+            total: 30,
+            grain: "documents",
             scroll: 0,
             opened: uuid(1),
         });
@@ -512,8 +573,9 @@ describe("CorpusDocument", () => {
     it("counts its filters in this document only", async () => {
         const fetchMock = stubFetch();
         const { wrapper, store } = mountScreen();
-        store.setFilter("technique", ["http://example.org/xrf"]);
-        await flushPromises();
+        await changeFilters(() =>
+            store.setFilter("technique", ["http://example.org/xrf"]),
+        );
         const match = fetchMock.mock.calls
             .map(([url]) => String(url))
             .filter((url) => url.includes("/document-match/"))
@@ -599,8 +661,9 @@ describe("CorpusDocument", () => {
         const { wrapper, store } = mountScreen();
         await flushPromises();
         fetchMock.mockImplementation(async () => jsonResponse({}, 503));
-        store.setFilter("technique", ["http://example.org/xrf"]);
-        await flushPromises();
+        await changeFilters(() =>
+            store.setFilter("technique", ["http://example.org/xrf"]),
+        );
         expect(wrapper.find(".document-bar h2").exists()).toBe(true);
         expect(wrapper.text()).toContain(
             "The service is not answering right now.",

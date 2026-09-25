@@ -1,3 +1,5 @@
+import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
+
 import type { Component } from "vue";
 
 import type {
@@ -30,6 +32,8 @@ export interface ViewerEntry {
     kind: string;
     folio: FolioMark;
     preview: () => Promise<Component>;
+    /** What the preview draws with besides its component (Plotly for spectra). */
+    library: (() => Promise<unknown>) | null;
     external: ExternalMount | null;
 }
 
@@ -46,6 +50,7 @@ const BUILT_IN: Record<DataKind, ViewerEntry> = {
                     "@/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue"
                 ),
         ),
+        library: loadPlotly,
         external: null,
     },
     "chemical-imaging": {
@@ -57,6 +62,7 @@ const BUILT_IN: Record<DataKind, ViewerEntry> = {
                     "@/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue"
                 ),
         ),
+        library: null,
         external: null,
     },
     "micro-imaging": {
@@ -68,6 +74,7 @@ const BUILT_IN: Record<DataKind, ViewerEntry> = {
                     "@/manuspectrum/pages/AnalysisExplorer/viewers/MicroImagePreview.vue"
                 ),
         ),
+        library: null,
         external: null,
     },
     file: {
@@ -79,6 +86,7 @@ const BUILT_IN: Record<DataKind, ViewerEntry> = {
                     "@/manuspectrum/pages/AnalysisExplorer/viewers/FileOnlyPreview.vue"
                 ),
         ),
+        library: null,
         external: null,
     },
 };
@@ -109,6 +117,7 @@ export function registerExternalViewer(
                     "@/manuspectrum/pages/AnalysisExplorer/viewers/ExternalViewer.vue"
                 ),
         ),
+        library: null,
         external: mount,
     });
     return () => external.delete(kind);
@@ -117,4 +126,12 @@ export function registerExternalViewer(
 /** The folio layer toggle that shows an analysis of this data kind: a frame is an imaging zone, a point a point analysis. */
 export function folioLayerOf(kind: string): "points" | "zones" {
     return viewerFor(kind).folio === "frame" ? "zones" : "points";
+}
+
+/** Starts loading the preview of a data kind and its library before a card asks for them; a failure is left to the card. */
+export function warmViewer(kind: string): void {
+    const entry = viewerFor(kind);
+    void Promise.all([entry.preview(), entry.library?.()]).catch(
+        () => undefined,
+    );
 }
