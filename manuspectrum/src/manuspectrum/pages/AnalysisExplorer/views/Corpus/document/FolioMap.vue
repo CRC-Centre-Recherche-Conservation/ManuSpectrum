@@ -294,6 +294,7 @@ function drawPage(): void {
 
 function drawMarks(): void {
     if (!map) return;
+    openedGroup = null;
     cluster?.remove();
     frames?.remove();
     materials?.remove();
@@ -585,14 +586,17 @@ function focusTarget(id: string): void {
 }
 
 function zoomIn(): void {
+    openedGroup = null;
     map?.zoomIn();
 }
 
 function zoomOut(): void {
+    openedGroup = null;
     map?.zoomOut();
 }
 
 function wholePage(): void {
+    openedGroup = null;
     if (page && map?.hasLayer(page) && "_fitBounds" in page) {
         // leaflet-iiif fits the whole image with this private method.
         (page as unknown as { _fitBounds: () => void })._fitBounds();
