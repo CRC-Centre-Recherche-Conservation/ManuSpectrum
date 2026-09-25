@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -16,17 +16,32 @@ import type {
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-const props = defineProps<{
-    annotations: Annotation[];
-    unlocated: UnlocatedAnalysis[];
-    characterizations: CharacterizationSummary[];
-    samples: SampleSummary[];
-    styles: Map<string, TechniqueStyle>;
-    view: FolioView;
-}>();
+const SEPARATOR = /\s+[—–-]\s+/;
+
+/**
+ * What the page shows, listed. A row name drops the page label and the
+ * document it ends with (`pageLabel`, `documentName`: the screen says them
+ * already). The analyses without a position fold under their count when
+ * the page has analyses of its own.
+ */
+const props = withDefaults(
+    defineProps<{
+        annotations: Annotation[];
+        unlocated: UnlocatedAnalysis[];
+        characterizations: CharacterizationSummary[];
+        samples: SampleSummary[];
+        styles: Map<string, TechniqueStyle>;
+        view: FolioView;
+        pageLabel?: string;
+        documentName?: string;
+    }>(),
+    { pageLabel: "", documentName: "" },
+);
 const emit = defineEmits<{ select: [focus: Focus] }>();
 
-const { $gettext } = useGettext();
+const { $gettext, interpolate } = useGettext();
+
+const unlocatedOpen = ref(props.annotations.length === 0);
 
 /** One entry per analysis (an analysis may have several zones), grouped in the order of the technique styles. */
 const groups = computed(() => {
@@ -60,6 +75,38 @@ const emptyMessage = computed(() => {
         : null;
 });
 
+const unlocatedTitle = computed(() =>
+    interpolate(
+        $gettext("Without a position on the image (%{n})"),
+        { n: props.unlocated.length },
+        true,
+    ),
+);
+
+/**
+ * `name` without its trailing context: from the segment that is this page's
+ * label when at most one segment (the document) follows it, else without a
+ * last segment that is the document's name. Segments are separated by a
+ * spaced dash.
+ */
+function shortName(name: string): string {
+    const parts = name.split(SEPARATOR);
+    const page = props.pageLabel.trim();
+    const at = page ? parts.lastIndexOf(page) : -1;
+    if (at >= 1 && at >= parts.length - 2) {
+        return parts.slice(0, at).join(" — ");
+    }
+    const document = props.documentName.trim();
+    if (parts.length > 1 && document && parts.at(-1) === document) {
+        return parts.slice(0, -1).join(" — ");
+    }
+    return name;
+}
+
+function toggleUnlocated(): void {
+    unlocatedOpen.value = !unlocatedOpen.value;
+}
+
 function select(focus: Focus): void {
     emit("select", focus);
 }
@@ -70,7 +117,10 @@ function select(focus: Focus): void {
         class="on-this-page"
         aria-labelledby="on-this-page-title"
     >
-        <h3 id="on-this-page-title">
+        <h3
+            id="on-this-page-title"
+            tabindex="-1"
+        >
             <span>{{ $gettext("On this page") }}</span>
         </h3>
         <p
@@ -109,12 +159,14 @@ function select(focus: Focus): void {
                     >
                         <button
                             type="button"
+                            :data-focus="`analysis:${item.analysis}`"
+                            :title="item.name.value"
                             @click="
                                 select({ kind: 'analysis', id: item.analysis })
                             "
                         >
                             <span :lang="item.name.lang">{{
-                                item.name.value
+                                shortName(item.name.value)
                             }}</span>
                         </button>
                         <span
@@ -150,6 +202,7 @@ function select(focus: Focus): void {
                 >
                     <button
                         type="button"
+                        :data-focus="`characterization:${summary.id}`"
                         @click="
                             select({ kind: 'characterization', id: summary.id })
                         "
@@ -181,6 +234,7 @@ function select(focus: Focus): void {
                 >
                     <button
                         type="button"
+                        :data-focus="`sample:${entry.id}`"
                         @click="select({ kind: 'sample', id: entry.id })"
                     >
                         <span :lang="entry.name.lang">{{
@@ -201,9 +255,16 @@ function select(focus: Focus): void {
             class="unlocated"
         >
             <h4>
-                <span>{{ $gettext("Without a position on the image") }}</span>
+                <button
+                    type="button"
+                    class="fold"
+                    :aria-expanded="unlocatedOpen ? 'true' : 'false'"
+                    @click="toggleUnlocated"
+                >
+                    <span>{{ unlocatedTitle }}</span>
+                </button>
             </h4>
-            <ul>
+            <ul v-if="unlocatedOpen">
                 <li
                     v-for="item in props.unlocated"
                     :key="item.analysis"
@@ -211,10 +272,12 @@ function select(focus: Focus): void {
                 >
                     <button
                         type="button"
+                        :data-focus="`unlocated:${item.analysis}`"
+                        :title="item.name.value"
                         @click="select({ kind: 'analysis', id: item.analysis })"
                     >
                         <span :lang="item.name.lang">{{
-                            item.name.value
+                            shortName(item.name.value)
                         }}</span>
                     </button>
                     <span
@@ -242,7 +305,17 @@ function select(focus: Focus): void {
 }
 
 .on-this-page h3 {
-    font-weight: 600;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.on-this-page h3:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 .on-this-page .empty {
@@ -258,19 +331,24 @@ function select(focus: Focus): void {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 0.8125rem;
     font-weight: 600;
 }
 
 .on-this-page .code {
     display: inline-grid;
+    flex: none;
     place-items: center;
-    inline-size: 1.5rem;
+    box-sizing: border-box;
+    min-inline-size: 1.5rem;
     block-size: 1.5rem;
+    padding-inline: 0.25rem;
     border: 0.125rem solid var(--surface);
-    border-radius: 50%;
+    border-radius: 999rem;
     background: var(--ink);
     color: var(--stage);
-    font: 600 0.6875rem var(--font-body);
+    font: 600 0.625rem var(--font-body);
+    white-space: nowrap;
 }
 
 .on-this-page .code--tech-1 {
@@ -297,14 +375,31 @@ function select(focus: Focus): void {
     background: var(--tech-6);
 }
 
+.on-this-page .code--tech-7 {
+    background: var(--tech-7);
+}
+
+.on-this-page .code--tech-8 {
+    background: var(--tech-8);
+}
+
+.on-this-page .code--tech-9 {
+    background: var(--tech-9);
+}
+
+.on-this-page .code--tech-10 {
+    background: var(--tech-10);
+}
+
 .on-this-page .code--ink {
+    border-color: var(--ink);
     background: var(--surface);
     color: var(--ink);
 }
 
 .on-this-page ul {
     display: grid;
-    gap: 0.25rem;
+    gap: 0;
     padding: 0;
     list-style: none;
 }
@@ -325,7 +420,7 @@ function select(focus: Focus): void {
     flex: 1 1 auto;
     align-items: center;
     justify-content: flex-start;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.5rem;
     border: none;
     border-radius: 0.25rem;
@@ -343,6 +438,19 @@ function select(focus: Focus): void {
 .on-this-page button:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
+}
+
+.on-this-page .fold {
+    font-weight: 600;
+}
+
+.on-this-page .fold::before {
+    content: "▸" / "";
+    margin-inline-end: 0.375rem;
+}
+
+.on-this-page .fold[aria-expanded="true"]::before {
+    content: "▾" / "";
 }
 
 .on-this-page .draft,

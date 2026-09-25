@@ -21,8 +21,8 @@ describe("folio overlays", () => {
             layerImageUrl({
                 service: "https://iiif.example/pb/",
                 url: null,
-                width: 1,
-                height: 1,
+                width: 4000,
+                height: 3000,
             }),
         ).toBe("https://iiif.example/pb/full/!2048,2048/0/default.jpg");
         expect(
@@ -36,6 +36,24 @@ describe("folio overlays", () => {
         expect(
             layerImageUrl({ service: null, url: null, width: 1, height: 1 }),
         ).toBeNull();
+    });
+
+    it("never asks the image server for more than the layer's own size", () => {
+        const small = {
+            service: "https://iiif.example/pb",
+            url: null,
+            width: 253,
+            height: 271,
+        };
+        expect(layerImageUrl(small)).toBe(
+            "https://iiif.example/pb/full/!253,271/0/default.jpg",
+        );
+        expect(layerImageUrl(small, 480)).toBe(
+            "https://iiif.example/pb/full/!253,271/0/default.jpg",
+        );
+        expect(layerImageUrl({ ...small, width: 0, height: 0 }, 480)).toBe(
+            "https://iiif.example/pb/full/!480,480/0/default.jpg",
+        );
     });
 
     it("lays the layers switched on in the bounding box of the analysis zone", () => {
@@ -63,7 +81,7 @@ describe("folio overlays", () => {
         expect(result).toEqual([
             {
                 key: `${uuid(101)}:1`,
-                url: "https://iiif.example/image/hg/full/!2048,2048/0/default.jpg",
+                url: "https://iiif.example/image/hg/full/!2000,2048/0/default.jpg",
                 bounds: [
                     [-1, 0],
                     [0, 2],

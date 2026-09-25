@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
+
 import { useItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useItems.ts";
+import { SELECTION_HINTS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { holdingsOf } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import {
     BASKET_LIMIT,
@@ -12,26 +16,79 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type {
+    AnalysisItem,
     Item,
     Label,
+    Technique,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+
+/**
+ * The Selection, kept on this browser. Items read once are kept, so an
+ * addition asks the items API for the new keys only; until an item is read,
+ * its row shows what the card that added it knew (`SELECTION_HINTS_KEY`).
+ */
+const hints = inject(
+    SELECTION_HINTS_KEY,
+    () => ref(new Map<string, SelectionHint>()),
+    true,
+);
 
 const store = useExplorerStore();
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
-const items = useItems(() => store.basket.map((item) => item.key));
 
-const byKey = computed(
-    () =>
-        new Map(
-            (items.data.value?.items ?? []).map((item) => [item.key, item]),
-        ),
+const byKey = ref(new Map<string, Item>());
+const missing = ref(new Set<string>());
+
+const items = useItems(() =>
+    store.basket
+        .map((item) => item.key)
+        .filter((key) => !byKey.value.has(key) && !missing.value.has(key)),
 );
-const missing = computed(() => new Set(items.data.value?.missing ?? []));
+
 const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
+
+watch(
+    () => items.data.value,
+    (answer) => {
+        if (!answer) return;
+        const read = new Map(byKey.value);
+        for (const item of answer.items) read.set(item.key, item);
+        byKey.value = read;
+        missing.value = new Set([...missing.value, ...answer.missing]);
+    },
+);
 const canCompare = computed(() => isViewAvailable("compare"));
 
+/** What a whole analysis holds, « 2 spectra · 1 map », or that it holds nothing to show. */
+function holdingsText(item: AnalysisItem): string {
+    const held = holdingsOf(item.files);
+    const parts = [
+        [
+            held.spectra,
+            $ngettext("%{n} spectrum", "%{n} spectra", held.spectra),
+        ],
+        [held.maps, $ngettext("%{n} map", "%{n} maps", held.maps)],
+        [
+            held.microImages,
+            $ngettext(
+                "%{n} micro-image",
+                "%{n} micro-images",
+                held.microImages,
+            ),
+        ],
+    ] as const;
+    const written = parts
+        .filter(([count]) => count > 0)
+        .map(([count, text]) => interpolate(text, { n: count }, true));
+    return written.length > 0
+        ? written.join(" · ")
+        : $gettext("no data to show");
+}
+
 function kindText(item: Item): string {
+    if (item.kind === "analysis") return holdingsText(item);
     if (item.kind === "characterization")
         return $gettext("identified material");
     if (item.kind === "imaging") return $gettext("map layer");
@@ -45,6 +102,10 @@ function titleOf(item: Item): Label {
 }
 
 /** The label of a map layer, written after the analysis name (a label from the file, language unknown). */
+function techniqueOf(item: Item): Technique | null {
+    return item.kind === "characterization" ? null : item.analysis.technique;
+}
+
 function layerOf(item: Item): string | null {
     if (item.kind !== "imaging") return null;
     const index = Number(item.key.split(":")[2]);
@@ -73,12 +134,17 @@ function removeLabel(slot: number): string {
         class="selection-panel"
         aria-labelledby="selection-title"
     >
-        <h3 id="selection-title">
-            <span>{{ $gettext("Selection") }}</span>
-            <span class="count"
-                >{{ store.basket.length }} / {{ BASKET_LIMIT }}</span
-            >
-        </h3>
+        <header class="head">
+            <h3 id="selection-title">
+                <span>{{ $gettext("Selection") }}</span>
+                <span class="count"
+                    >{{ store.basket.length }} / {{ BASKET_LIMIT }}</span
+                >
+            </h3>
+            <p class="kept">
+                <span>{{ $gettext("Kept on this browser") }}</span>
+            </p>
+        </header>
         <p
             v-if="store.basket.length === 0"
             class="empty"
@@ -86,7 +152,7 @@ function removeLabel(slot: number): string {
             <span>
                 {{
                     $gettext(
-                        "Your Selection is empty. Add analyses, maps or identified materials with « + Selection ».",
+                        "Your Selection is empty. Add analyses or identified materials with « + Selection ».",
                     )
                 }}
             </span>
@@ -100,6 +166,14 @@ function removeLabel(slot: number): string {
                 <span class="slot">{{ slotLabel(row.slot) }}</span>
                 <span class="info">
                     <template v-if="byKey.get(row.key)">
+                        <TechniqueTag
+                            v-if="
+                                byKey.get(row.key)!.kind === 'analysis' &&
+                                techniqueOf(byKey.get(row.key)!)
+                            "
+                            :code="techniqueOf(byKey.get(row.key)!)!.code"
+                            :colour="techniqueOf(byKey.get(row.key)!)!.colour"
+                        />
                         <span class="kind">{{
                             kindText(byKey.get(row.key)!)
                         }}</span>
@@ -125,6 +199,23 @@ function removeLabel(slot: number): string {
                     >
                         {{ $gettext("no longer available") }}
                     </span>
+                    <template v-else-if="hints.get(row.key)">
+                        <span class="kind">{{ hints.get(row.key)!.kind }}</span>
+                        <span class="title">
+                            <span :lang="hints.get(row.key)!.title.lang">{{
+                                hints.get(row.key)!.title.value
+                            }}</span>
+                            <span v-if="hints.get(row.key)!.detail">
+                                · {{ hints.get(row.key)!.detail }}
+                            </span>
+                        </span>
+                    </template>
+                    <span
+                        v-else
+                        class="pending ms-skeleton"
+                        role="img"
+                        :aria-label="$gettext('Loading…')"
+                    ></span>
                 </span>
                 <button
                     type="button"
@@ -168,8 +259,9 @@ function removeLabel(slot: number): string {
 .selection-panel h3 {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: baseline;
     gap: 0.5rem;
+    font-size: 0.9375rem;
     font-weight: 600;
 }
 
@@ -177,6 +269,16 @@ function removeLabel(slot: number): string {
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-weight: 400;
+}
+
+.selection-panel .head {
+    display: grid;
+    gap: 0.125rem;
+}
+
+.selection-panel .kept {
+    color: var(--ink-muted);
+    font-size: 0.75rem;
 }
 
 .selection-panel .empty {
@@ -216,11 +318,16 @@ function removeLabel(slot: number): string {
     font-size: 0.75rem;
 }
 
+.selection-panel .pending {
+    inline-size: 70%;
+    block-size: 0.875rem;
+}
+
 .selection-panel .remove {
     display: inline-grid;
     place-items: center;
-    inline-size: 2.75rem;
-    block-size: 2.75rem;
+    inline-size: var(--explorer-target, 2.75rem);
+    block-size: var(--explorer-target, 2.75rem);
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.25rem;
     background: var(--surface);
@@ -244,7 +351,7 @@ function removeLabel(slot: number): string {
 
 .selection-panel .clear,
 .selection-panel .compare {
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.25rem;

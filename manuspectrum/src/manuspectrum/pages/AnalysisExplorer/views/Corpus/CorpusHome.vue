@@ -2,14 +2,16 @@
 import { computed, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue";
 
-import { getJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
-import { useRequest } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
-import { searchQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
+import {
+    searchQuery,
+    useSearch,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import {
     emptyFilters,
     useExplorerStore,
@@ -18,87 +20,54 @@ import {
     documentHref,
     snapshotOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
+import { dayIndex } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document-of-the-day.ts";
 
 import type {
     DocumentHit,
     FacetValue,
-    SearchResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
+/**
+ * The explorer home (S0): the doors by technique and by project from the
+ * first page of the documents overview, and the document of the day: the
+ * document at the day's position (`dayIndex`) among those with analyses,
+ * read from its page of the overview once the overview has counted them.
+ */
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
 
-/**
- * Fetches page 1 of the Documents overview (grain "documents",
- * `onlyWithAnalyses`), then every remaining page in parallel, and merges
- * their hits. The remaining pages follow `signal` and are all aborted as soon
- * as one of them fails. `featured` reduces over the merged set, so
- * it compares analysis counts across the whole corpus, not one page of it.
- * Facets are read from page 1 only.
- */
-async function loadOverview(
-    query: string,
-    signal: AbortSignal,
-): Promise<SearchResponse> {
-    const first = await getJson<SearchResponse>(
-        "manuspectrum:explorer-search",
-        { query: new URLSearchParams(query), signal },
-    );
-    const pageCount =
-        first.page.size > 0 ? Math.ceil(first.total / first.page.size) : 1;
-    if (pageCount <= 1) {
-        return first;
-    }
-    const pages = new AbortController();
-    const abortPages = (): void => pages.abort();
-    signal.addEventListener("abort", abortPages);
-    if (signal.aborted) {
-        pages.abort();
-    }
-    try {
-        const rest = await Promise.all(
-            Array.from({ length: pageCount - 1 }, (_placeholder, index) =>
-                getJson<SearchResponse>("manuspectrum:explorer-search", {
-                    query: searchQuery(emptyFilters(), index + 2),
-                    signal: pages.signal,
-                }),
-            ),
-        );
-        return {
-            ...first,
-            results: [first, ...rest].flatMap((page) => page.results),
-        };
-    } catch (error) {
-        pages.abort();
-        throw error;
-    } finally {
-        signal.removeEventListener("abort", abortPages);
-    }
-}
-
-const overview = useRequest<SearchResponse>(
-    () => searchQuery(emptyFilters(), 1).toString(),
-    loadOverview,
+const overview = useSearch(() => searchQuery(emptyFilters(), 1));
+/** The document of the day's page of the overview, and its place on it. */
+const dayPlace = computed(() => {
+    const payload = overview.data.value;
+    const position = dayIndex(new Date(), payload?.total ?? 0);
+    if (!payload || position === null) return null;
+    const size = payload.page.size || 1;
+    return { page: Math.floor(position / size) + 1, index: position % size };
+});
+const ofTheDay = useSearch(() =>
+    dayPlace.value && dayPlace.value.page > 1
+        ? searchQuery(emptyFilters(), dayPlace.value.page)
+        : null,
 );
 const text = ref("");
 
 useFacetLabels(() => overview.data.value?.facets);
 
 const featured = computed<DocumentHit | null>(() => {
-    const documents = (overview.data.value?.results ?? []).filter(
-        (hit): hit is DocumentHit =>
-            hit.type === "document" && hit.analysisCount > 0,
-    );
-    return documents.reduce<DocumentHit | null>(
-        (best, hit) =>
-            best === null || hit.analysisCount > best.analysisCount
-                ? hit
-                : best,
-        null,
-    );
+    const place = dayPlace.value;
+    if (!place) return null;
+    const payload =
+        place.page === 1 ? overview.data.value : ofTheDay.data.value;
+    if (payload?.page.number !== place.page) return null;
+    const hit = payload.results[place.index];
+    return hit?.type === "document" ? hit : null;
 });
+const featuredLoading = computed(
+    () => ofTheDay.status.value === "loading" && featured.value === null,
+);
 const techniques = computed<FacetValue[]>(
     () =>
         overview.data.value?.facets.find((facet) => facet.key === "technique")
@@ -108,6 +77,9 @@ const projects = computed<FacetValue[]>(
     () =>
         overview.data.value?.facets.find((facet) => facet.key === "project")
             ?.values ?? [],
+);
+const firstLoad = computed(
+    () => overview.status.value === "loading" && overview.data.value === null,
 );
 const nothingPublished = computed(
     () =>
@@ -139,6 +111,10 @@ function openTechnique(id: string): void {
 
 function openProject(id: string): void {
     store.setFilter("project", [id]);
+    store.setCorpusScreen("results");
+}
+
+function browseAll(): void {
     store.setCorpusScreen("results");
 }
 
@@ -192,6 +168,19 @@ function hrefFor(id: string): string {
                 </button>
             </div>
         </form>
+        <p class="browse">
+            <button
+                type="button"
+                class="browse-all"
+                @click="browseAll"
+            >
+                <span>{{ $gettext("Browse the whole corpus") }}</span>
+            </button>
+        </p>
+        <BusyStatus
+            :busy="overview.status.value === 'loading'"
+            :first="firstLoad"
+        />
         <UnavailableState
             v-if="
                 overview.status.value === 'error' ||
@@ -201,6 +190,20 @@ function hrefFor(id: string): string {
             :hide-home="true"
             @retry="overview.retry"
         />
+        <div
+            v-else-if="firstLoad"
+            class="doors"
+            aria-hidden="true"
+        >
+            <div
+                v-for="door in 3"
+                :key="door"
+                class="door door-skeleton"
+            >
+                <span class="ms-skeleton heading"></span>
+                <span class="ms-skeleton block"></span>
+            </div>
+        </div>
         <p
             v-else-if="nothingPublished"
             class="nothing"
@@ -213,7 +216,7 @@ function hrefFor(id: string): string {
             :aria-busy="overview.status.value === 'loading' ? 'true' : 'false'"
         >
             <section
-                v-if="featured"
+                v-if="featured || featuredLoading"
                 class="door featured"
                 aria-labelledby="explorer-door-featured"
             >
@@ -221,13 +224,19 @@ function hrefFor(id: string): string {
                     id="explorer-door-featured"
                     class="title"
                 >
-                    <span>{{ $gettext("The most analysed document") }}</span>
+                    <span>{{ $gettext("Document of the day") }}</span>
                 </h2>
                 <DocumentCard
+                    v-if="featured"
                     :hit="featured"
                     :href="hrefFor(featured.id)"
                     @open="openDocument"
                 />
+                <span
+                    v-else
+                    class="ms-skeleton featured-skeleton"
+                    aria-hidden="true"
+                ></span>
             </section>
             <section
                 v-if="techniques.length > 0"
@@ -312,13 +321,13 @@ function hrefFor(id: string): string {
 .corpus-home {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 2rem;
+    gap: 1.5rem;
     padding-block: 1rem 2rem;
 }
 
 .corpus-home .promise {
     font-family: var(--font-display);
-    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-size: clamp(1.375rem, 2.5vw, 1.75rem);
     font-weight: 400;
     color: var(--ink);
 }
@@ -326,8 +335,16 @@ function hrefFor(id: string): string {
 .corpus-home .search {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.5rem;
-    max-inline-size: 48rem;
+    gap: 0.375rem;
+    max-inline-size: 44rem;
+}
+
+.corpus-home .label {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .corpus-home .row {
@@ -338,7 +355,7 @@ function hrefFor(id: string): string {
 .corpus-home .input {
     flex: 1;
     min-inline-size: 0;
-    min-block-size: 3rem;
+    min-block-size: 2.5rem;
     padding-inline: 1rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
@@ -349,9 +366,9 @@ function hrefFor(id: string): string {
 
 .corpus-home .submit,
 .corpus-home .choice {
-    min-block-size: 2.75rem;
-    padding-inline: 1.25rem;
-    border: 0.0625rem solid var(--ink);
+    min-block-size: var(--explorer-target);
+    padding-inline: 0.875rem;
+    border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
     background: var(--surface);
     color: var(--ink);
@@ -359,7 +376,18 @@ function hrefFor(id: string): string {
     cursor: pointer;
 }
 
+.corpus-home .choice {
+    text-align: start;
+}
+
+.corpus-home .choice:hover {
+    border-color: var(--ink);
+}
+
 .corpus-home .submit {
+    min-block-size: 2.5rem;
+    padding-inline: 1.25rem;
+    border-color: var(--ink);
     background: var(--ink);
     color: var(--surface);
 }
@@ -367,25 +395,64 @@ function hrefFor(id: string): string {
 .corpus-home .doors {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
-    gap: 1.5rem;
+    gap: 1rem;
+    min-block-size: 14rem;
 }
 
 .corpus-home .door {
     display: grid;
     align-content: start;
     gap: 0.75rem;
+    padding: 1rem;
+    border: 0.0625rem solid var(--border);
+    border-radius: var(--explorer-radius);
+    background: var(--surface);
+}
+
+.corpus-home .featured-skeleton {
+    block-size: 7rem;
+}
+
+.corpus-home .browse-all {
+    min-block-size: var(--explorer-target);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--blue-text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.corpus-home .browse-all::after {
+    content: " →" / "";
+}
+
+.corpus-home .browse-all:hover {
+    text-decoration: underline;
+}
+
+.corpus-home .door-skeleton .heading {
+    inline-size: 50%;
+    block-size: 1.25rem;
+}
+
+.corpus-home .door-skeleton .block {
+    block-size: 9rem;
 }
 
 .corpus-home .title {
-    font-family: var(--font-display);
-    font-size: 1.375rem;
-    font-weight: 500;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .corpus-home .choices {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.375rem;
     list-style: none;
 }
 

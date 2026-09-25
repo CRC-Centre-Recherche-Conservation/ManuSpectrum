@@ -87,6 +87,25 @@ describe("CharacterizationCard", () => {
         expect(wrapper.find(".note").html()).toContain("<em>together</em>");
     });
 
+    it("marks on the scale the level of this identification", () => {
+        const { wrapper } = mountCard([], {});
+        const current = wrapper.findAll(".scale li[aria-current='true']");
+        expect(current).toHaveLength(1);
+        expect(current[0].text()).toContain("Reliable");
+    });
+
+    it("names an element group as the elements of its level", () => {
+        const { wrapper } = mountCard([], {}, 200, {
+            elements: [
+                {
+                    level: { ...valueRef("l:major", "major"), rank: 0 },
+                    values: [valueRef("e:pb", "Pb")],
+                },
+            ],
+        });
+        expect(wrapper.find(".details").text()).toContain("Elements (major)");
+    });
+
     it("lists the evidence analyses by name and opens one", async () => {
         const { wrapper, store } = mountCard([uuid(101)], {
             [uuid(101)]: analysisWith(uuid(101), true),
@@ -98,18 +117,19 @@ describe("CharacterizationCard", () => {
         expect(store.focus).toEqual({ kind: "analysis", id: uuid(101) });
     });
 
-    it("adds the material and its evidence in one step", async () => {
+    it("adds the material and every evidence analysis in one step, those without data too", async () => {
         const { wrapper, store, summary } = mountCard([uuid(101), uuid(102)], {
             [uuid(101)]: analysisWith(uuid(101), true),
-            [uuid(102)]: analysisWith(uuid(102), true),
+            [uuid(102)]: analysisWith(uuid(102), false),
         });
         await flushPromises();
         await wrapper.find(".with-evidence button").trigger("click");
         expect(store.basket.map((item) => item.key)).toEqual([
             `ch:${summary.id}:-`,
-            `af:${uuid(101)}:${uuid(901)}`,
-            `af:${uuid(102)}:${uuid(902)}`,
+            `an:${uuid(101)}:-`,
+            `an:${uuid(102)}:-`,
         ]);
+        expect(wrapper.text()).not.toContain("no data to show");
     });
 
     it("refuses the batch when it does not fit", async () => {
@@ -117,10 +137,7 @@ describe("CharacterizationCard", () => {
             [uuid(101)]: analysisWith(uuid(101), true),
         });
         store.addManyToBasket(
-            Array.from(
-                { length: 29 },
-                (_, n) => `af:${uuid(300 + n)}:${uuid(400 + n)}`,
-            ),
+            Array.from({ length: 29 }, (_, n) => `an:${uuid(300 + n)}:-`),
         );
         await flushPromises();
         expect(
@@ -129,30 +146,14 @@ describe("CharacterizationCard", () => {
         expect(store.basket).toHaveLength(29);
     });
 
-    it("reports an evidence analysis without displayable data", async () => {
-        const { wrapper, store, summary } = mountCard([uuid(101), uuid(102)], {
-            [uuid(101)]: analysisWith(uuid(101), true),
-            [uuid(102)]: analysisWith(uuid(102), false),
-        });
+    it("adds its evidence even when the analyses cannot be read", async () => {
+        const { wrapper, store, summary } = mountCard([uuid(101)], {}, 503);
         await flushPromises();
-        expect(wrapper.find(".with-evidence").text()).toContain(
-            "1 supporting analysis has no data to show",
-        );
         await wrapper.find(".with-evidence button").trigger("click");
         expect(store.basket.map((item) => item.key)).toEqual([
             `ch:${summary.id}:-`,
-            `af:${uuid(101)}:${uuid(901)}`,
+            `an:${uuid(101)}:-`,
         ]);
-    });
-
-    it("adds nothing with its evidence when an analysis cannot be read, and says so", async () => {
-        const { wrapper } = mountCard([uuid(101)], {}, 503);
-        await flushPromises();
-        expect(wrapper.find(".with-evidence button").exists()).toBe(false);
-        expect(wrapper.text()).toContain(
-            "The supporting analyses could not be read",
-        );
-        expect(wrapper.find(".alone button").exists()).toBe(true);
     });
 
     it("links a web source and writes an unsafe one as plain text", () => {
@@ -179,7 +180,7 @@ describe("CharacterizationCard", () => {
     });
 
     it("offers no evidence of the previous material while the next one's loads", async () => {
-        const { wrapper } = mountCard([uuid(101)], {
+        const { wrapper, store } = mountCard([uuid(101)], {
             [uuid(101)]: analysisWith(uuid(101), true),
         });
         await flushPromises();
@@ -191,8 +192,14 @@ describe("CharacterizationCard", () => {
             summary: characterization(2, { evidence: [uuid(102)] }),
         });
         await flushPromises();
-        expect(wrapper.find(".with-evidence button").exists()).toBe(false);
         expect(wrapper.find(".evidence").text()).not.toContain("Analysis 101");
+        await wrapper.find(".with-evidence button").trigger("click");
+        expect(store.basket.map((item) => item.key)).toContain(
+            `an:${uuid(102)}:-`,
+        );
+        expect(store.basket.map((item) => item.key)).not.toContain(
+            `an:${uuid(101)}:-`,
+        );
     });
 
     it("gives its section headings ids of its own", () => {

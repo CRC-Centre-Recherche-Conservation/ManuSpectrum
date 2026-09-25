@@ -1,21 +1,39 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef } from "vue";
+import {
+    computed,
+    inject,
+    nextTick,
+    onMounted,
+    ref,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import AnalysisRow from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue";
 import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue";
 import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue";
+import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
 
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
+import {
+    RESULTS_MEMO_KEY,
+    SCREEN_FOCUS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import {
     searchQuery,
     useSearch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
-import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import {
+    PAGE_SIZES,
+    selectedFacets,
+    useExplorerStore,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     documentHref,
     snapshotOf,
@@ -26,33 +44,47 @@ import type {
     DocumentHit,
     FacetKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import type { PageSize } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
+const SKELETON_CARDS = 4;
+
+/**
+ * The results (S1). Coming back from a document opened here shows the same
+ * page of the same results again without a request, at the same scroll, with
+ * the keyboard focus on the result that was opened (`RESULTS_MEMO_KEY`).
+ */
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const { activeFilters } = useActiveFilters();
+const memo = inject(
+    RESULTS_MEMO_KEY,
+    () => ref<ResultsMemo | null>(null),
+    true,
+);
+const screenFocus = inject(SCREEN_FOCUS_KEY, null);
 const heading = useTemplateRef<HTMLElement>("heading");
-useScreenHeading(() => heading.value);
+const list = useTemplateRef<HTMLElement>("list");
 
 // Declared before useSearch, whose source reads `page` at once. A page belongs
 // to one filter set: any filter change reads as page 1 in the same tick.
 const filterKey = computed(() => searchQuery(store.filters, 1).toString());
-const pageState = ref({ key: "", number: 1 });
+const returning = memo.value?.filterKey === filterKey.value ? memo.value : null;
+const pageState = ref({
+    key: returning ? filterKey.value : "",
+    number: returning?.page ?? 1,
+});
+const restoring = ref(returning?.opened != null);
 const page = computed(() =>
     pageState.value.key === filterKey.value ? pageState.value.number : 1,
 );
-const railOpen = ref(false);
 
-const search = useSearch(() => searchQuery(store.filters, page.value));
+useScreenHeading(() => (restoring.value ? null : heading.value));
+const search = useSearch(
+    () => searchQuery(store.filters, page.value),
+    (query) => (memo.value?.query === query ? memo.value.payload : null),
+);
 useFacetLabels(() => search.data.value?.facets);
-const probe = useSearch(() => {
-    const data = search.data.value;
-    const filters = store.filters;
-    const empty =
-        search.status.value === "ready" && data !== null && data.total === 0;
-    return empty && filters.grain === "documents" && filters.onlyWithAnalyses
-        ? searchQuery({ ...filters, onlyWithAnalyses: false }, 1)
-        : null;
-});
 
 const total = computed(() => search.data.value?.total ?? 0);
 const pageCount = computed(() => {
@@ -68,21 +100,71 @@ const countText = computed(() =>
         true,
     ),
 );
-const withoutAnalysesCount = computed(() =>
-    probe.status.value === "ready" ? probe.data.value?.total ?? 0 : 0,
+const withoutAnalyses = computed(() =>
+    store.filters.grain === "documents"
+        ? search.data.value?.withoutAnalyses ?? 0
+        : 0,
+);
+const withoutAnalysesText = computed(() =>
+    interpolate(
+        store.filters.empty
+            ? $ngettext(
+                  "Hide the %{n} document without analyses",
+                  "Hide the %{n} documents without analyses",
+                  withoutAnalyses.value,
+              )
+            : $ngettext(
+                  "+ %{n} document without analyses — show",
+                  "+ %{n} documents without analyses — show",
+                  withoutAnalyses.value,
+              ),
+        { n: withoutAnalyses.value },
+        true,
+    ),
 );
 const isEmpty = computed(
     () => search.status.value === "ready" && total.value === 0,
 );
-const railToggleLabel = computed(() =>
+const showLabel = computed(() =>
     interpolate(
-        $gettext("Filters (%{count})"),
-        {
-            count: store.activeFilterCount,
-        },
+        $ngettext("See %{n} result", "See %{n} results", total.value),
+        { n: total.value },
         true,
     ),
 );
+const loading = computed(() => search.status.value === "loading");
+/** Nothing to show yet: the first load of this screen. */
+const firstLoad = computed(() => loading.value && search.data.value === null);
+
+watch(
+    () => [search.data.value, search.status.value] as const,
+    ([payload, status]) => {
+        if (payload && status === "ready") {
+            memo.value = {
+                query: searchQuery(store.filters, page.value).toString(),
+                filterKey: filterKey.value,
+                page: page.value,
+                payload,
+                scroll: 0,
+                opened: null,
+            };
+        }
+    },
+    { immediate: true },
+);
+
+onMounted(async () => {
+    if (!returning || returning.opened === null) return;
+    await nextTick();
+    window.scrollTo(0, returning.scroll);
+    list.value
+        ?.querySelector<HTMLElement>(
+            `[data-result="${returning.opened}"] :is(a, button)`,
+        )
+        ?.focus({ preventScroll: true });
+    if (screenFocus) screenFocus.value = false;
+    restoring.value = false;
+});
 
 function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
     return hit.type === "document";
@@ -96,15 +178,19 @@ function setGrain(grain: "documents" | "analyses"): void {
     store.setFilter("grain", grain);
 }
 
-function onOnlyWithAnalyses(event: Event): void {
-    store.setFilter(
-        "onlyWithAnalyses",
-        (event.target as HTMLInputElement).checked,
-    );
+function toggleEmpty(): void {
+    store.setFilter("empty", !store.filters.empty);
 }
 
-function includeWithoutAnalyses(): void {
-    store.setFilter("onlyWithAnalyses", false);
+function setSize(size: PageSize): void {
+    store.setFilter("size", size);
+}
+
+/** Records where the reader leaves the results, to come back there. */
+function rememberOpened(id: string): void {
+    if (memo.value) {
+        memo.value = { ...memo.value, scroll: window.scrollY, opened: id };
+    }
 }
 
 function hrefFor(id: string): string {
@@ -112,11 +198,13 @@ function hrefFor(id: string): string {
 }
 
 function openDocument(id: string): void {
+    rememberOpened(id);
     store.openDocument(id);
 }
 
 /** The document, then its card: two history entries, so Back closes the card first. */
 async function openAnalysis(hit: AnalysisHit): Promise<void> {
+    rememberOpened(hit.id);
     store.openDocument(hit.document.id, hit.canvas);
     await nextTick();
     store.focusOn({ kind: "analysis", id: hit.id });
@@ -129,10 +217,6 @@ function goToPage(next: number): void {
     };
 }
 
-function toggleRail(): void {
-    railOpen.value = !railOpen.value;
-}
-
 function goHome(): void {
     store.setCorpusScreen("home");
 }
@@ -140,30 +224,24 @@ function goHome(): void {
 
 <template>
     <div class="corpus-results">
-        <button
-            type="button"
-            class="rail-toggle"
-            aria-controls="explorer-facet-rail"
-            :aria-expanded="railOpen ? 'true' : 'false'"
-            @click="toggleRail"
-        >
-            <span>{{ railToggleLabel }}</span>
-        </button>
-        <aside
-            id="explorer-facet-rail"
+        <RailPanel
             class="rail"
-            :class="{ 'is-open': railOpen }"
-            :aria-label="$gettext('Filters')"
+            :show-label="showLabel"
         >
             <FacetRail
                 :facets="search.data.value?.facets ?? []"
+                :selected="selectedFacets(store.filters)"
                 @change="onFacetChange"
             />
-        </aside>
+        </RailPanel>
         <section
             class="results"
             aria-labelledby="explorer-results-title"
         >
+            <BusyStatus
+                :busy="loading"
+                :first="firstLoad"
+            />
             <h2
                 id="explorer-results-title"
                 ref="heading"
@@ -198,17 +276,28 @@ function goHome(): void {
                         <span>{{ $gettext("Analyses") }}</span>
                     </label>
                 </fieldset>
-                <label
-                    v-if="store.filters.grain === 'documents'"
-                    class="only-with-analyses"
+                <div
+                    class="page-size"
+                    role="group"
+                    :aria-label="$gettext('Results per page')"
                 >
-                    <input
-                        type="checkbox"
-                        :checked="store.filters.onlyWithAnalyses"
-                        @change="onOnlyWithAnalyses"
-                    />
-                    <span>{{ $gettext("Only with analyses") }}</span>
-                </label>
+                    <span
+                        class="page-size-label"
+                        aria-hidden="true"
+                        >{{ $gettext("Per page") }}</span
+                    >
+                    <button
+                        v-for="size in PAGE_SIZES"
+                        :key="size"
+                        type="button"
+                        :aria-pressed="
+                            store.filters.size === size ? 'true' : 'false'
+                        "
+                        @click="setSize(size)"
+                    >
+                        <span>{{ size }}</span>
+                    </button>
+                </div>
                 <p
                     class="count"
                     aria-live="polite"
@@ -239,26 +328,6 @@ function goHome(): void {
                     <span>{{ $gettext("No result.") }}</span>
                 </p>
                 <button
-                    v-if="withoutAnalysesCount > 0"
-                    type="button"
-                    class="include-without"
-                    @click="includeWithoutAnalyses"
-                >
-                    <span>
-                        {{
-                            interpolate(
-                                $gettext(
-                                    "Include documents without analyses (%{n})",
-                                ),
-                                {
-                                    n: withoutAnalysesCount,
-                                },
-                                true,
-                            )
-                        }}
-                    </span>
-                </button>
-                <button
                     v-for="filter in activeFilters"
                     :key="filter.id"
                     type="button"
@@ -277,15 +346,32 @@ function goHome(): void {
                 </button>
             </div>
             <ul
-                v-else
+                v-else-if="firstLoad"
                 class="list"
-                :aria-busy="
-                    search.status.value === 'loading' ? 'true' : 'false'
-                "
+                aria-hidden="true"
+            >
+                <li
+                    v-for="index in SKELETON_CARDS"
+                    :key="index"
+                    class="card-skeleton"
+                >
+                    <span class="ms-skeleton thumbnail"></span>
+                    <span class="lines">
+                        <span class="ms-skeleton line"></span>
+                        <span class="ms-skeleton line short"></span>
+                    </span>
+                </li>
+            </ul>
+            <ul
+                v-else
+                ref="list"
+                class="list"
+                :aria-busy="loading ? 'true' : 'false'"
             >
                 <li
                     v-for="hit in search.data.value?.results ?? []"
                     :key="hit.id"
+                    :data-result="hit.id"
                 >
                     <DocumentCard
                         v-if="isDocument(hit)"
@@ -300,6 +386,18 @@ function goHome(): void {
                     />
                 </li>
             </ul>
+            <p
+                v-if="withoutAnalyses > 0"
+                class="without-analyses"
+            >
+                <button
+                    type="button"
+                    :aria-pressed="store.filters.empty ? 'true' : 'false'"
+                    @click="toggleEmpty"
+                >
+                    <span>{{ withoutAnalysesText }}</span>
+                </button>
+            </p>
             <nav
                 v-if="pageCount > 1 && !isEmpty"
                 class="pagination"
@@ -339,26 +437,26 @@ function goHome(): void {
 <style scoped>
 .corpus-results {
     display: grid;
-    grid-template-columns: 17rem 1fr;
-    gap: 2rem;
-    padding-block: 1rem;
-}
-
-.corpus-results .rail-toggle {
-    display: none;
+    grid-template-columns: var(--explorer-rail) minmax(0, 1fr);
+    align-items: start;
+    gap: 1.5rem;
+    padding-block: 0.5rem 1rem;
 }
 
 .corpus-results .results {
     display: grid;
     align-content: start;
-    gap: 1rem;
+    gap: 0.75rem;
+    min-inline-size: 0;
 }
 
 .corpus-results .toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 1rem 1.5rem;
+    gap: 0.5rem 1.25rem;
+    padding-block-end: 0.5rem;
+    border-block-end: 0.0625rem solid var(--border);
 }
 
 .corpus-results .grain {
@@ -367,24 +465,100 @@ function goHome(): void {
     border: none;
 }
 
-.corpus-results .option,
-.corpus-results .only-with-analyses {
+.corpus-results .option {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target);
     cursor: pointer;
+}
+
+.corpus-results .page-size {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+
+.corpus-results .page-size-label {
+    margin-inline-end: 0.25rem;
+    color: var(--ink-muted);
+}
+
+.corpus-results .page-size button {
+    min-inline-size: var(--explorer-target);
+    min-block-size: var(--explorer-target);
+    border: 0.0625rem solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.corpus-results .page-size button[aria-pressed="true"] {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--surface);
+}
+
+.corpus-results .without-analyses button {
+    min-block-size: var(--explorer-target);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--blue-text);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.corpus-results .without-analyses button:hover {
+    text-decoration: underline;
 }
 
 .corpus-results .count {
     margin-inline-start: auto;
     color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
 }
 
 .corpus-results .list {
     display: grid;
-    gap: 0.75rem;
+    gap: 0.5rem;
     list-style: none;
+}
+
+.corpus-results .card-skeleton {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: 1rem;
+    padding: 0.75rem;
+    border: 0.0625rem solid var(--border);
+    border-radius: var(--explorer-radius);
+    background: var(--surface);
+}
+
+.corpus-results .card-skeleton .thumbnail {
+    block-size: 5rem;
+}
+
+.corpus-results .card-skeleton .lines {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+}
+
+.corpus-results .card-skeleton .line {
+    inline-size: 60%;
+    block-size: 1.125rem;
+}
+
+.corpus-results .card-skeleton .line.short {
+    inline-size: 35%;
+    block-size: 0.75rem;
 }
 
 .corpus-results .empty {
@@ -394,10 +568,9 @@ function goHome(): void {
 }
 
 .corpus-results .empty button,
-.corpus-results .pagination button,
-.corpus-results .rail-toggle {
-    min-block-size: 2.75rem;
-    padding-inline: 1rem;
+.corpus-results .pagination button {
+    min-block-size: var(--explorer-target);
+    padding-inline: 0.875rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
     background: var(--surface);
@@ -433,22 +606,9 @@ function goHome(): void {
     white-space: nowrap;
 }
 
-@media (max-width: 64rem) {
+@media (max-width: 80rem) {
     .corpus-results {
-        grid-template-columns: 1fr;
-    }
-
-    .corpus-results .rail-toggle {
-        display: inline-flex;
-        justify-self: start;
-    }
-
-    .corpus-results .rail {
-        display: none;
-    }
-
-    .corpus-results .rail.is-open {
-        display: block;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 </style>

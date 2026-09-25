@@ -24,21 +24,33 @@ export interface RequestHandle<T> {
  * flash empty. A 404 is `unavailable`; anything else is `error`, which a retry
  * reloads. Abort answers are dropped. The stored controller is cleared once a
  * request settles, so disposing the scope afterwards does not abort it again.
+ * A payload `cached` returns for the source is taken as is, with no request;
+ * Retry always loads.
  */
 export function useRequest<T>(
     source: () => string | null,
     load: (argument: string, signal: AbortSignal) => Promise<T>,
+    cached?: (argument: string) => T | null,
 ): RequestHandle<T> {
     const status = ref<RequestStatus>("idle");
     const data = shallowRef<T | null>(null);
     let controller: AbortController | null = null;
 
-    async function run(argument: string | null): Promise<void> {
+    async function run(
+        argument: string | null,
+        useCache = true,
+    ): Promise<void> {
         controller?.abort();
         controller = null;
         if (argument === null) {
             status.value = "idle";
             data.value = null;
+            return;
+        }
+        const kept = useCache ? cached?.(argument) ?? null : null;
+        if (kept !== null) {
+            data.value = kept;
+            status.value = "ready";
             return;
         }
         const current = new AbortController();
@@ -65,5 +77,5 @@ export function useRequest<T>(
     watch(source, (argument) => void run(argument), { immediate: true });
     onScopeDispose(() => controller?.abort());
 
-    return { status, data, retry: () => void run(source()) };
+    return { status, data, retry: () => void run(source(), false) };
 }

@@ -9,8 +9,8 @@ import {
     characterization,
     label,
     sample,
+    technique,
     uuid,
-    valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 function mountList(props: Record<string, unknown>) {
@@ -36,7 +36,7 @@ describe("OnThisPage", () => {
     it("groups the analyses of the page by technique", () => {
         const annotations = [
             annotation(1),
-            annotation(2, { technique: valueRef("t:fors", "FORS") }),
+            annotation(2, { technique: technique("t:fors", "FORS", 2) }),
             annotation(3),
         ];
         const wrapper = mountList({ annotations });
@@ -63,6 +63,46 @@ describe("OnThisPage", () => {
         expect(wrapper.find(".technique li").text()).toContain(
             "outside the filters",
         );
+    });
+
+    it("leaves out the page and document a row name repeats", () => {
+        const wrapper = mountList({
+            annotations: [
+                annotation(1, {
+                    name: label("Zone bleue — 70r — Grenoble, Ms.76 Rés."),
+                }),
+            ],
+            pageLabel: "70r",
+            documentName: "Grenoble. Bibliothèque municipale, Ms.76 Rés.",
+        });
+        expect(wrapper.find(".technique li button").text()).toBe("Zone bleue");
+        const bare = mountList({
+            annotations: [annotation(2, { name: label("XRF — 70v — spot 2") })],
+            pageLabel: "70r",
+        });
+        expect(bare.find(".technique li button").text()).toBe(
+            "XRF — 70v — spot 2",
+        );
+    });
+
+    it("folds the unlocated analyses under a count when the page has its own", async () => {
+        const unlocated = [
+            {
+                analysis: uuid(150),
+                name: label("FORS_014"),
+                technique: null,
+                dataKind: "xy",
+                unpublished: false,
+                match: true,
+            },
+        ];
+        const wrapper = mountList({ annotations: [annotation(1)], unlocated });
+        const toggle = wrapper.find(".unlocated .fold");
+        expect(toggle.text()).toBe("Without a position on the image (1)");
+        expect(toggle.attributes("aria-expanded")).toBe("false");
+        expect(wrapper.find(".unlocated").text()).not.toContain("FORS_014");
+        await toggle.trigger("click");
+        expect(wrapper.find(".unlocated").text()).toContain("FORS_014");
     });
 
     it("lists the unlocated analyses under their own heading", () => {

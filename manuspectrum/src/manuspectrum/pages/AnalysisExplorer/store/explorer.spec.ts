@@ -19,10 +19,11 @@ function characterization(n: number): string {
 beforeEach(() => setActivePinia(createPinia()));
 
 describe("filters", () => {
-    it("defaults to the documents grain with only documents that have analyses", () => {
+    it("defaults to the documents grain, ten per page, without the documents that have no analysis", () => {
         const store = useExplorerStore();
         expect(store.filters.grain).toBe("documents");
-        expect(store.filters.onlyWithAnalyses).toBe(true);
+        expect(store.filters.empty).toBe(false);
+        expect(store.filters.size).toBe(10);
         expect(hasActiveFilters(store.filters)).toBe(false);
     });
 
@@ -39,7 +40,8 @@ describe("filters", () => {
         store.setFilter("technique", ["a", "b"]);
         store.setFilter("q", "lead");
         store.setFilter("grain", "analyses");
-        store.setFilter("onlyWithAnalyses", false);
+        store.setFilter("empty", true);
+        store.setFilter("size", 50);
         store.clearFilter("technique", "a");
         expect(store.filters.technique).toEqual(["b"]);
         store.clearFilter("q");
@@ -48,7 +50,8 @@ describe("filters", () => {
         expect(store.filters).toEqual({
             ...emptyFilters(),
             grain: "analyses",
-            onlyWithAnalyses: false,
+            empty: true,
+            size: 50,
         });
     });
 

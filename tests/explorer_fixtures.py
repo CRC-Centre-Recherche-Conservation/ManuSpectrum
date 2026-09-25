@@ -43,6 +43,8 @@ ROLE_NODES = [
     ("component", "label_of_name", "string", "comp_name"),
     ("component", "item_visual_is_part_of_document", "resource-instance", "comp_doc"),
     ("component", "location_in_document", "annotation", "comp_zone"),
+    ("component", "type", "reference", "comp_type"),
+    ("component", "color_features", "reference", "comp_colour"),
     ("analysis", "label_of_name", "string", "an_name"),
     ("analysis", "component_observed", "resource-instance", "an_observed"),
     ("analysis", "analysis_by_project", "resource-instance", "an_project"),
@@ -90,6 +92,12 @@ ROLE_NODES = [
     ("analysis", "instrument", "resource-instance", "an_instrument"),
     ("analysis", "chemical_imaging_manifest", "manifest", "an_imaging"),
     ("document", "current_owner", "resource-instance-list", "doc_owner"),
+    ("document", "value_of_identifier", "string", "doc_identifier"),
+    ("document", "type_of_identifier", "reference", "doc_identifier"),
+    ("document", "date_start_of_production_time", "date", "doc_production"),
+    ("document", "date_end_of_production_time", "date", "doc_production"),
+    ("document", "content_of_statement", "string", "doc_statement"),
+    ("document", "type", "reference", "doc_type"),
 ]
 
 CANVAS = "https://example.org/iiif/ms59/canvas/f1v"
@@ -227,6 +235,16 @@ class ExplorerCase(TestCase):
             resourceinstance=resource,
             nodegroup_id=node.nodegroup_id,
             data={str(node.nodeid): value},
+        )
+
+    @classmethod
+    def tile_values(cls, resource, slug, **values):
+        """One tile holding several nodes of one nodegroup, ``alias=value``."""
+        nodes = [cls.nodes[(slug, alias)] for alias in values]
+        return TileModel.objects.create(
+            resourceinstance=resource,
+            nodegroup_id=nodes[0].nodegroup_id,
+            data={str(n.nodeid): values[n.alias] for n in nodes},
         )
 
     @staticmethod

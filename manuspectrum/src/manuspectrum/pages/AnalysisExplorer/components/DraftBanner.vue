@@ -22,8 +22,8 @@ const message = computed(() => {
                   props.count,
               )
             : $ngettext(
-                  "%{n} draft on this page; it is marked “Draft”.",
-                  "%{n} drafts on this page; they are marked “Draft”.",
+                  "%{n} draft in this document; it is marked “Draft”.",
+                  "%{n} drafts in this document; they are marked “Draft”.",
                   props.count,
               );
     return interpolate(text, { n: props.count }, true);
@@ -41,10 +41,11 @@ const message = computed(() => {
 
 <style scoped>
 .draft-banner {
-    padding: 0.75rem 1rem;
-    border-inline-start: 0.25rem solid var(--accent);
+    padding: 0.375rem 0.75rem;
+    border-inline-start: 0.1875rem solid var(--accent);
+    border-radius: 0.25rem;
     background: var(--bg-warm);
     color: var(--ink);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
 }
 </style>

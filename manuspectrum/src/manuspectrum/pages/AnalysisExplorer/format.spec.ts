@@ -38,11 +38,19 @@ describe("safeHref", () => {
         );
     });
 
-    it("refuses any other scheme, a relative path and an empty value", () => {
+    it("keeps a path of this site", () => {
+        expect(safeHref("/en/report/1")).toBe("/en/report/1");
+        expect(safeHref(" /files/x.csv?download=1")).toBe(
+            "/files/x.csv?download=1",
+        );
+    });
+
+    it("refuses any other scheme, another host, a relative path and an empty value", () => {
         expect(safeHref("javascript:alert(1)")).toBeNull();
         expect(safeHref(" JavaScript:alert(1)")).toBeNull();
         expect(safeHref("data:text/html,<script>alert(1)</script>")).toBeNull();
-        expect(safeHref("/en/report/1")).toBeNull();
+        expect(safeHref("//evil.example/x")).toBeNull();
+        expect(safeHref("/\\evil.example/x")).toBeNull();
         expect(safeHref("files/x.csv")).toBeNull();
         expect(safeHref("")).toBeNull();
         expect(safeHref(null)).toBeNull();

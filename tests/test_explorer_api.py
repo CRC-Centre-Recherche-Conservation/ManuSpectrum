@@ -36,6 +36,14 @@ class SearchRouteTests(ServiceCase):
         assert_shape(self, response.json(), "SearchResponse")
         for hit in response.json()["results"]:
             assert_shape(self, hit, "AnalysisHit")
+        for facet in response.json()["facets"]:
+            assert_shape(self, facet, "Facet")
+            for value in facet["values"]:
+                assert_shape(self, value, "FacetValue")
+        techniques = [r["technique"] for r in response.json()["results"]]
+        self.assertTrue(any(techniques))
+        for technique in filter(None, techniques):
+            assert_shape(self, technique, "Technique")
         again = self.client.get(
             "/en/api/explorer/search", HTTP_IF_NONE_MATCH=response["ETag"]
         )
@@ -46,9 +54,18 @@ class SearchRouteTests(ServiceCase):
 
         self.assertTrue(results)
         for hit in results:
+            assert_shape(self, hit, "DocumentHit")
             self.assertTrue(
                 hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
             )
+
+    def test_a_search_scoped_to_a_document_has_the_contract_shape(self):
+        response = self.get(f"?document={self.documents['open'].pk}")
+
+        self.assertEqual(response.status_code, 200)
+        assert_shape(self, response.json(), "SearchResponse")
+        for hit in response.json()["results"]:
+            assert_shape(self, hit, "AnalysisHit")
 
     def test_a_signed_in_reader_gets_a_private_answer(self):
         self.client.force_login(self.editor)
@@ -203,6 +220,29 @@ class ReadRightsTests(ReadRightsCase):
         self.assertIsNone(payload["technique"])
         self.assertNotIn("Portable XRF", str(payload))
 
+    def test_a_part_nodegroup_the_visitor_cannot_read_leaves_its_facet_out(self):
+        component = self.components["open"]
+        self.tile(
+            component,
+            "type",
+            self.reference_value("http://vocab/illum", "Illumination"),
+        )
+        self.tile(
+            component,
+            "color_features",
+            self.reference_value("http://vocab/part-blue", "Blue"),
+        )
+        shown = self.client.get("/en/api/explorer/search").json()
+        self.assertIn("partType", [f["key"] for f in shown["facets"]])
+
+        self.deny(("component", "type"), ("component", "color_features"))
+        search = self.client.get("/en/api/explorer/search").json()
+
+        keys = [f["key"] for f in search["facets"]]
+        self.assertNotIn("partType", keys)
+        self.assertNotIn("partColour", keys)
+        self.assertNotIn("Illumination", str(search))
+
     def test_a_zone_nodegroup_the_visitor_cannot_read_gives_no_zone(self):
         self.tile(
             self.components["open"],
@@ -235,19 +275,39 @@ class ReadRightsTests(ReadRightsCase):
         self.assertNotIn("initial", payload["component"]["name"]["value"])
 
     def test_a_document_of_a_model_the_visitor_cannot_read_is_not_listed(self):
-        self.deny(
-            ("document", "label_of_name"),
-            ("document", "facsimiles"),
-            ("document", "current_owner"),
-        )
+        self.deny(*(role for role in self.nodes if role[0] == "document"))
 
         search = self.client.get(
             "/en/api/explorer/search",
-            {"grain": "documents", "onlyWithAnalyses": "false"},
+            {"grain": "documents", "empty": "1"},
         ).json()
 
         self.assertEqual(search["results"], [])
         self.assertNotIn("Ms 59", str(search))
+
+    def test_an_identifier_nodegroup_the_visitor_cannot_read_gives_no_shelfmark(self):
+        self.tile_values(
+            self.documents["open"],
+            "document",
+            value_of_identifier=self.string_value("Latin 8055"),
+        )
+        self.tile(
+            self.documents["open"],
+            "content_of_statement",
+            self.string_value("A psalter"),
+        )
+        self.deny(("document", "value_of_identifier"))
+
+        search = self.client.get(
+            "/en/api/explorer/search", {"grain": "documents"}
+        ).json()
+
+        hit = next(
+            r for r in search["results"] if r["id"] == str(self.documents["open"].pk)
+        )
+        self.assertIsNone(hit["shelfmark"])
+        self.assertEqual(hit["description"]["value"], "A psalter")
+        self.assertNotIn("Latin 8055", str(search))
 
 
 class DocumentRouteTests(CorpusCase):
@@ -470,6 +530,24 @@ class AnalysisRouteTests(CorpusCase):
         )
         self.assertIsNone(payload["citation"])
 
+    def test_the_report_link_is_a_path_in_the_language_of_the_request(self):
+        analysis = self.analyses["open"].pk
+
+        english = self.get(analysis).json()
+        french = self.client.get(f"/fr/api/explorer/analysis/{analysis}").json()
+
+        self.assertEqual(english["reportUrl"], f"/en/report/{analysis}")
+        self.assertEqual(french["reportUrl"], f"/fr/report/{analysis}")
+
+    def test_a_local_file_link_is_a_path_on_the_site(self):
+        files = self.get(self.analyses["open"].pk).json()["files"]
+
+        for entry in files:
+            self.assertTrue(entry["downloadUrl"].startswith("/files/"), entry)
+            if entry["previewUrl"]:
+                self.assertTrue(entry["previewUrl"].startswith("/"), entry)
+                self.assertFalse(entry["previewUrl"].startswith("//"), entry)
+
     def test_an_operator_whose_resource_is_gone_is_left_out(self):
         gone = "00000000-0000-4000-8000-0000000000de"
         self.tile(self.analyses["open"], "performed_by_actor", [{"resourceId": gone}])
@@ -539,6 +617,56 @@ class ItemsRouteTests(CorpusCase):
         self.assertEqual(payload["missing"], [unknown])
         self.assertEqual([i["kind"] for i in payload["items"]], ["imaging"])
         assert_shape(self, payload["items"][0]["file"], "FileEntry")
+
+    def test_an_an_key_restores_the_whole_analysis_with_the_files_it_shows(self):
+        key = f"an:{self.analyses['open'].pk}:-"
+
+        payload = self.get([key]).json()
+
+        self.assertEqual(payload["missing"], [])
+        item = payload["items"][0]
+        assert_shape(self, item, "AnalysisItem")
+        self.assertEqual((item["key"], item["kind"]), (key, "analysis"))
+        self.assertEqual(item["analysis"]["id"], str(self.analyses["open"].pk))
+        self.assertEqual([f["id"] for f in item["files"]], [self.CSV])
+        for entry in item["files"]:
+            assert_shape(self, entry, "FileEntry")
+
+    def test_an_analysis_with_nothing_to_show_is_still_an_item(self):
+        key = f"an:{self.analyses['on_document'].pk}:-"
+
+        payload = self.get([key]).json()
+
+        self.assertEqual(payload["missing"], [])
+        self.assertEqual(payload["items"][0]["files"], [])
+
+    def test_an_imaging_manifest_comes_with_its_layers_in_the_analysis_item(self):
+        self.tile(
+            self.analyses["open"],
+            "chemical_imaging_manifest",
+            "https://example.org/iiif/imaging/x",
+        )
+
+        with mock.patch(
+            "manuspectrum.views.explorer_service.manifest_json",
+            return_value=self.IMAGING_MANIFEST,
+        ):
+            payload = self.get([f"an:{self.analyses['open'].pk}:-"]).json()
+
+        files = payload["items"][0]["files"]
+        self.assertEqual([f["dataKind"] for f in files], ["xy", "chemical-imaging"])
+        self.assertEqual([layer["label"] for layer in files[1]["layers"]], ["Pb"])
+
+    def test_a_hidden_unknown_or_malformed_analysis_key_is_missing(self):
+        self.embargo(self.analyses["open"])
+        hidden = f"an:{self.analyses['open'].pk}:-"
+        unknown = "an:00000000-0000-4000-8000-00000000000a:-"
+        malformed = f"an:{self.analyses['on_document'].pk}:0"
+
+        payload = self.get([hidden, unknown, malformed]).json()
+
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(payload["missing"], sorted([hidden, unknown, malformed]))
 
     def test_malformed_and_hidden_keys_are_missing_alike(self):
         self.embargo(self.analyses["open"])

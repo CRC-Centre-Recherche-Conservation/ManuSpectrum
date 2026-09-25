@@ -2,19 +2,18 @@
 import { computed, defineAsyncComponent, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
 
 import {
+    foldText,
     formatDateRange,
     formatSize,
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
-import {
-    entryKeyOf,
-    fileKey,
-} from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { viewerFor } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
@@ -26,6 +25,7 @@ import type {
     Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 interface ConditionGroup {
     title: Label;
@@ -40,16 +40,23 @@ const COPYRIGHT = "©";
  * `analysisId`, and its heading (one element from loading to loaded) says it
  * is loading meanwhile.
  */
-const props = defineProps<{
-    handle: RequestHandle<AnalysisPayload>;
-    analysisId: string;
-}>();
+const props = withDefaults(
+    defineProps<{
+        handle: RequestHandle<AnalysisPayload>;
+        analysisId: string;
+        /** Names the heading (a drawer is labelled by it). */
+        headingId?: string;
+        /** False hides « Close » where the container has its own. */
+        closable?: boolean;
+    }>(),
+    { headingId: undefined, closable: true },
+);
 
 const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
 const store = useExplorerStore();
-const { $gettext } = useGettext();
+const { $gettext, interpolate } = useGettext();
 const lang = document.documentElement.lang || "en";
 const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -98,7 +105,7 @@ const previewed = computed<FileEntry[]>(() => {
     return shown;
 });
 const entryKey = computed(() =>
-    analysis.value ? entryKeyOf(analysis.value) : null,
+    analysis.value ? analysisKey(analysis.value.id) : null,
 );
 const conditionGroups = computed<ConditionGroup[]>(() => {
     const groups = new Map<string, ConditionGroup>();
@@ -114,6 +121,21 @@ const conditionGroups = computed<ConditionGroup[]>(() => {
     }
     return [...groups.values()];
 });
+/** A single group whose title the section heading already says (« conditions ») shows no title of its own. */
+const conditionTitleShown = computed(() => {
+    const groups = conditionGroups.value;
+    if (groups.length !== 1) return true;
+    const title = foldText(groups[0].title.value).trim();
+    return !foldText($gettext("Measurement conditions")).includes(title);
+});
+const entryHints = computed(() => {
+    const current = analysis.value;
+    const key = entryKey.value;
+    if (!current || !key) return null;
+    return new Map<string, SelectionHint>([
+        [key, { title: current.name, kind: $gettext("analysis") }],
+    ]);
+});
 const date = computed(() =>
     analysis.value ? formatDateRange(analysis.value.date) : "",
 );
@@ -127,7 +149,8 @@ const attribution = computed(() => {
     if (!text) return "";
     return text.startsWith(COPYRIGHT) ? text : `${COPYRIGHT} ${text}`;
 });
-const permalink = computed(() => safeHref(analysis.value?.permalink));
+/** The Arches report of the analysis on this site, opened in a new tab. */
+const reportHref = computed(() => safeHref(analysis.value?.reportUrl));
 
 function previewOf(file: FileEntry): Component {
     const entry = viewerFor(file.dataKind);
@@ -185,13 +208,20 @@ function focusHeading(): void {
             class="card-head"
         >
             <h3
+                :id="props.headingId"
                 ref="heading"
                 class="name"
                 tabindex="-1"
                 :lang="analysis?.name.lang"
             >
                 <span v-if="analysis">{{ analysis.name.value }}</span>
-                <span v-else>{{ $gettext("Loading the analysis…") }}</span>
+                <span
+                    v-else
+                    class="loading"
+                >
+                    <LoadingSpinner />
+                    <span>{{ $gettext("Loading the analysis…") }}</span>
+                </span>
             </h3>
             <template v-if="analysis">
                 <p class="meta">
@@ -212,9 +242,20 @@ function focusHeading(): void {
                     v-if="entryKey"
                     :keys="[entryKey]"
                     :label="$gettext('+ Selection')"
+                    :aria-label="
+                        interpolate(
+                            $gettext(
+                                'Add the analysis %{name} to the Selection',
+                            ),
+                            { name: analysis.name.value },
+                            true,
+                        )
+                    "
+                    :hints="entryHints"
                 />
             </template>
             <button
+                v-if="props.closable"
                 type="button"
                 class="close"
                 @click="close"
@@ -281,10 +322,6 @@ function focusHeading(): void {
                                 {{ rawLabel(rawOf(file)!) }}
                             </span>
                         </template>
-                        <AddToSelection
-                            :keys="[fileKey(analysis.id, file.id)]"
-                            :label="$gettext('+ Selection')"
-                        />
                     </li>
                 </ul>
             </section>
@@ -338,7 +375,10 @@ function focusHeading(): void {
                         v-for="group in conditionGroups"
                         :key="group.title.value"
                     >
-                        <dt :lang="group.title.lang || undefined">
+                        <dt
+                            v-if="conditionTitleShown"
+                            :lang="group.title.lang || undefined"
+                        >
                             <span>{{ group.title.value }}</span>
                         </dt>
                         <dd
@@ -470,7 +510,7 @@ function focusHeading(): void {
                     v-if="licence.isDefault"
                     class="badge default"
                 >
-                    {{ $gettext("default licence") }}
+                    {{ $gettext("Project licence (not stated for this file)") }}
                 </span>
                 <span
                     v-if="attribution"
@@ -505,11 +545,19 @@ function focusHeading(): void {
             </section>
 
             <a
-                v-if="permalink"
+                v-if="reportHref"
                 class="record"
-                :href="permalink"
+                rel="noopener"
+                target="_blank"
+                :href="reportHref"
             >
                 <span>{{ $gettext("Full record") }}</span>
+                <span class="visually-hidden">{{ $gettext("(new tab)") }}</span>
+                <span
+                    class="new-tab"
+                    aria-hidden="true"
+                    >↗</span
+                >
             </a>
         </template>
     </article>
@@ -536,6 +584,14 @@ function focusHeading(): void {
 
 .analysis-card .card-head .close {
     margin-inline-start: auto;
+}
+
+.analysis-card .card-head .loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ink-muted);
+    font-weight: 400;
 }
 
 .analysis-card .meta {
@@ -584,7 +640,7 @@ function focusHeading(): void {
 .analysis-card button {
     display: inline-flex;
     align-items: center;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
 }
 
 .analysis-card a {
@@ -634,5 +690,20 @@ function focusHeading(): void {
     .analysis-card dd {
         grid-column: 1;
     }
+}
+
+.analysis-card .record {
+    display: inline-flex;
+    gap: 0.25rem;
+    justify-self: start;
+}
+
+.analysis-card .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 </style>

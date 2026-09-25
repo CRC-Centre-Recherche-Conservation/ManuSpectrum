@@ -191,6 +191,46 @@ describe("FolioMap", () => {
         wrapper.unmount();
     });
 
+    it("focuses a marker without scrolling the page and pans it inside the viewer", async () => {
+        const wrapper = mountFolio();
+        await flushPromises();
+        const focus = vi.spyOn(HTMLElement.prototype, "focus");
+        const panBy = vi.spyOn(L.Map.prototype, "panBy");
+        (
+            wrapper.vm as unknown as { focusTarget: (id: string) => void }
+        ).focusTarget(uuid(102));
+        expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+        expect(panBy).toHaveBeenCalled();
+        focus.mockRestore();
+        panBy.mockRestore();
+        wrapper.unmount();
+    });
+
+    it("gives the keyboard focus to its tab stop on request", async () => {
+        const wrapper = mountFolio();
+        await flushPromises();
+        (wrapper.vm as unknown as { focusCurrent: () => void }).focusCurrent();
+        const stop = wrapper
+            .findAll("[data-target]")
+            .find((marker) => marker.attributes("tabindex") === "0")!;
+        expect(document.activeElement).toBe(stop.element);
+        wrapper.unmount();
+    });
+
+    it("names its zoom buttons inside the viewer and writes its caption", async () => {
+        const wrapper = mountFolio({ caption: "Ms 59 · f. 1v · page 1 / 2" });
+        await flushPromises();
+        expect(
+            wrapper
+                .findAll(".controls button")
+                .map((button) => button.attributes("aria-label")),
+        ).toEqual(["Zoom in", "Zoom out", "Whole page"]);
+        expect(wrapper.find(".caption").text()).toBe(
+            "Ms 59 · f. 1v · page 1 / 2",
+        );
+        wrapper.unmount();
+    });
+
     it("dims the analyses the filters drop and lights the evidence of an open identified material", async () => {
         const annotations = [
             annotation(1, { match: false }),
@@ -417,6 +457,32 @@ describe("FolioMap", () => {
         wrapper.unmount();
     });
 
+    it("says when a laid map does not load and lays it again on Retry", async () => {
+        const overlay = {
+            key: "a:0",
+            url: "https://iiif.example/pb/full/!253,271/0/default.jpg",
+            bounds: [
+                [-1, 0],
+                [0, 2],
+            ] as [[number, number], [number, number]],
+            opacity: 0.5,
+            label: "Pb",
+        };
+        const wrapper = mountFolio({ overlays: [overlay] });
+        await flushPromises();
+        const first = wrapper.find("img.folio-overlay").element;
+        first.dispatchEvent(new Event("error"));
+        await flushPromises();
+        const status = wrapper.find(".overlay-failed");
+        expect(status.attributes("role")).toBe("status");
+        expect(status.text()).toContain("Map unavailable (image server)");
+        await status.find("button").trigger("click");
+        await flushPromises();
+        expect(wrapper.find(".overlay-failed").exists()).toBe(false);
+        expect(wrapper.find("img.folio-overlay").element).not.toBe(first);
+        wrapper.unmount();
+    });
+
     describe("with the real leaflet-iiif", () => {
         it("follows later page changes and unmounts while an info.json never answers", async () => {
             const factory = await realIiif(() => new Promise(() => undefined));
@@ -437,6 +503,23 @@ describe("FolioMap", () => {
                 "https://dead.example/c/info.json",
             ]);
             expect(() => wrapper.unmount()).not.toThrow();
+        });
+
+        it("says when the page image is unavailable and asks again on Retry", async () => {
+            const factory = await realIiif(async () =>
+                Promise.reject(new TypeError("Failed to fetch")),
+            );
+            const wrapper = mountFolio({
+                canvas: canvasFrom("https://dead.example/a"),
+            });
+            await flushPromises();
+            const status = wrapper.find(".page-failed");
+            expect(status.attributes("role")).toBe("status");
+            expect(status.text()).toContain("Page image unavailable");
+            await status.find("button").trigger("click");
+            await flushPromises();
+            expect(factory).toHaveBeenCalledTimes(2);
+            wrapper.unmount();
         });
 
         it("lays the next page after an image host that refuses its info.json", async () => {
@@ -534,6 +617,57 @@ describe("FolioMap", () => {
             const focused = document.activeElement as HTMLElement;
             expect(focused.dataset.target).toBe(uuid(101));
             expect(focused.tabIndex).toBe(0);
+            wrapper.unmount();
+        });
+
+        it("counts in a group the analyses the filters keep, and dims a group with none", async () => {
+            const dropped = NEAR.map((entry) => ({ ...entry, match: false }));
+            const wrapper = mountFolio({ annotations: dropped });
+            await afterRegrouping();
+            const group = wrapper.find(".folio-cluster");
+            expect(group.text()).toBe("0/2");
+            expect(group.classes()).toContain("is-dimmed");
+            expect(group.attributes("aria-label")).toBe(
+                "2 analyses here, none in the filters",
+            );
+            await wrapper.setProps({
+                annotations: [NEAR[0], dropped[1]],
+            });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").text()).toBe("1/2");
+            expect(wrapper.find(".folio-cluster").classes()).not.toContain(
+                "is-dimmed",
+            );
+            wrapper.unmount();
+        });
+
+        it("keeps the open analysis out of any group, ringed", async () => {
+            const three = [
+                ...NEAR,
+                annotation(3, { shape: { type: "point", x: 200, y: 150 } }),
+            ];
+            const wrapper = mountFolio({ annotations: three });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").text()).toBe("3");
+            await wrapper.setProps({
+                focus: { kind: "analysis", id: uuid(101) },
+            });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").text()).toBe("2");
+            const marker = wrapper.find(`[data-target="${uuid(101)}"]`);
+            expect(marker.classes()).toContain("is-focused");
+            wrapper.unmount();
+        });
+
+        it("keeps the evidence of an open identified material out of any group", async () => {
+            const wrapper = mountFolio({
+                annotations: NEAR,
+                view: "characterizations",
+                lit: new Set([uuid(101), uuid(102)]),
+            });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").exists()).toBe(false);
+            expect(wrapper.findAll(".folio-marker.is-lit")).toHaveLength(2);
             wrapper.unmount();
         });
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { nextTick, provide, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
+import SelectionDrawer from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue";
 import SharedSelectionPrompt from "@/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue";
 import ViewTabs from "@/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.vue";
 import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusView.vue";
@@ -10,8 +11,14 @@ import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
 import {
     ANNOUNCE_KEY,
     FACET_LABELS_KEY,
+    RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
+    SELECTION_HINTS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    INTRO_BAR_ID,
+    introBar,
+} from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { useBasketPersistence } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
 import {
@@ -27,6 +34,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    ResultsMemo,
+    SelectionHint,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { SharedSelection } from "@/manuspectrum/pages/AnalysisExplorer/store/selection-link.ts";
 
 // Read before useUrlState rewrites the URL without `sel`.
@@ -49,21 +60,46 @@ useUrlState({
     historyMode,
 });
 
+const hasIntroBar = introBar() !== null;
 const sharedSelection = ref<SharedSelection | null>(INITIAL_SELECTION);
 const announcement = ref("");
 const facetLabels = ref(new Map<string, Label>());
 const screenFocusPending = ref(false);
+const resultsMemo = ref<ResultsMemo | null>(null);
+const selectionHints = ref(new Map<string, SelectionHint>());
+
+/** The screen shown, as CorpusView decides it: the page intro folds to one line off the home. */
+const screen = computed(() => {
+    if (store.view !== "corpus") return store.view;
+    if (store.corpusScreen === "document" && store.document) return "document";
+    return store.corpusScreen === "results" ? "results" : "home";
+});
 
 provide(FACET_LABELS_KEY, facetLabels);
 provide(SCREEN_FOCUS_KEY, screenFocusPending);
+provide(RESULTS_MEMO_KEY, resultsMemo);
+provide(SELECTION_HINTS_KEY, selectionHints);
 provide(ANNOUNCE_KEY, announce);
 
+/** A new screen or another document; the same document named again by the address is neither. */
 watch(
-    () => [store.corpusScreen, store.document?.id] as const,
+    () => `${store.corpusScreen}:${store.document?.id ?? ""}`,
     () => {
         screenFocusPending.value = true;
     },
 );
+
+watch(
+    screen,
+    (name) => {
+        window.document.body.dataset.explorerScreen = name;
+    },
+    { immediate: true },
+);
+
+onBeforeUnmount(() => {
+    delete window.document.body.dataset.explorerScreen;
+});
 
 /** Clearing the region first makes a repeated message spoken again. */
 function announce(message: string): void {
@@ -82,6 +118,12 @@ function onSelectionResolved(message: string): void {
 
 <template>
     <div class="analysis-explorer">
+        <Teleport
+            :to="`#${INTRO_BAR_ID}`"
+            :disabled="!hasIntroBar"
+        >
+            <SelectionDrawer class="selection" />
+        </Teleport>
         <ViewTabs />
         <SharedSelectionPrompt
             v-if="sharedSelection"
@@ -103,7 +145,7 @@ function onSelectionResolved(message: string): void {
 .analysis-explorer {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 1rem;
+    gap: 0.5rem;
 }
 
 .analysis-explorer .announcer {

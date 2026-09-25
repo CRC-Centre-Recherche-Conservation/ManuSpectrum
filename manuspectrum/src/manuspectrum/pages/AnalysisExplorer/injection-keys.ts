@@ -1,6 +1,22 @@
 import type { InjectionKey, Ref } from "vue";
 
-import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    Label,
+    SearchResponse,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
+/** The last results shown (S1) and where the reader left them, to come back to them as they were. */
+export interface ResultsMemo {
+    /** The search query string of the page shown. */
+    query: string;
+    /** The filters it was reached with (query string at page 1), and its page. */
+    filterKey: string;
+    page: number;
+    payload: SearchResponse;
+    /** Window scroll and id of the result opened, recorded when one is opened. */
+    scroll: number;
+    opened: string | null;
+}
 
 /** Labels of facet values seen in search payloads, keyed `${facetKey}:${valueId}`; filled by S1 and S0. */
 export const FACET_LABELS_KEY: InjectionKey<Ref<Map<string, Label>>> =
@@ -20,3 +36,21 @@ export const FOLIO_ZONES_KEY: InjectionKey<Ref<ReadonlySet<string>>> =
 /** Speaks a message through the shell's polite live region. */
 export const ANNOUNCE_KEY: InjectionKey<(message: string) => void> =
     Symbol("announce");
+
+/** The last results shown; provided by the shell, read back by S1 and by the way back from S2. */
+export const RESULTS_MEMO_KEY: InjectionKey<Ref<ResultsMemo | null>> =
+    Symbol("results-memo");
+
+/** What a card knew of an item it added to the Selection, shown until the item is read. */
+export interface SelectionHint {
+    title: Label;
+    /** The kind of item, translated (« spectrum », « map layer »…). */
+    kind: string;
+    /** A part of the title's item, such as a map layer's label. */
+    detail?: string;
+}
+
+/** Hints of the items added to the Selection, by key; provided by the shell. */
+export const SELECTION_HINTS_KEY: InjectionKey<
+    Ref<Map<string, SelectionHint>>
+> = Symbol("selection-hints");

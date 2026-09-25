@@ -15,12 +15,13 @@ const F = "7d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
 const BAD_VERSION = "0b3c6f4e-6a39-9e3c-9f7e-1d2c3b4a5f60";
 
 describe("item keys", () => {
-    it("accepts the three key shapes, trimmed and lower-cased", () => {
+    it("accepts the four key shapes, trimmed and lower-cased", () => {
         expect(normalizeItemKey(` af:${A.toUpperCase()}:${F} `)).toBe(
             `af:${A}:${F}`,
         );
         expect(normalizeItemKey(`im:${A}:3`)).toBe(`im:${A}:3`);
         expect(normalizeItemKey(`ch:${A}:-`)).toBe(`ch:${A}:-`);
+        expect(normalizeItemKey(`AN:${A}:-`)).toBe(`an:${A}:-`);
     });
 
     it("rejects anything else", () => {
@@ -29,6 +30,8 @@ describe("item keys", () => {
             "af:1:2",
             `af:${A}`,
             `ch:${A}:${F}`,
+            `an:${A}:${F}`,
+            `an:${A}:0`,
             `im:${A}:x`,
             `im:${A}:12345`,
             `zz:${A}:-`,
@@ -52,6 +55,7 @@ describe("item keys", () => {
         expect(kindOf(`af:${A}:${F}`)).toBe("analysis-file");
         expect(kindOf(`im:${A}:0`)).toBe("imaging");
         expect(kindOf(`ch:${A}:-`)).toBe("characterization");
+        expect(kindOf(`an:${A}:-`)).toBe("analysis");
     });
 
     it("dedupes and counts invalid keys, keeping the first order", () => {

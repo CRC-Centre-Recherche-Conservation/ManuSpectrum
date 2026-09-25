@@ -95,11 +95,40 @@ describe("AnalysisCard", () => {
         expect(wrapper.find(".conditions").text()).toContain("Not provided");
     });
 
-    it("marks the default licence", () => {
+    it("says the project's licence applies when the file states none", () => {
         const file = fileEntry();
         file.license = { ...file.license, isDefault: true };
         const { wrapper } = mountCard(analysisPayload({ files: [file] }));
-        expect(wrapper.find(".licence").text()).toContain("default licence");
+        expect(wrapper.find(".licence").text()).toContain(
+            "Project licence (not stated for this file)",
+        );
+    });
+
+    it("leaves out a condition title that repeats the section's", () => {
+        const single = mountCard(
+            analysisPayload({
+                conditions: [
+                    {
+                        type: valueRef("aat:cond", "conditions"),
+                        html: "<p>40 kV</p>",
+                        lang: "en",
+                    },
+                ],
+            }),
+        ).wrapper;
+        expect(single.find(".conditions dt").exists()).toBe(false);
+        expect(single.find(".conditions").text()).toContain("40 kV");
+    });
+
+    it("adds the whole analysis from its head and never a single file", () => {
+        const { wrapper } = mountCard(analysisPayload());
+        const head = wrapper.find(".card-head .add-to-selection button");
+        expect(head.text()).toBe("+ Selection");
+        expect(head.attributes("aria-label")).toBe(
+            "Add the analysis MS1_f12_XRF_03 to the Selection",
+        );
+        expect(wrapper.findAll(".add-to-selection")).toHaveLength(1);
+        expect(wrapper.find(".files .add-to-selection").exists()).toBe(false);
     });
 
     it("links a DOI dataset to its resolver and writes an unsafe address as plain text", () => {
@@ -138,12 +167,33 @@ describe("AnalysisCard", () => {
         });
     });
 
-    it("adds the analysis to the Selection by its spectrum", async () => {
+    it("adds the whole analysis to the Selection", async () => {
         const { wrapper, store } = mountCard(analysisPayload());
         await wrapper
             .find(".card-head .add-to-selection button")
             .trigger("click");
-        expect(store.basket[0].key).toBe(`af:${uuid(101)}:${uuid(700)}`);
+        expect(store.basket.map((item) => item.key)).toEqual([
+            `an:${uuid(101)}:-`,
+        ]);
+    });
+
+    it("adds an analysis with nothing to show all the same", async () => {
+        const { wrapper, store } = mountCard(analysisPayload({ files: [] }));
+        await wrapper
+            .find(".card-head .add-to-selection button")
+            .trigger("click");
+        expect(store.basket.map((item) => item.key)).toEqual([
+            `an:${uuid(101)}:-`,
+        ]);
+    });
+
+    it("opens the full record, a page of this site, in a new tab", () => {
+        const { wrapper } = mountCard(analysisPayload());
+        const record = wrapper.find("a.record");
+        expect(record.attributes("href")).toBe(`/en/report/${uuid(101)}`);
+        expect(record.attributes("target")).toBe("_blank");
+        expect(record.attributes("rel")).toBe("noopener");
+        expect(record.text()).toContain("(new tab)");
     });
 
     it("asks to be closed", async () => {

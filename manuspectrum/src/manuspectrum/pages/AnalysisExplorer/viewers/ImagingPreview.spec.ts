@@ -41,6 +41,17 @@ function mountPreview(
 }
 
 describe("ImagingPreview", () => {
+    it("says when the image server does not give the map, and asks again on Retry", async () => {
+        const { wrapper } = mountPreview();
+        await wrapper.find("img.layer-image").trigger("error");
+        const status = wrapper.find(".unavailable");
+        expect(status.attributes("role")).toBe("status");
+        expect(status.text()).toContain("Map unavailable (image server)");
+        expect(wrapper.find("img.layer-image").exists()).toBe(false);
+        await status.find("button").trigger("click");
+        expect(wrapper.find("img.layer-image").exists()).toBe(true);
+    });
+
     it("names the current layer by its kind and label", () => {
         const { wrapper } = mountPreview();
         expect(wrapper.find(".current").text()).toContain("Element");
@@ -87,12 +98,19 @@ describe("ImagingPreview", () => {
         expect(wrapper.text()).toContain("no zone on this page");
     });
 
-    it("adds the current layer to the Selection", async () => {
-        const { wrapper, store } = mountPreview();
-        await wrapper.find(".add-to-selection button").trigger("click");
-        expect(store.basket.map((item) => item.key)).toEqual([
-            `im:${uuid(101)}:0`,
-        ]);
+    it("offers no button of its own to add a map to the Selection", () => {
+        const { wrapper } = mountPreview();
+        expect(wrapper.find(".add-to-selection").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("Add the map");
+    });
+
+    it("shows the ends of the layer scale and says where the handle is", () => {
+        const { wrapper } = mountPreview();
+        expect(wrapper.find(".scroll .ends").text()).toContain("Pb");
+        expect(wrapper.find(".scroll .ends").text()).toContain("Hg");
+        expect(
+            wrapper.find(".scroll [role=slider]").attributes("aria-valuetext"),
+        ).toBe("Pb, layer 1 of 2");
     });
 
     it("opens on the layer of this file that is laid on the page", () => {

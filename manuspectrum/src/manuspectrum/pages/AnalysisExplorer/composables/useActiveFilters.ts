@@ -35,7 +35,7 @@ export function useActiveFilters(): {
         true,
     );
     const { $gettext, interpolate } = useGettext();
-    const { facetTitle } = useVocabulary();
+    const { facetTitle, filterTitle } = useVocabulary();
 
     function named(facet: string, value: string): string {
         return interpolate(
@@ -67,7 +67,7 @@ export function useActiveFilters(): {
                     facetLabels.value.get(`${key}:${value}`)?.value ?? value;
                 entries.push({
                     id: `${key}:${value}`,
-                    label: named(facetTitle(key), valueLabel),
+                    label: named(filterTitle(key), valueLabel),
                     clear: () => store.clearFilter(key, value),
                 });
             }

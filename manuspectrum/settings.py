@@ -771,7 +771,6 @@ SPECTRUM_PREVIEW_TIERS = (200, 4096)
 RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa")
 # A stored URL whose host is one of these is rewritten to PUBLIC_SERVER_ADDRESS.
 EXPLORER_LEGACY_HOSTS = ()
-EXPLORER_SEARCH_PAGE_SIZE = 50
 EXPLORER_ITEMS_MAX = 30
 # Seconds the homepage technique list is kept per language.
 EXPLORER_TECHNIQUES_TTL = 600

@@ -9,14 +9,15 @@ import type {
 export const BASKET_LIMIT = 30;
 
 const PAGE = /^\d{1,4}$/;
-const KEY_SHAPE = /^(af|im|ch):([^:]+):([^:]+)$/;
+const KEY_SHAPE = /^(an|af|im|ch):([^:]+):([^:]+)$/;
 const KIND_BY_PREFIX: Record<string, BasketKind> = {
+    an: "analysis",
     af: "analysis-file",
     im: "imaging",
     ch: "characterization",
 };
 
-/** Whether the second segment matches its kind: a file id for `af`, a page number for `im`, the literal `-` for `ch`. */
+/** Whether the second segment matches its kind: a file id for `af`, a page number for `im`, the literal `-` for `an` and `ch`. */
 function hasValidSecondSegment(kind: string, second: string): boolean {
     if (kind === "af") return isUuid(second);
     if (kind === "im") return PAGE.test(second);

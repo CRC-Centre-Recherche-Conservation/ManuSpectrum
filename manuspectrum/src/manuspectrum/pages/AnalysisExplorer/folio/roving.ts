@@ -42,3 +42,21 @@ export function nextId(
             return null;
     }
 }
+
+/**
+ * The shift that brings a point `padding` inside a box of `width` × `height`:
+ * zero on an axis where the point is already inside the padded box.
+ */
+export function offsetInside(
+    point: { x: number; y: number },
+    width: number,
+    height: number,
+    padding: number,
+): { x: number; y: number } {
+    function along(value: number, extent: number): number {
+        if (value < padding) return value - padding;
+        if (value > extent - padding) return value - (extent - padding);
+        return 0;
+    }
+    return { x: along(point.x, width), y: along(point.y, height) };
+}

@@ -6,15 +6,20 @@ links off the tiles by role (D6), and a resource outside ``visible_set`` never
 reaches a payload, a facet or a name.
 """
 
+import hashlib
+import html
 import logging
 import re
 import sys
+import textwrap
 import unicodedata
 from collections import Counter, defaultdict
 
+import nh3
 from django.conf import settings
 from django.http import QueryDict
 from django.urls import reverse
+from django.utils import translation
 
 from arches.app.models.models import (
     IIIFManifest,
@@ -36,6 +41,8 @@ from manuspectrum.utils.public_visibility import (
 from manuspectrum.utils.role_links import readable_links, role_node
 from manuspectrum.views.explorer_conditions import clean_html, conditions_of
 from manuspectrum.views.explorer_values import (
+    FALLBACK_LANGUAGE,
+    acronym,
     dataset_of,
     file_entries,
     label,
@@ -52,7 +59,15 @@ ROLES = {
     "doc_name": ("document", "label_of_name"),
     "doc_manifest": ("document", "facsimiles"),
     "doc_owner": ("document", "current_owner"),
+    "doc_identifier": ("document", "value_of_identifier"),
+    "doc_identifier_type": ("document", "type_of_identifier"),
+    "doc_start": ("document", "date_start_of_production_time"),
+    "doc_end": ("document", "date_end_of_production_time"),
+    "doc_description": ("document", "content_of_statement"),
+    "doc_type": ("document", "type"),
     "comp_zone": ("component", "location_in_document"),
+    "comp_type": ("component", "type"),
+    "comp_colour": ("component", "color_features"),
     "an_name": ("analysis", "label_of_name"),
     "technique": ("analysis", "analysis_technique_used"),
     "operators": ("analysis", "performed_by_actor"),
@@ -81,18 +96,74 @@ ROLES = {
     "ch_source": ("characterization", "source_of_statement"),
     "sample_zone": ("sample", "location_in_object_of_sampling_taking"),
 }
-FACET_KEYS = (
-    "project",
-    "technique",
-    "part",
-    "operator",
-    "year",
-    "colour",
-    "material",
-    "element",
-    "layer",
+FACET_GROUPS = (
+    ("part", ("partType", "partColour", "part")),
+    ("analysis", ("project", "technique", "operator", "year")),
+    ("characterization", ("material", "colour", "layer", "element")),
 )
+FACET_KEYS = tuple(key for _, keys in FACET_GROUPS for key in keys)
+GROUP_OF = {key: group for group, keys in FACET_GROUPS for key in keys}
+CHARACTERIZATION_KEYS = dict(FACET_GROUPS)["characterization"]
+REF_FACETS = {
+    "partType": "partTypes",
+    "partColour": "partColours",
+    "material": "materials",
+    "colour": "colours",
+    "element": "elements",
+    "layer": "layers",
+}
+CHARACTERIZATION_ROLES = {
+    "material": "material",
+    "colour": "colour",
+    "layer": "layer",
+    "element": "elements",
+}
+TECHNIQUE_PALETTE = 10
+SWATCHES = {
+    "blue": "royalblue",
+    "bleu": "royalblue",
+    "azur": "royalblue",
+    "red": "firebrick",
+    "rouge": "firebrick",
+    "vermillon": "orangered",
+    "vermilion": "orangered",
+    "green": "forestgreen",
+    "vert": "forestgreen",
+    "gold": "goldenrod",
+    "golden": "goldenrod",
+    "or": "goldenrod",
+    "dore": "goldenrod",
+    "silver": "silver",
+    "argent": "silver",
+    "argente": "silver",
+    "white": "white",
+    "blanc": "white",
+    "black": "black",
+    "noir": "black",
+    "yellow": "gold",
+    "jaune": "gold",
+    "brown": "saddlebrown",
+    "brun": "saddlebrown",
+    "marron": "saddlebrown",
+    "beige": "beige",
+    "ochre": "peru",
+    "ocre": "peru",
+    "grey": "grey",
+    "gray": "grey",
+    "gris": "grey",
+    "purple": "purple",
+    "violet": "purple",
+    "pourpre": "purple",
+    "pink": "hotpink",
+    "rose": "hotpink",
+    "orange": "darkorange",
+}
+SWATCH_FACETS = ("colour", "partColour")
 _EMPTY = (None, "", [], {})
+PAGE_SIZES = (10, 25, 50)
+DESCRIPTION_LENGTH = 220
+SHELFMARK_LABELS = frozenset({"shelfmark", "shelf mark", "call number", "cote"})
+LINK_IDENTIFIER = re.compile(r"(?i)\s*(https?://|ark:)")
 
 logger = logging.getLogger(__name__)
 
@@ -234,8 +305,8 @@ def model_of(resource_ids):
     }
 
 
-def ancestor_terms(item_ids):
-    """``{item id: labels of its ancestors}``: a parent term found by free text brings its children (« XRF » → pXRF)."""
+def parent_chains(item_ids):
+    """``{item id: its ancestor ids, nearest first}`` in the thesaurus; an unknown item has none."""
     parent_of, frontier = {}, {str(i) for i in item_ids}
     for _ in range(8):
         if not frontier:
@@ -255,6 +326,15 @@ def ancestor_terms(item_ids):
             chain.append(current)
             current = parent_of.get(current)
         ancestors[str(item)] = chain
+    return ancestors
+
+
+def ancestor_terms(item_ids, chains=None):
+    """``{item id: labels of its ancestors}``: a parent term found by free text brings its children (« XRF » → pXRF).
+
+    *chains* is a ``parent_chains`` result the caller already holds.
+    """
+    ancestors = parent_chains(item_ids) if chains is None else chains
     labels = defaultdict(set)
     wanted = {a for chain in ancestors.values() for a in chain}
     for item, value in ListItemValue.objects.filter(
@@ -297,6 +377,104 @@ def _canvas_of(annotation):
     return None
 
 
+def colour_swatch(value):
+    """Display colour of a colour concept (``SWATCHES``), the same in every language; None when no label names one.
+
+    Labels are tried in a fixed order whatever the request language: English
+    preferred label, other preferred labels by language, then alternative
+    labels by language; the first colour word found wins.
+    """
+    entries = [
+        entry
+        for item in (value if isinstance(value, list) else [value])
+        if isinstance(item, dict)
+        for entry in item.get("labels") or []
+        if isinstance(entry, dict) and isinstance(entry.get("value"), str)
+    ]
+    entries.sort(
+        key=lambda e: (
+            e.get("valuetype_id") != "prefLabel",
+            e.get("language_id") != FALLBACK_LANGUAGE,
+            e.get("language_id") or "",
+            e["value"],
+        )
+    )
+    for entry in entries:
+        for word in re.split(r"[^a-z]+", fold(entry["value"])):
+            if word in SWATCHES:
+                return SWATCHES[word]
+    return None
+
+
+def _letters_code(text, taken):
+    letters = re.sub(r"[\W_]", "", text or "").upper() or "?"
+    for candidate in (letters[:1], letters[:2], letters[:3]):
+        if candidate not in taken:
+            return candidate
+    suffix = 2
+    while f"{letters[:1]}{suffix}" in taken:
+        suffix += 1
+    return f"{letters[:1]}{suffix}"
+
+
+def family_colours(families):
+    """``{family uri: colour}``: each family's ``--tech-n`` keyed by its uri, independent of counts and language.
+
+    A family's home hue is the sha1 of its uri modulo ``TECHNIQUE_PALETTE``.
+    Families are placed in uri order; one whose hue is taken takes the next
+    free hue (linear probing), so two families never share a hue while one
+    is free, and families beyond the palette have none (``None``). Adding a
+    family only moves the families placed after it whose probe run crosses
+    the hue it takes; every other family keeps its colour.
+    """
+    taken, colours = set(), {}
+    for uri in sorted(set(families)):
+        home = int(hashlib.sha1(uri.encode("utf-8")).hexdigest(), 16)
+        colours[uri] = None
+        for step in range(TECHNIQUE_PALETTE):
+            slot = (home + step) % TECHNIQUE_PALETTE
+            if slot not in taken:
+                taken.add(slot)
+                colours[uri] = slot + 1
+                break
+    return colours
+
+
+def technique_marks(techniques, chains):
+    """``{item id: {"code", "colour", "family"}}`` of the techniques used in the corpus, the same in every language.
+
+    *techniques* maps an item id to ``(uri, reference value)``, *chains* is
+    ``parent_chains`` of the ids. A technique whose ancestor is also used
+    belongs to the family of its farthest used ancestor; ``family`` is that
+    ancestor's uri, else its own, and its colour is ``family_colours`` of that
+    uri. The code is the ``acronym`` of the value, else the first letters of
+    its English label not already taken, in uri order.
+    """
+    root = {}
+    for item in techniques:
+        used = [a for a in chains.get(item, []) if a in techniques]
+        root[item] = used[-1] if used else item
+    colour_of = family_colours(techniques[f][0] for f in set(root.values()))
+    by_uri = sorted(techniques, key=lambda item: (techniques[item][0], item))
+    codes = {item: acronym(techniques[item][1]) for item in by_uri}
+    taken = {code for code in codes.values() if code}
+    for item in by_uri:
+        if not codes[item]:
+            refs = value_refs(techniques[item][1], FALLBACK_LANGUAGE)
+            codes[item] = _letters_code(
+                refs[0]["label"]["value"] if refs else "", taken
+            )
+            taken.add(codes[item])
+    return {
+        item: {
+            "code": codes[item],
+            "colour": colour_of[techniques[root[item]][0]],
+            "family": techniques[root[item]][0],
+        }
+        for item in techniques
+    }
+
+
 def corpus_rows(user, language, chains=None):
     """One row per visible analysis: what search filters, counts and lists.
 
@@ -325,6 +503,20 @@ def corpus_rows(user, language, chains=None):
     characterizations = Values(
         visible.characterizations, ["material", "colour", "layer", "elements"], user
     )
+    value_sets = {
+        c: {
+            key: {
+                ref["uri"]
+                for v in characterizations.get(c, role)
+                for ref in value_refs(v, language)
+            }
+            for key, role in CHARACTERIZATION_ROLES.items()
+        }
+        for c in visible.characterizations
+    }
+    parts = Values(
+        {c for _, c in chains.values() if c}, ["comp_type", "comp_colour"], user
+    )
     cited_by = defaultdict(list)
     for characterization, evidence in visible.evidence.items():
         for analysis in evidence:
@@ -335,12 +527,14 @@ def corpus_rows(user, language, chains=None):
     )
     analysis_index = GraphIndex.for_slug("analysis")
     analysis_model = analysis_index.name if analysis_index else {}
-    technique_ids = {
-        ref["id"]
-        for a in analyses
-        for ref in value_refs(values.first(a, "technique"), language)
-    }
-    ancestors = ancestor_terms(technique_ids)
+    used = {}
+    for a in analyses:
+        value = values.first(a, "technique")
+        for ref in value_refs(value, language)[:1]:
+            used.setdefault(ref["id"], (ref["uri"], value))
+    parents = parent_chains(used)
+    marks = technique_marks(used, parents)
+    ancestors = ancestor_terms(used, parents)
     related = {d for d, _ in chains.values()} | {c for _, c in chains.values() if c}
     label_of = names(related, language, user)
     rows = []
@@ -348,7 +542,9 @@ def corpus_rows(user, language, chains=None):
         document, component = chains[a]
         technique_value = values.first(a, "technique")
         techniques = value_refs(technique_value, language)
-        technique = techniques[0] if techniques else None
+        technique = (
+            {**techniques[0], **marks[techniques[0]["id"]]} if techniques else None
+        )
         cited = sorted(cited_by[a])
 
         def refs_of(key):
@@ -408,6 +604,34 @@ def corpus_rows(user, language, chains=None):
                 "colours": _unique(colours),
                 "layers": _unique(refs_of("layer")),
                 "elements": _unique(refs_of("elements")),
+                "characterizations": [value_sets[c] for c in cited],
+                "partTypes": _unique(
+                    [
+                        r
+                        for v in (
+                            parts.get(component, "comp_type") if component else []
+                        )
+                        for r in value_refs(v, language)
+                    ]
+                ),
+                "partColours": _unique(
+                    [
+                        r
+                        for v in (
+                            parts.get(component, "comp_colour") if component else []
+                        )
+                        for r in value_refs(v, language)
+                    ]
+                ),
+                "swatches": {
+                    ref["uri"]: colour_swatch(item)
+                    for v in [
+                        *(parts.get(component, "comp_colour") if component else []),
+                        *(v for c in cited for v in characterizations.get(c, "colour")),
+                    ]
+                    for item in (v if isinstance(v, list) else [v])
+                    for ref in value_refs(item, language)
+                },
                 "dataKinds": kinds,
                 "unpublished": a in visible.unpublished,
                 "text": fold(" ".join(texts)),
@@ -426,7 +650,11 @@ def _unique(refs):
 
 
 def parse_filters(query):
-    """Filters and page number of a search query; lists come as repeated or comma-separated parameters."""
+    """Filters and page number of a search query; lists come as repeated or comma-separated parameters.
+
+    ``size`` is one of ``PAGE_SIZES``, else the first; ``empty`` asks for the
+    documents without analyses; ``document`` scopes the search to one document.
+    """
     filters = {
         key: sorted(
             {
@@ -440,11 +668,13 @@ def parse_filters(query):
     }
     filters["q"] = query.get("q", "").strip()
     filters["grain"] = "documents" if query.get("grain") == "documents" else "analyses"
-    filters["onlyWithAnalyses"] = query.get("onlyWithAnalyses", "true").lower() not in (
-        "0",
-        "false",
-        "no",
-    )
+    filters["empty"] = query.get("empty", "").lower() in ("1", "true", "yes")
+    filters["document"] = query.get("document", "").strip() or None
+    try:
+        size = int(query.get("size", ""))
+    except ValueError:
+        size = None
+    filters["size"] = size if size in PAGE_SIZES else PAGE_SIZES[0]
     try:
         page = max(1, int(query.get("page", "1")))
     except ValueError:
@@ -461,13 +691,7 @@ def _facet_values(row, key):
         return [str(row["year"])] if row["year"] else []
     if key in ("project", "operator"):
         return row[f"{key}s"]
-    plural = {
-        "material": "materials",
-        "colour": "colours",
-        "element": "elements",
-        "layer": "layers",
-    }[key]
-    return [ref["uri"] for ref in row[plural]]
+    return [ref["uri"] for ref in row[REF_FACETS[key]]]
 
 
 def _facet_labels(rows, language, user):
@@ -475,12 +699,7 @@ def _facet_labels(rows, language, user):
     for row in rows:
         if row["technique"]:
             labels["technique"][row["technique"]["uri"]] = row["technique"]["label"]
-        for key, plural in (
-            ("material", "materials"),
-            ("colour", "colours"),
-            ("element", "elements"),
-            ("layer", "layers"),
-        ):
+        for key, plural in REF_FACETS.items():
             for ref in row[plural]:
                 labels[key][ref["uri"]] = ref["label"]
         if row["year"]:
@@ -525,11 +744,16 @@ def analysis_hit(row, label_of):
 
 
 def row_filter(rows, query):
-    """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe)``.
+    """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe, carried)``.
 
-    ``keep(row, skip=None)`` is OR inside a facet and AND across facets, and
-    the folded free text ``needle``; ``skip`` leaves one facet out (open facet
-    counts). ``universe`` holds, per facet, the values the rows carry; a
+    ``keep(row, skip=None)`` is OR inside a facet, AND across facets, and the
+    folded free text ``needle``; ``skip`` leaves one facet out (open facet
+    counts). The facets of the characterization group hold on one identified
+    material: a row is kept when one characterization citing it carries a
+    selected value of each of them. ``carried(row, key)`` is the set of
+    values of *key* a row counts for under the other selections: in that
+    group, the values of the characterizations that meet the other facets of
+    the group. ``universe`` holds, per facet, the values the rows carry; a
     selected value outside it is ignored (§3.3).
     """
     filters, page = parse_filters(query)
@@ -541,17 +765,42 @@ def row_filter(rows, query):
     }
     needle = fold(filters["q"])
 
+    def meeting(row, skip):
+        wanted = [
+            (key, set(active[key]))
+            for key in CHARACTERIZATION_KEYS
+            if key != skip and active[key]
+        ]
+        if not wanted:
+            return None
+        return [
+            c
+            for c in row["characterizations"]
+            if all(c[key] & values for key, values in wanted)
+        ]
+
     def keep(row, skip=None):
         for key in FACET_KEYS:
             if (
                 key != skip
+                and key not in CHARACTERIZATION_KEYS
                 and active[key]
                 and not set(_facet_values(row, key)) & set(active[key])
             ):
                 return False
+        if meeting(row, skip) == []:
+            return False
         return not needle or needle in row["text"]
 
-    return keep, active, filters, page, needle, universe
+    def carried(row, key):
+        if not keep(row, key):
+            return set()
+        found = meeting(row, key) if key in CHARACTERIZATION_KEYS else None
+        if found is None:
+            return set(_facet_values(row, key))
+        return set().union(*(c[key] for c in found))
+
+    return keep, active, filters, page, needle, universe, carried
 
 
 def search_payload(query, user, language):
@@ -561,29 +810,61 @@ def search_payload(query, user, language):
     across facets. A facet is absent when no value has a count on the whole
     visible set; a selected value that is not in the visible set is ignored
     without a word.
+
+    With ``document``, rows are those of that document: facets list the
+    values it carries plus the selected ones (count 0 when it lacks them), a
+    facet without values is absent, and the results are its matching
+    analyses whatever the grain. An unknown, hidden or malformed id is a
+    document without rows.
+
+    In the documents grain, a visible document without any visible analysis
+    is listed only with ``empty``, when no facet filter is active and the
+    free text is in its name; ``withoutAnalyses`` counts those documents
+    whether listed or not (0 in the other cases).
     """
-    rows = corpus_rows(user, language)
-    keep, active, filters, page, needle, universe = row_filter(rows, query)
+    all_rows = corpus_rows(user, language)
+    keep, active, filters, page, needle, universe, counted = row_filter(all_rows, query)
+    scope = filters["document"]
+    rows = (
+        all_rows if scope is None else [r for r in all_rows if r["document"] == scope]
+    )
 
     matching = [row for row in rows if keep(row)]
-    labels = _facet_labels(rows, language, user)
+    labels = _facet_labels(all_rows, language, user)
+    marks = {
+        row["technique"]["uri"]: {
+            k: row["technique"][k] for k in ("code", "colour", "family")
+        }
+        for row in all_rows
+        if row["technique"]
+    }
+    swatches = {
+        uri: swatch for row in all_rows for uri, swatch in row["swatches"].items()
+    }
     facets = []
     for key in FACET_KEYS:
         if not universe[key]:
             continue
-        counts = Counter(
-            v for row in rows if keep(row, key) for v in set(_facet_values(row, key))
+        carried = (
+            universe[key]
+            if scope is None
+            else {v for row in rows for v in _facet_values(row, key)}
         )
+        counts = Counter(v for row in rows for v in counted(row, key))
         values = [
             {
                 "id": v,
                 "label": labels[key][v],
                 "count": counts[v],
                 "selected": v in active[key],
+                "mark": marks.get(v) if key == "technique" else None,
+                "swatch": swatches.get(v) if key in SWATCH_FACETS else None,
             }
-            for v in universe[key]
+            for v in carried | set(active[key])
             if counts[v] > 0 or v in active[key]
         ]
+        if scope is not None and not values:
+            continue
         values.sort(
             key=(
                 (lambda item: item["id"])
@@ -591,38 +872,46 @@ def search_payload(query, user, language):
                 else (lambda item: (fold(item["label"]["value"]), item["id"]))
             )
         )
-        facets.append({"key": key, "values": values})
+        facets.append({"key": key, "group": GROUP_OF[key], "values": values})
 
     visible = visible_set(user)
     label_of = names(
-        {r["document"] for r in rows}
-        | {r["component"] for r in rows if r["component"]}
+        {r["document"] for r in all_rows}
+        | {r["component"] for r in all_rows if r["component"]}
         | visible.documents,
         language,
         user,
     )
-    if filters["grain"] == "documents":
+    size = filters["size"]
+    without_analyses = 0
+    if filters["grain"] == "documents" and scope is None:
         per_document = Counter(row["document"] for row in matching)
+        with_rows = {row["document"] for row in all_rows}
         candidates = sorted(
             visible.documents, key=lambda d: (fold(label_of[d]["value"]), d)
         )
-        results = [
-            {
-                "type": "document",
-                "id": d,
-                "name": label_of[d],
-                "holding": None,
-                "analysisCount": per_document[d],
-                "thumbnail": reverse("thumbnail", kwargs={"resource_id": d}),
-                "unpublished": d in visible.unpublished,
-            }
-            for d in candidates
-            if per_document[d] > 0
-            or (
-                not filters["onlyWithAnalyses"]
+        bare = (
+            set()
+            if any(active.values())
+            else {
+                d
+                for d in candidates
+                if d not in with_rows
                 and (not needle or needle in fold(label_of[d]["value"]))
-            )
+            }
+        )
+        without_analyses = len(bare)
+        listed = [
+            d
+            for d in candidates
+            if per_document[d] > 0 or (filters["empty"] and d in bare)
         ]
+        chunk_ids = listed[(page - 1) * size : page * size]
+        chunk = document_hits(
+            chunk_ids, per_document, visible, user, language, label_of
+        )
+        total = len(listed)
+        unpublished = sum(1 for d in listed if d in visible.unpublished)
     else:
         matching.sort(
             key=lambda r: (
@@ -632,16 +921,137 @@ def search_payload(query, user, language):
                 r["id"],
             )
         )
-        results = [analysis_hit(row, label_of) for row in matching]
-    size = settings.EXPLORER_SEARCH_PAGE_SIZE
-    chunk = results[(page - 1) * size : page * size]
+        chunk = [
+            analysis_hit(row, label_of)
+            for row in matching[(page - 1) * size : page * size]
+        ]
+        total = len(matching)
+        unpublished = sum(1 for r in matching if r["unpublished"])
     return {
-        "total": len(results),
+        "total": total,
         "page": {"number": page, "size": size, "count": len(chunk)},
         "results": chunk,
         "facets": facets,
-        "unpublishedCount": sum(1 for r in results if r["unpublished"]),
+        "unpublishedCount": unpublished,
+        "withoutAnalyses": without_analyses,
     }
+
+
+def plain_text(markup, length=DESCRIPTION_LENGTH):
+    """*markup* as plain text: tags removed, entities decoded, whitespace collapsed, cut on a word to *length* characters with « … »."""
+    spaced = re.sub(r"(?i)<br\s*/?>|</(p|li|div|h[1-6])\s*>", " ", markup or "")
+    text = html.unescape(nh3.clean(spaced, tags=set(), attributes={}))
+    return textwrap.shorten(text, width=length, placeholder="…")
+
+
+def _shelfmark(tiles, value_node, type_node, language):
+    """The identifier typed as a shelfmark (``SHELFMARK_LABELS``), else the first identifier; None without one.
+
+    An identifier that is a link (``LINK_IDENTIFIER``: http, https, ark) is
+    never a shelfmark.
+    """
+    found = []
+    for data in tiles:
+        text = label(string_texts(data.get(value_node.nodeid)), language)
+        if not text or LINK_IDENTIFIER.match(text["value"]):
+            continue
+        terms = (
+            {fold(t) for t in reference_terms(data.get(type_node.nodeid))}
+            if type_node
+            else set()
+        )
+        found.append((not terms & SHELFMARK_LABELS, text))
+    return min(found, key=lambda f: f[0])[1] if found else None
+
+
+def document_hits(document_ids, per_document, visible, user, language, label_of):
+    """``DocumentHit`` of each of *document_ids*, in order, read in one batch.
+
+    A field whose nodegroup the reader may not read is None; the holding is
+    the first owner a linked reference may show.
+    """
+    values = Values(
+        document_ids,
+        [
+            "doc_owner",
+            "doc_identifier",
+            "doc_identifier_type",
+            "doc_start",
+            "doc_end",
+            "doc_description",
+            "doc_type",
+        ],
+        user,
+    )
+    owners_of = {d: _resource_refs(values.get(d, "doc_owner")) for d in document_ids}
+    shown = set(linkable({o for v in owners_of.values() for o in v}, user))
+    owner_of = {
+        d: [
+            str(v.get("resourceId"))
+            for v in values.get(d, "doc_owner")
+            if isinstance(v, dict) and str(v.get("resourceId")) in shown
+        ][:1]
+        for d in document_ids
+    }
+    owner_names = names({o for v in owner_of.values() for o in v}, language, user)
+    identifier_node = values.node("doc_identifier")
+    type_node = values.node("doc_identifier_type")
+    start_node, end_node = values.node("doc_start"), values.node("doc_end")
+    hits = []
+    for d in document_ids:
+        dates = None
+        for data in values.tiles(d, "doc_start") or values.tiles(d, "doc_end"):
+            start = data.get(start_node.nodeid) if start_node else None
+            end = data.get(end_node.nodeid) if end_node else None
+            if start or end:
+                dates = {
+                    "start": _date(start) if isinstance(start, str) else None,
+                    "end": _date(end) if isinstance(end, str) else None,
+                }
+                break
+        description = next(
+            (
+                found
+                for found in (
+                    label(
+                        {
+                            lang: plain_text(text)
+                            for lang, text in string_texts(v).items()
+                        },
+                        language,
+                    )
+                    for v in values.get(d, "doc_description")
+                )
+                if found
+            ),
+            None,
+        )
+        types = value_refs(values.first(d, "doc_type"), language)
+        hits.append(
+            {
+                "type": "document",
+                "id": d,
+                "name": label_of[d],
+                "holding": owner_names[owner_of[d][0]] if owner_of[d] else None,
+                "analysisCount": per_document[d],
+                "thumbnail": reverse("thumbnail", kwargs={"resource_id": d}),
+                "unpublished": d in visible.unpublished,
+                "shelfmark": (
+                    _shelfmark(
+                        values.tiles(d, "doc_identifier"),
+                        identifier_node,
+                        type_node,
+                        language,
+                    )
+                    if identifier_node
+                    else None
+                ),
+                "dates": dates,
+                "description": description,
+                "documentType": types[0]["label"] if types else None,
+            }
+        )
+    return hits
 
 
 _LOCAL_MANIFEST = re.compile(r"/manifest/(?P<uuid>[0-9a-fA-F-]{36})/?$")
@@ -1215,6 +1625,12 @@ def analysis_files(analysis_id, user, language, values=None):
     )
 
 
+def report_url(resource_id, language):
+    """Path of the Arches report of *resource_id* on this site, in *language*."""
+    with translation.override(language):
+        return reverse("resource_report", kwargs={"resourceid": resource_id})
+
+
 def analysis_payload(analysis_id, user, language):
     """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible."""
     visible = visible_set(user)
@@ -1312,12 +1728,24 @@ def analysis_payload(analysis_id, user, language):
         ],
         "citation": None,
         "permalink": f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis_id}",
+        "reportUrl": report_url(analysis_id, language),
         "certaintyScale": certainty_scale(language),
         "unpublished": row["unpublished"],
     }
 
 
-ITEM_KEY = re.compile(r"^(af|im|ch):([0-9a-f-]{36}):([^:]+)$")
+ITEM_KEY = re.compile(r"^(an|af|im|ch):([0-9a-f-]{36}):([^:]+)$")
+
+
+def shown_files(files):
+    """The files of *files* a viewer shows: readable spectra, imaging manifests with layers, micro-images."""
+    return [
+        f
+        for f in files
+        if (f["dataKind"] == "xy" and f["role"] == "readable")
+        or (f["dataKind"] == "chemical-imaging" and f["layers"])
+        or f["dataKind"] == "micro-imaging"
+    ]
 
 
 def parse_keys(query):
@@ -1328,7 +1756,13 @@ def parse_keys(query):
 
 
 def items_payload(keys, user, language):
-    """``ItemsResponse``: the items still visible and the keys that are not, without saying why."""
+    """``ItemsResponse``: the items still visible and the keys that are not, without saying why.
+
+    ``an:<analysis>:-`` is a whole analysis with the files a viewer shows
+    (possibly none); ``af:<analysis>:<file>`` one of its files and
+    ``im:<analysis>:<layer>`` the imaging manifest holding that layer;
+    ``ch:<characterization>:-`` an identified material.
+    """
     visible = visible_set(user)
     rows = {r["id"]: r for r in corpus_rows(user, language)}
     label_of = names(
@@ -1350,7 +1784,8 @@ def items_payload(keys, user, language):
         for s in characterization_summaries(ch_ids, visible, user, language, {})
     }
     file_ids = sorted(
-        {m.group(2) for _, m in parsed if m and m.group(1) in ("af", "im")} & set(rows)
+        {m.group(2) for _, m in parsed if m and m.group(1) in ("an", "af", "im")}
+        & set(rows)
     )
     shared_values = (
         Values(file_ids, ["files", "micro", "imaging"], user) if file_ids else None
@@ -1374,11 +1809,21 @@ def items_payload(keys, user, language):
             else:
                 missing.append(key)
             continue
-        if rid not in rows:
+        if rid not in rows or (kind == "an" and sub != "-"):
             missing.append(key)
             continue
         if rid not in files_of:
             files_of[rid] = analysis_files(rid, user, language, values=shared_values)
+        if kind == "an":
+            items.append(
+                {
+                    "key": key,
+                    "kind": "analysis",
+                    "analysis": analysis_hit(rows[rid], label_of),
+                    "files": shown_files(files_of[rid]),
+                }
+            )
+            continue
         if kind == "af":
             found = next(
                 (

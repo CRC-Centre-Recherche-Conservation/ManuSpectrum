@@ -5,6 +5,17 @@ export type Label = { value: string; lang: string };
 export type Ref = { id: string; model: string; name: Label };
 export type ValueRef = { id: string; uri: string; label: Label };
 export type RankedValue = ValueRef & { rank: number };
+/**
+ * Identity of a technique on every screen, the same in every language and
+ * document: `code` is its acronym (else first letters), `colour` the
+ * `--tech-n` of its family (null: ink), `family` the uri of that family.
+ */
+export type TechniqueMark = {
+    code: string;
+    colour: number | null;
+    family: string;
+};
+export type Technique = ValueRef & TechniqueMark;
 export type DataKind = "xy" | "chemical-imaging" | "micro-imaging" | "file";
 export type Shape =
     | { type: "point"; x: number; y: number }
@@ -24,8 +35,10 @@ export type EventType =
     | "analysis"
     | "sampling";
 export type FacetKey =
-    | "technique"
+    | "partType"
+    | "partColour"
     | "part"
+    | "technique"
     | "operator"
     | "year"
     | "material"
@@ -33,6 +46,8 @@ export type FacetKey =
     | "element"
     | "layer"
     | "project";
+/** Level of the chain a facet filters: the studied part, the analysis, the identified material. */
+export type FacetGroup = "part" | "analysis" | "characterization";
 export type DateRange = { start: string | null; end: string | null };
 
 export interface FacetValue {
@@ -40,10 +55,15 @@ export interface FacetValue {
     label: Label;
     count: number;
     selected: boolean;
+    /** Technique values only. */
+    mark: TechniqueMark | null;
+    /** Colour values only: CSS colour of the concept, the same in every language; null when its labels name none. */
+    swatch: string | null;
 }
 
 export interface Facet {
     key: FacetKey;
+    group: FacetGroup;
     values: FacetValue[];
 }
 
@@ -55,13 +75,18 @@ export interface DocumentHit {
     analysisCount: number;
     thumbnail: string | null;
     unpublished: boolean;
+    shelfmark: Label | null;
+    dates: DateRange | null;
+    /** Plain text, cut on a word at about 220 characters with « … ». */
+    description: Label | null;
+    documentType: Label | null;
 }
 
 export interface AnalysisHit {
     type: "analysis";
     id: string;
     name: Label;
-    technique: ValueRef | null;
+    technique: Technique | null;
     document: Ref;
     component: Ref | null;
     canvas: string | null;
@@ -77,6 +102,8 @@ export interface SearchResponse {
     results: (DocumentHit | AnalysisHit)[];
     facets: Facet[];
     unpublishedCount: number;
+    /** Documents without analyses the query would list with `empty=1` (0 outside the documents grain). */
+    withoutAnalyses: number;
 }
 
 export interface Annotation {
@@ -85,7 +112,7 @@ export interface Annotation {
     name: Label;
     canvas: string;
     shape: Shape;
-    technique: ValueRef | null;
+    technique: Technique | null;
     dataKind: DataKind;
     unpublished: boolean;
     match: boolean;
@@ -94,7 +121,7 @@ export interface Annotation {
 export interface UnlocatedAnalysis {
     analysis: string;
     name: Label;
-    technique: ValueRef | null;
+    technique: Technique | null;
     dataKind: DataKind;
     unpublished: boolean;
     match: boolean;
@@ -215,7 +242,7 @@ export interface Citation {
 export interface AnalysisPayload {
     id: string;
     name: Label;
-    technique: ValueRef | null;
+    technique: Technique | null;
     instrument: Ref | null;
     operators: Ref[];
     projects: Ref[];
@@ -230,11 +257,22 @@ export interface AnalysisPayload {
     bibliography: Label[];
     citation: Citation | null;
     permalink: string;
+    /** Path of the Arches report on this site, in the request language. */
+    reportUrl: string;
     certaintyScale: CertaintyScale;
     unpublished: boolean;
 }
 
+/** A whole analysis in the Selection, with the files a viewer shows (raw files left out; possibly none). */
+export interface AnalysisItem {
+    key: string;
+    kind: "analysis";
+    analysis: AnalysisHit;
+    files: FileEntry[];
+}
+
 export type Item =
+    | AnalysisItem
     | {
           key: string;
           kind: "analysis-file";
@@ -284,13 +322,37 @@ export const SHAPE_KEYS = {
         width: true,
         height: true,
     } satisfies Record<keyof ImageRef, true>,
-    Facet: { key: true, values: true } satisfies Record<keyof Facet, true>,
+    Technique: {
+        id: true,
+        uri: true,
+        label: true,
+        code: true,
+        colour: true,
+        family: true,
+    } satisfies Record<keyof Technique, true>,
+    TechniqueMark: { code: true, colour: true, family: true } satisfies Record<
+        keyof TechniqueMark,
+        true
+    >,
+    Facet: { key: true, group: true, values: true } satisfies Record<
+        keyof Facet,
+        true
+    >,
+    FacetValue: {
+        id: true,
+        label: true,
+        count: true,
+        selected: true,
+        mark: true,
+        swatch: true,
+    } satisfies Record<keyof FacetValue, true>,
     SearchResponse: {
         total: true,
         page: true,
         results: true,
         facets: true,
         unpublishedCount: true,
+        withoutAnalyses: true,
     } satisfies Record<keyof SearchResponse, true>,
     DocumentHit: {
         type: true,
@@ -300,6 +362,10 @@ export const SHAPE_KEYS = {
         analysisCount: true,
         thumbnail: true,
         unpublished: true,
+        shelfmark: true,
+        dates: true,
+        description: true,
+        documentType: true,
     } satisfies Record<keyof DocumentHit, true>,
     AnalysisHit: {
         type: true,
@@ -389,6 +455,7 @@ export const SHAPE_KEYS = {
         bibliography: true,
         citation: true,
         permalink: true,
+        reportUrl: true,
         certaintyScale: true,
         unpublished: true,
     } satisfies Record<keyof AnalysisPayload, true>,
@@ -407,6 +474,12 @@ export const SHAPE_KEYS = {
         previewUrl: true,
         zone: true,
     } satisfies Record<keyof FileEntry, true>,
+    AnalysisItem: {
+        key: true,
+        kind: true,
+        analysis: true,
+        files: true,
+    } satisfies Record<keyof AnalysisItem, true>,
     ItemsResponse: { items: true, missing: true } satisfies Record<
         keyof ItemsResponse,
         true

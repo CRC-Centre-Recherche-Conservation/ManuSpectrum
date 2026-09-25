@@ -26,16 +26,16 @@
 {% block arches_js_data %}{% endblock %}
 {% block content %}
 <section class="ms-explorer-intro">
-    <h1 class="ms-explorer-intro__title">
-        {% trans "Discover the data" %}
-        <span class="ms-explorer-intro__subtitle">{% trans "Analysis explorer" %}</span>
-    </h1>
+    <p class="ms-explorer-intro__kicker">{% trans "Analysis explorer" %}</p>
+    <h1 class="ms-explorer-intro__title">{% trans "Discover the data" %}</h1>
+    <span class="ms-explorer-intro__accent" aria-hidden="true"></span>
     <p class="ms-explorer-intro__lead">
         {% blocktrans trimmed %}
         Search the analyses of written heritage by technique, material, project or year,
         then open a document to see where each analysis was made.
         {% endblocktrans %}
     </p>
+    <div id="ms-explorer-intro-bar" class="ms-explorer-intro__bar"></div>
 </section>
 <div id="ms-explorer-app" class="ms-explorer" aria-busy="true" data-connected="{{ explorer_connected|yesno:'true,false' }}">
     <p class="ms-explorer__loading">{% trans "Loading the explorer…" %}</p>

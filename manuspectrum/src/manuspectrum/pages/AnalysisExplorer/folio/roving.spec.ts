@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     nextId,
+    offsetInside,
     readingOrder,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
 
@@ -26,5 +27,16 @@ describe("roving order", () => {
         expect(nextId(order, null, "ArrowRight")).toBe("a");
         expect(nextId(order, "a", "Tab")).toBeNull();
         expect(nextId([], null, "ArrowRight")).toBeNull();
+    });
+
+    it("shifts a point back inside the padded box, and only then", () => {
+        expect(offsetInside({ x: 50, y: 50 }, 100, 100, 10)).toEqual({
+            x: 0,
+            y: 0,
+        });
+        expect(offsetInside({ x: 4, y: 97 }, 100, 100, 10)).toEqual({
+            x: -6,
+            y: 7,
+        });
     });
 });

@@ -31,14 +31,20 @@ export function overlayKey(analysisId: string, index: number): string {
     return `${analysisId}:${index}`;
 }
 
-/** The layer image: its own URL, else the IIIF image service at most `size` px on a side. */
+/**
+ * The layer image: its own URL, else the IIIF image service at most `size` px
+ * on a side and never beyond the image's own size (servers refuse to scale
+ * up); a size left at 0 is unknown.
+ */
 export function layerImageUrl(
     image: ImageRef,
     size = OVERLAY_SIZE,
 ): string | null {
     if (image.url) return image.url;
     if (image.service) {
-        return imageUrl(image.service, { size: `!${size},${size}` });
+        const width = image.width > 0 ? Math.min(size, image.width) : size;
+        const height = image.height > 0 ? Math.min(size, image.height) : size;
+        return imageUrl(image.service, { size: `!${width},${height}` });
     }
     return null;
 }

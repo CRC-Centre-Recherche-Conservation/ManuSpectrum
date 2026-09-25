@@ -7,6 +7,7 @@ import {
     useTemplateRef,
     watch,
 } from "vue";
+import { usePreferredReducedMotion, useResizeObserver } from "@vueuse/core";
 import L from "leaflet";
 import "leaflet-iiif";
 import "leaflet.markercluster";
@@ -26,6 +27,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     nextId,
+    offsetInside,
     readingOrder,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -59,6 +61,11 @@ const HATCH_ID = "ms-folio-hatch";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const CLUSTER_PREFIX = "cluster:";
 const SAMPLE_PREFIX = "sample:";
+const FOCUS_PADDING = 48;
+const PINNED_PANE = "folio-pinned";
+// Above Leaflet's marker pane (600), below its tooltips (650).
+const PINNED_PANE_Z_INDEX = "620";
+const MARKER_PANE = "markerPane";
 
 /** The leaflet-iiif 3.0.0 state the folio reads: the info.json request, the image sizes it yields, the tile container. */
 type IiifLayer = L.TileLayer & {
@@ -82,20 +89,29 @@ const props = withDefaults(
         samples: SampleSummary[];
         overlays?: FolioOverlay[];
         curtain?: string | null;
+        /** The line under the page: document, page, position. */
+        caption?: string;
     }>(),
-    { overlays: () => [], curtain: null },
+    { overlays: () => [], curtain: null, caption: "" },
 );
 const emit = defineEmits<{ select: [focus: Focus] }>();
-defineExpose({ focusTarget });
+defineExpose({ focusTarget, focusCurrent });
 
 const { $gettext, interpolate } = useGettext();
+const motion = usePreferredReducedMotion();
 const host = useTemplateRef<HTMLDivElement>("host");
 
 const active = ref<string | null>(null);
+const pageFailed = ref(false);
+/** Keys of laid maps whose image did not load. */
+const failedOverlays = ref<ReadonlySet<string>>(new Set());
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
 let page: IiifLayer | null = null;
 let cluster: L.MarkerClusterGroup | null = null;
+// The open analysis or sample and the lit evidence: drawn above the groups, never inside one.
+let pinned: L.LayerGroup | null = null;
+const matchOf = new Map<L.Marker, boolean>();
 let frames: L.GeoJSON | null = null;
 let materials: L.GeoJSON | null = null;
 let sampleZones: L.GeoJSON | null = null;
@@ -125,7 +141,13 @@ watch(
     ],
     drawMarks,
 );
-watch(() => props.focus, refreshStates);
+watch(
+    () => props.focus,
+    () => {
+        repin();
+        computeTargets();
+    },
+);
 watch(() => [props.overlays, props.curtain], drawOverlays);
 
 onMounted(() => {
@@ -141,12 +163,16 @@ onMounted(() => {
         zoomSnap: 0.25,
     });
     map.setView([0, 0], INITIAL_ZOOM);
+    map.createPane(PINNED_PANE).style.zIndex = PINNED_PANE_Z_INDEX;
+    pinned = L.layerGroup().addTo(map);
     stackSmallestOnTop(map);
     map.on("zoomend moveend", computeTargets);
     drawPage();
     drawMarks();
     drawOverlays();
 });
+
+useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 
 onBeforeUnmount(() => {
     sideBySide?.remove();
@@ -216,26 +242,56 @@ function markerIcon(annotation: Annotation): L.DivIcon {
     });
 }
 
-/** The group's icon host takes no tab stop: the roving `span` inside is the target. */
+/** The label of a marker group: how many analyses it holds and how many of them the filters keep. */
+function clusterLabel(count: number, matching: number): string {
+    if (props.view === "samples") {
+        return interpolate(
+            $gettext("%{n} samples here, zoom in"),
+            { n: count },
+            true,
+        );
+    }
+    if (matching === 0) {
+        return interpolate(
+            $gettext("%{n} analyses here, none in the filters"),
+            { n: count },
+            true,
+        );
+    }
+    if (matching < count) {
+        return interpolate(
+            $gettext("%{n} analyses here, %{kept} in the filters, zoom in"),
+            { n: count, kept: matching },
+            true,
+        );
+    }
+    return interpolate(
+        $gettext("%{n} analyses here, zoom in"),
+        { n: count },
+        true,
+    );
+}
+
+/**
+ * The group's icon host takes no tab stop: the roving `span` inside is the
+ * target. A group writes « kept/all » when the filters drop some of its
+ * analyses, and is dimmed when they drop them all.
+ */
 function clusterIcon(group: L.MarkerCluster): L.DivIcon {
     group.options.keyboard = false;
-    const count = group.getChildCount();
+    const children = group.getAllChildMarkers();
+    const count = children.length;
+    const matching = children.filter(
+        (marker) => matchOf.get(marker) !== false,
+    ).length;
     const element = document.createElement("span");
     element.dataset.target = `${CLUSTER_PREFIX}${L.stamp(group)}`;
     element.setAttribute("role", "button");
-    element.setAttribute(
-        "aria-label",
-        interpolate(
-            props.view === "samples"
-                ? $gettext("%{n} samples here, zoom in")
-                : $gettext("%{n} analyses here, zoom in"),
-            { n: count },
-            true,
-        ),
-    );
+    element.setAttribute("aria-label", clusterLabel(count, matching));
     element.tabIndex = -1;
-    element.className = "folio-cluster";
-    element.textContent = String(count);
+    element.className = `folio-cluster${matching === 0 ? " is-dimmed" : ""}`;
+    element.textContent =
+        matching < count ? `${matching}/${count}` : String(count);
     return L.divIcon({
         html: element,
         className: "folio-marker-host",
@@ -314,12 +370,14 @@ function ensureHatch(): void {
  * read (never, when the image host refuses it), and GridLayer.onRemove throws
  * on a layer whose tiles are not laid: an unread page never reaches the map,
  * and a page removed in the instant between its addition and its tiles is
- * dropped without calling GridLayer.onRemove.
+ * dropped without calling GridLayer.onRemove. An info.json that cannot be
+ * read leaves the markers on the bare stage and says so (`pageFailed`).
  */
 function drawPage(): void {
     if (!map) return;
     if (page && map.hasLayer(page)) map.removeLayer(page);
     page = null;
+    pageFailed.value = false;
     const service = props.canvas?.image.service;
     if (!service) return;
     const next = L.tileLayer.iiif(infoJsonUrl(service), {
@@ -330,14 +388,50 @@ function drawPage(): void {
     next.onRemove = (from: L.Map) =>
         next._container ? onRemove.call(next, from) : next;
     page = next;
-    void Promise.resolve(next._infoPromise).then(() => {
-        if (map && page === next && next._imageSizes) map.addLayer(next);
-    });
+    void Promise.resolve(next._infoPromise).then(
+        () => {
+            if (!map || page !== next) return;
+            if (next._imageSizes) map.addLayer(next);
+            else pageFailed.value = true;
+        },
+        () => {
+            if (page === next) pageFailed.value = true;
+        },
+    );
+}
+
+/** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
+function pinnedTargets(): Set<string> {
+    const targets = new Set<string>(props.lit ?? []);
+    if (props.focus?.kind === "analysis") targets.add(props.focus.id);
+    if (props.focus?.kind === "sample")
+        targets.add(`${SAMPLE_PREFIX}${props.focus.id}`);
+    return targets;
+}
+
+/** Moves each marker between the groups and the pinned layer as `pinnedTargets` says. */
+function repin(): void {
+    if (!cluster || !pinned) return;
+    const wanted = pinnedTargets();
+    for (const [id, marker] of markers) {
+        const isPinned = pinned.hasLayer(marker);
+        if (wanted.has(id) && !isPinned) {
+            cluster.removeLayer(marker);
+            marker.options.pane = PINNED_PANE;
+            pinned.addLayer(marker);
+        } else if (!wanted.has(id) && isPinned) {
+            pinned.removeLayer(marker);
+            marker.options.pane = MARKER_PANE;
+            cluster.addLayer(marker);
+        }
+    }
 }
 
 function drawMarks(): void {
     if (!map) return;
     openedGroup = null;
+    pinned?.clearLayers();
+    matchOf.clear();
     cluster?.remove();
     frames?.remove();
     materials?.remove();
@@ -361,6 +455,7 @@ function drawMarks(): void {
         });
         marker.on("click", () => activate(annotation.analysis));
         markers.set(annotation.analysis, marker);
+        matchOf.set(marker, annotation.match);
     }
     const shownSamples = props.view === "samples" ? props.samples : [];
     for (const sample of shownSamples) {
@@ -390,7 +485,18 @@ function drawMarks(): void {
         });
         if (feature) frameFeatures.push(feature);
     }
-    cluster.addLayers([...markers.values()]);
+    const wanted = pinnedTargets();
+    for (const [id, marker] of markers) {
+        if (wanted.has(id)) {
+            marker.options.pane = PINNED_PANE;
+            pinned?.addLayer(marker);
+        }
+    }
+    cluster.addLayers(
+        [...markers]
+            .filter(([id]) => !wanted.has(id))
+            .map(([, marker]) => marker),
+    );
     cluster.on("animationend spiderfied unspiderfied", settleGroups);
     map.addLayer(cluster);
 
@@ -488,6 +594,9 @@ function drawOverlays(): void {
             images.delete(key);
         }
     }
+    failedOverlays.value = new Set(
+        [...failedOverlays.value].filter((key) => wanted.has(key)),
+    );
     for (const overlay of props.overlays) {
         const existing = images.get(overlay.key);
         if (existing) {
@@ -495,17 +604,16 @@ function drawOverlays(): void {
             existing.setBounds(L.latLngBounds(overlay.bounds));
         } else {
             const pane = overlayPane(map, overlay.key);
+            const layer = L.imageOverlay(overlay.url, overlay.bounds, {
+                opacity: overlay.opacity,
+                className: "folio-overlay",
+                alt: overlay.label,
+                pane,
+            });
+            layer.on("error", () => markOverlayFailed(overlay.key));
             images.set(
                 overlay.key,
-                curtainable(
-                    L.imageOverlay(overlay.url, overlay.bounds, {
-                        opacity: overlay.opacity,
-                        className: "folio-overlay",
-                        alt: overlay.label,
-                        pane,
-                    }).addTo(map),
-                    map.getPane(pane)!,
-                ),
+                curtainable(layer.addTo(map), map.getPane(pane)!),
             );
         }
     }
@@ -524,6 +632,20 @@ function drawOverlays(): void {
             sideBySide as L.SideBySide & { _range?: HTMLElement }
         )._range?.setAttribute("aria-label", $gettext("Curtain position"));
     }
+}
+
+function markOverlayFailed(key: string): void {
+    failedOverlays.value = new Set(failedOverlays.value).add(key);
+}
+
+/** Lays the maps that did not load again, as new images. */
+function retryOverlays(): void {
+    for (const key of failedOverlays.value) {
+        images.get(key)?.remove();
+        images.delete(key);
+    }
+    failedOverlays.value = new Set();
+    drawOverlays();
 }
 
 /** A layer that leaves the curtain keeps no clip: its pane may be laid again without it. */
@@ -641,10 +763,26 @@ function settleGroups(): void {
     if (first) moveTo(first);
 }
 
+/**
+ * Gives the keyboard focus to a marker or marker group without scrolling the
+ * page, then pans the map until it sits `FOCUS_PADDING` inside the viewer.
+ */
 function moveTo(id: string): void {
     active.value = id;
     refreshStates();
-    targetElement(id)?.focus();
+    targetElement(id)?.focus({ preventScroll: true });
+    const layer = targets.get(id);
+    if (!map || !layer) return;
+    const size = map.getSize();
+    const shift = offsetInside(
+        map.latLngToContainerPoint(layer.getLatLng()),
+        size.x,
+        size.y,
+        FOCUS_PADDING,
+    );
+    if (shift.x !== 0 || shift.y !== 0) {
+        map.panBy([shift.x, shift.y], { animate: motion.value !== "reduce" });
+    }
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -668,6 +806,15 @@ function onKeydown(event: KeyboardEvent): void {
 function focusTarget(id: string): void {
     const target = visibleTargetOf(id);
     if (target !== null && targets.has(target)) moveTo(target);
+}
+
+/** Puts the keyboard focus on the folio's tab stop: its current marker, else the viewer. */
+function focusCurrent(): void {
+    if (active.value !== null && targets.has(active.value)) {
+        moveTo(active.value);
+        return;
+    }
+    host.value?.focus({ preventScroll: true });
 }
 
 function zoomIn(): void {
@@ -700,30 +847,53 @@ function wholePage(): void {
         ref="host"
         class="folio"
         role="group"
+        tabindex="-1"
         :aria-label="$gettext('Page and its analyses')"
         @keydown="onKeydown"
     >
+        <div class="surface"></div>
         <div class="controls">
             <button
                 type="button"
                 class="control"
+                :aria-label="$gettext('Zoom in')"
+                :title="$gettext('Zoom in')"
                 @click="zoomIn"
             >
-                <span>{{ $gettext("Zoom in") }}</span>
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M8 3v10M3 8h10" />
+                </svg>
             </button>
             <button
                 type="button"
                 class="control"
+                :aria-label="$gettext('Zoom out')"
+                :title="$gettext('Zoom out')"
                 @click="zoomOut"
             >
-                <span>{{ $gettext("Zoom out") }}</span>
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M3 8h10" />
+                </svg>
             </button>
             <button
                 type="button"
                 class="control"
+                :aria-label="$gettext('Whole page')"
+                :title="$gettext('Whole page')"
                 @click="wholePage"
             >
-                <span>{{ $gettext("Whole page") }}</span>
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M2.5 7.5 8 3l5.5 4.5M4 6.5V13h8V6.5" />
+                </svg>
             </button>
         </div>
         <p
@@ -733,7 +903,44 @@ function wholePage(): void {
         >
             <span>{{ $gettext("No image for this page.") }}</span>
         </p>
-        <div class="surface"></div>
+        <p
+            v-else-if="pageFailed"
+            class="no-image page-failed"
+            role="status"
+        >
+            <span>{{
+                $gettext(
+                    "Page image unavailable (the institution's IIIF server).",
+                )
+            }}</span>
+            <button
+                type="button"
+                class="retry"
+                @click="drawPage"
+            >
+                <span>{{ $gettext("Retry") }}</span>
+            </button>
+        </p>
+        <p
+            v-if="failedOverlays.size > 0"
+            class="no-image overlay-failed"
+            role="status"
+        >
+            <span>{{ $gettext("Map unavailable (image server)") }}</span>
+            <button
+                type="button"
+                class="retry"
+                @click="retryOverlays"
+            >
+                <span>{{ $gettext("Retry") }}</span>
+            </button>
+        </p>
+        <p
+            v-if="props.caption"
+            class="caption"
+        >
+            <span>{{ props.caption }}</span>
+        </p>
     </div>
 </template>
 
@@ -741,34 +948,58 @@ function wholePage(): void {
 .folio {
     position: relative;
     display: grid;
-    grid-template-rows: auto 1fr;
-    min-block-size: 28rem;
+    grid-template-rows: minmax(0, 1fr);
+    min-block-size: 20rem;
     background: var(--stage);
-    border-radius: 0.5rem;
+    border-radius: var(--explorer-radius, 0.625rem);
     overflow: hidden;
 }
 
+.folio:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
 .folio .surface {
-    min-block-size: 28rem;
+    min-block-size: 0;
     background: var(--stage);
 }
 
 .folio .controls {
-    display: flex;
-    gap: 0.25rem;
-    padding: 0.5rem;
-    background: var(--surface);
+    position: absolute;
+    inset-block-start: 0.75rem;
+    inset-inline-end: 0.75rem;
+    z-index: 1000;
+    display: grid;
+    gap: 0.375rem;
 }
 
 .folio .control {
-    min-block-size: 2.75rem;
-    padding-inline: 0.75rem;
-    border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.25rem;
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
+    display: grid;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    padding: 0;
+    border: 0.0625rem solid color-mix(in srgb, var(--surface) 30%, transparent);
+    border-radius: 0.375rem;
+    background: color-mix(in srgb, var(--stage) 85%, transparent);
+    color: var(--surface);
     cursor: pointer;
+}
+
+.folio .control:hover {
+    background: var(--stage);
+    border-color: var(--surface);
+}
+
+.folio .control svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .folio .control:focus-visible,
@@ -777,18 +1008,68 @@ function wholePage(): void {
     outline-offset: 0.125rem;
 }
 
+.folio .control:focus-visible {
+    outline-color: var(--surface);
+}
+
+.folio .caption {
+    position: absolute;
+    inset-block-end: 0.5rem;
+    inset-inline-start: 0.5rem;
+    z-index: 1000;
+    max-inline-size: calc(100% - 1rem);
+    padding: 0.125rem 0.5rem;
+    overflow: hidden;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--stage) 85%, transparent);
+    color: var(--surface);
+    font: 0.6875rem var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
 .folio .no-image {
     position: absolute;
-    inset-block-start: 4rem;
-    inset-inline: 1rem;
-    z-index: 500;
+    inset-block-start: 1rem;
+    inset-inline: 1rem 3.75rem;
+    z-index: 1000;
     padding: 0.5rem 0.75rem;
     border-radius: 0.25rem;
     background: var(--surface);
     color: var(--ink);
 }
 
+.folio .no-image {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+.folio .overlay-failed {
+    inset-block: auto 2.5rem;
+}
+
+.folio .retry {
+    min-block-size: 2rem;
+    padding-inline: 0.75rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.folio .retry:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
 .folio :deep(.folio-marker-host) {
+    display: flex;
+    justify-content: center;
     background: none;
     border: none;
 }
@@ -796,14 +1077,18 @@ function wholePage(): void {
 .folio :deep(.folio-marker) {
     position: relative;
     display: grid;
+    flex: none;
     place-items: center;
-    inline-size: 1.75rem;
+    box-sizing: border-box;
+    min-inline-size: 1.75rem;
     block-size: 1.75rem;
+    padding-inline: 0.25rem;
     border: 0.125rem solid var(--surface);
-    border-radius: 50%;
+    border-radius: 999rem;
     background: var(--ink);
     color: var(--stage);
-    font: 600 0.75rem var(--font-body);
+    font: 600 0.625rem var(--font-body);
+    white-space: nowrap;
     cursor: pointer;
 }
 
@@ -829,6 +1114,22 @@ function wholePage(): void {
 
 .folio :deep(.folio-marker--tech-6) {
     background: var(--tech-6);
+}
+
+.folio :deep(.folio-marker--tech-7) {
+    background: var(--tech-7);
+}
+
+.folio :deep(.folio-marker--tech-8) {
+    background: var(--tech-8);
+}
+
+.folio :deep(.folio-marker--tech-9) {
+    background: var(--tech-9);
+}
+
+.folio :deep(.folio-marker--tech-10) {
+    background: var(--tech-10);
 }
 
 .folio :deep(.folio-marker--ink) {
@@ -859,15 +1160,27 @@ function wholePage(): void {
     background: var(--accent-text);
 }
 
-.folio :deep(.folio-marker.is-dimmed),
+.folio :deep(.folio-marker.is-dimmed) {
+    border-color: color-mix(in srgb, var(--surface) 75%, transparent);
+    background: color-mix(in srgb, var(--stage) 40%, transparent);
+    color: var(--surface);
+    opacity: 0.6;
+}
+
 .folio :deep(.folio-material.is-dimmed) {
     opacity: 0.35;
 }
 
-.folio :deep(.folio-marker.is-lit),
-.folio :deep(.folio-marker.is-focused) {
+.folio :deep(.folio-marker.is-lit) {
     box-shadow: 0 0 0 0.25rem
         color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.folio :deep(.folio-marker.is-focused),
+.folio :deep(.folio-sample.is-focused) {
+    box-shadow:
+        0 0 0 0.1875rem var(--ink),
+        0 0 0 0.375rem var(--surface);
 }
 
 .folio :deep(.folio-sample) {
@@ -893,11 +1206,6 @@ function wholePage(): void {
     background: var(--accent-text);
 }
 
-.folio :deep(.folio-sample.is-focused) {
-    box-shadow: 0 0 0 0.25rem
-        color-mix(in srgb, var(--surface) 60%, transparent);
-}
-
 .folio :deep(.folio-sample-zone) {
     stroke: var(--ink);
 }
@@ -913,6 +1221,13 @@ function wholePage(): void {
     color: var(--ink);
     font: 600 0.75rem var(--font-mono);
     cursor: pointer;
+}
+
+.folio :deep(.folio-cluster.is-dimmed) {
+    border-color: color-mix(in srgb, var(--surface) 75%, transparent);
+    background: color-mix(in srgb, var(--stage) 40%, transparent);
+    color: var(--surface);
+    opacity: 0.6;
 }
 
 .folio :deep(.folio-frame) {
@@ -941,6 +1256,22 @@ function wholePage(): void {
 
 .folio :deep(.folio-frame--tech-6) {
     stroke: var(--tech-6);
+}
+
+.folio :deep(.folio-frame--tech-7) {
+    stroke: var(--tech-7);
+}
+
+.folio :deep(.folio-frame--tech-8) {
+    stroke: var(--tech-8);
+}
+
+.folio :deep(.folio-frame--tech-9) {
+    stroke: var(--tech-9);
+}
+
+.folio :deep(.folio-frame--tech-10) {
+    stroke: var(--tech-10);
 }
 
 .folio :deep(.folio-material) {

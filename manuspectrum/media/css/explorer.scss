@@ -2,9 +2,31 @@
 // mount point. Components carry their own scoped styles; the colour tokens
 // come from _ms-chrome's :root (css/pages). Imports tokens only: css/pages
 // already ships the chrome, and a second copy would duplicate the reset.
+// The rules on `body.ms-page--app` also reach what PrimeVue teleports to
+// <body> (drawers), which the mount point does not contain.
 @import 'ms-tokens';
 @import url(node_modules/leaflet/dist/leaflet.css);
 @import url(node_modules/leaflet.markercluster/dist/MarkerCluster.css);
+
+@mixin ms-app-container {
+    max-width: $ms-app-maxw;
+    margin-inline: auto;
+    padding-inline: var(--ms-gutter, #{$ms-gutter});
+}
+
+body.ms-page--app {
+    // Application tokens, read by the Explorer components.
+    --explorer-top: calc(#{$ms-header-stuck} + 0.5rem);
+    --explorer-rail: 15.5rem;
+    --explorer-side: 21rem;
+    --explorer-radius: 0.625rem;
+    --explorer-target: 2rem;
+    --explorer-busy-opacity: 0.55;
+
+    @media (pointer: coarse) {
+        --explorer-target: 2.75rem;
+    }
+}
 
 // The paper grain sits over the page at z-index 10000; over an application it
 // swallows the contrast of every control.
@@ -12,39 +34,102 @@ body.ms-page--app::after {
     display: none;
 }
 
+// --- Intro: the homepage heading on the Explorer home, one line elsewhere ---
 .ms-explorer-intro {
-    @include ms-container;
-    padding-block: 7rem 1rem;
+    @include ms-app-container;
+    display: grid;
+    justify-items: start;
+    gap: 0.5rem;
+    padding-block: 6.5rem 0.5rem;
+}
+
+.ms-explorer-intro__kicker {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent-text);
 }
 
 .ms-explorer-intro__title {
     font-family: var(--font-display);
-    font-size: clamp(1.75rem, 4vw, 2.5rem);
-    font-weight: 500;
+    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+    font-weight: 400;
+    line-height: 1.1;
     color: var(--ink);
 }
 
-.ms-explorer-intro__subtitle {
+.ms-explorer-intro__accent {
     display: block;
-    font-family: var(--font-body);
-    font-size: 0.875rem;
-    font-weight: 400;
-    color: var(--ink-muted);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    inline-size: 6rem;
+    block-size: 0.1875rem;
+    border-radius: 0.125rem;
+    @include ms-spectral-gradient();
 }
 
 .ms-explorer-intro__lead {
-    max-width: 48rem;
-    margin-block-start: 0.75rem;
+    max-width: 46rem;
     color: var(--ink-muted);
+    font-size: 0.9375rem;
     line-height: 1.6;
 }
 
+// The explorer's bar (back link, Selection) is mounted here by the app.
+.ms-explorer-intro__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    justify-self: stretch;
+    font-size: 0.8125rem;
+
+    &:empty {
+        display: none;
+    }
+
+    > .selection {
+        order: 1;
+        margin-inline-start: auto;
+    }
+}
+
+body[data-explorer-screen='results'] .ms-explorer-intro__bar,
+body[data-explorer-screen='document'] .ms-explorer-intro__bar {
+    flex: 1 1 18rem;
+}
+
+body[data-explorer-screen='results'] .ms-explorer-intro,
+body[data-explorer-screen='document'] .ms-explorer-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    padding-block: 5rem 0;
+}
+
+body[data-explorer-screen='results'] .ms-explorer-intro__title,
+body[data-explorer-screen='document'] .ms-explorer-intro__title {
+    order: -1;
+    font-size: 1.25rem;
+}
+
+body[data-explorer-screen='results'] .ms-explorer-intro__accent,
+body[data-explorer-screen='results'] .ms-explorer-intro__lead,
+body[data-explorer-screen='document'] .ms-explorer-intro__accent,
+body[data-explorer-screen='document'] .ms-explorer-intro__lead {
+    display: none;
+}
+
+// --- Application area ---
 .ms-explorer,
 .ms-explorer-fallback {
-    @include ms-container;
+    @include ms-app-container;
     padding-block-end: 4rem;
+}
+
+.ms-explorer {
+    font-size: 0.8125rem;
+    line-height: 1.5;
 }
 
 .ms-explorer__loading {
@@ -57,4 +142,84 @@ body.ms-page--app::after {
 
 .ms-explorer-fallback a {
     color: var(--blue-text);
+}
+
+// --- Busy regions: a rainbow bar on top, the stale content dimmed ---
+body.ms-page--app [aria-busy='true'] {
+    position: relative;
+}
+
+body.ms-page--app [aria-busy='true'] > * {
+    opacity: var(--explorer-busy-opacity);
+    transition: opacity 0.2s ease 0.15s;
+}
+
+body.ms-page--app [aria-busy='true']::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    z-index: 5;
+    block-size: 0.1875rem;
+    border-radius: 0.125rem;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--spectral-1),
+        var(--spectral-2),
+        var(--spectral-3),
+        var(--spectral-4),
+        var(--spectral-5),
+        var(--spectral-6),
+        transparent
+    );
+    background-size: 50% 100%;
+    background-repeat: no-repeat;
+    animation: ms-explorer-busy 1.4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes ms-explorer-busy {
+    from { background-position: -100% 0; }
+    to { background-position: 200% 0; }
+}
+
+// --- Skeletons of first loads ---
+body.ms-page--app .ms-skeleton {
+    display: block;
+    border-radius: 0.375rem;
+    background: linear-gradient(90deg, var(--bg-alt) 25%, var(--bg-warm) 50%, var(--bg-alt) 75%);
+    background-size: 200% 100%;
+    animation: ms-explorer-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes ms-explorer-shimmer {
+    from { background-position: 100% 0; }
+    to { background-position: -100% 0; }
+}
+
+// --- Drawers (teleported to <body>) ---
+.p-drawer-mask.p-drawer-bottom .p-drawer.explorer-card-drawer {
+    block-size: min(85dvh, calc(100% - 3rem));
+}
+
+.p-drawer-mask.p-drawer-left .p-drawer.explorer-rail-drawer {
+    inline-size: min(22rem, calc(100% - 3rem));
+}
+
+.p-drawer.explorer-card-drawer,
+.p-drawer.explorer-rail-drawer {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.ms-page--app [aria-busy='true']::before {
+        animation: none;
+        background-size: 100% 100%;
+    }
+
+    body.ms-page--app .ms-skeleton {
+        animation: none;
+    }
 }

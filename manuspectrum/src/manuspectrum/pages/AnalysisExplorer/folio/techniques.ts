@@ -1,10 +1,10 @@
 import type {
     Label,
-    ValueRef,
+    Technique,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-/** Number of `--tech-n` colours in `_ms-chrome.scss`; further techniques are drawn in ink with their code. */
-export const TECHNIQUE_COLOURS = 6;
+/** Number of `--tech-n` colours in `_ms-chrome.scss`; the server gives no family a colour beyond it. */
+export const TECHNIQUE_COLOURS = 10;
 
 export interface TechniqueStyle {
     key: string;
@@ -18,52 +18,44 @@ const collator = new Intl.Collator(undefined, {
     numeric: true,
 });
 
-export function techniqueKey(technique: ValueRef | null): string {
+export function techniqueKey(technique: Technique | null): string {
     return technique?.uri ?? "";
 }
 
-function codeFor(text: string, taken: Set<string>): string {
-    const letters = text.replace(/[^\p{L}\p{N}]/gu, "").toUpperCase() || "?";
-    for (const candidate of [
-        letters.slice(0, 1),
-        letters.slice(0, 2),
-        letters.slice(0, 3),
-    ]) {
-        if (candidate && !taken.has(candidate)) return candidate;
-    }
-    let suffix = 2;
-    while (taken.has(`${letters.slice(0, 1)}${suffix}`)) suffix += 1;
-    return `${letters.slice(0, 1)}${suffix}`;
-}
-
 /**
- * One style per technique of a document, ordered by label: a short code shown
- * in the marker and the legend, and the colour `--tech-1`…`--tech-6` in that
- * order. Colour follows the technique, never its rank among the markers shown.
+ * One style per technique, keyed by its URI and ordered by label (the order
+ * of the legend and the page list). Code and colour are the ones the server
+ * gives the technique, the same in every language and document; an analysis
+ * without a technique is drawn in ink under `fallback`.
  */
 export function techniqueStyles(
-    techniques: readonly (ValueRef | null)[],
+    techniques: readonly (Technique | null)[],
     fallback: Label,
 ): Map<string, TechniqueStyle> {
-    const unique = new Map<string, Label>();
+    const unique = new Map<string, TechniqueStyle>();
     for (const technique of techniques) {
         const key = techniqueKey(technique);
-        if (!unique.has(key)) unique.set(key, technique?.label ?? fallback);
-    }
-    const sorted = [...unique.entries()].sort(([, a], [, b]) =>
-        collator.compare(a.value, b.value),
-    );
-    const taken = new Set<string>();
-    const styles = new Map<string, TechniqueStyle>();
-    sorted.forEach(([key, text], index) => {
-        const code = codeFor(text.value, taken);
-        taken.add(code);
-        styles.set(key, {
+        if (unique.has(key)) continue;
+        unique.set(
             key,
-            label: text,
-            code,
-            colour: index < TECHNIQUE_COLOURS ? index + 1 : null,
-        });
-    });
-    return styles;
+            technique
+                ? {
+                      key,
+                      label: technique.label,
+                      code: technique.code,
+                      colour: technique.colour,
+                  }
+                : { key, label: fallback, code: "?", colour: null },
+        );
+    }
+    return new Map(
+        [...unique.entries()].sort(([, a], [, b]) =>
+            collator.compare(a.label.value, b.label.value),
+        ),
+    );
+}
+
+/** The class of a technique colour: `<prefix>--tech-n`, or `<prefix>--ink` without a colour. */
+export function techniqueClass(prefix: string, colour: number | null): string {
+    return colour ? `${prefix}--tech-${colour}` : `${prefix}--ink`;
 }

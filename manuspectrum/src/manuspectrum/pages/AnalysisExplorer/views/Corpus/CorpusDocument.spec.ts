@@ -2,10 +2,11 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h } from "vue";
+import { defineComponent, h, ref } from "vue";
 
 import CorpusDocument from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue";
 
+import { RESULTS_MEMO_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     snapshotOf,
@@ -17,8 +18,10 @@ import {
     annotation,
     characterization,
     documentPayload,
+    facetValue,
     sample,
     searchResponse,
+    technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
@@ -26,6 +29,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 import type { Pinia } from "pinia";
 import type { Component, PropType } from "vue";
 
+import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type { LayerToggles } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
@@ -40,6 +44,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 }));
 
 const focusTarget = vi.fn();
+const focusCurrent = vi.fn();
 const FolioStub = defineComponent({
     name: "FolioMap",
     props: {
@@ -56,10 +61,11 @@ const FolioStub = defineComponent({
         samples: { type: Array, default: () => [] },
         overlays: { type: Array, default: () => [] },
         curtain: { type: String, default: null },
+        caption: { type: String, default: "" },
     },
     emits: ["select"],
     setup(_props, { expose }) {
-        expose({ focusTarget });
+        expose({ focusTarget, focusCurrent });
         return () => h("div", { class: "folio-stub" });
     },
 });
@@ -75,11 +81,16 @@ function cardStub(name: string): Component {
             scale: { type: Object, default: null },
             sample: { type: Object, default: null },
             analysisNames: { type: Map, default: null },
+            headingId: { type: String, default: undefined },
+            closable: { type: Boolean, default: true },
         },
         emits: ["close"],
-        setup(_props, { expose }) {
+        setup(props, { expose }) {
             expose({ focusHeading: () => undefined });
-            return () => h("article", { class: `${name}-stub` });
+            return () =>
+                h("article", { class: `${name}-stub` }, [
+                    h("h3", { id: props.headingId, tabindex: -1 }),
+                ]);
         },
     };
 }
@@ -90,6 +101,7 @@ let pinia: Pinia;
 beforeEach(() => {
     narrow = false;
     focusTarget.mockClear();
+    focusCurrent.mockClear();
     pinia = createPinia();
     setActivePinia(pinia);
     vi.stubGlobal("matchMedia", (query: string) => ({
@@ -131,6 +143,7 @@ function mountScreen(
     options: {
         stubs?: Record<string, unknown>;
         attachTo?: HTMLElement;
+        provide?: Record<symbol, unknown>;
     } = {},
 ) {
     const store = useExplorerStore();
@@ -140,6 +153,7 @@ function mountScreen(
         props: { documentId: uuid(1) },
         global: {
             plugins: [pinia, PrimeVue],
+            provide: options.provide,
             stubs: {
                 FolioMap: FolioStub,
                 AnalysisCard: cardStub("AnalysisCard"),
@@ -210,7 +224,7 @@ describe("CorpusDocument", () => {
         );
     });
 
-    it("counts the page's analyses the filters keep", async () => {
+    it("says on top of the page how many of its analyses the filters keep", async () => {
         stubFetch(
             documentPayload({
                 annotations: [
@@ -222,7 +236,7 @@ describe("CorpusDocument", () => {
         );
         const { wrapper } = mountScreen();
         await flushPromises();
-        expect(wrapper.find(".rail-foot").text()).toContain(
+        expect(wrapper.find(".stage .page-count").text()).toBe(
             "1 / 2 analyses on this page",
         );
     });
@@ -413,7 +427,7 @@ describe("CorpusDocument", () => {
         const { wrapper } = mountScreen();
         await flushPromises();
         expect(wrapper.find(".on-this-page").text()).toContain("FORS_014");
-        expect(wrapper.find(".selection-panel").exists()).toBe(true);
+        expect(wrapper.find(".side .selection-panel").exists()).toBe(false);
     });
 
     it("returns the focus to the marker when the card drawer closes", async () => {
@@ -458,22 +472,88 @@ describe("CorpusDocument", () => {
             store.openDocument(uuid(1));
         });
         await flushPromises();
-        const back = wrapper.find(".back");
-        expect(back.text()).toBe("Back to the results");
+        const back = wrapper.find(".explorer-back");
+        expect(back.text()).toBe("Results");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("results");
         expect(store.document).toBeNull();
         expect(store.filters.technique).toEqual(["http://x/xrf"]);
     });
 
+    it("says how many results it goes back to", async () => {
+        stubFetch();
+        const memo = ref<ResultsMemo>({
+            query: "grain=documents",
+            filterKey: "grain=documents",
+            page: 1,
+            payload: searchResponse({ total: 30 }),
+            scroll: 0,
+            opened: uuid(1),
+        });
+        const { wrapper } = mountScreen(
+            (store) => {
+                store.setCorpusScreen("results");
+                store.openDocument(uuid(1));
+            },
+            { provide: { [RESULTS_MEMO_KEY as symbol]: memo } },
+        );
+        await flushPromises();
+        expect(wrapper.find(".explorer-back").text()).toBe(
+            "Results (30 documents)",
+        );
+    });
+
+    it("counts its filters in this document only", async () => {
+        const fetchMock = stubFetch();
+        const { wrapper, store } = mountScreen();
+        store.setFilter("technique", ["http://example.org/xrf"]);
+        await flushPromises();
+        const search = fetchMock.mock.calls
+            .map(([url]) => String(url))
+            .filter((url) => url.includes("/search"))
+            .at(-1)!;
+        const query = new URLSearchParams(search.split("?")[1]);
+        expect(query.get("document")).toBe(uuid(1));
+        expect(query.get("grain")).toBe("analyses");
+        expect(query.get("technique")).toBe("http://example.org/xrf");
+        expect(wrapper.find(".rail .rail-title").text()).toBe(
+            "Filters of this document",
+        );
+    });
+
     it("goes back to the explorer home when opened from it", async () => {
         stubFetch();
         const { wrapper, store } = mountScreen();
         await flushPromises();
-        const back = wrapper.find(".back");
+        const back = wrapper.find(".explorer-back");
         expect(back.text()).toBe("Back to the explorer home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
+    });
+
+    it("opens on the first page with results when filters are active and no page is named", async () => {
+        stubFetch(
+            documentPayload({
+                annotations: [
+                    annotation(1, { match: false }),
+                    annotation(2, {
+                        canvas: "https://iiif.example/c2",
+                        match: true,
+                    }),
+                ],
+            }),
+        );
+        const { wrapper } = mountScreen((store) => {
+            store.setFilter("technique", ["http://example.org/xrf"]);
+            store.openDocument(uuid(1));
+        });
+        await flushPromises();
+        expect(wrapper.findComponent(FolioStub).props("canvas")?.id).toBe(
+            "https://iiif.example/c2",
+        );
+        expect(wrapper.find(".canvas-strip").classes()).toContain(
+            "is-filtered",
+        );
     });
 
     it("keeps the page after a filter reload with a card open", async () => {
@@ -650,5 +730,169 @@ describe("CorpusDocument", () => {
             wrapper.find(`#folio-marker-${uuid(101)}`).element,
         );
         wrapper.unmount();
+    });
+
+    describe("layout and keyboard", () => {
+        it("offers skip links to the page, the filters and the card", async () => {
+            stubFetch();
+            const { wrapper } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            const skips = wrapper.findAll(".skip-links button");
+            expect(skips.map((skip) => skip.text())).toEqual([
+                "Go to the page",
+                "Go to the filters",
+                "Go to the card",
+            ]);
+            await skips[0].trigger("click");
+            expect(focusCurrent).toHaveBeenCalled();
+            await skips[1].trigger("click");
+            expect(document.activeElement).toBe(wrapper.find(".rail").element);
+            await skips[2].trigger("click");
+            expect(document.activeElement).toBe(
+                wrapper.find("#on-this-page-title").element,
+            );
+            wrapper.unmount();
+        });
+
+        it("closes the card on Escape and gives the focus back to the list entry that opened it", async () => {
+            stubFetch();
+            const { wrapper, store } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            const entry = wrapper.find(
+                `.on-this-page [data-focus="analysis:${uuid(101)}"]`,
+            );
+            (entry.element as HTMLButtonElement).focus();
+            await entry.trigger("click");
+            await flushPromises();
+            expect(store.focus).toEqual({ kind: "analysis", id: uuid(101) });
+            await wrapper.find(".side article").trigger("keydown", {
+                key: "Escape",
+            });
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(document.activeElement).toBe(
+                wrapper.find(
+                    `.on-this-page [data-focus="analysis:${uuid(101)}"]`,
+                ).element,
+            );
+            expect(focusTarget).not.toHaveBeenCalled();
+            wrapper.unmount();
+        });
+
+        it("brings the heading of a card opened from the folio into view", async () => {
+            stubFetch();
+            const scrollIntoView = vi.fn();
+            Element.prototype.scrollIntoView = scrollIntoView;
+            const { wrapper } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "analysis", id: uuid(101) });
+            await flushPromises();
+            expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+            expect(scrollIntoView.mock.contexts[0]).toBe(
+                document.getElementById("explorer-card-heading"),
+            );
+            delete (Element.prototype as Partial<Element>).scrollIntoView;
+            wrapper.unmount();
+        });
+
+        it("lists in the legend only the techniques drawn on the page, with their counts", async () => {
+            stubFetch(
+                documentPayload({
+                    annotations: [
+                        annotation(1),
+                        annotation(2, {
+                            technique: technique("t:fors", "FORS", 2),
+                            canvas: "https://iiif.example/c2",
+                        }),
+                        annotation(3),
+                    ],
+                }),
+            );
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            expect(
+                wrapper
+                    .findAll(".folio-legend li")
+                    .map((entry) =>
+                        entry.findAll("span").map((part) => part.text()),
+                    ),
+            ).toEqual([["XRF", "XRF", "2"]]);
+            expect(useExplorerStore().legendOpen).toBe(false);
+        });
+
+        it("draws a technique in the rail and on the folio in the colour the server gives it", async () => {
+            const fors = technique("t:fors", "FORS", 7, "t:fors", "FORS");
+            stubFetch(
+                documentPayload({
+                    annotations: [annotation(1, { technique: fors })],
+                }),
+            );
+            const fetchMock = vi.mocked(fetch);
+            const document = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url, init) =>
+                String(url).includes("/search")
+                    ? jsonResponse(
+                          searchResponse({
+                              results: [],
+                              facets: [
+                                  {
+                                      key: "technique",
+                                      group: "analysis",
+                                      values: [
+                                          facetValue("t:fors", "FORS", {
+                                              mark: {
+                                                  code: "FORS",
+                                                  colour: 7,
+                                                  family: "t:fors",
+                                              },
+                                          }),
+                                      ],
+                                  },
+                              ],
+                          }),
+                      )
+                    : document(url, init),
+            );
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            const styles = wrapper
+                .findComponent(FolioStub)
+                .props("styles") as Map<string, { colour: number | null }>;
+            expect(styles.get("t:fors")?.colour).toBe(7);
+            expect(wrapper.find(".facet-rail .dot").classes()).toContain(
+                "dot--tech-7",
+            );
+        });
+
+        it("names the card drawer by the card heading and leaves out the card's own Close", async () => {
+            narrow = true;
+            stubFetch();
+            const { wrapper } = mountScreen(undefined, {
+                stubs: { transition: false },
+                attachTo: document.body,
+            });
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "analysis", id: uuid(101) });
+            await flushPromises();
+            const dialog = document.querySelector(".explorer-card-drawer");
+            expect(dialog?.getAttribute("role")).toBe("dialog");
+            expect(dialog?.getAttribute("aria-labelledby")).toBe(
+                "explorer-card-heading",
+            );
+            const card = wrapper.findComponent({ name: "AnalysisCard" });
+            expect(card.props("closable")).toBe(false);
+            expect(card.props("headingId")).toBe("explorer-card-heading");
+            wrapper.unmount();
+        });
     });
 });

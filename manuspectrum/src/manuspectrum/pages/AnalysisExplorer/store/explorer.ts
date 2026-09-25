@@ -9,7 +9,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
-import type { FacetKey } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    FacetGroup,
+    FacetKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     BasketAddResult,
     BasketItem,
@@ -24,14 +27,20 @@ import type {
     FolioView,
     ItemKey,
     LayerToggles,
+    ColourLevel,
     ListFilterKey,
     Overlay,
+    PageSize,
     ToolFilters,
     ToolKind,
     ToolWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
+export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
+
 export const LIST_FILTER_KEYS: readonly ListFilterKey[] = [
+    "partType",
+    "partColour",
     "technique",
     "part",
     "material",
@@ -52,7 +61,10 @@ export function emptyFilters(): Filters {
     return {
         q: "",
         grain: "documents",
-        onlyWithAnalyses: true,
+        empty: false,
+        size: PAGE_SIZES[0],
+        partType: [],
+        partColour: [],
         technique: [],
         part: [],
         material: [],
@@ -68,11 +80,22 @@ export function emptyFilters(): Filters {
     };
 }
 
+/** The facet values the filters hold, by facet key (years as text, as the facets name them). */
+export function selectedFacets(
+    filters: Filters,
+): Partial<Record<FacetKey, string[]>> {
+    const selected: Partial<Record<FacetKey, string[]>> = {
+        year: filters.year.map(String),
+    };
+    for (const key of LIST_FILTER_KEYS) selected[key] = filters[key];
+    return selected;
+}
+
 function emptyToolFilters(): ToolFilters {
     return { element: null, cell: null, pair: null };
 }
 
-/** Filters that restrict Corpus results; `eventType` (Map only), grain and onlyWithAnalyses are not among them. */
+/** Filters that restrict Corpus results; `eventType` (Map only) and the display options (grain, empty, size) are not among them. */
 export function hasActiveFilters(filters: Filters): boolean {
     return countCorpusFilters(filters) > 0;
 }
@@ -129,6 +152,12 @@ export const useExplorerStore = defineStore("explorer", () => {
         tools: [],
     });
     const session = ref<{ connected: boolean }>({ connected: false });
+    /** Rail groups folded to their heading; not in the address. */
+    const collapsedGroups = ref<FacetGroup[]>([]);
+    /** Which colour facet the rail's Colour toggle shows; not in the address. */
+    const colourLevel = ref<ColourLevel>("colour");
+    /** Whether the folio legend is unfolded; folded when the explorer opens. */
+    const legendOpen = ref(false);
     let toolCounter = 0;
 
     const basketFree = computed(() => BASKET_LIMIT - basket.value.length);
@@ -155,11 +184,12 @@ export const useExplorerStore = defineStore("explorer", () => {
     }
 
     function clearFilters(): void {
-        filters.value = {
-            ...emptyFilters(),
-            grain: filters.value.grain,
-            onlyWithAnalyses: filters.value.onlyWithAnalyses,
-        };
+        filters.value = { ...emptyFilters(), ...displayOptions() };
+    }
+
+    function displayOptions(): Pick<Filters, "grain" | "empty" | "size"> {
+        const { grain, empty, size } = filters.value;
+        return { grain, empty, size };
     }
 
     function setView(next: ExplorerView): void {
@@ -171,8 +201,8 @@ export const useExplorerStore = defineStore("explorer", () => {
     /**
      * Leaves the document screen for another Corpus screen; the document
      * screen is reached only through `openDocument`. The home screen carries
-     * no Corpus filter: going there clears them, keeping the grain, the
-     * "only with analyses" choice and the Map's event types.
+     * no Corpus filter: going there clears them, keeping the display options
+     * (grain, documents without analyses, page size) and the Map's event types.
      */
     function setCorpusScreen(screen: CorpusScreen): void {
         if (screen === "document") {
@@ -181,8 +211,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         if (screen === "home") {
             filters.value = {
                 ...emptyFilters(),
-                grain: filters.value.grain,
-                onlyWithAnalyses: filters.value.onlyWithAnalyses,
+                ...displayOptions(),
                 eventType: filters.value.eventType,
             };
         }
@@ -232,6 +261,20 @@ export const useExplorerStore = defineStore("explorer", () => {
         } else {
             setFilter(key, ids);
         }
+    }
+
+    function toggleGroup(group: FacetGroup): void {
+        collapsedGroups.value = collapsedGroups.value.includes(group)
+            ? collapsedGroups.value.filter((entry) => entry !== group)
+            : [...collapsedGroups.value, group];
+    }
+
+    function setColourLevel(level: ColourLevel): void {
+        colourLevel.value = level;
+    }
+
+    function setLegendOpen(open: boolean): void {
+        legendOpen.value = open;
     }
 
     function setLayer(key: keyof LayerToggles, on: boolean): void {
@@ -374,6 +417,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         basket,
         compare,
         session,
+        collapsedGroups,
+        colourLevel,
+        legendOpen,
         basketFree,
         activeFilterCount,
         setFilter,
@@ -387,6 +433,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         focusOn,
         setFolioView,
         setLayer,
+        toggleGroup,
+        setColourLevel,
+        setLegendOpen,
         addToBasket,
         addManyToBasket,
         removeFromBasket,

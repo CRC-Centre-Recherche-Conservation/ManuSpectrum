@@ -15,19 +15,19 @@ vi.mock("@/manuspectrum/pages/AnalysisExplorer/api/http.ts", () => ({
 }));
 
 describe("searchQuery", () => {
-    it("always sends the grain and onlyWithAnalyses", () => {
+    it("always sends the grain, and nothing else by default", () => {
         expect(searchQuery(emptyFilters(), 1).toString()).toBe(
-            "grain=documents&onlyWithAnalyses=true",
+            "grain=documents",
         );
     });
 
-    it("sends text, facets, years and the page, never place, period or eventType", () => {
+    it("sends text, facets, years, the page size and the page, never place, period or eventType", () => {
         const query = searchQuery(
             {
                 ...emptyFilters(),
                 q: "lead",
                 grain: "analyses",
-                onlyWithAnalyses: false,
+                size: 25,
                 part: ["p2", "p1"],
                 year: [2023, 2021],
                 place: "x",
@@ -37,7 +37,29 @@ describe("searchQuery", () => {
             3,
         );
         expect(query.toString()).toBe(
-            "q=lead&grain=analyses&onlyWithAnalyses=false&part=p1&part=p2&year=2021&year=2023&page=3",
+            "q=lead&grain=analyses&size=25&part=p1&part=p2&year=2021&year=2023&page=3",
+        );
+    });
+
+    it("asks for the documents without analyses only in the documents grain", () => {
+        const filters = { ...emptyFilters(), empty: true };
+        expect(searchQuery(filters, 1).toString()).toBe(
+            "grain=documents&empty=1",
+        );
+        expect(
+            searchQuery({ ...filters, grain: "analyses" }, 1).toString(),
+        ).toBe("grain=analyses");
+    });
+
+    it("limits the search to one document", () => {
+        expect(
+            searchQuery(emptyFilters(), 1, { document: "d-1" }).toString(),
+        ).toBe("grain=documents&document=d-1");
+    });
+
+    it("asks for one page of a given size", () => {
+        expect(searchQuery(emptyFilters(), 4, { size: 1 }).toString()).toBe(
+            "grain=documents&size=1&page=4",
         );
     });
 });
@@ -56,9 +78,7 @@ describe("useSearch", () => {
         await nextTick();
         await flushPromises();
         expect(getJson).toHaveBeenCalledWith("manuspectrum:explorer-search", {
-            query: new URLSearchParams(
-                "grain=documents&onlyWithAnalyses=true&page=2",
-            ),
+            query: new URLSearchParams("grain=documents&page=2"),
             signal: expect.any(AbortSignal),
         });
         expect(search?.status.value).toBe("ready");

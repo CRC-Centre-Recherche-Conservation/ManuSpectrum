@@ -1,13 +1,19 @@
 import type { EventType } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-// 'af:<analysisId>:<fileId>' | 'im:<analysisId>:<mapIndex>' | 'ch:<characterizationId>:-'
+// 'an:<analysisId>:-' | 'af:<analysisId>:<fileId>' | 'im:<analysisId>:<mapIndex>' | 'ch:<characterizationId>:-'
 export type ItemKey = string;
 export type ExplorerView = "corpus" | "map" | "compare";
 export type CorpusScreen = "home" | "results" | "document";
 // the Corpus screen a document screen was entered from
 export type DocumentOrigin = Exclude<CorpusScreen, "document">;
-export type BasketKind = "analysis-file" | "imaging" | "characterization";
+export type BasketKind =
+    | "analysis"
+    | "analysis-file"
+    | "imaging"
+    | "characterization";
 export type ListFilterKey =
+    | "partType"
+    | "partColour"
     | "technique"
     | "part"
     | "material"
@@ -17,10 +23,20 @@ export type ListFilterKey =
     | "project"
     | "operator";
 
+/** The two colour facets the rail's Colour toggle switches between: seen on the part, identified by analysis. */
+export type ColourLevel = "partColour" | "colour";
+
+/** Results per page the search offers. */
+export type PageSize = 10 | 25 | 50;
+
 export interface Filters {
     q: string;
     grain: "documents" | "analyses";
-    onlyWithAnalyses: boolean;
+    // documents grain: also list the documents that have no analysis
+    empty: boolean;
+    size: PageSize;
+    partType: string[];
+    partColour: string[];
     technique: string[];
     part: string[];
     material: string[];

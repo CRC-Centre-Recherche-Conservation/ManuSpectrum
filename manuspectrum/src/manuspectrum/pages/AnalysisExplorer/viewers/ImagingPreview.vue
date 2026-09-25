@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Slider from "primevue/slider";
-
-import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 
 import {
     layerImageUrl,
@@ -14,7 +12,6 @@ import {
     CURTAIN_KEY,
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
-import { layerKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type {
@@ -28,6 +25,7 @@ const PREVIEW_SIZE = 480;
 const PERCENT = 100;
 const OPACITY_STEP = 5;
 
+/** A map the image server does not give is said so in place, with Retry. */
 const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
 
 const curtain = inject(CURTAIN_KEY, ref<string | null>(null));
@@ -51,6 +49,9 @@ const position = ref(
     ),
 );
 
+const imageFailed = ref(false);
+const attempt = ref(0);
+
 const layer = computed<FileLayer | null>(
     () => props.file.layers[position.value] ?? null,
 );
@@ -71,6 +72,22 @@ const underCurtain = computed(
 const imageUrl = computed(() =>
     layer.value ? layerImageUrl(layer.value.image, PREVIEW_SIZE) : null,
 );
+/** Where the layer scale's handle is, in words: « 550 nm, layer 4 of 13 ». */
+const valueText = computed(() =>
+    layer.value
+        ? interpolate(
+              $gettext("%{label}, layer %{n} of %{total}"),
+              {
+                  label: layer.value.label,
+                  n: position.value + 1,
+                  total: props.file.layers.length,
+              },
+              true,
+          )
+        : "",
+);
+const firstLayer = computed(() => props.file.layers[0]?.label ?? "");
+const lastLayer = computed(() => props.file.layers.at(-1)?.label ?? "");
 const scrollLabel = computed(() =>
     layer.value
         ? interpolate(
@@ -80,6 +97,19 @@ const scrollLabel = computed(() =>
           )
         : $gettext("Layers, in order"),
 );
+
+watch(imageUrl, () => {
+    imageFailed.value = false;
+});
+
+function onImageError(): void {
+    imageFailed.value = true;
+}
+
+function retryImage(): void {
+    attempt.value += 1;
+    imageFailed.value = false;
+}
 
 function kindLabel(entry: FileLayer): string {
     switch (entry.kind) {
@@ -152,11 +182,6 @@ function onCurtainChange(event: Event): void {
             <span>{{ kindLabel(layer) }}</span>
             <span class="value">{{ layer.label }}</span>
         </p>
-        <AddToSelection
-            v-if="layer"
-            :keys="[layerKey(props.analysis.id, layer.index)]"
-            :label="$gettext('+ Selection')"
-        />
         <div
             v-if="props.file.layers.length > 1"
             class="scroll"
@@ -168,15 +193,48 @@ function onCurtainChange(event: Event): void {
                 :max="props.file.layers.length - 1"
                 :step="1"
                 :aria-label="scrollLabel"
+                :pt="{ handle: { 'aria-valuetext': valueText } }"
                 @update:model-value="moveTo"
             />
+            <span
+                class="ticks"
+                aria-hidden="true"
+            >
+                <span
+                    v-for="entry in props.file.layers"
+                    :key="entry.index"
+                    class="tick"
+                ></span>
+            </span>
+            <span
+                class="ends"
+                aria-hidden="true"
+            >
+                <span>{{ firstLayer }}</span>
+                <span>{{ lastLayer }}</span>
+            </span>
         </div>
+        <p
+            v-if="imageUrl && imageFailed"
+            class="unavailable"
+            role="status"
+        >
+            <span>{{ $gettext("Map unavailable (image server)") }}</span>
+            <button
+                type="button"
+                @click="retryImage"
+            >
+                <span>{{ $gettext("Retry") }}</span>
+            </button>
+        </p>
         <img
-            v-if="imageUrl && layer"
+            v-else-if="imageUrl && layer"
+            :key="`${imageUrl}#${attempt}`"
             class="layer-image"
             loading="lazy"
             :src="imageUrl"
             :alt="layer.label"
+            @error="onImageError"
         />
         <p class="note">
             <span>{{ $gettext("Each map keeps its own contrast.") }}</span>
@@ -261,6 +319,27 @@ function onCurtainChange(event: Event): void {
 .imaging-preview .opacity {
     display: grid;
     gap: 0.5rem;
+    padding-inline: 0.625rem;
+}
+
+.imaging-preview .ticks {
+    display: flex;
+    justify-content: space-between;
+}
+
+.imaging-preview .tick {
+    inline-size: 0.0625rem;
+    block-size: 0.375rem;
+    background: var(--border-hover);
+}
+
+.imaging-preview .ends {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
 }
 
 .imaging-preview .layer-image {
@@ -269,11 +348,34 @@ function onCurtainChange(event: Event): void {
     image-rendering: pixelated;
 }
 
+.imaging-preview .unavailable {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
+    border: 0.0625rem dashed var(--border-hover);
+    border-radius: 0.375rem;
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+}
+
+.imaging-preview .unavailable button {
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding-inline: 0.75rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
 .imaging-preview .toggle {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
 }
 
 .imaging-preview .note {

@@ -142,6 +142,21 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
+    it("names every file of an analysis in the Selection by the analysis A-label", async () => {
+        const { wrapper, store } = mountPreview(
+            [readable(1), readable(2)],
+            () => jsonResponse(SERIES),
+        );
+        store.addToBasket(`an:${uuid(101)}:-`);
+        await flushPromises();
+        const { traces } = lastDrawing();
+        expect(traces.map((trace) => trace.name)).toEqual([
+            "P1.csv (A1)",
+            "P2.csv (A1)",
+        ]);
+        wrapper.unmount();
+    });
+
     it("keeps drawing the other files when one fails, and says which", async () => {
         const { wrapper } = mountPreview([readable(1), readable(2)], (url) =>
             url.includes(uuid(702))
@@ -153,6 +168,30 @@ describe("SpectrumPreview", () => {
         expect(traces.map((trace) => trace.name)).toEqual(["P1.csv"]);
         expect(wrapper.text()).toContain("P2.csv could not be drawn.");
         wrapper.unmount();
+    });
+
+    it("offers Retry after a server error, not after a missing file", async () => {
+        let status = 503;
+        const { wrapper } = mountPreview([readable(1)], () =>
+            status === 200 ? jsonResponse(SERIES) : jsonResponse({}, status),
+        );
+        await flushPromises();
+        const retry = wrapper.find("button.retry");
+        expect(retry.exists()).toBe(true);
+        status = 200;
+        await retry.trigger("click");
+        await flushPromises();
+        expect(wrapper.text()).not.toContain("could not be drawn");
+
+        status = 404;
+        const missing = mountPreview([readable(2)], () =>
+            jsonResponse({}, status),
+        ).wrapper;
+        await flushPromises();
+        expect(missing.text()).toContain("P2.csv could not be drawn.");
+        expect(missing.find("button.retry").exists()).toBe(false);
+        wrapper.unmount();
+        missing.unmount();
     });
 
     it("says which file has nothing to draw", async () => {
@@ -202,51 +241,23 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
-    it("gives the points of one file to the table view", async () => {
-        vi.stubGlobal(
-            "ResizeObserver",
-            class {
-                observe(): void {}
-                unobserve(): void {}
-                disconnect(): void {}
-            },
-        );
+    it("resets the zoom from an icon in the chart and shows no table nor visible summary", async () => {
         const { wrapper } = mountPreview([readable(1), readable(2)], () =>
             jsonResponse(SERIES),
         );
         await flushPromises();
-        await wrapper.find("button.table-toggle").trigger("click");
-        expect(
-            wrapper.findComponent({ name: "DataTable" }).props("value"),
-        ).toHaveLength(3);
-        expect(
-            wrapper.find("select.table-file").findAll("option"),
-        ).toHaveLength(2);
-        wrapper.unmount();
-    });
-
-    it("marks the English axis names of the table as English", async () => {
-        vi.stubGlobal(
-            "ResizeObserver",
-            class {
-                observe(): void {}
-                unobserve(): void {}
-                disconnect(): void {}
-            },
+        const reset = wrapper.find(".plot button.reset");
+        expect(reset.attributes("aria-label")).toBe("Reset the zoom");
+        expect(reset.text()).toBe("");
+        expect(wrapper.find("button.table-toggle").exists()).toBe(false);
+        expect(wrapper.findComponent({ name: "DataTable" }).exists()).toBe(
+            false,
         );
-        const file = readable(1);
-        file.viewer = {
-            ...file.viewer,
-            xLabel: "Wavelength (nm)",
-            yLabel: "Reflectance",
-        };
-        const { wrapper } = mountPreview([file], () => jsonResponse(SERIES));
-        await flushPromises();
-        await wrapper.find("button.table-toggle").trigger("click");
-        const names = wrapper
-            .findAll('th [lang="en"]')
-            .map((cell) => cell.text());
-        expect(names).toEqual(["Wavelength (nm)", "Reflectance"]);
+        expect(wrapper.find(".summary").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("points from");
+        expect(wrapper.find("[role=img]").attributes("aria-label")).toBe(
+            "P1.csv: 3 points from 1 to 3. P2.csv: 3 points from 1 to 3.",
+        );
         wrapper.unmount();
     });
 });
