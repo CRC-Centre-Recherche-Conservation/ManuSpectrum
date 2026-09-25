@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import PrimeVue from "primevue/config";
 
 import AnalysisExplorer from "@/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue";
 
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
+    analysisHit,
+    analysisPayload,
     documentPayload,
     searchResponse,
     uuid,
@@ -122,6 +125,52 @@ describe("AnalysisExplorer", () => {
         expect(document.activeElement?.classList.contains("promise")).toBe(
             true,
         );
+        wrapper.unmount();
+    });
+
+    it("opens an analysis from the results in two history steps, the document then its card", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string) => {
+                if (url.includes("explorer-search")) {
+                    return jsonResponse(
+                        searchResponse({
+                            results: [
+                                analysisHit(1, {
+                                    canvas: "https://iiif.example/c1",
+                                }),
+                            ],
+                        }),
+                    );
+                }
+                if (url.includes("explorer-document")) {
+                    return jsonResponse(documentPayload());
+                }
+                if (url.includes("explorer-analysis")) {
+                    return jsonResponse(analysisPayload({ files: [] }));
+                }
+                return jsonResponse({ items: [], missing: [] });
+            }),
+        );
+        window.history.replaceState(
+            null,
+            "",
+            "/en/discover?screen=results&grain=analyses",
+        );
+        const wrapper = mount(AnalysisExplorer, {
+            props: { connected: false },
+            global: { plugins: [pinia, PrimeVue] },
+        });
+        await flushPromises();
+        const pushState = vi.spyOn(window.history, "pushState");
+        await wrapper.find(".analysis-row .link").trigger("click");
+        await flushPromises();
+        const urls = pushState.mock.calls.map(([, , url]) => String(url));
+        pushState.mockRestore();
+        expect(urls).toHaveLength(2);
+        expect(urls[0]).toContain(`doc=${uuid(1)}`);
+        expect(urls[0]).not.toContain("focus=");
+        expect(urls[1]).toContain(`focus=analysis%3A${uuid(101)}`);
         wrapper.unmount();
     });
 

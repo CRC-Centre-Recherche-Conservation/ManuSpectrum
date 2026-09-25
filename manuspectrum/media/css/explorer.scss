@@ -3,6 +3,8 @@
 // come from _ms-chrome's :root (css/pages). Imports tokens only: css/pages
 // already ships the chrome, and a second copy would duplicate the reset.
 @import 'ms-tokens';
+@import url(node_modules/leaflet/dist/leaflet.css);
+@import url(node_modules/leaflet.markercluster/dist/MarkerCluster.css);
 
 // The paper grain sits over the page at z-index 10000; over an application it
 // swallows the contrast of every control.
@@ -11,10 +13,8 @@ body.ms-page--app::after {
 }
 
 .ms-explorer-intro {
-    max-width: 72rem;
-    margin-inline: auto;
+    @include ms-container;
     padding-block: 7rem 1rem;
-    padding-inline: 1rem;
 }
 
 .ms-explorer-intro__title {
@@ -43,9 +43,7 @@ body.ms-page--app::after {
 
 .ms-explorer,
 .ms-explorer-fallback {
-    max-width: 90rem;
-    margin-inline: auto;
-    padding-inline: 1rem;
+    @include ms-container;
     padding-block-end: 4rem;
 }
 

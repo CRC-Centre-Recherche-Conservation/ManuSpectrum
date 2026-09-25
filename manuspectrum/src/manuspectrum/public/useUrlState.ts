@@ -14,7 +14,8 @@ const NEXT_LINKS =
     "#ms-header a[href*='next='], #ms-mobile-nav a[href*='next=']";
 const NEXT_PARAM = "next";
 
-function searchOf(query: URLSearchParams): string {
+/** The `location.search` a query is written as. */
+export function searchOf(query: URLSearchParams): string {
     const serialized = query.toString();
     return serialized ? `?${serialized}` : "";
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from "vue";
+import { computed, nextTick, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
@@ -89,14 +89,7 @@ function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
 }
 
 function onFacetChange(key: FacetKey, ids: string[]): void {
-    if (key === "year") {
-        store.setFilter(
-            "year",
-            ids.map(Number).filter((year) => Number.isInteger(year)),
-        );
-    } else {
-        store.setFilter(key, ids);
-    }
+    store.setFacet(key, ids);
 }
 
 function setGrain(grain: "documents" | "analyses"): void {
@@ -122,8 +115,10 @@ function openDocument(id: string): void {
     store.openDocument(id);
 }
 
-function openAnalysis(hit: AnalysisHit): void {
+/** The document, then its card: two history entries, so Back closes the card first. */
+async function openAnalysis(hit: AnalysisHit): Promise<void> {
     store.openDocument(hit.document.id, hit.canvas);
+    await nextTick();
     store.focusOn({ kind: "analysis", id: hit.id });
 }
 

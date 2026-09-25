@@ -39,6 +39,10 @@ function generateConfig(): Promise<UserConfig> {
             // `arches.js`.
             'arches/arches/app': path.join(parsedData['ROOT_DIR'], 'app'),
             'arches': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'arches.js'),
+            // Mirrors the project's `nodeModulesPaths` entry (package.json).
+            'uuid-esm': path.join(filePath, 'node_modules', 'uuid', 'dist', 'esm-browser', 'index.js'),
+            // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
+            'leaflet-side-by-side': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'plugins', 'leaflet-side-by-side', 'index.js'),
         };
 
         for (

@@ -1,9 +1,15 @@
 import type {
     AnalysisHit,
+    AnalysisPayload,
+    Annotation,
+    CharacterizationSummary,
     DocumentHit,
     DocumentPayload,
     Facet,
+    FileEntry,
+    SampleSummary,
     SearchResponse,
+    ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 export function uuid(n: number): string {
@@ -115,6 +121,187 @@ export function documentPayload(
         unpublished: false,
         certaintyScale: { levels: [] },
         unlocated: [],
+        samples: [],
+        ...overrides,
+    };
+}
+
+export function valueRef(uri: string, text: string): ValueRef {
+    return { id: uri, uri, label: label(text) };
+}
+
+export function annotation(
+    n: number,
+    overrides: Partial<Annotation> = {},
+): Annotation {
+    return {
+        key: `an:${uuid(100 + n)}:f${n}`,
+        analysis: uuid(100 + n),
+        canvas: "https://iiif.example/c1",
+        shape: { type: "point", x: 100 * n, y: 50 * n },
+        technique: valueRef("http://example.org/xrf", "XRF"),
+        name: label(`MS1_f12_XRF_0${n}`),
+        dataKind: "xy",
+        unpublished: false,
+        match: true,
+        ...overrides,
+    };
+}
+
+export function sample(
+    n: number,
+    overrides: Partial<SampleSummary> = {},
+): SampleSummary {
+    return {
+        id: uuid(600 + n),
+        name: label(`Sample ${n}`),
+        zone: {
+            canvas: "https://iiif.example/c1",
+            shape: { type: "rect", x: 40 * n, y: 60 * n, w: 20, h: 10 },
+        },
+        analyses: [],
+        unpublished: false,
+        ...overrides,
+    };
+}
+
+export function characterization(
+    n: number,
+    overrides: Partial<CharacterizationSummary> = {},
+): CharacterizationSummary {
+    return {
+        id: uuid(500 + n),
+        name: label(`Characterization ${n}`),
+        objects: [],
+        materials: [
+            {
+                value: valueRef("http://example.org/vermilion", "Vermilion"),
+                confidence: null,
+                proportion: null,
+            },
+        ],
+        colours: [valueRef("http://example.org/red", "Red")],
+        layers: [],
+        elements: [],
+        zone: null,
+        evidence: [],
+        note: null,
+        sources: [],
+        authors: [],
+        date: { start: null, end: null },
+        unpublished: false,
+        ...overrides,
+    };
+}
+
+export function fileEntry(overrides: Partial<FileEntry> = {}): FileEntry {
+    return {
+        id: uuid(700),
+        name: "X01_f1v.csv",
+        size: 4200,
+        format: "text/csv",
+        role: "readable",
+        pairedWith: null,
+        dataKind: "xy",
+        viewer: {
+            rendererConfigId: uuid(800),
+            xLabel: "Energy (keV)",
+            yLabel: "Counts",
+            axisKey: "xrf:energy",
+            axisTitle: label("Counts · Energy (keV)"),
+            points: null,
+            decimated: false,
+        },
+        layers: [],
+        license: {
+            id: "cc-by",
+            url: "https://creativecommons.org/licenses/by/4.0/",
+            label: label("CC BY 4.0"),
+            attribution: null,
+            noDerivatives: false,
+            inRightsRegistry: true,
+            isDefault: false,
+        },
+        downloadUrl: "http://testserver/files/x01.csv",
+        previewUrl: `http://testserver/api/spectrum-preview/${uuid(700)}`,
+        zone: null,
+        ...overrides,
+    };
+}
+
+export function imagingEntry(overrides: Partial<FileEntry> = {}): FileEntry {
+    const image = {
+        service: "https://iiif.example/image/pb",
+        url: null,
+        width: 2000,
+        height: 3000,
+    };
+    return fileEntry({
+        id: `${uuid(101)}:imaging:0`,
+        name: "maXRF f. 1v",
+        size: null,
+        format: "application/ld+json",
+        role: "other",
+        dataKind: "chemical-imaging",
+        viewer: {
+            rendererConfigId: null,
+            xLabel: null,
+            yLabel: null,
+            axisKey: null,
+            axisTitle: null,
+            points: null,
+            decimated: false,
+        },
+        layers: [
+            {
+                index: 0,
+                label: "Pb",
+                kind: "element",
+                element: "Pb",
+                band: null,
+                image,
+            },
+            {
+                index: 1,
+                label: "Hg",
+                kind: "element",
+                element: "Hg",
+                band: null,
+                image: { ...image, service: "https://iiif.example/image/hg" },
+            },
+        ],
+        previewUrl: null,
+        ...overrides,
+    });
+}
+
+export function analysisPayload(
+    overrides: Partial<AnalysisPayload> = {},
+): AnalysisPayload {
+    return {
+        id: uuid(101),
+        name: label("MS1_f12_XRF_03"),
+        technique: valueRef("http://example.org/xrf", "XRF"),
+        instrument: null,
+        operators: [],
+        projects: [],
+        date: { start: "2023-05-02", end: null },
+        document: {
+            id: uuid(1),
+            model: "document",
+            name: label("Manuscript 1"),
+        },
+        component: null,
+        sample: null,
+        files: [fileEntry()],
+        conditions: [],
+        evidenceOf: [],
+        dataset: null,
+        bibliography: [],
+        citation: null,
+        permalink: `http://testserver/report/${uuid(101)}`,
+        certaintyScale: { levels: [] },
+        unpublished: false,
         ...overrides,
     };
 }

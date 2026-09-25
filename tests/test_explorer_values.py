@@ -239,3 +239,38 @@ class FileEntryTests(SimpleTestCase):
         }
 
         self.assertTrue(effective_license(entry, "en")["noDerivatives"])
+
+    def test_an_attribution_stored_per_language_gives_its_text(self):
+        entry = {
+            "attribution": {
+                "en": {"value": "© CRC", "direction": "ltr"},
+                "fr": {"value": "", "direction": "ltr"},
+            }
+        }
+
+        self.assertEqual(effective_license(entry, "en")["attribution"], "© CRC")
+        self.assertEqual(effective_license(entry, "fr")["attribution"], "© CRC")
+
+    def test_an_empty_attribution_is_none(self):
+        entry = {"attribution": {"fr": {"value": "", "direction": "ltr"}}}
+
+        self.assertIsNone(effective_license(entry, "fr")["attribution"])
+
+    def test_a_readable_file_carries_its_axis_labels(self):
+        config_id = "c0000000-0000-4000-8000-000000000001"
+        entries = [
+            {
+                "file_id": "11111111-1111-4111-8111-111111111111",
+                "name": "a.csv",
+                "url": "/files/a",
+                "rendererConfig": config_id,
+            }
+        ]
+        configs = {config_id: {"presetKey": "fors", "display": {}}}
+
+        viewer = file_entries(
+            entries, language="en", configs=configs, kind="measurement"
+        )[0]["viewer"]
+
+        self.assertTrue(viewer["xLabel"])
+        self.assertTrue(viewer["yLabel"])

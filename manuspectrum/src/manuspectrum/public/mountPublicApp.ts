@@ -1,14 +1,22 @@
 import { createVueApplication } from "@/arches_vue_components/application";
+import { en } from "primelocale/js/en.js";
+import { fr } from "primelocale/js/fr.js";
 
 import { guardLocalStorage } from "@/manuspectrum/public/safe-storage.ts";
 import { PUBLIC_THEME } from "@/manuspectrum/themes/public-theme.ts";
 
 import type { App, Component } from "vue";
+import type { PrimeVueLocaleOptions } from "primevue/config";
 
 export interface MountPublicAppOptions {
     component: Component;
     mountPoint: Element;
     initialProps?: Record<string, unknown>;
+}
+
+/** PrimeVue's built-in strings (aria labels, close buttons) in the page language; English for any language the site does not offer. */
+export function primeVueLocale(lang: string): PrimeVueLocaleOptions {
+    return lang.toLowerCase().startsWith("fr") ? fr : en;
 }
 
 /**
@@ -26,7 +34,10 @@ export async function mountPublicApp({
     guardLocalStorage();
     const app = await createVueApplication({
         component,
-        themeConfiguration: PUBLIC_THEME,
+        themeConfiguration: {
+            ...PUBLIC_THEME,
+            locale: primeVueLocale(document.documentElement.lang),
+        },
         initialProps,
     });
     app.mount(mountPoint);

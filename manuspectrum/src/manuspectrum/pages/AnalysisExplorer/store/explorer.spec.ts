@@ -92,6 +92,62 @@ describe("navigation", () => {
     });
 });
 
+describe("document screen", () => {
+    it("changes the page of the open document only", () => {
+        const store = useExplorerStore();
+        store.setCanvas("c2");
+        expect(store.document).toBeNull();
+        store.openDocument(uuid(1));
+        store.setCanvas("c2");
+        expect(store.document).toEqual({ id: uuid(1), canvas: "c2" });
+    });
+
+    it("sets a facet, reading years as integers", () => {
+        const store = useExplorerStore();
+        store.setFacet("year", ["2023", "x", "2021"]);
+        store.setFacet("technique", ["t:b", "t:a"]);
+        expect(store.filters.year).toEqual([2021, 2023]);
+        expect(store.filters.technique).toEqual(["t:a", "t:b"]);
+    });
+
+    it("sets the folio view and resets it when a document opens or the screen changes", () => {
+        const store = useExplorerStore();
+        expect(store.folioView).toBe("analyses");
+        store.openDocument(uuid(1));
+        store.setFolioView("samples");
+        expect(store.folioView).toBe("samples");
+        store.openDocument(uuid(2));
+        expect(store.folioView).toBe("analyses");
+        store.setFolioView("characterizations");
+        store.setCorpusScreen("results");
+        expect(store.folioView).toBe("analyses");
+    });
+
+    it("shows the folio view of what a focus opens", () => {
+        const store = useExplorerStore();
+        store.openDocument(uuid(1));
+        store.focusOn({ kind: "sample", id: uuid(2) });
+        expect(store.folioView).toBe("samples");
+        store.focusOn({ kind: "analysis", id: uuid(3) });
+        expect(store.folioView).toBe("analyses");
+        store.focusOn({ kind: "characterization", id: uuid(4) });
+        expect(store.folioView).toBe("characterizations");
+        store.focusOn({ kind: "file", id: uuid(5) });
+        store.focusOn(null);
+        expect(store.folioView).toBe("characterizations");
+    });
+
+    it("switches one folio layer", () => {
+        const store = useExplorerStore();
+        store.setLayer("zones", false);
+        expect(store.layers).toEqual({
+            points: true,
+            zones: false,
+            characterizations: true,
+        });
+    });
+});
+
 describe("Selection", () => {
     it("refuses the 31st item and says how many places are left", () => {
         const store = useExplorerStore();

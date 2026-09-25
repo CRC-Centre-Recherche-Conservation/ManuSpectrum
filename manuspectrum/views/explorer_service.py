@@ -13,6 +13,7 @@ import unicodedata
 from collections import Counter, defaultdict
 
 from django.conf import settings
+from django.http import QueryDict
 from django.urls import reverse
 
 from arches.app.models.models import (
@@ -78,6 +79,7 @@ ROLES = {
     "ch_start": ("characterization", "inference_making_start_date"),
     "ch_end": ("characterization", "inference_making_end_date"),
     "ch_source": ("characterization", "source_of_statement"),
+    "sample_zone": ("sample", "location_in_object_of_sampling_taking"),
 }
 FACET_KEYS = (
     "project",
@@ -522,15 +524,14 @@ def analysis_hit(row, label_of):
     }
 
 
-def search_payload(query, user, language):
-    """``SearchResponse`` (spec §5): results of one page, open facet counts, unpublished count.
+def row_filter(rows, query):
+    """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe)``.
 
-    Facet counts are "open to the other selections": OR inside a facet, AND
-    across facets. A facet is absent when no value has a count on the whole
-    visible set; a selected value that is not in the visible set is ignored
-    without a word.
+    ``keep(row, skip=None)`` is OR inside a facet and AND across facets, and
+    the folded free text ``needle``; ``skip`` leaves one facet out (open facet
+    counts). ``universe`` holds, per facet, the values the rows carry; a
+    selected value outside it is ignored (§3.3).
     """
-    rows = corpus_rows(user, language)
     filters, page = parse_filters(query)
     universe = {
         key: {v for row in rows for v in _facet_values(row, key)} for key in FACET_KEYS
@@ -549,6 +550,20 @@ def search_payload(query, user, language):
             ):
                 return False
         return not needle or needle in row["text"]
+
+    return keep, active, filters, page, needle, universe
+
+
+def search_payload(query, user, language):
+    """``SearchResponse`` (spec §5): results of one page, open facet counts, unpublished count.
+
+    Facet counts are "open to the other selections": OR inside a facet, AND
+    across facets. A facet is absent when no value has a count on the whole
+    visible set; a selected value that is not in the visible set is ignored
+    without a word.
+    """
+    rows = corpus_rows(user, language)
+    keep, active, filters, page, needle, universe = row_filter(rows, query)
 
     matching = [row for row in rows if keep(row)]
     labels = _facet_labels(rows, language, user)
@@ -598,8 +613,7 @@ def search_payload(query, user, language):
                 "name": label_of[d],
                 "holding": None,
                 "analysisCount": per_document[d],
-                "thumbnail": settings.PUBLIC_SERVER_ADDRESS
-                + reverse("thumbnail", kwargs={"resource_id": d}).lstrip("/"),
+                "thumbnail": reverse("thumbnail", kwargs={"resource_id": d}),
                 "unpublished": d in visible.unpublished,
             }
             for d in candidates
@@ -735,17 +749,39 @@ def certainty_scale(language):
     }
 
 
+def canvas_index(canvases):
+    """``{name: (canvas id, width, height)}`` of each canvas, by its id and by its image service.
+
+    Arches' IIIF viewer stores an annotation under the image service it drew
+    (the tile layer's URL), not under the manifest's canvas id; both names
+    lead to the canvas.
+    """
+    index = {}
+    for canvas in canvases:
+        entry = (canvas["id"], canvas["image"]["width"], canvas["image"]["height"])
+        index[canvas["id"].rstrip("/")] = entry
+        if canvas["image"]["service"]:
+            index[canvas["image"]["service"].rstrip("/")] = entry
+    return index
+
+
 def _canvas_and_shape(vw, dims):
     """Canvas id and pixel ``Shape`` of one ``VwAnnotation`` row; canvas empty and shape None when unresolved.
 
-    A canvas missing from *dims* is not clamped to any size, so a zone has
-    the same coordinates whether its canvas dimensions are known or not.
+    *dims* is a ``canvas_index``: the stored name (canvas id or image service)
+    becomes the manifest's canvas id. A canvas missing from it keeps its
+    stored name and is not clamped to any size, so a zone has the same
+    coordinates whether its canvas dimensions are known or not.
     """
     feature = vw.feature or {}
-    canvas = rewrite_legacy_url(
+    stored = rewrite_legacy_url(
         vw.canvas or (feature.get("properties") or {}).get("canvas") or ""
     )
-    width, height = dims.get(canvas) or (sys.maxsize, sys.maxsize)
+    canvas, width, height = dims.get(stored.rstrip("/")) or (
+        stored,
+        sys.maxsize,
+        sys.maxsize,
+    )
     shape = shape_of(feature.get("geometry"), width, height)
     return canvas, shape
 
@@ -926,8 +962,41 @@ def characterization_summaries(ids, visible, user, language, dims):
     return summaries
 
 
-def document_payload(document_id, user, language):
-    """``DocumentPayload`` of a visible document; None when it is unknown or not visible."""
+def sample_summaries(analyses, visible, user, language, dims):
+    """``SampleSummary`` of the visible samples used by *analyses*, sorted by id.
+
+    *analyses* are the visible analyses of one document; each sample lists
+    those that used it. The zone is the first annotation feature of the
+    sample zone, resolved through the ``canvas_index`` *dims*.
+    """
+    readable = readable_nodegroup_ids(user)
+    sample_of = _links("analysis", "sample_used", readable)
+    used_by = defaultdict(set)
+    for analysis in analyses:
+        for sample in sample_of[analysis]:
+            if sample in visible.samples:
+                used_by[sample].add(analysis)
+    ids = sorted(used_by)
+    label_of = names(ids, language, user)
+    zones = _zone(role_node(*ROLES["sample_zone"]), ids, dims, readable)
+    return [
+        {
+            "id": s,
+            "name": label_of[s],
+            "zone": zones.get(s),
+            "analyses": sorted(used_by[s]),
+            "unpublished": s in visible.unpublished,
+        }
+        for s in ids
+    ]
+
+
+def document_payload(document_id, user, language, query=None):
+    """``DocumentPayload`` of a visible document; None when it is unknown or not visible.
+
+    *query* carries the Corpus filters; each analysis says whether they keep
+    it (``match``), by the rule of the search.
+    """
     visible = visible_set(user)
     document_id = str(document_id)
     if document_id not in visible.documents:
@@ -942,12 +1011,10 @@ def document_payload(document_id, user, language):
         rewrite_legacy_url(values.first(document_id, "doc_manifest") or "") or None
     )
     canvases = canvases_of(manifest_json(manifest_url)) if manifest_url else []
-    dims = {c["id"]: (c["image"]["width"], c["image"]["height"]) for c in canvases}
-    rows = {
-        r["id"]: r
-        for r in corpus_rows(user, language, chains=chains)
-        if r["document"] == document_id
-    }
+    dims = canvas_index(canvases)
+    all_rows = corpus_rows(user, language, chains=chains)
+    keep, *_ = row_filter(all_rows, query or QueryDict(""))
+    rows = {r["id"]: r for r in all_rows if r["document"] == document_id}
     annotations = []
     for analysis, feature_id, canvas, shape in _annotations(
         role_node(*ROLES["zone"]), analyses, dims, readable
@@ -959,11 +1026,13 @@ def document_payload(document_id, user, language):
             {
                 "key": f"an:{analysis}:{feature_id}",
                 "analysis": analysis,
+                "name": row["name"],
                 "canvas": canvas,
                 "shape": shape,
                 "technique": row["technique"],
                 "dataKind": (row["dataKinds"] or ["file"])[0],
                 "unpublished": row["unpublished"],
+                "match": keep(row),
             }
         )
     located = {a["analysis"] for a in annotations}
@@ -974,6 +1043,7 @@ def document_payload(document_id, user, language):
             "technique": rows[a]["technique"],
             "dataKind": (rows[a]["dataKinds"] or ["file"])[0],
             "unpublished": rows[a]["unpublished"],
+            "match": keep(rows[a]),
         }
         for a in analyses
         if a in rows and a not in located
@@ -1017,6 +1087,7 @@ def document_payload(document_id, user, language):
         "unpublished": document_id in visible.unpublished,
         "certaintyScale": certainty_scale(language),
         "unlocated": unlocated,
+        "samples": sample_summaries(analyses, visible, user, language, dims),
     }
 
 
@@ -1091,6 +1162,8 @@ def imaging_entries(analysis_id, manifest_values, language):
                 "dataKind": "chemical-imaging",
                 "viewer": {
                     "rendererConfigId": None,
+                    "xLabel": None,
+                    "yLabel": None,
                     "axisKey": None,
                     "axisTitle": None,
                     "points": None,

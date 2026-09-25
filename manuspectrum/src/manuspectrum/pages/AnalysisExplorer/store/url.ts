@@ -1,4 +1,4 @@
-import { validate as isUuid } from "uuid";
+import { validate as isUuid } from "uuid-esm";
 
 import {
     emptyFilters,
@@ -16,6 +16,7 @@ import type {
     ExplorerView,
     Filters,
     Focus,
+    FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 export interface UrlSnapshot {
@@ -23,6 +24,7 @@ export interface UrlSnapshot {
     corpusScreen: CorpusScreen;
     document: DocumentState | null;
     focus: Focus | null;
+    folioView: FolioView;
     filters: Filters;
 }
 
@@ -31,6 +33,12 @@ const FOCUS_KINDS: readonly Focus["kind"][] = [
     "analysis",
     "characterization",
     "file",
+    "sample",
+];
+const FOLIO_VIEWS: readonly FolioView[] = [
+    "analyses",
+    "characterizations",
+    "samples",
 ];
 const EVENT_TYPES: readonly EventType[] = [
     "production",
@@ -90,6 +98,7 @@ export function snapshotOf(store: ExplorerStore): UrlSnapshot {
             corpusScreen: store.corpusScreen,
             document: store.document,
             focus: store.focus,
+            folioView: store.folioView,
             filters: store.filters,
         }),
     ) as UrlSnapshot;
@@ -107,6 +116,8 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
     }
     if (snapshot.focus)
         query.set("focus", `${snapshot.focus.kind}:${snapshot.focus.id}`);
+    if (snapshot.document && snapshot.folioView !== "analyses")
+        query.set("fview", snapshot.folioView);
     if (filters.q) query.set("q", filters.q);
     if (filters.grain !== "documents") query.set("grain", filters.grain);
     if (!filters.onlyWithAnalyses) query.set("onlyWithAnalyses", "false");
@@ -153,6 +164,11 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
     const requestedView = query.get("view");
     const view =
         VIEWS.find((candidate) => candidate === requestedView) ?? "corpus";
+    const focus = documentId ? focusOf(query.get("focus")) : null;
+    const requestedFolioView = query.get("fview");
+    const folioView =
+        FOLIO_VIEWS.find((candidate) => candidate === requestedFolioView) ??
+        folioViewOf(focus);
     let corpusScreen: CorpusScreen = "home";
     if (document) {
         corpusScreen = "document";
@@ -163,9 +179,17 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
         view,
         corpusScreen,
         document,
-        focus: document ? focusOf(query.get("focus")) : null,
+        focus,
+        folioView: document ? folioView : "analyses",
         filters,
     };
+}
+
+/** The folio view that shows a focused item: its own layer for an identified material or a sample. */
+function folioViewOf(focus: Focus | null): FolioView {
+    if (focus?.kind === "characterization") return "characterizations";
+    if (focus?.kind === "sample") return "samples";
+    return "analyses";
 }
 
 export function historyMode(
@@ -204,6 +228,7 @@ export function applySnapshot(
         state.corpusScreen = snapshot.corpusScreen;
         state.document = snapshot.document;
         state.focus = snapshot.focus;
+        state.folioView = snapshot.folioView;
         state.filters = snapshot.filters;
     });
 }
@@ -217,6 +242,7 @@ export function documentHref(
         corpusScreen: "document",
         document: { id: documentId, canvas: null },
         focus: null,
+        folioView: "analyses",
     });
     return `?${query.toString()}`;
 }

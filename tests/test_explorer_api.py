@@ -41,6 +41,15 @@ class SearchRouteTests(ServiceCase):
         )
         self.assertEqual(again.status_code, 304)
 
+    def test_a_document_thumbnail_is_a_path_on_the_site_that_serves_the_page(self):
+        results = self.get("?grain=documents").json()["results"]
+
+        self.assertTrue(results)
+        for hit in results:
+            self.assertTrue(
+                hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
+            )
+
     def test_a_signed_in_reader_gets_a_private_answer(self):
         self.client.force_login(self.editor)
 
@@ -242,9 +251,37 @@ class ReadRightsTests(ReadRightsCase):
 
 
 class DocumentRouteTests(CorpusCase):
-    def get(self, resource):
+    def get(self, resource, query=""):
         with mock.patch(FETCH, return_value=MANIFEST_JSON):
-            return self.client.get(f"/en/api/explorer/document/{resource}")
+            return self.client.get(f"/en/api/explorer/document/{resource}{query}")
+
+    def test_every_analysis_matches_when_no_filter_is_set(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertTrue(payload["annotations"])
+        self.assertTrue(all(a["match"] for a in payload["annotations"]))
+
+    def test_an_analysis_the_search_would_drop_does_not_match(self):
+        payload = self.get(self.documents["open"].pk, f"?technique={FORS}").json()
+
+        self.assertTrue(payload["annotations"])
+        matched = {a["analysis"]: a["match"] for a in payload["annotations"]}
+        self.assertTrue(matched[str(self.analyses["on_document"].pk)])
+        self.assertFalse(matched[str(self.analyses["open"].pk)])
+        self.assertFalse(matched[str(self.analyses["draft"].pk)])
+
+    def test_the_document_and_the_search_apply_the_same_filters(self):
+        query = f"?technique={XRF}"
+        search = self.client.get(
+            f"/en/api/explorer/search{query}&grain=analyses"
+        ).json()
+        payload = self.get(self.documents["open"].pk, query).json()
+
+        matched = {a["analysis"] for a in payload["annotations"] if a["match"]}
+        found = {r["id"] for r in search["results"]}
+        document_analyses = {a["analysis"] for a in payload["annotations"]}
+        self.assertTrue(matched)
+        self.assertEqual(matched, found & document_analyses)
 
     def test_the_document_payload_has_the_contract_shape(self):
         response = self.get(self.documents["open"].pk)
@@ -275,6 +312,28 @@ class DocumentRouteTests(CorpusCase):
             self.assertGreater(response.json()["unpublishedCount"], 0)
         self.assertEqual(visitor["Cache-Control"], "public, no-cache")
         self.assertEqual(editor["Cache-Control"], "private, no-store")
+
+    def test_an_annotation_naming_the_image_service_lands_on_its_canvas(self):
+        placed = self.new_resource("analysis", "XRF_021 — f. 1v, by image service")
+        self.tile(placed, "component_observed", self.refs(self.components["open"]))
+        self.tile(placed, "analysis_by_project", self.refs(self.projects["main"]))
+        self.tile(
+            placed,
+            "literal_location_of_analysis",
+            self.annotation_value(
+                "https://example.org/iiif/image/f1v",
+                {"type": "Point", "coordinates": [10, -20]},
+            ),
+        )
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        mine = [a for a in payload["annotations"] if a["analysis"] == str(placed.pk)]
+        self.assertEqual([a["canvas"] for a in mine], [CANVAS])
+        self.assertEqual(
+            payload["canvases"][0]["analysisCount"],
+            len({a["analysis"] for a in payload["annotations"]}),
+        )
 
     def test_an_analysis_without_a_position_is_listed_as_unlocated_not_dropped(self):
         unplaced = self.new_resource("analysis", "FORS_014 — f. 1v, no zone")
@@ -314,6 +373,60 @@ class DocumentRouteTests(CorpusCase):
         self.assertIn(
             str(vermilion.pk), {s["id"] for s in payload["characterizations"]}
         )
+
+    def test_a_sample_used_by_an_analysis_of_the_document_is_listed_with_its_zone(
+        self,
+    ):
+        self.tile(
+            self.samples["s1"],
+            "location_in_object_of_sampling_taking",
+            self.annotation_value(
+                CANVAS,
+                {
+                    "type": "Polygon",
+                    "coordinates": [[[10, -20], [30, -20], [30, -40], [10, -20]]],
+                },
+            ),
+        )
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertEqual(
+            [s["id"] for s in payload["samples"]], [str(self.samples["s1"].pk)]
+        )
+        sample = payload["samples"][0]
+        assert_shape(self, sample, "SampleSummary")
+        self.assertEqual(sample["name"]["value"], "S1")
+        self.assertEqual(sample["zone"]["canvas"], CANVAS)
+        self.assertEqual(sample["zone"]["shape"]["type"], "polygon")
+        self.assertEqual(sample["analyses"], [str(self.analyses["open"].pk)])
+        self.assertIs(sample["unpublished"], False)
+
+    def test_a_sample_of_a_hidden_analysis_is_not_listed(self):
+        hidden = self.new_resource("analysis", "X04 — f. 1v, embargoed")
+        self.tile(hidden, "component_observed", self.refs(self.components["open"]))
+        s2 = self.new_resource("sample", "S2")
+        self.tile(hidden, "sample_used", self.refs(s2))
+        self.embargo(hidden)
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertNotIn(str(s2.pk), {s["id"] for s in payload["samples"]})
+        self.assertNotIn("S2", str(payload["samples"]))
+
+    def test_a_sample_zone_naming_the_image_service_lands_on_its_canvas(self):
+        self.tile(
+            self.samples["s1"],
+            "location_in_object_of_sampling_taking",
+            self.annotation_value(
+                "https://example.org/iiif/image/f1v",
+                {"type": "Point", "coordinates": [10, -20]},
+            ),
+        )
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertEqual([s["zone"]["canvas"] for s in payload["samples"]], [CANVAS])
 
     def test_an_embargoed_document_answers_like_an_unknown_one(self):
         self.embargo(self.documents["embargoed"])

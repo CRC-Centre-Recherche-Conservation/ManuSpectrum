@@ -60,6 +60,7 @@ ROLE_NODES = [
     ("analysis", "content_of_statement", "string", "an_statement"),
     ("project", "label_of_name", "string", "proj_name"),
     ("sample", "label_of_name", "string", "sample_name"),
+    ("sample", "location_in_object_of_sampling_taking", "annotation", "sample_zone"),
     ("person", "label_of_name", "string", "person_name"),
     ("characterization", "label_of_name", "string", "char_name"),
     ("characterization", "object_observed", "resource-instance-list", "char_object"),

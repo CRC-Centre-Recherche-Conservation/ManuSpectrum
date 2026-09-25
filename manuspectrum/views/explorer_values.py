@@ -202,6 +202,12 @@ def file_entries(entries, *, language, configs, kind):
                 "dataKind": data_kind,
                 "viewer": {
                     "rendererConfigId": config_id,
+                    "xLabel": (
+                        _display(config).get("xAxisLabel") or None if config else None
+                    ),
+                    "yLabel": (
+                        _display(config).get("yAxisLabel") or None if config else None
+                    ),
                     "axisKey": axis_key(config) if config else None,
                     "axisTitle": axis_title(config) if config else None,
                     "points": None,

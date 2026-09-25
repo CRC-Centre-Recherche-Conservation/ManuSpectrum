@@ -82,11 +82,13 @@ export interface SearchResponse {
 export interface Annotation {
     key: string;
     analysis: string;
+    name: Label;
     canvas: string;
     shape: Shape;
     technique: ValueRef | null;
     dataKind: DataKind;
     unpublished: boolean;
+    match: boolean;
 }
 
 export interface UnlocatedAnalysis {
@@ -94,6 +96,15 @@ export interface UnlocatedAnalysis {
     name: Label;
     technique: ValueRef | null;
     dataKind: DataKind;
+    unpublished: boolean;
+    match: boolean;
+}
+
+export interface SampleSummary {
+    id: string;
+    name: Label;
+    zone: { canvas: string; shape: Shape } | null;
+    analyses: string[];
     unpublished: boolean;
 }
 
@@ -149,6 +160,7 @@ export interface DocumentPayload {
     unpublished: boolean;
     certaintyScale: CertaintyScale;
     unlocated: UnlocatedAnalysis[];
+    samples: SampleSummary[];
 }
 
 export interface FileLayer {
@@ -170,6 +182,8 @@ export interface FileEntry {
     dataKind: DataKind;
     viewer: {
         rendererConfigId: string | null;
+        xLabel: string | null;
+        yLabel: string | null;
         axisKey: string | null;
         axisTitle: Label | null;
         points: number | null;
@@ -239,6 +253,15 @@ export interface ItemsResponse {
     missing: string[];
 }
 
+/** Body of `GET /api/spectrum-preview/<file_id>?n=` (already through its renderer configuration). */
+export interface Series {
+    x: number[];
+    y: number[];
+    n_source: number;
+    decimated: boolean;
+    x_reversed: boolean;
+}
+
 export const SHAPE_KEYS = {
     Label: { value: true, lang: true } satisfies Record<keyof Label, true>,
     Ref: { id: true, model: true, name: true } satisfies Record<
@@ -304,22 +327,33 @@ export const SHAPE_KEYS = {
         unpublished: true,
         certaintyScale: true,
         unlocated: true,
+        samples: true,
     } satisfies Record<keyof DocumentPayload, true>,
     Annotation: {
         key: true,
         analysis: true,
+        name: true,
         canvas: true,
         shape: true,
         technique: true,
         dataKind: true,
         unpublished: true,
+        match: true,
     } satisfies Record<keyof Annotation, true>,
+    SampleSummary: {
+        id: true,
+        name: true,
+        zone: true,
+        analyses: true,
+        unpublished: true,
+    } satisfies Record<keyof SampleSummary, true>,
     UnlocatedAnalysis: {
         analysis: true,
         name: true,
         technique: true,
         dataKind: true,
         unpublished: true,
+        match: true,
     } satisfies Record<keyof UnlocatedAnalysis, true>,
     CharacterizationSummary: {
         id: true,

@@ -92,6 +92,27 @@ def default_license():
 RIGHTS_REGISTRY_HOSTS = ("creativecommons.org", "rightsstatements.org")
 
 
+def _attribution_text(stored, language):
+    """The attribution text of a file entry in *language*, else English, else any; None when empty.
+
+    Arches stores it per language as ``{lang: {"value", "direction"}}``; a
+    plain string or a ``{lang: text}`` mapping reads the same way.
+    """
+
+    def text(value):
+        if isinstance(value, dict):
+            value = value.get("value")
+        return value.strip() if isinstance(value, str) else ""
+
+    if not isinstance(stored, dict):
+        return text(stored) or None
+    texts = {lang: text(value) for lang, value in stored.items()}
+    for lang in (language, "en"):
+        if texts.get(lang):
+            return texts[lang]
+    return next((value for value in texts.values() if value), None)
+
+
 def effective_license(entry, language):
     """The licence of a file entry as the Explorer shows it (spec §5 ``FileEntry.license``).
 
@@ -111,12 +132,7 @@ def effective_license(entry, language):
             text = str(catalogue["label"])
     else:
         text = licence.get("label") or licence["id"]
-    attribution = entry.get("attribution")
-    if isinstance(attribution, dict):
-        attribution = next(
-            (attribution[lang] for lang in (language, "en") if attribution.get(lang)),
-            next((v for v in attribution.values() if v), None),
-        )
+    attribution = _attribution_text(entry.get("attribution"), language)
     return {
         "id": licence["id"],
         "url": url,
