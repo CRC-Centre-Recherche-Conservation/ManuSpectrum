@@ -6,6 +6,7 @@ links off the tiles by role (D6), and a resource outside ``visible_set`` never
 reaches a payload, a facet or a name.
 """
 
+import hashlib
 import html
 import logging
 import re
@@ -416,30 +417,44 @@ def _letters_code(text, taken):
     return f"{letters[:1]}{suffix}"
 
 
-def technique_marks(techniques, counts, chains):
+def family_colours(families):
+    """``{family uri: colour}``: each family's ``--tech-n`` keyed by its uri, independent of counts and language.
+
+    A family's home hue is the sha1 of its uri modulo ``TECHNIQUE_PALETTE``.
+    Families are placed in uri order; one whose hue is taken takes the next
+    free hue (linear probing), so two families never share a hue while one
+    is free, and families beyond the palette have none (``None``). Adding a
+    family only moves the families placed after it whose probe run crosses
+    the hue it takes; every other family keeps its colour.
+    """
+    taken, colours = set(), {}
+    for uri in sorted(set(families)):
+        home = int(hashlib.sha1(uri.encode("utf-8")).hexdigest(), 16)
+        colours[uri] = None
+        for step in range(TECHNIQUE_PALETTE):
+            slot = (home + step) % TECHNIQUE_PALETTE
+            if slot not in taken:
+                taken.add(slot)
+                colours[uri] = slot + 1
+                break
+    return colours
+
+
+def technique_marks(techniques, chains):
     """``{item id: {"code", "colour", "family"}}`` of the techniques used in the corpus, the same in every language.
 
-    *techniques* maps an item id to ``(uri, reference value)``, *counts* an
-    item id to its number of analyses, *chains* is ``parent_chains`` of the
-    ids. A technique whose ancestor is also used belongs to the family of its
-    farthest used ancestor; ``family`` is that ancestor's uri, else its own.
-    Families take the colours 1…``TECHNIQUE_PALETTE`` by number of analyses,
-    then uri; further families have none. The code is the ``acronym`` of the
-    value, else the first letters of its English label not already taken, in
-    uri order.
+    *techniques* maps an item id to ``(uri, reference value)``, *chains* is
+    ``parent_chains`` of the ids. A technique whose ancestor is also used
+    belongs to the family of its farthest used ancestor; ``family`` is that
+    ancestor's uri, else its own, and its colour is ``family_colours`` of that
+    uri. The code is the ``acronym`` of the value, else the first letters of
+    its English label not already taken, in uri order.
     """
     root = {}
     for item in techniques:
         used = [a for a in chains.get(item, []) if a in techniques]
         root[item] = used[-1] if used else item
-    per_family = Counter()
-    for item, family in root.items():
-        per_family[family] += counts.get(item, 0)
-    ordered = sorted(per_family, key=lambda f: (-per_family[f], techniques[f][0]))
-    colour = {
-        f: rank + 1 if rank < TECHNIQUE_PALETTE else None
-        for rank, f in enumerate(ordered)
-    }
+    colour_of = family_colours(techniques[f][0] for f in set(root.values()))
     by_uri = sorted(techniques, key=lambda item: (techniques[item][0], item))
     codes = {item: acronym(techniques[item][1]) for item in by_uri}
     taken = {code for code in codes.values() if code}
@@ -453,7 +468,7 @@ def technique_marks(techniques, counts, chains):
     return {
         item: {
             "code": codes[item],
-            "colour": colour[root[item]],
+            "colour": colour_of[techniques[root[item]][0]],
             "family": techniques[root[item]][0],
         }
         for item in techniques
@@ -512,14 +527,13 @@ def corpus_rows(user, language, chains=None):
     )
     analysis_index = GraphIndex.for_slug("analysis")
     analysis_model = analysis_index.name if analysis_index else {}
-    used, per_technique = {}, Counter()
+    used = {}
     for a in analyses:
         value = values.first(a, "technique")
         for ref in value_refs(value, language)[:1]:
             used.setdefault(ref["id"], (ref["uri"], value))
-            per_technique[ref["id"]] += 1
     parents = parent_chains(used)
-    marks = technique_marks(used, per_technique, parents)
+    marks = technique_marks(used, parents)
     ancestors = ancestor_terms(used, parents)
     related = {d for d, _ in chains.values()} | {c for _, c in chains.values() if c}
     label_of = names(related, language, user)

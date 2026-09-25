@@ -6,15 +6,17 @@ Usage:
 
 from uuid import NAMESPACE_URL, uuid5
 
+from django.core.cache import cache
 from django.http import QueryDict
 from django.test import SimpleTestCase
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
-from manuspectrum.views import explorer_service
 from manuspectrum.views.explorer_service import (
+    TECHNIQUE_PALETTE,
     ancestor_terms,
     corpus_rows,
+    family_colours,
     fold,
     row_filter,
     search_payload,
@@ -682,8 +684,10 @@ class TechniqueMarkTests(ServiceCase):
             ["XRF", "pXRF", "µXRF"],
         )
         self.assertEqual(
-            {marks[u]["colour"] for u in (XRF_FAMILY, XRF, MICRO_XRF)}, {1}
+            {marks[u]["colour"] for u in (XRF_FAMILY, XRF, MICRO_XRF)},
+            {marks[XRF_FAMILY]["colour"]},
         )
+        self.assertIsNotNone(marks[XRF_FAMILY]["colour"])
         self.assertEqual(
             {marks[u]["family"] for u in (XRF_FAMILY, XRF, MICRO_XRF)}, {XRF_FAMILY}
         )
@@ -717,13 +721,30 @@ class TechniqueMarkTests(ServiceCase):
         second = scoped(self.documents["embargoed"])
         self.assertEqual(first[RAMAN], second[RAMAN])
 
-    def test_families_take_colours_by_analysis_count_then_uri(self):
+    def test_families_take_distinct_colours_keyed_by_their_uri(self):
         marks = self.marks()
 
+        colours = [marks[u]["colour"] for u in (XRF_FAMILY, RAMAN, FORS)]
+        self.assertEqual(len(set(colours)), 3)
         self.assertEqual(
-            [marks[u]["colour"] for u in (XRF_FAMILY, RAMAN, FORS)], [1, 2, 3]
+            colours, [family_colours([u])[u] for u in (XRF_FAMILY, RAMAN, FORS)]
         )
-        self.assertGreaterEqual(explorer_service.TECHNIQUE_PALETTE, 3)
+
+    def test_a_family_keeps_its_colour_when_analysis_counts_change(self):
+        before = self.marks()
+        for name in ("F10", "F11", "F12"):
+            analysis = self.new_resource("analysis", name)
+            self.tile(
+                analysis, "component_observed", self.refs(self.components["open"])
+            )
+            self.tile(
+                analysis,
+                "analysis_technique_used",
+                self.reference_value(FORS, "Reflectance (FORS)"),
+            )
+
+        cache.clear()
+        self.assertEqual(self.marks(), before)
 
     def test_the_technique_facet_value_carries_the_same_mark(self):
         payload = search_payload(self.query(), self.anonymous, "fr")
@@ -734,3 +755,48 @@ class TechniqueMarkTests(ServiceCase):
             self.assertEqual(value["mark"], rows[value["id"]])
         other = next(f for f in payload["facets"] if f["key"] == "project")
         self.assertEqual({v["mark"] for v in other["values"]}, {None})
+
+
+def colliding_pair():
+    """Two uris whose hash puts them on the same colour when each is alone."""
+    home = {}
+    for n in range(100):
+        uri = f"http://vocab/t{n}"
+        slot = family_colours([uri])[uri]
+        if slot in home:
+            return home[slot], uri
+        home[slot] = uri
+    raise AssertionError("no collision in 100 uris")
+
+
+class FamilyColourTests(SimpleTestCase):
+    def test_a_family_alone_takes_its_colour_whatever_the_others(self):
+        alone = {u: family_colours([u])[u] for u in (XRF_FAMILY, RAMAN, FORS)}
+
+        together = family_colours([FORS, RAMAN, XRF_FAMILY])
+
+        self.assertEqual(len(set(alone.values())), 3)
+        self.assertEqual(together, alone)
+        self.assertEqual(
+            family_colours([RAMAN, XRF_FAMILY]), family_colours([XRF_FAMILY, RAMAN])
+        )
+
+    def test_two_families_on_the_same_hue_are_told_apart_the_first_uri_keeping_it(
+        self,
+    ):
+        first, second = sorted(colliding_pair())
+
+        colours = family_colours([second, first])
+
+        self.assertEqual(colours[first], family_colours([first])[first])
+        self.assertNotEqual(colours[second], colours[first])
+        self.assertIsNotNone(colours[second])
+
+    def test_beyond_the_palette_a_family_has_no_colour(self):
+        uris = [f"http://vocab/f{n}" for n in range(TECHNIQUE_PALETTE + 1)]
+
+        colours = family_colours(uris)
+
+        given = [c for c in colours.values() if c is not None]
+        self.assertEqual(sorted(given), list(range(1, TECHNIQUE_PALETTE + 1)))
+        self.assertEqual(list(colours.values()).count(None), 1)
