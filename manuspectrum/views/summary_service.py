@@ -79,6 +79,12 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 3600
 SLUG_CACHE_KEY = "summary-graph-slugs"
 
+
+def graph_index_key(graph_id):
+    """Cache key of the memoised ``GraphIndex`` of a graph."""
+    return f"summary-graph:{graph_id}"
+
+
 # A degraded payload states that the cluster answered nothing, which is a
 # symptom and not a fact about the resource: it expires in seconds.
 DEGRADED_TTL = 30
@@ -133,7 +139,7 @@ class GraphIndex(NamedTuple):
         """Index of a graph, memoised for an hour; None when the graph is unknown."""
         graph_id = str(graph_id)
         return get_or_build(
-            f"summary-graph:{graph_id}", lambda: cls._build(graph_id), CACHE_TTL
+            graph_index_key(graph_id), lambda: cls._build(graph_id), CACHE_TTL
         )
 
     @classmethod

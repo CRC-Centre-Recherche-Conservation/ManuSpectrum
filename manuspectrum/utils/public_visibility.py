@@ -33,6 +33,7 @@ memo starts over. Guardian's bulk ``assign_perm`` on a queryset
 (``bulk_create``) sends no signal; the TTL bounds that case.
 """
 
+import hashlib
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -47,6 +48,7 @@ from arches.app.models.models import Node, ResourceInstance
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.utils.cache import get_or_build
+from manuspectrum.utils.data_version import data_version
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +157,11 @@ def forget_visibility():
     )
 
 
+def permission_epoch():
+    """The token every visibility memo key carries; ``forget_visibility`` replaces it."""
+    return _epoch()
+
+
 def _epoch():
     epoch = cache.get(EPOCH_CACHE_KEY)
     if epoch is None:
@@ -205,6 +212,20 @@ def reader_scope(user):
     return str(user.pk) if is_connected(user) else "anonymous"
 
 
+def explorer_scope(user):
+    """Scope of the Explorer's memos: ``"public"`` shared by every reader, else ``reader_scope``.
+
+    Shared only while ``perm_scope`` finds no restriction in the deployment
+    and the reader has readable nodegroups: a reader without a profile never
+    lands on the shared entry.
+    """
+    from manuspectrum.views.summary_service import perm_scope
+
+    if perm_scope(user) == "public" and readable_nodegroup_ids(user):
+        return "public"
+    return reader_scope(user)
+
+
 def draft_state_id_set():
     """Ids, as strings, of the lifecycle states that mean "not published yet"."""
     from arches.app.models.models import ResourceInstanceLifecycleState
@@ -243,6 +264,7 @@ class VisibleSet:
     characterizations: frozenset = frozenset()
     unpublished: frozenset = frozenset()
     evidence: dict = field(default_factory=dict)
+    digest: str = ""
 
     @property
     def ids(self):
@@ -256,7 +278,7 @@ class VisibleSet:
         )
 
 
-def visible_set(user):
+def visible_set(user, version=None):
     """The resources *user* may see in the Explorer, decided once (spec §4, D33, D37, D50).
 
     A resource is hidden only by a read restriction: it is in
@@ -270,11 +292,18 @@ def visible_set(user):
     nodegroup and no hidden Project (a Draft Project hides nothing), a Sample
     a visible Analysis using it, an identified material a visible object
     observed and at least one visible analysis cited in evidence. Links are
-    read off the tiles. Memoised per reader and permission epoch for
-    ``PERM_SCOPE_TTL``: a lifecycle change or a new link shows within that
-    delay.
+    read off the tiles.
+
+    Memoised per reader, permission epoch and data version (*version*, a
+    ``data_version()`` the caller already read, else read here) for
+    ``PERM_SCOPE_TTL``: a lifecycle change or a new link shows at the next
+    request, a grant written without a signal within that delay. ``digest``
+    names the sets and the reader's gates they were decided with (hidden
+    resources, readable nodegroups and models): two readers with the same
+    digest see the same thing.
     """
-    key = f"public-visibility:visible:{_epoch()}:{reader_scope(user)}"
+    version = data_version() if version is None else version
+    key = f"public-visibility:visible:{_epoch()}:{version}:{reader_scope(user)}"
     return get_or_build(key, lambda: _visible_for(user), PERM_SCOPE_TTL)
 
 
@@ -339,13 +368,23 @@ def _visible_for(user):
         if not (observed[a] & published_objects):
             unpublished.add(a)
 
-    return VisibleSet(
-        documents=frozenset(documents),
-        components=frozenset(components),
-        analyses=frozenset(analyses),
-        projects=frozenset(projects),
-        samples=frozenset(samples),
-        characterizations=frozenset(evidence),
-        unpublished=frozenset(unpublished),
-        evidence=evidence,
-    )
+    sets = {
+        "documents": frozenset(documents),
+        "components": frozenset(components),
+        "analyses": frozenset(analyses),
+        "projects": frozenset(projects),
+        "samples": frozenset(samples),
+        "characterizations": frozenset(evidence),
+        "unpublished": frozenset(unpublished),
+    }
+    digest = hashlib.sha1(usedforsecurity=False)
+    for name, ids in [
+        *sets.items(),
+        ("hidden", hidden),
+        ("nodegroups", nodegroups),
+        ("graphs", graphs),
+    ]:
+        digest.update(f"{name}:{','.join(sorted(map(str, ids)))};".encode())
+    for c in sorted(evidence):
+        digest.update(f"{c}>{','.join(evidence[c])};".encode())
+    return VisibleSet(**sets, evidence=evidence, digest=digest.hexdigest())
