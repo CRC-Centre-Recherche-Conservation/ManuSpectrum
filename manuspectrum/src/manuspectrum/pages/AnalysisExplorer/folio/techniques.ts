@@ -18,6 +18,34 @@ const collator = new Intl.Collator(undefined, {
     numeric: true,
 });
 
+/**
+ * Technique families and their code, tried in this order on the label (English
+ * or French, case and accents ignored): the first family that matches gives
+ * the code, so a technique keeps its code in every document.
+ */
+const FAMILIES: readonly (readonly [RegExp, string])[] = [
+    [
+        /fluorescence x|x-?ray (micro)?fluorescence|\b(ma|µ|micro-?|p)?xrf\b/,
+        "X",
+    ],
+    [/reflectance|fors\b/, "F"],
+    [/raman/, "R"],
+    [/mass|masse|maldi/, "MS"],
+    [/imag|photograph/, "I"],
+    [/infrared|infrarouge|\birtf\b|\bftir\b/, "IR"],
+    [/microscop/, "M"],
+    [/diffraction|\bxrd\b|\bdrx\b/, "D"],
+];
+
+/** The code of the family a technique label belongs to; null outside the families. */
+export function familyCode(text: string): string | null {
+    const plain = text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    return FAMILIES.find(([pattern]) => pattern.test(plain))?.[1] ?? null;
+}
+
 export function techniqueKey(technique: ValueRef | null): string {
     return technique?.uri ?? "";
 }
@@ -40,6 +68,8 @@ function codeFor(text: string, taken: Set<string>): string {
  * One style per technique of a document, ordered by label: a short code shown
  * in the marker and the legend, and the colour `--tech-1`…`--tech-6` in that
  * order. Colour follows the technique, never its rank among the markers shown.
+ * A technique of a known family takes the family code; any other takes the
+ * first letters of its label not already used in the document.
  */
 export function techniqueStyles(
     techniques: readonly (ValueRef | null)[],
@@ -53,10 +83,15 @@ export function techniqueStyles(
     const sorted = [...unique.entries()].sort(([, a], [, b]) =>
         collator.compare(a.value, b.value),
     );
-    const taken = new Set<string>();
+    const families = new Map(
+        sorted.map(([key, text]) => [key, familyCode(text.value)]),
+    );
+    const taken = new Set<string>(
+        [...families.values()].filter((code): code is string => code !== null),
+    );
     const styles = new Map<string, TechniqueStyle>();
     sorted.forEach(([key, text], index) => {
-        const code = codeFor(text.value, taken);
+        const code = families.get(key) ?? codeFor(text.value, taken);
         taken.add(code);
         styles.set(key, {
             key,

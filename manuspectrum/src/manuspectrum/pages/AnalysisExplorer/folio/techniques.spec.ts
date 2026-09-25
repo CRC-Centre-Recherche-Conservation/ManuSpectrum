@@ -28,18 +28,62 @@ describe("technique styles", () => {
         ]);
     });
 
-    it("gives each technique a distinct code", () => {
-        const styles = techniqueStyles(
+    it("gives each technique family the same code in every document", () => {
+        const first = techniqueStyles(
             [
-                valueRef("t:xrf", "XRF"),
-                valueRef("t:xrd", "XRD"),
-                valueRef("t:xrf2", "XRF"),
+                valueRef("t:xrf", "X-ray fluorescence"),
+                valueRef("t:pxrf", "portable X-ray fluorescence"),
+                valueRef("t:fors", "fiber optic reflectance spectrometry"),
             ],
             NONE,
         );
-        const codes = [...styles.values()].map((s) => s.code);
-        expect(new Set(codes).size).toBe(codes.length);
-        expect(codes[0]).toBe("X");
+        const second = techniqueStyles(
+            [
+                valueRef("t:micro-xrf", "Microfluorescence x"),
+                valueRef("t:raman", "Spectrométrie Raman"),
+                valueRef("t:hsi", "imagerie hyperspectrale"),
+                valueRef("t:macro", "Macrophotographie"),
+                valueRef("t:ftir", "IRTF"),
+                valueRef(
+                    "t:maldi",
+                    "Spectrométrie de masse par désorption laser",
+                ),
+                valueRef("t:om", "Microscopie optique"),
+            ],
+            NONE,
+        );
+        const codes = (styles: ReturnType<typeof techniqueStyles>) =>
+            Object.fromEntries(
+                [...styles.values()].map((style) => [style.key, style.code]),
+            );
+        expect(codes(first)).toEqual({
+            "t:xrf": "X",
+            "t:pxrf": "X",
+            "t:fors": "F",
+        });
+        expect(codes(second)).toEqual({
+            "t:micro-xrf": "X",
+            "t:raman": "R",
+            "t:hsi": "I",
+            "t:macro": "I",
+            "t:ftir": "IR",
+            "t:maldi": "MS",
+            "t:om": "M",
+        });
+    });
+
+    it("codes a technique outside the families by its first letters, apart from the family codes", () => {
+        const styles = techniqueStyles(
+            [
+                valueRef("t:xrf", "XRF"),
+                valueRef("t:xeno", "Xenon lamp test"),
+                valueRef("t:xylo", "Xylography"),
+            ],
+            NONE,
+        );
+        expect(styles.get("t:xrf")?.code).toBe("X");
+        expect(styles.get("t:xeno")?.code).toBe("XE");
+        expect(styles.get("t:xylo")?.code).toBe("XY");
     });
 
     it("keeps one entry per URI and names an analysis without technique", () => {
