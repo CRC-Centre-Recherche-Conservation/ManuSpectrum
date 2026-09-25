@@ -9,6 +9,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
+import type { FacetKey } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     BasketAddResult,
     BasketItem,
@@ -193,8 +194,31 @@ export const useExplorerStore = defineStore("explorer", () => {
         focus.value = null;
     }
 
+    /** Changes the page of the open document; does nothing outside a document. */
+    function setCanvas(canvas: string | null): void {
+        if (document.value) {
+            document.value = { ...document.value, canvas };
+        }
+    }
+
     function focusOn(next: Focus | null): void {
         focus.value = next;
+    }
+
+    /** A facet's selected values from the rail; year values are read as integers. */
+    function setFacet(key: FacetKey, ids: string[]): void {
+        if (key === "year") {
+            setFilter(
+                "year",
+                ids.map(Number).filter((year) => Number.isInteger(year)),
+            );
+        } else {
+            setFilter(key, ids);
+        }
+    }
+
+    function setLayer(key: keyof LayerToggles, on: boolean): void {
+        layers.value = { ...layers.value, [key]: on };
     }
 
     /** Adds every new key or none: an invalid key or a batch larger than the free places refuses the whole batch. */
@@ -335,12 +359,15 @@ export const useExplorerStore = defineStore("explorer", () => {
         basketFree,
         activeFilterCount,
         setFilter,
+        setFacet,
         clearFilter,
         clearFilters,
         setView,
         setCorpusScreen,
         openDocument,
+        setCanvas,
         focusOn,
+        setLayer,
         addToBasket,
         addManyToBasket,
         removeFromBasket,

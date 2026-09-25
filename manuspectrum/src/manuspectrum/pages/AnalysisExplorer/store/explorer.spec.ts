@@ -92,6 +92,35 @@ describe("navigation", () => {
     });
 });
 
+describe("document screen", () => {
+    it("changes the page of the open document only", () => {
+        const store = useExplorerStore();
+        store.setCanvas("c2");
+        expect(store.document).toBeNull();
+        store.openDocument(uuid(1));
+        store.setCanvas("c2");
+        expect(store.document).toEqual({ id: uuid(1), canvas: "c2" });
+    });
+
+    it("sets a facet, reading years as integers", () => {
+        const store = useExplorerStore();
+        store.setFacet("year", ["2023", "x", "2021"]);
+        store.setFacet("technique", ["t:b", "t:a"]);
+        expect(store.filters.year).toEqual([2021, 2023]);
+        expect(store.filters.technique).toEqual(["t:a", "t:b"]);
+    });
+
+    it("switches one folio layer", () => {
+        const store = useExplorerStore();
+        store.setLayer("zones", false);
+        expect(store.layers).toEqual({
+            points: true,
+            zones: false,
+            characterizations: true,
+        });
+    });
+});
+
 describe("Selection", () => {
     it("refuses the 31st item and says how many places are left", () => {
         const store = useExplorerStore();
