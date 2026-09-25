@@ -109,7 +109,7 @@ SHAPES = {
     },
     "AnalysisZone": {"canvas": int, "shape": dict},
     "DocumentMatch": {"facets": list, "kept": "MatchKept", "total": int},
-    "MatchKept": {"analyses": list, "characterizations": list},
+    "MatchKept": {"analyses": (list, type(None)), "characterizations": list},
     "SampleSummary": {
         "id": str,
         "name": "Label",

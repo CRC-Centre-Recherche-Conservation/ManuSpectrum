@@ -46,14 +46,18 @@ export interface DocumentView
  * The view of `payload` under `match`: one annotation per zone, in the order
  * of the analyses and of their zones, on the canvas its position names; an
  * analysis without zones is unlocated. Without a match, every analysis and
- * identified material is kept.
+ * identified material is kept; a match whose `kept.analyses` is null keeps
+ * every analysis.
  */
 export function documentView(
     payload: DocumentPayload,
     match: DocumentMatch | null,
 ): DocumentView {
     const { analyses, techniques, ...rest } = payload;
-    const kept = match ? new Set(match.kept.analyses) : null;
+    const kept =
+        match && match.kept.analyses !== null
+            ? new Set(match.kept.analyses)
+            : null;
     const annotations: Annotation[] = [];
     const unlocated: UnlocatedAnalysis[] = [];
     for (const analysis of analyses) {

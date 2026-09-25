@@ -578,6 +578,15 @@ class DocumentMatchRouteTests(CorpusCase):
                 assert_shape(self, value, "FacetValue")
         self.assertEqual(payload["kept"]["analyses"], [str(self.analyses["open"].pk)])
 
+    def test_the_match_without_a_filter_keeps_every_analysis_as_null(self):
+        response = self.get(self.documents["open"].pk)
+
+        payload = response.json()
+        assert_shape(self, payload, "DocumentMatch")
+        assert_shape(self, payload["kept"], "MatchKept")
+        self.assertIsNone(payload["kept"]["analyses"])
+        self.assertGreater(payload["total"], 0)
+
     def test_the_match_and_the_search_keep_the_same_analyses(self):
         query = f"?technique={XRF}"
         search = self.client.get(

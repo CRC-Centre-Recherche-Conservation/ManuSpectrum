@@ -142,7 +142,8 @@ export interface DocumentAnalysis {
 }
 
 export interface MatchKept {
-    analyses: string[];
+    /** The analyses the filters keep; null when no filter is active (every analysis kept). */
+    analyses: string[] | null;
     characterizations: string[];
 }
 

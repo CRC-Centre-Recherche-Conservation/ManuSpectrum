@@ -1247,8 +1247,8 @@ def match_payload(document_id, query, user, language, ticket=None):
     ``facets`` list the values the document's analyses carry plus the
     selected ones (count 0 when it lacks them); a facet without values is
     absent. ``kept.analyses`` are the document's analyses ``row_filter``
-    keeps, with the facet universe of the whole corpus; ``total`` counts
-    them. ``kept.characterizations`` are its identified materials carrying a
+    keeps, with the facet universe of the whole corpus, or None when no
+    filter is active (every analysis kept); ``total`` counts them. ``kept.characterizations`` are its identified materials carrying a
     selected value of each active facet of the characterization group; the
     other facets and the free text leave them kept. Grain, page and size are
     not read.
@@ -1258,7 +1258,9 @@ def match_payload(document_id, query, user, language, ticket=None):
     if document_id not in bundle.visible.documents:
         return None
     rows = bundle.by_document.get(document_id, [])
-    keep, active, *_, counted = row_filter(rows, query, universe=bundle.universe)
+    keep, active, _, _, needle, _, counted = row_filter(
+        rows, query, universe=bundle.universe
+    )
     facets = []
     for key in FACET_KEYS:
         facet = facet_entry(
@@ -1274,11 +1276,12 @@ def match_payload(document_id, query, user, language, ticket=None):
         if facet["values"]:
             facets.append(facet)
     kept = sorted(row["id"] for row in rows if keep(row))
+    filtered = bool(needle) or any(active.values())
     wanted = characterization_wanted(active)
     return {
         "facets": facets,
         "kept": {
-            "analyses": kept,
+            "analyses": kept if filtered else None,
             "characterizations": [
                 c
                 for c in document_characterizations(bundle, document_id)
@@ -1296,8 +1299,7 @@ _FNV_PRIME = 0x01000193
 def day_index(day, count):
     """Position (from 0) of the document of *day* (``YYYY-MM-DD``) among *count*; None when *count* is 0.
 
-    FNV-1a (32 bits) of the day's characters modulo *count*, the same number
-    as ``dayIndex`` of ``document-of-the-day.ts``.
+    FNV-1a (32 bits) of the day's characters modulo *count*.
     """
     if count <= 0:
         return None

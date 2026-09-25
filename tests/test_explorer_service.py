@@ -245,14 +245,23 @@ class DocumentMatchTests(ServiceCase):
         self.assertEqual(payload["kept"]["analyses"], [])
         self.assertEqual(payload["total"], 0)
 
-    def test_every_analysis_of_the_document_is_kept_whatever_the_grain_and_page(self):
-        payload = self.match(self.documents["open"].pk, "grain=documents&page=3")
+    def test_without_an_active_filter_every_analysis_is_kept_as_null(self):
+        for text in (
+            "",
+            "grain=documents&page=3",
+            "q=",
+            "technique=http://vocab/nowhere",
+        ):
+            payload = self.match(self.documents["open"].pk, text)
 
-        self.assertEqual(
-            set(payload["kept"]["analyses"]),
-            {str(self.analyses[k].pk) for k in ("open", "on_document", "draft")},
-        )
-        self.assertEqual(payload["total"], 3)
+            self.assertIsNone(payload["kept"]["analyses"], text or "none")
+            self.assertEqual(payload["total"], 3, text or "none")
+
+    def test_an_active_filter_lists_the_analyses_it_keeps(self):
+        payload = self.match(self.documents["open"].pk, f"technique={XRF}")
+
+        self.assertEqual(payload["kept"]["analyses"], [str(self.analyses["open"].pk)])
+        self.assertEqual(payload["total"], 1)
 
     def test_the_match_and_the_search_keep_the_same_analyses(self):
         for text in (f"technique={XRF}", "q=azurite", f"material={AZURITE}"):

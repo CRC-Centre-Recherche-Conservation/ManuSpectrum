@@ -102,6 +102,20 @@ describe("documentView", () => {
         expect([...view.keptCharacterizations]).toEqual([uuid(502)]);
     });
 
+    it("keeps every analysis when the match lists none as kept (no active filter)", () => {
+        const view = documentView(
+            payload(),
+            documentMatch({
+                kept: { analyses: null, characterizations: [uuid(501)] },
+                total: 2,
+            }),
+        );
+
+        expect(view.annotations.every((entry) => entry.match)).toBe(true);
+        expect(view.unlocated[0].match).toBe(true);
+        expect([...view.keptCharacterizations]).toEqual([uuid(501)]);
+    });
+
     it("drops a zone whose canvas position is not in the payload", () => {
         const source = payload();
         source.analyses[0].zones[1].canvas = 9;
