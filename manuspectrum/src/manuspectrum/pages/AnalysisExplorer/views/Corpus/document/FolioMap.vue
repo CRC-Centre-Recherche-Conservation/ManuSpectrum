@@ -1068,6 +1068,8 @@ function wholePage(): void {
 }
 
 .folio :deep(.folio-marker-host) {
+    display: flex;
+    justify-content: center;
     background: none;
     border: none;
 }
@@ -1075,14 +1077,18 @@ function wholePage(): void {
 .folio :deep(.folio-marker) {
     position: relative;
     display: grid;
+    flex: none;
     place-items: center;
-    inline-size: 1.75rem;
+    box-sizing: border-box;
+    min-inline-size: 1.75rem;
     block-size: 1.75rem;
+    padding-inline: 0.25rem;
     border: 0.125rem solid var(--surface);
-    border-radius: 50%;
+    border-radius: 999rem;
     background: var(--ink);
     color: var(--stage);
-    font: 600 0.75rem var(--font-body);
+    font: 600 0.625rem var(--font-body);
+    white-space: nowrap;
     cursor: pointer;
 }
 
@@ -1108,6 +1114,22 @@ function wholePage(): void {
 
 .folio :deep(.folio-marker--tech-6) {
     background: var(--tech-6);
+}
+
+.folio :deep(.folio-marker--tech-7) {
+    background: var(--tech-7);
+}
+
+.folio :deep(.folio-marker--tech-8) {
+    background: var(--tech-8);
+}
+
+.folio :deep(.folio-marker--tech-9) {
+    background: var(--tech-9);
+}
+
+.folio :deep(.folio-marker--tech-10) {
+    background: var(--tech-10);
 }
 
 .folio :deep(.folio-marker--ink) {
@@ -1234,6 +1256,22 @@ function wholePage(): void {
 
 .folio :deep(.folio-frame--tech-6) {
     stroke: var(--tech-6);
+}
+
+.folio :deep(.folio-frame--tech-7) {
+    stroke: var(--tech-7);
+}
+
+.folio :deep(.folio-frame--tech-8) {
+    stroke: var(--tech-8);
+}
+
+.folio :deep(.folio-frame--tech-9) {
+    stroke: var(--tech-9);
+}
+
+.folio :deep(.folio-frame--tech-10) {
+    stroke: var(--tech-10);
 }
 
 .folio :deep(.folio-material) {

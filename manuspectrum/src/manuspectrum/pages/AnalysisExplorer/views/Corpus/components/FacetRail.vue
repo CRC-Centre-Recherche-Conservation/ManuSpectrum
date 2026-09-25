@@ -1,66 +1,126 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import InputText from "primevue/inputtext";
+import ToggleButton from "primevue/togglebutton";
+import Tooltip from "primevue/tooltip";
 
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import { foldText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
-import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
-import { colourSwatch } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-swatches.ts";
+import { techniqueClass } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type {
     Facet,
+    FacetGroup,
     FacetKey,
     FacetValue,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { ColourLevel } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const PREVIEW_SIZE = 6;
 const SEARCH_THRESHOLD = 8;
+const GROUPS: readonly FacetGroup[] = ["part", "analysis", "characterization"];
+const COLOUR_LEVELS: readonly ColourLevel[] = ["partColour", "colour"];
+/** The facets of each group in rail order; `colour` stands for the Colour facet and its level toggle. */
+const GROUP_KEYS: Readonly<Record<FacetGroup, readonly FacetKey[]>> = {
+    part: ["partType", "part"],
+    analysis: ["project", "technique", "operator", "year"],
+    characterization: ["material", "colour", "layer", "element"],
+};
 
 /**
- * The facets of a Corpus screen. What is ticked comes from `selected` (the
- * filters in force), never from the payload's `selected`, which lags behind
- * while the next search loads. A facet longer than `SEARCH_THRESHOLD` has a
- * search box that narrows its values as one types (accents and case
- * ignored). `countHint`, a translated text with `%{n}`, says what a count
- * counts (« %{n} in this document »).
+ * The facets of a Corpus screen, in three groups (studied part, analysis,
+ * identified material), each folding to its heading (state in the store).
+ * The two colour facets share one « Colour » facet in the identified
+ * material group, with a toggle choosing the level its ticks apply to; an
+ * option with ticks of its own while the other is shown says how many.
+ * What is ticked comes from `selected` (the filters in force), never from the
+ * payload's `selected`, which lags behind while the next search loads. A
+ * facet longer than `SEARCH_THRESHOLD` has a search box that narrows its
+ * values as one types (accents and case ignored). `countHint`, a translated
+ * text with `%{n}`, says what a count counts (« %{n} in this document »).
  */
 const props = withDefaults(
     defineProps<{
         facets: Facet[];
         selected: Partial<Record<FacetKey, readonly string[]>>;
-        /** `--tech-n` colour of each technique value (null: drawn in ink); by default their order in the facet. */
-        techniqueColours?: ReadonlyMap<string, number | null> | null;
         countHint?: string;
     }>(),
-    { techniqueColours: null, countHint: "" },
+    { countHint: "" },
 );
 const emit = defineEmits<{ change: [key: FacetKey, ids: string[]] }>();
 
+const vTooltip = Tooltip;
+const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
-const { facetTitle } = useVocabulary();
+const { facetTitle, groupTitle, levelLabel, levelHint } = useVocabulary();
+const baseId = useId();
 
 const expanded = ref<Set<FacetKey>>(new Set());
 const queries = ref<Partial<Record<FacetKey, string>>>({});
 
-/** The technique colours given, else one per technique value in the order of the facet. */
-const colours = computed<ReadonlyMap<string, number | null>>(() => {
-    if (props.techniqueColours) return props.techniqueColours;
-    const values =
-        props.facets.find((facet) => facet.key === "technique")?.values ?? [];
-    const styles = techniqueStyles(
-        values.map((value) => ({
-            id: value.id,
-            uri: value.id,
-            label: value.label,
-        })),
-        { value: "", lang: "" },
+const byKey = computed(
+    () => new Map(props.facets.map((facet) => [facet.key, facet])),
+);
+/** The colour level shown: the one chosen, else the one that has a facet. */
+const shownLevel = computed<ColourLevel>(() =>
+    byKey.value.has(store.colourLevel)
+        ? store.colourLevel
+        : COLOUR_LEVELS.find((level) => byKey.value.has(level)) ??
+          store.colourLevel,
+);
+const sections = computed(() =>
+    GROUPS.map((group) => ({
+        group,
+        facets: GROUP_KEYS[group].flatMap((key) => {
+            const facet = byKey.value.get(
+                key === "colour" ? shownLevel.value : key,
+            );
+            return facet ? [facet] : [];
+        }),
+    })).filter((section) => section.facets.length > 0),
+);
+
+function isColour(key: FacetKey): boolean {
+    return COLOUR_LEVELS.includes(key as ColourLevel);
+}
+
+function isCollapsed(group: FacetGroup): boolean {
+    return store.collapsedGroups.includes(group);
+}
+
+function groupBodyId(group: FacetGroup): string {
+    return `${baseId}-${group}`;
+}
+
+function levelHintId(level: ColourLevel): string {
+    return `${baseId}-${level}-hint`;
+}
+
+function hasLevel(level: ColourLevel): boolean {
+    return byKey.value.has(level);
+}
+
+/** Ticks held by a colour level that is not the one shown; 0 for the one shown. */
+function hiddenTicks(level: ColourLevel): number {
+    return level === shownLevel.value
+        ? 0
+        : (props.selected[level] ?? []).length;
+}
+
+function tickBadge(level: ColourLevel): string {
+    return interpolate(
+        $gettext("%{n} ticked"),
+        { n: hiddenTicks(level) },
+        true,
     );
-    return new Map(
-        values.map((value) => [value.id, styles.get(value.id)?.colour ?? null]),
-    );
-});
+}
+
+function chooseLevel(level: ColourLevel): void {
+    store.setColourLevel(level);
+}
 
 function isSelected(key: FacetKey, id: string): boolean {
     return props.selected[key]?.includes(id) ?? false;
@@ -139,13 +199,48 @@ function searchLabel(key: FacetKey): string {
     );
 }
 
-function dotClass(id: string): string {
-    const colour = colours.value.get(id);
-    return colour ? `dot--tech-${colour}` : "dot--ink";
+/** The labels of the ticked values of a facet, by the labels its values carry. */
+function tickedLabels(key: FacetKey): string[] {
+    const values = byKey.value.get(key)?.values ?? [];
+    return (props.selected[key] ?? []).map(
+        (id) => values.find((value) => value.id === id)?.label.value ?? id,
+    );
 }
 
-function swatchOf(key: FacetKey, value: FacetValue): string | null {
-    return key === "colour" ? colourSwatch(value.label.value) : null;
+/** « Selection: Blue, Red », naming the level of each colour facet with ticks; empty without ticks. */
+function selectionSummary(facet: Facet): string {
+    const keys: readonly FacetKey[] = isColour(facet.key)
+        ? COLOUR_LEVELS
+        : [facet.key];
+    const parts = keys
+        .filter((key) => tickedLabels(key).length > 0)
+        .map((key) =>
+            isColour(key)
+                ? interpolate(
+                      $gettext("%{values} (%{level})"),
+                      {
+                          values: tickedLabels(key).join(", "),
+                          level: levelLabel(key as ColourLevel).toLowerCase(),
+                      },
+                      true,
+                  )
+                : tickedLabels(key).join(", "),
+        );
+    return parts.length > 0
+        ? interpolate(
+              $gettext("Selection: %{values}"),
+              { values: parts.join(" · ") },
+              true,
+          )
+        : "";
+}
+
+function summaryId(key: FacetKey): string {
+    return `${baseId}-${key}-summary`;
+}
+
+function dotClass(value: FacetValue): string {
+    return techniqueClass("dot", value.mark?.colour ?? null);
 }
 
 function countTitle(value: FacetValue): string | undefined {
@@ -165,86 +260,180 @@ function onChange(facet: Facet, id: string, event: Event): void {
 
 <template>
     <div class="facet-rail">
-        <fieldset
-            v-for="facet in props.facets"
-            :key="facet.key"
-            class="facet"
+        <section
+            v-for="section in sections"
+            :key="section.group"
+            class="group"
         >
-            <legend class="title">
-                <span>{{ facetTitle(facet.key) }}</span>
-            </legend>
-            <InputText
-                v-if="isSearchable(facet)"
-                class="search"
-                type="search"
-                size="small"
-                autocomplete="off"
-                :model-value="queries[facet.key] ?? ''"
-                :placeholder="$gettext('Search…')"
-                :aria-label="searchLabel(facet.key)"
-                @update:model-value="setQuery(facet.key, $event)"
-            />
-            <ul class="values">
-                <li
-                    v-for="value in visibleValues(facet)"
-                    :key="value.id"
+            <h3 class="group-title">
+                <button
+                    type="button"
+                    class="disclosure"
+                    :aria-expanded="
+                        isCollapsed(section.group) ? 'false' : 'true'
+                    "
+                    :aria-controls="groupBodyId(section.group)"
+                    @click="store.toggleGroup(section.group)"
                 >
-                    <label class="value">
-                        <input
-                            type="checkbox"
-                            :value="value.id"
-                            :checked="isSelected(facet.key, value.id)"
-                            :disabled="
-                                value.count === 0 &&
-                                !isSelected(facet.key, value.id)
-                            "
-                            @change="onChange(facet, value.id, $event)"
-                        />
-                        <span
-                            v-if="facet.key === 'technique'"
-                            class="dot"
-                            :class="dotClass(value.id)"
-                            aria-hidden="true"
-                        ></span>
-                        <span
-                            v-else-if="swatchOf(facet.key, value)"
-                            class="swatch"
-                            aria-hidden="true"
-                            :style="{
-                                '--swatch':
-                                    swatchOf(facet.key, value) ?? undefined,
-                            }"
-                        ></span>
-                        <span
-                            class="label"
-                            :lang="value.label.lang"
-                            :title="value.label.value"
-                            >{{ value.label.value }}</span
-                        >
-                        <span
-                            class="count"
-                            :title="countTitle(value)"
-                            >{{ value.count }}</span
-                        >
-                    </label>
-                </li>
-            </ul>
-            <p
-                v-if="hasNoMatch(facet)"
-                class="no-match"
+                    <span
+                        class="chevron"
+                        aria-hidden="true"
+                        >{{ isCollapsed(section.group) ? "▸" : "▾" }}</span
+                    >
+                    <span>{{ groupTitle(section.group) }}</span>
+                </button>
+            </h3>
+            <div
+                v-show="!isCollapsed(section.group)"
+                :id="groupBodyId(section.group)"
+                class="group-body"
             >
-                <span>{{ $gettext("No match") }}</span>
-            </p>
-            <button
-                v-if="showsMore(facet)"
-                type="button"
-                class="more"
-                :aria-expanded="isExpanded(facet.key) ? 'true' : 'false'"
-                @click="toggleExpanded(facet.key)"
-            >
-                <span>{{ moreLabel(facet) }}</span>
-            </button>
-        </fieldset>
+                <fieldset
+                    v-for="facet in section.facets"
+                    :key="facet.key"
+                    class="facet"
+                    :aria-describedby="
+                        selectionSummary(facet)
+                            ? summaryId(facet.key)
+                            : undefined
+                    "
+                >
+                    <legend class="title">
+                        <span
+                            v-if="selectionSummary(facet)"
+                            v-tooltip.top="selectionSummary(facet)"
+                            class="title-hint"
+                        >
+                            <span
+                                v-tooltip.focus.top="selectionSummary(facet)"
+                                class="title-text"
+                                tabindex="0"
+                                >{{ facetTitle(facet.key) }}</span
+                            >
+                        </span>
+                        <span v-else>{{ facetTitle(facet.key) }}</span>
+                    </legend>
+                    <span
+                        v-if="selectionSummary(facet)"
+                        :id="summaryId(facet.key)"
+                        class="visually-hidden"
+                        >{{ selectionSummary(facet) }}</span
+                    >
+                    <div
+                        v-if="isColour(facet.key)"
+                        class="levels"
+                        role="group"
+                        :aria-label="$gettext('Colour level')"
+                    >
+                        <span
+                            v-for="level in COLOUR_LEVELS"
+                            :key="level"
+                            v-tooltip.top="levelHint(level)"
+                            class="level"
+                        >
+                            <ToggleButton
+                                v-tooltip.focus.top="levelHint(level)"
+                                class="level-button"
+                                size="small"
+                                :model-value="level === shownLevel"
+                                :disabled="!hasLevel(level)"
+                                :pt="{
+                                    root: {
+                                        'aria-describedby': levelHintId(level),
+                                    },
+                                }"
+                                @update:model-value="chooseLevel(level)"
+                            >
+                                <span class="level-label">{{
+                                    levelLabel(level)
+                                }}</span>
+                                <span
+                                    v-if="hiddenTicks(level) > 0"
+                                    class="ticks"
+                                    :aria-label="tickBadge(level)"
+                                    >{{ hiddenTicks(level) }}</span
+                                >
+                            </ToggleButton>
+                            <span
+                                :id="levelHintId(level)"
+                                class="visually-hidden"
+                                >{{ levelHint(level) }}</span
+                            >
+                        </span>
+                    </div>
+                    <InputText
+                        v-if="isSearchable(facet)"
+                        class="search"
+                        type="search"
+                        size="small"
+                        autocomplete="off"
+                        :model-value="queries[facet.key] ?? ''"
+                        :placeholder="$gettext('Search…')"
+                        :aria-label="searchLabel(facet.key)"
+                        @update:model-value="setQuery(facet.key, $event)"
+                    />
+                    <ul class="values">
+                        <li
+                            v-for="value in visibleValues(facet)"
+                            :key="value.id"
+                        >
+                            <label class="value">
+                                <input
+                                    type="checkbox"
+                                    :value="value.id"
+                                    :checked="isSelected(facet.key, value.id)"
+                                    :disabled="
+                                        value.count === 0 &&
+                                        !isSelected(facet.key, value.id)
+                                    "
+                                    @change="onChange(facet, value.id, $event)"
+                                />
+                                <span
+                                    v-if="facet.key === 'technique'"
+                                    class="dot"
+                                    :class="dotClass(value)"
+                                    aria-hidden="true"
+                                ></span>
+                                <span
+                                    v-else-if="value.swatch"
+                                    class="swatch"
+                                    aria-hidden="true"
+                                    :style="{ '--swatch': value.swatch }"
+                                ></span>
+                                <span
+                                    class="label"
+                                    :lang="value.label.lang"
+                                    :title="value.label.value"
+                                    >{{ value.label.value }}</span
+                                >
+                                <span
+                                    class="count"
+                                    :title="countTitle(value)"
+                                    >{{ value.count }}</span
+                                >
+                            </label>
+                        </li>
+                    </ul>
+                    <p
+                        v-if="hasNoMatch(facet)"
+                        class="no-match"
+                    >
+                        <span>{{ $gettext("No match") }}</span>
+                    </p>
+                    <button
+                        v-if="showsMore(facet)"
+                        type="button"
+                        class="more"
+                        :aria-expanded="
+                            isExpanded(facet.key) ? 'true' : 'false'
+                        "
+                        @click="toggleExpanded(facet.key)"
+                    >
+                        <span>{{ moreLabel(facet) }}</span>
+                    </button>
+                </fieldset>
+            </div>
+        </section>
     </div>
 </template>
 
@@ -253,6 +442,86 @@ function onChange(facet: Facet, id: string, event: Event): void {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
+}
+
+.facet-rail .group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+}
+
+.facet-rail .group + .group {
+    padding-block-start: 0.75rem;
+    border-block-start: 0.0625rem solid var(--border);
+}
+
+.facet-rail .group-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+}
+
+.facet-rail .disclosure {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: 2rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant: all-small-caps;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+.facet-rail .disclosure .chevron {
+    color: var(--ink-muted);
+}
+
+.facet-rail .title-text {
+    border-block-end: 0.0625rem dotted var(--ink-muted);
+    cursor: help;
+}
+
+.facet-rail .levels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.facet-rail .level {
+    display: inline-flex;
+}
+
+.facet-rail .level-button {
+    gap: 0.375rem;
+    font-size: 0.6875rem;
+}
+
+.facet-rail .ticks {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 1rem;
+    block-size: 1rem;
+    padding-inline: 0.25rem;
+    border-radius: 999rem;
+    background: var(--blue-text);
+    color: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+}
+
+.facet-rail .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .facet-rail .facet {
@@ -348,6 +617,22 @@ function onChange(facet: Facet, id: string, event: Event): void {
     background: var(--tech-6);
 }
 
+.facet-rail .dot--tech-7 {
+    background: var(--tech-7);
+}
+
+.facet-rail .dot--tech-8 {
+    background: var(--tech-8);
+}
+
+.facet-rail .dot--tech-9 {
+    background: var(--tech-9);
+}
+
+.facet-rail .dot--tech-10 {
+    background: var(--tech-10);
+}
+
 .facet-rail .dot--ink {
     border: 0.125rem solid var(--ink);
 }
@@ -387,7 +672,9 @@ function onChange(facet: Facet, id: string, event: Event): void {
 }
 
 .facet-rail input:focus-visible,
-.facet-rail .more:focus-visible {
+.facet-rail .more:focus-visible,
+.facet-rail .disclosure:focus-visible,
+.facet-rail .title-text:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
 }

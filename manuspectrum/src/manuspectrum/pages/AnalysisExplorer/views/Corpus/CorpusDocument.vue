@@ -232,16 +232,6 @@ const styles = computed(() =>
         { value: $gettext("Analysis"), lang: "" },
     ),
 );
-/** The folio colour of each technique, by the id its facet value carries (the technique's URI). */
-const techniqueColours = computed(
-    () =>
-        new Map(
-            [...styles.value.values()].map((style) => [
-                style.key,
-                style.colour,
-            ]),
-        ),
-);
 /** The techniques drawn on this page (in the analyses view, or lit as evidence), with their number of analyses. */
 const pageLegend = computed<LegendEntry[]>(() => {
     const drawn =
@@ -715,7 +705,6 @@ function goHome(): void {
                     <FacetRail
                         :facets="search.data.value?.facets ?? []"
                         :selected="selectedFacets(store.filters)"
-                        :technique-colours="techniqueColours"
                         :count-hint="$gettext('%{n} in this document')"
                         @change="onFacetChange"
                     />
@@ -771,7 +760,6 @@ function goHome(): void {
                         <FolioLegend
                             class="legend"
                             :entries="pageLegend"
-                            :start-open="!narrow"
                         />
                     </div>
                     <CanvasStrip

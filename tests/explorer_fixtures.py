@@ -43,6 +43,8 @@ ROLE_NODES = [
     ("component", "label_of_name", "string", "comp_name"),
     ("component", "item_visual_is_part_of_document", "resource-instance", "comp_doc"),
     ("component", "location_in_document", "annotation", "comp_zone"),
+    ("component", "type", "reference", "comp_type"),
+    ("component", "color_features", "reference", "comp_colour"),
     ("analysis", "label_of_name", "string", "an_name"),
     ("analysis", "component_observed", "resource-instance", "an_observed"),
     ("analysis", "analysis_by_project", "resource-instance", "an_project"),

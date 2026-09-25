@@ -8,6 +8,15 @@ payload and the TypeScript types cannot drift silently.
 LABEL = {"value": str, "lang": str}
 REF = {"id": str, "model": str, "name": "Label"}
 VALUE_REF = {"id": str, "uri": str, "label": "Label"}
+TECHNIQUE = {
+    "id": str,
+    "uri": str,
+    "label": "Label",
+    "code": str,
+    "colour": (int, type(None)),
+    "family": str,
+}
+TECHNIQUE_MARK = {"code": str, "colour": (int, type(None)), "family": str}
 RANKED_VALUE = {"id": str, "uri": str, "label": "Label", "rank": int}
 IMAGE_REF = {
     "service": (str, type(None)),
@@ -22,7 +31,17 @@ SHAPES = {
     "ValueRef": VALUE_REF,
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
-    "Facet": {"key": str, "values": list},
+    "Technique": TECHNIQUE,
+    "TechniqueMark": TECHNIQUE_MARK,
+    "Facet": {"key": str, "group": str, "values": list},
+    "FacetValue": {
+        "id": str,
+        "label": "Label",
+        "count": int,
+        "selected": bool,
+        "mark": ("TechniqueMark", None),
+        "swatch": (str, type(None)),
+    },
     "SearchResponse": {
         "total": int,
         "page": dict,
@@ -48,7 +67,7 @@ SHAPES = {
         "type": str,
         "id": str,
         "name": "Label",
-        "technique": ("ValueRef", None),
+        "technique": ("Technique", None),
         "document": "Ref",
         "component": ("Ref", None),
         "canvas": (str, type(None)),
@@ -77,7 +96,7 @@ SHAPES = {
         "analysis": str,
         "canvas": str,
         "shape": dict,
-        "technique": ("ValueRef", None),
+        "technique": ("Technique", None),
         "dataKind": str,
         "unpublished": bool,
         "match": bool,
@@ -93,7 +112,7 @@ SHAPES = {
     "UnlocatedAnalysis": {
         "analysis": str,
         "name": "Label",
-        "technique": ("ValueRef", None),
+        "technique": ("Technique", None),
         "dataKind": str,
         "unpublished": bool,
         "match": bool,
@@ -117,7 +136,7 @@ SHAPES = {
     "AnalysisPayload": {
         "id": str,
         "name": "Label",
-        "technique": ("ValueRef", None),
+        "technique": ("Technique", None),
         "instrument": ("Ref", None),
         "operators": list,
         "projects": list,

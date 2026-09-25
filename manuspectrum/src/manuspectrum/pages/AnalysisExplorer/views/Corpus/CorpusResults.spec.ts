@@ -15,7 +15,7 @@ import {
     analysisHit,
     documentHit,
     facet,
-    label,
+    facetValue,
     searchResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
@@ -202,10 +202,8 @@ describe("CorpusResults", () => {
     it("writes facet changes to the store and records the value labels", async () => {
         const year: Facet = {
             key: "year",
-            values: [
-                ...facet("year", 2).values,
-                { id: "2021", label: label("2021"), count: 1, selected: false },
-            ],
+            group: "analysis",
+            values: [...facet("year", 2).values, facetValue("2021")],
         };
         fetchMock.mockResolvedValue(
             jsonResponse(

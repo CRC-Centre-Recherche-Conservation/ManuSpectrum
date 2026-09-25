@@ -40,6 +40,8 @@ from manuspectrum.utils.public_visibility import (
 from manuspectrum.utils.role_links import readable_links, role_node
 from manuspectrum.views.explorer_conditions import clean_html, conditions_of
 from manuspectrum.views.explorer_values import (
+    FALLBACK_LANGUAGE,
+    acronym,
     dataset_of,
     file_entries,
     label,
@@ -63,6 +65,8 @@ ROLES = {
     "doc_description": ("document", "content_of_statement"),
     "doc_type": ("document", "type"),
     "comp_zone": ("component", "location_in_document"),
+    "comp_type": ("component", "type"),
+    "comp_colour": ("component", "color_features"),
     "an_name": ("analysis", "label_of_name"),
     "technique": ("analysis", "analysis_technique_used"),
     "operators": ("analysis", "performed_by_actor"),
@@ -91,17 +95,69 @@ ROLES = {
     "ch_source": ("characterization", "source_of_statement"),
     "sample_zone": ("sample", "location_in_object_of_sampling_taking"),
 }
-FACET_KEYS = (
-    "project",
-    "technique",
-    "part",
-    "operator",
-    "year",
-    "colour",
-    "material",
-    "element",
-    "layer",
+FACET_GROUPS = (
+    ("part", ("partType", "partColour", "part")),
+    ("analysis", ("project", "technique", "operator", "year")),
+    ("characterization", ("material", "colour", "layer", "element")),
 )
+FACET_KEYS = tuple(key for _, keys in FACET_GROUPS for key in keys)
+GROUP_OF = {key: group for group, keys in FACET_GROUPS for key in keys}
+CHARACTERIZATION_KEYS = dict(FACET_GROUPS)["characterization"]
+REF_FACETS = {
+    "partType": "partTypes",
+    "partColour": "partColours",
+    "material": "materials",
+    "colour": "colours",
+    "element": "elements",
+    "layer": "layers",
+}
+CHARACTERIZATION_ROLES = {
+    "material": "material",
+    "colour": "colour",
+    "layer": "layer",
+    "element": "elements",
+}
+TECHNIQUE_PALETTE = 10
+SWATCHES = {
+    "blue": "royalblue",
+    "bleu": "royalblue",
+    "azur": "royalblue",
+    "red": "firebrick",
+    "rouge": "firebrick",
+    "vermillon": "orangered",
+    "vermilion": "orangered",
+    "green": "forestgreen",
+    "vert": "forestgreen",
+    "gold": "goldenrod",
+    "golden": "goldenrod",
+    "or": "goldenrod",
+    "dore": "goldenrod",
+    "silver": "silver",
+    "argent": "silver",
+    "argente": "silver",
+    "white": "white",
+    "blanc": "white",
+    "black": "black",
+    "noir": "black",
+    "yellow": "gold",
+    "jaune": "gold",
+    "brown": "saddlebrown",
+    "brun": "saddlebrown",
+    "marron": "saddlebrown",
+    "beige": "beige",
+    "ochre": "peru",
+    "ocre": "peru",
+    "grey": "grey",
+    "gray": "grey",
+    "gris": "grey",
+    "purple": "purple",
+    "violet": "purple",
+    "pourpre": "purple",
+    "pink": "hotpink",
+    "rose": "hotpink",
+    "orange": "darkorange",
+}
+SWATCH_FACETS = ("colour", "partColour")
 _EMPTY = (None, "", [], {})
 PAGE_SIZES = (10, 25, 50)
 DESCRIPTION_LENGTH = 220
@@ -248,8 +304,8 @@ def model_of(resource_ids):
     }
 
 
-def ancestor_terms(item_ids):
-    """``{item id: labels of its ancestors}``: a parent term found by free text brings its children (« XRF » → pXRF)."""
+def parent_chains(item_ids):
+    """``{item id: its ancestor ids, nearest first}`` in the thesaurus; an unknown item has none."""
     parent_of, frontier = {}, {str(i) for i in item_ids}
     for _ in range(8):
         if not frontier:
@@ -269,6 +325,15 @@ def ancestor_terms(item_ids):
             chain.append(current)
             current = parent_of.get(current)
         ancestors[str(item)] = chain
+    return ancestors
+
+
+def ancestor_terms(item_ids, chains=None):
+    """``{item id: labels of its ancestors}``: a parent term found by free text brings its children (« XRF » → pXRF).
+
+    *chains* is a ``parent_chains`` result the caller already holds.
+    """
+    ancestors = parent_chains(item_ids) if chains is None else chains
     labels = defaultdict(set)
     wanted = {a for chain in ancestors.values() for a in chain}
     for item, value in ListItemValue.objects.filter(
@@ -311,6 +376,90 @@ def _canvas_of(annotation):
     return None
 
 
+def colour_swatch(value):
+    """Display colour of a colour concept (``SWATCHES``), the same in every language; None when no label names one.
+
+    Labels are tried in a fixed order whatever the request language: English
+    preferred label, other preferred labels by language, then alternative
+    labels by language; the first colour word found wins.
+    """
+    entries = [
+        entry
+        for item in (value if isinstance(value, list) else [value])
+        if isinstance(item, dict)
+        for entry in item.get("labels") or []
+        if isinstance(entry, dict) and isinstance(entry.get("value"), str)
+    ]
+    entries.sort(
+        key=lambda e: (
+            e.get("valuetype_id") != "prefLabel",
+            e.get("language_id") != FALLBACK_LANGUAGE,
+            e.get("language_id") or "",
+            e["value"],
+        )
+    )
+    for entry in entries:
+        for word in re.split(r"[^a-z]+", fold(entry["value"])):
+            if word in SWATCHES:
+                return SWATCHES[word]
+    return None
+
+
+def _letters_code(text, taken):
+    letters = re.sub(r"[\W_]", "", text or "").upper() or "?"
+    for candidate in (letters[:1], letters[:2], letters[:3]):
+        if candidate not in taken:
+            return candidate
+    suffix = 2
+    while f"{letters[:1]}{suffix}" in taken:
+        suffix += 1
+    return f"{letters[:1]}{suffix}"
+
+
+def technique_marks(techniques, counts, chains):
+    """``{item id: {"code", "colour", "family"}}`` of the techniques used in the corpus, the same in every language.
+
+    *techniques* maps an item id to ``(uri, reference value)``, *counts* an
+    item id to its number of analyses, *chains* is ``parent_chains`` of the
+    ids. A technique whose ancestor is also used belongs to the family of its
+    farthest used ancestor; ``family`` is that ancestor's uri, else its own.
+    Families take the colours 1…``TECHNIQUE_PALETTE`` by number of analyses,
+    then uri; further families have none. The code is the ``acronym`` of the
+    value, else the first letters of its English label not already taken, in
+    uri order.
+    """
+    root = {}
+    for item in techniques:
+        used = [a for a in chains.get(item, []) if a in techniques]
+        root[item] = used[-1] if used else item
+    per_family = Counter()
+    for item, family in root.items():
+        per_family[family] += counts.get(item, 0)
+    ordered = sorted(per_family, key=lambda f: (-per_family[f], techniques[f][0]))
+    colour = {
+        f: rank + 1 if rank < TECHNIQUE_PALETTE else None
+        for rank, f in enumerate(ordered)
+    }
+    by_uri = sorted(techniques, key=lambda item: (techniques[item][0], item))
+    codes = {item: acronym(techniques[item][1]) for item in by_uri}
+    taken = {code for code in codes.values() if code}
+    for item in by_uri:
+        if not codes[item]:
+            refs = value_refs(techniques[item][1], FALLBACK_LANGUAGE)
+            codes[item] = _letters_code(
+                refs[0]["label"]["value"] if refs else "", taken
+            )
+            taken.add(codes[item])
+    return {
+        item: {
+            "code": codes[item],
+            "colour": colour[root[item]],
+            "family": techniques[root[item]][0],
+        }
+        for item in techniques
+    }
+
+
 def corpus_rows(user, language, chains=None):
     """One row per visible analysis: what search filters, counts and lists.
 
@@ -339,6 +488,20 @@ def corpus_rows(user, language, chains=None):
     characterizations = Values(
         visible.characterizations, ["material", "colour", "layer", "elements"], user
     )
+    value_sets = {
+        c: {
+            key: {
+                ref["uri"]
+                for v in characterizations.get(c, role)
+                for ref in value_refs(v, language)
+            }
+            for key, role in CHARACTERIZATION_ROLES.items()
+        }
+        for c in visible.characterizations
+    }
+    parts = Values(
+        {c for _, c in chains.values() if c}, ["comp_type", "comp_colour"], user
+    )
     cited_by = defaultdict(list)
     for characterization, evidence in visible.evidence.items():
         for analysis in evidence:
@@ -349,12 +512,15 @@ def corpus_rows(user, language, chains=None):
     )
     analysis_index = GraphIndex.for_slug("analysis")
     analysis_model = analysis_index.name if analysis_index else {}
-    technique_ids = {
-        ref["id"]
-        for a in analyses
-        for ref in value_refs(values.first(a, "technique"), language)
-    }
-    ancestors = ancestor_terms(technique_ids)
+    used, per_technique = {}, Counter()
+    for a in analyses:
+        value = values.first(a, "technique")
+        for ref in value_refs(value, language)[:1]:
+            used.setdefault(ref["id"], (ref["uri"], value))
+            per_technique[ref["id"]] += 1
+    parents = parent_chains(used)
+    marks = technique_marks(used, per_technique, parents)
+    ancestors = ancestor_terms(used, parents)
     related = {d for d, _ in chains.values()} | {c for _, c in chains.values() if c}
     label_of = names(related, language, user)
     rows = []
@@ -362,7 +528,9 @@ def corpus_rows(user, language, chains=None):
         document, component = chains[a]
         technique_value = values.first(a, "technique")
         techniques = value_refs(technique_value, language)
-        technique = techniques[0] if techniques else None
+        technique = (
+            {**techniques[0], **marks[techniques[0]["id"]]} if techniques else None
+        )
         cited = sorted(cited_by[a])
 
         def refs_of(key):
@@ -422,6 +590,34 @@ def corpus_rows(user, language, chains=None):
                 "colours": _unique(colours),
                 "layers": _unique(refs_of("layer")),
                 "elements": _unique(refs_of("elements")),
+                "characterizations": [value_sets[c] for c in cited],
+                "partTypes": _unique(
+                    [
+                        r
+                        for v in (
+                            parts.get(component, "comp_type") if component else []
+                        )
+                        for r in value_refs(v, language)
+                    ]
+                ),
+                "partColours": _unique(
+                    [
+                        r
+                        for v in (
+                            parts.get(component, "comp_colour") if component else []
+                        )
+                        for r in value_refs(v, language)
+                    ]
+                ),
+                "swatches": {
+                    ref["uri"]: colour_swatch(item)
+                    for v in [
+                        *(parts.get(component, "comp_colour") if component else []),
+                        *(v for c in cited for v in characterizations.get(c, "colour")),
+                    ]
+                    for item in (v if isinstance(v, list) else [v])
+                    for ref in value_refs(item, language)
+                },
                 "dataKinds": kinds,
                 "unpublished": a in visible.unpublished,
                 "text": fold(" ".join(texts)),
@@ -481,13 +677,7 @@ def _facet_values(row, key):
         return [str(row["year"])] if row["year"] else []
     if key in ("project", "operator"):
         return row[f"{key}s"]
-    plural = {
-        "material": "materials",
-        "colour": "colours",
-        "element": "elements",
-        "layer": "layers",
-    }[key]
-    return [ref["uri"] for ref in row[plural]]
+    return [ref["uri"] for ref in row[REF_FACETS[key]]]
 
 
 def _facet_labels(rows, language, user):
@@ -495,12 +685,7 @@ def _facet_labels(rows, language, user):
     for row in rows:
         if row["technique"]:
             labels["technique"][row["technique"]["uri"]] = row["technique"]["label"]
-        for key, plural in (
-            ("material", "materials"),
-            ("colour", "colours"),
-            ("element", "elements"),
-            ("layer", "layers"),
-        ):
+        for key, plural in REF_FACETS.items():
             for ref in row[plural]:
                 labels[key][ref["uri"]] = ref["label"]
         if row["year"]:
@@ -545,11 +730,16 @@ def analysis_hit(row, label_of):
 
 
 def row_filter(rows, query):
-    """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe)``.
+    """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe, carried)``.
 
-    ``keep(row, skip=None)`` is OR inside a facet and AND across facets, and
-    the folded free text ``needle``; ``skip`` leaves one facet out (open facet
-    counts). ``universe`` holds, per facet, the values the rows carry; a
+    ``keep(row, skip=None)`` is OR inside a facet, AND across facets, and the
+    folded free text ``needle``; ``skip`` leaves one facet out (open facet
+    counts). The facets of the characterization group hold on one identified
+    material: a row is kept when one characterization citing it carries a
+    selected value of each of them. ``carried(row, key)`` is the set of
+    values of *key* a row counts for under the other selections: in that
+    group, the values of the characterizations that meet the other facets of
+    the group. ``universe`` holds, per facet, the values the rows carry; a
     selected value outside it is ignored (§3.3).
     """
     filters, page = parse_filters(query)
@@ -561,17 +751,42 @@ def row_filter(rows, query):
     }
     needle = fold(filters["q"])
 
+    def meeting(row, skip):
+        wanted = [
+            (key, set(active[key]))
+            for key in CHARACTERIZATION_KEYS
+            if key != skip and active[key]
+        ]
+        if not wanted:
+            return None
+        return [
+            c
+            for c in row["characterizations"]
+            if all(c[key] & values for key, values in wanted)
+        ]
+
     def keep(row, skip=None):
         for key in FACET_KEYS:
             if (
                 key != skip
+                and key not in CHARACTERIZATION_KEYS
                 and active[key]
                 and not set(_facet_values(row, key)) & set(active[key])
             ):
                 return False
+        if meeting(row, skip) == []:
+            return False
         return not needle or needle in row["text"]
 
-    return keep, active, filters, page, needle, universe
+    def carried(row, key):
+        if not keep(row, key):
+            return set()
+        found = meeting(row, key) if key in CHARACTERIZATION_KEYS else None
+        if found is None:
+            return set(_facet_values(row, key))
+        return set().union(*(c[key] for c in found))
+
+    return keep, active, filters, page, needle, universe, carried
 
 
 def search_payload(query, user, language):
@@ -594,7 +809,7 @@ def search_payload(query, user, language):
     whether listed or not (0 in the other cases).
     """
     all_rows = corpus_rows(user, language)
-    keep, active, filters, page, needle, universe = row_filter(all_rows, query)
+    keep, active, filters, page, needle, universe, counted = row_filter(all_rows, query)
     scope = filters["document"]
     rows = (
         all_rows if scope is None else [r for r in all_rows if r["document"] == scope]
@@ -602,6 +817,16 @@ def search_payload(query, user, language):
 
     matching = [row for row in rows if keep(row)]
     labels = _facet_labels(all_rows, language, user)
+    marks = {
+        row["technique"]["uri"]: {
+            k: row["technique"][k] for k in ("code", "colour", "family")
+        }
+        for row in all_rows
+        if row["technique"]
+    }
+    swatches = {
+        uri: swatch for row in all_rows for uri, swatch in row["swatches"].items()
+    }
     facets = []
     for key in FACET_KEYS:
         if not universe[key]:
@@ -611,15 +836,15 @@ def search_payload(query, user, language):
             if scope is None
             else {v for row in rows for v in _facet_values(row, key)}
         )
-        counts = Counter(
-            v for row in rows if keep(row, key) for v in set(_facet_values(row, key))
-        )
+        counts = Counter(v for row in rows for v in counted(row, key))
         values = [
             {
                 "id": v,
                 "label": labels[key][v],
                 "count": counts[v],
                 "selected": v in active[key],
+                "mark": marks.get(v) if key == "technique" else None,
+                "swatch": swatches.get(v) if key in SWATCH_FACETS else None,
             }
             for v in carried | set(active[key])
             if counts[v] > 0 or v in active[key]
@@ -633,7 +858,7 @@ def search_payload(query, user, language):
                 else (lambda item: (fold(item["label"]["value"]), item["id"]))
             )
         )
-        facets.append({"key": key, "values": values})
+        facets.append({"key": key, "group": GROUP_OF[key], "values": values})
 
     visible = visible_set(user)
     label_of = names(

@@ -93,6 +93,35 @@ def value_refs(value, language):
     return refs
 
 
+ACRONYM = re.compile(r"^\S{1,12}$")
+
+
+def acronym(value):
+    """Short code of a ``reference`` value from its alternative labels, the same in every language.
+
+    Candidates are the alternative labels without whitespace of at most 12
+    characters. The first candidate of the first language (by code) that every
+    language carries wins, else the first English candidate, else the first
+    candidate of the first language; None without candidates.
+    """
+    found = {}
+    for item in _reference_items(value)[:1]:
+        for entry in item.get("labels") or []:
+            if not isinstance(entry, dict) or entry.get("valuetype_id") != "altLabel":
+                continue
+            text = entry.get("value")
+            text = text.strip() if isinstance(text, str) else ""
+            if ACRONYM.match(text):
+                candidates = found.setdefault(entry.get("language_id") or "", [])
+                if text not in candidates:
+                    candidates.append(text)
+    if not found:
+        return None
+    first = found[sorted(found)[0]]
+    shared = [t for t in first if all(t in texts for texts in found.values())]
+    return (shared or found.get(FALLBACK_LANGUAGE) or first)[0]
+
+
 def reference_terms(value):
     """Every label of a ``reference`` value, preferred and alternative, in every language."""
     return {

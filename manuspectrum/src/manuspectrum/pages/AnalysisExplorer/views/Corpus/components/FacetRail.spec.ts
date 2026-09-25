@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 
 import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue";
 
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     facet,
+    facetValue,
     label,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
@@ -14,6 +17,10 @@ import type { Facet } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 function mountRail(props: InstanceType<typeof FacetRail>["$props"]) {
     return mount(FacetRail, { props, global: { plugins: [PrimeVue] } });
 }
+
+beforeEach(() => {
+    setActivePinia(createPinia());
+});
 
 function checkedIds(wrapper: ReturnType<typeof mount>): string[] {
     return wrapper
@@ -99,52 +106,125 @@ describe("FacetRail", () => {
         expect(wrapper.findAll(".facet")[0].text()).toContain("No match");
     });
 
-    it("puts a colour dot on the colour names it knows and none on others", () => {
+    it("draws the swatch the server gives a colour and none without one", () => {
         const colour: Facet = {
             key: "colour",
+            group: "characterization",
             values: [
-                { id: "c1", label: label("Bleu"), count: 2, selected: false },
-                {
-                    id: "c2",
-                    label: label("Polychrome"),
-                    count: 1,
-                    selected: false,
-                },
+                facetValue("c1", "Azzurro", { swatch: "royalblue" }),
+                facetValue("c2", "Polychrome"),
             ],
         };
         const wrapper = mountRail({ facets: [colour], selected: {} });
         const rows = wrapper.findAll(".value");
-        expect(rows[0].find(".swatch").exists()).toBe(true);
+        expect(rows[0].find(".swatch").attributes("style")).toContain(
+            "royalblue",
+        );
         expect(rows[1].find(".swatch").exists()).toBe(false);
     });
 
-    it("gives each technique the folio colour it is drawn in", () => {
-        const technique = facet("technique", 2);
-        const wrapper = mountRail({
-            facets: [technique],
-            selected: {},
-            techniqueColours: new Map([
-                ["technique-0", 3],
-                ["technique-1", null],
-            ]),
-        });
+    it("gives each technique the colour of its mark", () => {
+        const technique: Facet = {
+            key: "technique",
+            group: "analysis",
+            values: [
+                facetValue("t:xrf", "XRF", {
+                    mark: { code: "XRF", colour: 3, family: "t:xrf" },
+                }),
+                facetValue("t:om", "OM", {
+                    mark: { code: "OM", colour: null, family: "t:om" },
+                }),
+            ],
+        };
+        const wrapper = mountRail({ facets: [technique], selected: {} });
         const rows = wrapper.findAll(".value");
         expect(rows[0].find(".dot").classes()).toContain("dot--tech-3");
         expect(rows[1].find(".dot").classes()).toContain("dot--ink");
     });
 
+    it("shows the part, analysis and identified material groups in that order, each folding", async () => {
+        const wrapper = mountRail({
+            facets: [
+                facet("material", 1),
+                facet("technique", 1),
+                facet("partType", 1),
+            ],
+            selected: {},
+        });
+        const titles = wrapper.findAll(".group-title button");
+        expect(titles.map((title) => title.text())).toEqual([
+            "▾Studied part",
+            "▾Analysis",
+            "▾Identified material",
+        ]);
+        expect(titles[1].attributes("aria-expanded")).toBe("true");
+        await titles[1].trigger("click");
+        expect(useExplorerStore().collapsedGroups).toEqual(["analysis"]);
+        expect(titles[1].attributes("aria-expanded")).toBe("false");
+        const body = wrapper.find(`#${titles[1].attributes("aria-controls")}`);
+        expect(body.isVisible()).toBe(false);
+    });
+
+    it("shows one Colour facet whose toggle picks the level the ticks apply to", async () => {
+        const wrapper = mountRail({
+            facets: [facet("partColour", 2), facet("colour", 3)],
+            selected: { partColour: ["partColour-1"] },
+        });
+        expect(wrapper.findAll(".facet")).toHaveLength(1);
+        expect(wrapper.find(".facet legend").text()).toBe("Colour");
+        const levels = wrapper.findAll(".level-button");
+        expect(
+            levels.map((level) => level.find(".level-label").text()),
+        ).toEqual(["Seen on the part", "Identified by analysis"]);
+        expect(levels[1].attributes("aria-pressed")).toBe("true");
+        expect(wrapper.findAll(".value")).toHaveLength(3);
+        expect(levels[0].find(".ticks").text()).toBe("1");
+        const hint = wrapper.find(
+            `#${levels[0].attributes("aria-describedby")}`,
+        );
+        expect(hint.text()).toBe(
+            "Colours described on the studied part, even without analysis",
+        );
+
+        await levels[0].trigger("click");
+
+        expect(useExplorerStore().colourLevel).toBe("partColour");
+        expect(wrapper.findAll(".value")).toHaveLength(2);
+        expect(
+            wrapper.findAll<HTMLInputElement>(".value input")[1].element
+                .checked,
+        ).toBe(true);
+        await wrapper.findAll(".value input")[0].setValue(true);
+        expect(wrapper.emitted("change")?.[0]).toEqual([
+            "partColour",
+            ["partColour-1", "partColour-0"],
+        ]);
+    });
+
+    it("names the ticked values and their colour level on the facet title", () => {
+        const wrapper = mountRail({
+            facets: [facet("partColour", 2), facet("colour", 2)],
+            selected: { partColour: ["partColour-0"], colour: ["colour-1"] },
+        });
+        const fieldset = wrapper.find(".facet");
+        const summary = wrapper.find(
+            `#${fieldset.attributes("aria-describedby")}`,
+        );
+        expect(summary.text()).toBe(
+            "Selection: partColour 0 (seen on the part) · colour 1 (identified by analysis)",
+        );
+        expect(fieldset.find(".title-text").attributes("tabindex")).toBe("0");
+    });
+
     it("keeps the whole label for a label cut on screen", () => {
         const project: Facet = {
             key: "project",
+            group: "analysis",
             values: [
-                {
-                    id: "p1",
-                    label: label(
-                        "ATRAMENTA — Encres ferrogalliques et carbonées",
-                    ),
-                    count: 2,
-                    selected: false,
-                },
+                facetValue(
+                    "p1",
+                    "ATRAMENTA — Encres ferrogalliques et carbonées",
+                ),
             ],
         };
         const wrapper = mountRail({ facets: [project], selected: {} });

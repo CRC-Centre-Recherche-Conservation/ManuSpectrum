@@ -4,11 +4,14 @@ Usage:
     python manage.py test tests.test_explorer_service --settings="tests.test_settings"
 """
 
+from uuid import NAMESPACE_URL, uuid5
+
 from django.http import QueryDict
 from django.test import SimpleTestCase
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
+from manuspectrum.views import explorer_service
 from manuspectrum.views.explorer_service import (
     ancestor_terms,
     corpus_rows,
@@ -173,6 +176,9 @@ class RowFilterTests(SimpleTestCase):
                 "colours": [],
                 "elements": [],
                 "layers": [],
+                "partTypes": [],
+                "partColours": [],
+                "characterizations": [],
                 "text": "ms 59 xrf",
             },
             {
@@ -185,6 +191,9 @@ class RowFilterTests(SimpleTestCase):
                 "colours": [],
                 "elements": [],
                 "layers": [],
+                "partTypes": [],
+                "partColours": [],
+                "characterizations": [],
                 "text": "ms 59 fors",
             },
         ]
@@ -431,3 +440,297 @@ class DocumentHitTests(ServiceCase):
         payload = search_payload(self.query("grain=documents"), self.anonymous, "en")
         hit = next(r for r in payload["results"] if r["id"] == str(other.pk))
         self.assertEqual(hit["shelfmark"]["value"], "MS 12")
+
+
+LEAD_WHITE, RED, LAPIS = (
+    "http://vocab/lead-white",
+    "http://vocab/red",
+    "http://vocab/lapis",
+)
+ILLUMINATION, INITIAL, PART_BLUE = (
+    "http://vocab/illumination",
+    "http://vocab/initial",
+    "http://vocab/part-blue",
+)
+
+
+class LevelCase(ServiceCase):
+    """The open analysis is cited by « Azurite, blue » and by « Lead white, red »; its component is a blue illumination."""
+
+    facet = FacetTests.facet
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ref = cls.reference_value
+        cls.second = cls.new_resource("characterization", "Lead white, red ground")
+        cls.tile(cls.second, "object_observed", cls.refs(cls.components["open"]))
+        cls.tile(cls.second, "evidence_analyses", cls.refs(cls.analyses["open"]))
+        cls.tile(
+            cls.second,
+            "identified_material",
+            ref(LEAD_WHITE, "Lead white", "Blanc de plomb"),
+        )
+        cls.tile(cls.second, "color_aspect", ref(RED, "Red", "Rouge"))
+        cls.tile(
+            cls.components["open"],
+            "type",
+            ref(ILLUMINATION, "Illumination", "Enluminure"),
+        )
+        cls.tile(
+            cls.components["open"], "color_features", ref(PART_BLUE, "Blue", "Bleu")
+        )
+        cls.tile(
+            cls.components["embargoed"], "type", ref(INITIAL, "Initial", "Lettrine")
+        )
+
+    def ids(self, payload):
+        return {r["id"] for r in payload["results"]}
+
+    def search(self, text):
+        return search_payload(self.query(text), self.anonymous, "en")
+
+
+class CharacterizationLevelTests(LevelCase):
+    def test_two_values_of_different_characterizations_do_not_combine(self):
+        payload = self.search(f"material={LEAD_WHITE}&colour={BLUE}")
+
+        self.assertEqual(self.ids(payload), set())
+
+    def test_two_values_of_one_characterization_combine(self):
+        payload = self.search(f"material={AZURITE}&colour={BLUE}")
+
+        self.assertEqual(
+            self.ids(payload),
+            {str(self.analyses["open"].pk), str(self.analyses["on_document"].pk)},
+        )
+
+    def test_counts_in_the_characterization_group_follow_the_same_characterization(
+        self,
+    ):
+        payload = self.search(f"colour={BLUE}")
+
+        materials = self.facet(payload, "material")
+        self.assertEqual(materials[AZURITE]["count"], 2)
+        self.assertNotIn(LEAD_WHITE, materials)
+        colours = self.facet(payload, "colour")
+        self.assertEqual((colours[BLUE]["count"], colours[RED]["count"]), (2, 1))
+
+    def test_the_document_match_follows_the_same_characterization(self):
+        rows = {
+            r["id"]: r
+            for r in corpus_rows(self.anonymous, "en")
+            if r["document"] == str(self.documents["open"].pk)
+        }
+        keep, *_ = row_filter(
+            list(rows.values()), self.query(f"material={LEAD_WHITE}&colour={BLUE}")
+        )
+        self.assertFalse(keep(rows[str(self.analyses["open"].pk)]))
+        keep, *_ = row_filter(
+            list(rows.values()), self.query(f"material={LEAD_WHITE}&colour={RED}")
+        )
+        self.assertTrue(keep(rows[str(self.analyses["open"].pk)]))
+
+    def test_free_text_matches_any_characterization(self):
+        payload = self.search("q=lead+white")
+
+        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+
+
+class PartLevelTests(LevelCase):
+    def test_part_type_and_part_colour_filter_the_analyses_of_the_part(self):
+        payload = self.search(f"partType={ILLUMINATION}&partColour={PART_BLUE}")
+
+        self.assertEqual(
+            self.ids(payload),
+            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
+        )
+        types = self.facet(payload, "partType")
+        self.assertEqual(types[ILLUMINATION]["count"], 2)
+        self.assertEqual(types[ILLUMINATION]["label"]["value"], "Illumination")
+
+    def test_part_colour_and_identified_colour_are_two_facets(self):
+        payload = self.search(f"partColour={PART_BLUE}&colour={RED}")
+
+        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+
+    def test_each_facet_names_its_group_in_rail_order(self):
+        payload = self.search("")
+
+        self.assertEqual(
+            [(f["key"], f["group"]) for f in payload["facets"]],
+            [
+                ("partType", "part"),
+                ("partColour", "part"),
+                ("part", "part"),
+                ("project", "analysis"),
+                ("technique", "analysis"),
+                ("operator", "analysis"),
+                ("year", "analysis"),
+                ("material", "characterization"),
+                ("colour", "characterization"),
+            ],
+        )
+
+    def test_a_colour_concept_has_one_swatch_in_every_language(self):
+        gilded = "http://vocab/gilded"
+        self.tile(
+            self.characterization,
+            "color_aspect",
+            self.reference_value(gilded, "Gilded", "Doré"),
+        )
+        swatches = {
+            language: {
+                key: {v: facet[v]["swatch"] for v in facet}
+                for key in ("colour", "partColour", "material")
+                for facet in [
+                    self.facet(
+                        search_payload(self.query(), self.anonymous, language), key
+                    )
+                ]
+            }
+            for language in ("en", "fr")
+        }
+
+        self.assertEqual(swatches["en"], swatches["fr"])
+        self.assertEqual(swatches["en"]["colour"][gilded], "goldenrod")
+        self.assertEqual(swatches["en"]["colour"][BLUE], "royalblue")
+        self.assertEqual(swatches["en"]["partColour"][PART_BLUE], "royalblue")
+        self.assertEqual(set(swatches["en"]["material"].values()), {None})
+
+    def test_the_french_label_of_a_part_type(self):
+        payload = search_payload(self.query(), self.anonymous, "fr")
+
+        self.assertEqual(
+            self.facet(payload, "partType")[ILLUMINATION]["label"]["value"],
+            "Enluminure",
+        )
+
+
+XRF_FAMILY, MICRO_XRF, RAMAN = (
+    "http://vocab/xrf",
+    "http://vocab/micro-xrf",
+    "http://vocab/raman",
+)
+
+
+class TechniqueMarkTests(ServiceCase):
+    """pXRF and µXRF are children of XRF in the thesaurus; Raman has no parent used in the corpus."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        vocab = List.objects.create(name="techniques")
+        items = {}
+        for order, uri in enumerate((XRF_FAMILY, XRF, MICRO_XRF, RAMAN, FORS)):
+            items[uri] = ListItem.objects.create(
+                id=uuid5(NAMESPACE_URL, uri), list=vocab, uri=uri, sortorder=order
+            )
+        for child in (XRF, MICRO_XRF):
+            items[child].parent = items[XRF_FAMILY]
+            items[child].save()
+        ref = cls.reference_value
+        cls.more = {
+            "xrf": cls.new_resource("analysis", "X10"),
+            "micro": cls.new_resource("analysis", "X11"),
+            "raman": cls.new_resource("analysis", "R01"),
+            "raman_open": cls.new_resource("analysis", "R02"),
+        }
+        for key, analysis in cls.more.items():
+            component = "open" if key == "raman_open" else "embargoed"
+            cls.tile(
+                analysis, "component_observed", cls.refs(cls.components[component])
+            )
+        cls.tile(
+            cls.more["xrf"],
+            "analysis_technique_used",
+            ref(XRF_FAMILY, "X-ray fluorescence", "Fluorescence X", alt="XRF"),
+        )
+        cls.tile(
+            cls.more["micro"],
+            "analysis_technique_used",
+            ref(
+                MICRO_XRF, "X-ray microfluorescence", "Microfluorescence X", alt="µXRF"
+            ),
+        )
+        for key in ("raman", "raman_open"):
+            cls.tile(
+                cls.more[key],
+                "analysis_technique_used",
+                ref(RAMAN, "Raman spectrometry", "Spectrométrie Raman"),
+            )
+        cls.tile(
+            cls.analyses["draft"],
+            "analysis_technique_used",
+            ref(XRF, "Portable XRF", "XRF portable", alt="pXRF"),
+        )
+
+    def marks(self, language="en"):
+        return {
+            r["technique"]["uri"]: {
+                k: r["technique"][k] for k in ("code", "colour", "family")
+            }
+            for r in corpus_rows(self.anonymous, language)
+            if r["technique"]
+        }
+
+    def test_the_code_is_the_acronym_and_the_family_shares_one_colour(self):
+        marks = self.marks()
+
+        self.assertEqual(
+            [marks[u]["code"] for u in (XRF_FAMILY, XRF, MICRO_XRF)],
+            ["XRF", "pXRF", "µXRF"],
+        )
+        self.assertEqual(
+            {marks[u]["colour"] for u in (XRF_FAMILY, XRF, MICRO_XRF)}, {1}
+        )
+        self.assertEqual(
+            {marks[u]["family"] for u in (XRF_FAMILY, XRF, MICRO_XRF)}, {XRF_FAMILY}
+        )
+        self.assertEqual(marks[RAMAN]["family"], RAMAN)
+
+    def test_a_technique_without_acronym_takes_first_letters_unique_in_the_corpus(
+        self,
+    ):
+        marks = self.marks()
+
+        codes = [m["code"] for m in marks.values()]
+        self.assertEqual(len(codes), len(set(codes)))
+        self.assertTrue(marks[RAMAN]["code"].startswith("R"))
+        self.assertTrue(marks[FORS]["code"].startswith("R"))
+
+    def test_marks_are_the_same_in_every_language(self):
+        self.assertEqual(self.marks("en"), self.marks("fr"))
+
+    def test_marks_are_the_same_in_two_documents(self):
+        def scoped(document):
+            payload = search_payload(
+                self.query(f"document={document.pk}"), self.anonymous, "en"
+            )
+            return {
+                r["technique"]["uri"]: r["technique"]
+                for r in payload["results"]
+                if r["technique"]
+            }
+
+        first = scoped(self.documents["open"])
+        second = scoped(self.documents["embargoed"])
+        self.assertEqual(first[RAMAN], second[RAMAN])
+
+    def test_families_take_colours_by_analysis_count_then_uri(self):
+        marks = self.marks()
+
+        self.assertEqual(
+            [marks[u]["colour"] for u in (XRF_FAMILY, RAMAN, FORS)], [1, 2, 3]
+        )
+        self.assertGreaterEqual(explorer_service.TECHNIQUE_PALETTE, 3)
+
+    def test_the_technique_facet_value_carries_the_same_mark(self):
+        payload = search_payload(self.query(), self.anonymous, "fr")
+        rows = self.marks("fr")
+
+        facet = next(f for f in payload["facets"] if f["key"] == "technique")
+        for value in facet["values"]:
+            self.assertEqual(value["mark"], rows[value["id"]])
+        other = next(f for f in payload["facets"] if f["key"] == "project")
+        self.assertEqual({v["mark"] for v in other["values"]}, {None})

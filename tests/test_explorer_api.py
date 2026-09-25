@@ -36,6 +36,14 @@ class SearchRouteTests(ServiceCase):
         assert_shape(self, response.json(), "SearchResponse")
         for hit in response.json()["results"]:
             assert_shape(self, hit, "AnalysisHit")
+        for facet in response.json()["facets"]:
+            assert_shape(self, facet, "Facet")
+            for value in facet["values"]:
+                assert_shape(self, value, "FacetValue")
+        techniques = [r["technique"] for r in response.json()["results"]]
+        self.assertTrue(any(techniques))
+        for technique in filter(None, techniques):
+            assert_shape(self, technique, "Technique")
         again = self.client.get(
             "/en/api/explorer/search", HTTP_IF_NONE_MATCH=response["ETag"]
         )
@@ -211,6 +219,29 @@ class ReadRightsTests(ReadRightsCase):
         self.assertEqual({r["technique"] for r in search["results"]}, {None})
         self.assertIsNone(payload["technique"])
         self.assertNotIn("Portable XRF", str(payload))
+
+    def test_a_part_nodegroup_the_visitor_cannot_read_leaves_its_facet_out(self):
+        component = self.components["open"]
+        self.tile(
+            component,
+            "type",
+            self.reference_value("http://vocab/illum", "Illumination"),
+        )
+        self.tile(
+            component,
+            "color_features",
+            self.reference_value("http://vocab/part-blue", "Blue"),
+        )
+        shown = self.client.get("/en/api/explorer/search").json()
+        self.assertIn("partType", [f["key"] for f in shown["facets"]])
+
+        self.deny(("component", "type"), ("component", "color_features"))
+        search = self.client.get("/en/api/explorer/search").json()
+
+        keys = [f["key"] for f in search["facets"]]
+        self.assertNotIn("partType", keys)
+        self.assertNotIn("partColour", keys)
+        self.assertNotIn("Illumination", str(search))
 
     def test_a_zone_nodegroup_the_visitor_cannot_read_gives_no_zone(self):
         self.tile(

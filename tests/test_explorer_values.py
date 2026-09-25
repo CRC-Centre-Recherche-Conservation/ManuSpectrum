@@ -9,6 +9,7 @@ from django.utils import translation
 
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.views.explorer_values import (
+    acronym,
     axis_key,
     dataset_of,
     file_entries,
@@ -291,3 +292,40 @@ class FileEntryTests(SimpleTestCase):
 
         self.assertTrue(viewer["xLabel"])
         self.assertTrue(viewer["yLabel"])
+
+
+def _labelled(*labels):
+    return [
+        {
+            "uri": "http://vocab/t",
+            "labels": [
+                {"value": v, "language_id": lang, "valuetype_id": kind}
+                for kind, lang, v in labels
+            ],
+        }
+    ]
+
+
+class AcronymTests(SimpleTestCase):
+    def test_the_acronym_every_language_shares_wins(self):
+        value = _labelled(
+            ("altLabel", "fr", "DRX"),
+            ("altLabel", "fr", "XRD"),
+            ("altLabel", "en", "XRD"),
+            ("prefLabel", "en", "X-ray diffraction"),
+        )
+
+        self.assertEqual(acronym(value), "XRD")
+
+    def test_without_a_shared_acronym_the_english_one_wins(self):
+        value = _labelled(("altLabel", "fr", "SMA"), ("altLabel", "en", "AMS"))
+
+        self.assertEqual(acronym(value), "AMS")
+
+    def test_a_long_alternative_label_is_not_an_acronym(self):
+        value = _labelled(
+            ("altLabel", "fr", "Spectrométrie de Masse par Accélérateur (SMA)"),
+            ("prefLabel", "en", "accelerator mass spectrometry"),
+        )
+
+        self.assertIsNone(acronym(value))

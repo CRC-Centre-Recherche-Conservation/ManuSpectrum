@@ -78,7 +78,8 @@
     --spectral-6: #8b5cf6;
 
     // Analysis Explorer (spec §10.1). Series colours are the compared items
-    // A1…A8; technique colours are drawn on images with a white outline.
+    // A1…A8; technique colours are drawn on images with a white outline and
+    // carry their code in --stage (contrast ≥ 6:1 for each hue).
     --series-1: #1d4ed8;
     --series-2: #b45309;
     --series-3: #6d28d9;
@@ -93,6 +94,10 @@
     --tech-4: #4fd1a5;
     --tech-5: #f87171;
     --tech-6: #38bdf8;
+    --tech-7: #facc15;
+    --tech-8: #f472b6;
+    --tech-9: #a3e635;
+    --tech-10: #94a3b8;
     --stage: #1c1b26;
     --map-sea: #e4ebf1;
     --map-land: #f4f0e7;

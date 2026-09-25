@@ -9,8 +9,8 @@ import {
     characterization,
     label,
     sample,
+    technique,
     uuid,
-    valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 function mountList(props: Record<string, unknown>) {
@@ -36,7 +36,7 @@ describe("OnThisPage", () => {
     it("groups the analyses of the page by technique", () => {
         const annotations = [
             annotation(1),
-            annotation(2, { technique: valueRef("t:fors", "FORS") }),
+            annotation(2, { technique: technique("t:fors", "FORS", 2) }),
             annotation(3),
         ];
         const wrapper = mountList({ annotations });

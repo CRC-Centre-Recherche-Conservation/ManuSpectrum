@@ -9,7 +9,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
-import type { FacetKey } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    FacetGroup,
+    FacetKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     BasketAddResult,
     BasketItem,
@@ -24,6 +27,7 @@ import type {
     FolioView,
     ItemKey,
     LayerToggles,
+    ColourLevel,
     ListFilterKey,
     Overlay,
     PageSize,
@@ -35,6 +39,8 @@ import type {
 export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
 
 export const LIST_FILTER_KEYS: readonly ListFilterKey[] = [
+    "partType",
+    "partColour",
     "technique",
     "part",
     "material",
@@ -57,6 +63,8 @@ export function emptyFilters(): Filters {
         grain: "documents",
         empty: false,
         size: PAGE_SIZES[0],
+        partType: [],
+        partColour: [],
         technique: [],
         part: [],
         material: [],
@@ -144,6 +152,12 @@ export const useExplorerStore = defineStore("explorer", () => {
         tools: [],
     });
     const session = ref<{ connected: boolean }>({ connected: false });
+    /** Rail groups folded to their heading; not in the address. */
+    const collapsedGroups = ref<FacetGroup[]>([]);
+    /** Which colour facet the rail's Colour toggle shows; not in the address. */
+    const colourLevel = ref<ColourLevel>("colour");
+    /** Whether the folio legend is unfolded; folded when the explorer opens. */
+    const legendOpen = ref(false);
     let toolCounter = 0;
 
     const basketFree = computed(() => BASKET_LIMIT - basket.value.length);
@@ -247,6 +261,20 @@ export const useExplorerStore = defineStore("explorer", () => {
         } else {
             setFilter(key, ids);
         }
+    }
+
+    function toggleGroup(group: FacetGroup): void {
+        collapsedGroups.value = collapsedGroups.value.includes(group)
+            ? collapsedGroups.value.filter((entry) => entry !== group)
+            : [...collapsedGroups.value, group];
+    }
+
+    function setColourLevel(level: ColourLevel): void {
+        colourLevel.value = level;
+    }
+
+    function setLegendOpen(open: boolean): void {
+        legendOpen.value = open;
     }
 
     function setLayer(key: keyof LayerToggles, on: boolean): void {
@@ -389,6 +417,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         basket,
         compare,
         session,
+        collapsedGroups,
+        colourLevel,
+        legendOpen,
         basketFree,
         activeFilterCount,
         setFilter,
@@ -402,6 +433,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         focusOn,
         setFolioView,
         setLayer,
+        toggleGroup,
+        setColourLevel,
+        setLegendOpen,
         addToBasket,
         addManyToBasket,
         removeFromBasket,

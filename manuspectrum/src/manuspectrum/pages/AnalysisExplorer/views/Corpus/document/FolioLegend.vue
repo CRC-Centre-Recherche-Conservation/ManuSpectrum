@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, useId } from "vue";
+import { useId } from "vue";
 import { useGettext } from "vue3-gettext";
+
+import { techniqueClass } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
@@ -12,19 +15,15 @@ export interface LegendEntry {
     count: number;
 }
 
-/** The techniques drawn on the page, with the number of analyses of each; folds to its title, folded at first when `startOpen` is false. */
-const props = withDefaults(
-    defineProps<{ entries: LegendEntry[]; startOpen?: boolean }>(),
-    { startOpen: true },
-);
+/** The techniques drawn on the page, with the number of analyses of each; folds to its title, folded when the explorer opens (state in the store). */
+const props = defineProps<{ entries: LegendEntry[] }>();
 
+const store = useExplorerStore();
 const { $gettext } = useGettext();
 const listId = useId();
 
-const open = ref(props.startOpen);
-
 function toggle(): void {
-    open.value = !open.value;
+    store.setLegendOpen(!store.legendOpen);
 }
 </script>
 
@@ -37,18 +36,18 @@ function toggle(): void {
             type="button"
             class="toggle"
             :aria-controls="listId"
-            :aria-expanded="open ? 'true' : 'false'"
+            :aria-expanded="store.legendOpen ? 'true' : 'false'"
             @click="toggle"
         >
             <span>{{ $gettext("Techniques on this page") }}</span>
             <span
                 class="chevron"
                 aria-hidden="true"
-                >{{ open ? "▾" : "▸" }}</span
+                >{{ store.legendOpen ? "▾" : "▸" }}</span
             >
         </button>
         <ul
-            v-show="open"
+            v-show="store.legendOpen"
             :id="listId"
             class="entries"
         >
@@ -59,11 +58,7 @@ function toggle(): void {
                 <span
                     class="code"
                     aria-hidden="true"
-                    :class="
-                        entry.colour
-                            ? `code--tech-${entry.colour}`
-                            : 'code--ink'
-                    "
+                    :class="techniqueClass('code', entry.colour)"
                 >
                     {{ entry.code }}
                 </span>
@@ -162,6 +157,22 @@ function toggle(): void {
 
 .folio-legend .code--tech-6 {
     background: var(--tech-6);
+}
+
+.folio-legend .code--tech-7 {
+    background: var(--tech-7);
+}
+
+.folio-legend .code--tech-8 {
+    background: var(--tech-8);
+}
+
+.folio-legend .code--tech-9 {
+    background: var(--tech-9);
+}
+
+.folio-legend .code--tech-10 {
+    background: var(--tech-10);
 }
 
 .folio-legend .code--ink {

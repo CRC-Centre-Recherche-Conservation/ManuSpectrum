@@ -18,10 +18,11 @@ import {
     annotation,
     characterization,
     documentPayload,
+    facetValue,
     sample,
     searchResponse,
+    technique,
     uuid,
-    valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
@@ -806,7 +807,7 @@ describe("CorpusDocument", () => {
                     annotations: [
                         annotation(1),
                         annotation(2, {
-                            technique: valueRef("t:fors", "FORS"),
+                            technique: technique("t:fors", "FORS", 2),
                             canvas: "https://iiif.example/c2",
                         }),
                         annotation(3),
@@ -821,7 +822,52 @@ describe("CorpusDocument", () => {
                     .map((entry) =>
                         entry.findAll("span").map((part) => part.text()),
                     ),
-            ).toEqual([["X", "XRF", "2"]]);
+            ).toEqual([["XRF", "XRF", "2"]]);
+            expect(useExplorerStore().legendOpen).toBe(false);
+        });
+
+        it("draws a technique in the rail and on the folio in the colour the server gives it", async () => {
+            const fors = technique("t:fors", "FORS", 7, "t:fors", "FORS");
+            stubFetch(
+                documentPayload({
+                    annotations: [annotation(1, { technique: fors })],
+                }),
+            );
+            const fetchMock = vi.mocked(fetch);
+            const document = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url, init) =>
+                String(url).includes("/search")
+                    ? jsonResponse(
+                          searchResponse({
+                              results: [],
+                              facets: [
+                                  {
+                                      key: "technique",
+                                      group: "analysis",
+                                      values: [
+                                          facetValue("t:fors", "FORS", {
+                                              mark: {
+                                                  code: "FORS",
+                                                  colour: 7,
+                                                  family: "t:fors",
+                                              },
+                                          }),
+                                      ],
+                                  },
+                              ],
+                          }),
+                      )
+                    : document(url, init),
+            );
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            const styles = wrapper
+                .findComponent(FolioStub)
+                .props("styles") as Map<string, { colour: number | null }>;
+            expect(styles.get("t:fors")?.colour).toBe(7);
+            expect(wrapper.find(".facet-rail .dot").classes()).toContain(
+                "dot--tech-7",
+            );
         });
 
         it("names the card drawer by the card heading and leaves out the card's own Close", async () => {

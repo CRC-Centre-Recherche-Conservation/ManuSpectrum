@@ -5,6 +5,17 @@ export type Label = { value: string; lang: string };
 export type Ref = { id: string; model: string; name: Label };
 export type ValueRef = { id: string; uri: string; label: Label };
 export type RankedValue = ValueRef & { rank: number };
+/**
+ * Identity of a technique on every screen, the same in every language and
+ * document: `code` is its acronym (else first letters), `colour` the
+ * `--tech-n` of its family (null: ink), `family` the uri of that family.
+ */
+export type TechniqueMark = {
+    code: string;
+    colour: number | null;
+    family: string;
+};
+export type Technique = ValueRef & TechniqueMark;
 export type DataKind = "xy" | "chemical-imaging" | "micro-imaging" | "file";
 export type Shape =
     | { type: "point"; x: number; y: number }
@@ -24,8 +35,10 @@ export type EventType =
     | "analysis"
     | "sampling";
 export type FacetKey =
-    | "technique"
+    | "partType"
+    | "partColour"
     | "part"
+    | "technique"
     | "operator"
     | "year"
     | "material"
@@ -33,6 +46,8 @@ export type FacetKey =
     | "element"
     | "layer"
     | "project";
+/** Level of the chain a facet filters: the studied part, the analysis, the identified material. */
+export type FacetGroup = "part" | "analysis" | "characterization";
 export type DateRange = { start: string | null; end: string | null };
 
 export interface FacetValue {
@@ -40,10 +55,15 @@ export interface FacetValue {
     label: Label;
     count: number;
     selected: boolean;
+    /** Technique values only. */
+    mark: TechniqueMark | null;
+    /** Colour values only: CSS colour of the concept, the same in every language; null when its labels name none. */
+    swatch: string | null;
 }
 
 export interface Facet {
     key: FacetKey;
+    group: FacetGroup;
     values: FacetValue[];
 }
 
@@ -66,7 +86,7 @@ export interface AnalysisHit {
     type: "analysis";
     id: string;
     name: Label;
-    technique: ValueRef | null;
+    technique: Technique | null;
     document: Ref;
     component: Ref | null;
     canvas: string | null;
@@ -92,7 +112,7 @@ export interface Annotation {
     name: Label;
     canvas: string;
     shape: Shape;
-    technique: ValueRef | null;
+    technique: Technique | null;
     dataKind: DataKind;
     unpublished: boolean;
     match: boolean;
@@ -101,7 +121,7 @@ export interface Annotation {
 export interface UnlocatedAnalysis {
     analysis: string;
     name: Label;
-    technique: ValueRef | null;
+    technique: Technique | null;
     dataKind: DataKind;
     unpublished: boolean;
     match: boolean;
@@ -222,7 +242,7 @@ export interface Citation {
 export interface AnalysisPayload {
     id: string;
     name: Label;
-    technique: ValueRef | null;
+    technique: Technique | null;
     instrument: Ref | null;
     operators: Ref[];
     projects: Ref[];
@@ -293,7 +313,30 @@ export const SHAPE_KEYS = {
         width: true,
         height: true,
     } satisfies Record<keyof ImageRef, true>,
-    Facet: { key: true, values: true } satisfies Record<keyof Facet, true>,
+    Technique: {
+        id: true,
+        uri: true,
+        label: true,
+        code: true,
+        colour: true,
+        family: true,
+    } satisfies Record<keyof Technique, true>,
+    TechniqueMark: { code: true, colour: true, family: true } satisfies Record<
+        keyof TechniqueMark,
+        true
+    >,
+    Facet: { key: true, group: true, values: true } satisfies Record<
+        keyof Facet,
+        true
+    >,
+    FacetValue: {
+        id: true,
+        label: true,
+        count: true,
+        selected: true,
+        mark: true,
+        swatch: true,
+    } satisfies Record<keyof FacetValue, true>,
     SearchResponse: {
         total: true,
         page: true,

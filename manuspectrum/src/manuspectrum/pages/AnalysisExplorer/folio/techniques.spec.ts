@@ -1,97 +1,77 @@
 import { describe, expect, it } from "vitest";
 
-import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import {
+    techniqueClass,
+    techniqueStyles,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
     label,
-    valueRef,
+    technique,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 const NONE = label("Analysis");
 
 describe("technique styles", () => {
-    it("orders the techniques by label and gives the first six a colour", () => {
-        const names = ["XRF", "FORS", "Raman", "IR", "MALDI", "UV", "XRD"];
+    it("takes code and colour from the technique, ordered by label", () => {
         const styles = techniqueStyles(
-            names.map((n) => valueRef(`t:${n}`, n)),
+            [
+                technique("t:xrf", "X-ray fluorescence", 1, "t:xrf", "XRF"),
+                technique("t:pxrf", "Portable XRF", 1, "t:pxrf", "pXRF"),
+                technique("t:fors", "FORS", 4, "t:fors", "FORS"),
+                technique("t:om", "Optical microscopy", null, "t:om", "OM"),
+            ],
             NONE,
         );
         expect(
-            [...styles.values()].map((s) => [s.label.value, s.colour]),
+            [...styles.values()].map((s) => [s.label.value, s.code, s.colour]),
         ).toEqual([
-            ["FORS", 1],
-            ["IR", 2],
-            ["MALDI", 3],
-            ["Raman", 4],
-            ["UV", 5],
-            ["XRD", 6],
-            ["XRF", null],
+            ["FORS", "FORS", 4],
+            ["Optical microscopy", "OM", null],
+            ["Portable XRF", "pXRF", 1],
+            ["X-ray fluorescence", "XRF", 1],
         ]);
     });
 
-    it("gives each technique family the same code in every document", () => {
-        const first = techniqueStyles(
+    it("gives a technique the same style whatever the other techniques of the document", () => {
+        const pxrf = technique("t:pxrf", "Portable XRF", 2, "t:pxrf", "pXRF");
+        const alone = techniqueStyles([pxrf], NONE).get("t:pxrf");
+        const among = techniqueStyles(
             [
-                valueRef("t:xrf", "X-ray fluorescence"),
-                valueRef("t:pxrf", "portable X-ray fluorescence"),
-                valueRef("t:fors", "fiber optic reflectance spectrometry"),
+                technique("t:a", "Alpha", 5, "t:a", "A"),
+                technique("t:b", "Beta", 6, "t:b", "B"),
+                pxrf,
             ],
             NONE,
-        );
-        const second = techniqueStyles(
-            [
-                valueRef("t:micro-xrf", "Microfluorescence x"),
-                valueRef("t:raman", "Spectrométrie Raman"),
-                valueRef("t:hsi", "imagerie hyperspectrale"),
-                valueRef("t:macro", "Macrophotographie"),
-                valueRef("t:ftir", "IRTF"),
-                valueRef(
-                    "t:maldi",
-                    "Spectrométrie de masse par désorption laser",
-                ),
-                valueRef("t:om", "Microscopie optique"),
-            ],
-            NONE,
-        );
-        const codes = (styles: ReturnType<typeof techniqueStyles>) =>
-            Object.fromEntries(
-                [...styles.values()].map((style) => [style.key, style.code]),
-            );
-        expect(codes(first)).toEqual({
-            "t:xrf": "X",
-            "t:pxrf": "X",
-            "t:fors": "F",
-        });
-        expect(codes(second)).toEqual({
-            "t:micro-xrf": "X",
-            "t:raman": "R",
-            "t:hsi": "I",
-            "t:macro": "I",
-            "t:ftir": "IR",
-            "t:maldi": "MS",
-            "t:om": "M",
-        });
+        ).get("t:pxrf");
+        expect(among).toEqual(alone);
     });
 
-    it("codes a technique outside the families by its first letters, apart from the family codes", () => {
-        const styles = techniqueStyles(
-            [
-                valueRef("t:xrf", "XRF"),
-                valueRef("t:xeno", "Xenon lamp test"),
-                valueRef("t:xylo", "Xylography"),
-            ],
+    it("gives the same style in English and French", () => {
+        const en = techniqueStyles(
+            [technique("t:xrf", "X-ray fluorescence", 3, "t:xrf", "XRF")],
             NONE,
-        );
-        expect(styles.get("t:xrf")?.code).toBe("X");
-        expect(styles.get("t:xeno")?.code).toBe("XE");
-        expect(styles.get("t:xylo")?.code).toBe("XY");
+        ).get("t:xrf");
+        const fr = techniqueStyles(
+            [technique("t:xrf", "Fluorescence X", 3, "t:xrf", "XRF")],
+            NONE,
+        ).get("t:xrf");
+        expect([fr?.code, fr?.colour]).toEqual([en?.code, en?.colour]);
     });
 
-    it("keeps one entry per URI and names an analysis without technique", () => {
-        const styles = techniqueStyles(
-            [valueRef("t:xrf", "XRF"), null, valueRef("t:xrf", "XRF")],
-            NONE,
-        );
+    it("keeps one entry per URI and draws an analysis without technique in ink", () => {
+        const xrf = technique("t:xrf", "XRF");
+        const styles = techniqueStyles([xrf, null, xrf], NONE);
         expect(styles.size).toBe(2);
-        expect(styles.get("")?.label).toEqual(NONE);
+        expect(styles.get("")).toEqual({
+            key: "",
+            label: NONE,
+            code: "?",
+            colour: null,
+        });
+    });
+
+    it("names the colour class of a style", () => {
+        expect(techniqueClass("dot", 7)).toBe("dot--tech-7");
+        expect(techniqueClass("dot", null)).toBe("dot--ink");
     });
 });

@@ -4,27 +4,29 @@ import { characterizationMatches } from "@/manuspectrum/pages/AnalysisExplorer/f
 import { emptyFilters } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     characterization,
-    label,
+    facetValue,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
-import type {
-    Facet,
-    FacetValue,
-} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Facet } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 const FACETS: Facet[] = [
     {
         key: "material",
+        group: "characterization",
         values: [facetValue("http://example.org/vermilion")],
     },
-    { key: "colour", values: [facetValue("http://example.org/blue")] },
-    { key: "element", values: [facetValue("el:Hg")] },
+    {
+        key: "colour",
+        group: "characterization",
+        values: [facetValue("http://example.org/blue")],
+    },
+    {
+        key: "element",
+        group: "characterization",
+        values: [facetValue("el:Hg")],
+    },
 ];
-
-function facetValue(id: string): FacetValue {
-    return { id, label: label(id), count: 1, selected: false };
-}
 
 describe("identified material matching", () => {
     it("keeps every identified material when no material filter is set", () => {

@@ -8,6 +8,8 @@ export type CorpusScreen = "home" | "results" | "document";
 export type DocumentOrigin = Exclude<CorpusScreen, "document">;
 export type BasketKind = "analysis-file" | "imaging" | "characterization";
 export type ListFilterKey =
+    | "partType"
+    | "partColour"
     | "technique"
     | "part"
     | "material"
@@ -16,6 +18,9 @@ export type ListFilterKey =
     | "layer"
     | "project"
     | "operator";
+
+/** The two colour facets the rail's Colour toggle switches between: seen on the part, identified by analysis. */
+export type ColourLevel = "partColour" | "colour";
 
 /** Results per page the search offers. */
 export type PageSize = 10 | 25 | 50;
@@ -26,6 +31,8 @@ export interface Filters {
     // documents grain: also list the documents that have no analysis
     empty: boolean;
     size: PageSize;
+    partType: string[];
+    partColour: string[];
     technique: string[];
     part: string[];
     material: string[];

@@ -6,9 +6,11 @@ import type {
     DocumentHit,
     DocumentPayload,
     Facet,
+    FacetValue,
     FileEntry,
     SampleSummary,
     SearchResponse,
+    Technique,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
@@ -48,11 +50,7 @@ export function analysisHit(
         type: "analysis",
         id: uuid(100 + n),
         name: label(`MS${n}_f12_XRF_03`),
-        technique: {
-            id: uuid(900),
-            uri: "http://example.org/xrf",
-            label: label("XRF"),
-        },
+        technique: technique("http://example.org/xrf", "XRF", 1, uuid(900)),
         document: {
             id: uuid(1),
             model: "document",
@@ -68,14 +66,52 @@ export function analysisHit(
     };
 }
 
+const GROUP_OF: Record<Facet["key"], Facet["group"]> = {
+    partType: "part",
+    partColour: "part",
+    part: "part",
+    project: "analysis",
+    technique: "analysis",
+    operator: "analysis",
+    year: "analysis",
+    material: "characterization",
+    colour: "characterization",
+    layer: "characterization",
+    element: "characterization",
+};
+
+/** One facet value without mark nor swatch. */
+export function facetValue(
+    id: string,
+    text: string = id,
+    overrides: Partial<FacetValue> = {},
+): FacetValue {
+    return {
+        id,
+        label: label(text),
+        count: 1,
+        selected: false,
+        mark: null,
+        swatch: null,
+        ...overrides,
+    };
+}
+
+/** A facet of `count` values; technique values carry a mark (code = label, colour by value), colour values no swatch. */
 export function facet(key: Facet["key"], count: number): Facet {
     return {
         key,
+        group: GROUP_OF[key],
         values: Array.from({ length: count }, (_, n) => ({
             id: `${key}-${n}`,
             label: label(`${key} ${n}`),
             count: n + 1,
             selected: false,
+            mark:
+                key === "technique"
+                    ? { code: `T${n}`, colour: n + 1, family: `${key}-${n}` }
+                    : null,
+            swatch: null,
         })),
     };
 }
@@ -131,6 +167,18 @@ export function documentPayload(
     };
 }
 
+/** A technique as the server sends it: `code` defaults to the label, `family` to its own uri. */
+export function technique(
+    uri: string,
+    text: string,
+    colour: number | null = 1,
+    id: string = uri,
+    code: string = text,
+    family: string = uri,
+): Technique {
+    return { id, uri, label: label(text), code, colour, family };
+}
+
 export function valueRef(uri: string, text: string): ValueRef {
     return { id: uri, uri, label: label(text) };
 }
@@ -144,7 +192,7 @@ export function annotation(
         analysis: uuid(100 + n),
         canvas: "https://iiif.example/c1",
         shape: { type: "point", x: 100 * n, y: 50 * n },
-        technique: valueRef("http://example.org/xrf", "XRF"),
+        technique: technique("http://example.org/xrf", "XRF"),
         name: label(`MS1_f12_XRF_0${n}`),
         dataKind: "xy",
         unpublished: false,
@@ -286,7 +334,7 @@ export function analysisPayload(
     return {
         id: uuid(101),
         name: label("MS1_f12_XRF_03"),
-        technique: valueRef("http://example.org/xrf", "XRF"),
+        technique: technique("http://example.org/xrf", "XRF"),
         instrument: null,
         operators: [],
         projects: [],
