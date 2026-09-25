@@ -36,8 +36,8 @@ function queryOf(url: string): URLSearchParams {
     return new URLSearchParams(url.split("?")[1] ?? "");
 }
 
-function sizeOf(url: string): string | null {
-    return queryOf(url).get("size");
+function pageOf(url: string): string | null {
+    return queryOf(url).get("page");
 }
 
 beforeEach(() => {
@@ -96,16 +96,24 @@ describe("CorpusHome", () => {
         expect(wrapper.find(".door.techniques").exists()).toBe(true);
     });
 
-    it("features the document of the day: one page of size 1 at the day's position", async () => {
+    it("features the document of the day: the one at the day's position among the documents", async () => {
         vi.useFakeTimers({ toFake: ["Date"] });
         vi.setSystemTime(new Date(2026, 8, 25, 10));
+        const position = dayIndex(new Date(2026, 8, 25), 55)!;
+        const onPage = Array.from({ length: 10 }, (_, index) =>
+            documentHit(index === position % 10 ? 9 : 20 + index),
+        );
         const fetchMock = vi.fn(async (url: string) =>
-            sizeOf(url) === "1"
+            pageOf(url) !== null
                 ? jsonResponse(
                       searchResponse({
-                          results: [documentHit(9)],
+                          results: onPage,
                           total: 55,
-                          page: { number: 35, size: 1, count: 1 },
+                          page: {
+                              number: Math.floor(position / 10) + 1,
+                              size: 10,
+                              count: 10,
+                          },
                       }),
                   )
                 : jsonResponse(
@@ -123,7 +131,7 @@ describe("CorpusHome", () => {
         const urls = fetchMock.mock.calls.map(([url]) => url);
         expect(urls).toHaveLength(2);
         expect(queryOf(urls[1]).toString()).toBe(
-            `grain=documents&size=1&page=${dayIndex(new Date(2026, 8, 25), 55)! + 1}`,
+            `grain=documents&page=${Math.floor(position / 10) + 1}`,
         );
         expect(wrapper.find(".featured .title").text()).toBe(
             "Document of the day",
@@ -135,15 +143,18 @@ describe("CorpusHome", () => {
     });
 
     it("shows the other doors before the document of the day arrives", async () => {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(new Date(2026, 8, 25, 10));
         vi.stubGlobal(
             "fetch",
             vi.fn((url: string) =>
-                sizeOf(url) === "1"
+                pageOf(url) !== null
                     ? new Promise<Response>(() => {})
                     : Promise.resolve(
                           jsonResponse(
                               searchResponse({
-                                  total: 3,
+                                  total: 55,
+                                  page: { number: 1, size: 10, count: 2 },
                                   facets: [facet("technique", 2)],
                               }),
                           ),
@@ -154,6 +165,7 @@ describe("CorpusHome", () => {
         await flushPromises();
         expect(wrapper.find(".door.techniques").exists()).toBe(true);
         expect(wrapper.find(".featured .ms-skeleton").exists()).toBe(true);
+        vi.useRealTimers();
     });
 
     it("opens the whole corpus in the results, with no filter", async () => {

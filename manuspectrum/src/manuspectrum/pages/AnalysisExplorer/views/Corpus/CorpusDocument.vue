@@ -55,6 +55,7 @@ import {
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     hasActiveFilters,
+    PAGE_SIZES,
     selectedFacets,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -91,6 +92,7 @@ const payload = useDocument(
 const search = useSearch(() =>
     searchQuery({ ...store.filters, grain: "analyses" }, 1, {
         document: props.documentId,
+        size: PAGE_SIZES[0],
     }),
 );
 const resultsMemo = inject(

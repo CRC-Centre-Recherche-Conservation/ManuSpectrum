@@ -29,8 +29,9 @@ import type {
 
 /**
  * The explorer home (S0): the doors by technique and by project from the
- * first page of the documents overview, and the document of the day, read
- * once the overview has said how many documents have analyses.
+ * first page of the documents overview, and the document of the day: the
+ * document at the day's position (`dayIndex`) among those with analyses,
+ * read from its page of the overview once the overview has counted them.
  */
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
@@ -38,22 +39,32 @@ const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
 
 const overview = useSearch(() => searchQuery(emptyFilters(), 1));
-const ofTheDay = useSearch(() => {
-    const index = dayIndex(new Date(), overview.data.value?.total ?? 0);
-    return index === null
-        ? null
-        : searchQuery(emptyFilters(), index + 1, { size: 1 });
+/** The document of the day's page of the overview, and its place on it. */
+const dayPlace = computed(() => {
+    const payload = overview.data.value;
+    const position = dayIndex(new Date(), payload?.total ?? 0);
+    if (!payload || position === null) return null;
+    const size = payload.page.size || 1;
+    return { page: Math.floor(position / size) + 1, index: position % size };
 });
+const ofTheDay = useSearch(() =>
+    dayPlace.value && dayPlace.value.page > 1
+        ? searchQuery(emptyFilters(), dayPlace.value.page)
+        : null,
+);
 const text = ref("");
 
 useFacetLabels(() => overview.data.value?.facets);
 
-const featured = computed<DocumentHit | null>(
-    () =>
-        ofTheDay.data.value?.results.find(
-            (hit): hit is DocumentHit => hit.type === "document",
-        ) ?? null,
-);
+const featured = computed<DocumentHit | null>(() => {
+    const place = dayPlace.value;
+    if (!place) return null;
+    const payload =
+        place.page === 1 ? overview.data.value : ofTheDay.data.value;
+    if (payload?.page.number !== place.page) return null;
+    const hit = payload.results[place.index];
+    return hit?.type === "document" ? hit : null;
+});
 const featuredLoading = computed(
     () => ofTheDay.status.value === "loading" && featured.value === null,
 );
