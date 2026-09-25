@@ -10,7 +10,8 @@ const COMPACT_QUERY = "(max-width: 80rem)";
 const FOCUSABLE = "input:not([disabled]), button:not([disabled])";
 
 /**
- * The filter column of a Corpus screen. Below 80rem it folds into a toggle
+ * The filter column of a Corpus screen: a column that stays under the site
+ * header and scrolls on its own. Below 80rem it folds into a toggle
  * that opens the filters in a left drawer; the drawer closes on Escape or on
  * `showLabel` (« See n analyses »), and the focus goes back to the toggle.
  */
@@ -126,7 +127,13 @@ function focusFilters(): void {
 }
 
 .rail-panel:not(.is-compact) {
+    position: sticky;
+    inset-block-start: var(--explorer-top, 0);
+    max-block-size: calc(100dvh - var(--explorer-top, 0rem) - 1rem);
     padding: 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
     border: 0.0625rem solid var(--border);
     border-radius: var(--explorer-radius, 0.625rem);
     background: var(--surface);

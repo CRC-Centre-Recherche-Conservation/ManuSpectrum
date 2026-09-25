@@ -461,6 +461,13 @@ function onChange(facet: Facet, id: string, event: Event): void {
     gap: 1rem;
 }
 
+.facet-rail .group-title {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    background: var(--surface);
+}
+
 .facet-rail .disclosure {
     display: inline-flex;
     align-items: center;
