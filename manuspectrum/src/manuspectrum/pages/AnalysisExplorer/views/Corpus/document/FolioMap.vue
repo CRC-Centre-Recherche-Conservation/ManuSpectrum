@@ -10,6 +10,7 @@ import {
 import L from "leaflet";
 import "leaflet-iiif";
 import "leaflet.markercluster";
+import "leaflet-side-by-side";
 import { useGettext } from "vue3-gettext";
 import { infoJsonUrl } from "utils/iiif-image";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
@@ -18,6 +19,7 @@ import {
     shapeCentre,
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+import { curtainable } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     nextId,
     readingOrder,
@@ -80,6 +82,8 @@ let materials: L.GeoJSON | null = null;
 let order: string[] = [];
 const markers = new Map<string, L.Marker>();
 const targets = new Map<string, L.Marker>();
+const images = new Map<string, L.ImageOverlay>();
+let sideBySide: L.SideBySide | null = null;
 
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 
@@ -96,6 +100,7 @@ watch(
     drawMarks,
 );
 watch(() => [props.focus, props.lit], refreshStates);
+watch(() => [props.overlays, props.curtain], drawOverlays);
 
 onMounted(() => {
     const surface = host.value?.querySelector<HTMLElement>(".surface");
@@ -114,9 +119,13 @@ onMounted(() => {
     map.on("zoomend moveend", computeTargets);
     drawPage();
     drawMarks();
+    drawOverlays();
 });
 
 onBeforeUnmount(() => {
+    sideBySide?.remove();
+    sideBySide = null;
+    images.clear();
     map?.remove();
     map = null;
 });
@@ -347,6 +356,42 @@ function drawMarks(): void {
         );
     }
     computeTargets();
+}
+
+/** Adds, updates and removes the laid layers by key; the curtain clips the one named by `curtain`. */
+function drawOverlays(): void {
+    if (!map) return;
+    const wanted = new Set(props.overlays.map((overlay) => overlay.key));
+    for (const [key, layer] of images) {
+        if (!wanted.has(key)) {
+            layer.remove();
+            images.delete(key);
+        }
+    }
+    for (const overlay of props.overlays) {
+        const existing = images.get(overlay.key);
+        if (existing) {
+            existing.setOpacity(overlay.opacity);
+            existing.setBounds(L.latLngBounds(overlay.bounds));
+        } else {
+            images.set(
+                overlay.key,
+                curtainable(
+                    L.imageOverlay(overlay.url, overlay.bounds, {
+                        opacity: overlay.opacity,
+                        className: "folio-overlay",
+                        alt: overlay.label,
+                    }).addTo(map),
+                ),
+            );
+        }
+    }
+    sideBySide?.remove();
+    sideBySide = null;
+    const under = props.curtain ? images.get(props.curtain) : undefined;
+    if (under) {
+        sideBySide = L.control.sideBySide([], under).addTo(map);
+    }
 }
 
 /** The id of the marker, or of the marker group, that shows an analysis now; null when neither is on the map. */
@@ -702,6 +747,10 @@ function wholePage(): void {
     font: 0.75rem var(--font-body);
     border: none;
     box-shadow: none;
+}
+
+.folio :deep(.folio-overlay) {
+    image-rendering: pixelated;
 }
 
 @media (prefers-reduced-motion: reduce) {

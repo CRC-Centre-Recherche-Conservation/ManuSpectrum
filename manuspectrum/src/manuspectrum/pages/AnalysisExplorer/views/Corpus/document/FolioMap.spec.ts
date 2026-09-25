@@ -1,4 +1,5 @@
 import { flushPromises, mount } from "@vue/test-utils";
+import L from "leaflet";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
@@ -67,9 +68,16 @@ function mountFolio(props: Record<string, unknown> = {}) {
 }
 
 let iiif: ReturnType<typeof stubIiifLayer>;
+let sideBySide: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
     iiif = stubIiifLayer();
+    sideBySide = vi.fn(() => ({
+        addTo: vi.fn().mockReturnThis(),
+        remove: vi.fn(),
+        setRightLayers: vi.fn(),
+    }));
+    L.control.sideBySide = sideBySide as unknown as typeof L.control.sideBySide;
 });
 
 describe("FolioMap", () => {
@@ -228,6 +236,27 @@ describe("FolioMap", () => {
         expect(wrapper.text()).toContain("No image for this page");
         expect(iiif).not.toHaveBeenCalled();
         expect(wrapper.findAll("[data-target]")).toHaveLength(2);
+        wrapper.unmount();
+    });
+
+    it("lays an imaging layer at its opacity and puts it under the curtain", async () => {
+        const overlay = {
+            key: "a:0",
+            url: "https://iiif.example/pb/full/!2048,2048/0/default.jpg",
+            bounds: [
+                [-1, 0],
+                [0, 2],
+            ] as [[number, number], [number, number]],
+            opacity: 0.5,
+            label: "Pb",
+        };
+        const wrapper = mountFolio({ overlays: [overlay] });
+        await flushPromises();
+        const image = wrapper.find("img.folio-overlay");
+        expect(image.attributes("src")).toBe(overlay.url);
+        expect((image.element as HTMLElement).style.opacity).toBe("0.5");
+        await wrapper.setProps({ curtain: "a:0" });
+        expect(sideBySide).toHaveBeenCalledWith([], expect.anything());
         wrapper.unmount();
     });
 });
