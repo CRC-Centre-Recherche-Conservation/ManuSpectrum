@@ -13,10 +13,8 @@ body.ms-page--app::after {
 }
 
 .ms-explorer-intro {
-    max-width: 72rem;
-    margin-inline: auto;
+    @include ms-container;
     padding-block: 7rem 1rem;
-    padding-inline: 1rem;
 }
 
 .ms-explorer-intro__title {
@@ -45,9 +43,7 @@ body.ms-page--app::after {
 
 .ms-explorer,
 .ms-explorer-fallback {
-    max-width: 90rem;
-    margin-inline: auto;
-    padding-inline: 1rem;
+    @include ms-container;
     padding-block-end: 4rem;
 }
 

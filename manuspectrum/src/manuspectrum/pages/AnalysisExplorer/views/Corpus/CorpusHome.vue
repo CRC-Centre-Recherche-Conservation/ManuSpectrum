@@ -311,6 +311,7 @@ function hrefFor(id: string): string {
 <style scoped>
 .corpus-home {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
     padding-block: 1rem 2rem;
 }
@@ -324,6 +325,7 @@ function hrefFor(id: string): string {
 
 .corpus-home .search {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
     max-inline-size: 48rem;
 }
@@ -335,6 +337,7 @@ function hrefFor(id: string): string {
 
 .corpus-home .input {
     flex: 1;
+    min-inline-size: 0;
     min-block-size: 3rem;
     padding-inline: 1rem;
     border: 0.0625rem solid var(--border-hover);
@@ -363,7 +366,7 @@ function hrefFor(id: string): string {
 
 .corpus-home .doors {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
     gap: 1.5rem;
 }
 
@@ -388,7 +391,7 @@ function hrefFor(id: string): string {
 
 .corpus-home .how-to {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
     gap: 1rem;
     padding-inline-start: 1.25rem;
     color: var(--ink-muted);
