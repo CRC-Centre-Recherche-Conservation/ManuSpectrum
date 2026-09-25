@@ -185,6 +185,25 @@ describe("CorpusDocument", () => {
         expect(store.document?.canvas).toBe("https://iiif.example/c1");
     });
 
+    it("opens the page a result names by its image service", async () => {
+        const base = documentPayload();
+        const canvases = base.canvases.map((canvas, index) => ({
+            ...canvas,
+            image: {
+                ...canvas.image,
+                service: `https://iiif.example/image/p${index + 1}`,
+            },
+        }));
+        stubFetch(documentPayload({ canvases }));
+        const { wrapper } = mountScreen((store) =>
+            store.openDocument(uuid(1), "https://iiif.example/image/p2/"),
+        );
+        await flushPromises();
+        expect(wrapper.findComponent(FolioStub).props("canvas")?.id).toBe(
+            "https://iiif.example/c2",
+        );
+    });
+
     it("counts the page's analyses the filters keep", async () => {
         stubFetch(
             documentPayload({

@@ -39,7 +39,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 import { folioLayerOf } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
-import type { FacetKey } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    DocumentCanvas,
+    FacetKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     Focus,
     LayerToggles,
@@ -90,9 +93,24 @@ const certaintyScale = computed(
     () => data.value?.certaintyScale ?? { levels: [] },
 );
 const canvases = computed(() => data.value?.canvases ?? []);
+/** A result names a page by its canvas id or by its image service (as Arches annotations do). */
+function isCanvas(
+    canvas: DocumentCanvas,
+    name: string | null | undefined,
+): boolean {
+    return (
+        Boolean(name) &&
+        (canvas.id === name ||
+            canvas.image.service?.replace(/\/$/, "") ===
+                name?.replace(/\/$/, ""))
+    );
+}
+
 const currentCanvas = computed(
     () =>
-        canvases.value.find((canvas) => canvas.id === store.document?.canvas) ??
+        canvases.value.find((canvas) =>
+            isCanvas(canvas, store.document?.canvas),
+        ) ??
         canvases.value.find((canvas) => canvas.analysisCount > 0) ??
         canvases.value[0] ??
         null,
@@ -601,6 +619,7 @@ function goHome(): void {
 <style scoped>
 .corpus-document {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     padding-block: 1rem 2rem;
 }
