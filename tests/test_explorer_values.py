@@ -213,13 +213,30 @@ class FileEntryTests(SimpleTestCase):
         self.assertEqual(entries[CSV_ID]["pairedWith"], MCA_ID)
         self.assertEqual(entries[PDF_ID]["role"], "other")
         self.assertIsNone(entries[PDF_ID]["pairedWith"])
-        self.assertEqual(
-            entries[MCA_ID]["downloadUrl"], "https://manuspectrum.example/files/f-mca"
-        )
+        self.assertEqual(entries[MCA_ID]["downloadUrl"], "/files/f-mca")
         self.assertIsNone(entries[MCA_ID]["previewUrl"])
+        self.assertTrue(entries[CSV_ID]["previewUrl"].startswith("/"))
         self.assertTrue(
             entries[CSV_ID]["previewUrl"].endswith(f"/api/spectrum-preview/{CSV_ID}")
         )
+
+    @override_settings(EXPLORER_LEGACY_HOSTS=("192.168.122.250",))
+    def test_a_local_file_url_is_a_path_and_an_external_one_is_kept(self):
+        urls = {
+            "files/a": "/files/a",
+            "https://manuspectrum.example/files/b?x=1": "/files/b?x=1",
+            "http://192.168.122.250:8000/files/c": "/files/c",
+            "https://zenodo.org/records/1/files/d.csv": "https://zenodo.org/records/1/files/d.csv",
+            "//cdn.example/e": "//cdn.example/e",
+        }
+        entries = [
+            {"file_id": f"f-{n}", "name": f"{n}.pdf", "url": url}
+            for n, url in enumerate(urls)
+        ]
+
+        found = file_entries(entries, language="en", configs={}, kind="measurement")
+
+        self.assertEqual([e["downloadUrl"] for e in found], list(urls.values()))
 
     def test_a_file_without_licence_gets_the_default_marked_as_such(self):
         with translation.override("en"):

@@ -157,8 +157,25 @@ def axis_title(config):
     return {"value": " · ".join(t for t in (y, x) if t), "lang": FALLBACK_LANGUAGE}
 
 
-def _absolute(path):
-    return settings.PUBLIC_SERVER_ADDRESS + str(path or "").lstrip("/")
+_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
+
+
+def site_path(url):
+    """*url* as a path on this site when it is local, else unchanged.
+
+    Local is a path, or an absolute URL on ``PUBLIC_SERVER_ADDRESS`` or on a
+    host of ``EXPLORER_LEGACY_HOSTS``; a path without its leading slash gets
+    one. A protocol-relative or other absolute URL is external.
+    """
+    url = rewrite_legacy_url(str(url or ""))
+    if url.startswith("//") or not url:
+        return url
+    if not _SCHEME.match(url):
+        return "/" + url.lstrip("/")
+    public = settings.PUBLIC_SERVER_ADDRESS.rstrip("/")
+    if public and (url == public or url.startswith(public + "/")):
+        return "/" + url[len(public) :].lstrip("/")
+    return url
 
 
 def file_entries(entries, *, language, configs, kind):
@@ -215,11 +232,9 @@ def file_entries(entries, *, language, configs, kind):
                 },
                 "layers": [],
                 "license": effective_license(entry, language),
-                "downloadUrl": _absolute(entry.get("url")),
+                "downloadUrl": site_path(entry.get("url")),
                 "previewUrl": (
-                    _absolute(
-                        reverse("api-spectrum-preview", kwargs={"file_id": file_id})
-                    )
+                    reverse("api-spectrum-preview", kwargs={"file_id": file_id})
                     if data_kind == "xy"
                     else None
                 ),

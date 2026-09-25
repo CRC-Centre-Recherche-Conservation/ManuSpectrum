@@ -305,6 +305,7 @@ export function analysisPayload(
         bibliography: [],
         citation: null,
         permalink: `http://testserver/report/${uuid(101)}`,
+        reportUrl: `/en/report/${uuid(101)}`,
         certaintyScale: { levels: [] },
         unpublished: false,
         ...overrides,

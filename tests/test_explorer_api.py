@@ -499,6 +499,24 @@ class AnalysisRouteTests(CorpusCase):
         )
         self.assertIsNone(payload["citation"])
 
+    def test_the_report_link_is_a_path_in_the_language_of_the_request(self):
+        analysis = self.analyses["open"].pk
+
+        english = self.get(analysis).json()
+        french = self.client.get(f"/fr/api/explorer/analysis/{analysis}").json()
+
+        self.assertEqual(english["reportUrl"], f"/en/report/{analysis}")
+        self.assertEqual(french["reportUrl"], f"/fr/report/{analysis}")
+
+    def test_a_local_file_link_is_a_path_on_the_site(self):
+        files = self.get(self.analyses["open"].pk).json()["files"]
+
+        for entry in files:
+            self.assertTrue(entry["downloadUrl"].startswith("/files/"), entry)
+            if entry["previewUrl"]:
+                self.assertTrue(entry["previewUrl"].startswith("/"), entry)
+                self.assertFalse(entry["previewUrl"].startswith("//"), entry)
+
     def test_an_operator_whose_resource_is_gone_is_left_out(self):
         gone = "00000000-0000-4000-8000-0000000000de"
         self.tile(self.analyses["open"], "performed_by_actor", [{"resourceId": gone}])

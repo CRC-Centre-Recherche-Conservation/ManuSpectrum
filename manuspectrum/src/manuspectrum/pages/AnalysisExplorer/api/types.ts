@@ -237,6 +237,8 @@ export interface AnalysisPayload {
     bibliography: Label[];
     citation: Citation | null;
     permalink: string;
+    /** Path of the Arches report on this site, in the request language. */
+    reportUrl: string;
     certaintyScale: CertaintyScale;
     unpublished: boolean;
 }
@@ -401,6 +403,7 @@ export const SHAPE_KEYS = {
         bibliography: true,
         citation: true,
         permalink: true,
+        reportUrl: true,
         certaintyScale: true,
         unpublished: true,
     } satisfies Record<keyof AnalysisPayload, true>,

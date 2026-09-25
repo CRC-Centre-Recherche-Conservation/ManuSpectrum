@@ -132,6 +132,7 @@ SHAPES = {
         "bibliography": list,
         "citation": (dict, type(None)),
         "permalink": str,
+        "reportUrl": str,
         "certaintyScale": dict,
         "unpublished": bool,
     },

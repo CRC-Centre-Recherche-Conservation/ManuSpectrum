@@ -18,6 +18,7 @@ import nh3
 from django.conf import settings
 from django.http import QueryDict
 from django.urls import reverse
+from django.utils import translation
 
 from arches.app.models.models import (
     IIIFManifest,
@@ -1380,6 +1381,12 @@ def analysis_files(analysis_id, user, language, values=None):
     )
 
 
+def report_url(resource_id, language):
+    """Path of the Arches report of *resource_id* on this site, in *language*."""
+    with translation.override(language):
+        return reverse("resource_report", kwargs={"resourceid": resource_id})
+
+
 def analysis_payload(analysis_id, user, language):
     """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible."""
     visible = visible_set(user)
@@ -1477,6 +1484,7 @@ def analysis_payload(analysis_id, user, language):
         ],
         "citation": None,
         "permalink": f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis_id}",
+        "reportUrl": report_url(analysis_id, language),
         "certaintyScale": certainty_scale(language),
         "unpublished": row["unpublished"],
     }
