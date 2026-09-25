@@ -17,7 +17,10 @@ import {
     searchQuery,
     useSearch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
-import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import {
+    selectedFacets,
+    useExplorerStore,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     documentHref,
     snapshotOf,
@@ -146,6 +149,7 @@ function goHome(): void {
         >
             <FacetRail
                 :facets="search.data.value?.facets ?? []"
+                :selected="selectedFacets(store.filters)"
                 @change="onFacetChange"
             />
         </RailPanel>

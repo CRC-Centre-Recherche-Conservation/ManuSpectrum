@@ -59,3 +59,11 @@ function sitePath(value: string): string | null {
         return null;
     }
 }
+
+/** `text` without accents, in lower case: the form two labels are compared in. */
+export function foldText(text: string): string {
+    return text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+}

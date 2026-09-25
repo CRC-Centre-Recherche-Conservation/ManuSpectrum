@@ -68,6 +68,17 @@ export function emptyFilters(): Filters {
     };
 }
 
+/** The facet values the filters hold, by facet key (years as text, as the facets name them). */
+export function selectedFacets(
+    filters: Filters,
+): Partial<Record<FacetKey, string[]>> {
+    const selected: Partial<Record<FacetKey, string[]>> = {
+        year: filters.year.map(String),
+    };
+    for (const key of LIST_FILTER_KEYS) selected[key] = filters[key];
+    return selected;
+}
+
 function emptyToolFilters(): ToolFilters {
     return { element: null, cell: null, pair: null };
 }
