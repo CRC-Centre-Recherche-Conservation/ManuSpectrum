@@ -1,7 +1,10 @@
 import L from "leaflet";
 import { imageUrl } from "utils/iiif-image";
 
-import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+import {
+    markedZones,
+    shapeBounds,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 
 import type {
     AnalysisPayload,
@@ -42,8 +45,9 @@ export function layerImageUrl(
 
 /**
  * The imaging layers of the open analysis that are switched on, each stretched
- * into the bounding box of the analysis zone on this page (indicative, not
- * registered). An analysis with only a point here lays nothing.
+ * into the bounding box of the analysis's marked zone on this page
+ * (`markedZones`; indicative, not registered). An analysis with only a point
+ * here lays nothing.
  */
 export function folioOverlays(
     analysis: AnalysisPayload | null,
@@ -51,9 +55,8 @@ export function folioOverlays(
     annotations: readonly Annotation[],
 ): FolioOverlay[] {
     if (!analysis) return [];
-    const zone = annotations.find(
-        (entry) =>
-            entry.analysis === analysis.id && shapeBounds(entry.shape) !== null,
+    const zone = markedZones(annotations).find(
+        (entry) => entry.analysis === analysis.id,
     );
     const bounds = zone ? shapeBounds(zone.shape) : null;
     if (!bounds) return [];

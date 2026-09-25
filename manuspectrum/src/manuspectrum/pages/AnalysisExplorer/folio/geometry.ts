@@ -1,6 +1,9 @@
 import type { Feature, Point, Polygon } from "geojson";
 
-import type { Shape } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    Annotation,
+    Shape,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 /**
  * Canvas pixels per Leaflet unit in the Arches annotation space: the zoom 5 of
@@ -77,4 +80,24 @@ export function shapeFeature<P extends Record<string, unknown>>(
         properties,
         geometry: { type: "Polygon", coordinates: [ring] },
     };
+}
+
+/**
+ * The annotation that stands for each analysis among `annotations`, in their
+ * order: the analysis's first zone with an extent, else its first point. The
+ * analysis's marker and its laid maps sit on it.
+ */
+export function markedZones(annotations: readonly Annotation[]): Annotation[] {
+    const marked = new Map<string, Annotation>();
+    for (const annotation of annotations) {
+        const current = marked.get(annotation.analysis);
+        if (
+            !current ||
+            (shapeBounds(current.shape) === null &&
+                shapeBounds(annotation.shape) !== null)
+        ) {
+            marked.set(annotation.analysis, annotation);
+        }
+    }
+    return [...marked.values()];
 }

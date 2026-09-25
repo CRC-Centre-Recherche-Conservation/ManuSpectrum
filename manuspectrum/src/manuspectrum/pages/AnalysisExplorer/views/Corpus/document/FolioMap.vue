@@ -16,6 +16,7 @@ import { infoJsonUrl } from "utils/iiif-image";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
 
 import {
+    markedZones,
     shapeCentre,
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
@@ -28,7 +29,10 @@ import {
     readingOrder,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
-import { viewerFor } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
+import {
+    folioLayerOf,
+    viewerFor,
+} from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
 import type {
     Annotation,
@@ -91,6 +95,8 @@ let frames: L.GeoJSON | null = null;
 let materials: L.GeoJSON | null = null;
 let order: string[] = [];
 let openedGroup: Set<string> | null = null;
+// An imageless page is fitted to its markers once; later redraws keep the reader's view.
+let fittedCanvas: string | null | undefined;
 const markers = new Map<string, L.Marker>();
 const targets = new Map<string, L.Marker>();
 const images = new Map<string, L.ImageOverlay>();
@@ -235,8 +241,7 @@ function materialLabel(summary: CharacterizationSummary): HTMLElement {
 }
 
 function isShown(annotation: Annotation): boolean {
-    const mark = viewerFor(annotation.dataKind).folio;
-    return mark === "frame" ? props.layers.zones : props.layers.points;
+    return props.layers[folioLayerOf(annotation.dataKind)];
 }
 
 function ensureHatch(): void {
@@ -301,8 +306,7 @@ function drawMarks(): void {
         removeOutsideVisibleBounds: false,
         iconCreateFunction: clusterIcon,
     });
-    const frameFeatures = [];
-    for (const annotation of props.annotations) {
+    for (const annotation of markedZones(props.annotations)) {
         if (!isShown(annotation)) continue;
         const centre = shapeCentre(annotation.shape);
         if (!centre) continue;
@@ -312,17 +316,22 @@ function drawMarks(): void {
         });
         marker.on("click", () => activate(annotation.analysis));
         markers.set(annotation.analysis, marker);
+    }
+    const frameFeatures = [];
+    for (const annotation of props.annotations) {
         if (
-            viewerFor(annotation.dataKind).folio === "frame" &&
-            annotation.shape.type !== "point"
+            !isShown(annotation) ||
+            viewerFor(annotation.dataKind).folio !== "frame" ||
+            annotation.shape.type === "point"
         ) {
-            const style = props.styles.get(techniqueKey(annotation.technique));
-            const feature = shapeFeature(annotation.shape, {
-                analysis: annotation.analysis,
-                colour: style?.colour ?? null,
-            });
-            if (feature) frameFeatures.push(feature);
+            continue;
         }
+        const style = props.styles.get(techniqueKey(annotation.technique));
+        const feature = shapeFeature(annotation.shape, {
+            analysis: annotation.analysis,
+            colour: style?.colour ?? null,
+        });
+        if (feature) frameFeatures.push(feature);
     }
     cluster.addLayers([...markers.values()]);
     cluster.on("animationend spiderfied unspiderfied", settleGroups);
@@ -372,7 +381,12 @@ function drawMarks(): void {
     }).addTo(map);
     ensureHatch();
 
-    if (!hasImage.value && markers.size > 0) {
+    if (
+        !hasImage.value &&
+        markers.size > 0 &&
+        fittedCanvas !== (props.canvas?.id ?? null)
+    ) {
+        fittedCanvas = props.canvas?.id ?? null;
         map.fitBounds(
             L.featureGroup([...markers.values()])
                 .getBounds()

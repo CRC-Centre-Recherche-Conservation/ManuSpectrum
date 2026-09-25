@@ -114,6 +114,11 @@ export function registerExternalViewer(
     return () => external.delete(kind);
 }
 
+/** The folio layer toggle that shows an analysis of this data kind: a frame is an imaging zone, a point a point analysis. */
+export function folioLayerOf(kind: string): "points" | "zones" {
+    return viewerFor(kind).folio === "frame" ? "zones" : "points";
+}
+
 export function showsSpectrum(kind: string): boolean {
     return viewerFor(kind).kind === "xy";
 }

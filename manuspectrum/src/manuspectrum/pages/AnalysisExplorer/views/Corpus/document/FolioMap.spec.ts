@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
 
+import { shapeCentre } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
     annotation,
@@ -517,5 +518,47 @@ describe("FolioMap", () => {
             );
             wrapper.unmount();
         });
+    });
+
+    it("puts one marker per analysis on its first zone", async () => {
+        const zones = [
+            annotation(3, {
+                key: "first",
+                dataKind: "chemical-imaging",
+                shape: { type: "rect", x: 100, y: 100, w: 800, h: 400 },
+            }),
+            annotation(3, {
+                key: "second",
+                dataKind: "chemical-imaging",
+                shape: { type: "rect", x: 3000, y: 3000, w: 100, h: 100 },
+            }),
+        ];
+        const wrapper = mountFolio({ annotations: zones });
+        await flushPromises();
+        expect(wrapper.findAll("path.folio-frame")).toHaveLength(2);
+        const hosts = wrapper.findAll(".folio-marker-host");
+        expect(hosts).toHaveLength(1);
+        const centre = L.latLng(shapeCentre(zones[0].shape)!);
+        const host = hosts[0].element as HTMLElement;
+        // The folio opens at zoom 2 on [0, 0]: a Leaflet unit is 4 layer pixels.
+        expect(
+            Math.abs(parseFloat(host.style.left) - centre.lng * 4),
+        ).toBeLessThanOrEqual(1);
+        wrapper.unmount();
+    });
+
+    it("fits an imageless page to its markers once, not on every redraw", async () => {
+        const fitBounds = vi.spyOn(L.Map.prototype, "fitBounds");
+        const wrapper = mountFolio({
+            canvas: {
+                ...canvasWithImage(),
+                image: { service: null, url: null, width: 1, height: 1 },
+            },
+        });
+        await flushPromises();
+        await wrapper.setProps({ slots: new Map([[uuid(101), ["A1"]]]) });
+        await wrapper.setProps({ layers: { ...LAYERS } });
+        expect(fitBounds).toHaveBeenCalledTimes(1);
+        wrapper.unmount();
     });
 });

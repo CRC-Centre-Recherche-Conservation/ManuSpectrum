@@ -32,6 +32,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { folioLayerOf } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
 import type { FacetKey } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
@@ -203,9 +204,14 @@ const counts = computed(() => {
         ),
     ].join(" · ");
 });
+/** The layer toggles offered: those that would show or hide something on this page (`folioLayerOf`, as the folio decides). */
 const availableLayers = computed(() => ({
-    points: pageAnnotations.value.some((entry) => entry.shape.type === "point"),
-    zones: pageAnnotations.value.some((entry) => entry.shape.type !== "point"),
+    points: pageAnnotations.value.some(
+        (entry) => folioLayerOf(entry.dataKind) === "points",
+    ),
+    zones: pageAnnotations.value.some(
+        (entry) => folioLayerOf(entry.dataKind) === "zones",
+    ),
     characterizations: pageCharacterizations.value.length > 0,
 }));
 const railToggleLabel = computed(() =>

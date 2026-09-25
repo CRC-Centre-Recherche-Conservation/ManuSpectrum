@@ -297,4 +297,22 @@ describe("CorpusDocument", () => {
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
     });
+
+    it("offers the layer toggle that hides each analysis, by the folio mark of its data", async () => {
+        stubFetch(
+            documentPayload({
+                annotations: [
+                    annotation(1, {
+                        shape: { type: "rect", x: 0, y: 0, w: 64, h: 32 },
+                    }),
+                ],
+            }),
+        );
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        const offered = wrapper
+            .findAll(".layers label")
+            .map((entry) => entry.text());
+        expect(offered).toEqual(["Point analyses"]);
+    });
 });

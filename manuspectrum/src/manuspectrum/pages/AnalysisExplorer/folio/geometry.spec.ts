@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { Shape } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 import {
+    annotation,
+    uuid,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+
+import {
+    markedZones,
     shapeBounds,
     shapeCentre,
     shapeFeature,
@@ -58,5 +64,26 @@ describe("folio geometry", () => {
 
     it("has no bounds for a point", () => {
         expect(shapeBounds({ type: "point", x: 1, y: 1 })).toBeNull();
+    });
+
+    it("marks each analysis once, on its first zone with an extent, else on its first point", () => {
+        const point = annotation(1, { key: "k1" });
+        const firstZone = annotation(1, {
+            key: "k2",
+            shape: { type: "rect", x: 0, y: 0, w: 10, h: 10 },
+        });
+        const secondZone = annotation(1, {
+            key: "k3",
+            shape: { type: "rect", x: 50, y: 50, w: 10, h: 10 },
+        });
+        const pointOnly = annotation(2);
+        expect(
+            markedZones([point, firstZone, secondZone, pointOnly]).map(
+                (entry) => [entry.analysis, entry.key],
+            ),
+        ).toEqual([
+            [uuid(101), "k2"],
+            [uuid(102), pointOnly.key],
+        ]);
     });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+    folioLayerOf,
     registerExternalViewer,
     showsSpectrum,
     viewerFor,
@@ -14,6 +15,13 @@ describe("viewer registry", () => {
         expect(viewerFor("file").folio).toBe("point");
         expect(showsSpectrum("xy")).toBe(true);
         expect(showsSpectrum("chemical-imaging")).toBe(false);
+    });
+
+    it("puts frames under the imaging zones toggle and points under the point analyses toggle", () => {
+        expect(folioLayerOf("xy")).toBe("points");
+        expect(folioLayerOf("file")).toBe("points");
+        expect(folioLayerOf("chemical-imaging")).toBe("zones");
+        expect(folioLayerOf("micro-imaging")).toBe("zones");
     });
 
     it("treats a kind without a registered renderer as a plain file", async () => {
