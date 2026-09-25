@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import L from "leaflet";
 import { useGettext } from "vue3-gettext";
+
+import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
 import type {
     AnalysisPayload,
@@ -17,15 +19,21 @@ const { $gettext } = useGettext();
 const surface = useTemplateRef<HTMLDivElement>("surface");
 
 const failed = ref(false);
+
+const href = computed(() => safeHref(props.file.downloadUrl));
 // The Leaflet map lives outside Vue reactivity.
 let map: L.Map | null = null;
 let probe: HTMLImageElement | null = null;
 
 onMounted(() => {
+    if (!href.value) {
+        failed.value = true;
+        return;
+    }
     probe = new Image();
     probe.addEventListener("load", onProbeLoad);
     probe.addEventListener("error", onProbeError);
-    probe.src = props.file.downloadUrl;
+    probe.src = href.value;
 });
 
 onBeforeUnmount(() => {
@@ -54,7 +62,7 @@ function show(width: number, height: number): void {
         minZoom: MIN_ZOOM,
         zoomSnap: ZOOM_SNAP,
     });
-    L.imageOverlay(props.file.downloadUrl, bounds, {
+    L.imageOverlay(href.value!, bounds, {
         className: "micro-image",
         alt: props.file.name,
     }).addTo(map);
@@ -76,9 +84,10 @@ function show(width: number, height: number): void {
             class="surface"
         ></div>
         <a
+            v-if="href"
             class="download"
             download=""
-            :href="props.file.downloadUrl"
+            :href="href"
         >
             <span>{{ $gettext("Download the image") }}</span>
         </a>

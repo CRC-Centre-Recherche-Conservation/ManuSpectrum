@@ -142,6 +142,7 @@ const tableRows = computed(() => {
         y: numberFormat.format(curve.series.y[index]),
     }));
 });
+// The preset axis names are English whatever the page language.
 const xHeader = computed(() => props.file.viewer.xLabel || "x");
 const yHeader = computed(() => props.file.viewer.yLabel || "y");
 
@@ -294,14 +295,24 @@ function toggleTable(): void {
                 :scroll-height="TABLE_HEIGHT"
                 :virtual-scroller-options="{ itemSize: TABLE_ROW_HEIGHT }"
             >
-                <Column
-                    field="x"
-                    :header="xHeader"
-                />
-                <Column
-                    field="y"
-                    :header="yHeader"
-                />
+                <Column field="x">
+                    <template #header>
+                        <span
+                            :lang="props.file.viewer.xLabel ? 'en' : undefined"
+                        >
+                            {{ xHeader }}
+                        </span>
+                    </template>
+                </Column>
+                <Column field="y">
+                    <template #header>
+                        <span
+                            :lang="props.file.viewer.yLabel ? 'en' : undefined"
+                        >
+                            {{ yHeader }}
+                        </span>
+                    </template>
+                </Column>
             </DataTable>
         </template>
     </section>

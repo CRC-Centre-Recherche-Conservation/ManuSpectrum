@@ -156,7 +156,11 @@ const dimmedMaterials = computed(
             (data.value?.characterizations ?? [])
                 .filter(
                     (summary) =>
-                        !characterizationMatches(summary, store.filters),
+                        !characterizationMatches(
+                            summary,
+                            store.filters,
+                            search.data.value?.facets ?? [],
+                        ),
                 )
                 .map((summary) => summary.id),
         ),

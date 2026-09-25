@@ -17,9 +17,14 @@ import {
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
-function mountPreview(zones: string[] = [uuid(101)]) {
+function mountPreview(
+    zones: string[] = [uuid(101)],
+    prepare: (store: ReturnType<typeof useExplorerStore>) => void = () =>
+        undefined,
+) {
     const pinia = createPinia();
     setActivePinia(pinia);
+    prepare(useExplorerStore());
     const curtain = ref<string | null>(null);
     const file = imagingEntry();
     const wrapper = mount(ImagingPreview, {
@@ -88,5 +93,19 @@ describe("ImagingPreview", () => {
         expect(store.basket.map((item) => item.key)).toEqual([
             `im:${uuid(101)}:0`,
         ]);
+    });
+
+    it("opens on the layer of this file that is laid on the page", () => {
+        const { wrapper } = mountPreview([uuid(101)], (store) =>
+            store.setOverlay(`${uuid(101)}:1`, {
+                element: "Hg",
+                opacity: 0.4,
+                on: true,
+            }),
+        );
+        expect(wrapper.find(".current").text()).toContain("Hg");
+        expect(
+            (wrapper.find("input.lay").element as HTMLInputElement).checked,
+        ).toBe(true);
     });
 });

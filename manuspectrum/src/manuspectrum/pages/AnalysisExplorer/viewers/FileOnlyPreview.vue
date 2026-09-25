@@ -2,6 +2,8 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
+
 import type {
     AnalysisPayload,
     FileEntry,
@@ -11,6 +13,7 @@ const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
 
 const { $gettext, interpolate } = useGettext();
 
+const href = computed(() => safeHref(props.file.downloadUrl));
 const downloadLabel = computed(() =>
     interpolate($gettext("Download %{name}"), { name: props.file.name }, true),
 );
@@ -22,9 +25,10 @@ const downloadLabel = computed(() =>
             $gettext("Not in a chart: this file can be downloaded.")
         }}</span>
         <a
+            v-if="href"
             class="download"
-            :href="props.file.downloadUrl"
             download=""
+            :href="href"
         >
             <span>{{ downloadLabel }}</span>
         </a>

@@ -224,4 +224,29 @@ describe("SpectrumPreview", () => {
         ).toHaveLength(2);
         wrapper.unmount();
     });
+
+    it("marks the English axis names of the table as English", async () => {
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                observe(): void {}
+                unobserve(): void {}
+                disconnect(): void {}
+            },
+        );
+        const file = readable(1);
+        file.viewer = {
+            ...file.viewer,
+            xLabel: "Wavelength (nm)",
+            yLabel: "Reflectance",
+        };
+        const { wrapper } = mountPreview([file], () => jsonResponse(SERIES));
+        await flushPromises();
+        await wrapper.find("button.table-toggle").trigger("click");
+        const names = wrapper
+            .findAll('th [lang="en"]')
+            .map((cell) => cell.text());
+        expect(names).toEqual(["Wavelength (nm)", "Reflectance"]);
+        wrapper.unmount();
+    });
 });

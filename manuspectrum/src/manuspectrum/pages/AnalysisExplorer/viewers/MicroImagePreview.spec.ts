@@ -68,4 +68,20 @@ describe("MicroImagePreview", () => {
         expect(wrapper.text()).toContain("This image cannot be shown here.");
         wrapper.unmount();
     });
+
+    it("offers no download link for an address that is not http or https", () => {
+        recordImages();
+        const wrapper = mount(MicroImagePreview, {
+            attachTo: sizedContainer(),
+            props: {
+                file: fileEntry({
+                    dataKind: "micro-imaging",
+                    downloadUrl: "javascript:alert(1)",
+                }),
+                analysis: analysisPayload(),
+            },
+        });
+        expect(wrapper.find("a.download").exists()).toBe(false);
+        wrapper.unmount();
+    });
 });

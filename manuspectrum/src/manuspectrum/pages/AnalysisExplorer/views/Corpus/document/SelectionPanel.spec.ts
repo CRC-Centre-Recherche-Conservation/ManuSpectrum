@@ -8,6 +8,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     analysisHit,
     fileEntry,
+    imagingEntry,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
@@ -78,5 +79,36 @@ describe("SelectionPanel", () => {
         const { wrapper } = mountPanel();
         await flushPromises();
         expect(wrapper.find("button.compare").exists()).toBe(false);
+    });
+
+    it("writes a map layer's label apart from the analysis name and its language", async () => {
+        const key = `im:${uuid(101)}:1`;
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () =>
+                jsonResponse({
+                    items: [
+                        {
+                            key,
+                            kind: "imaging",
+                            analysis: analysisHit(1, {
+                                name: { value: "Analyse maXRF", lang: "fr" },
+                            }),
+                            file: imagingEntry(),
+                        },
+                    ],
+                    missing: [],
+                }),
+            ),
+        );
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        useExplorerStore().addManyToBasket([key]);
+        const wrapper = mount(SelectionPanel, { global: { plugins: [pinia] } });
+        await flushPromises();
+        const title = wrapper.find(`[data-key="${key}"] .title`);
+        expect(title.find('[lang="fr"]').text()).toBe("Analyse maXRF");
+        expect(title.text()).toContain("Hg");
+        expect(title.find('[lang="fr"]').text()).not.toContain("Hg");
     });
 });

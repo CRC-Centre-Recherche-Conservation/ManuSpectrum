@@ -39,16 +39,18 @@ function kindText(item: Item): string {
 }
 
 function titleOf(item: Item): Label {
-    if (item.kind === "characterization") return item.characterization.name;
-    if (item.kind === "imaging") {
-        const index = Number(item.key.split(":")[2]);
-        const layer = item.file.layers.find((entry) => entry.index === index);
-        return {
-            value: `${item.analysis.name.value}${layer ? ` · ${layer.label}` : ""}`,
-            lang: item.analysis.name.lang,
-        };
-    }
-    return item.analysis.name;
+    return item.kind === "characterization"
+        ? item.characterization.name
+        : item.analysis.name;
+}
+
+/** The label of a map layer, written after the analysis name (a label from the file, language unknown). */
+function layerOf(item: Item): string | null {
+    if (item.kind !== "imaging") return null;
+    const index = Number(item.key.split(":")[2]);
+    return (
+        item.file.layers.find((entry) => entry.index === index)?.label ?? null
+    );
 }
 
 function documentOf(item: Item): Label | null {
@@ -101,11 +103,13 @@ function removeLabel(slot: number): string {
                         <span class="kind">{{
                             kindText(byKey.get(row.key)!)
                         }}</span>
-                        <span
-                            class="title"
-                            :lang="titleOf(byKey.get(row.key)!).lang"
-                        >
-                            {{ titleOf(byKey.get(row.key)!).value }}
+                        <span class="title">
+                            <span :lang="titleOf(byKey.get(row.key)!).lang">{{
+                                titleOf(byKey.get(row.key)!).value
+                            }}</span>
+                            <span v-if="layerOf(byKey.get(row.key)!)">
+                                · {{ layerOf(byKey.get(row.key)!) }}
+                            </span>
                         </span>
                         <span
                             v-if="documentOf(byKey.get(row.key)!)"

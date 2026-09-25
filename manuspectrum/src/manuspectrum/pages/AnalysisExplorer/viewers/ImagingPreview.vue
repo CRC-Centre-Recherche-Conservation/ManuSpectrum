@@ -40,7 +40,16 @@ const percentFormat = new Intl.NumberFormat(
     { style: "percent" },
 );
 
-const position = ref(0);
+/** Opens on the layer of this file laid on the page, if any. */
+const position = ref(
+    Math.max(
+        0,
+        props.file.layers.findIndex(
+            (entry) =>
+                store.overlays[overlayKey(props.analysis.id, entry.index)]?.on,
+        ),
+    ),
+);
 
 const layer = computed<FileLayer | null>(
     () => props.file.layers[position.value] ?? null,
