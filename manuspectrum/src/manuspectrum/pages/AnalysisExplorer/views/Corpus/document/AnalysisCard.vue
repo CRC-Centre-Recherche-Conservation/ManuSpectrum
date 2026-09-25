@@ -14,10 +14,7 @@ import {
     formatSize,
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
-import {
-    entryKeyOf,
-    fileKey,
-} from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { entryKeyOf } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { viewerFor } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
@@ -186,29 +183,6 @@ function rawLabel(file: FileEntry): string {
         .join(" · ");
 }
 
-function fileHints(file: FileEntry): Map<string, SelectionHint> | null {
-    const current = analysis.value;
-    if (!current) return null;
-    return new Map([
-        [
-            fileKey(current.id, file.id),
-            {
-                title: current.name,
-                kind: dataKindBadge(file.dataKind),
-                detail: file.name,
-            },
-        ],
-    ]);
-}
-
-function addFileLabel(file: FileEntry): string {
-    return interpolate(
-        $gettext("Add %{file} to the Selection"),
-        { file: file.name },
-        true,
-    );
-}
-
 function names(refs: { name: Label }[]): string {
     return refs.map((ref) => ref.name.value).join(", ");
 }
@@ -356,12 +330,6 @@ function focusHeading(): void {
                                 {{ rawLabel(rawOf(file)!) }}
                             </span>
                         </template>
-                        <AddToSelection
-                            :keys="[fileKey(analysis.id, file.id)]"
-                            :label="$gettext('+ Add this file')"
-                            :aria-label="addFileLabel(file)"
-                            :hints="fileHints(file)"
-                        />
                     </li>
                 </ul>
             </section>

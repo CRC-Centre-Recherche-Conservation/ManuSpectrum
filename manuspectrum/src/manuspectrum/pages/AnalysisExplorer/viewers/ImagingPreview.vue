@@ -4,8 +4,6 @@ import { useGettext } from "vue3-gettext";
 
 import Slider from "primevue/slider";
 
-import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
-
 import {
     layerImageUrl,
     overlayKey,
@@ -14,7 +12,6 @@ import {
     CURTAIN_KEY,
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
-import { layerKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type {
@@ -22,7 +19,6 @@ import type {
     FileEntry,
     FileLayer,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 const DEFAULT_OPACITY = 0.7;
 const PREVIEW_SIZE = 480;
@@ -92,34 +88,6 @@ const valueText = computed(() =>
 );
 const firstLayer = computed(() => props.file.layers[0]?.label ?? "");
 const lastLayer = computed(() => props.file.layers.at(-1)?.label ?? "");
-const addLabel = computed(() =>
-    interpolate(
-        $gettext("+ Add the map %{label}"),
-        { label: layer.value?.label ?? "" },
-        true,
-    ),
-);
-const addAriaLabel = computed(() =>
-    interpolate(
-        $gettext("Add the map %{label} to the Selection"),
-        { label: layer.value?.label ?? "" },
-        true,
-    ),
-);
-const addHints = computed(() =>
-    layer.value
-        ? new Map<string, SelectionHint>([
-              [
-                  layerKey(props.analysis.id, layer.value.index),
-                  {
-                      title: props.analysis.name,
-                      kind: $gettext("map layer"),
-                      detail: layer.value.label,
-                  },
-              ],
-          ])
-        : null,
-);
 const scrollLabel = computed(() =>
     layer.value
         ? interpolate(
@@ -271,13 +239,6 @@ function onCurtainChange(event: Event): void {
         <p class="note">
             <span>{{ $gettext("Each map keeps its own contrast.") }}</span>
         </p>
-        <AddToSelection
-            v-if="layer"
-            :keys="[layerKey(props.analysis.id, layer.index)]"
-            :label="addLabel"
-            :aria-label="addAriaLabel"
-            :hints="addHints"
-        />
         <label class="toggle">
             <input
                 class="lay"

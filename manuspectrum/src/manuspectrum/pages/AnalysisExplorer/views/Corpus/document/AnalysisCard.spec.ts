@@ -120,18 +120,15 @@ describe("AnalysisCard", () => {
         expect(single.find(".conditions").text()).toContain("40 kV");
     });
 
-    it("names each + Selection by what it adds", () => {
+    it("adds the whole analysis from its head and never a single file", () => {
         const { wrapper } = mountCard(analysisPayload());
         const head = wrapper.find(".card-head .add-to-selection button");
         expect(head.text()).toBe("+ Selection");
         expect(head.attributes("aria-label")).toBe(
             "Add the analysis MS1_f12_XRF_03 to the Selection",
         );
-        const row = wrapper.find(".files .add-to-selection button");
-        expect(row.text()).toBe("+ Add this file");
-        expect(row.attributes("aria-label")).toBe(
-            "Add X01_f1v.csv to the Selection",
-        );
+        expect(wrapper.findAll(".add-to-selection")).toHaveLength(1);
+        expect(wrapper.find(".files .add-to-selection").exists()).toBe(false);
     });
 
     it("links a DOI dataset to its resolver and writes an unsafe address as plain text", () => {
