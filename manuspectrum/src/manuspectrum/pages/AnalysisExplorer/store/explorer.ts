@@ -21,6 +21,7 @@ import type {
     FilterKey,
     Filters,
     Focus,
+    FolioView,
     ItemKey,
     LayerToggles,
     ListFilterKey,
@@ -40,6 +41,12 @@ export const LIST_FILTER_KEYS: readonly ListFilterKey[] = [
     "project",
     "operator",
 ];
+
+const FOLIO_VIEW_OF: Partial<Record<Focus["kind"], FolioView>> = {
+    analysis: "analyses",
+    characterization: "characterizations",
+    sample: "samples",
+};
 
 export function emptyFilters(): Filters {
     return {
@@ -109,6 +116,7 @@ export const useExplorerStore = defineStore("explorer", () => {
     const document = ref<DocumentState | null>(null);
     const documentOrigin = ref<DocumentOrigin>("home");
     const focus = ref<Focus | null>(null);
+    const folioView = ref<FolioView>("analyses");
     const layers = ref<LayerToggles>({
         points: true,
         zones: true,
@@ -181,6 +189,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         corpusScreen.value = screen;
         document.value = null;
         focus.value = null;
+        folioView.value = "analyses";
     }
 
     /** Opens a document screen, remembering the Corpus screen it was opened from. */
@@ -192,6 +201,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         corpusScreen.value = "document";
         document.value = { id, canvas };
         focus.value = null;
+        folioView.value = "analyses";
     }
 
     /** Changes the page of the open document; does nothing outside a document. */
@@ -201,8 +211,15 @@ export const useExplorerStore = defineStore("explorer", () => {
         }
     }
 
+    /** Opens an analysis, identified material or sample and shows the folio view that draws it; clearing or a file focus keeps the view. */
     function focusOn(next: Focus | null): void {
         focus.value = next;
+        const shown = next ? FOLIO_VIEW_OF[next.kind] : undefined;
+        if (shown) folioView.value = shown;
+    }
+
+    function setFolioView(next: FolioView): void {
+        folioView.value = next;
     }
 
     /** A facet's selected values from the rail; year values are read as integers. */
@@ -351,6 +368,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         document,
         documentOrigin,
         focus,
+        folioView,
         layers,
         overlays,
         basket,
@@ -367,6 +385,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         openDocument,
         setCanvas,
         focusOn,
+        setFolioView,
         setLayer,
         addToBasket,
         addManyToBasket,

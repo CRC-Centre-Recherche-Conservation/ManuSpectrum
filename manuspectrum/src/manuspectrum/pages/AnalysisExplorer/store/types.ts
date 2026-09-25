@@ -45,8 +45,11 @@ export interface DocumentState {
     canvas: string | null;
 }
 
+// what the folio draws: one kind of element at a time
+export type FolioView = "analyses" | "characterizations" | "samples";
+
 export interface Focus {
-    kind: "analysis" | "characterization" | "file";
+    kind: "analysis" | "characterization" | "file" | "sample";
     id: string;
 }
 

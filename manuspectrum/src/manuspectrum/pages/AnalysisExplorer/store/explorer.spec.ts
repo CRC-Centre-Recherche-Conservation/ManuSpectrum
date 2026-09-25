@@ -110,6 +110,33 @@ describe("document screen", () => {
         expect(store.filters.technique).toEqual(["t:a", "t:b"]);
     });
 
+    it("sets the folio view and resets it when a document opens or the screen changes", () => {
+        const store = useExplorerStore();
+        expect(store.folioView).toBe("analyses");
+        store.openDocument(uuid(1));
+        store.setFolioView("samples");
+        expect(store.folioView).toBe("samples");
+        store.openDocument(uuid(2));
+        expect(store.folioView).toBe("analyses");
+        store.setFolioView("characterizations");
+        store.setCorpusScreen("results");
+        expect(store.folioView).toBe("analyses");
+    });
+
+    it("shows the folio view of what a focus opens", () => {
+        const store = useExplorerStore();
+        store.openDocument(uuid(1));
+        store.focusOn({ kind: "sample", id: uuid(2) });
+        expect(store.folioView).toBe("samples");
+        store.focusOn({ kind: "analysis", id: uuid(3) });
+        expect(store.folioView).toBe("analyses");
+        store.focusOn({ kind: "characterization", id: uuid(4) });
+        expect(store.folioView).toBe("characterizations");
+        store.focusOn({ kind: "file", id: uuid(5) });
+        store.focusOn(null);
+        expect(store.folioView).toBe("characterizations");
+    });
+
     it("switches one folio layer", () => {
         const store = useExplorerStore();
         store.setLayer("zones", false);

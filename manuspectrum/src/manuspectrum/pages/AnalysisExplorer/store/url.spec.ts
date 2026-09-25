@@ -25,6 +25,7 @@ function home(): UrlSnapshot {
         corpusScreen: "home",
         document: null,
         focus: null,
+        folioView: "analyses",
         filters: emptyFilters(),
     };
 }
@@ -79,6 +80,27 @@ describe("toQuery / fromQuery", () => {
         expect(snapshot.focus).toEqual({ kind: "analysis", id: ANALYSIS });
     });
 
+    it("reads the folio view of a document and omits the default one", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams(
+                `doc=${DOC}&fview=samples&focus=sample:${ANALYSIS}`,
+            ),
+        );
+        expect(snapshot.folioView).toBe("samples");
+        expect(snapshot.focus).toEqual({ kind: "sample", id: ANALYSIS });
+        expect(toQuery(snapshot).get("fview")).toBe("samples");
+        expect(
+            toQuery({ ...snapshot, folioView: "analyses" }).has("fview"),
+        ).toBe(false);
+        expect(
+            fromQuery(new URLSearchParams(`doc=${DOC}&fview=nowhere`))
+                .folioView,
+        ).toBe("analyses");
+        expect(fromQuery(new URLSearchParams("fview=samples")).folioView).toBe(
+            "analyses",
+        );
+    });
+
     it("drops malformed values", () => {
         const snapshot = fromQuery(
             new URLSearchParams(
@@ -122,6 +144,9 @@ describe("toQuery / fromQuery", () => {
             filters: { ...emptyFilters(), q: "gold" },
         };
         expect(documentHref(snapshot, DOC)).toBe(`?doc=${DOC}&q=gold`);
+        expect(documentHref({ ...snapshot, folioView: "samples" }, DOC)).toBe(
+            `?doc=${DOC}&q=gold`,
+        );
     });
 });
 
@@ -159,6 +184,9 @@ describe("historyMode", () => {
                 document: { id: DOC, canvas: "c2" },
             }),
         ).toBe("replace");
+        expect(
+            historyMode(opened, { ...opened, folioView: "characterizations" }),
+        ).toBe("replace");
     });
 });
 
@@ -186,6 +214,16 @@ describe("store round trip", () => {
             ...emptyFilters(),
             grain: "analyses",
         });
+    });
+
+    it("applies the folio view of a snapshot and reads it back", () => {
+        const store = useExplorerStore();
+        const snapshot = fromQuery(
+            new URLSearchParams(`doc=${DOC}&fview=characterizations`),
+        );
+        applySnapshot(store, snapshot);
+        expect(store.folioView).toBe("characterizations");
+        expect(snapshotOf(store)).toEqual(snapshot);
     });
 
     it("records where a document screen was entered from", () => {
