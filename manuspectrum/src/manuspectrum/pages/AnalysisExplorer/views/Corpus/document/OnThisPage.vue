@@ -16,12 +16,12 @@ import type {
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-const SEPARATOR = /\s*[—–-]\s*$/;
+const SEPARATOR = /\s+[—–-]\s+/;
 
 /**
  * What the page shows, listed. A row name drops the page label and the
- * document name it ends with (`pageLabel`, `documentName`: the screen says
- * them already). The analyses without a position fold under their count when
+ * document it ends with (`pageLabel`, `documentName`: the screen says them
+ * already). The analyses without a position fold under their count when
  * the page has analyses of its own.
  */
 const props = withDefaults(
@@ -83,17 +83,24 @@ const unlocatedTitle = computed(() =>
     ),
 );
 
-/** `name` without a trailing « — page — document » (either part, in that order). */
+/**
+ * `name` without its trailing context: from the segment that is this page's
+ * label when at most one segment (the document) follows it, else without a
+ * last segment that is the document's name. Segments are separated by a
+ * spaced dash.
+ */
 function shortName(name: string): string {
-    let text = name.trim();
-    for (const part of [props.documentName, props.pageLabel]) {
-        const suffix = part.trim();
-        if (suffix && text.endsWith(suffix)) {
-            const rest = text.slice(0, -suffix.length);
-            if (SEPARATOR.test(rest)) text = rest.replace(SEPARATOR, "");
-        }
+    const parts = name.split(SEPARATOR);
+    const page = props.pageLabel.trim();
+    const at = page ? parts.lastIndexOf(page) : -1;
+    if (at >= 1 && at >= parts.length - 2) {
+        return parts.slice(0, at).join(" — ");
     }
-    return text || name;
+    const document = props.documentName.trim();
+    if (parts.length > 1 && document && parts.at(-1) === document) {
+        return parts.slice(0, -1).join(" — ");
+    }
+    return name;
 }
 
 function toggleUnlocated(): void {

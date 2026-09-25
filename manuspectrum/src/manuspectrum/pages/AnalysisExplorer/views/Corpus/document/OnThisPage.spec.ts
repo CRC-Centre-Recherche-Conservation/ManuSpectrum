@@ -73,9 +73,16 @@ describe("OnThisPage", () => {
                 }),
             ],
             pageLabel: "70r",
-            documentName: "Grenoble, Ms.76 Rés.",
+            documentName: "Grenoble. Bibliothèque municipale, Ms.76 Rés.",
         });
         expect(wrapper.find(".technique li button").text()).toBe("Zone bleue");
+        const bare = mountList({
+            annotations: [annotation(2, { name: label("XRF — 70v — spot 2") })],
+            pageLabel: "70r",
+        });
+        expect(bare.find(".technique li button").text()).toBe(
+            "XRF — 70v — spot 2",
+        );
     });
 
     it("folds the unlocated analyses under a count when the page has its own", async () => {

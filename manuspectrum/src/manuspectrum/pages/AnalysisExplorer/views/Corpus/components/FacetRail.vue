@@ -251,11 +251,13 @@ function onChange(facet: Facet, id: string, event: Event): void {
 <style scoped>
 .facet-rail {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
 }
 
 .facet-rail .facet {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.25rem;
     min-inline-size: 0;
     border: none;
@@ -271,13 +273,20 @@ function onChange(facet: Facet, id: string, event: Event): void {
 }
 
 .facet-rail .search {
+    box-sizing: border-box;
     inline-size: 100%;
+    min-inline-size: 0;
     font-size: 0.75rem;
 }
 
 .facet-rail .values {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     list-style: none;
+}
+
+.facet-rail .values li {
+    min-inline-size: 0;
 }
 
 .facet-rail .value {
