@@ -6,11 +6,12 @@ import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusySta
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue";
 
-import { getJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
-import { useRequest } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
-import { searchQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
+import {
+    searchQuery,
+    useSearch,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import {
     emptyFilters,
     useExplorerStore,
@@ -19,87 +20,43 @@ import {
     documentHref,
     snapshotOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
+import { dayIndex } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document-of-the-day.ts";
 
 import type {
     DocumentHit,
     FacetValue,
-    SearchResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
+/**
+ * The explorer home (S0): the doors by technique and by project from the
+ * first page of the documents overview, and the document of the day, read
+ * once the overview has said how many documents have analyses.
+ */
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
 
-/**
- * Fetches page 1 of the Documents overview (grain "documents",
- * `onlyWithAnalyses`), then every remaining page in parallel, and merges
- * their hits. The remaining pages follow `signal` and are all aborted as soon
- * as one of them fails. `featured` reduces over the merged set, so
- * it compares analysis counts across the whole corpus, not one page of it.
- * Facets are read from page 1 only.
- */
-async function loadOverview(
-    query: string,
-    signal: AbortSignal,
-): Promise<SearchResponse> {
-    const first = await getJson<SearchResponse>(
-        "manuspectrum:explorer-search",
-        { query: new URLSearchParams(query), signal },
-    );
-    const pageCount =
-        first.page.size > 0 ? Math.ceil(first.total / first.page.size) : 1;
-    if (pageCount <= 1) {
-        return first;
-    }
-    const pages = new AbortController();
-    const abortPages = (): void => pages.abort();
-    signal.addEventListener("abort", abortPages);
-    if (signal.aborted) {
-        pages.abort();
-    }
-    try {
-        const rest = await Promise.all(
-            Array.from({ length: pageCount - 1 }, (_placeholder, index) =>
-                getJson<SearchResponse>("manuspectrum:explorer-search", {
-                    query: searchQuery(emptyFilters(), index + 2),
-                    signal: pages.signal,
-                }),
-            ),
-        );
-        return {
-            ...first,
-            results: [first, ...rest].flatMap((page) => page.results),
-        };
-    } catch (error) {
-        pages.abort();
-        throw error;
-    } finally {
-        signal.removeEventListener("abort", abortPages);
-    }
-}
-
-const overview = useRequest<SearchResponse>(
-    () => searchQuery(emptyFilters(), 1).toString(),
-    loadOverview,
-);
+const overview = useSearch(() => searchQuery(emptyFilters(), 1));
+const ofTheDay = useSearch(() => {
+    const index = dayIndex(new Date(), overview.data.value?.total ?? 0);
+    return index === null
+        ? null
+        : searchQuery(emptyFilters(), index + 1, { size: 1 });
+});
 const text = ref("");
 
 useFacetLabels(() => overview.data.value?.facets);
 
-const featured = computed<DocumentHit | null>(() => {
-    const documents = (overview.data.value?.results ?? []).filter(
-        (hit): hit is DocumentHit =>
-            hit.type === "document" && hit.analysisCount > 0,
-    );
-    return documents.reduce<DocumentHit | null>(
-        (best, hit) =>
-            best === null || hit.analysisCount > best.analysisCount
-                ? hit
-                : best,
-        null,
-    );
-});
+const featured = computed<DocumentHit | null>(
+    () =>
+        ofTheDay.data.value?.results.find(
+            (hit): hit is DocumentHit => hit.type === "document",
+        ) ?? null,
+);
+const featuredLoading = computed(
+    () => ofTheDay.status.value === "loading" && featured.value === null,
+);
 const techniques = computed<FacetValue[]>(
     () =>
         overview.data.value?.facets.find((facet) => facet.key === "technique")
@@ -143,6 +100,10 @@ function openTechnique(id: string): void {
 
 function openProject(id: string): void {
     store.setFilter("project", [id]);
+    store.setCorpusScreen("results");
+}
+
+function browseAll(): void {
     store.setCorpusScreen("results");
 }
 
@@ -196,6 +157,15 @@ function hrefFor(id: string): string {
                 </button>
             </div>
         </form>
+        <p class="browse">
+            <button
+                type="button"
+                class="browse-all"
+                @click="browseAll"
+            >
+                <span>{{ $gettext("Browse the whole corpus") }}</span>
+            </button>
+        </p>
         <BusyStatus
             :busy="overview.status.value === 'loading'"
             :first="firstLoad"
@@ -235,7 +205,7 @@ function hrefFor(id: string): string {
             :aria-busy="overview.status.value === 'loading' ? 'true' : 'false'"
         >
             <section
-                v-if="featured"
+                v-if="featured || featuredLoading"
                 class="door featured"
                 aria-labelledby="explorer-door-featured"
             >
@@ -243,13 +213,19 @@ function hrefFor(id: string): string {
                     id="explorer-door-featured"
                     class="title"
                 >
-                    <span>{{ $gettext("The most analysed document") }}</span>
+                    <span>{{ $gettext("Document of the day") }}</span>
                 </h2>
                 <DocumentCard
+                    v-if="featured"
                     :hit="featured"
                     :href="hrefFor(featured.id)"
                     @open="openDocument"
                 />
+                <span
+                    v-else
+                    class="ms-skeleton featured-skeleton"
+                    aria-hidden="true"
+                ></span>
             </section>
             <section
                 v-if="techniques.length > 0"
@@ -420,6 +396,28 @@ function hrefFor(id: string): string {
     border: 0.0625rem solid var(--border);
     border-radius: var(--explorer-radius);
     background: var(--surface);
+}
+
+.corpus-home .featured-skeleton {
+    block-size: 7rem;
+}
+
+.corpus-home .browse-all {
+    min-block-size: var(--explorer-target);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--blue-text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.corpus-home .browse-all::after {
+    content: " →" / "";
+}
+
+.corpus-home .browse-all:hover {
+    text-decoration: underline;
 }
 
 .corpus-home .door-skeleton .heading {
