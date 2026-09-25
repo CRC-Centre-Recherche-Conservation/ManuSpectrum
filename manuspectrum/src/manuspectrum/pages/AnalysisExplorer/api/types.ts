@@ -244,6 +244,15 @@ export interface ItemsResponse {
     missing: string[];
 }
 
+/** Body of `GET /api/spectrum-preview/<file_id>?n=` (already through its renderer configuration). */
+export interface Series {
+    x: number[];
+    y: number[];
+    n_source: number;
+    decimated: boolean;
+    x_reversed: boolean;
+}
+
 export const SHAPE_KEYS = {
     Label: { value: true, lang: true } satisfies Record<keyof Label, true>,
     Ref: { id: true, model: true, name: true } satisfies Record<

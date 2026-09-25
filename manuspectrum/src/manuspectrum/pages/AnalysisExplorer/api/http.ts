@@ -1,5 +1,7 @@
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
+import type { Series } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
 export type ExplorerRoute =
     | "manuspectrum:explorer-search"
     | "manuspectrum:explorer-document"
@@ -13,6 +15,7 @@ export interface GetJsonOptions {
 }
 
 const NOT_FOUND = 404;
+const NO_CONTENT = 204;
 
 /** The API answered 404: unknown and refused look the same (spec §4). */
 export class UnavailableError extends Error {
@@ -52,4 +55,32 @@ export async function getJson<T>(
         throw new ServiceError(response.status);
     }
     return (await response.json()) as T;
+}
+
+/**
+ * The series of one readable file at a point budget of the server's tiers.
+ * The preview URL of the payload is absolute on `PUBLIC_SERVER_ADDRESS`; only
+ * its path is fetched, on the page's own origin. `null` means nothing to draw.
+ */
+export async function getSeries(
+    previewUrl: string,
+    n: 200 | 4096,
+    signal?: AbortSignal,
+): Promise<Series | null> {
+    const path = new URL(previewUrl, window.location.origin).pathname;
+    const response = await fetch(`${path}?n=${n}`, {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        signal,
+    });
+    if (response.status === NOT_FOUND) {
+        throw new UnavailableError();
+    }
+    if (!response.ok) {
+        throw new ServiceError(response.status);
+    }
+    if (response.status === NO_CONTENT) {
+        return null;
+    }
+    return (await response.json()) as Series;
 }

@@ -4,6 +4,7 @@ import {
     ServiceError,
     UnavailableError,
     getJson,
+    getSeries,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
@@ -70,5 +71,14 @@ describe("getJson", () => {
         expect(fetchMock.mock.calls[0][0]).toBe(
             "/en/manuspectrum:explorer-search",
         );
+    });
+});
+
+describe("getSeries", () => {
+    it("maps 404 to UnavailableError", async () => {
+        fetchMock.mockResolvedValueOnce(respond(404));
+        await expect(
+            getSeries("http://testserver/api/spectrum-preview/abc", 4096),
+        ).rejects.toBeInstanceOf(UnavailableError);
     });
 });
