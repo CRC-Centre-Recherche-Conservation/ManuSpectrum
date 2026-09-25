@@ -106,6 +106,7 @@ _EMPTY = (None, "", [], {})
 PAGE_SIZES = (10, 25, 50)
 DESCRIPTION_LENGTH = 220
 SHELFMARK_LABELS = frozenset({"shelfmark", "shelf mark", "call number", "cote"})
+LINK_IDENTIFIER = re.compile(r"(?i)\s*(https?://|ark:)")
 
 logger = logging.getLogger(__name__)
 
@@ -705,11 +706,15 @@ def plain_text(markup, length=DESCRIPTION_LENGTH):
 
 
 def _shelfmark(tiles, value_node, type_node, language):
-    """The identifier typed as a shelfmark (``SHELFMARK_LABELS``), else the first identifier; None without one."""
+    """The identifier typed as a shelfmark (``SHELFMARK_LABELS``), else the first identifier; None without one.
+
+    An identifier that is a link (``LINK_IDENTIFIER``: http, https, ark) is
+    never a shelfmark.
+    """
     found = []
     for data in tiles:
         text = label(string_texts(data.get(value_node.nodeid)), language)
-        if not text:
+        if not text or LINK_IDENTIFIER.match(text["value"]):
             continue
         terms = (
             {fold(t) for t in reference_terms(data.get(type_node.nodeid))}

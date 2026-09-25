@@ -418,3 +418,16 @@ class DocumentHitTests(ServiceCase):
         self.assertIsNone(hit["description"])
         self.assertIsNone(hit["documentType"])
         self.assertIsNone(hit["holding"])
+
+    def test_an_identifier_that_is_a_link_is_never_the_shelfmark(self):
+        other = self.documents["embargoed"]
+        for link in ("https://gallica.example/ark:/12148/b1", "ark:/12148/b2"):
+            self.tile(other, "value_of_identifier", self.string_value(link))
+        payload = search_payload(self.query("grain=documents"), self.anonymous, "en")
+        hit = next(r for r in payload["results"] if r["id"] == str(other.pk))
+        self.assertIsNone(hit["shelfmark"])
+
+        self.tile(other, "value_of_identifier", self.string_value("MS 12"))
+        payload = search_payload(self.query("grain=documents"), self.anonymous, "en")
+        hit = next(r for r in payload["results"] if r["id"] == str(other.pk))
+        self.assertEqual(hit["shelfmark"]["value"], "MS 12")
