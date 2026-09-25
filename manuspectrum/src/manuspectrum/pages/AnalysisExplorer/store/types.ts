@@ -1,12 +1,16 @@
 import type { EventType } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-// 'af:<analysisId>:<fileId>' | 'im:<analysisId>:<mapIndex>' | 'ch:<characterizationId>:-'
+// 'an:<analysisId>:-' | 'af:<analysisId>:<fileId>' | 'im:<analysisId>:<mapIndex>' | 'ch:<characterizationId>:-'
 export type ItemKey = string;
 export type ExplorerView = "corpus" | "map" | "compare";
 export type CorpusScreen = "home" | "results" | "document";
 // the Corpus screen a document screen was entered from
 export type DocumentOrigin = Exclude<CorpusScreen, "document">;
-export type BasketKind = "analysis-file" | "imaging" | "characterization";
+export type BasketKind =
+    | "analysis"
+    | "analysis-file"
+    | "imaging"
+    | "characterization";
 export type ListFilterKey =
     | "partType"
     | "partColour"

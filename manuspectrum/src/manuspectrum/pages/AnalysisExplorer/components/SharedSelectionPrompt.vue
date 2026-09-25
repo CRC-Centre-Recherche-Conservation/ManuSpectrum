@@ -64,6 +64,9 @@ function itemName(item: Item): Label {
     if (item.kind === "characterization") {
         return item.characterization.name;
     }
+    if (item.kind === "analysis") {
+        return item.analysis.name;
+    }
     return {
         value: `${item.analysis.name.value} · ${item.file.name}`,
         lang: item.analysis.name.lang,

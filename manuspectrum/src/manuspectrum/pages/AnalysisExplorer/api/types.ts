@@ -263,7 +263,16 @@ export interface AnalysisPayload {
     unpublished: boolean;
 }
 
+/** A whole analysis in the Selection, with the files a viewer shows (raw files left out; possibly none). */
+export interface AnalysisItem {
+    key: string;
+    kind: "analysis";
+    analysis: AnalysisHit;
+    files: FileEntry[];
+}
+
 export type Item =
+    | AnalysisItem
     | {
           key: string;
           kind: "analysis-file";
@@ -465,6 +474,12 @@ export const SHAPE_KEYS = {
         previewUrl: true,
         zone: true,
     } satisfies Record<keyof FileEntry, true>,
+    AnalysisItem: {
+        key: true,
+        kind: true,
+        analysis: true,
+        files: true,
+    } satisfies Record<keyof AnalysisItem, true>,
     ItemsResponse: { items: true, missing: true } satisfies Record<
         keyof ItemsResponse,
         true

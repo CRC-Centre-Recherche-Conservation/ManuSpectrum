@@ -2,8 +2,11 @@
 import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
+
 import { useItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useItems.ts";
 import { SELECTION_HINTS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { holdingsOf } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import {
     BASKET_LIMIT,
@@ -13,8 +16,10 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type {
+    AnalysisItem,
     Item,
     Label,
+    Technique,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
@@ -30,7 +35,7 @@ const hints = inject(
 );
 
 const store = useExplorerStore();
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
 
 const byKey = ref(new Map<string, Item>());
@@ -56,7 +61,34 @@ watch(
 );
 const canCompare = computed(() => isViewAvailable("compare"));
 
+/** What a whole analysis holds, « 2 spectra · 1 map », or that it holds nothing to show. */
+function holdingsText(item: AnalysisItem): string {
+    const held = holdingsOf(item.files);
+    const parts = [
+        [
+            held.spectra,
+            $ngettext("%{n} spectrum", "%{n} spectra", held.spectra),
+        ],
+        [held.maps, $ngettext("%{n} map", "%{n} maps", held.maps)],
+        [
+            held.microImages,
+            $ngettext(
+                "%{n} micro-image",
+                "%{n} micro-images",
+                held.microImages,
+            ),
+        ],
+    ] as const;
+    const written = parts
+        .filter(([count]) => count > 0)
+        .map(([count, text]) => interpolate(text, { n: count }, true));
+    return written.length > 0
+        ? written.join(" · ")
+        : $gettext("no data to show");
+}
+
 function kindText(item: Item): string {
+    if (item.kind === "analysis") return holdingsText(item);
     if (item.kind === "characterization")
         return $gettext("identified material");
     if (item.kind === "imaging") return $gettext("map layer");
@@ -70,6 +102,10 @@ function titleOf(item: Item): Label {
 }
 
 /** The label of a map layer, written after the analysis name (a label from the file, language unknown). */
+function techniqueOf(item: Item): Technique | null {
+    return item.kind === "characterization" ? null : item.analysis.technique;
+}
+
 function layerOf(item: Item): string | null {
     if (item.kind !== "imaging") return null;
     const index = Number(item.key.split(":")[2]);
@@ -116,7 +152,7 @@ function removeLabel(slot: number): string {
             <span>
                 {{
                     $gettext(
-                        "Your Selection is empty. Add analyses, maps or identified materials with « + Selection ».",
+                        "Your Selection is empty. Add analyses or identified materials with « + Selection ».",
                     )
                 }}
             </span>
@@ -130,6 +166,14 @@ function removeLabel(slot: number): string {
                 <span class="slot">{{ slotLabel(row.slot) }}</span>
                 <span class="info">
                     <template v-if="byKey.get(row.key)">
+                        <TechniqueTag
+                            v-if="
+                                byKey.get(row.key)!.kind === 'analysis' &&
+                                techniqueOf(byKey.get(row.key)!)
+                            "
+                            :code="techniqueOf(byKey.get(row.key)!)!.code"
+                            :colour="techniqueOf(byKey.get(row.key)!)!.colour"
+                        />
                         <span class="kind">{{
                             kindText(byKey.get(row.key)!)
                         }}</span>

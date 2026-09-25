@@ -7,14 +7,13 @@ import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/U
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
 
-import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import {
     foldText,
     formatDateRange,
     formatSize,
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
-import { entryKeyOf } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { viewerFor } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
@@ -58,7 +57,6 @@ defineExpose({ focusHeading });
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
-const { dataKindBadge } = useVocabulary();
 const lang = document.documentElement.lang || "en";
 const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -107,7 +105,7 @@ const previewed = computed<FileEntry[]>(() => {
     return shown;
 });
 const entryKey = computed(() =>
-    analysis.value ? entryKeyOf(analysis.value) : null,
+    analysis.value ? analysisKey(analysis.value.id) : null,
 );
 const conditionGroups = computed<ConditionGroup[]>(() => {
     const groups = new Map<string, ConditionGroup>();
@@ -134,14 +132,8 @@ const entryHints = computed(() => {
     const current = analysis.value;
     const key = entryKey.value;
     if (!current || !key) return null;
-    const [prefix, , part] = key.split(":");
-    const file = current.files.find((entry) => entry.id === part);
-    const kind =
-        prefix === "im"
-            ? $gettext("map layer")
-            : dataKindBadge(file?.dataKind ?? "file");
     return new Map<string, SelectionHint>([
-        [key, { title: current.name, kind }],
+        [key, { title: current.name, kind: $gettext("analysis") }],
     ]);
 });
 const date = computed(() =>

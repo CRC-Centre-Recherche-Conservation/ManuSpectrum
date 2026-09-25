@@ -5,7 +5,10 @@ import { useGettext } from "vue3-gettext";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 
 import { useSeriesSet } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
-import { fileKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import {
+    analysisKey,
+    fileKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
@@ -149,10 +152,15 @@ function drawnFiles(): FileEntry[] {
     );
 }
 
-/** The file name, followed by its A-label when the file is in the Selection. */
+/** The file name, followed by the A-label of the file, else of its analysis, when either is in the Selection. */
 function legendName(file: FileEntry): string {
-    const key = fileKey(props.analysis.id, file.id);
-    const slot = store.basket.find((item) => item.key === key)?.slot;
+    const keys = [
+        fileKey(props.analysis.id, file.id),
+        analysisKey(props.analysis.id),
+    ];
+    const slot = keys
+        .map((key) => store.basket.find((item) => item.key === key)?.slot)
+        .find((found) => found !== undefined);
     return slot === undefined ? file.name : `${file.name} (${slotLabel(slot)})`;
 }
 

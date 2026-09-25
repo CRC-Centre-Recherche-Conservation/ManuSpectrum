@@ -1720,7 +1720,18 @@ def analysis_payload(analysis_id, user, language):
     }
 
 
-ITEM_KEY = re.compile(r"^(af|im|ch):([0-9a-f-]{36}):([^:]+)$")
+ITEM_KEY = re.compile(r"^(an|af|im|ch):([0-9a-f-]{36}):([^:]+)$")
+
+
+def shown_files(files):
+    """The files of *files* a viewer shows: readable spectra, imaging manifests with layers, micro-images."""
+    return [
+        f
+        for f in files
+        if (f["dataKind"] == "xy" and f["role"] == "readable")
+        or (f["dataKind"] == "chemical-imaging" and f["layers"])
+        or f["dataKind"] == "micro-imaging"
+    ]
 
 
 def parse_keys(query):
@@ -1731,7 +1742,13 @@ def parse_keys(query):
 
 
 def items_payload(keys, user, language):
-    """``ItemsResponse``: the items still visible and the keys that are not, without saying why."""
+    """``ItemsResponse``: the items still visible and the keys that are not, without saying why.
+
+    ``an:<analysis>:-`` is a whole analysis with the files a viewer shows
+    (possibly none); ``af:<analysis>:<file>`` one of its files and
+    ``im:<analysis>:<layer>`` the imaging manifest holding that layer;
+    ``ch:<characterization>:-`` an identified material.
+    """
     visible = visible_set(user)
     rows = {r["id"]: r for r in corpus_rows(user, language)}
     label_of = names(
@@ -1753,7 +1770,8 @@ def items_payload(keys, user, language):
         for s in characterization_summaries(ch_ids, visible, user, language, {})
     }
     file_ids = sorted(
-        {m.group(2) for _, m in parsed if m and m.group(1) in ("af", "im")} & set(rows)
+        {m.group(2) for _, m in parsed if m and m.group(1) in ("an", "af", "im")}
+        & set(rows)
     )
     shared_values = (
         Values(file_ids, ["files", "micro", "imaging"], user) if file_ids else None
@@ -1777,11 +1795,21 @@ def items_payload(keys, user, language):
             else:
                 missing.append(key)
             continue
-        if rid not in rows:
+        if rid not in rows or (kind == "an" and sub != "-"):
             missing.append(key)
             continue
         if rid not in files_of:
             files_of[rid] = analysis_files(rid, user, language, values=shared_values)
+        if kind == "an":
+            items.append(
+                {
+                    "key": key,
+                    "kind": "analysis",
+                    "analysis": analysis_hit(rows[rid], label_of),
+                    "files": shown_files(files_of[rid]),
+                }
+            )
+            continue
         if kind == "af":
             found = next(
                 (

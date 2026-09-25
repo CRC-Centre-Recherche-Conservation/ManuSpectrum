@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { effectScope } from "vue";
 
 import { useEvidence } from "@/manuspectrum/pages/AnalysisExplorer/composables/useEvidence.ts";
-import { evidenceEntries } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import {
     analysisPayload,
     fileEntry,
@@ -19,7 +18,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe("evidence of an identified material", () => {
-    it("reads every evidence analysis and keys those with data", async () => {
+    it("reads every evidence analysis", async () => {
         const withData = analysisPayload({
             id: uuid(101),
             files: [fileEntry({ id: uuid(8) })],
@@ -41,10 +40,6 @@ describe("evidence of an identified material", () => {
             uuid(101),
             uuid(102),
         ]);
-        expect(evidenceEntries(handle.data.value!)).toEqual({
-            keys: [`af:${uuid(101)}:${uuid(8)}`],
-            withoutData: [uuid(102)],
-        });
         scope.stop();
     });
 

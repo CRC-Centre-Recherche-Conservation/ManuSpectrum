@@ -142,6 +142,21 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
+    it("names every file of an analysis in the Selection by the analysis A-label", async () => {
+        const { wrapper, store } = mountPreview(
+            [readable(1), readable(2)],
+            () => jsonResponse(SERIES),
+        );
+        store.addToBasket(`an:${uuid(101)}:-`);
+        await flushPromises();
+        const { traces } = lastDrawing();
+        expect(traces.map((trace) => trace.name)).toEqual([
+            "P1.csv (A1)",
+            "P2.csv (A1)",
+        ]);
+        wrapper.unmount();
+    });
+
     it("keeps drawing the other files when one fails, and says which", async () => {
         const { wrapper } = mountPreview([readable(1), readable(2)], (url) =>
             url.includes(uuid(702))

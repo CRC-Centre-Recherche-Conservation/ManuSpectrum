@@ -170,6 +170,7 @@ SHAPES = {
         "previewUrl": (str, type(None)),
         "zone": (dict, type(None)),
     },
+    "AnalysisItem": {"key": str, "kind": str, "analysis": "AnalysisHit", "files": list},
     "ItemsResponse": {"items": list, "missing": list},
 }
 

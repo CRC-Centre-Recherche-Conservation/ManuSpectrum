@@ -167,12 +167,24 @@ describe("AnalysisCard", () => {
         });
     });
 
-    it("adds the analysis to the Selection by its spectrum", async () => {
+    it("adds the whole analysis to the Selection", async () => {
         const { wrapper, store } = mountCard(analysisPayload());
         await wrapper
             .find(".card-head .add-to-selection button")
             .trigger("click");
-        expect(store.basket[0].key).toBe(`af:${uuid(101)}:${uuid(700)}`);
+        expect(store.basket.map((item) => item.key)).toEqual([
+            `an:${uuid(101)}:-`,
+        ]);
+    });
+
+    it("adds an analysis with nothing to show all the same", async () => {
+        const { wrapper, store } = mountCard(analysisPayload({ files: [] }));
+        await wrapper
+            .find(".card-head .add-to-selection button")
+            .trigger("click");
+        expect(store.basket.map((item) => item.key)).toEqual([
+            `an:${uuid(101)}:-`,
+        ]);
     });
 
     it("opens the full record, a page of this site, in a new tab", () => {

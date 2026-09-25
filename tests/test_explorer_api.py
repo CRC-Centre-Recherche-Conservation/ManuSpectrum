@@ -618,6 +618,56 @@ class ItemsRouteTests(CorpusCase):
         self.assertEqual([i["kind"] for i in payload["items"]], ["imaging"])
         assert_shape(self, payload["items"][0]["file"], "FileEntry")
 
+    def test_an_an_key_restores_the_whole_analysis_with_the_files_it_shows(self):
+        key = f"an:{self.analyses['open'].pk}:-"
+
+        payload = self.get([key]).json()
+
+        self.assertEqual(payload["missing"], [])
+        item = payload["items"][0]
+        assert_shape(self, item, "AnalysisItem")
+        self.assertEqual((item["key"], item["kind"]), (key, "analysis"))
+        self.assertEqual(item["analysis"]["id"], str(self.analyses["open"].pk))
+        self.assertEqual([f["id"] for f in item["files"]], [self.CSV])
+        for entry in item["files"]:
+            assert_shape(self, entry, "FileEntry")
+
+    def test_an_analysis_with_nothing_to_show_is_still_an_item(self):
+        key = f"an:{self.analyses['on_document'].pk}:-"
+
+        payload = self.get([key]).json()
+
+        self.assertEqual(payload["missing"], [])
+        self.assertEqual(payload["items"][0]["files"], [])
+
+    def test_an_imaging_manifest_comes_with_its_layers_in_the_analysis_item(self):
+        self.tile(
+            self.analyses["open"],
+            "chemical_imaging_manifest",
+            "https://example.org/iiif/imaging/x",
+        )
+
+        with mock.patch(
+            "manuspectrum.views.explorer_service.manifest_json",
+            return_value=self.IMAGING_MANIFEST,
+        ):
+            payload = self.get([f"an:{self.analyses['open'].pk}:-"]).json()
+
+        files = payload["items"][0]["files"]
+        self.assertEqual([f["dataKind"] for f in files], ["xy", "chemical-imaging"])
+        self.assertEqual([layer["label"] for layer in files[1]["layers"]], ["Pb"])
+
+    def test_a_hidden_unknown_or_malformed_analysis_key_is_missing(self):
+        self.embargo(self.analyses["open"])
+        hidden = f"an:{self.analyses['open'].pk}:-"
+        unknown = "an:00000000-0000-4000-8000-00000000000a:-"
+        malformed = f"an:{self.analyses['on_document'].pk}:0"
+
+        payload = self.get([hidden, unknown, malformed]).json()
+
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(payload["missing"], sorted([hidden, unknown, malformed]))
+
     def test_malformed_and_hidden_keys_are_missing_alike(self):
         self.embargo(self.analyses["open"])
         hidden = f"af:{self.analyses['open'].pk}:{self.CSV}"

@@ -11,9 +11,8 @@ import {
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import {
+    analysisKey,
     characterizationKey,
-    entryKeyOf,
-    evidenceEntries,
 } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
@@ -42,7 +41,7 @@ const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
 const store = useExplorerStore();
-const { $gettext, $ngettext, interpolate } = useGettext();
+const { $gettext, interpolate } = useGettext();
 const evidence = useEvidence(() => props.summary.evidence);
 const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -67,17 +66,11 @@ const names = computed(
             ]),
         ),
 );
-const entries = computed(() =>
-    evidenceRead.value ? evidenceEntries(evidenceRead.value) : null,
-);
-const withEvidenceKeys = computed(() =>
-    entries.value ? [ownKey.value, ...entries.value.keys] : [],
-);
-const readFailed = computed(
-    () =>
-        evidence.status.value === "error" ||
-        evidence.status.value === "unavailable",
-);
+/** The material and every analysis it cites, whether or not an analysis holds data to show. */
+const withEvidenceKeys = computed(() => [
+    ownKey.value,
+    ...props.summary.evidence.map((id) => analysisKey(id)),
+]);
 const sortedLevels = computed(() =>
     [...props.scale.levels].sort((first, second) => first.rank - second.rank),
 );
@@ -102,35 +95,18 @@ const ownHints = computed(
             ],
         ]),
 );
-/** The material and each supporting analysis, by the name the card read. */
+/** The material and each supporting analysis the card has read, by its name. */
 const withEvidenceHints = computed(() => {
     const hints = new Map(ownHints.value);
     for (const analysis of evidenceRead.value ?? []) {
-        const key = entryKeyOf(analysis);
-        if (key) {
-            hints.set(key, {
-                title: analysis.name,
-                kind: $gettext("supporting analysis"),
-            });
-        }
+        hints.set(analysisKey(analysis.id), {
+            title: analysis.name,
+            kind: $gettext("supporting analysis"),
+        });
     }
     return hints;
 });
 const date = computed(() => formatDateRange(props.summary.date));
-const withoutDataNote = computed(() => {
-    const count = entries.value?.withoutData.length ?? 0;
-    return count === 0
-        ? ""
-        : interpolate(
-              $ngettext(
-                  "%{n} supporting analysis has no data to show and is left out.",
-                  "%{n} supporting analyses have no data to show and are left out.",
-                  count,
-              ),
-              { n: count },
-              true,
-          );
-});
 const evidenceTitle = computed(() =>
     interpolate(
         $gettext("Analyses cited as evidence (%{n})"),
@@ -409,33 +385,11 @@ function focusHeading(): void {
             v-if="props.summary.evidence.length > 0"
             class="with-evidence"
         >
-            <p
-                v-if="readFailed"
-                class="warning"
-            >
-                <span>
-                    {{
-                        $gettext(
-                            "The supporting analyses could not be read; add the material alone.",
-                        )
-                    }}
-                </span>
-            </p>
-            <template v-else-if="entries">
-                <AddToSelection
-                    :keys="withEvidenceKeys"
-                    :label="
-                        $gettext('+ Selection with its supporting analyses')
-                    "
-                    :hints="withEvidenceHints"
-                />
-                <p
-                    v-if="withoutDataNote"
-                    class="note-line"
-                >
-                    <span>{{ withoutDataNote }}</span>
-                </p>
-            </template>
+            <AddToSelection
+                :keys="withEvidenceKeys"
+                :label="$gettext('+ Selection with its supporting analyses')"
+                :hints="withEvidenceHints"
+            />
         </div>
     </article>
 </template>
@@ -543,11 +497,6 @@ function focusHeading(): void {
 .characterization-card .name:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
-}
-
-.characterization-card .warning {
-    color: var(--ink);
-    font-weight: 600;
 }
 
 .characterization-card dl {
