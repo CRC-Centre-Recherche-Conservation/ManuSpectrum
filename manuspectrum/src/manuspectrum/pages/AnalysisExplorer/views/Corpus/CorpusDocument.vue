@@ -11,7 +11,9 @@ import AnalysisCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/doc
 import CanvasStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue";
 import CharacterizationCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue";
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
+import FolioViewSwitch from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue";
 import OnThisPage from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue";
+import SampleCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue";
 import SelectionPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SelectionPanel.vue";
 
 import { searchOf } from "@/manuspectrum/public/useUrlState.ts";
@@ -37,15 +39,15 @@ import {
     snapshotOf,
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
-import { folioLayerOf } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
 import type {
     DocumentCanvas,
     FacetKey,
+    Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     Focus,
-    LayerToggles,
+    FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const NARROW_QUERY = "(max-width: 48rem)";
@@ -132,6 +134,47 @@ const listedCharacterizations = computed(() =>
             !summary.zone || summary.zone.canvas === currentCanvas.value?.id,
     ),
 );
+/** The samples drawn on this page. */
+const pageSamples = computed(() =>
+    (data.value?.samples ?? []).filter(
+        (entry) => entry.zone?.canvas === currentCanvas.value?.id,
+    ),
+);
+/** The samples drawn on this page and those without a zone. */
+const listedSamples = computed(() =>
+    (data.value?.samples ?? []).filter(
+        (entry) => !entry.zone || entry.zone.canvas === currentCanvas.value?.id,
+    ),
+);
+/** The folio views that have something on this page, in the order of the switch. */
+const availableViews = computed(() => {
+    const views: FolioView[] = [];
+    if (
+        pageAnnotations.value.length > 0 ||
+        (data.value?.unlocated ?? []).length > 0
+    )
+        views.push("analyses");
+    if (listedCharacterizations.value.length > 0)
+        views.push("characterizations");
+    if (listedSamples.value.length > 0) views.push("samples");
+    return views;
+});
+/** The view the folio and the page list show: the one chosen, or the first this page has. */
+const folioView = computed<FolioView>(() =>
+    availableViews.value.includes(store.folioView)
+        ? store.folioView
+        : availableViews.value[0] ?? "analyses",
+);
+/** Names of the document's analyses, by id. */
+const analysisNames = computed(
+    () =>
+        new Map<string, Label>(
+            [
+                ...(data.value?.annotations ?? []),
+                ...(data.value?.unlocated ?? []),
+            ].map((entry) => [entry.analysis, entry.name]),
+        ),
+);
 const styles = computed(() =>
     techniqueStyles(
         [
@@ -160,8 +203,16 @@ const openCharacterization = computed(() => {
         ) ?? null
     );
 });
+const openSample = computed(() => {
+    const focus = store.focus;
+    if (focus?.kind !== "sample") return null;
+    return data.value?.samples.find((entry) => entry.id === focus.id) ?? null;
+});
 const cardOpen = computed(
-    () => focusedAnalysis.value !== null || openCharacterization.value !== null,
+    () =>
+        focusedAnalysis.value !== null ||
+        openCharacterization.value !== null ||
+        openSample.value !== null,
 );
 const lit = computed(() =>
     openCharacterization.value
@@ -238,16 +289,6 @@ const counts = computed(() => {
         ),
     ].join(" · ");
 });
-/** The layer toggles offered: those that would show or hide something on this page (`folioLayerOf`, as the folio decides). */
-const availableLayers = computed(() => ({
-    points: pageAnnotations.value.some(
-        (entry) => folioLayerOf(entry.dataKind) === "points",
-    ),
-    zones: pageAnnotations.value.some(
-        (entry) => folioLayerOf(entry.dataKind) === "zones",
-    ),
-    characterizations: pageCharacterizations.value.length > 0,
-}));
 const railToggleLabel = computed(() =>
     interpolate(
         $gettext("Filters (%{count})"),
@@ -324,15 +365,15 @@ function followFocus(): void {
     const current = data.value;
     if (!focus || !current) return;
     pageToFollow = false;
+    const zoned =
+        focus.kind === "sample" ? current.samples : current.characterizations;
     const pages =
         focus.kind === "analysis"
             ? current.annotations
                   .filter((entry) => entry.analysis === focus.id)
                   .map((entry) => entry.canvas)
             : [
-                  current.characterizations.find(
-                      (summary) => summary.id === focus.id,
-                  )?.zone?.canvas,
+                  zoned.find((entry) => entry.id === focus.id)?.zone?.canvas,
               ].filter((canvas): canvas is string => Boolean(canvas));
     const here = currentCanvas.value?.id;
     if (pages.length > 0 && !pages.some((canvas) => canvas === here)) {
@@ -346,13 +387,16 @@ function onSelect(focus: Focus): void {
 
 /**
  * Clears the focus and gives the keyboard focus back to the marker of the
- * analysis the card showed; the document name takes it when no marker does
- * (an identified material, an analysis without a zone on this page). When the
+ * analysis or sample the card showed; the document name takes it when no
+ * marker does (an identified material, an analysis without a zone on this
+ * page). When the
  * card was opened over an entry that is this screen without a card, the
  * history steps back to it, so Back does not show the same screen twice.
  */
 async function closeCard(): Promise<void> {
-    const returnTo = focusedAnalysis.value;
+    const returnTo =
+        focusedAnalysis.value ??
+        (openSample.value ? `sample:${openSample.value.id}` : null);
     const goBack = openedOver !== null && openedOver === addressWithoutCard();
     store.focusOn(null);
     await nextTick();
@@ -371,8 +415,8 @@ function onFacetChange(key: FacetKey, ids: string[]): void {
     store.setFacet(key, ids);
 }
 
-function toggleLayer(key: keyof LayerToggles, event: Event): void {
-    store.setLayer(key, (event.target as HTMLInputElement).checked);
+function onFolioView(view: FolioView): void {
+    store.setFolioView(view);
 }
 
 function toggleRail(): void {
@@ -492,39 +536,16 @@ function goHome(): void {
                     class="stage"
                     :aria-label="$gettext('Page')"
                 >
-                    <fieldset class="layers">
-                        <legend>
-                            <span>{{ $gettext("Layers") }}</span>
-                        </legend>
-                        <label v-if="availableLayers.points">
-                            <input
-                                type="checkbox"
-                                :checked="store.layers.points"
-                                @change="toggleLayer('points', $event)"
-                            />
-                            <span>{{ $gettext("Point analyses") }}</span>
-                        </label>
-                        <label v-if="availableLayers.zones">
-                            <input
-                                type="checkbox"
-                                :checked="store.layers.zones"
-                                @change="toggleLayer('zones', $event)"
-                            />
-                            <span>{{ $gettext("Imaging zones") }}</span>
-                        </label>
-                        <label v-if="availableLayers.characterizations">
-                            <input
-                                type="checkbox"
-                                :checked="store.layers.characterizations"
-                                @change="
-                                    toggleLayer('characterizations', $event)
-                                "
-                            />
-                            <span>{{ $gettext("Identified materials") }}</span>
-                        </label>
-                    </fieldset>
+                    <FolioViewSwitch
+                        :view="folioView"
+                        :available="availableViews"
+                        @change="onFolioView"
+                    />
                     <ul
-                        v-if="legend.length > 0"
+                        v-if="
+                            legend.length > 0 &&
+                            (folioView === 'analyses' || lit !== null)
+                        "
                         class="legend"
                         :aria-label="$gettext('Techniques')"
                     >
@@ -559,6 +580,8 @@ function goHome(): void {
                         :lit="lit"
                         :dimmed-materials="dimmedMaterials"
                         :layers="store.layers"
+                        :view="folioView"
+                        :samples="pageSamples"
                         :overlays="overlays"
                         :curtain="curtain"
                         @select="onSelect"
@@ -582,12 +605,21 @@ function goHome(): void {
                         :scale="certaintyScale"
                         @close="closeCard"
                     />
+                    <SampleCard
+                        v-else-if="!narrow && openSample"
+                        ref="card"
+                        :sample="openSample"
+                        :analysis-names="analysisNames"
+                        @close="closeCard"
+                    />
                     <OnThisPage
                         v-else
                         :annotations="pageAnnotations"
                         :unlocated="data.unlocated"
                         :characterizations="listedCharacterizations"
+                        :samples="listedSamples"
                         :styles="styles"
+                        :view="folioView"
                         @select="onSelect"
                     />
                     <SelectionPanel />
@@ -609,6 +641,12 @@ function goHome(): void {
                     v-else-if="openCharacterization"
                     :summary="openCharacterization"
                     :scale="certaintyScale"
+                    @close="closeCard"
+                />
+                <SampleCard
+                    v-else-if="openSample"
+                    :sample="openSample"
+                    :analysis-names="analysisNames"
                     @close="closeCard"
                 />
             </Drawer>
@@ -692,25 +730,6 @@ function goHome(): void {
     color: var(--ink-muted);
 }
 
-.corpus-document .layers {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 1.5rem;
-    border: none;
-}
-
-.corpus-document .layers legend {
-    font-weight: 600;
-}
-
-.corpus-document .layers label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-block-size: 2.75rem;
-    cursor: pointer;
-}
-
 .corpus-document .legend {
     display: flex;
     flex-wrap: wrap;
@@ -767,7 +786,6 @@ function goHome(): void {
 }
 
 .corpus-document button:focus-visible,
-.corpus-document input:focus-visible,
 .corpus-document .name:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;

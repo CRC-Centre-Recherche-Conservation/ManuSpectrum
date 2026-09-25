@@ -11,6 +11,7 @@ import {
     characterization,
     documentPayload,
     label,
+    sample,
     uuid,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -106,6 +107,8 @@ function mountFolio(props: Record<string, unknown> = {}) {
             lit: null,
             dimmedMaterials: new Set<string>(),
             layers: LAYERS,
+            view: "analyses",
+            samples: [],
             ...props,
         },
     });
@@ -242,7 +245,10 @@ describe("FolioMap", () => {
                 source: "own",
             },
         });
-        const wrapper = mountFolio({ characterizations: [summary] });
+        const wrapper = mountFolio({
+            characterizations: [summary],
+            view: "characterizations",
+        });
         await flushPromises();
         const zone = wrapper.find("path.folio-material");
         expect(zone.exists()).toBe(true);
@@ -251,6 +257,103 @@ describe("FolioMap", () => {
             { kind: "characterization", id: summary.id },
         ]);
         wrapper.unmount();
+    });
+
+    describe("views", () => {
+        const material = () =>
+            characterization(1, {
+                zone: {
+                    canvas: "https://iiif.example/c1",
+                    shape: { type: "rect", x: 10, y: 10, w: 300, h: 300 },
+                    source: "own",
+                },
+            });
+        const samples = () => [
+            sample(1),
+            sample(2, {
+                zone: {
+                    canvas: "https://iiif.example/c1",
+                    shape: { type: "point", x: 2000, y: 1000 },
+                },
+            }),
+        ];
+
+        it("draws only the analyses in the analyses view", async () => {
+            const wrapper = mountFolio({
+                characterizations: [material()],
+                samples: samples(),
+            });
+            await flushPromises();
+            expect(
+                wrapper
+                    .findAll("[data-target]")
+                    .map((marker) => marker.attributes("data-target")),
+            ).toEqual(expect.arrayContaining([uuid(101), uuid(102)]));
+            expect(wrapper.findAll("[data-target]")).toHaveLength(2);
+            expect(wrapper.find("path.folio-material").exists()).toBe(false);
+            expect(wrapper.find(".folio-sample").exists()).toBe(false);
+            wrapper.unmount();
+        });
+
+        it("draws only the identified materials in the materials view", async () => {
+            const wrapper = mountFolio({
+                characterizations: [material()],
+                samples: samples(),
+                view: "characterizations",
+            });
+            await flushPromises();
+            expect(wrapper.findAll("path.folio-material")).toHaveLength(1);
+            expect(wrapper.findAll("[data-target]")).toHaveLength(0);
+            wrapper.unmount();
+        });
+
+        it("draws the evidence analyses of an open identified material, lit", async () => {
+            const wrapper = mountFolio({
+                characterizations: [material()],
+                view: "characterizations",
+                lit: new Set([uuid(102)]),
+            });
+            await flushPromises();
+            const markers = wrapper.findAll("[data-target]");
+            expect(markers.map((m) => m.attributes("data-target"))).toEqual([
+                uuid(102),
+            ]);
+            expect(markers[0].classes()).toContain("is-lit");
+            expect(wrapper.findAll("path.folio-material")).toHaveLength(1);
+            wrapper.unmount();
+        });
+
+        it("draws the samples as square pastilles with the outline of their zone", async () => {
+            const wrapper = mountFolio({
+                characterizations: [material()],
+                samples: samples(),
+                view: "samples",
+            });
+            await flushPromises();
+            const markers = wrapper.findAll("[data-target]");
+            expect(
+                markers.map((m) => m.attributes("data-target")).sort(),
+            ).toEqual([`sample:${uuid(601)}`, `sample:${uuid(602)}`]);
+            expect(markers.every((m) => m.classes("folio-sample"))).toBe(true);
+            expect(wrapper.findAll("path.folio-sample-zone")).toHaveLength(1);
+            expect(wrapper.find("path.folio-material").exists()).toBe(false);
+            expect(
+                markers.filter((m) => m.attributes("tabindex") === "0"),
+            ).toHaveLength(1);
+            wrapper.unmount();
+        });
+
+        it("opens a sample from its marker on Enter", async () => {
+            const wrapper = mountFolio({ samples: samples(), view: "samples" });
+            await flushPromises();
+            const marker = wrapper.find(`[data-target="sample:${uuid(602)}"]`);
+            expect(marker.attributes("aria-label")).toContain("Sample 2");
+            await marker.trigger("keydown", { key: "Enter" });
+            expect(wrapper.emitted("select")?.at(-1)).toEqual([
+                { kind: "sample", id: uuid(602) },
+            ]);
+            wrapper.unmount();
+        });
     });
 
     it("labels an identified material as text, never as markup", async () => {
@@ -269,7 +372,10 @@ describe("FolioMap", () => {
                 source: "own",
             },
         });
-        const wrapper = mountFolio({ characterizations: [summary] });
+        const wrapper = mountFolio({
+            characterizations: [summary],
+            view: "characterizations",
+        });
         await flushPromises();
         const tooltip = wrapper.find(".folio-material-label");
         expect(tooltip.text()).toBe(markup);

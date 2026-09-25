@@ -17,6 +17,7 @@ import {
     annotation,
     characterization,
     documentPayload,
+    sample,
     searchResponse,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -51,6 +52,8 @@ const FolioStub = defineComponent({
         lit: { type: Set, default: null },
         dimmedMaterials: { type: Set, default: () => new Set() },
         layers: { type: Object as PropType<LayerToggles>, required: true },
+        view: { type: String, required: true },
+        samples: { type: Array, default: () => [] },
         overlays: { type: Array, default: () => [] },
         curtain: { type: String, default: null },
     },
@@ -70,6 +73,8 @@ function cardStub(name: string): Component {
             analysisId: { type: String, default: null },
             summary: { type: Object, default: null },
             scale: { type: Object, default: null },
+            sample: { type: Object, default: null },
+            analysisNames: { type: Map, default: null },
         },
         emits: ["close"],
         setup(_props, { expose }) {
@@ -139,6 +144,7 @@ function mountScreen(
                 FolioMap: FolioStub,
                 AnalysisCard: cardStub("AnalysisCard"),
                 CharacterizationCard: cardStub("CharacterizationCard"),
+                SampleCard: cardStub("SampleCard"),
                 ...options.stubs,
             },
         },
@@ -221,15 +227,133 @@ describe("CorpusDocument", () => {
         );
     });
 
-    it("switches a folio layer", async () => {
-        stubFetch();
-        const { wrapper, store } = mountScreen();
-        await flushPromises();
-        await wrapper.find(".layers input").setValue(false);
-        expect(store.layers.points).toBe(false);
-        expect(wrapper.findComponent(FolioStub).props("layers").points).toBe(
-            false,
-        );
+    describe("folio views", () => {
+        function everything() {
+            return documentPayload({
+                annotations: [annotation(1)],
+                characterizations: [
+                    characterization(1, {
+                        evidence: [uuid(101)],
+                        zone: {
+                            canvas: "https://iiif.example/c1",
+                            shape: { type: "point", x: 10, y: 10 },
+                            source: "own",
+                        },
+                    }),
+                ],
+                samples: [
+                    sample(1, { analyses: [uuid(101)] }),
+                    sample(2, {
+                        zone: {
+                            canvas: "https://iiif.example/c2",
+                            shape: { type: "point", x: 10, y: 10 },
+                        },
+                    }),
+                ],
+            });
+        }
+
+        it("offers the views the page has and draws and lists the one chosen", async () => {
+            stubFetch(everything());
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            expect(wrapper.find(".layers").exists()).toBe(false);
+            const buttons = wrapper.findAll(".folio-view-switch button");
+            expect(buttons.map((button) => button.text())).toEqual([
+                "Analyses",
+                "Identified materials",
+                "Samples",
+            ]);
+            const folio = wrapper.findComponent(FolioStub);
+            expect(folio.props("view")).toBe("analyses");
+            await buttons[2].trigger("click");
+            expect(store.folioView).toBe("samples");
+            expect(folio.props("view")).toBe("samples");
+            expect(
+                (folio.props("samples") as { id: string }[]).map((s) => s.id),
+            ).toEqual([uuid(601)]);
+            expect(wrapper.find(".on-this-page .samples").text()).toContain(
+                "Sample 1",
+            );
+            expect(wrapper.find(".on-this-page .technique").exists()).toBe(
+                false,
+            );
+        });
+
+        it("hides the switch when only the analyses have something on the page", async () => {
+            stubFetch();
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            expect(wrapper.find(".folio-view-switch").exists()).toBe(false);
+            expect(wrapper.findComponent(FolioStub).props("view")).toBe(
+                "analyses",
+            );
+        });
+
+        it("draws the analyses when the view chosen has nothing on this page", async () => {
+            stubFetch();
+            const { wrapper, store } = mountScreen();
+            store.setFolioView("samples");
+            await flushPromises();
+            expect(wrapper.findComponent(FolioStub).props("view")).toBe(
+                "analyses",
+            );
+        });
+
+        it("shows the analyses view when the identified-material card opens an evidence analysis", async () => {
+            stubFetch(everything());
+            const { wrapper, store } = mountScreen(undefined, {
+                stubs: { CharacterizationCard: false },
+            });
+            await flushPromises();
+            wrapper.findComponent(FolioStub).vm.$emit("select", {
+                kind: "characterization",
+                id: uuid(501),
+            });
+            await flushPromises();
+            expect(wrapper.findComponent(FolioStub).props("view")).toBe(
+                "characterizations",
+            );
+            await wrapper
+                .find(".characterization-card .evidence button")
+                .trigger("click");
+            await flushPromises();
+            expect(store.focus).toEqual({ kind: "analysis", id: uuid(101) });
+            expect(wrapper.findComponent(FolioStub).props("view")).toBe(
+                "analyses",
+            );
+        });
+
+        it("opens a sample's card from the folio and gives the focus back to its marker on close", async () => {
+            stubFetch(everything());
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "sample", id: uuid(601) });
+            await flushPromises();
+            expect(store.folioView).toBe("samples");
+            const card = wrapper.findComponent({ name: "SampleCard" });
+            expect(card.props("sample")).toMatchObject({ id: uuid(601) });
+            expect(
+                (card.props("analysisNames") as Map<string, unknown>).has(
+                    uuid(101),
+                ),
+            ).toBe(true);
+            card.vm.$emit("close");
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(focusTarget).toHaveBeenCalledWith(`sample:${uuid(601)}`);
+        });
+
+        it("follows a sample to the page of its zone", async () => {
+            stubFetch(everything());
+            const { store } = mountScreen();
+            await flushPromises();
+            store.focusOn({ kind: "sample", id: uuid(602) });
+            await flushPromises();
+            expect(store.document?.canvas).toBe("https://iiif.example/c2");
+        });
     });
 
     it("opens the analysis card when the folio selects an analysis", async () => {
@@ -350,24 +474,6 @@ describe("CorpusDocument", () => {
         expect(back.text()).toBe("Back to the explorer home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
-    });
-
-    it("offers the layer toggle that hides each analysis, by the folio mark of its data", async () => {
-        stubFetch(
-            documentPayload({
-                annotations: [
-                    annotation(1, {
-                        shape: { type: "rect", x: 0, y: 0, w: 64, h: 32 },
-                    }),
-                ],
-            }),
-        );
-        const { wrapper } = mountScreen();
-        await flushPromises();
-        const offered = wrapper
-            .findAll(".layers label")
-            .map((entry) => entry.text());
-        expect(offered).toEqual(["Point analyses"]);
     });
 
     it("keeps the page after a filter reload with a card open", async () => {

@@ -7,16 +7,22 @@ import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techni
 import type {
     Annotation,
     CharacterizationSummary,
+    SampleSummary,
     UnlocatedAnalysis,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
-import type { Focus } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type {
+    Focus,
+    FolioView,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const props = defineProps<{
     annotations: Annotation[];
     unlocated: UnlocatedAnalysis[];
     characterizations: CharacterizationSummary[];
+    samples: SampleSummary[];
     styles: Map<string, TechniqueStyle>;
+    view: FolioView;
 }>();
 const emit = defineEmits<{ select: [focus: Focus] }>();
 
@@ -37,12 +43,22 @@ const groups = computed(() => {
         .map((style) => ({ style, items: byTechnique.get(style.key)! }));
 });
 
-const isEmpty = computed(
-    () =>
-        props.annotations.length === 0 &&
-        props.unlocated.length === 0 &&
-        props.characterizations.length === 0,
-);
+/** The message of a view with nothing to list; null when the view lists something. */
+const emptyMessage = computed(() => {
+    if (props.view === "characterizations") {
+        return props.characterizations.length === 0
+            ? $gettext("No identified material on this page.")
+            : null;
+    }
+    if (props.view === "samples") {
+        return props.samples.length === 0
+            ? $gettext("No sample on this page.")
+            : null;
+    }
+    return props.annotations.length === 0 && props.unlocated.length === 0
+        ? $gettext("No published analysis on this page.")
+        : null;
+});
 
 function select(focus: Focus): void {
     emit("select", focus);
@@ -58,63 +74,70 @@ function select(focus: Focus): void {
             <span>{{ $gettext("On this page") }}</span>
         </h3>
         <p
-            v-if="isEmpty"
+            v-if="emptyMessage"
             class="empty"
         >
-            <span>{{ $gettext("No published analysis on this page.") }}</span>
+            <span>{{ emptyMessage }}</span>
         </p>
-        <section
-            v-for="group in groups"
-            :key="group.style.key"
-            class="technique"
-        >
-            <h4>
-                <span
-                    class="code"
-                    :class="
-                        group.style.colour
-                            ? `code--tech-${group.style.colour}`
-                            : 'code--ink'
-                    "
-                    aria-hidden="true"
-                >
-                    {{ group.style.code }}
-                </span>
-                <span :lang="group.style.label.lang || undefined">
-                    {{ group.style.label.value }}
-                </span>
-            </h4>
-            <ul>
-                <li
-                    v-for="item in group.items"
-                    :key="item.analysis"
-                    :class="{ 'is-dimmed': !item.match }"
-                >
-                    <button
-                        type="button"
-                        @click="select({ kind: 'analysis', id: item.analysis })"
-                    >
-                        <span :lang="item.name.lang">{{
-                            item.name.value
-                        }}</span>
-                    </button>
+        <template v-if="props.view === 'analyses'">
+            <section
+                v-for="group in groups"
+                :key="group.style.key"
+                class="technique"
+            >
+                <h4>
                     <span
-                        v-if="item.unpublished"
-                        class="draft"
+                        class="code"
+                        :class="
+                            group.style.colour
+                                ? `code--tech-${group.style.colour}`
+                                : 'code--ink'
+                        "
+                        aria-hidden="true"
                     >
-                        {{ $gettext("Draft") }}
+                        {{ group.style.code }}
                     </span>
-                    <span
-                        v-if="!item.match"
-                        class="outside"
+                    <span :lang="group.style.label.lang || undefined">
+                        {{ group.style.label.value }}
+                    </span>
+                </h4>
+                <ul>
+                    <li
+                        v-for="item in group.items"
+                        :key="item.analysis"
+                        :class="{ 'is-dimmed': !item.match }"
                     >
-                        {{ $gettext("outside the filters") }}
-                    </span>
-                </li>
-            </ul>
-        </section>
+                        <button
+                            type="button"
+                            @click="
+                                select({ kind: 'analysis', id: item.analysis })
+                            "
+                        >
+                            <span :lang="item.name.lang">{{
+                                item.name.value
+                            }}</span>
+                        </button>
+                        <span
+                            v-if="item.unpublished"
+                            class="draft"
+                        >
+                            {{ $gettext("Draft") }}
+                        </span>
+                        <span
+                            v-if="!item.match"
+                            class="outside"
+                        >
+                            {{ $gettext("outside the filters") }}
+                        </span>
+                    </li>
+                </ul>
+            </section>
+        </template>
         <section
-            v-if="props.characterizations.length > 0"
+            v-if="
+                props.view === 'characterizations' &&
+                props.characterizations.length > 0
+            "
             class="materials"
         >
             <h4>
@@ -145,7 +168,36 @@ function select(focus: Focus): void {
             </ul>
         </section>
         <section
-            v-if="props.unlocated.length > 0"
+            v-if="props.view === 'samples' && props.samples.length > 0"
+            class="samples"
+        >
+            <h4>
+                <span>{{ $gettext("Samples") }}</span>
+            </h4>
+            <ul>
+                <li
+                    v-for="entry in props.samples"
+                    :key="entry.id"
+                >
+                    <button
+                        type="button"
+                        @click="select({ kind: 'sample', id: entry.id })"
+                    >
+                        <span :lang="entry.name.lang">{{
+                            entry.name.value
+                        }}</span>
+                    </button>
+                    <span
+                        v-if="entry.unpublished"
+                        class="draft"
+                    >
+                        {{ $gettext("Draft") }}
+                    </span>
+                </li>
+            </ul>
+        </section>
+        <section
+            v-if="props.view === 'analyses' && props.unlocated.length > 0"
             class="unlocated"
         >
             <h4>

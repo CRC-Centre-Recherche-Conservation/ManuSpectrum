@@ -38,11 +38,13 @@ import type {
     Annotation,
     CharacterizationSummary,
     DocumentCanvas,
+    SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type {
     Focus,
+    FolioView,
     LayerToggles,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
@@ -56,6 +58,7 @@ const NO_IMAGE_PADDING = 0.5;
 const HATCH_ID = "ms-folio-hatch";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const CLUSTER_PREFIX = "cluster:";
+const SAMPLE_PREFIX = "sample:";
 
 /** The leaflet-iiif 3.0.0 state the folio reads: the info.json request, the image sizes it yields, the tile container. */
 type IiifLayer = L.TileLayer & {
@@ -75,6 +78,8 @@ const props = withDefaults(
         lit: ReadonlySet<string> | null;
         dimmedMaterials: ReadonlySet<string>;
         layers: LayerToggles;
+        view: FolioView;
+        samples: SampleSummary[];
         overlays?: FolioOverlay[];
         curtain?: string | null;
     }>(),
@@ -93,6 +98,7 @@ let page: IiifLayer | null = null;
 let cluster: L.MarkerClusterGroup | null = null;
 let frames: L.GeoJSON | null = null;
 let materials: L.GeoJSON | null = null;
+let sampleZones: L.GeoJSON | null = null;
 let order: string[] = [];
 let openedGroup: Set<string> | null = null;
 // An imageless page is fitted to its markers once; later redraws keep the reader's view.
@@ -113,10 +119,13 @@ watch(
         props.slots,
         props.layers,
         props.dimmedMaterials,
+        props.view,
+        props.samples,
+        props.lit,
     ],
     drawMarks,
 );
-watch(() => [props.focus, props.lit], refreshStates);
+watch(() => props.focus, refreshStates);
 watch(() => [props.overlays, props.curtain], drawOverlays);
 
 onMounted(() => {
@@ -217,7 +226,9 @@ function clusterIcon(group: L.MarkerCluster): L.DivIcon {
     element.setAttribute(
         "aria-label",
         interpolate(
-            $gettext("%{n} analyses here, zoom in"),
+            props.view === "samples"
+                ? $gettext("%{n} samples here, zoom in")
+                : $gettext("%{n} analyses here, zoom in"),
             { n: count },
             true,
         ),
@@ -240,8 +251,40 @@ function materialLabel(summary: CharacterizationSummary): HTMLElement {
     return element;
 }
 
+/**
+ * An analysis is drawn in the analyses view, and in the identified-materials
+ * view when it is evidence of the open material; its layer toggle applies in
+ * both.
+ */
 function isShown(annotation: Annotation): boolean {
-    return props.layers[folioLayerOf(annotation.dataKind)];
+    const inView =
+        props.view === "analyses" ||
+        (props.view === "characterizations" &&
+            (props.lit?.has(annotation.analysis) ?? false));
+    return inView && props.layers[folioLayerOf(annotation.dataKind)];
+}
+
+function sampleIcon(sample: SampleSummary): L.DivIcon {
+    const element = document.createElement("span");
+    element.id = `folio-sample-${sample.id}`;
+    element.dataset.target = `${SAMPLE_PREFIX}${sample.id}`;
+    element.setAttribute("role", "button");
+    const parts = [sample.name.value, $gettext("Sample")];
+    if (sample.unpublished) parts.push($gettext("Draft"));
+    element.setAttribute("aria-label", parts.join(", "));
+    element.tabIndex = -1;
+    element.className = "folio-sample";
+    if (sample.unpublished) {
+        const draft = document.createElement("span");
+        draft.className = "draft";
+        draft.setAttribute("aria-hidden", "true");
+        element.append(draft);
+    }
+    return L.divIcon({
+        html: element,
+        className: "folio-marker-host",
+        iconSize: [MARKER_SIZE, MARKER_SIZE],
+    });
 }
 
 function ensureHatch(): void {
@@ -298,6 +341,7 @@ function drawMarks(): void {
     cluster?.remove();
     frames?.remove();
     materials?.remove();
+    sampleZones?.remove();
     markers.clear();
 
     cluster = L.markerClusterGroup({
@@ -317,6 +361,18 @@ function drawMarks(): void {
         });
         marker.on("click", () => activate(annotation.analysis));
         markers.set(annotation.analysis, marker);
+    }
+    const shownSamples = props.view === "samples" ? props.samples : [];
+    for (const sample of shownSamples) {
+        const centre = sample.zone ? shapeCentre(sample.zone.shape) : null;
+        if (!centre) continue;
+        const target = `${SAMPLE_PREFIX}${sample.id}`;
+        const marker = L.marker(centre, {
+            icon: sampleIcon(sample),
+            keyboard: false,
+        });
+        marker.on("click", () => activate(target));
+        markers.set(target, marker);
     }
     const frameFeatures = [];
     for (const annotation of props.annotations) {
@@ -348,14 +404,33 @@ function drawMarks(): void {
         }),
     }).addTo(map);
 
-    const materialFeatures = props.layers.characterizations
-        ? props.characterizations.flatMap((summary) => {
-              const feature = summary.zone
-                  ? shapeFeature(summary.zone.shape, { id: summary.id })
-                  : null;
-              return feature ? [feature] : [];
-          })
-        : [];
+    sampleZones = L.geoJSON(
+        shownSamples.flatMap((sample) => {
+            const feature =
+                sample.zone && sample.zone.shape.type !== "point"
+                    ? shapeFeature(sample.zone.shape, { id: sample.id })
+                    : null;
+            return feature ? [feature] : [];
+        }),
+        {
+            style: () => ({
+                className: "folio-sample-zone",
+                weight: 2,
+                fill: false,
+                interactive: false,
+            }),
+        },
+    ).addTo(map);
+
+    const materialFeatures =
+        props.view === "characterizations" && props.layers.characterizations
+            ? props.characterizations.flatMap((summary) => {
+                  const feature = summary.zone
+                      ? shapeFeature(summary.zone.shape, { id: summary.id })
+                      : null;
+                  return feature ? [feature] : [];
+              })
+            : [];
     materials = L.geoJSON(materialFeatures, {
         pointToLayer: (_feature, latlng) =>
             L.circleMarker(latlng, { radius: MATERIAL_POINT_RADIUS }),
@@ -460,7 +535,7 @@ function unclip(event: L.LeafletEvent): void {
     if (container) container.style.clip = "";
 }
 
-/** The id of the marker, or of the marker group, that shows an analysis now; null when neither is on the map. */
+/** The id of the marker, or of the marker group, that shows an analysis or a sample (`sample:<id>`) now; null when neither is on the map. */
 function visibleTargetOf(id: string): string | null {
     const marker = markers.get(id);
     const parent = marker ? cluster?.getVisibleParent(marker) : null;
@@ -496,6 +571,12 @@ function targetElement(id: string): HTMLElement | null {
 
 /** Classes and tab stops follow focus, evidence and filters without redrawing the markers. */
 function refreshStates(): void {
+    for (const sample of props.samples) {
+        targetElement(`${SAMPLE_PREFIX}${sample.id}`)?.classList.toggle(
+            "is-focused",
+            props.focus?.kind === "sample" && props.focus.id === sample.id,
+        );
+    }
     for (const annotation of props.annotations) {
         const element = targetElement(annotation.analysis);
         if (!element) continue;
@@ -523,6 +604,10 @@ function activate(id: string): void {
         return;
     }
     active.value = id;
+    if (id.startsWith(SAMPLE_PREFIX)) {
+        emit("select", { kind: "sample", id: id.slice(SAMPLE_PREFIX.length) });
+        return;
+    }
     emit("select", { kind: "analysis", id });
 }
 
@@ -538,7 +623,7 @@ function openGroup(id: string): void {
     openedGroup = new Set(
         [...markers]
             .filter(([, marker]) => children.has(marker))
-            .map(([analysis]) => analysis),
+            .map(([target]) => target),
     );
     // The group turns a click carrying a cluster into its `clusterclick`.
     cluster.fire("click", { layer: group });
@@ -579,7 +664,7 @@ function onKeydown(event: KeyboardEvent): void {
     moveTo(next);
 }
 
-/** Puts the keyboard focus on the marker of an analysis, or on the marker group that holds it. */
+/** Puts the keyboard focus on the marker of an analysis or a sample (`sample:<id>`), or on the marker group that holds it. */
 function focusTarget(id: string): void {
     const target = visibleTargetOf(id);
     if (target !== null && targets.has(target)) moveTo(target);
@@ -783,6 +868,38 @@ function wholePage(): void {
 .folio :deep(.folio-marker.is-focused) {
     box-shadow: 0 0 0 0.25rem
         color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.folio :deep(.folio-sample) {
+    position: relative;
+    display: block;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin: 0.25rem;
+    border: 0.1875rem solid var(--ink);
+    border-radius: 0.125rem;
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.folio :deep(.folio-sample .draft) {
+    position: absolute;
+    inset-block-end: -0.375rem;
+    inset-inline-end: -0.375rem;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border: 0.0625rem solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent-text);
+}
+
+.folio :deep(.folio-sample.is-focused) {
+    box-shadow: 0 0 0 0.25rem
+        color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.folio :deep(.folio-sample-zone) {
+    stroke: var(--ink);
 }
 
 .folio :deep(.folio-cluster) {
