@@ -24,3 +24,11 @@ declare module "utils/iiif-image" {
         options?: { region?: string; size?: string },
     ): string;
 }
+
+// The generated `paths` entry "*" sends `leaflet` to its untyped JavaScript
+// build before `@types/leaflet` is looked up. `tsconfig.json` loads
+// `@types/leaflet` (global `L`) and `@types/leaflet.markercluster` through
+// `types`; the module is bound to them here.
+declare module "leaflet" {
+    export = L;
+}
