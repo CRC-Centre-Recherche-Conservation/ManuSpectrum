@@ -234,4 +234,20 @@ describe("store round trip", () => {
         applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
         expect(store.documentOrigin).toBe("results");
     });
+    it("opens the folio view of a focused sample or identified material when the address names none", () => {
+        const sample = fromQuery(
+            new URLSearchParams(`doc=${DOC}&focus=sample:${DOC}`),
+        );
+        const material = fromQuery(
+            new URLSearchParams(`doc=${DOC}&focus=characterization:${DOC}`),
+        );
+        const chosen = fromQuery(
+            new URLSearchParams(
+                `doc=${DOC}&focus=sample:${DOC}&fview=analyses`,
+            ),
+        );
+        expect(sample.folioView).toBe("samples");
+        expect(material.folioView).toBe("characterizations");
+        expect(chosen.folioView).toBe("analyses");
+    });
 });

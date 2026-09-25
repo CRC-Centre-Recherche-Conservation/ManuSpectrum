@@ -164,10 +164,11 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
     const requestedView = query.get("view");
     const view =
         VIEWS.find((candidate) => candidate === requestedView) ?? "corpus";
+    const focus = documentId ? focusOf(query.get("focus")) : null;
     const requestedFolioView = query.get("fview");
     const folioView =
         FOLIO_VIEWS.find((candidate) => candidate === requestedFolioView) ??
-        "analyses";
+        folioViewOf(focus);
     let corpusScreen: CorpusScreen = "home";
     if (document) {
         corpusScreen = "document";
@@ -178,10 +179,17 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
         view,
         corpusScreen,
         document,
-        focus: document ? focusOf(query.get("focus")) : null,
+        focus,
         folioView: document ? folioView : "analyses",
         filters,
     };
+}
+
+/** The folio view that shows a focused item: its own layer for an identified material or a sample. */
+function folioViewOf(focus: Focus | null): FolioView {
+    if (focus?.kind === "characterization") return "characterizations";
+    if (focus?.kind === "sample") return "samples";
+    return "analyses";
 }
 
 export function historyMode(
