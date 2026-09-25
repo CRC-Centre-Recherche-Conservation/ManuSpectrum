@@ -41,6 +41,15 @@ class SearchRouteTests(ServiceCase):
         )
         self.assertEqual(again.status_code, 304)
 
+    def test_a_document_thumbnail_is_a_path_on_the_site_that_serves_the_page(self):
+        results = self.get("?grain=documents").json()["results"]
+
+        self.assertTrue(results)
+        for hit in results:
+            self.assertTrue(
+                hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
+            )
+
     def test_a_signed_in_reader_gets_a_private_answer(self):
         self.client.force_login(self.editor)
 

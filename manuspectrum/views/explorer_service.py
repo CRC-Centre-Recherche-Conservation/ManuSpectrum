@@ -612,8 +612,7 @@ def search_payload(query, user, language):
                 "name": label_of[d],
                 "holding": None,
                 "analysisCount": per_document[d],
-                "thumbnail": settings.PUBLIC_SERVER_ADDRESS
-                + reverse("thumbnail", kwargs={"resource_id": d}).lstrip("/"),
+                "thumbnail": reverse("thumbnail", kwargs={"resource_id": d}),
                 "unpublished": d in visible.unpublished,
             }
             for d in candidates
