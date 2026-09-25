@@ -8,6 +8,10 @@ import CorpusDocument from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/C
 
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
+    snapshotOf,
+    toQuery,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
+import {
     annotation,
     characterization,
     documentPayload,
@@ -85,7 +89,7 @@ function stubFetch(
     const fetchMock = vi.fn(async (url: string) =>
         url.includes("/search")
             ? jsonResponse(searchResponse({ results: [] }))
-            : jsonResponse(payload, status),
+            : jsonResponse(structuredClone(payload), status),
     );
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
@@ -314,5 +318,111 @@ describe("CorpusDocument", () => {
             .findAll(".layers label")
             .map((entry) => entry.text());
         expect(offered).toEqual(["Point analyses"]);
+    });
+
+    it("keeps the page after a filter reload with a card open", async () => {
+        stubFetch();
+        const { store } = mountScreen();
+        await flushPromises();
+        store.focusOn({ kind: "analysis", id: uuid(101) });
+        await flushPromises();
+        store.setCanvas("https://iiif.example/c2");
+        await flushPromises();
+        store.setFilter("technique", ["http://example.org/xrf"]);
+        await flushPromises();
+        expect(store.document?.canvas).toBe("https://iiif.example/c2");
+    });
+
+    it("stays on the page of the clicked zone of an analysis zoned on several pages", async () => {
+        stubFetch(
+            documentPayload({
+                annotations: [
+                    annotation(2, { key: "on-c1" }),
+                    annotation(2, {
+                        key: "on-c2",
+                        canvas: "https://iiif.example/c2",
+                    }),
+                ],
+            }),
+        );
+        const { store } = mountScreen();
+        await flushPromises();
+        store.setCanvas("https://iiif.example/c2");
+        await flushPromises();
+        store.focusOn({ kind: "analysis", id: uuid(102) });
+        await flushPromises();
+        expect(store.document?.canvas).toBe("https://iiif.example/c2");
+    });
+
+    it("keeps the document on screen and offers Retry when a reload fails", async () => {
+        const fetchMock = stubFetch();
+        const { wrapper, store } = mountScreen();
+        await flushPromises();
+        fetchMock.mockImplementation(async (url: string) =>
+            url.includes("/search")
+                ? jsonResponse(searchResponse({ results: [] }))
+                : jsonResponse({}, 503),
+        );
+        store.setFilter("technique", ["http://example.org/xrf"]);
+        await flushPromises();
+        expect(wrapper.find(".document-bar h2").exists()).toBe(true);
+        expect(wrapper.text()).toContain(
+            "The service is not answering right now.",
+        );
+        const calls = fetchMock.mock.calls.length;
+        await wrapper.find(".unavailable-state .retry").trigger("click");
+        expect(fetchMock.mock.calls.length).toBeGreaterThan(calls);
+    });
+
+    describe("closing a card", () => {
+        let back: ReturnType<typeof vi.spyOn>;
+
+        beforeEach(() => {
+            back = vi
+                .spyOn(window.history, "back")
+                .mockImplementation(() => undefined);
+        });
+
+        afterEach(() => {
+            back.mockRestore();
+            window.history.replaceState(null, "", "/");
+        });
+
+        function standOnTheDocumentEntry(store: ExplorerStore): void {
+            const search = toQuery(snapshotOf(store)).toString();
+            window.history.replaceState(null, "", `/?${search}`);
+        }
+
+        it("goes back over the entry its opening pushed", async () => {
+            stubFetch();
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            standOnTheDocumentEntry(store);
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "analysis", id: uuid(101) });
+            await flushPromises();
+            wrapper.findComponent({ name: "AnalysisCard" }).vm.$emit("close");
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(back).toHaveBeenCalledTimes(1);
+        });
+
+        it("stays on its entry when the filters changed since it opened", async () => {
+            stubFetch();
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            standOnTheDocumentEntry(store);
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "analysis", id: uuid(101) });
+            await flushPromises();
+            store.setFilter("technique", ["http://example.org/xrf"]);
+            await flushPromises();
+            wrapper.findComponent({ name: "AnalysisCard" }).vm.$emit("close");
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(back).not.toHaveBeenCalled();
+        });
     });
 });

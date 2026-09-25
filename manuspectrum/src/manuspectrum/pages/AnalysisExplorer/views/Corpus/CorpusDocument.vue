@@ -14,6 +14,7 @@ import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/documen
 import OnThisPage from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue";
 import SelectionPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SelectionPanel.vue";
 
+import { searchOf } from "@/manuspectrum/public/useUrlState.ts";
 import { useAnalysis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnalysis.ts";
 import { useDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocument.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
@@ -32,6 +33,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import {
+    snapshotOf,
+    toQuery,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 import { folioLayerOf } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
 import type { FacetKey } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -67,13 +72,19 @@ const folio = useTemplateRef<{ focusTarget: (id: string) => void }>("folio");
 
 const railOpen = ref(false);
 const curtain = ref<string | null>(null);
+let pageToFollow = store.focus !== null;
+let openedOver: string | null = null;
 
-const data = computed(() => payload.data.value);
-const isUnavailable = computed(
+const data = computed(() =>
+    payload.data.value?.id === props.documentId ? payload.data.value : null,
+);
+const failed = computed(
     () =>
         payload.status.value === "error" ||
         payload.status.value === "unavailable",
 );
+/** S7 replaces the screen only when this document was never shown; a failed reload is reported inline. */
+const isUnavailable = computed(() => failed.value && data.value === null);
 const certaintyScale = computed(
     () => data.value?.certaintyScale ?? { levels: [] },
 );
@@ -235,24 +246,60 @@ useScreenHeading(
     () => heading.value ?? (isUnavailable.value ? backButton.value : null),
 );
 
-/** An analysis or identified material opened elsewhere (S1, a card link) brings its page with it. */
+/**
+ * An analysis or identified material opened elsewhere (S1, a card link)
+ * brings its page with it, when the focus changes or when the payload first
+ * arrives for a focus; a reload never moves the page. The page stays when the
+ * focus has a zone on it; otherwise an analysis goes to the page of its first
+ * zone.
+ */
 watch(
-    () => [store.focus, data.value] as const,
-    ([focus, current]) => {
-        if (!focus || !current) return;
-        const canvas =
-            focus.kind === "analysis"
-                ? current.annotations.find(
-                      (entry) => entry.analysis === focus.id,
-                  )?.canvas
-                : current.characterizations.find(
-                      (summary) => summary.id === focus.id,
-                  )?.zone?.canvas;
-        if (canvas && canvas !== currentCanvas.value?.id) {
-            store.setCanvas(canvas);
-        }
+    () => store.focus,
+    (focus) => {
+        pageToFollow = focus !== null;
+        followFocus();
     },
 );
+watch(data, () => {
+    if (pageToFollow) followFocus();
+});
+
+/**
+ * Keeps the address of the history entry a card was opened over: the one
+ * current when the focus goes from none to some, before the URL records it.
+ */
+watch(
+    () => store.focus,
+    (next, previous) => {
+        if (next === null) {
+            openedOver = null;
+        } else if (previous === null) {
+            openedOver = window.location.search;
+        }
+    },
+    { flush: "sync" },
+);
+
+function followFocus(): void {
+    const focus = store.focus;
+    const current = data.value;
+    if (!focus || !current) return;
+    pageToFollow = false;
+    const pages =
+        focus.kind === "analysis"
+            ? current.annotations
+                  .filter((entry) => entry.analysis === focus.id)
+                  .map((entry) => entry.canvas)
+            : [
+                  current.characterizations.find(
+                      (summary) => summary.id === focus.id,
+                  )?.zone?.canvas,
+              ].filter((canvas): canvas is string => Boolean(canvas));
+    const here = currentCanvas.value?.id;
+    if (pages.length > 0 && !pages.some((canvas) => canvas === here)) {
+        store.setCanvas(pages[0]);
+    }
+}
 
 function onSelect(focus: Focus): void {
     store.focusOn(focus);
@@ -261,15 +308,24 @@ function onSelect(focus: Focus): void {
 /**
  * Clears the focus and gives the keyboard focus back to the marker of the
  * analysis the card showed; the document name takes it when no marker does
- * (an identified material, an analysis without a zone on this page).
+ * (an identified material, an analysis without a zone on this page). When the
+ * card was opened over an entry that is this screen without a card, the
+ * history steps back to it, so Back does not show the same screen twice.
  */
 async function closeCard(): Promise<void> {
     const returnTo = focusedAnalysis.value;
+    const goBack = openedOver !== null && openedOver === addressWithoutCard();
     store.focusOn(null);
     await nextTick();
+    if (goBack) window.history.back();
     if (returnTo) folio.value?.focusTarget(returnTo);
     const active = window.document.activeElement;
     if (!active || active === window.document.body) heading.value?.focus();
+}
+
+/** The address of this screen with no card open. */
+function addressWithoutCard(): string {
+    return searchOf(toQuery({ ...snapshotOf(store), focus: null }));
 }
 
 function onFacetChange(key: FacetKey, ids: string[]): void {
@@ -339,6 +395,14 @@ function goHome(): void {
                 </p>
                 <DraftBanner :count="data.unpublishedCount" />
             </header>
+            <UnavailableState
+                v-if="failed"
+                :status="
+                    payload.status.value === 'error' ? 'error' : 'unavailable'
+                "
+                :hide-home="true"
+                @retry="payload.retry"
+            />
             <CanvasStrip
                 :canvases="canvases"
                 :current="currentCanvas?.id ?? null"
