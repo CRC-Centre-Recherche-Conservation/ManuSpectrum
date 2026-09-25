@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import L from "leaflet";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
 
@@ -13,6 +13,7 @@ import {
     uuid,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 import {
     sizedContainer,
     stubIiifLayer,
@@ -40,6 +41,48 @@ function canvasWithImage() {
             height: 6000,
         },
     };
+}
+
+function canvasFrom(service: string) {
+    return {
+        ...canvasWithImage(),
+        id: `${service}/canvas`,
+        image: { service, url: null, width: 4000, height: 6000 },
+    };
+}
+
+function infoJson(service: string) {
+    return {
+        "@context": "http://iiif.io/api/image/2/context.json",
+        "@id": service,
+        width: 4000,
+        height: 6000,
+        profile: ["http://iiif.io/api/image/2/level1.json"],
+        tiles: [{ width: 256, scaleFactors: [1, 2, 4, 8, 16] }],
+    };
+}
+
+let realIiifFactory: typeof L.tileLayer.iiif | null = null;
+
+/** The real leaflet-iiif 3.0.0 over a `fetch` that answers each info.json as `answer` says. */
+async function realIiif(
+    answer: (url: string) => Promise<Response>,
+): Promise<ReturnType<typeof vi.fn>> {
+    vi.stubGlobal("fetch", vi.fn(answer));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    if (!realIiifFactory) {
+        await vi.importActual("leaflet-iiif");
+        realIiifFactory = L.tileLayer.iiif;
+    }
+    const real = realIiifFactory;
+    const factory = vi.fn((...args: Parameters<typeof real>) => real(...args));
+    L.tileLayer.iiif = factory as unknown as typeof real;
+    return factory;
+}
+
+function pageLayers(wrapper: { element: Element }): number {
+    return wrapper.element.querySelectorAll(".leaflet-tile-pane .leaflet-layer")
+        .length;
 }
 
 function mountFolio(props: Record<string, unknown> = {}) {
@@ -78,6 +121,11 @@ beforeEach(() => {
         setRightLayers: vi.fn(),
     }));
     L.control.sideBySide = sideBySide as unknown as typeof L.control.sideBySide;
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
 
 describe("FolioMap", () => {
@@ -258,5 +306,75 @@ describe("FolioMap", () => {
         await wrapper.setProps({ curtain: "a:0" });
         expect(sideBySide).toHaveBeenCalledWith([], expect.anything());
         wrapper.unmount();
+    });
+
+    describe("with the real leaflet-iiif", () => {
+        it("follows later page changes and unmounts while an info.json never answers", async () => {
+            const factory = await realIiif(() => new Promise(() => undefined));
+            const wrapper = mountFolio({
+                canvas: canvasFrom("https://dead.example/a"),
+            });
+            await flushPromises();
+            await wrapper.setProps({
+                canvas: canvasFrom("https://dead.example/b"),
+            });
+            await wrapper.setProps({
+                canvas: canvasFrom("https://dead.example/c"),
+            });
+            await flushPromises();
+            expect(factory.mock.calls.map(([url]) => url)).toEqual([
+                "https://dead.example/a/info.json",
+                "https://dead.example/b/info.json",
+                "https://dead.example/c/info.json",
+            ]);
+            expect(() => wrapper.unmount()).not.toThrow();
+        });
+
+        it("lays the next page after an image host that refuses its info.json", async () => {
+            await realIiif(async (url) =>
+                url.startsWith("https://dead.example")
+                    ? Promise.reject(new TypeError("Failed to fetch"))
+                    : jsonResponse(infoJson(url.replace("/info.json", ""))),
+            );
+            const wrapper = mountFolio({
+                canvas: canvasFrom("https://dead.example/a"),
+            });
+            await flushPromises();
+            await wrapper.setProps({
+                canvas: canvasFrom("https://iiif.example/b"),
+            });
+            await flushPromises();
+            expect(pageLayers(wrapper)).toBe(1);
+            expect(() => wrapper.unmount()).not.toThrow();
+        });
+
+        it("never lays a page left before its info.json arrived", async () => {
+            let answerFirst: () => void = () => undefined;
+            await realIiif(
+                (url) =>
+                    new Promise((resolve) => {
+                        const response = jsonResponse(
+                            infoJson(url.replace("/info.json", "")),
+                        );
+                        if (url.includes("/a/")) {
+                            answerFirst = () => resolve(response);
+                        } else {
+                            resolve(response);
+                        }
+                    }),
+            );
+            const wrapper = mountFolio({
+                canvas: canvasFrom("https://slow.example/a"),
+            });
+            await flushPromises();
+            await wrapper.setProps({
+                canvas: canvasFrom("https://iiif.example/b"),
+            });
+            await flushPromises();
+            answerFirst();
+            await flushPromises();
+            expect(pageLayers(wrapper)).toBe(1);
+            wrapper.unmount();
+        });
     });
 });

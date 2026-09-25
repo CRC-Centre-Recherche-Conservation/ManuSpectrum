@@ -50,6 +50,13 @@ const HATCH_ID = "ms-folio-hatch";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const CLUSTER_PREFIX = "cluster:";
 
+/** The leaflet-iiif 3.0.0 state the folio reads: the info.json request, the image sizes it yields, the tile container. */
+type IiifLayer = L.TileLayer & {
+    _infoPromise?: Promise<unknown> | null;
+    _imageSizes?: unknown[];
+    _container?: HTMLElement;
+};
+
 const props = withDefaults(
     defineProps<{
         canvas: DocumentCanvas | null;
@@ -75,7 +82,7 @@ const host = useTemplateRef<HTMLDivElement>("host");
 const active = ref<string | null>(null);
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
-let page: L.Layer | null = null;
+let page: IiifLayer | null = null;
 let cluster: L.MarkerClusterGroup | null = null;
 let frames: L.GeoJSON | null = null;
 let materials: L.GeoJSON | null = null;
@@ -247,19 +254,31 @@ function ensureHatch(): void {
     svg.prepend(defs);
 }
 
+/**
+ * Lays the page's IIIF image once leaflet-iiif has read its info.json, if the
+ * page is still the one shown. leaflet-iiif lays its tiles only after that
+ * read (never, when the image host refuses it), and GridLayer.onRemove throws
+ * on a layer whose tiles are not laid: an unread page never reaches the map,
+ * and a page removed in the instant between its addition and its tiles is
+ * dropped without calling GridLayer.onRemove.
+ */
 function drawPage(): void {
     if (!map) return;
-    if (page) map.removeLayer(page);
+    if (page && map.hasLayer(page)) map.removeLayer(page);
     page = null;
     const service = props.canvas?.image.service;
-    if (service) {
-        page = L.tileLayer
-            .iiif(infoJsonUrl(service), {
-                fitBounds: true,
-                setMaxBounds: false,
-            })
-            .addTo(map);
-    }
+    if (!service) return;
+    const next = L.tileLayer.iiif(infoJsonUrl(service), {
+        fitBounds: true,
+        setMaxBounds: false,
+    }) as IiifLayer;
+    const onRemove = next.onRemove;
+    next.onRemove = (from: L.Map) =>
+        next._container ? onRemove.call(next, from) : next;
+    page = next;
+    void Promise.resolve(next._infoPromise).then(() => {
+        if (map && page === next && next._imageSizes) map.addLayer(next);
+    });
 }
 
 function drawMarks(): void {
@@ -500,7 +519,7 @@ function zoomOut(): void {
 }
 
 function wholePage(): void {
-    if (page && "_fitBounds" in page) {
+    if (page && map?.hasLayer(page) && "_fitBounds" in page) {
         // leaflet-iiif fits the whole image with this private method.
         (page as unknown as { _fitBounds: () => void })._fitBounds();
     } else if (markers.size > 0) {
