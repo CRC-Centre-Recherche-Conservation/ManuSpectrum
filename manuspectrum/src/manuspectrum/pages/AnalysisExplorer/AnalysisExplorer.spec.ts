@@ -76,6 +76,30 @@ describe("AnalysisExplorer", () => {
         expect(document.body.dataset.explorerScreen).toBeUndefined();
     });
 
+    it("puts the back link and the Selection button in the intro line of the page", async () => {
+        const bar = document.createElement("div");
+        bar.id = "ms-explorer-intro-bar";
+        document.body.append(bar);
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            props: { connected: false },
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        expect(bar.querySelector(".selection-drawer .opener")).not.toBeNull();
+        useExplorerStore().openDocument(uuid(1));
+        await flushPromises();
+        expect(bar.querySelector(".explorer-back")?.textContent).toContain(
+            "Back to the explorer home",
+        );
+        expect(wrapper.find(".corpus-document .explorer-back").exists()).toBe(
+            false,
+        );
+        wrapper.unmount();
+        bar.remove();
+    });
+
     it("prompts for a shared Selection and removes sel from the URL", async () => {
         window.history.replaceState(null, "", `/en/discover?sel=${KEY}`);
         const wrapper = mount(AnalysisExplorer, {
@@ -146,7 +170,7 @@ describe("AnalysisExplorer", () => {
         const store = useExplorerStore();
         store.openDocument(uuid(1));
         await flushPromises();
-        const back = wrapper.find(".corpus-document .back");
+        const back = wrapper.find(".explorer-back");
         (back.element as HTMLButtonElement).focus();
         store.$patch((state) => {
             state.document = { id: uuid(1), canvas: null };
@@ -236,7 +260,9 @@ describe("AnalysisExplorer", () => {
         await flushPromises();
         useExplorerStore().openDocument(uuid(1));
         await flushPromises();
-        expect(document.activeElement?.classList.contains("back")).toBe(true);
+        expect(
+            document.activeElement?.classList.contains("explorer-back"),
+        ).toBe(true);
         wrapper.unmount();
     });
 });

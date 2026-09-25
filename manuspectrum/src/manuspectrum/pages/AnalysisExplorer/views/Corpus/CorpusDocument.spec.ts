@@ -427,7 +427,7 @@ describe("CorpusDocument", () => {
         const { wrapper } = mountScreen();
         await flushPromises();
         expect(wrapper.find(".on-this-page").text()).toContain("FORS_014");
-        expect(wrapper.find(".selection-panel").exists()).toBe(true);
+        expect(wrapper.find(".side .selection-panel").exists()).toBe(false);
     });
 
     it("returns the focus to the marker when the card drawer closes", async () => {
@@ -472,7 +472,7 @@ describe("CorpusDocument", () => {
             store.openDocument(uuid(1));
         });
         await flushPromises();
-        const back = wrapper.find(".back");
+        const back = wrapper.find(".explorer-back");
         expect(back.text()).toBe("Results");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("results");
@@ -498,7 +498,9 @@ describe("CorpusDocument", () => {
             { provide: { [RESULTS_MEMO_KEY as symbol]: memo } },
         );
         await flushPromises();
-        expect(wrapper.find(".back").text()).toBe("Results (30 documents)");
+        expect(wrapper.find(".explorer-back").text()).toBe(
+            "Results (30 documents)",
+        );
     });
 
     it("counts its filters in this document only", async () => {
@@ -523,7 +525,7 @@ describe("CorpusDocument", () => {
         stubFetch();
         const { wrapper, store } = mountScreen();
         await flushPromises();
-        const back = wrapper.find(".back");
+        const back = wrapper.find(".explorer-back");
         expect(back.text()).toBe("Back to the explorer home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");

@@ -6,7 +6,10 @@ import {
     ANNOUNCE_KEY,
     SELECTION_HINTS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
-import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import {
+    BASKET_LIMIT,
+    slotLabel,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -93,8 +96,8 @@ async function add(): Promise<void> {
     if (result.refused === null && result.added.length > 0) {
         announce(
             interpolate(
-                $gettext("Added to the Selection as %{slots}."),
-                { slots: heldLabels.value },
+                $gettext("Added to the Selection (%{n}/%{limit})."),
+                { n: store.basket.length, limit: BASKET_LIMIT },
                 true,
             ),
         );

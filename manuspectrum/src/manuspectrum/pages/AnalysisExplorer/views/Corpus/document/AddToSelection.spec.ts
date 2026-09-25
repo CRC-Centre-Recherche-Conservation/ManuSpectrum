@@ -30,7 +30,7 @@ describe("AddToSelection", () => {
         const { wrapper, announce, store } = mountButton([KEY]);
         await wrapper.find("button").trigger("click");
         expect(store.basket.map((item) => item.key)).toEqual([KEY]);
-        expect(announce).toHaveBeenCalledWith(expect.stringContaining("A1"));
+        expect(announce).toHaveBeenCalledWith("Added to the Selection (1/30).");
         expect(wrapper.text()).toContain("In the Selection as A1");
     });
 

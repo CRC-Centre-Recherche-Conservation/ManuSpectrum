@@ -25,7 +25,6 @@ import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/documen
 import FolioViewSwitch from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue";
 import OnThisPage from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue";
 import SampleCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue";
-import SelectionPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SelectionPanel.vue";
 
 import { searchOf } from "@/manuspectrum/public/useUrlState.ts";
 import { useAnalysis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnalysis.ts";
@@ -52,6 +51,10 @@ import {
     FOLIO_ZONES_KEY,
     RESULTS_MEMO_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    INTRO_BAR_ID,
+    introBar,
+} from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     hasActiveFilters,
@@ -117,6 +120,7 @@ const card = useTemplateRef<{ focusHeading: () => void }>("card");
 const rail = useTemplateRef<{ focusFilters: () => void }>("rail");
 const side = useTemplateRef<HTMLElement>("side");
 
+const hasIntroBar = introBar() !== null;
 const curtain = ref<string | null>(null);
 let pageToFollow = store.focus !== null;
 /** The document whose first payload has placed the page. */
@@ -626,14 +630,19 @@ function goHome(): void {
             :busy="payload.status.value === 'loading'"
             :first="data === null"
         />
-        <button
-            ref="back-button"
-            type="button"
-            class="back"
-            @click="back"
+        <Teleport
+            :to="`#${INTRO_BAR_ID}`"
+            :disabled="!hasIntroBar"
         >
-            <span>{{ backLabel }}</span>
-        </button>
+            <button
+                ref="back-button"
+                type="button"
+                class="explorer-back"
+                @click="back"
+            >
+                <span>{{ backLabel }}</span>
+            </button>
+        </Teleport>
         <UnavailableState
             v-if="isUnavailable"
             :status="payload.status.value === 'error' ? 'error' : 'unavailable'"
@@ -811,7 +820,6 @@ function goHome(): void {
                         :document-name="data.name.value"
                         @select="onSelect"
                     />
-                    <SelectionPanel />
                 </aside>
             </div>
             <Drawer
@@ -896,26 +904,31 @@ function goHome(): void {
     font-weight: 600;
 }
 
-.corpus-document .back {
+.explorer-back {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    justify-self: start;
     min-block-size: var(--explorer-target);
     padding: 0;
     border: none;
     background: transparent;
     color: var(--blue-text);
     font: inherit;
+    font-size: 0.8125rem;
     cursor: pointer;
 }
 
-.corpus-document .back::before {
+.explorer-back::before {
     content: "←" / "";
 }
 
-.corpus-document .back:hover {
+.explorer-back:hover {
     text-decoration: underline;
+}
+
+.explorer-back:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 .corpus-document .document-bar {

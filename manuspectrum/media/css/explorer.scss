@@ -74,6 +74,30 @@ body.ms-page--app::after {
     line-height: 1.6;
 }
 
+// The explorer's bar (back link, Selection) is mounted here by the app.
+.ms-explorer-intro__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    justify-self: stretch;
+    font-size: 0.8125rem;
+
+    &:empty {
+        display: none;
+    }
+
+    > .selection {
+        order: 1;
+        margin-inline-start: auto;
+    }
+}
+
+body[data-explorer-screen='results'] .ms-explorer-intro__bar,
+body[data-explorer-screen='document'] .ms-explorer-intro__bar {
+    flex: 1 1 18rem;
+}
+
 body[data-explorer-screen='results'] .ms-explorer-intro,
 body[data-explorer-screen='document'] .ms-explorer-intro {
     display: flex;

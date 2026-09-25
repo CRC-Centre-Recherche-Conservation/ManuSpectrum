@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
+import SelectionDrawer from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue";
 import SharedSelectionPrompt from "@/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue";
 import ViewTabs from "@/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.vue";
 import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusView.vue";
@@ -14,6 +15,10 @@ import {
     SCREEN_FOCUS_KEY,
     SELECTION_HINTS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    INTRO_BAR_ID,
+    introBar,
+} from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { useBasketPersistence } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
 import {
@@ -55,6 +60,7 @@ useUrlState({
     historyMode,
 });
 
+const hasIntroBar = introBar() !== null;
 const sharedSelection = ref<SharedSelection | null>(INITIAL_SELECTION);
 const announcement = ref("");
 const facetLabels = ref(new Map<string, Label>());
@@ -112,6 +118,12 @@ function onSelectionResolved(message: string): void {
 
 <template>
     <div class="analysis-explorer">
+        <Teleport
+            :to="`#${INTRO_BAR_ID}`"
+            :disabled="!hasIntroBar"
+        >
+            <SelectionDrawer class="selection" />
+        </Teleport>
         <ViewTabs />
         <SharedSelectionPrompt
             v-if="sharedSelection"
