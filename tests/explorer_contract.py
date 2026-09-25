@@ -29,6 +29,7 @@ SHAPES = {
         "results": list,
         "facets": list,
         "unpublishedCount": int,
+        "withoutAnalyses": int,
     },
     "DocumentHit": {
         "type": str,
@@ -38,6 +39,10 @@ SHAPES = {
         "analysisCount": int,
         "thumbnail": (str, type(None)),
         "unpublished": bool,
+        "shelfmark": ("Label", None),
+        "dates": (dict, type(None)),
+        "description": ("Label", None),
+        "documentType": ("Label", None),
     },
     "AnalysisHit": {
         "type": str,

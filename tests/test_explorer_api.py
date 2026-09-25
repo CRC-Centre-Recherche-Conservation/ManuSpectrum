@@ -46,9 +46,18 @@ class SearchRouteTests(ServiceCase):
 
         self.assertTrue(results)
         for hit in results:
+            assert_shape(self, hit, "DocumentHit")
             self.assertTrue(
                 hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
             )
+
+    def test_a_search_scoped_to_a_document_has_the_contract_shape(self):
+        response = self.get(f"?document={self.documents['open'].pk}")
+
+        self.assertEqual(response.status_code, 200)
+        assert_shape(self, response.json(), "SearchResponse")
+        for hit in response.json()["results"]:
+            assert_shape(self, hit, "AnalysisHit")
 
     def test_a_signed_in_reader_gets_a_private_answer(self):
         self.client.force_login(self.editor)
@@ -235,19 +244,39 @@ class ReadRightsTests(ReadRightsCase):
         self.assertNotIn("initial", payload["component"]["name"]["value"])
 
     def test_a_document_of_a_model_the_visitor_cannot_read_is_not_listed(self):
-        self.deny(
-            ("document", "label_of_name"),
-            ("document", "facsimiles"),
-            ("document", "current_owner"),
-        )
+        self.deny(*(role for role in self.nodes if role[0] == "document"))
 
         search = self.client.get(
             "/en/api/explorer/search",
-            {"grain": "documents", "onlyWithAnalyses": "false"},
+            {"grain": "documents", "empty": "1"},
         ).json()
 
         self.assertEqual(search["results"], [])
         self.assertNotIn("Ms 59", str(search))
+
+    def test_an_identifier_nodegroup_the_visitor_cannot_read_gives_no_shelfmark(self):
+        self.tile_values(
+            self.documents["open"],
+            "document",
+            value_of_identifier=self.string_value("Latin 8055"),
+        )
+        self.tile(
+            self.documents["open"],
+            "content_of_statement",
+            self.string_value("A psalter"),
+        )
+        self.deny(("document", "value_of_identifier"))
+
+        search = self.client.get(
+            "/en/api/explorer/search", {"grain": "documents"}
+        ).json()
+
+        hit = next(
+            r for r in search["results"] if r["id"] == str(self.documents["open"].pk)
+        )
+        self.assertIsNone(hit["shelfmark"])
+        self.assertEqual(hit["description"]["value"], "A psalter")
+        self.assertNotIn("Latin 8055", str(search))
 
 
 class DocumentRouteTests(CorpusCase):

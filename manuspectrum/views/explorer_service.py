@@ -6,12 +6,15 @@ links off the tiles by role (D6), and a resource outside ``visible_set`` never
 reaches a payload, a facet or a name.
 """
 
+import html
 import logging
 import re
 import sys
+import textwrap
 import unicodedata
 from collections import Counter, defaultdict
 
+import nh3
 from django.conf import settings
 from django.http import QueryDict
 from django.urls import reverse
@@ -52,6 +55,12 @@ ROLES = {
     "doc_name": ("document", "label_of_name"),
     "doc_manifest": ("document", "facsimiles"),
     "doc_owner": ("document", "current_owner"),
+    "doc_identifier": ("document", "value_of_identifier"),
+    "doc_identifier_type": ("document", "type_of_identifier"),
+    "doc_start": ("document", "date_start_of_production_time"),
+    "doc_end": ("document", "date_end_of_production_time"),
+    "doc_description": ("document", "content_of_statement"),
+    "doc_type": ("document", "type"),
     "comp_zone": ("component", "location_in_document"),
     "an_name": ("analysis", "label_of_name"),
     "technique": ("analysis", "analysis_technique_used"),
@@ -93,6 +102,9 @@ FACET_KEYS = (
     "layer",
 )
 _EMPTY = (None, "", [], {})
+PAGE_SIZES = (10, 25, 50)
+DESCRIPTION_LENGTH = 220
+SHELFMARK_LABELS = frozenset({"shelfmark", "shelf mark", "call number", "cote"})
 
 logger = logging.getLogger(__name__)
 
@@ -426,7 +438,11 @@ def _unique(refs):
 
 
 def parse_filters(query):
-    """Filters and page number of a search query; lists come as repeated or comma-separated parameters."""
+    """Filters and page number of a search query; lists come as repeated or comma-separated parameters.
+
+    ``size`` is one of ``PAGE_SIZES``, else the first; ``empty`` asks for the
+    documents without analyses; ``document`` scopes the search to one document.
+    """
     filters = {
         key: sorted(
             {
@@ -440,11 +456,13 @@ def parse_filters(query):
     }
     filters["q"] = query.get("q", "").strip()
     filters["grain"] = "documents" if query.get("grain") == "documents" else "analyses"
-    filters["onlyWithAnalyses"] = query.get("onlyWithAnalyses", "true").lower() not in (
-        "0",
-        "false",
-        "no",
-    )
+    filters["empty"] = query.get("empty", "").lower() in ("1", "true", "yes")
+    filters["document"] = query.get("document", "").strip() or None
+    try:
+        size = int(query.get("size", ""))
+    except ValueError:
+        size = None
+    filters["size"] = size if size in PAGE_SIZES else PAGE_SIZES[0]
     try:
         page = max(1, int(query.get("page", "1")))
     except ValueError:
@@ -561,16 +579,36 @@ def search_payload(query, user, language):
     across facets. A facet is absent when no value has a count on the whole
     visible set; a selected value that is not in the visible set is ignored
     without a word.
+
+    With ``document``, rows are those of that document: facets list the
+    values it carries plus the selected ones (count 0 when it lacks them), a
+    facet without values is absent, and the results are its matching
+    analyses whatever the grain. An unknown, hidden or malformed id is a
+    document without rows.
+
+    In the documents grain, a visible document without any visible analysis
+    is listed only with ``empty``, when no facet filter is active and the
+    free text is in its name; ``withoutAnalyses`` counts those documents
+    whether listed or not (0 in the other cases).
     """
-    rows = corpus_rows(user, language)
-    keep, active, filters, page, needle, universe = row_filter(rows, query)
+    all_rows = corpus_rows(user, language)
+    keep, active, filters, page, needle, universe = row_filter(all_rows, query)
+    scope = filters["document"]
+    rows = (
+        all_rows if scope is None else [r for r in all_rows if r["document"] == scope]
+    )
 
     matching = [row for row in rows if keep(row)]
-    labels = _facet_labels(rows, language, user)
+    labels = _facet_labels(all_rows, language, user)
     facets = []
     for key in FACET_KEYS:
         if not universe[key]:
             continue
+        carried = (
+            universe[key]
+            if scope is None
+            else {v for row in rows for v in _facet_values(row, key)}
+        )
         counts = Counter(
             v for row in rows if keep(row, key) for v in set(_facet_values(row, key))
         )
@@ -581,9 +619,11 @@ def search_payload(query, user, language):
                 "count": counts[v],
                 "selected": v in active[key],
             }
-            for v in universe[key]
+            for v in carried | set(active[key])
             if counts[v] > 0 or v in active[key]
         ]
+        if scope is not None and not values:
+            continue
         values.sort(
             key=(
                 (lambda item: item["id"])
@@ -595,34 +635,42 @@ def search_payload(query, user, language):
 
     visible = visible_set(user)
     label_of = names(
-        {r["document"] for r in rows}
-        | {r["component"] for r in rows if r["component"]}
+        {r["document"] for r in all_rows}
+        | {r["component"] for r in all_rows if r["component"]}
         | visible.documents,
         language,
         user,
     )
-    if filters["grain"] == "documents":
+    size = filters["size"]
+    without_analyses = 0
+    if filters["grain"] == "documents" and scope is None:
         per_document = Counter(row["document"] for row in matching)
+        with_rows = {row["document"] for row in all_rows}
         candidates = sorted(
             visible.documents, key=lambda d: (fold(label_of[d]["value"]), d)
         )
-        results = [
-            {
-                "type": "document",
-                "id": d,
-                "name": label_of[d],
-                "holding": None,
-                "analysisCount": per_document[d],
-                "thumbnail": reverse("thumbnail", kwargs={"resource_id": d}),
-                "unpublished": d in visible.unpublished,
-            }
-            for d in candidates
-            if per_document[d] > 0
-            or (
-                not filters["onlyWithAnalyses"]
+        bare = (
+            set()
+            if any(active.values())
+            else {
+                d
+                for d in candidates
+                if d not in with_rows
                 and (not needle or needle in fold(label_of[d]["value"]))
-            )
+            }
+        )
+        without_analyses = len(bare)
+        listed = [
+            d
+            for d in candidates
+            if per_document[d] > 0 or (filters["empty"] and d in bare)
         ]
+        chunk_ids = listed[(page - 1) * size : page * size]
+        chunk = document_hits(
+            chunk_ids, per_document, visible, user, language, label_of
+        )
+        total = len(listed)
+        unpublished = sum(1 for d in listed if d in visible.unpublished)
     else:
         matching.sort(
             key=lambda r: (
@@ -632,16 +680,133 @@ def search_payload(query, user, language):
                 r["id"],
             )
         )
-        results = [analysis_hit(row, label_of) for row in matching]
-    size = settings.EXPLORER_SEARCH_PAGE_SIZE
-    chunk = results[(page - 1) * size : page * size]
+        chunk = [
+            analysis_hit(row, label_of)
+            for row in matching[(page - 1) * size : page * size]
+        ]
+        total = len(matching)
+        unpublished = sum(1 for r in matching if r["unpublished"])
     return {
-        "total": len(results),
+        "total": total,
         "page": {"number": page, "size": size, "count": len(chunk)},
         "results": chunk,
         "facets": facets,
-        "unpublishedCount": sum(1 for r in results if r["unpublished"]),
+        "unpublishedCount": unpublished,
+        "withoutAnalyses": without_analyses,
     }
+
+
+def plain_text(markup, length=DESCRIPTION_LENGTH):
+    """*markup* as plain text: tags removed, entities decoded, whitespace collapsed, cut on a word to *length* characters with « … »."""
+    spaced = re.sub(r"(?i)<br\s*/?>|</(p|li|div|h[1-6])\s*>", " ", markup or "")
+    text = html.unescape(nh3.clean(spaced, tags=set(), attributes={}))
+    return textwrap.shorten(text, width=length, placeholder="…")
+
+
+def _shelfmark(tiles, value_node, type_node, language):
+    """The identifier typed as a shelfmark (``SHELFMARK_LABELS``), else the first identifier; None without one."""
+    found = []
+    for data in tiles:
+        text = label(string_texts(data.get(value_node.nodeid)), language)
+        if not text:
+            continue
+        terms = (
+            {fold(t) for t in reference_terms(data.get(type_node.nodeid))}
+            if type_node
+            else set()
+        )
+        found.append((not terms & SHELFMARK_LABELS, text))
+    return min(found, key=lambda f: f[0])[1] if found else None
+
+
+def document_hits(document_ids, per_document, visible, user, language, label_of):
+    """``DocumentHit`` of each of *document_ids*, in order, read in one batch.
+
+    A field whose nodegroup the reader may not read is None; the holding is
+    the first owner a linked reference may show.
+    """
+    values = Values(
+        document_ids,
+        [
+            "doc_owner",
+            "doc_identifier",
+            "doc_identifier_type",
+            "doc_start",
+            "doc_end",
+            "doc_description",
+            "doc_type",
+        ],
+        user,
+    )
+    owners_of = {d: _resource_refs(values.get(d, "doc_owner")) for d in document_ids}
+    shown = set(linkable({o for v in owners_of.values() for o in v}, user))
+    owner_of = {
+        d: [
+            str(v.get("resourceId"))
+            for v in values.get(d, "doc_owner")
+            if isinstance(v, dict) and str(v.get("resourceId")) in shown
+        ][:1]
+        for d in document_ids
+    }
+    owner_names = names({o for v in owner_of.values() for o in v}, language, user)
+    identifier_node = values.node("doc_identifier")
+    type_node = values.node("doc_identifier_type")
+    start_node, end_node = values.node("doc_start"), values.node("doc_end")
+    hits = []
+    for d in document_ids:
+        dates = None
+        for data in values.tiles(d, "doc_start") or values.tiles(d, "doc_end"):
+            start = data.get(start_node.nodeid) if start_node else None
+            end = data.get(end_node.nodeid) if end_node else None
+            if start or end:
+                dates = {
+                    "start": _date(start) if isinstance(start, str) else None,
+                    "end": _date(end) if isinstance(end, str) else None,
+                }
+                break
+        description = next(
+            (
+                found
+                for found in (
+                    label(
+                        {
+                            lang: plain_text(text)
+                            for lang, text in string_texts(v).items()
+                        },
+                        language,
+                    )
+                    for v in values.get(d, "doc_description")
+                )
+                if found
+            ),
+            None,
+        )
+        types = value_refs(values.first(d, "doc_type"), language)
+        hits.append(
+            {
+                "type": "document",
+                "id": d,
+                "name": label_of[d],
+                "holding": owner_names[owner_of[d][0]] if owner_of[d] else None,
+                "analysisCount": per_document[d],
+                "thumbnail": reverse("thumbnail", kwargs={"resource_id": d}),
+                "unpublished": d in visible.unpublished,
+                "shelfmark": (
+                    _shelfmark(
+                        values.tiles(d, "doc_identifier"),
+                        identifier_node,
+                        type_node,
+                        language,
+                    )
+                    if identifier_node
+                    else None
+                ),
+                "dates": dates,
+                "description": description,
+                "documentType": types[0]["label"] if types else None,
+            }
+        )
+    return hits
 
 
 _LOCAL_MANIFEST = re.compile(r"/manifest/(?P<uuid>[0-9a-fA-F-]{36})/?$")

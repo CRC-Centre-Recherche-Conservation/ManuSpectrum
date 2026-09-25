@@ -32,6 +32,10 @@ export function documentHit(
         analysisCount: n,
         thumbnail: `/thumbnail/${uuid(n)}`,
         unpublished: false,
+        shelfmark: null,
+        dates: null,
+        description: null,
+        documentType: null,
         ...overrides,
     };
 }
@@ -86,6 +90,7 @@ export function searchResponse(
         results,
         facets: [],
         unpublishedCount: 0,
+        withoutAnalyses: 0,
         ...overrides,
     };
 }

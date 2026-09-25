@@ -55,6 +55,11 @@ export interface DocumentHit {
     analysisCount: number;
     thumbnail: string | null;
     unpublished: boolean;
+    shelfmark: Label | null;
+    dates: DateRange | null;
+    /** Plain text, cut on a word at about 220 characters with « … ». */
+    description: Label | null;
+    documentType: Label | null;
 }
 
 export interface AnalysisHit {
@@ -77,6 +82,8 @@ export interface SearchResponse {
     results: (DocumentHit | AnalysisHit)[];
     facets: Facet[];
     unpublishedCount: number;
+    /** Documents without analyses the query would list with `empty=1` (0 outside the documents grain). */
+    withoutAnalyses: number;
 }
 
 export interface Annotation {
@@ -291,6 +298,7 @@ export const SHAPE_KEYS = {
         results: true,
         facets: true,
         unpublishedCount: true,
+        withoutAnalyses: true,
     } satisfies Record<keyof SearchResponse, true>,
     DocumentHit: {
         type: true,
@@ -300,6 +308,10 @@ export const SHAPE_KEYS = {
         analysisCount: true,
         thumbnail: true,
         unpublished: true,
+        shelfmark: true,
+        dates: true,
+        description: true,
+        documentType: true,
     } satisfies Record<keyof DocumentHit, true>,
     AnalysisHit: {
         type: true,
