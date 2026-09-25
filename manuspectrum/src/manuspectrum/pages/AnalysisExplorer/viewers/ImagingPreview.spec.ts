@@ -41,6 +41,17 @@ function mountPreview(
 }
 
 describe("ImagingPreview", () => {
+    it("says when the image server does not give the map, and asks again on Retry", async () => {
+        const { wrapper } = mountPreview();
+        await wrapper.find("img.layer-image").trigger("error");
+        const status = wrapper.find(".unavailable");
+        expect(status.attributes("role")).toBe("status");
+        expect(status.text()).toContain("Map unavailable (image server)");
+        expect(wrapper.find("img.layer-image").exists()).toBe(false);
+        await status.find("button").trigger("click");
+        expect(wrapper.find("img.layer-image").exists()).toBe(true);
+    });
+
     it("names the current layer by its kind and label", () => {
         const { wrapper } = mountPreview();
         expect(wrapper.find(".current").text()).toContain("Element");

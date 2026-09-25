@@ -457,6 +457,32 @@ describe("FolioMap", () => {
         wrapper.unmount();
     });
 
+    it("says when a laid map does not load and lays it again on Retry", async () => {
+        const overlay = {
+            key: "a:0",
+            url: "https://iiif.example/pb/full/!253,271/0/default.jpg",
+            bounds: [
+                [-1, 0],
+                [0, 2],
+            ] as [[number, number], [number, number]],
+            opacity: 0.5,
+            label: "Pb",
+        };
+        const wrapper = mountFolio({ overlays: [overlay] });
+        await flushPromises();
+        const first = wrapper.find("img.folio-overlay").element;
+        first.dispatchEvent(new Event("error"));
+        await flushPromises();
+        const status = wrapper.find(".overlay-failed");
+        expect(status.attributes("role")).toBe("status");
+        expect(status.text()).toContain("Map unavailable (image server)");
+        await status.find("button").trigger("click");
+        await flushPromises();
+        expect(wrapper.find(".overlay-failed").exists()).toBe(false);
+        expect(wrapper.find("img.folio-overlay").element).not.toBe(first);
+        wrapper.unmount();
+    });
+
     describe("with the real leaflet-iiif", () => {
         it("follows later page changes and unmounts while an info.json never answers", async () => {
             const factory = await realIiif(() => new Promise(() => undefined));
@@ -477,6 +503,23 @@ describe("FolioMap", () => {
                 "https://dead.example/c/info.json",
             ]);
             expect(() => wrapper.unmount()).not.toThrow();
+        });
+
+        it("says when the page image is unavailable and asks again on Retry", async () => {
+            const factory = await realIiif(async () =>
+                Promise.reject(new TypeError("Failed to fetch")),
+            );
+            const wrapper = mountFolio({
+                canvas: canvasFrom("https://dead.example/a"),
+            });
+            await flushPromises();
+            const status = wrapper.find(".page-failed");
+            expect(status.attributes("role")).toBe("status");
+            expect(status.text()).toContain("Page image unavailable");
+            await status.find("button").trigger("click");
+            await flushPromises();
+            expect(factory).toHaveBeenCalledTimes(2);
+            wrapper.unmount();
         });
 
         it("lays the next page after an image host that refuses its info.json", async () => {

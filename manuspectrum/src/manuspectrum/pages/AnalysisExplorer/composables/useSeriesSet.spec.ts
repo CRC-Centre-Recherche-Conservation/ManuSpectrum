@@ -64,9 +64,28 @@ describe("useSeriesSet", () => {
         await flushPromises();
         expect(handle.status.value).toBe("ready");
         expect(handle.data.value).toEqual([
-            { series: null, failed: true },
-            { series: null, failed: false },
-            { series: SERIES, failed: false },
+            { series: null, failed: true, retryable: true },
+            { series: null, failed: false, retryable: false },
+            { series: SERIES, failed: false, retryable: false },
+        ]);
+        stop();
+    });
+
+    it("marks a missing file failed for good, and a server error worth a retry", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string) =>
+                jsonResponse({}, url.includes("/a?") ? 404 : 502),
+            ),
+        );
+        const { handle, stop } = run([
+            "/api/spectrum-preview/a",
+            "/api/spectrum-preview/b",
+        ]);
+        await flushPromises();
+        expect(handle.data.value).toEqual([
+            { series: null, failed: true, retryable: false },
+            { series: null, failed: true, retryable: true },
         ]);
         stop();
     });

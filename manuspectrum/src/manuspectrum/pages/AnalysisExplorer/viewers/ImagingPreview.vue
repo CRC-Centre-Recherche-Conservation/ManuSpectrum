@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Slider from "primevue/slider";
@@ -28,6 +28,7 @@ const PREVIEW_SIZE = 480;
 const PERCENT = 100;
 const OPACITY_STEP = 5;
 
+/** A map the image server does not give is said so in place, with Retry. */
 const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
 
 const curtain = inject(CURTAIN_KEY, ref<string | null>(null));
@@ -50,6 +51,9 @@ const position = ref(
         ),
     ),
 );
+
+const imageFailed = ref(false);
+const attempt = ref(0);
 
 const layer = computed<FileLayer | null>(
     () => props.file.layers[position.value] ?? null,
@@ -80,6 +84,19 @@ const scrollLabel = computed(() =>
           )
         : $gettext("Layers, in order"),
 );
+
+watch(imageUrl, () => {
+    imageFailed.value = false;
+});
+
+function onImageError(): void {
+    imageFailed.value = true;
+}
+
+function retryImage(): void {
+    attempt.value += 1;
+    imageFailed.value = false;
+}
 
 function kindLabel(entry: FileLayer): string {
     switch (entry.kind) {
@@ -171,12 +188,27 @@ function onCurtainChange(event: Event): void {
                 @update:model-value="moveTo"
             />
         </div>
+        <p
+            v-if="imageUrl && imageFailed"
+            class="unavailable"
+            role="status"
+        >
+            <span>{{ $gettext("Map unavailable (image server)") }}</span>
+            <button
+                type="button"
+                @click="retryImage"
+            >
+                <span>{{ $gettext("Retry") }}</span>
+            </button>
+        </p>
         <img
-            v-if="imageUrl && layer"
+            v-else-if="imageUrl && layer"
+            :key="`${imageUrl}#${attempt}`"
             class="layer-image"
             loading="lazy"
             :src="imageUrl"
             :alt="layer.label"
+            @error="onImageError"
         />
         <p class="note">
             <span>{{ $gettext("Each map keeps its own contrast.") }}</span>
@@ -267,6 +299,29 @@ function onCurtainChange(event: Event): void {
     max-inline-size: 100%;
     background: var(--stage);
     image-rendering: pixelated;
+}
+
+.imaging-preview .unavailable {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
+    border: 0.0625rem dashed var(--border-hover);
+    border-radius: 0.375rem;
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+}
+
+.imaging-preview .unavailable button {
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding-inline: 0.75rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
 }
 
 .imaging-preview .toggle {

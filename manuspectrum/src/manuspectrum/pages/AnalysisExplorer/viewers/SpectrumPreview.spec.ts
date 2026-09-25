@@ -155,6 +155,30 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
+    it("offers Retry after a server error, not after a missing file", async () => {
+        let status = 503;
+        const { wrapper } = mountPreview([readable(1)], () =>
+            status === 200 ? jsonResponse(SERIES) : jsonResponse({}, status),
+        );
+        await flushPromises();
+        const retry = wrapper.find("button.retry");
+        expect(retry.exists()).toBe(true);
+        status = 200;
+        await retry.trigger("click");
+        await flushPromises();
+        expect(wrapper.text()).not.toContain("could not be drawn");
+
+        status = 404;
+        const missing = mountPreview([readable(2)], () =>
+            jsonResponse({}, status),
+        ).wrapper;
+        await flushPromises();
+        expect(missing.text()).toContain("P2.csv could not be drawn.");
+        expect(missing.find("button.retry").exists()).toBe(false);
+        wrapper.unmount();
+        missing.unmount();
+    });
+
     it("says which file has nothing to draw", async () => {
         const { wrapper } = mountPreview(
             [readable(1)],

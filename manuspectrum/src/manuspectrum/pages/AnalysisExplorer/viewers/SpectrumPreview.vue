@@ -108,6 +108,10 @@ const notes = computed(() =>
         return [];
     }),
 );
+/** A file failed on a server error: Retry may get it. */
+const canRetry = computed(() =>
+    (results.data.value ?? []).some((result) => result.retryable),
+);
 const summary = computed(() =>
     curves.value
         .map(({ file, series }) =>
@@ -271,6 +275,14 @@ function toggleTable(): void {
                 <span>{{ note }}</span>
             </li>
         </ul>
+        <button
+            v-if="canRetry"
+            type="button"
+            class="retry"
+            @click="results.retry"
+        >
+            <span>{{ $gettext("Retry") }}</span>
+        </button>
         <template v-if="showTable && tableCurve">
             <label
                 v-if="curves.length > 1"

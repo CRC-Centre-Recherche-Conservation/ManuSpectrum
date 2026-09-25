@@ -102,6 +102,9 @@ const motion = usePreferredReducedMotion();
 const host = useTemplateRef<HTMLDivElement>("host");
 
 const active = ref<string | null>(null);
+const pageFailed = ref(false);
+/** Keys of laid maps whose image did not load. */
+const failedOverlays = ref<ReadonlySet<string>>(new Set());
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
 let page: IiifLayer | null = null;
@@ -367,12 +370,14 @@ function ensureHatch(): void {
  * read (never, when the image host refuses it), and GridLayer.onRemove throws
  * on a layer whose tiles are not laid: an unread page never reaches the map,
  * and a page removed in the instant between its addition and its tiles is
- * dropped without calling GridLayer.onRemove.
+ * dropped without calling GridLayer.onRemove. An info.json that cannot be
+ * read leaves the markers on the bare stage and says so (`pageFailed`).
  */
 function drawPage(): void {
     if (!map) return;
     if (page && map.hasLayer(page)) map.removeLayer(page);
     page = null;
+    pageFailed.value = false;
     const service = props.canvas?.image.service;
     if (!service) return;
     const next = L.tileLayer.iiif(infoJsonUrl(service), {
@@ -383,9 +388,16 @@ function drawPage(): void {
     next.onRemove = (from: L.Map) =>
         next._container ? onRemove.call(next, from) : next;
     page = next;
-    void Promise.resolve(next._infoPromise).then(() => {
-        if (map && page === next && next._imageSizes) map.addLayer(next);
-    });
+    void Promise.resolve(next._infoPromise).then(
+        () => {
+            if (!map || page !== next) return;
+            if (next._imageSizes) map.addLayer(next);
+            else pageFailed.value = true;
+        },
+        () => {
+            if (page === next) pageFailed.value = true;
+        },
+    );
 }
 
 /** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
@@ -582,6 +594,9 @@ function drawOverlays(): void {
             images.delete(key);
         }
     }
+    failedOverlays.value = new Set(
+        [...failedOverlays.value].filter((key) => wanted.has(key)),
+    );
     for (const overlay of props.overlays) {
         const existing = images.get(overlay.key);
         if (existing) {
@@ -589,17 +604,16 @@ function drawOverlays(): void {
             existing.setBounds(L.latLngBounds(overlay.bounds));
         } else {
             const pane = overlayPane(map, overlay.key);
+            const layer = L.imageOverlay(overlay.url, overlay.bounds, {
+                opacity: overlay.opacity,
+                className: "folio-overlay",
+                alt: overlay.label,
+                pane,
+            });
+            layer.on("error", () => markOverlayFailed(overlay.key));
             images.set(
                 overlay.key,
-                curtainable(
-                    L.imageOverlay(overlay.url, overlay.bounds, {
-                        opacity: overlay.opacity,
-                        className: "folio-overlay",
-                        alt: overlay.label,
-                        pane,
-                    }).addTo(map),
-                    map.getPane(pane)!,
-                ),
+                curtainable(layer.addTo(map), map.getPane(pane)!),
             );
         }
     }
@@ -618,6 +632,20 @@ function drawOverlays(): void {
             sideBySide as L.SideBySide & { _range?: HTMLElement }
         )._range?.setAttribute("aria-label", $gettext("Curtain position"));
     }
+}
+
+function markOverlayFailed(key: string): void {
+    failedOverlays.value = new Set(failedOverlays.value).add(key);
+}
+
+/** Lays the maps that did not load again, as new images. */
+function retryOverlays(): void {
+    for (const key of failedOverlays.value) {
+        images.get(key)?.remove();
+        images.delete(key);
+    }
+    failedOverlays.value = new Set();
+    drawOverlays();
 }
 
 /** A layer that leaves the curtain keeps no clip: its pane may be laid again without it. */
@@ -876,6 +904,38 @@ function wholePage(): void {
             <span>{{ $gettext("No image for this page.") }}</span>
         </p>
         <p
+            v-else-if="pageFailed"
+            class="no-image page-failed"
+            role="status"
+        >
+            <span>{{
+                $gettext(
+                    "Page image unavailable (the institution's IIIF server).",
+                )
+            }}</span>
+            <button
+                type="button"
+                class="retry"
+                @click="drawPage"
+            >
+                <span>{{ $gettext("Retry") }}</span>
+            </button>
+        </p>
+        <p
+            v-if="failedOverlays.size > 0"
+            class="no-image overlay-failed"
+            role="status"
+        >
+            <span>{{ $gettext("Map unavailable (image server)") }}</span>
+            <button
+                type="button"
+                class="retry"
+                @click="retryOverlays"
+            >
+                <span>{{ $gettext("Retry") }}</span>
+            </button>
+        </p>
+        <p
             v-if="props.caption"
             class="caption"
         >
@@ -978,6 +1038,33 @@ function wholePage(): void {
     border-radius: 0.25rem;
     background: var(--surface);
     color: var(--ink);
+}
+
+.folio .no-image {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+.folio .overlay-failed {
+    inset-block: auto 2.5rem;
+}
+
+.folio .retry {
+    min-block-size: 2rem;
+    padding-inline: 0.75rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.folio .retry:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 .folio :deep(.folio-marker-host) {
