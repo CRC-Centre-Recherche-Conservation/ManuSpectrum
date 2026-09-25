@@ -33,7 +33,7 @@ describe("MicroImagePreview", () => {
             dataKind: "micro-imaging",
             role: "other",
             name: "micro.jpg",
-            downloadUrl: "http://testserver/files/micro.jpg",
+            downloadUrl: "/files/micro.jpg",
             previewUrl: null,
         });
         const images = recordImages();

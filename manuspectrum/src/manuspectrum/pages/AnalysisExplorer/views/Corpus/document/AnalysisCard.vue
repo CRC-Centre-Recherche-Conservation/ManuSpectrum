@@ -135,7 +135,8 @@ const attribution = computed(() => {
     if (!text) return "";
     return text.startsWith(COPYRIGHT) ? text : `${COPYRIGHT} ${text}`;
 });
-const permalink = computed(() => safeHref(analysis.value?.permalink));
+/** The Arches report of the analysis on this site, opened in a new tab. */
+const reportHref = computed(() => safeHref(analysis.value?.reportUrl));
 
 function previewOf(file: FileEntry): Component {
     const entry = viewerFor(file.dataKind);
@@ -521,11 +522,19 @@ function focusHeading(): void {
             </section>
 
             <a
-                v-if="permalink"
+                v-if="reportHref"
                 class="record"
-                :href="permalink"
+                rel="noopener"
+                target="_blank"
+                :href="reportHref"
             >
                 <span>{{ $gettext("Full record") }}</span>
+                <span class="visually-hidden">{{ $gettext("(new tab)") }}</span>
+                <span
+                    class="new-tab"
+                    aria-hidden="true"
+                    >↗</span
+                >
             </a>
         </template>
     </article>
@@ -658,5 +667,20 @@ function focusHeading(): void {
     .analysis-card dd {
         grid-column: 1;
     }
+}
+
+.analysis-card .record {
+    display: inline-flex;
+    gap: 0.25rem;
+    justify-self: start;
+}
+
+.analysis-card .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 </style>

@@ -31,18 +31,30 @@ export function formatDateRange(range: DateRange): string {
 
 /**
  * An address safe to put in `href`: an absolute http or https URL as given, a
- * bare DOI (`10.xxxx/…`) as its doi.org address; null for anything else
- * (other schemes, relative paths, empty values).
+ * bare DOI (`10.xxxx/…`) as its doi.org address, a path of this site (one
+ * leading `/`, read on no other host) as given; null for anything else (other
+ * schemes, protocol-relative or relative paths, empty values).
  */
 export function safeHref(url: string | null | undefined): string | null {
     const value = url?.trim() ?? "";
     if (value === "") return null;
+    if (value.startsWith("/")) return sitePath(value);
     const candidate = value.startsWith(DOI_PREFIX)
         ? `${DOI_RESOLVER}${value}`
         : value;
     try {
         const parsed = new URL(candidate);
         return WEB_SCHEMES.has(parsed.protocol) ? parsed.href : null;
+    } catch {
+        return null;
+    }
+}
+
+/** A path that stays on the page's host once the browser reads it; null when it would leave it (`//host`, `/\host`). */
+function sitePath(value: string): string | null {
+    try {
+        const parsed = new URL(value, window.location.origin);
+        return parsed.origin === window.location.origin ? value : null;
     } catch {
         return null;
     }

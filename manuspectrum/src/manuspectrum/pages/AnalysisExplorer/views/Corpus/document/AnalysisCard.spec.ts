@@ -146,6 +146,15 @@ describe("AnalysisCard", () => {
         expect(store.basket[0].key).toBe(`af:${uuid(101)}:${uuid(700)}`);
     });
 
+    it("opens the full record, a page of this site, in a new tab", () => {
+        const { wrapper } = mountCard(analysisPayload());
+        const record = wrapper.find("a.record");
+        expect(record.attributes("href")).toBe(`/en/report/${uuid(101)}`);
+        expect(record.attributes("target")).toBe("_blank");
+        expect(record.attributes("rel")).toBe("noopener");
+        expect(record.text()).toContain("(new tab)");
+    });
+
     it("asks to be closed", async () => {
         const { wrapper } = mountCard(analysisPayload());
         await wrapper.find(".card-head .close").trigger("click");
