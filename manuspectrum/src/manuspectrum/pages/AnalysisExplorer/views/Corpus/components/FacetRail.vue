@@ -495,18 +495,23 @@ function onChange(facet: Facet, id: string, event: Event): void {
 }
 
 .facet-rail .levels {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.25rem;
 }
 
 .facet-rail .level {
-    display: inline-flex;
+    display: flex;
+    min-inline-size: 0;
 }
 
 .facet-rail .level-button {
-    gap: 0.375rem;
+    flex: 1 1 auto;
+    gap: 0.25rem;
+    padding: 0.25rem 0.375rem;
     font-size: 0.6875rem;
+    line-height: 1.2;
+    white-space: normal;
 }
 
 .facet-rail .ticks {
