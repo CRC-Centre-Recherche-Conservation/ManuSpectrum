@@ -1,24 +1,18 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
+
+import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
 
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 
-import type {
-    AnalysisHit,
-    Label,
-} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { AnalysisHit } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
+/** One analysis of the results, headed by its name; technique, document, part, date and data kinds as meta. */
 const props = defineProps<{ hit: AnalysisHit }>();
 const emit = defineEmits<{ open: [hit: AnalysisHit] }>();
 
 const { $gettext } = useGettext();
 const { dataKindBadge } = useVocabulary();
-
-const title = computed<Label>(
-    () =>
-        props.hit.technique?.label ?? { value: $gettext("Analysis"), lang: "" },
-);
 
 function open(): void {
     emit("open", props.hit);
@@ -31,12 +25,22 @@ function open(): void {
             <button
                 type="button"
                 class="link"
-                :lang="title.lang || undefined"
+                :lang="props.hit.name.lang || undefined"
                 @click="open"
             >
-                <span>{{ title.value }}</span>
+                <span>{{ props.hit.name.value }}</span>
             </button>
         </h3>
+        <p
+            v-if="props.hit.technique"
+            class="meta"
+        >
+            <TechniqueTag
+                :code="props.hit.technique.code"
+                :colour="props.hit.technique.colour"
+                :label="props.hit.technique.label"
+            />
+        </p>
         <p class="where">
             <span :lang="props.hit.document.name.lang">{{
                 props.hit.document.name.value
@@ -63,9 +67,6 @@ function open(): void {
                 <span>{{ $gettext("Draft") }}</span>
             </li>
         </ul>
-        <p class="raw-name">
-            <span :lang="props.hit.name.lang">{{ props.hit.name.value }}</span>
-        </p>
     </article>
 </template>
 
@@ -86,6 +87,7 @@ function open(): void {
     font-size: 1.0625rem;
     font-weight: 600;
     text-align: start;
+    overflow-wrap: anywhere;
     cursor: pointer;
 }
 
@@ -121,9 +123,7 @@ function open(): void {
     color: var(--accent-text);
 }
 
-.analysis-row .raw-name {
-    color: var(--ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+.analysis-row .meta {
+    font-size: 0.875rem;
 }
 </style>
