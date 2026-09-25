@@ -304,6 +304,28 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual(visitor["Cache-Control"], "public, no-cache")
         self.assertEqual(editor["Cache-Control"], "private, no-store")
 
+    def test_an_annotation_naming_the_image_service_lands_on_its_canvas(self):
+        placed = self.new_resource("analysis", "XRF_021 — f. 1v, by image service")
+        self.tile(placed, "component_observed", self.refs(self.components["open"]))
+        self.tile(placed, "analysis_by_project", self.refs(self.projects["main"]))
+        self.tile(
+            placed,
+            "literal_location_of_analysis",
+            self.annotation_value(
+                "https://example.org/iiif/image/f1v",
+                {"type": "Point", "coordinates": [10, -20]},
+            ),
+        )
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        mine = [a for a in payload["annotations"] if a["analysis"] == str(placed.pk)]
+        self.assertEqual([a["canvas"] for a in mine], [CANVAS])
+        self.assertEqual(
+            payload["canvases"][0]["analysisCount"],
+            len({a["analysis"] for a in payload["annotations"]}),
+        )
+
     def test_an_analysis_without_a_position_is_listed_as_unlocated_not_dropped(self):
         unplaced = self.new_resource("analysis", "FORS_014 — f. 1v, no zone")
         self.tile(unplaced, "component_observed", self.refs(self.components["open"]))

@@ -749,17 +749,39 @@ def certainty_scale(language):
     }
 
 
+def canvas_index(canvases):
+    """``{name: (canvas id, width, height)}`` of each canvas, by its id and by its image service.
+
+    Arches' IIIF viewer stores an annotation under the image service it drew
+    (the tile layer's URL), not under the manifest's canvas id; both names
+    lead to the canvas.
+    """
+    index = {}
+    for canvas in canvases:
+        entry = (canvas["id"], canvas["image"]["width"], canvas["image"]["height"])
+        index[canvas["id"].rstrip("/")] = entry
+        if canvas["image"]["service"]:
+            index[canvas["image"]["service"].rstrip("/")] = entry
+    return index
+
+
 def _canvas_and_shape(vw, dims):
     """Canvas id and pixel ``Shape`` of one ``VwAnnotation`` row; canvas empty and shape None when unresolved.
 
-    A canvas missing from *dims* is not clamped to any size, so a zone has
-    the same coordinates whether its canvas dimensions are known or not.
+    *dims* is a ``canvas_index``: the stored name (canvas id or image service)
+    becomes the manifest's canvas id. A canvas missing from it keeps its
+    stored name and is not clamped to any size, so a zone has the same
+    coordinates whether its canvas dimensions are known or not.
     """
     feature = vw.feature or {}
-    canvas = rewrite_legacy_url(
+    stored = rewrite_legacy_url(
         vw.canvas or (feature.get("properties") or {}).get("canvas") or ""
     )
-    width, height = dims.get(canvas) or (sys.maxsize, sys.maxsize)
+    canvas, width, height = dims.get(stored.rstrip("/")) or (
+        stored,
+        sys.maxsize,
+        sys.maxsize,
+    )
     shape = shape_of(feature.get("geometry"), width, height)
     return canvas, shape
 
@@ -960,7 +982,7 @@ def document_payload(document_id, user, language, query=None):
         rewrite_legacy_url(values.first(document_id, "doc_manifest") or "") or None
     )
     canvases = canvases_of(manifest_json(manifest_url)) if manifest_url else []
-    dims = {c["id"]: (c["image"]["width"], c["image"]["height"]) for c in canvases}
+    dims = canvas_index(canvases)
     all_rows = corpus_rows(user, language, chains=chains)
     keep, *_ = row_filter(all_rows, query or QueryDict(""))
     rows = {r["id"]: r for r in all_rows if r["document"] == document_id}
