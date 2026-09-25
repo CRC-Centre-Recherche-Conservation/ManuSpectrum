@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, provide, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
 import SharedSelectionPrompt from "@/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue";
@@ -54,16 +54,36 @@ const announcement = ref("");
 const facetLabels = ref(new Map<string, Label>());
 const screenFocusPending = ref(false);
 
+/** The screen shown, as CorpusView decides it: the page intro folds to one line off the home. */
+const screen = computed(() => {
+    if (store.view !== "corpus") return store.view;
+    if (store.corpusScreen === "document" && store.document) return "document";
+    return store.corpusScreen === "results" ? "results" : "home";
+});
+
 provide(FACET_LABELS_KEY, facetLabels);
 provide(SCREEN_FOCUS_KEY, screenFocusPending);
 provide(ANNOUNCE_KEY, announce);
 
+/** A new screen or another document; the same document named again by the address is neither. */
 watch(
-    () => [store.corpusScreen, store.document?.id] as const,
+    () => `${store.corpusScreen}:${store.document?.id ?? ""}`,
     () => {
         screenFocusPending.value = true;
     },
 );
+
+watch(
+    screen,
+    (name) => {
+        window.document.body.dataset.explorerScreen = name;
+    },
+    { immediate: true },
+);
+
+onBeforeUnmount(() => {
+    delete window.document.body.dataset.explorerScreen;
+});
 
 /** Clearing the region first makes a repeated message spoken again. */
 function announce(message: string): void {
@@ -103,7 +123,7 @@ function onSelectionResolved(message: string): void {
 .analysis-explorer {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 1rem;
+    gap: 0.5rem;
 }
 
 .analysis-explorer .announcer {

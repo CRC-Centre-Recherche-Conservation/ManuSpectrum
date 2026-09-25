@@ -48,8 +48,8 @@ function removeLabel(label: string): string {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
-    padding-block: 0.75rem;
+    gap: 0.375rem;
+    padding-block: 0.25rem;
 }
 
 .active-filters .list {
@@ -64,14 +64,14 @@ function removeLabel(label: string): string {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    min-block-size: 2.75rem;
-    padding-inline: 0.875rem;
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
     background: var(--surface);
     color: var(--ink);
     font: inherit;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     cursor: pointer;
 }
 

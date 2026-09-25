@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import PrimeVue from "primevue/config";
 
 import CorpusResults from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue";
 
@@ -39,7 +40,7 @@ function queryOf(call: unknown[]): URLSearchParams {
 function mountResults() {
     return mount(CorpusResults, {
         global: {
-            plugins: [pinia],
+            plugins: [pinia, PrimeVue],
             provide: { [FACET_LABELS_KEY as symbol]: labels },
         },
     });
@@ -231,15 +232,43 @@ describe("CorpusResults", () => {
         expect(wrapper.findAll(".document-card")).toHaveLength(2);
     });
 
-    it("folds the rail behind a Filters button that counts active filters", async () => {
+    it("folds the rail behind a Filters button that counts active filters below 80rem", async () => {
+        vi.stubGlobal("matchMedia", (query: string) => ({
+            matches: query.includes("80rem"),
+            media: query,
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+        }));
         fetchMock.mockResolvedValue(jsonResponse(searchResponse()));
         useExplorerStore().setFilter("technique", ["t1", "t2"]);
         const wrapper = mountResults();
         await flushPromises();
-        const toggle = wrapper.find(".rail-toggle");
+        const toggle = wrapper.find(".rail .toggle");
         expect(toggle.text()).toBe("Filters (2)");
         expect(toggle.attributes("aria-expanded")).toBe("false");
-        await toggle.trigger("click");
-        expect(wrapper.find(".rail").classes()).toContain("is-open");
+        expect(wrapper.find(".facet-rail").exists()).toBe(false);
+    });
+
+    it("shows card placeholders on the first load, then dims the old list while the next one loads", async () => {
+        let answer: (response: Response) => void = () => undefined;
+        fetchMock.mockImplementation(
+            () =>
+                new Promise<Response>((resolve) => {
+                    answer = resolve;
+                }),
+        );
+        const wrapper = mountResults();
+        await flushPromises();
+        expect(wrapper.findAll(".card-skeleton")).toHaveLength(4);
+        expect(wrapper.find("[role=status]").text()).toBe("Loading…");
+        answer(jsonResponse(searchResponse()));
+        await flushPromises();
+        expect(wrapper.find(".card-skeleton").exists()).toBe(false);
+        useExplorerStore().setFilter("grain", "analyses");
+        await flushPromises();
+        const list = wrapper.find(".list");
+        expect(list.attributes("aria-busy")).toBe("true");
+        expect(list.findAll(".document-card")).toHaveLength(2);
+        expect(wrapper.find("[role=status]").text()).toBe("Updating…");
     });
 });

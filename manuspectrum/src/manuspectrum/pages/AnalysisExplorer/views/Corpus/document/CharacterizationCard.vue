@@ -25,10 +25,16 @@ import type {
 type Material = CharacterizationSummary["materials"][number];
 type Source = CharacterizationSummary["sources"][number];
 
-const props = defineProps<{
-    summary: CharacterizationSummary;
-    scale: CertaintyScale;
-}>();
+/** `headingId` names the heading (a drawer is labelled by it); `closable: false` hides « Close » where the container has its own. */
+const props = withDefaults(
+    defineProps<{
+        summary: CharacterizationSummary;
+        scale: CertaintyScale;
+        headingId?: string;
+        closable?: boolean;
+    }>(),
+    { headingId: undefined, closable: true },
+);
 
 const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
@@ -136,6 +142,7 @@ function focusHeading(): void {
     <article class="characterization-card">
         <header class="card-head">
             <h3
+                :id="props.headingId"
                 ref="heading"
                 class="name"
                 tabindex="-1"
@@ -153,6 +160,7 @@ function focusHeading(): void {
                 </span>
             </p>
             <button
+                v-if="props.closable"
                 type="button"
                 class="close"
                 @click="close"
@@ -456,7 +464,7 @@ function focusHeading(): void {
 .characterization-card button {
     display: inline-flex;
     align-items: center;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
 }
 
 .characterization-card a {

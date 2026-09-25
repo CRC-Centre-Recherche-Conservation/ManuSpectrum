@@ -44,6 +44,12 @@ $ms-maxw:    1240px;
 $ms-gutter:  2rem;
 $ms-gutter-sm: 1.2rem;  // matches the .ms-container @media (max-width:768px) reduction
 
+// Public applications (Analysis Explorer): full width up to $ms-app-maxw, and
+// the height of the fixed site header once scrolled (.ms-header.scrolled),
+// under which sticky panels stop.
+$ms-app-maxw:       105rem;
+$ms-header-stuck:   3.75rem;
+
 @mixin ms-spectral-gradient($angle: 90deg) {
     background: linear-gradient($angle, $ms-red, $ms-orange, $ms-yellow, $ms-green, $ms-blue, $ms-purple);
 }

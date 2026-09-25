@@ -61,10 +61,15 @@ function choose(next: FolioView | null): void {
 }
 
 .folio-view-switch .label {
-    font-weight: 600;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .folio-view-switch :deep(.p-togglebutton) {
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
+    font-size: 0.8125rem;
 }
 </style>

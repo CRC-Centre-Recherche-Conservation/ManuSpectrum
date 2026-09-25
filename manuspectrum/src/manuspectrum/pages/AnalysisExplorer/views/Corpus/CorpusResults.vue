@@ -2,11 +2,13 @@
 import { computed, nextTick, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import AnalysisRow from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue";
 import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue";
 import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue";
+import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
 
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
@@ -27,6 +29,8 @@ import type {
     FacetKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
+const SKELETON_CARDS = 4;
+
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const { activeFilters } = useActiveFilters();
@@ -40,7 +44,6 @@ const pageState = ref({ key: "", number: 1 });
 const page = computed(() =>
     pageState.value.key === filterKey.value ? pageState.value.number : 1,
 );
-const railOpen = ref(false);
 
 const search = useSearch(() => searchQuery(store.filters, page.value));
 useFacetLabels(() => search.data.value?.facets);
@@ -74,15 +77,16 @@ const withoutAnalysesCount = computed(() =>
 const isEmpty = computed(
     () => search.status.value === "ready" && total.value === 0,
 );
-const railToggleLabel = computed(() =>
+const showLabel = computed(() =>
     interpolate(
-        $gettext("Filters (%{count})"),
-        {
-            count: store.activeFilterCount,
-        },
+        $ngettext("See %{n} result", "See %{n} results", total.value),
+        { n: total.value },
         true,
     ),
 );
+const loading = computed(() => search.status.value === "loading");
+/** Nothing to show yet: the first load of this screen. */
+const firstLoad = computed(() => loading.value && search.data.value === null);
 
 function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
     return hit.type === "document";
@@ -129,10 +133,6 @@ function goToPage(next: number): void {
     };
 }
 
-function toggleRail(): void {
-    railOpen.value = !railOpen.value;
-}
-
 function goHome(): void {
     store.setCorpusScreen("home");
 }
@@ -140,30 +140,23 @@ function goHome(): void {
 
 <template>
     <div class="corpus-results">
-        <button
-            type="button"
-            class="rail-toggle"
-            aria-controls="explorer-facet-rail"
-            :aria-expanded="railOpen ? 'true' : 'false'"
-            @click="toggleRail"
-        >
-            <span>{{ railToggleLabel }}</span>
-        </button>
-        <aside
-            id="explorer-facet-rail"
+        <RailPanel
             class="rail"
-            :class="{ 'is-open': railOpen }"
-            :aria-label="$gettext('Filters')"
+            :show-label="showLabel"
         >
             <FacetRail
                 :facets="search.data.value?.facets ?? []"
                 @change="onFacetChange"
             />
-        </aside>
+        </RailPanel>
         <section
             class="results"
             aria-labelledby="explorer-results-title"
         >
+            <BusyStatus
+                :busy="loading"
+                :first="firstLoad"
+            />
             <h2
                 id="explorer-results-title"
                 ref="heading"
@@ -277,11 +270,26 @@ function goHome(): void {
                 </button>
             </div>
             <ul
+                v-else-if="firstLoad"
+                class="list"
+                aria-hidden="true"
+            >
+                <li
+                    v-for="index in SKELETON_CARDS"
+                    :key="index"
+                    class="card-skeleton"
+                >
+                    <span class="ms-skeleton thumbnail"></span>
+                    <span class="lines">
+                        <span class="ms-skeleton line"></span>
+                        <span class="ms-skeleton line short"></span>
+                    </span>
+                </li>
+            </ul>
+            <ul
                 v-else
                 class="list"
-                :aria-busy="
-                    search.status.value === 'loading' ? 'true' : 'false'
-                "
+                :aria-busy="loading ? 'true' : 'false'"
             >
                 <li
                     v-for="hit in search.data.value?.results ?? []"
@@ -339,26 +347,26 @@ function goHome(): void {
 <style scoped>
 .corpus-results {
     display: grid;
-    grid-template-columns: 17rem 1fr;
-    gap: 2rem;
-    padding-block: 1rem;
-}
-
-.corpus-results .rail-toggle {
-    display: none;
+    grid-template-columns: var(--explorer-rail) minmax(0, 1fr);
+    align-items: start;
+    gap: 1.5rem;
+    padding-block: 0.5rem 1rem;
 }
 
 .corpus-results .results {
     display: grid;
     align-content: start;
-    gap: 1rem;
+    gap: 0.75rem;
+    min-inline-size: 0;
 }
 
 .corpus-results .toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 1rem 1.5rem;
+    gap: 0.5rem 1.25rem;
+    padding-block-end: 0.5rem;
+    border-block-end: 0.0625rem solid var(--border);
 }
 
 .corpus-results .grain {
@@ -372,19 +380,51 @@ function goHome(): void {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target);
     cursor: pointer;
 }
 
 .corpus-results .count {
     margin-inline-start: auto;
     color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
 }
 
 .corpus-results .list {
     display: grid;
-    gap: 0.75rem;
+    gap: 0.5rem;
     list-style: none;
+}
+
+.corpus-results .card-skeleton {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: 1rem;
+    padding: 0.75rem;
+    border: 0.0625rem solid var(--border);
+    border-radius: var(--explorer-radius);
+    background: var(--surface);
+}
+
+.corpus-results .card-skeleton .thumbnail {
+    block-size: 5rem;
+}
+
+.corpus-results .card-skeleton .lines {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+}
+
+.corpus-results .card-skeleton .line {
+    inline-size: 60%;
+    block-size: 1.125rem;
+}
+
+.corpus-results .card-skeleton .line.short {
+    inline-size: 35%;
+    block-size: 0.75rem;
 }
 
 .corpus-results .empty {
@@ -394,10 +434,9 @@ function goHome(): void {
 }
 
 .corpus-results .empty button,
-.corpus-results .pagination button,
-.corpus-results .rail-toggle {
-    min-block-size: 2.75rem;
-    padding-inline: 1rem;
+.corpus-results .pagination button {
+    min-block-size: var(--explorer-target);
+    padding-inline: 0.875rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
     background: var(--surface);
@@ -433,22 +472,9 @@ function goHome(): void {
     white-space: nowrap;
 }
 
-@media (max-width: 64rem) {
+@media (max-width: 80rem) {
     .corpus-results {
-        grid-template-columns: 1fr;
-    }
-
-    .corpus-results .rail-toggle {
-        display: inline-flex;
-        justify-self: start;
-    }
-
-    .corpus-results .rail {
-        display: none;
-    }
-
-    .corpus-results .rail.is-open {
-        display: block;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 </style>

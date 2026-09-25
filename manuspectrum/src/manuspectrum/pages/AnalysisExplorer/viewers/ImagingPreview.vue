@@ -273,7 +273,7 @@ function onCurtainChange(event: Event): void {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
 }
 
 .imaging-preview .note {

@@ -108,7 +108,7 @@ function show(width: number, height: number): void {
 .micro-image-preview .download {
     display: inline-flex;
     align-items: center;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     color: var(--blue-text);
 }
 

@@ -7,6 +7,7 @@ import {
     useTemplateRef,
     watch,
 } from "vue";
+import { usePreferredReducedMotion, useResizeObserver } from "@vueuse/core";
 import L from "leaflet";
 import "leaflet-iiif";
 import "leaflet.markercluster";
@@ -26,6 +27,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     nextId,
+    offsetInside,
     readingOrder,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -59,6 +61,7 @@ const HATCH_ID = "ms-folio-hatch";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const CLUSTER_PREFIX = "cluster:";
 const SAMPLE_PREFIX = "sample:";
+const FOCUS_PADDING = 48;
 
 /** The leaflet-iiif 3.0.0 state the folio reads: the info.json request, the image sizes it yields, the tile container. */
 type IiifLayer = L.TileLayer & {
@@ -82,13 +85,16 @@ const props = withDefaults(
         samples: SampleSummary[];
         overlays?: FolioOverlay[];
         curtain?: string | null;
+        /** The line under the page: document, page, position. */
+        caption?: string;
     }>(),
-    { overlays: () => [], curtain: null },
+    { overlays: () => [], curtain: null, caption: "" },
 );
 const emit = defineEmits<{ select: [focus: Focus] }>();
-defineExpose({ focusTarget });
+defineExpose({ focusTarget, focusCurrent });
 
 const { $gettext, interpolate } = useGettext();
+const motion = usePreferredReducedMotion();
 const host = useTemplateRef<HTMLDivElement>("host");
 
 const active = ref<string | null>(null);
@@ -147,6 +153,8 @@ onMounted(() => {
     drawMarks();
     drawOverlays();
 });
+
+useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 
 onBeforeUnmount(() => {
     sideBySide?.remove();
@@ -641,10 +649,26 @@ function settleGroups(): void {
     if (first) moveTo(first);
 }
 
+/**
+ * Gives the keyboard focus to a marker or marker group without scrolling the
+ * page, then pans the map until it sits `FOCUS_PADDING` inside the viewer.
+ */
 function moveTo(id: string): void {
     active.value = id;
     refreshStates();
-    targetElement(id)?.focus();
+    targetElement(id)?.focus({ preventScroll: true });
+    const layer = targets.get(id);
+    if (!map || !layer) return;
+    const size = map.getSize();
+    const shift = offsetInside(
+        map.latLngToContainerPoint(layer.getLatLng()),
+        size.x,
+        size.y,
+        FOCUS_PADDING,
+    );
+    if (shift.x !== 0 || shift.y !== 0) {
+        map.panBy([shift.x, shift.y], { animate: motion.value !== "reduce" });
+    }
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -668,6 +692,15 @@ function onKeydown(event: KeyboardEvent): void {
 function focusTarget(id: string): void {
     const target = visibleTargetOf(id);
     if (target !== null && targets.has(target)) moveTo(target);
+}
+
+/** Puts the keyboard focus on the folio's tab stop: its current marker, else the viewer. */
+function focusCurrent(): void {
+    if (active.value !== null && targets.has(active.value)) {
+        moveTo(active.value);
+        return;
+    }
+    host.value?.focus({ preventScroll: true });
 }
 
 function zoomIn(): void {
@@ -700,30 +733,53 @@ function wholePage(): void {
         ref="host"
         class="folio"
         role="group"
+        tabindex="-1"
         :aria-label="$gettext('Page and its analyses')"
         @keydown="onKeydown"
     >
+        <div class="surface"></div>
         <div class="controls">
             <button
                 type="button"
                 class="control"
+                :aria-label="$gettext('Zoom in')"
+                :title="$gettext('Zoom in')"
                 @click="zoomIn"
             >
-                <span>{{ $gettext("Zoom in") }}</span>
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M8 3v10M3 8h10" />
+                </svg>
             </button>
             <button
                 type="button"
                 class="control"
+                :aria-label="$gettext('Zoom out')"
+                :title="$gettext('Zoom out')"
                 @click="zoomOut"
             >
-                <span>{{ $gettext("Zoom out") }}</span>
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M3 8h10" />
+                </svg>
             </button>
             <button
                 type="button"
                 class="control"
+                :aria-label="$gettext('Whole page')"
+                :title="$gettext('Whole page')"
                 @click="wholePage"
             >
-                <span>{{ $gettext("Whole page") }}</span>
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M2.5 7.5 8 3l5.5 4.5M4 6.5V13h8V6.5" />
+                </svg>
             </button>
         </div>
         <p
@@ -733,7 +789,12 @@ function wholePage(): void {
         >
             <span>{{ $gettext("No image for this page.") }}</span>
         </p>
-        <div class="surface"></div>
+        <p
+            v-if="props.caption"
+            class="caption"
+        >
+            <span>{{ props.caption }}</span>
+        </p>
     </div>
 </template>
 
@@ -741,34 +802,58 @@ function wholePage(): void {
 .folio {
     position: relative;
     display: grid;
-    grid-template-rows: auto 1fr;
-    min-block-size: 28rem;
+    grid-template-rows: minmax(0, 1fr);
+    min-block-size: 20rem;
     background: var(--stage);
-    border-radius: 0.5rem;
+    border-radius: var(--explorer-radius, 0.625rem);
     overflow: hidden;
 }
 
+.folio:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
 .folio .surface {
-    min-block-size: 28rem;
+    min-block-size: 0;
     background: var(--stage);
 }
 
 .folio .controls {
-    display: flex;
-    gap: 0.25rem;
-    padding: 0.5rem;
-    background: var(--surface);
+    position: absolute;
+    inset-block-start: 0.75rem;
+    inset-inline-end: 0.75rem;
+    z-index: 1000;
+    display: grid;
+    gap: 0.375rem;
 }
 
 .folio .control {
-    min-block-size: 2.75rem;
-    padding-inline: 0.75rem;
-    border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.25rem;
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
+    display: grid;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    padding: 0;
+    border: 0.0625rem solid color-mix(in srgb, var(--surface) 30%, transparent);
+    border-radius: 0.375rem;
+    background: color-mix(in srgb, var(--stage) 85%, transparent);
+    color: var(--surface);
     cursor: pointer;
+}
+
+.folio .control:hover {
+    background: var(--stage);
+    border-color: var(--surface);
+}
+
+.folio .control svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .folio .control:focus-visible,
@@ -777,11 +862,32 @@ function wholePage(): void {
     outline-offset: 0.125rem;
 }
 
+.folio .control:focus-visible {
+    outline-color: var(--surface);
+}
+
+.folio .caption {
+    position: absolute;
+    inset-block-end: 0.5rem;
+    inset-inline-start: 0.5rem;
+    z-index: 1000;
+    max-inline-size: calc(100% - 1rem);
+    padding: 0.125rem 0.5rem;
+    overflow: hidden;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--stage) 85%, transparent);
+    color: var(--surface);
+    font: 0.6875rem var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
 .folio .no-image {
     position: absolute;
-    inset-block-start: 4rem;
-    inset-inline: 1rem;
-    z-index: 500;
+    inset-block-start: 1rem;
+    inset-inline: 1rem 3.75rem;
+    z-index: 1000;
     padding: 0.5rem 0.75rem;
     border-radius: 0.25rem;
     background: var(--surface);

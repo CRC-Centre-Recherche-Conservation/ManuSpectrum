@@ -114,55 +114,71 @@ function onChange(facet: Facet, id: string, event: Event): void {
 <style scoped>
 .facet-rail {
     display: grid;
-    gap: 1.25rem;
+    gap: 1rem;
 }
 
 .facet-rail .facet {
     display: grid;
-    gap: 0.375rem;
+    gap: 0.125rem;
+    min-inline-size: 0;
     border: none;
 }
 
 .facet-rail .title {
-    font-weight: 600;
-    color: var(--ink);
+    margin-block-end: 0.25rem;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .facet-rail .hint {
-    color: var(--ink-muted);
-    font-size: 0.75rem;
+    color: var(--ink-dim);
+    font-size: 0.6875rem;
 }
 
 .facet-rail .values {
     display: grid;
-    gap: 0.125rem;
     list-style: none;
 }
 
 .facet-rail .value {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.5rem;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
+    font-size: 0.8125rem;
     cursor: pointer;
+}
+
+.facet-rail .value:has(input:disabled) {
+    color: var(--ink-dim);
+    cursor: default;
 }
 
 .facet-rail .count {
     color: var(--ink-muted);
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
+    text-align: end;
 }
 
 .facet-rail .more {
     justify-self: start;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding: 0;
     border: none;
     background: transparent;
     color: var(--blue-text);
     font: inherit;
-    text-decoration: underline;
+    font-size: 0.75rem;
     cursor: pointer;
+}
+
+.facet-rail .more:hover {
+    text-decoration: underline;
 }
 
 .facet-rail input:focus-visible,

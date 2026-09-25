@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
@@ -40,10 +41,17 @@ const COPYRIGHT = "©";
  * `analysisId`, and its heading (one element from loading to loaded) says it
  * is loading meanwhile.
  */
-const props = defineProps<{
-    handle: RequestHandle<AnalysisPayload>;
-    analysisId: string;
-}>();
+const props = withDefaults(
+    defineProps<{
+        handle: RequestHandle<AnalysisPayload>;
+        analysisId: string;
+        /** Names the heading (a drawer is labelled by it). */
+        headingId?: string;
+        /** False hides « Close » where the container has its own. */
+        closable?: boolean;
+    }>(),
+    { headingId: undefined, closable: true },
+);
 
 const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
@@ -185,13 +193,20 @@ function focusHeading(): void {
             class="card-head"
         >
             <h3
+                :id="props.headingId"
                 ref="heading"
                 class="name"
                 tabindex="-1"
                 :lang="analysis?.name.lang"
             >
                 <span v-if="analysis">{{ analysis.name.value }}</span>
-                <span v-else>{{ $gettext("Loading the analysis…") }}</span>
+                <span
+                    v-else
+                    class="loading"
+                >
+                    <LoadingSpinner />
+                    <span>{{ $gettext("Loading the analysis…") }}</span>
+                </span>
             </h3>
             <template v-if="analysis">
                 <p class="meta">
@@ -215,6 +230,7 @@ function focusHeading(): void {
                 />
             </template>
             <button
+                v-if="props.closable"
                 type="button"
                 class="close"
                 @click="close"
@@ -538,6 +554,14 @@ function focusHeading(): void {
     margin-inline-start: auto;
 }
 
+.analysis-card .card-head .loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ink-muted);
+    font-weight: 400;
+}
+
 .analysis-card .meta {
     display: flex;
     flex-wrap: wrap;
@@ -584,7 +608,7 @@ function focusHeading(): void {
 .analysis-card button {
     display: inline-flex;
     align-items: center;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
 }
 
 .analysis-card a {

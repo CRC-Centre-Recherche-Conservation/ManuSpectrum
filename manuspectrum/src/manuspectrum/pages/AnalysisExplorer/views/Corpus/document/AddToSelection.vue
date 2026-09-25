@@ -109,7 +109,7 @@ async function add(): Promise<void> {
 
 <style scoped>
 .add-to-selection button {
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--blue-text);
     border-radius: 0.25rem;

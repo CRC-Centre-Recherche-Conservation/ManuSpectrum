@@ -61,6 +61,21 @@ describe("AnalysisExplorer", () => {
         expect(wrapper.find(".active-filters").exists()).toBe(true);
     });
 
+    it("names the screen shown on the page body, for the page intro", async () => {
+        window.history.replaceState(null, "", "/en/discover?q=gold");
+        const wrapper = mount(AnalysisExplorer, {
+            props: { connected: false },
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        expect(document.body.dataset.explorerScreen).toBe("results");
+        useExplorerStore().setCorpusScreen("home");
+        await flushPromises();
+        expect(document.body.dataset.explorerScreen).toBe("home");
+        wrapper.unmount();
+        expect(document.body.dataset.explorerScreen).toBeUndefined();
+    });
+
     it("prompts for a shared Selection and removes sel from the URL", async () => {
         window.history.replaceState(null, "", `/en/discover?sel=${KEY}`);
         const wrapper = mount(AnalysisExplorer, {
@@ -109,6 +124,35 @@ describe("AnalysisExplorer", () => {
         expect(document.activeElement?.classList.contains("promise")).toBe(
             true,
         );
+        wrapper.unmount();
+    });
+
+    it("leaves the keyboard focus alone when the address names the same document again", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string) =>
+                url.includes("explorer-document")
+                    ? jsonResponse(documentPayload())
+                    : jsonResponse(searchResponse()),
+            ),
+        );
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            props: { connected: false },
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        const store = useExplorerStore();
+        store.openDocument(uuid(1));
+        await flushPromises();
+        const back = wrapper.find(".corpus-document .back");
+        (back.element as HTMLButtonElement).focus();
+        store.$patch((state) => {
+            state.document = { id: uuid(1), canvas: null };
+        });
+        await flushPromises();
+        expect(document.activeElement).toBe(back.element);
         wrapper.unmount();
     });
 

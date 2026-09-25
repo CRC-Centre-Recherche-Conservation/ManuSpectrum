@@ -44,7 +44,7 @@ const downloadLabel = computed(() =>
 
 .file-only .download {
     color: var(--blue-text);
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     display: inline-flex;
     align-items: center;
 }

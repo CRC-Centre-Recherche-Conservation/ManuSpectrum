@@ -20,6 +20,7 @@ import {
     sample,
     searchResponse,
     uuid,
+    valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
@@ -40,6 +41,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 }));
 
 const focusTarget = vi.fn();
+const focusCurrent = vi.fn();
 const FolioStub = defineComponent({
     name: "FolioMap",
     props: {
@@ -56,10 +58,11 @@ const FolioStub = defineComponent({
         samples: { type: Array, default: () => [] },
         overlays: { type: Array, default: () => [] },
         curtain: { type: String, default: null },
+        caption: { type: String, default: "" },
     },
     emits: ["select"],
     setup(_props, { expose }) {
-        expose({ focusTarget });
+        expose({ focusTarget, focusCurrent });
         return () => h("div", { class: "folio-stub" });
     },
 });
@@ -75,11 +78,16 @@ function cardStub(name: string): Component {
             scale: { type: Object, default: null },
             sample: { type: Object, default: null },
             analysisNames: { type: Map, default: null },
+            headingId: { type: String, default: undefined },
+            closable: { type: Boolean, default: true },
         },
         emits: ["close"],
-        setup(_props, { expose }) {
+        setup(props, { expose }) {
             expose({ focusHeading: () => undefined });
-            return () => h("article", { class: `${name}-stub` });
+            return () =>
+                h("article", { class: `${name}-stub` }, [
+                    h("h3", { id: props.headingId, tabindex: -1 }),
+                ]);
         },
     };
 }
@@ -90,6 +98,7 @@ let pinia: Pinia;
 beforeEach(() => {
     narrow = false;
     focusTarget.mockClear();
+    focusCurrent.mockClear();
     pinia = createPinia();
     setActivePinia(pinia);
     vi.stubGlobal("matchMedia", (query: string) => ({
@@ -650,5 +659,124 @@ describe("CorpusDocument", () => {
             wrapper.find(`#folio-marker-${uuid(101)}`).element,
         );
         wrapper.unmount();
+    });
+
+    describe("layout and keyboard", () => {
+        it("offers skip links to the page, the filters and the card", async () => {
+            stubFetch();
+            const { wrapper } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            const skips = wrapper.findAll(".skip-links button");
+            expect(skips.map((skip) => skip.text())).toEqual([
+                "Go to the page",
+                "Go to the filters",
+                "Go to the card",
+            ]);
+            await skips[0].trigger("click");
+            expect(focusCurrent).toHaveBeenCalled();
+            await skips[1].trigger("click");
+            expect(document.activeElement).toBe(wrapper.find(".rail").element);
+            await skips[2].trigger("click");
+            expect(document.activeElement).toBe(
+                wrapper.find("#on-this-page-title").element,
+            );
+            wrapper.unmount();
+        });
+
+        it("closes the card on Escape and gives the focus back to the list entry that opened it", async () => {
+            stubFetch();
+            const { wrapper, store } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            const entry = wrapper.find(
+                `.on-this-page [data-focus="analysis:${uuid(101)}"]`,
+            );
+            (entry.element as HTMLButtonElement).focus();
+            await entry.trigger("click");
+            await flushPromises();
+            expect(store.focus).toEqual({ kind: "analysis", id: uuid(101) });
+            await wrapper.find(".side article").trigger("keydown", {
+                key: "Escape",
+            });
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(document.activeElement).toBe(
+                wrapper.find(
+                    `.on-this-page [data-focus="analysis:${uuid(101)}"]`,
+                ).element,
+            );
+            expect(focusTarget).not.toHaveBeenCalled();
+            wrapper.unmount();
+        });
+
+        it("brings the heading of a card opened from the folio into view", async () => {
+            stubFetch();
+            const scrollIntoView = vi.fn();
+            Element.prototype.scrollIntoView = scrollIntoView;
+            const { wrapper } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "analysis", id: uuid(101) });
+            await flushPromises();
+            expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+            expect(scrollIntoView.mock.contexts[0]).toBe(
+                document.getElementById("explorer-card-heading"),
+            );
+            delete (Element.prototype as Partial<Element>).scrollIntoView;
+            wrapper.unmount();
+        });
+
+        it("lists in the legend only the techniques drawn on the page, with their counts", async () => {
+            stubFetch(
+                documentPayload({
+                    annotations: [
+                        annotation(1),
+                        annotation(2, {
+                            technique: valueRef("t:fors", "FORS"),
+                            canvas: "https://iiif.example/c2",
+                        }),
+                        annotation(3),
+                    ],
+                }),
+            );
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            expect(
+                wrapper
+                    .findAll(".folio-legend li")
+                    .map((entry) =>
+                        entry.findAll("span").map((part) => part.text()),
+                    ),
+            ).toEqual([["X", "XRF", "2"]]);
+        });
+
+        it("names the card drawer by the card heading and leaves out the card's own Close", async () => {
+            narrow = true;
+            stubFetch();
+            const { wrapper } = mountScreen(undefined, {
+                stubs: { transition: false },
+                attachTo: document.body,
+            });
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "analysis", id: uuid(101) });
+            await flushPromises();
+            const dialog = document.querySelector(".explorer-card-drawer");
+            expect(dialog?.getAttribute("role")).toBe("dialog");
+            expect(dialog?.getAttribute("aria-labelledby")).toBe(
+                "explorer-card-heading",
+            );
+            const card = wrapper.findComponent({ name: "AnalysisCard" });
+            expect(card.props("closable")).toBe(false);
+            expect(card.props("headingId")).toBe("explorer-card-heading");
+            wrapper.unmount();
+        });
     });
 });

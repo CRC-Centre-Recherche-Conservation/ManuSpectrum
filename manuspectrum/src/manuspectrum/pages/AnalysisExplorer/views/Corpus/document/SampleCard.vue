@@ -9,10 +9,16 @@ import type {
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-const props = defineProps<{
-    sample: SampleSummary;
-    analysisNames: Map<string, Label>;
-}>();
+/** `headingId` names the heading (a drawer is labelled by it); `closable: false` hides « Close » where the container has its own. */
+const props = withDefaults(
+    defineProps<{
+        sample: SampleSummary;
+        analysisNames: Map<string, Label>;
+        headingId?: string;
+        closable?: boolean;
+    }>(),
+    { headingId: undefined, closable: true },
+);
 
 const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
@@ -60,6 +66,7 @@ function focusHeading(): void {
     <article class="sample-card">
         <header class="card-head">
             <h3
+                :id="props.headingId"
                 ref="heading"
                 class="name"
                 tabindex="-1"
@@ -77,6 +84,7 @@ function focusHeading(): void {
                 </span>
             </p>
             <button
+                v-if="props.closable"
                 type="button"
                 class="close"
                 @click="close"
@@ -167,7 +175,7 @@ function focusHeading(): void {
 .sample-card button {
     display: inline-flex;
     align-items: center;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.25rem;

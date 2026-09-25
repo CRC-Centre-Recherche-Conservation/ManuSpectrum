@@ -69,17 +69,17 @@ function open(event: MouseEvent): void {
 <style scoped>
 .document-card {
     display: grid;
-    grid-template-columns: 5rem 1fr;
-    gap: 1rem;
-    padding: 1rem;
+    grid-template-columns: 3.5rem 1fr;
+    gap: 0.875rem;
+    padding: 0.75rem;
     border: 0.0625rem solid var(--border);
-    border-radius: 0.75rem;
+    border-radius: var(--explorer-radius, 0.625rem);
     background: var(--surface);
 }
 
 .document-card .thumbnail {
-    inline-size: 5rem;
-    block-size: 6.5rem;
+    inline-size: 3.5rem;
+    block-size: 4.5rem;
     object-fit: cover;
     border-radius: 0.375rem;
     background: var(--bg-alt);
@@ -87,7 +87,7 @@ function open(event: MouseEvent): void {
 
 .document-card .name {
     font-family: var(--font-display);
-    font-size: 1.25rem;
+    font-size: 1.125rem;
     font-weight: 500;
 }
 
@@ -105,7 +105,7 @@ function open(event: MouseEvent): void {
     flex-wrap: wrap;
     gap: 0.5rem;
     color: var(--ink-muted);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
 }
 
 .document-card .badge {

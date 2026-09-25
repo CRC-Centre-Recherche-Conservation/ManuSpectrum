@@ -41,10 +41,11 @@ const message = computed(() => {
 
 <style scoped>
 .draft-banner {
-    padding: 0.75rem 1rem;
-    border-inline-start: 0.25rem solid var(--accent);
+    padding: 0.375rem 0.75rem;
+    border-inline-start: 0.1875rem solid var(--accent);
+    border-radius: 0.25rem;
     background: var(--bg-warm);
     color: var(--ink);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
 }
 </style>

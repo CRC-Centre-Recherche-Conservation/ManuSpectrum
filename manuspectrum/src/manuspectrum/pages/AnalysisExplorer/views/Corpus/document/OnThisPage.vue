@@ -70,7 +70,10 @@ function select(focus: Focus): void {
         class="on-this-page"
         aria-labelledby="on-this-page-title"
     >
-        <h3 id="on-this-page-title">
+        <h3
+            id="on-this-page-title"
+            tabindex="-1"
+        >
             <span>{{ $gettext("On this page") }}</span>
         </h3>
         <p
@@ -109,6 +112,7 @@ function select(focus: Focus): void {
                     >
                         <button
                             type="button"
+                            :data-focus="`analysis:${item.analysis}`"
                             @click="
                                 select({ kind: 'analysis', id: item.analysis })
                             "
@@ -150,6 +154,7 @@ function select(focus: Focus): void {
                 >
                     <button
                         type="button"
+                        :data-focus="`characterization:${summary.id}`"
                         @click="
                             select({ kind: 'characterization', id: summary.id })
                         "
@@ -181,6 +186,7 @@ function select(focus: Focus): void {
                 >
                     <button
                         type="button"
+                        :data-focus="`sample:${entry.id}`"
                         @click="select({ kind: 'sample', id: entry.id })"
                     >
                         <span :lang="entry.name.lang">{{
@@ -211,6 +217,7 @@ function select(focus: Focus): void {
                 >
                     <button
                         type="button"
+                        :data-focus="`unlocated:${item.analysis}`"
                         @click="select({ kind: 'analysis', id: item.analysis })"
                     >
                         <span :lang="item.name.lang">{{
@@ -242,7 +249,17 @@ function select(focus: Focus): void {
 }
 
 .on-this-page h3 {
-    font-weight: 600;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.on-this-page h3:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 .on-this-page .empty {
@@ -258,6 +275,7 @@ function select(focus: Focus): void {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 0.8125rem;
     font-weight: 600;
 }
 
@@ -298,13 +316,14 @@ function select(focus: Focus): void {
 }
 
 .on-this-page .code--ink {
+    border-color: var(--ink);
     background: var(--surface);
     color: var(--ink);
 }
 
 .on-this-page ul {
     display: grid;
-    gap: 0.25rem;
+    gap: 0;
     padding: 0;
     list-style: none;
 }
@@ -325,7 +344,7 @@ function select(focus: Focus): void {
     flex: 1 1 auto;
     align-items: center;
     justify-content: flex-start;
-    min-block-size: 2.75rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.5rem;
     border: none;
     border-radius: 0.25rem;

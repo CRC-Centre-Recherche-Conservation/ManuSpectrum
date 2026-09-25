@@ -191,6 +191,46 @@ describe("FolioMap", () => {
         wrapper.unmount();
     });
 
+    it("focuses a marker without scrolling the page and pans it inside the viewer", async () => {
+        const wrapper = mountFolio();
+        await flushPromises();
+        const focus = vi.spyOn(HTMLElement.prototype, "focus");
+        const panBy = vi.spyOn(L.Map.prototype, "panBy");
+        (
+            wrapper.vm as unknown as { focusTarget: (id: string) => void }
+        ).focusTarget(uuid(102));
+        expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+        expect(panBy).toHaveBeenCalled();
+        focus.mockRestore();
+        panBy.mockRestore();
+        wrapper.unmount();
+    });
+
+    it("gives the keyboard focus to its tab stop on request", async () => {
+        const wrapper = mountFolio();
+        await flushPromises();
+        (wrapper.vm as unknown as { focusCurrent: () => void }).focusCurrent();
+        const stop = wrapper
+            .findAll("[data-target]")
+            .find((marker) => marker.attributes("tabindex") === "0")!;
+        expect(document.activeElement).toBe(stop.element);
+        wrapper.unmount();
+    });
+
+    it("names its zoom buttons inside the viewer and writes its caption", async () => {
+        const wrapper = mountFolio({ caption: "Ms 59 · f. 1v · page 1 / 2" });
+        await flushPromises();
+        expect(
+            wrapper
+                .findAll(".controls button")
+                .map((button) => button.attributes("aria-label")),
+        ).toEqual(["Zoom in", "Zoom out", "Whole page"]);
+        expect(wrapper.find(".caption").text()).toBe(
+            "Ms 59 · f. 1v · page 1 / 2",
+        );
+        wrapper.unmount();
+    });
+
     it("dims the analyses the filters drop and lights the evidence of an open identified material", async () => {
         const annotations = [
             annotation(1, { match: false }),
