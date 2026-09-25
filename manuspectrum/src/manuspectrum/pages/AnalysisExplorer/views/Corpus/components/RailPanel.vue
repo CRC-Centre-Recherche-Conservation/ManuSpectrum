@@ -14,7 +14,14 @@ const FOCUSABLE = "input:not([disabled]), button:not([disabled])";
  * that opens the filters in a left drawer; the drawer closes on Escape or on
  * `showLabel` (« See n analyses »), and the focus goes back to the toggle.
  */
-const props = defineProps<{ showLabel: string }>();
+const props = withDefaults(
+    defineProps<{
+        showLabel: string;
+        /** The heading of the filters; « Filters » by default. */
+        title?: string;
+    }>(),
+    { title: "" },
+);
 defineExpose({ focusFilters });
 
 const store = useExplorerStore();
@@ -25,6 +32,7 @@ const column = useTemplateRef<HTMLElement>("column");
 
 const open = ref(false);
 
+const heading = computed(() => props.title || $gettext("Filters"));
 const toggleLabel = computed(() =>
     interpolate(
         $gettext("Filters (%{count})"),
@@ -77,9 +85,9 @@ function focusFilters(): void {
             v-model:visible="open"
             class="explorer-rail-drawer"
             position="left"
-            :header="$gettext('Filters')"
+            :header="heading"
             :pt="{
-                root: { role: 'dialog', 'aria-label': $gettext('Filters') },
+                root: { role: 'dialog', 'aria-label': heading },
             }"
         >
             <div class="rail-panel-body">
@@ -99,8 +107,11 @@ function focusFilters(): void {
         ref="column"
         class="rail-panel"
         tabindex="-1"
-        :aria-label="$gettext('Filters')"
+        :aria-label="heading"
     >
+        <h2 class="rail-title">
+            <span>{{ heading }}</span>
+        </h2>
         <slot></slot>
     </aside>
 </template>
@@ -139,6 +150,12 @@ function focusFilters(): void {
     color: var(--ink);
     font: inherit;
     cursor: pointer;
+}
+
+.rail-panel .rail-title {
+    font-family: var(--font-display);
+    font-size: 1.0625rem;
+    font-weight: 500;
 }
 
 .rail-panel-body {

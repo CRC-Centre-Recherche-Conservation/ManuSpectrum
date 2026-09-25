@@ -2,10 +2,11 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h } from "vue";
+import { defineComponent, h, ref } from "vue";
 
 import CorpusDocument from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue";
 
+import { RESULTS_MEMO_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     snapshotOf,
@@ -27,6 +28,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 import type { Pinia } from "pinia";
 import type { Component, PropType } from "vue";
 
+import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type { LayerToggles } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
@@ -140,6 +142,7 @@ function mountScreen(
     options: {
         stubs?: Record<string, unknown>;
         attachTo?: HTMLElement;
+        provide?: Record<symbol, unknown>;
     } = {},
 ) {
     const store = useExplorerStore();
@@ -149,6 +152,7 @@ function mountScreen(
         props: { documentId: uuid(1) },
         global: {
             plugins: [pinia, PrimeVue],
+            provide: options.provide,
             stubs: {
                 FolioMap: FolioStub,
                 AnalysisCard: cardStub("AnalysisCard"),
@@ -468,11 +472,50 @@ describe("CorpusDocument", () => {
         });
         await flushPromises();
         const back = wrapper.find(".back");
-        expect(back.text()).toBe("Back to the results");
+        expect(back.text()).toBe("Results");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("results");
         expect(store.document).toBeNull();
         expect(store.filters.technique).toEqual(["http://x/xrf"]);
+    });
+
+    it("says how many results it goes back to", async () => {
+        stubFetch();
+        const memo = ref<ResultsMemo>({
+            query: "grain=documents",
+            filterKey: "grain=documents",
+            page: 1,
+            payload: searchResponse({ total: 30 }),
+            scroll: 0,
+            opened: uuid(1),
+        });
+        const { wrapper } = mountScreen(
+            (store) => {
+                store.setCorpusScreen("results");
+                store.openDocument(uuid(1));
+            },
+            { provide: { [RESULTS_MEMO_KEY as symbol]: memo } },
+        );
+        await flushPromises();
+        expect(wrapper.find(".back").text()).toBe("Results (30 documents)");
+    });
+
+    it("counts its filters in this document only", async () => {
+        const fetchMock = stubFetch();
+        const { wrapper, store } = mountScreen();
+        store.setFilter("technique", ["http://example.org/xrf"]);
+        await flushPromises();
+        const search = fetchMock.mock.calls
+            .map(([url]) => String(url))
+            .filter((url) => url.includes("/search"))
+            .at(-1)!;
+        const query = new URLSearchParams(search.split("?")[1]);
+        expect(query.get("document")).toBe(uuid(1));
+        expect(query.get("grain")).toBe("analyses");
+        expect(query.get("technique")).toBe("http://example.org/xrf");
+        expect(wrapper.find(".rail .rail-title").text()).toBe(
+            "Filters of this document",
+        );
     });
 
     it("goes back to the explorer home when opened from it", async () => {

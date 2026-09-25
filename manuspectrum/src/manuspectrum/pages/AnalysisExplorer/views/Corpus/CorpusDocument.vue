@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, provide, ref, useTemplateRef, watch } from "vue";
+import {
+    computed,
+    inject,
+    nextTick,
+    provide,
+    ref,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import Drawer from "primevue/drawer";
 import { useGettext } from "vue3-gettext";
@@ -38,6 +46,7 @@ import {
 import {
     CURTAIN_KEY,
     FOLIO_ZONES_KEY,
+    RESULTS_MEMO_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
@@ -58,6 +67,7 @@ import type {
     Focus,
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { LegendEntry } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 
 const NARROW_QUERY = "(max-width: 48rem)";
@@ -73,7 +83,14 @@ const payload = useDocument(
     () => searchQuery(store.filters, 1),
 );
 const search = useSearch(() =>
-    searchQuery({ ...store.filters, grain: "analyses" }, 1),
+    searchQuery({ ...store.filters, grain: "analyses" }, 1, {
+        document: props.documentId,
+    }),
+);
+const resultsMemo = inject(
+    RESULTS_MEMO_KEY,
+    () => ref<ResultsMemo | null>(null),
+    true,
 );
 useFacetLabels(() => search.data.value?.facets);
 const focusedAnalysis = computed(() =>
@@ -365,6 +382,26 @@ const folioCaption = computed(() => {
     );
     return [data.value.name.value, canvas.label, position].join(" · ");
 });
+/** « Results », with their number when the results left are known. */
+const backLabel = computed(() => {
+    if (store.documentOrigin !== "results") {
+        return $gettext("Back to the explorer home");
+    }
+    const payload = resultsMemo.value?.payload;
+    if (!payload) return $gettext("Results");
+    const text = payload.results.some((hit) => hit.type === "analysis")
+        ? $ngettext(
+              "Results (%{n} analysis)",
+              "Results (%{n} analyses)",
+              payload.total,
+          )
+        : $ngettext(
+              "Results (%{n} document)",
+              "Results (%{n} documents)",
+              payload.total,
+          );
+    return interpolate(text, { n: payload.total }, true);
+});
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
     set: (visible: boolean) => {
@@ -578,10 +615,7 @@ function goHome(): void {
             class="back"
             @click="back"
         >
-            <span v-if="store.documentOrigin === 'results'">{{
-                $gettext("Back to the results")
-            }}</span>
-            <span v-else>{{ $gettext("Back to the explorer home") }}</span>
+            <span>{{ backLabel }}</span>
         </button>
         <UnavailableState
             v-if="isUnavailable"
@@ -648,6 +682,7 @@ function goHome(): void {
                 <RailPanel
                     ref="rail"
                     class="rail"
+                    :title="$gettext('Filters of this document')"
                     :show-label="showLabel"
                 >
                     <FacetRail
