@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from "vue";
+import { computed, defineAsyncComponent, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
@@ -34,17 +34,33 @@ interface ConditionGroup {
 
 const COPYRIGHT = "©";
 
-const props = defineProps<{ handle: RequestHandle<AnalysisPayload> }>();
+/**
+ * The card of the analysis `analysisId`. `handle` may still hold the previous
+ * analysis while this one loads: the card shows only a payload of
+ * `analysisId`, and its heading (one element from loading to loaded) says it
+ * is loading meanwhile.
+ */
+const props = defineProps<{
+    handle: RequestHandle<AnalysisPayload>;
+    analysisId: string;
+}>();
 
 const emit = defineEmits<{ close: [] }>();
+defineExpose({ focusHeading });
 
 const store = useExplorerStore();
 const { $gettext } = useGettext();
 const lang = document.documentElement.lang || "en";
+const sectionId = useId();
+const heading = useTemplateRef<HTMLElement>("heading");
 
 const previews = new Map<string, Component>();
 
-const analysis = computed(() => props.handle.data.value);
+const analysis = computed(() =>
+    props.handle.data.value?.id === props.analysisId
+        ? props.handle.data.value
+        : null,
+);
 const status = computed(() => props.handle.status.value);
 const failed = computed(
     () => status.value === "unavailable" || status.value === "error",
@@ -147,6 +163,10 @@ function close(): void {
 function openCharacterization(id: string): void {
     store.focusOn({ kind: "characterization", id });
 }
+
+function focusHeading(): void {
+    heading.value?.focus();
+}
 </script>
 
 <template>
@@ -160,15 +180,20 @@ function openCharacterization(id: string): void {
             :hide-home="true"
             @retry="props.handle.retry"
         />
-        <template v-else-if="analysis">
-            <header class="card-head">
-                <h3
-                    class="name"
-                    tabindex="-1"
-                    :lang="analysis.name.lang"
-                >
-                    <span>{{ analysis.name.value }}</span>
-                </h3>
+        <header
+            v-else
+            class="card-head"
+        >
+            <h3
+                ref="heading"
+                class="name"
+                tabindex="-1"
+                :lang="analysis?.name.lang"
+            >
+                <span v-if="analysis">{{ analysis.name.value }}</span>
+                <span v-else>{{ $gettext("Loading the analysis…") }}</span>
+            </h3>
+            <template v-if="analysis">
                 <p class="meta">
                     <span
                         v-if="analysis.technique"
@@ -188,15 +213,16 @@ function openCharacterization(id: string): void {
                     :keys="[entryKey]"
                     :label="$gettext('+ Selection')"
                 />
-                <button
-                    type="button"
-                    class="close"
-                    @click="close"
-                >
-                    <span>{{ $gettext("Close") }}</span>
-                </button>
-            </header>
-
+            </template>
+            <button
+                type="button"
+                class="close"
+                @click="close"
+            >
+                <span>{{ $gettext("Close") }}</span>
+            </button>
+        </header>
+        <template v-if="!failed && analysis">
             <section
                 v-if="previewed.length > 0"
                 class="preview"
@@ -214,9 +240,9 @@ function openCharacterization(id: string): void {
             <section
                 v-if="readable.length > 0"
                 class="files"
-                aria-labelledby="card-files"
+                :aria-labelledby="`${sectionId}-files`"
             >
-                <h4 id="card-files">
+                <h4 :id="`${sectionId}-files`">
                     <span>{{ $gettext("Files") }}</span>
                 </h4>
                 <ul>
@@ -266,9 +292,9 @@ function openCharacterization(id: string): void {
             <section
                 v-if="notInChart.length > 0"
                 class="not-in-chart"
-                aria-labelledby="card-not-in-chart"
+                :aria-labelledby="`${sectionId}-not-in-chart`"
             >
-                <h4 id="card-not-in-chart">
+                <h4 :id="`${sectionId}-not-in-chart`">
                     <span>{{ $gettext("Not in a chart") }}</span>
                 </h4>
                 <ul>
@@ -296,9 +322,9 @@ function openCharacterization(id: string): void {
 
             <section
                 class="conditions"
-                aria-labelledby="card-conditions"
+                :aria-labelledby="`${sectionId}-conditions`"
             >
-                <h4 id="card-conditions">
+                <h4 :id="`${sectionId}-conditions`">
                     <span>{{ $gettext("Measurement conditions") }}</span>
                 </h4>
                 <p
@@ -457,9 +483,9 @@ function openCharacterization(id: string): void {
             <section
                 v-if="analysis.evidenceOf.length > 0"
                 class="evidence-of"
-                aria-labelledby="card-evidence-of"
+                :aria-labelledby="`${sectionId}-evidence-of`"
             >
-                <h4 id="card-evidence-of">
+                <h4 :id="`${sectionId}-evidence-of`">
                     <span>{{ $gettext("Supporting analysis of") }}</span>
                 </h4>
                 <ul>

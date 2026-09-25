@@ -11,7 +11,9 @@ import {
     snapshotOf,
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
+import { sizedContainer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
 import {
+    analysisPayload,
     annotation,
     characterization,
     documentPayload,
@@ -21,7 +23,7 @@ import {
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
 import type { Pinia } from "pinia";
-import type { PropType } from "vue";
+import type { Component, PropType } from "vue";
 
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type { LayerToggles } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
@@ -59,6 +61,24 @@ const FolioStub = defineComponent({
     },
 });
 
+/** A card that exposes what the screen calls on it; a plain options object, as a test double. */
+function cardStub(name: string): Component {
+    return {
+        name,
+        props: {
+            handle: { type: Object, default: null },
+            analysisId: { type: String, default: null },
+            summary: { type: Object, default: null },
+            scale: { type: Object, default: null },
+        },
+        emits: ["close"],
+        setup(_props, { expose }) {
+            expose({ focusHeading: () => undefined });
+            return () => h("article", { class: `${name}-stub` });
+        },
+    };
+}
+
 let narrow = false;
 let pinia: Pinia;
 
@@ -86,11 +106,16 @@ function stubFetch(
     }),
     status = 200,
 ) {
-    const fetchMock = vi.fn(async (url: string) =>
-        url.includes("/search")
-            ? jsonResponse(searchResponse({ results: [] }))
-            : jsonResponse(structuredClone(payload), status),
-    );
+    const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("/search")) {
+            return jsonResponse(searchResponse({ results: [] }));
+        }
+        if (url.includes("/analysis/")) {
+            const id = url.split("/analysis/")[1].split("?")[0];
+            return jsonResponse(analysisPayload({ id, files: [] }));
+        }
+        return jsonResponse(structuredClone(payload), status);
+    });
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
 }
@@ -98,17 +123,23 @@ function stubFetch(
 function mountScreen(
     prepare: (store: ExplorerStore) => void = (store) =>
         store.openDocument(uuid(1)),
+    options: {
+        stubs?: Record<string, unknown>;
+        attachTo?: HTMLElement;
+    } = {},
 ) {
     const store = useExplorerStore();
     prepare(store);
     const wrapper = mount(CorpusDocument, {
+        attachTo: options.attachTo,
         props: { documentId: uuid(1) },
         global: {
             plugins: [pinia, PrimeVue],
             stubs: {
                 FolioMap: FolioStub,
-                AnalysisCard: true,
-                CharacterizationCard: true,
+                AnalysisCard: cardStub("AnalysisCard"),
+                CharacterizationCard: cardStub("CharacterizationCard"),
+                ...options.stubs,
             },
         },
     });
@@ -424,5 +455,75 @@ describe("CorpusDocument", () => {
             expect(store.focus).toBeNull();
             expect(back).not.toHaveBeenCalled();
         });
+    });
+
+    it("gives the keyboard focus to the card heading when the list that opened it goes away", async () => {
+        stubFetch();
+        const { wrapper } = mountScreen(undefined, {
+            stubs: { AnalysisCard: false },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        const entry = wrapper.find(".on-this-page button");
+        (entry.element as HTMLButtonElement).focus();
+        await entry.trigger("click");
+        await flushPromises();
+        expect(document.activeElement).toBe(
+            wrapper.find(".analysis-card h3").element,
+        );
+        wrapper.unmount();
+    });
+
+    it("gives the keyboard focus to the new card's heading when a card opens a card of the other kind", async () => {
+        stubFetch(
+            documentPayload({
+                annotations: [annotation(1)],
+                characterizations: [
+                    characterization(1, { evidence: [uuid(101)] }),
+                ],
+            }),
+        );
+        const { wrapper, store } = mountScreen(undefined, {
+            stubs: { AnalysisCard: false, CharacterizationCard: false },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        store.focusOn({ kind: "characterization", id: uuid(501) });
+        await flushPromises();
+        const evidence = wrapper.find(
+            ".characterization-card .evidence button",
+        );
+        (evidence.element as HTMLButtonElement).focus();
+        await evidence.trigger("click");
+        await flushPromises();
+        expect(document.activeElement).toBe(
+            wrapper.find(".analysis-card h3").element,
+        );
+        wrapper.unmount();
+    });
+
+    it("returns the focus to the folio marker when Escape closes the card drawer", async () => {
+        narrow = true;
+        stubFetch();
+        const { wrapper, store } = mountScreen(undefined, {
+            stubs: { FolioMap: false, transition: false },
+            attachTo: sizedContainer(),
+        });
+        await flushPromises();
+        const marker = wrapper.find(`#folio-marker-${uuid(101)}`);
+        (marker.element as HTMLElement).focus();
+        await marker.trigger("keydown", { key: "Enter" });
+        await flushPromises();
+        expect(store.focus).toEqual({ kind: "analysis", id: uuid(101) });
+        expect(document.activeElement).not.toBe(marker.element);
+        document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", code: "Escape" }),
+        );
+        await flushPromises();
+        expect(store.focus).toBeNull();
+        expect(document.activeElement).toBe(
+            wrapper.find(`#folio-marker-${uuid(101)}`).element,
+        );
+        wrapper.unmount();
     });
 });

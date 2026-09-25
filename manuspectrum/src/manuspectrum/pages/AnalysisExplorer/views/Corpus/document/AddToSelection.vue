@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, useId } from "vue";
+import { computed, inject, nextTick, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -9,7 +9,8 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 /**
  * Adds all its keys to the Selection or none. Once every key is held it says
  * under which slots; when the new keys do not fit, the button is disabled and
- * says how many items for how many places left.
+ * says how many items for how many places left. The line that replaces the
+ * button takes the keyboard focus the removed button leaves.
  */
 const props = defineProps<{ keys: string[]; label: string }>();
 
@@ -18,6 +19,7 @@ const announce = inject(ANNOUNCE_KEY, () => undefined);
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const reasonId = useId();
+const heldLine = useTemplateRef<HTMLElement>("held-line");
 
 const held = computed(() =>
     store.basket.filter((item) => props.keys.includes(item.key)),
@@ -58,7 +60,7 @@ const heldText = computed(() =>
     ),
 );
 
-function add(): void {
+async function add(): Promise<void> {
     const result = store.addManyToBasket(props.keys);
     if (result.refused === null && result.added.length > 0) {
         announce(
@@ -68,6 +70,9 @@ function add(): void {
                 true,
             ),
         );
+        await nextTick();
+        const active = document.activeElement;
+        if (!active || active === document.body) heldLine.value?.focus();
     }
 }
 </script>
@@ -76,7 +81,9 @@ function add(): void {
     <div class="add-to-selection">
         <p
             v-if="allHeld"
+            ref="held-line"
             class="held"
+            tabindex="-1"
         >
             <span>{{ heldText }}</span>
         </p>

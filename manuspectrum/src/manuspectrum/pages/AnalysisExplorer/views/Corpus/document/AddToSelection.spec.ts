@@ -1,4 +1,4 @@
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,6 +15,7 @@ function mountButton(keys: string[]) {
     setActivePinia(pinia);
     const announce = vi.fn();
     const wrapper = mount(AddToSelection, {
+        attachTo: document.body,
         props: { keys, label: "+ Selection" },
         global: {
             plugins: [pinia],
@@ -68,5 +69,15 @@ describe("AddToSelection", () => {
         expect(describedBy).toBeTruthy();
         expect(describedBy).not.toContain(KEY);
         expect(wrapper.find(".reason").attributes("id")).toBe(describedBy);
+    });
+
+    it("keeps the keyboard focus on the line that replaces the button", async () => {
+        const { wrapper } = mountButton([KEY]);
+        const button = wrapper.find("button");
+        (button.element as HTMLButtonElement).focus();
+        await button.trigger("click");
+        await flushPromises();
+        expect(document.activeElement).toBe(wrapper.find(".held").element);
+        wrapper.unmount();
     });
 });

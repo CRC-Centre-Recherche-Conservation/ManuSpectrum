@@ -1,6 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { defineComponent, h } from "vue";
 
 import CharacterizationCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue";
 
@@ -175,5 +176,42 @@ describe("CharacterizationCard", () => {
         const { wrapper } = mountCard([], {});
         await wrapper.find(".card-head .close").trigger("click");
         expect(wrapper.emitted("close")).toHaveLength(1);
+    });
+
+    it("offers no evidence of the previous material while the next one's loads", async () => {
+        const { wrapper } = mountCard([uuid(101)], {
+            [uuid(101)]: analysisWith(uuid(101), true),
+        });
+        await flushPromises();
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => new Promise(() => undefined)),
+        );
+        await wrapper.setProps({
+            summary: characterization(2, { evidence: [uuid(102)] }),
+        });
+        await flushPromises();
+        expect(wrapper.find(".with-evidence button").exists()).toBe(false);
+        expect(wrapper.find(".evidence").text()).not.toContain("Analysis 101");
+    });
+
+    it("gives its section headings ids of its own", () => {
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        const summary = characterization(1);
+        const wrapper = mount(
+            defineComponent(() => () => [
+                h(CharacterizationCard, { summary, scale: SCALE }),
+                h(CharacterizationCard, { summary, scale: SCALE }),
+            ]),
+            { global: { plugins: [pinia] } },
+        );
+        const sections = wrapper.findAll(".materials");
+        const ids = sections.map((section) =>
+            section.find("h4").attributes("id"),
+        );
+        expect(ids[0]).toBeTruthy();
+        expect(ids[0]).not.toBe(ids[1]);
+        expect(sections[0].attributes("aria-labelledby")).toBe(ids[0]);
     });
 });

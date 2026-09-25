@@ -69,6 +69,7 @@ const phone = useMediaQuery(PHONE_QUERY);
 const heading = useTemplateRef<HTMLElement>("heading");
 const backButton = useTemplateRef<HTMLElement>("back-button");
 const folio = useTemplateRef<{ focusTarget: (id: string) => void }>("folio");
+const card = useTemplateRef<{ focusHeading: () => void }>("card");
 
 const railOpen = ref(false);
 const curtain = ref<string | null>(null);
@@ -278,6 +279,22 @@ watch(
         }
     },
     { flush: "sync" },
+);
+
+/**
+ * On a wide screen, the heading of a newly focused card takes the keyboard
+ * focus when the control that opened it is gone (the list of the page, a card
+ * of the other kind). In the drawer, the drawer places the focus.
+ */
+watch(
+    () => store.focus,
+    (focus) => {
+        if (!focus || narrow.value) return;
+        const active = window.document.activeElement;
+        if (!active || active === window.document.body)
+            card.value?.focusHeading();
+    },
+    { flush: "post" },
 );
 
 function followFocus(): void {
@@ -531,11 +548,14 @@ function goHome(): void {
                 >
                     <AnalysisCard
                         v-if="!narrow && focusedAnalysis !== null"
+                        ref="card"
                         :handle="analysis"
+                        :analysis-id="focusedAnalysis"
                         @close="closeCard"
                     />
                     <CharacterizationCard
                         v-else-if="!narrow && openCharacterization"
+                        ref="card"
                         :summary="openCharacterization"
                         :scale="certaintyScale"
                         @close="closeCard"
@@ -560,6 +580,7 @@ function goHome(): void {
                 <AnalysisCard
                     v-if="focusedAnalysis !== null"
                     :handle="analysis"
+                    :analysis-id="focusedAnalysis"
                     @close="closeCard"
                 />
                 <CharacterizationCard

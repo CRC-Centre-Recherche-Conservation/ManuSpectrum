@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
@@ -31,23 +31,36 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ close: [] }>();
+defineExpose({ focusHeading });
 
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const evidence = useEvidence(() => props.summary.evidence);
+const sectionId = useId();
+const heading = useTemplateRef<HTMLElement>("heading");
 
 const ownKey = computed(() => characterizationKey(props.summary.id));
+/** The evidence analyses read for this material; null while they load or when the data held is another material's. */
+const evidenceRead = computed(() => {
+    const read = evidence.data.value;
+    if (evidence.status.value !== "ready" || !read) return null;
+    const ids = read.map((analysis) => analysis.id);
+    return ids.length === props.summary.evidence.length &&
+        ids.every((id, index) => id === props.summary.evidence[index])
+        ? read
+        : null;
+});
 const names = computed(
     () =>
         new Map(
-            (evidence.data.value ?? []).map((analysis) => [
+            (evidenceRead.value ?? []).map((analysis) => [
                 analysis.id,
                 analysis.name,
             ]),
         ),
 );
 const entries = computed(() =>
-    evidence.data.value ? evidenceEntries(evidence.data.value) : null,
+    evidenceRead.value ? evidenceEntries(evidenceRead.value) : null,
 );
 const withEvidenceKeys = computed(() =>
     entries.value ? [ownKey.value, ...entries.value.keys] : [],
@@ -113,12 +126,17 @@ function openAnalysis(id: string): void {
 function close(): void {
     emit("close");
 }
+
+function focusHeading(): void {
+    heading.value?.focus();
+}
 </script>
 
 <template>
     <article class="characterization-card">
         <header class="card-head">
             <h3
+                ref="heading"
                 class="name"
                 tabindex="-1"
                 :lang="props.summary.name.lang"
@@ -152,9 +170,9 @@ function close(): void {
 
         <section
             class="materials"
-            aria-labelledby="ch-materials"
+            :aria-labelledby="`${sectionId}-materials`"
         >
-            <h4 id="ch-materials">
+            <h4 :id="`${sectionId}-materials`">
                 <span>{{ $gettext("Identified materials") }}</span>
             </h4>
             <ul>
@@ -239,9 +257,9 @@ function close(): void {
         <section
             v-if="props.summary.note"
             class="note"
-            aria-labelledby="ch-note"
+            :aria-labelledby="`${sectionId}-note`"
         >
-            <h4 id="ch-note">
+            <h4 :id="`${sectionId}-note`">
                 <span>{{ $gettext("Interpretation note") }}</span>
             </h4>
             <SafeHtml
@@ -253,9 +271,9 @@ function close(): void {
         <section
             v-if="props.summary.sources.length > 0"
             class="sources"
-            aria-labelledby="ch-sources"
+            :aria-labelledby="`${sectionId}-sources`"
         >
-            <h4 id="ch-sources">
+            <h4 :id="`${sectionId}-sources`">
                 <span>{{ $gettext("Sources") }}</span>
             </h4>
             <ul>
@@ -279,9 +297,9 @@ function close(): void {
         <section
             v-if="sortedLevels.length > 0"
             class="scale"
-            aria-labelledby="ch-scale"
+            :aria-labelledby="`${sectionId}-scale`"
         >
-            <h4 id="ch-scale">
+            <h4 :id="`${sectionId}-scale`">
                 <span>{{ $gettext("Degree of certainty") }}</span>
             </h4>
             <ol>
@@ -298,9 +316,9 @@ function close(): void {
         <section
             v-if="props.summary.evidence.length > 0"
             class="evidence"
-            aria-labelledby="ch-evidence"
+            :aria-labelledby="`${sectionId}-evidence`"
         >
-            <h4 id="ch-evidence">
+            <h4 :id="`${sectionId}-evidence`">
                 <span>{{ evidenceTitle }}</span>
             </h4>
             <ul>

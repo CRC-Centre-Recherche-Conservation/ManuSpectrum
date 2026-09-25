@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it } from "vitest";
-import { ref, shallowRef } from "vue";
+import { defineComponent, h, ref, shallowRef } from "vue";
 
 import AnalysisCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue";
 
@@ -21,6 +21,7 @@ import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/compos
 function mountCard(
     payload: AnalysisPayload | null,
     status: RequestStatus = "ready",
+    analysisId: string = payload?.id ?? uuid(101),
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -30,7 +31,7 @@ function mountCard(
         retry: () => undefined,
     };
     const wrapper = mount(AnalysisCard, {
-        props: { handle },
+        props: { handle, analysisId },
         global: { plugins: [pinia], stubs: { SpectrumPreview: true } },
     });
     return { wrapper, store: useExplorerStore() };
@@ -159,5 +160,56 @@ describe("AnalysisCard", () => {
     it("shows the unavailable state for a refused analysis", () => {
         const { wrapper } = mountCard(null, "unavailable");
         expect(wrapper.text()).toContain("This item is not available.");
+    });
+
+    it("shows nothing of the previous analysis while the next one loads", () => {
+        const { wrapper } = mountCard(
+            analysisPayload({ name: label("Previous analysis") }),
+            "loading",
+            uuid(102),
+        );
+        expect(wrapper.text()).not.toContain("Previous analysis");
+        expect(wrapper.find(".add-to-selection").exists()).toBe(false);
+        expect(wrapper.find(".card-head h3").text()).toBe(
+            "Loading the analysis…",
+        );
+    });
+
+    it("keeps its heading element from loading to loaded, so a focus on it stays", async () => {
+        const { wrapper } = mountCard(null, "loading", uuid(101));
+        const heading = wrapper.find(".card-head h3").element;
+        const handle = wrapper.props("handle") as {
+            data: { value: AnalysisPayload | null };
+            status: { value: RequestStatus };
+        };
+        handle.data.value = analysisPayload();
+        handle.status.value = "ready";
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find(".card-head h3").element).toBe(heading);
+        expect(wrapper.find(".card-head h3").text()).toBe("MS1_f12_XRF_03");
+    });
+
+    it("gives its section headings ids of its own", () => {
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        const handle = {
+            status: ref<RequestStatus>("ready"),
+            data: shallowRef<AnalysisPayload | null>(analysisPayload()),
+            retry: () => undefined,
+        };
+        const wrapper = mount(
+            defineComponent(() => () => [
+                h(AnalysisCard, { handle, analysisId: uuid(101) }),
+                h(AnalysisCard, { handle, analysisId: uuid(101) }),
+            ]),
+            { global: { plugins: [pinia], stubs: { SpectrumPreview: true } } },
+        );
+        const sections = wrapper.findAll(".conditions");
+        const ids = sections.map((section) =>
+            section.find("h4").attributes("id"),
+        );
+        expect(ids[0]).toBeTruthy();
+        expect(ids[0]).not.toBe(ids[1]);
+        expect(sections[0].attributes("aria-labelledby")).toBe(ids[0]);
     });
 });
