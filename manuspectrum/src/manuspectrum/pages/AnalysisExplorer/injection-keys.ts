@@ -16,3 +16,7 @@ export const CURTAIN_KEY: InjectionKey<Ref<string | null>> = Symbol("curtain");
 /** Analyses that have a rectangle or polygon on the page shown: an imaging layer can be laid only there. */
 export const FOLIO_ZONES_KEY: InjectionKey<Ref<ReadonlySet<string>>> =
     Symbol("folio-zones");
+
+/** Speaks a message through the shell's polite live region. */
+export const ANNOUNCE_KEY: InjectionKey<(message: string) => void> =
+    Symbol("announce");

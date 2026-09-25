@@ -81,4 +81,12 @@ describe("ImagingPreview", () => {
         expect(wrapper.find("input.lay").attributes("disabled")).toBeDefined();
         expect(wrapper.text()).toContain("no zone on this page");
     });
+
+    it("adds the current layer to the Selection", async () => {
+        const { wrapper, store } = mountPreview();
+        await wrapper.find(".add-to-selection button").trigger("click");
+        expect(store.basket.map((item) => item.key)).toEqual([
+            `im:${uuid(101)}:0`,
+        ]);
+    });
 });

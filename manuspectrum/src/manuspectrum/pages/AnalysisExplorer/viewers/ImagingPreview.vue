@@ -4,6 +4,8 @@ import { useGettext } from "vue3-gettext";
 
 import Slider from "primevue/slider";
 
+import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
+
 import {
     layerImageUrl,
     overlayKey,
@@ -12,6 +14,7 @@ import {
     CURTAIN_KEY,
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { layerKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type {
@@ -140,6 +143,11 @@ function onCurtainChange(event: Event): void {
             <span>{{ kindLabel(layer) }}</span>
             <span class="value">{{ layer.label }}</span>
         </p>
+        <AddToSelection
+            v-if="layer"
+            :keys="[layerKey(props.analysis.id, layer.index)]"
+            :label="$gettext('+ Selection')"
+        />
         <div
             v-if="props.file.layers.length > 1"
             class="scroll"

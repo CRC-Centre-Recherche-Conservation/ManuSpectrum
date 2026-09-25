@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { provide, ref, watch } from "vue";
+import { nextTick, provide, ref, watch } from "vue";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
 import SharedSelectionPrompt from "@/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue";
@@ -8,6 +8,7 @@ import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/Corpu
 
 import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
 import {
+    ANNOUNCE_KEY,
     FACET_LABELS_KEY,
     SCREEN_FOCUS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -55,6 +56,7 @@ const screenFocusPending = ref(false);
 
 provide(FACET_LABELS_KEY, facetLabels);
 provide(SCREEN_FOCUS_KEY, screenFocusPending);
+provide(ANNOUNCE_KEY, announce);
 
 watch(
     () => [store.corpusScreen, store.document?.id] as const,
@@ -62,6 +64,14 @@ watch(
         screenFocusPending.value = true;
     },
 );
+
+/** Clearing the region first makes a repeated message spoken again. */
+function announce(message: string): void {
+    announcement.value = "";
+    void nextTick(() => {
+        announcement.value = message;
+    });
+}
 
 function onSelectionResolved(message: string): void {
     sharedSelection.value = null;
