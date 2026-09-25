@@ -10,8 +10,6 @@ import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/compos
 import type { Filters } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 export interface SearchScope {
-    /** Limits the search to the analyses of one document. */
-    document?: string;
     /** A page size of its own, instead of `filters.size`. */
     size?: number;
 }
@@ -41,8 +39,14 @@ export function searchQuery(
     for (const year of [...filters.year].sort((a, b) => a - b)) {
         query.append("year", String(year));
     }
-    if (scope.document) query.set("document", scope.document);
     if (page > 1) query.set("page", String(page));
+    return query;
+}
+
+/** The filters of `filters` alone, as the document match reads them: no grain, page size nor page. */
+export function filterQuery(filters: Filters): URLSearchParams {
+    const query = searchQuery(filters, 1);
+    for (const key of ["grain", "size", "empty"]) query.delete(key);
     return query;
 }
 

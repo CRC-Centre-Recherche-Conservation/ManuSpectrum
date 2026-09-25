@@ -76,9 +76,8 @@ describe("FacetRail", () => {
         ]);
     });
 
-    it("checks what the filters hold, not what the last payload said", () => {
+    it("checks what the filters hold", () => {
         const colour = facet("colour", 2);
-        colour.values[1].selected = true;
         const wrapper = mountRail({
             facets: [colour],
             selected: { colour: ["colour-0"] },
@@ -114,6 +113,7 @@ describe("FacetRail", () => {
                 facetValue("c1", "Azzurro", { swatch: "royalblue" }),
                 facetValue("c2", "Polychrome"),
             ],
+            total: 2,
         };
         const wrapper = mountRail({ facets: [colour], selected: {} });
         const rows = wrapper.findAll(".value");
@@ -135,6 +135,7 @@ describe("FacetRail", () => {
                     mark: { code: "OM", colour: null, family: "t:om" },
                 }),
             ],
+            total: 2,
         };
         const wrapper = mountRail({ facets: [technique], selected: {} });
         const rows = wrapper.findAll(".value");
@@ -226,6 +227,7 @@ describe("FacetRail", () => {
                     "ATRAMENTA — Encres ferrogalliques et carbonées",
                 ),
             ],
+            total: 1,
         };
         const wrapper = mountRail({ facets: [project], selected: {} });
         expect(wrapper.find(".value .label").attributes("title")).toBe(

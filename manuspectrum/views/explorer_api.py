@@ -3,10 +3,19 @@
 Every answer goes through ``_answer``: the guard has already decided by
 building the payload from ``visible_set``; a payload the visitor may read is
 the same for every visitor, so it is sent ``public, no-cache`` with a strong
-ETag computed from its bytes; a signed-in reader's is ``private, no-store``.
-Unknown and refused alike answer a bodyless 404.
+ETag; a signed-in reader's is ``private, no-store``. Unknown and refused
+alike answer a bodyless 404. Answers are gzipped; the compression turns the
+ETag weak, which ``etag_already_held`` accepts.
+
+The ETag of a payload built from the corpus bundle alone (search, facet,
+match, home) is computed before building it, from the bundle key, the route
+and the query as the payload reads it, so a revalidation answers 304 without
+building anything. The document, analysis and items payloads embed IIIF
+manifests fetched over HTTP, which the data version does not follow: their
+ETag is the digest of the body.
 """
 
+import datetime
 import hashlib
 
 import orjson
@@ -18,75 +27,200 @@ from django.http import (
     HttpResponseNotModified,
 )
 from django.utils import translation
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.gzip import gzip_page
 
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import is_connected
+from manuspectrum.views import explorer_memo
 from manuspectrum.views.explorer_service import (
+    FACET_KEYS,
     analysis_payload,
     document_payload,
+    facet_payload,
+    home_payload,
     items_payload,
+    match_payload,
+    parse_filters,
     parse_keys,
     search_payload,
+    wants_facets,
 )
 
+HOME_DAY_MARGIN = datetime.timedelta(days=1)
 
-def _answer(request, payload):
-    """The HTTP answer for *payload*; None is the not-found answer."""
+
+def _shared(request):
+    """Whether the answer is the visitor's, which every visitor shares."""
+    return not (is_connected(request.user) or renews_csrf_cookie(request))
+
+
+def _not_found():
+    response = HttpResponseNotFound()
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _answer(request, build, token=None):
+    """The HTTP answer for the payload ``build()`` returns; None is the not-found answer.
+
+    *token* names the payload before it is built; without it the ETag is the
+    digest of the body.
+    """
+    shared = _shared(request)
+    etag = f'"{token}"' if token else None
+    if shared and etag and etag_already_held(request, etag):
+        return _not_modified(etag)
+    payload = build()
     if payload is None:
-        response = HttpResponseNotFound()
-        response["Cache-Control"] = "private, no-store"
-        return response
+        return _not_found()
     body = orjson.dumps(payload)
-    if is_connected(request.user) or renews_csrf_cookie(request):
+    if not shared:
         response = HttpResponse(body, content_type="application/json")
         response["Cache-Control"] = "private, no-store"
         return response
-    etag = '"%s"' % hashlib.md5(body, usedforsecurity=False).hexdigest()
+    etag = etag or '"%s"' % hashlib.md5(body, usedforsecurity=False).hexdigest()
     if etag_already_held(request, etag):
-        response = HttpResponseNotModified()
-    else:
-        response = HttpResponse(body, content_type="application/json")
+        return _not_modified(etag)
+    response = HttpResponse(body, content_type="application/json")
     response["ETag"] = etag
     response["Cache-Control"] = "public, no-cache"
     return response
 
 
+def _not_modified(etag):
+    response = HttpResponseNotModified()
+    response["ETag"] = etag
+    response["Cache-Control"] = "public, no-cache"
+    return response
+
+
+def _token(route, ticket, *parts):
+    """The ETag of a payload of *route* over the bundle of *ticket*, named by *parts*."""
+    return hashlib.sha1(
+        orjson.dumps(
+            [settings.CACHE_CODE_VERSION, route, ticket.key, *parts],
+            option=orjson.OPT_SORT_KEYS,
+        ),
+        usedforsecurity=False,
+    ).hexdigest()
+
+
+def _filters(query):
+    """The filters of *query* as ``row_filter`` reads them, without grain, page and size."""
+    filters, _ = parse_filters(query)
+    return {key: filters[key] for key in (*FACET_KEYS, "q")}
+
+
+def _ticket(request):
+    return explorer_memo.ticket(request.user, translation.get_language())
+
+
+@method_decorator(gzip_page, name="dispatch")
 class ExplorerSearchView(View):
     """``GET /{lang}/api/explorer/search``: results, facets and counts for the reader."""
 
     def get(self, request):
+        ticket, language = _ticket(request), translation.get_language()
+        filters, page = parse_filters(request.GET)
+        token = _token("search", ticket, filters, page, wants_facets(request.GET))
         return _answer(
             request,
-            search_payload(request.GET, request.user, translation.get_language()),
+            lambda: search_payload(request.GET, request.user, language, ticket),
+            token,
         )
 
 
+@method_decorator(gzip_page, name="dispatch")
+class ExplorerFacetView(View):
+    """``GET /{lang}/api/explorer/facet/<key>``: every value of one facet under the filters, narrowed by ``find``."""
+
+    def get(self, request, key):
+        if key not in FACET_KEYS:
+            return _not_found()
+        ticket, language = _ticket(request), translation.get_language()
+        token = _token(
+            "facet",
+            ticket,
+            key,
+            _filters(request.GET),
+            request.GET.get("find", "").strip(),
+        )
+        return _answer(
+            request,
+            lambda: facet_payload(key, request.GET, request.user, language, ticket),
+            token,
+        )
+
+
+@method_decorator(gzip_page, name="dispatch")
+class ExplorerHomeView(View):
+    """``GET /{lang}/api/explorer/home?day=YYYY-MM-DD``: the explorer home of the reader's day.
+
+    *day* is the reader's local date; one more than a day away from the
+    server's date is a bad request.
+    """
+
+    def get(self, request):
+        day = request.GET.get("day", "")
+        try:
+            date = datetime.date.fromisoformat(day)
+        except ValueError:
+            return HttpResponseBadRequest()
+        if day != date.isoformat() or (
+            abs(date - datetime.date.today()) > HOME_DAY_MARGIN
+        ):
+            return HttpResponseBadRequest()
+        ticket, language = _ticket(request), translation.get_language()
+        return _answer(
+            request,
+            lambda: home_payload(day, request.user, language, ticket),
+            _token("home", ticket, day),
+        )
+
+
+@method_decorator(gzip_page, name="dispatch")
 class ExplorerDocumentView(View):
-    """``GET /{lang}/api/explorer/document/<uuid>``: canvases, annotations and identified materials of one document."""
+    """``GET /{lang}/api/explorer/document/<uuid>``: canvases, analyses and identified materials of one document."""
 
     def get(self, request, resourceid):
+        language = translation.get_language()
         return _answer(
             request,
-            document_payload(
-                resourceid,
-                request.user,
-                translation.get_language(),
-                request.GET,
-            ),
+            lambda: document_payload(resourceid, request.user, language),
         )
 
 
+@method_decorator(gzip_page, name="dispatch")
+class ExplorerDocumentMatchView(View):
+    """``GET /{lang}/api/explorer/document/<uuid>/match``: what the Corpus filters keep in one document."""
+
+    def get(self, request, resourceid):
+        ticket, language = _ticket(request), translation.get_language()
+        token = _token("match", ticket, str(resourceid), _filters(request.GET))
+        return _answer(
+            request,
+            lambda: match_payload(
+                resourceid, request.GET, request.user, language, ticket
+            ),
+            token,
+        )
+
+
+@method_decorator(gzip_page, name="dispatch")
 class ExplorerAnalysisView(View):
     """``GET /{lang}/api/explorer/analysis/<uuid>``: one analysis with its files, conditions, evidence and dataset."""
 
     def get(self, request, resourceid):
+        language = translation.get_language()
         return _answer(
             request,
-            analysis_payload(resourceid, request.user, translation.get_language()),
+            lambda: analysis_payload(resourceid, request.user, language),
         )
 
 
+@method_decorator(gzip_page, name="dispatch")
 class ExplorerItemsView(View):
     """``GET /{lang}/api/explorer/items?ids=``: the Selection's items, at most ``EXPLORER_ITEMS_MAX`` keys."""
 
@@ -94,6 +228,8 @@ class ExplorerItemsView(View):
         keys = parse_keys(request.GET)
         if len(keys) > settings.EXPLORER_ITEMS_MAX:
             return HttpResponseBadRequest()
+        language = translation.get_language()
         return _answer(
-            request, items_payload(keys, request.user, translation.get_language())
+            request,
+            lambda: items_payload(keys, request.user, language),
         )

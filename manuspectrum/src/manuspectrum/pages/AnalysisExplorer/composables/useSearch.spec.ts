@@ -4,6 +4,7 @@ import { flushPromises } from "@vue/test-utils";
 
 import { getJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import {
+    filterQuery,
     searchQuery,
     useSearch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
@@ -51,10 +52,18 @@ describe("searchQuery", () => {
         ).toBe("grain=analyses");
     });
 
-    it("limits the search to one document", () => {
+    it("gives the filters alone, without grain, page size nor page", () => {
         expect(
-            searchQuery(emptyFilters(), 1, { document: "d-1" }).toString(),
-        ).toBe("grain=documents&document=d-1");
+            filterQuery({
+                ...emptyFilters(),
+                q: "lead",
+                grain: "analyses",
+                size: 25,
+                empty: true,
+                technique: ["t2", "t1"],
+                year: [2021],
+            }).toString(),
+        ).toBe("q=lead&technique=t1&technique=t2&year=2021");
     });
 
     it("asks for one page of a given size", () => {

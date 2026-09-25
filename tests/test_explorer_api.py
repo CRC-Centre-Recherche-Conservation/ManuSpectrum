@@ -4,6 +4,9 @@ Usage:
     python manage.py test tests.test_explorer_api --settings="tests.test_settings"
 """
 
+import datetime
+import json
+from pathlib import Path
 from unittest import mock
 
 from django.contrib.auth.models import Group, User
@@ -15,13 +18,17 @@ from arches.app.utils.permission_backend import assign_perm
 
 from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import CANVAS, MANIFEST, XY_CONFIG_ID
-from tests.test_explorer_service import FORS, XRF, ServiceCase
+from tests.test_explorer_service import AZURITE, FORS, XRF, ServiceCase
 
+from manuspectrum.views import explorer_service
 from manuspectrum.views.explorer_service import (
+    PREVIEW_SIZE,
     imaging_entries,
     layer_of,
     search_payload,
 )
+
+DAY_VECTORS = Path(__file__).parent / "fixtures" / "explorer_day_index.json"
 
 
 class SearchRouteTests(ServiceCase):
@@ -59,13 +66,41 @@ class SearchRouteTests(ServiceCase):
                 hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
             )
 
-    def test_a_search_scoped_to_a_document_has_the_contract_shape(self):
-        response = self.get(f"?document={self.documents['open'].pk}")
+    def test_facets_0_leaves_the_facets_out_and_keeps_the_results(self):
+        full = self.get("?grain=analyses").json()
+        bare = self.get("?grain=analyses&facets=0")
 
-        self.assertEqual(response.status_code, 200)
-        assert_shape(self, response.json(), "SearchResponse")
-        for hit in response.json()["results"]:
-            assert_shape(self, hit, "AnalysisHit")
+        assert_shape(self, bare.json(), "SearchResponse")
+        self.assertIsNone(bare.json()["facets"])
+        self.assertEqual(bare.json()["results"], full["results"])
+        self.assertNotEqual(bare["ETag"], self.get("?grain=analyses")["ETag"])
+
+    def test_the_part_facet_lists_its_first_values_and_the_selected_ones(self):
+        parts = []
+        for n in range(PREVIEW_SIZE + 2):
+            part = self.new_resource("component", f"f. {n + 10}r — part {n:02d}")
+            self.tile(
+                part,
+                "item_visual_is_part_of_document",
+                self.refs(self.documents["open"]),
+            )
+            analysis = self.new_resource("analysis", f"P{n:02d}")
+            self.tile(analysis, "component_observed", self.refs(part))
+            parts.append(str(part.pk))
+
+        full = self.client.get("/en/api/explorer/facet/part").json()
+        search = self.get(f"?part={full['values'][-1]['id']}").json()
+
+        facet = next(f for f in search["facets"] if f["key"] == "part")
+        assert_shape(self, facet, "Facet")
+        self.assertEqual(facet["total"], len(full["values"]))
+        self.assertGreater(facet["total"], PREVIEW_SIZE + 1)
+        self.assertEqual(
+            [v["id"] for v in facet["values"]],
+            [v["id"] for v in full["values"][:PREVIEW_SIZE]]
+            + [full["values"][-1]["id"]],
+        )
+        self.assertTrue(set(parts) <= {v["id"] for v in full["values"]})
 
     def test_a_signed_in_reader_gets_a_private_answer(self):
         self.client.force_login(self.editor)
@@ -315,33 +350,8 @@ class DocumentRouteTests(CorpusCase):
         with mock.patch(FETCH, return_value=MANIFEST_JSON):
             return self.client.get(f"/en/api/explorer/document/{resource}{query}")
 
-    def test_every_analysis_matches_when_no_filter_is_set(self):
-        payload = self.get(self.documents["open"].pk).json()
-
-        self.assertTrue(payload["annotations"])
-        self.assertTrue(all(a["match"] for a in payload["annotations"]))
-
-    def test_an_analysis_the_search_would_drop_does_not_match(self):
-        payload = self.get(self.documents["open"].pk, f"?technique={FORS}").json()
-
-        self.assertTrue(payload["annotations"])
-        matched = {a["analysis"]: a["match"] for a in payload["annotations"]}
-        self.assertTrue(matched[str(self.analyses["on_document"].pk)])
-        self.assertFalse(matched[str(self.analyses["open"].pk)])
-        self.assertFalse(matched[str(self.analyses["draft"].pk)])
-
-    def test_the_document_and_the_search_apply_the_same_filters(self):
-        query = f"?technique={XRF}"
-        search = self.client.get(
-            f"/en/api/explorer/search{query}&grain=analyses"
-        ).json()
-        payload = self.get(self.documents["open"].pk, query).json()
-
-        matched = {a["analysis"] for a in payload["annotations"] if a["match"]}
-        found = {r["id"] for r in search["results"]}
-        document_analyses = {a["analysis"] for a in payload["annotations"]}
-        self.assertTrue(matched)
-        self.assertEqual(matched, found & document_analyses)
+    def by_id(self, payload):
+        return {a["id"]: a for a in payload["analyses"]}
 
     def test_the_document_payload_has_the_contract_shape(self):
         response = self.get(self.documents["open"].pk)
@@ -353,20 +363,60 @@ class DocumentRouteTests(CorpusCase):
             payload["canvases"][0]["image"]["service"],
             "https://example.org/iiif/image/f1v",
         )
-        for annotation in payload["annotations"]:
-            assert_shape(self, annotation, "Annotation")
+        for analysis in payload["analyses"]:
+            assert_shape(self, analysis, "DocumentAnalysis")
+            for zone in analysis["zones"]:
+                assert_shape(self, zone, "AnalysisZone")
+        for uri, technique in payload["techniques"].items():
+            assert_shape(self, technique, "Technique")
+            self.assertEqual(technique["uri"], uri)
         for summary in payload["characterizations"]:
             assert_shape(self, summary, "CharacterizationSummary")
+            for evidence in summary["evidence"]:
+                assert_shape(self, evidence, "NamedRef")
 
-    def test_every_reader_sees_the_draft_annotation_marked_unpublished(self):
+    def test_each_analysis_names_its_technique_and_its_zones_by_canvas_position(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        mine = self.by_id(payload)[str(self.analyses["open"].pk)]
+        self.assertEqual(mine["technique"], XRF)
+        self.assertEqual(payload["techniques"][XRF]["label"]["value"], "Portable XRF")
+        self.assertEqual([z["canvas"] for z in mine["zones"]], [0])
+        self.assertEqual(mine["zones"][0]["shape"]["type"], "point")
+
+    def test_the_payload_is_the_same_whatever_the_filters(self):
+        plain = self.get(self.documents["open"].pk)
+        filtered = self.get(self.documents["open"].pk, f"?technique={FORS}&q=x")
+
+        self.assertEqual(filtered.content, plain.content)
+        self.assertEqual(filtered["ETag"], plain["ETag"])
+
+    def test_an_identified_material_names_its_evidence(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        summary = next(
+            s
+            for s in payload["characterizations"]
+            if s["id"] == str(self.characterization.pk)
+        )
+        cited = sorted(str(self.analyses[k].pk) for k in ("open", "on_document"))
+        named = {
+            r["id"]: r["name"]
+            for r in search_payload(QueryDict("size=50"), self.anonymous, "en")[
+                "results"
+            ]
+        }
+        self.assertEqual(
+            summary["evidence"], [{"id": a, "name": named[a]} for a in cited]
+        )
+
+    def test_every_reader_sees_the_draft_analysis_marked_unpublished(self):
         visitor = self.get(self.documents["open"].pk)
         self.client.force_login(self.editor)
         editor = self.get(self.documents["open"].pk)
 
         for response in (visitor, editor):
-            marked = {
-                a["analysis"]: a["unpublished"] for a in response.json()["annotations"]
-            }
+            marked = {a["id"]: a["unpublished"] for a in response.json()["analyses"]}
             self.assertIs(marked[str(self.analyses["draft"].pk)], True)
             self.assertIs(marked[str(self.analyses["open"].pk)], False)
             self.assertGreater(response.json()["unpublishedCount"], 0)
@@ -388,29 +438,24 @@ class DocumentRouteTests(CorpusCase):
 
         payload = self.get(self.documents["open"].pk).json()
 
-        mine = [a for a in payload["annotations"] if a["analysis"] == str(placed.pk)]
-        self.assertEqual([a["canvas"] for a in mine], [CANVAS])
+        mine = self.by_id(payload)[str(placed.pk)]
+        self.assertEqual([z["canvas"] for z in mine["zones"]], [0])
         self.assertEqual(
             payload["canvases"][0]["analysisCount"],
-            len({a["analysis"] for a in payload["annotations"]}),
+            sum(1 for a in payload["analyses"] if a["zones"]),
         )
 
-    def test_an_analysis_without_a_position_is_listed_as_unlocated_not_dropped(self):
+    def test_an_analysis_without_a_position_is_listed_without_zones_not_dropped(self):
         unplaced = self.new_resource("analysis", "FORS_014 — f. 1v, no zone")
         self.tile(unplaced, "component_observed", self.refs(self.components["open"]))
         self.tile(unplaced, "analysis_by_project", self.refs(self.projects["main"]))
 
         payload = self.get(self.documents["open"].pk).json()
 
-        self.assertNotIn(
-            str(unplaced.pk), {a["analysis"] for a in payload["annotations"]}
-        )
-        self.assertIn(str(unplaced.pk), {u["analysis"] for u in payload["unlocated"]})
-        for item in payload["unlocated"]:
-            assert_shape(self, item, "UnlocatedAnalysis")
+        self.assertEqual(self.by_id(payload)[str(unplaced.pk)]["zones"], [])
         self.assertEqual(
             sum(c["analysisCount"] for c in payload["canvases"]),
-            len({a["analysis"] for a in payload["annotations"]}),
+            sum(1 for a in payload["analyses"] if a["zones"]),
         )
         search_results = search_payload(QueryDict(""), self.anonymous, "en")["results"]
         self.assertIn(str(unplaced.pk), {r["id"] for r in search_results})
@@ -488,15 +533,87 @@ class DocumentRouteTests(CorpusCase):
 
         self.assertEqual([s["zone"]["canvas"] for s in payload["samples"]], [CANVAS])
 
+    def test_a_zone_on_a_canvas_the_manifest_does_not_list_is_left_out(self):
+        elsewhere = self.new_resource("analysis", "XRF_030 — another manifest")
+        self.tile(elsewhere, "component_observed", self.refs(self.components["open"]))
+        self.tile(
+            elsewhere,
+            "literal_location_of_analysis",
+            self.annotation_value(
+                "https://example.org/iiif/other/canvas/9",
+                {"type": "Point", "coordinates": [10, -20]},
+            ),
+        )
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertEqual(self.by_id(payload)[str(elsewhere.pk)]["zones"], [])
+
     def test_an_embargoed_document_answers_like_an_unknown_one(self):
         self.embargo(self.documents["embargoed"])
 
-        refused = self.get(self.documents["embargoed"].pk)
-        unknown = self.get("00000000-0000-4000-8000-000000000009")
+        for suffix in ("", "/match"):
+            refused = self.get(self.documents["embargoed"].pk, suffix)
+            unknown = self.get("00000000-0000-4000-8000-000000000009", suffix)
 
-        self.assertEqual((refused.status_code, refused.content), (404, b""))
-        self.assertEqual((unknown.status_code, unknown.content), (404, b""))
-        self.assertEqual(refused["Cache-Control"], unknown["Cache-Control"])
+            self.assertEqual((refused.status_code, refused.content), (404, b""))
+            self.assertEqual((unknown.status_code, unknown.content), (404, b""))
+            self.assertEqual(refused["Cache-Control"], unknown["Cache-Control"])
+
+
+class DocumentMatchRouteTests(CorpusCase):
+    def get(self, resource, query=""):
+        return self.client.get(f"/en/api/explorer/document/{resource}/match{query}")
+
+    def test_the_match_has_the_contract_shape(self):
+        response = self.get(self.documents["open"].pk, f"?technique={XRF}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "public, no-cache")
+        payload = response.json()
+        assert_shape(self, payload, "DocumentMatch")
+        for facet in payload["facets"]:
+            assert_shape(self, facet, "Facet")
+            for value in facet["values"]:
+                assert_shape(self, value, "FacetValue")
+        self.assertEqual(payload["kept"]["analyses"], [str(self.analyses["open"].pk)])
+
+    def test_the_match_and_the_search_keep_the_same_analyses(self):
+        query = f"?technique={XRF}"
+        search = self.client.get(
+            f"/en/api/explorer/search{query}&grain=analyses&size=50"
+        ).json()
+        kept = self.get(self.documents["open"].pk, query).json()["kept"]["analyses"]
+
+        found = {
+            r["id"]
+            for r in search["results"]
+            if r["document"]["id"] == str(self.documents["open"].pk)
+        }
+        self.assertTrue(kept)
+        self.assertEqual(set(kept), found)
+
+    def test_grain_page_and_size_do_not_change_the_answer(self):
+        plain = self.get(self.documents["open"].pk, f"?material={AZURITE}")
+        paged = self.get(
+            self.documents["open"].pk,
+            f"?material={AZURITE}&grain=documents&page=4&size=50&empty=1",
+        )
+
+        self.assertEqual(paged.content, plain.content)
+        self.assertEqual(paged["ETag"], plain["ETag"])
+
+    def test_a_restricted_value_nodegroup_leaves_its_facet_out(self):
+        nodegroup = NodeGroup.objects.get(
+            pk=self.nodes[("analysis", "analysis_technique_used")].nodegroup_id
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertNotIn("technique", [f["key"] for f in payload["facets"]])
+        self.assertNotIn("Portable XRF", str(payload))
 
 
 class AnalysisRouteTests(CorpusCase):
@@ -523,8 +640,16 @@ class AnalysisRouteTests(CorpusCase):
             payload["dataset"]["url"], "https://doi.org/10.48579/PRO/ZEEJTH"
         )
         self.assertEqual(
-            [c["id"] for c in payload["evidenceOf"]], [str(self.characterization.pk)]
+            payload["evidenceOf"],
+            [
+                {
+                    "id": str(self.characterization.pk),
+                    "name": {"value": "Azurite, blue ground", "lang": "en"},
+                }
+            ],
         )
+        for entry in payload["evidenceOf"]:
+            assert_shape(self, entry, "NamedRef")
         self.assertTrue(
             payload["permalink"].endswith(f"report/{self.analyses['open'].pk}")
         )
@@ -710,17 +835,195 @@ class ZoneCoordinatesTests(ReadRightsCase):
         mine = str(self.characterization.pk)
 
         document = self.document(self.documents["open"].pk)
-        analysis = self.analysis(self.analyses["open"].pk).json()
         items = self.client.get("/en/api/explorer/items", {"ids": f"ch:{mine}:-"})
 
         zones = [
             next(s["zone"] for s in document["characterizations"] if s["id"] == mine),
-            next(s["zone"] for s in analysis["evidenceOf"] if s["id"] == mine),
             items.json()["items"][0]["characterization"]["zone"],
         ]
         self.assertEqual(zones[0]["shape"], {"type": "point", "x": 2500, "y": 3200})
         self.assertEqual(zones[1], zones[0])
-        self.assertEqual(zones[2], zones[0])
+
+
+class FacetRouteTests(CorpusCase):
+    def get(self, key, query=""):
+        return self.client.get(f"/en/api/explorer/facet/{key}{query}")
+
+    def test_the_facet_lists_every_value_with_the_counts_of_the_search(self):
+        search = self.client.get(f"/en/api/explorer/search?material={AZURITE}").json()
+        response = self.get("technique", f"?material={AZURITE}")
+
+        self.assertEqual(response.status_code, 200)
+        facet = response.json()
+        assert_shape(self, facet, "Facet")
+        self.assertEqual(
+            facet, next(f for f in search["facets"] if f["key"] == "technique")
+        )
+
+    def test_find_narrows_the_values_by_folded_label_and_keeps_the_selected_ones(self):
+        both = self.get("technique").json()
+        found = self.get("technique", "?find=REFLECTANCE").json()
+        kept = self.get("technique", f"?find=reflectance&technique={XRF}").json()
+
+        self.assertEqual({v["id"] for v in both["values"]}, {XRF, FORS})
+        self.assertEqual([v["id"] for v in found["values"]], [FORS])
+        self.assertEqual(found["total"], 2)
+        self.assertEqual({v["id"] for v in kept["values"]}, {XRF, FORS})
+
+    def test_an_unknown_key_or_a_facet_without_values_answers_a_bodyless_404(self):
+        for key in ("nonsense", "layer"):
+            response = self.get(key)
+            self.assertEqual((response.status_code, response.content), (404, b""), key)
+
+    def test_a_restricted_value_nodegroup_answers_like_an_absent_facet(self):
+        nodegroup = NodeGroup.objects.get(
+            pk=self.nodes[("analysis", "analysis_technique_used")].nodegroup_id
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+        response = self.get("technique")
+
+        self.assertEqual((response.status_code, response.content), (404, b""))
+
+
+class HomeRouteTests(CorpusCase):
+    def get(self, day=None, **headers):
+        day = day or datetime.date.today().isoformat()
+        return self.client.get("/en/api/explorer/home", {"day": day}, **headers)
+
+    def test_the_home_has_the_contract_shape_and_the_overview_of_the_search(self):
+        response = self.get()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "public, no-cache")
+        home = response.json()
+        assert_shape(self, home, "HomeResponse")
+        overview = self.client.get("/en/api/explorer/search?grain=documents").json()
+        facets = {f["key"]: f["values"] for f in overview["facets"]}
+        self.assertEqual(home["documentCount"], overview["total"])
+        self.assertEqual(home["unpublishedCount"], overview["unpublishedCount"])
+        self.assertEqual(home["techniques"], facets["technique"])
+        self.assertEqual(home["projects"], facets["project"])
+        for value in home["techniques"] + home["projects"]:
+            assert_shape(self, value, "FacetValue")
+
+    def test_the_featured_document_is_the_one_at_the_position_of_the_day(self):
+        day = datetime.date.today().isoformat()
+        overview = self.client.get(
+            "/en/api/explorer/search?grain=documents&size=50"
+        ).json()
+
+        featured = self.get(day).json()["featured"]
+
+        assert_shape(self, featured, "DocumentHit")
+        position = explorer_service.day_index(day, overview["total"])
+        self.assertEqual(featured, overview["results"][position])
+
+    def test_a_hidden_document_is_never_featured(self):
+        self.embargo(self.documents["open"])
+        self.embargo(self.documents["embargoed"])
+
+        home = self.get().json()
+
+        self.assertEqual((home["documentCount"], home["featured"]), (0, None))
+
+    def test_a_day_that_is_malformed_missing_or_more_than_a_day_away_is_a_bad_request(
+        self,
+    ):
+        today = datetime.date.today()
+        for day in (
+            "not-a-day",
+            "2026-9-5",
+            (today + datetime.timedelta(days=2)).isoformat(),
+            (today - datetime.timedelta(days=2)).isoformat(),
+        ):
+            self.assertEqual(self.get(day).status_code, 400, day)
+        self.assertEqual(self.client.get("/en/api/explorer/home").status_code, 400)
+        for shift in (-1, 1):
+            day = (today + datetime.timedelta(days=shift)).isoformat()
+            self.assertEqual(self.get(day).status_code, 200, day)
+
+
+class DayIndexTests(SimpleTestCase):
+    def test_the_day_index_follows_the_vectors_the_front_end_shares(self):
+        vectors = json.loads(DAY_VECTORS.read_text())
+
+        self.assertTrue(vectors)
+        for vector in vectors:
+            self.assertEqual(
+                explorer_service.day_index(vector["day"], vector["count"]),
+                vector["index"],
+                vector,
+            )
+
+
+class RevalidationTests(CorpusCase):
+    ROUTES = (
+        "/en/api/explorer/search?grain=analyses",
+        "/en/api/explorer/facet/technique",
+        "/en/api/explorer/home?day={today}",
+        "/en/api/explorer/document/{document}/match?technique=" + XRF,
+    )
+
+    def urls(self):
+        return [
+            route.format(
+                today=datetime.date.today().isoformat(),
+                document=self.documents["open"].pk,
+            )
+            for route in self.ROUTES
+        ]
+
+    def test_a_held_etag_answers_304_without_building_the_bundle(self):
+        for url in self.urls():
+            etag = self.client.get(url)["ETag"]
+            with (
+                mock.patch.object(
+                    explorer_service, "build_bundle", side_effect=AssertionError
+                ),
+                mock.patch.object(
+                    explorer_service.explorer_memo,
+                    "remember",
+                    side_effect=AssertionError,
+                ),
+            ):
+                again = self.client.get(url, HTTP_IF_NONE_MATCH=etag)
+
+            self.assertEqual(again.status_code, 304, url)
+            self.assertEqual(again["ETag"], etag, url)
+
+    def test_the_etag_changes_when_the_data_changes(self):
+        for url in self.urls():
+            before = self.client.get(url)["ETag"]
+            self.tile(
+                self.analyses["open"],
+                "label_of_name",
+                self.string_value(f"renamed for {url}"),
+            )
+
+            after = self.client.get(url, HTTP_IF_NONE_MATCH=before)
+
+            self.assertEqual(after.status_code, 200, url)
+            self.assertNotEqual(after["ETag"], before, url)
+
+    def test_a_gzipped_answer_carries_a_weak_etag_that_revalidates(self):
+        with mock.patch(FETCH, return_value=MANIFEST_JSON):
+            for url in self.urls() + [
+                f"/en/api/explorer/document/{self.documents['open'].pk}",
+                f"/en/api/explorer/analysis/{self.analyses['open'].pk}",
+            ]:
+                response = self.client.get(url, HTTP_ACCEPT_ENCODING="gzip")
+                self.assertEqual(response["Content-Encoding"], "gzip", url)
+                self.assertTrue(response["ETag"].startswith('W/"'), url)
+                self.assertIn("Accept-Encoding", response["Vary"], url)
+
+                again = self.client.get(
+                    url,
+                    HTTP_ACCEPT_ENCODING="gzip",
+                    HTTP_IF_NONE_MATCH=response["ETag"],
+                )
+                self.assertEqual(again.status_code, 304, url)
 
 
 class LayerOfTests(SimpleTestCase):

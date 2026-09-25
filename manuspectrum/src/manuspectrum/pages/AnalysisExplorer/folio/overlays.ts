@@ -8,9 +8,9 @@ import {
 
 import type {
     AnalysisPayload,
-    Annotation,
     ImageRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 

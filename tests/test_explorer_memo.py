@@ -29,6 +29,7 @@ from manuspectrum.views import explorer_memo, explorer_service
 from manuspectrum.views.explorer_service import (
     corpus_bundle,
     document_payload,
+    match_payload,
     search_payload,
 )
 from manuspectrum.views.summary_service import graph_index_key
@@ -233,13 +234,13 @@ class UniverseTests(MemoCase):
         )
 
     def matches(self, text):
-        with mock.patch(
-            "manuspectrum.views.explorer_service.manifest_json", return_value=None
-        ):
-            payload = document_payload(
-                self.documents["open"].pk, self.anonymous, "en", QueryDict(text)
-            )
-        return {a["analysis"]: a["match"] for a in payload["unlocated"]}
+        payload = match_payload(
+            self.documents["open"].pk, QueryDict(text), self.anonymous, "en"
+        )
+        rows = corpus_bundle(self.anonymous, "en").by_document[
+            str(self.documents["open"].pk)
+        ]
+        return {r["id"]: r["id"] in payload["kept"]["analyses"] for r in rows}
 
     def test_a_value_selected_elsewhere_in_the_corpus_drops_the_analyses_without_it(
         self,

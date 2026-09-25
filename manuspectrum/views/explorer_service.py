@@ -169,6 +169,8 @@ SWATCHES = {
     "orange": "darkorange",
 }
 SWATCH_FACETS = ("colour", "partColour")
+LAZY_FACETS = ("part",)
+PREVIEW_SIZE = 6
 _EMPTY = (None, "", [], {})
 PAGE_SIZES = (10, 25, 50)
 DESCRIPTION_LENGTH = 220
@@ -585,10 +587,12 @@ def corpus_rows(user, language, chains=None):
     projects_of = _links(
         "analysis", "analysis_by_project", readable_nodegroup_ids(user)
     )
-    return _corpus_rows(user, language, visible, chains, projects_of)
+    return _corpus_rows(user, language, visible, chains, projects_of)[0]
 
 
 def _corpus_rows(user, language, visible, chains, projects_of):
+    """``(rows, values)``: the ``corpus_rows`` and, per visible identified
+    material, ``{facet key: set of uris}`` of the characterization facets."""
     memo = _BuildMemo(language)
     analyses = sorted(chains)
     values = Values(
@@ -752,7 +756,7 @@ def _corpus_rows(user, language, visible, chains, projects_of):
                 "text": " ".join(memo.fold(t) for t in texts),
             }
         )
-    return rows
+    return rows, value_sets
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -767,6 +771,8 @@ class CorpusBundle:
     the folded name of each visible document and ``documents`` lists them
     in name order. ``order`` is the analyses-grain sort key of each row.
     ``links`` holds the role maps the payloads follow, keyed by source id.
+    ``characterization_values`` holds, per visible identified material, the
+    uris it carries for each facet of the characterization group.
     """
 
     visible: VisibleSet
@@ -783,6 +789,7 @@ class CorpusBundle:
     folded: dict
     documents: list
     order: dict
+    characterization_values: dict
 
 
 LINK_ROLES = {
@@ -805,7 +812,9 @@ def build_bundle(user, language, visible):
         for name, (slug, alias) in LINK_ROLES.items()
     }
     chains = structure(visible, user, part_of=links["part_of"])
-    rows = _corpus_rows(user, language, visible, chains, links["projects"])
+    rows, characterization_values = _corpus_rows(
+        user, language, visible, chains, links["projects"]
+    )
     by_document = defaultdict(list)
     for row in rows:
         by_document[row["document"]].append(row)
@@ -858,12 +867,16 @@ def build_bundle(user, language, visible):
             )
             for row in rows
         },
+        characterization_values=characterization_values,
     )
 
 
-def corpus_bundle(user, language):
-    """The memoised ``CorpusBundle`` of *user* in *language* (``explorer_memo``)."""
-    return explorer_memo.corpus_bundle(user, language, build_bundle)
+def corpus_bundle(user, language, ticket=None):
+    """The memoised ``CorpusBundle`` of *user* in *language* (``explorer_memo``).
+
+    *ticket* is the ``explorer_memo.ticket`` the caller already read.
+    """
+    return explorer_memo.corpus_bundle(user, language, build_bundle, held=ticket)
 
 
 def _unique(refs):
@@ -879,7 +892,7 @@ def parse_filters(query):
     """Filters and page number of a search query; lists come as repeated or comma-separated parameters.
 
     ``size`` is one of ``PAGE_SIZES``, else the first; ``empty`` asks for the
-    documents without analyses; ``document`` scopes the search to one document.
+    documents without analyses.
     """
     filters = {
         key: sorted(
@@ -895,7 +908,6 @@ def parse_filters(query):
     filters["q"] = query.get("q", "").strip()
     filters["grain"] = "documents" if query.get("grain") == "documents" else "analyses"
     filters["empty"] = query.get("empty", "").lower() in ("1", "true", "yes")
-    filters["document"] = query.get("document", "").strip() or None
     try:
         size = int(query.get("size", ""))
     except ValueError:
@@ -976,6 +988,20 @@ def facet_universe(rows):
     }
 
 
+def characterization_wanted(active, skip=None):
+    """``[(facet key, selected uris)]`` of the active facets of the characterization group, *skip* left out."""
+    return [
+        (key, set(active[key]))
+        for key in CHARACTERIZATION_KEYS
+        if key != skip and active[key]
+    ]
+
+
+def meets(values, wanted):
+    """Whether one identified material's ``{facet key: uris}`` carries a selected value of each *wanted* facet."""
+    return all(values[key] & selected for key, selected in wanted)
+
+
 def row_filter(rows, query, universe=None):
     """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe, carried)``.
 
@@ -999,18 +1025,10 @@ def row_filter(rows, query, universe=None):
     needle = fold(filters["q"])
 
     def meeting(row, skip):
-        wanted = [
-            (key, set(active[key]))
-            for key in CHARACTERIZATION_KEYS
-            if key != skip and active[key]
-        ]
+        wanted = characterization_wanted(active, skip)
         if not wanted:
             return None
-        return [
-            c
-            for c in row["characterizations"]
-            if all(c[key] & values for key, values in wanted)
-        ]
+        return [c for c in row["characterizations"] if meets(c, wanted)]
 
     def keep(row, skip=None):
         for key in FACET_KEYS:
@@ -1036,72 +1054,103 @@ def row_filter(rows, query, universe=None):
     return keep, active, filters, page, needle, universe, carried
 
 
-def search_payload(query, user, language):
+def facet_entry(key, rows, active, counted, labels, marks, swatches, offered):
+    """One ``Facet`` over *rows*: the values of *offered* with a count and the selected ones.
+
+    Counts are "open to the other selections" (``counted``, the ``carried`` of
+    ``row_filter``). A selected value is listed at count 0 when no row counts
+    for it. Values are in label order, years in numeric order; ``total`` is
+    the number of values.
+    """
+    counts = Counter(v for row in rows for v in counted(row, key))
+    values = [
+        {
+            "id": v,
+            "label": labels[key][v],
+            "count": counts[v],
+            "mark": marks.get(v) if key == "technique" else None,
+            "swatch": swatches.get(v) if key in SWATCH_FACETS else None,
+        }
+        for v in offered | set(active[key])
+        if counts[v] > 0 or v in active[key]
+    ]
+    values.sort(
+        key=(
+            (lambda item: item["id"])
+            if key == "year"
+            else (lambda item: (fold(item["label"]["value"]), item["id"]))
+        )
+    )
+    return {"key": key, "group": GROUP_OF[key], "values": values, "total": len(values)}
+
+
+def preview(facet, active):
+    """*facet* cut to its first ``PREVIEW_SIZE`` values plus the selected ones; ``total`` keeps the full count."""
+    selected = set(active[facet["key"]])
+    return {
+        **facet,
+        "values": [
+            value
+            for index, value in enumerate(facet["values"])
+            if index < PREVIEW_SIZE or value["id"] in selected
+        ],
+    }
+
+
+def corpus_facets(bundle, rows, active, counted):
+    """The ``Facet`` of every key the visible corpus carries; ``LAZY_FACETS`` come as a ``preview``."""
+    facets = []
+    for key in FACET_KEYS:
+        if not bundle.universe[key]:
+            continue
+        facet = facet_entry(
+            key,
+            rows,
+            active,
+            counted,
+            bundle.labels,
+            bundle.marks,
+            bundle.swatches,
+            bundle.universe[key],
+        )
+        facets.append(preview(facet, active) if key in LAZY_FACETS else facet)
+    return facets
+
+
+def wants_facets(query):
+    """False when the query says ``facets=0``: the client holds the facets of these filters."""
+    return query.get("facets", "") not in ("0", "false", "no")
+
+
+def search_payload(query, user, language, ticket=None):
     """``SearchResponse`` (spec §5): results of one page, open facet counts, unpublished count.
 
     Facet counts are "open to the other selections": OR inside a facet, AND
     across facets. A facet is absent when no value has a count on the whole
     visible set; a selected value that is not in the visible set is ignored
-    without a word.
-
-    With ``document``, rows are those of that document: facets list the
-    values it carries plus the selected ones (count 0 when it lacks them), a
-    facet without values is absent, and the results are its matching
-    analyses whatever the grain. An unknown, hidden or malformed id is a
-    document without rows.
+    without a word. ``facets`` is None with ``facets=0``; a facet of
+    ``LAZY_FACETS`` lists its first ``PREVIEW_SIZE`` values and the selected
+    ones, ``facet_payload`` gives all of them.
 
     In the documents grain, a visible document without any visible analysis
     is listed only with ``empty``, when no facet filter is active and the
     free text is in its name; ``withoutAnalyses`` counts those documents
     whether listed or not (0 in the other cases).
     """
-    bundle = corpus_bundle(user, language)
-    all_rows = bundle.rows
-    keep, active, filters, page, needle, universe, counted = row_filter(
-        all_rows, query, universe=bundle.universe
+    bundle = corpus_bundle(user, language, ticket)
+    rows = bundle.rows
+    keep, active, filters, page, needle, _, counted = row_filter(
+        rows, query, universe=bundle.universe
     )
-    scope = filters["document"]
-    rows = all_rows if scope is None else bundle.by_document.get(scope, [])
-
     matching = [row for row in rows if keep(row)]
-    labels, marks, swatches = bundle.labels, bundle.marks, bundle.swatches
-    facets = []
-    for key in FACET_KEYS:
-        if not universe[key]:
-            continue
-        carried = (
-            universe[key]
-            if scope is None
-            else {v for row in rows for v in _facet_values(row, key)}
-        )
-        counts = Counter(v for row in rows for v in counted(row, key))
-        values = [
-            {
-                "id": v,
-                "label": labels[key][v],
-                "count": counts[v],
-                "selected": v in active[key],
-                "mark": marks.get(v) if key == "technique" else None,
-                "swatch": swatches.get(v) if key in SWATCH_FACETS else None,
-            }
-            for v in carried | set(active[key])
-            if counts[v] > 0 or v in active[key]
-        ]
-        if scope is not None and not values:
-            continue
-        values.sort(
-            key=(
-                (lambda item: item["id"])
-                if key == "year"
-                else (lambda item: (fold(item["label"]["value"]), item["id"]))
-            )
-        )
-        facets.append({"key": key, "group": GROUP_OF[key], "values": values})
+    facets = (
+        corpus_facets(bundle, rows, active, counted) if wants_facets(query) else None
+    )
 
     visible, label_of = bundle.visible, bundle.label_of
     size = filters["size"]
     without_analyses = 0
-    if filters["grain"] == "documents" and scope is None:
+    if filters["grain"] == "documents":
         per_document = Counter(row["document"] for row in matching)
         with_rows = bundle.by_document
         candidates = bundle.documents
@@ -1141,6 +1190,160 @@ def search_payload(query, user, language):
         "facets": facets,
         "unpublishedCount": unpublished,
         "withoutAnalyses": without_analyses,
+    }
+
+
+def facet_payload(key, query, user, language, ticket=None):
+    """``Facet`` *key* over the whole visible corpus under the filters of *query*, every value; None when absent.
+
+    ``find`` narrows the values to those whose folded label holds its folded
+    text, the selected ones kept; ``total`` stays the number of values
+    without it. A key outside ``FACET_KEYS``, or a facet the search would not
+    show (no value on the visible set), is None.
+    """
+    if key not in FACET_KEYS:
+        return None
+    bundle = corpus_bundle(user, language, ticket)
+    if not bundle.universe[key]:
+        return None
+    _, active, *_, counted = row_filter(bundle.rows, query, universe=bundle.universe)
+    facet = facet_entry(
+        key,
+        bundle.rows,
+        active,
+        counted,
+        bundle.labels,
+        bundle.marks,
+        bundle.swatches,
+        bundle.universe[key],
+    )
+    needle = fold(query.get("find", "").strip())
+    if needle:
+        selected = set(active[key])
+        facet["values"] = [
+            value
+            for value in facet["values"]
+            if needle in fold(value["label"]["value"]) or value["id"] in selected
+        ]
+    return facet
+
+
+def document_characterizations(bundle, document_id):
+    """Ids of the visible identified materials observed on *document_id* or on one of its visible parts, sorted."""
+    part_of, objects_of = bundle.links["part_of"], bundle.links["objects"]
+    observed = {document_id} | {
+        c for c in bundle.visible.components if document_id in part_of.get(c, ())
+    }
+    return sorted(
+        c
+        for c in bundle.visible.characterizations
+        if objects_of.get(c, frozenset()) & observed
+    )
+
+
+def match_payload(document_id, query, user, language, ticket=None):
+    """``DocumentMatch``: what the Corpus filters of *query* keep in a visible document; None when not visible.
+
+    ``facets`` list the values the document's analyses carry plus the
+    selected ones (count 0 when it lacks them); a facet without values is
+    absent. ``kept.analyses`` are the document's analyses ``row_filter``
+    keeps, with the facet universe of the whole corpus; ``total`` counts
+    them. ``kept.characterizations`` are its identified materials carrying a
+    selected value of each active facet of the characterization group; the
+    other facets and the free text leave them kept. Grain, page and size are
+    not read.
+    """
+    bundle = corpus_bundle(user, language, ticket)
+    document_id = str(document_id)
+    if document_id not in bundle.visible.documents:
+        return None
+    rows = bundle.by_document.get(document_id, [])
+    keep, active, *_, counted = row_filter(rows, query, universe=bundle.universe)
+    facets = []
+    for key in FACET_KEYS:
+        facet = facet_entry(
+            key,
+            rows,
+            active,
+            counted,
+            bundle.labels,
+            bundle.marks,
+            bundle.swatches,
+            {v for row in rows for v in _facet_values(row, key)},
+        )
+        if facet["values"]:
+            facets.append(facet)
+    kept = sorted(row["id"] for row in rows if keep(row))
+    wanted = characterization_wanted(active)
+    return {
+        "facets": facets,
+        "kept": {
+            "analyses": kept,
+            "characterizations": [
+                c
+                for c in document_characterizations(bundle, document_id)
+                if meets(bundle.characterization_values[c], wanted)
+            ],
+        },
+        "total": len(kept),
+    }
+
+
+_FNV_OFFSET = 0x811C9DC5
+_FNV_PRIME = 0x01000193
+
+
+def day_index(day, count):
+    """Position (from 0) of the document of *day* (``YYYY-MM-DD``) among *count*; None when *count* is 0.
+
+    FNV-1a (32 bits) of the day's characters modulo *count*, the same number
+    as ``dayIndex`` of ``document-of-the-day.ts``.
+    """
+    if count <= 0:
+        return None
+    digest = _FNV_OFFSET
+    for character in day:
+        digest = ((digest ^ ord(character)) * _FNV_PRIME) & 0xFFFFFFFF
+    return digest % count
+
+
+def home_payload(day, user, language, ticket=None):
+    """``HomeResponse``: the explorer home of *day* (a ``YYYY-MM-DD`` string) for the reader.
+
+    ``documentCount`` counts the documents with a visible analysis,
+    ``unpublishedCount`` the unpublished ones among them; ``techniques`` and
+    ``projects`` are the facets of the unfiltered search; ``featured`` is the
+    ``DocumentHit`` at ``day_index`` of those documents in name order, None
+    without any.
+    """
+    bundle = corpus_bundle(user, language, ticket)
+    listed = [d for d in bundle.documents if d in bundle.by_document]
+    _, active, *_, counted = row_filter(
+        bundle.rows, QueryDict(""), universe=bundle.universe
+    )
+    facets = {
+        facet["key"]: facet["values"]
+        for facet in corpus_facets(bundle, bundle.rows, active, counted)
+        if facet["key"] in ("technique", "project")
+    }
+    position = day_index(day, len(listed))
+    featured = None
+    if position is not None:
+        chosen = listed[position]
+        featured = document_hits(
+            [chosen],
+            {chosen: len(bundle.by_document[chosen])},
+            bundle.visible,
+            user,
+            language,
+            bundle.label_of,
+        )[0]
+    return {
+        "documentCount": len(listed),
+        "techniques": facets.get("technique", []),
+        "projects": facets.get("project", []),
+        "featured": featured,
+        "unpublishedCount": sum(1 for d in listed if d in bundle.visible.unpublished),
     }
 
 
@@ -1426,11 +1629,14 @@ def _zone(node, resource_ids, dims, readable):
     return zones
 
 
-def characterization_summaries(ids, visible, user, language, dims, objects_of=None):
+def characterization_summaries(
+    ids, visible, user, language, dims, objects_of=None, analysis_rows=None
+):
     """``CharacterizationSummary`` of the visible identified materials among *ids*.
 
-    *objects_of* is the characterization → objects observed map the caller
-    already holds.
+    ``evidence`` names each visible analysis cited, in id order. *objects_of*
+    is the characterization → objects observed map the caller already holds,
+    *analysis_rows* the corpus rows by analysis id, whose names it reuses.
     """
     ids = sorted(i for i in ids if i in visible.characterizations)
     if not ids:
@@ -1463,13 +1669,17 @@ def characterization_summaries(ids, visible, user, language, dims, objects_of=No
     authors_of = {c: _resource_refs(values.get(c, "ch_authors")) for c in ids}
     shown_authors = set(linkable({a for v in authors_of.values() for a in v}, user))
     authors = {c: sorted(authors_of[c] & shown_authors) for c in ids}
+    rows = analysis_rows or {}
+    cited = {a for c in ids for a in visible.evidence.get(c, ())}
     label_of = names(
         set(ids)
         | {o for v in objects.values() for o in v}
-        | {a for v in authors.values() for a in v},
+        | {a for v in authors.values() for a in v}
+        | {a for a in cited if a not in rows},
         language,
         user,
     )
+    label_of.update({a: rows[a]["name"] for a in cited if a in rows})
     slug_of = model_of(
         {o for v in objects.values() for o in v}
         | {a for v in authors.values() for a in v}
@@ -1553,7 +1763,9 @@ def characterization_summaries(ids, visible, user, language, dims, objects_of=No
                 ),
                 "elements": elements,
                 "zone": zone,
-                "evidence": list(visible.evidence.get(c, ())),
+                "evidence": [
+                    {"id": a, "name": label_of[a]} for a in visible.evidence.get(c, ())
+                ],
                 "note": (
                     {"html": clean_html(note_text["value"]), "lang": note_text["lang"]}
                     if note_text
@@ -1617,71 +1829,59 @@ def sample_summaries(analyses, visible, user, language, dims, sample_of=None):
     ]
 
 
-def document_payload(document_id, user, language, query=None):
-    """``DocumentPayload`` of a visible document; None when it is unknown or not visible.
+def document_payload(document_id, user, language, ticket=None):
+    """``DocumentPayload`` of a visible document, the same whatever the filters; None when it is unknown or not visible.
 
-    *query* carries the Corpus filters; each analysis says whether they keep
-    it (``match``), by the rule of the search.
+    ``techniques`` holds each technique of its analyses by uri; each analysis
+    names its technique by that uri and lists its zones, each on a canvas
+    given by its position in ``canvases``. A zone on a canvas the manifest
+    does not list is left out; an analysis without zones is not located on
+    a page. ``document_match`` says what the filters keep.
     """
-    bundle = corpus_bundle(user, language)
+    bundle = corpus_bundle(user, language, ticket)
     visible = bundle.visible
     document_id = str(document_id)
     if document_id not in visible.documents:
         return None
-    analyses = sorted(a for a, (d, _) in bundle.chains.items() if d == document_id)
+    rows = bundle.by_document.get(document_id, [])
     readable = readable_nodegroup_ids(user)
-    part_of = bundle.links["part_of"]
-    components = {c for c in visible.components if document_id in part_of.get(c, ())}
     values = Values([document_id], ["doc_name", "doc_manifest", "doc_owner"], user)
     manifest_url = (
         rewrite_legacy_url(values.first(document_id, "doc_manifest") or "") or None
     )
     canvases = canvases_of(manifest_json(manifest_url)) if manifest_url else []
     dims = canvas_index(canvases)
-    own_rows = bundle.by_document.get(document_id, [])
-    keep, *_ = row_filter(own_rows, query or QueryDict(""), universe=bundle.universe)
-    rows = {r["id"]: r for r in own_rows}
-    annotations = []
-    for analysis, feature_id, canvas, shape in _annotations(
-        role_node(*ROLES["zone"]), analyses, dims, readable
+    position = {canvas["id"]: index for index, canvas in enumerate(canvases)}
+    zones = defaultdict(list)
+    for analysis, _, canvas, shape in _annotations(
+        role_node(*ROLES["zone"]), [row["id"] for row in rows], dims, readable
     ):
-        row = rows.get(analysis)
-        if row is None:
-            continue
-        annotations.append(
+        if canvas in position:
+            zones[analysis].append({"canvas": position[canvas], "shape": shape})
+    techniques = {}
+    analyses = []
+    for row in rows:
+        technique = row["technique"]
+        if technique:
+            techniques.setdefault(technique["uri"], technique)
+        analyses.append(
             {
-                "key": f"an:{analysis}:{feature_id}",
-                "analysis": analysis,
+                "id": row["id"],
                 "name": row["name"],
-                "canvas": canvas,
-                "shape": shape,
-                "technique": row["technique"],
+                "technique": technique["uri"] if technique else None,
                 "dataKind": (row["dataKinds"] or ["file"])[0],
                 "unpublished": row["unpublished"],
-                "match": keep(row),
+                "zones": zones.get(row["id"], []),
             }
         )
-    located = {a["analysis"] for a in annotations}
-    unlocated = [
-        {
-            "analysis": a,
-            "name": rows[a]["name"],
-            "technique": rows[a]["technique"],
-            "dataKind": (rows[a]["dataKinds"] or ["file"])[0],
-            "unpublished": rows[a]["unpublished"],
-            "match": keep(rows[a]),
-        }
-        for a in analyses
-        if a in rows and a not in located
-    ]
-    objects_of = bundle.links["objects"]
-    related = [
-        c
-        for c in visible.characterizations
-        if objects_of.get(c, frozenset()) & ({document_id} | components)
-    ]
     summaries = characterization_summaries(
-        related, visible, user, language, dims, objects_of=objects_of
+        document_characterizations(bundle, document_id),
+        visible,
+        user,
+        language,
+        dims,
+        objects_of=bundle.links["objects"],
+        analysis_rows=bundle.by_id,
     )
     shown = set(linkable(_resource_refs(values.get(document_id, "doc_owner")), user))
     owners = [
@@ -1691,7 +1891,9 @@ def document_payload(document_id, user, language, query=None):
     ]
     label_of = names({document_id} | set(owners[:1]), language, user)
     per_canvas = Counter(
-        a["canvas"] for a in {a["analysis"]: a for a in annotations}.values()
+        zone["canvas"]
+        for entry in analyses
+        for zone in {z["canvas"]: z for z in entry["zones"]}.values()
     )
     per_canvas_char = Counter(s["zone"]["canvas"] for s in summaries if s["zone"])
     return {
@@ -1702,21 +1904,26 @@ def document_payload(document_id, user, language, query=None):
         "canvases": [
             {
                 **c,
-                "analysisCount": per_canvas[c["id"]],
+                "analysisCount": per_canvas[index],
                 "characterizationCount": per_canvas_char[c["id"]],
             }
-            for c in canvases
+            for index, c in enumerate(canvases)
         ],
-        "annotations": annotations,
+        "techniques": techniques,
+        "analyses": analyses,
         "characterizations": summaries,
         "history": [],
-        "unpublishedCount": sum(1 for a in analyses if a in visible.unpublished)
+        "unpublishedCount": sum(1 for row in rows if row["unpublished"])
         + sum(1 for s in summaries if s["unpublished"]),
         "unpublished": document_id in visible.unpublished,
         "certaintyScale": certainty_scale(language),
-        "unlocated": unlocated,
         "samples": sample_summaries(
-            analyses, visible, user, language, dims, sample_of=bundle.links["samples"]
+            [row["id"] for row in rows],
+            visible,
+            user,
+            language,
+            dims,
+            sample_of=bundle.links["samples"],
         ),
     }
 
@@ -1888,7 +2095,12 @@ def analysis_payload(analysis_id, user, language):
         | set(row["operators"])
         | set(instruments[:1])
     )
-    label_of = names(ids, language, user)
+    cited_by = sorted(
+        c
+        for c, cited in visible.evidence.items()
+        if analysis_id in cited and c in visible.characterizations
+    )
+    label_of = names(ids | set(cited_by), language, user)
     slug_of = model_of(ids)
     ref = lambda rid: {"id": rid, "model": slug_of.get(rid, ""), "name": label_of[rid]}
     type_node, content_node = values.node("statement_type"), values.node(
@@ -1903,14 +2115,6 @@ def analysis_payload(analysis_id, user, language):
         )
         if content_node
         else []
-    )
-    evidence_of = characterization_summaries(
-        [c for c, cited in visible.evidence.items() if analysis_id in cited],
-        visible,
-        user,
-        language,
-        {},
-        objects_of=links["objects"],
     )
     end = values.first(analysis_id, "end")
     return {
@@ -1929,7 +2133,7 @@ def analysis_payload(analysis_id, user, language):
         "sample": ref(samples[0]) if samples else None,
         "files": analysis_files(analysis_id, user, language),
         "conditions": conditions,
-        "evidenceOf": evidence_of,
+        "evidenceOf": [{"id": c, "name": label_of[c]} for c in cited_by],
         "dataset": dataset_of(values.first(analysis_id, "dataset")),
         "bibliography": [
             t
@@ -1989,7 +2193,13 @@ def items_payload(keys, user, language):
     summary_of = {
         s["id"]: s
         for s in characterization_summaries(
-            ch_ids, visible, user, language, {}, objects_of=bundle.links["objects"]
+            ch_ids,
+            visible,
+            user,
+            language,
+            {},
+            objects_of=bundle.links["objects"],
+            analysis_rows=rows,
         )
     }
     file_ids = sorted(

@@ -26,12 +26,14 @@ import gc
 import threading
 from collections import OrderedDict
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 from django.core.cache import cache
 
 from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.data_version import data_version
 from manuspectrum.utils.public_visibility import (
+    VisibleSet,
     explorer_scope,
     permission_epoch,
     visible_set,
@@ -52,13 +54,37 @@ def bundle_key(scope, language, version, epoch, digest):
     return stable_cache_key("explorer-bundle", scope, language, version, epoch, digest)
 
 
-def corpus_bundle(user, language, build):
-    """The bundle of *user* in *language*; ``build(user, language, visible)`` makes a missing one."""
+@dataclass(frozen=True)
+class Ticket:
+    """What names the bundle of one reader in one language: its key, read before any memo."""
+
+    key: str
+    scope: str
+    language: str
+    visible: VisibleSet
+
+
+def ticket(user, language):
+    """The ``Ticket`` of *user* in *language*: data version and visible set read once."""
     version = data_version()
     visible = visible_set(user, version=version)
     scope = explorer_scope(user)
     key = bundle_key(scope, language, version, permission_epoch(), visible.digest)
-    return remember(key, scope, language, lambda: build(user, language, visible))
+    return Ticket(key=key, scope=scope, language=language, visible=visible)
+
+
+def corpus_bundle(user, language, build, held=None):
+    """The bundle of *user* in *language*; ``build(user, language, visible)`` makes a missing one.
+
+    *held* is the ``ticket`` the caller already read for this request.
+    """
+    held = held or ticket(user, language)
+    return remember(
+        held.key,
+        held.scope,
+        language,
+        lambda: build(user, language, held.visible),
+    )
 
 
 def remember(key, scope, language, build):

@@ -7,21 +7,16 @@ import CharacterizationCard from "@/manuspectrum/pages/AnalysisExplorer/views/Co
 
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
-    analysisPayload,
     characterization,
-    fileEntry,
     label,
     uuid,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
-import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
-import type { CharacterizationSummary } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
-    generateArchesURL: (_route: string, params: Record<string, string>) =>
-        `/en/api/explorer/analysis/${params.resourceid}`,
-}));
+import type {
+    CharacterizationSummary,
+    NamedRef,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 const SCALE = {
     levels: [0, 1, 2, 3].map((rank) => ({
@@ -33,32 +28,20 @@ const SCALE = {
     })),
 };
 
-function analysisWith(id: string, withData: boolean) {
-    return analysisPayload({
-        id,
-        name: label(`Analysis ${id.slice(-3)}`),
-        files: withData
-            ? [fileEntry({ id: uuid(800 + Number(id.slice(-3))) })]
-            : [],
-    });
+function evidenceOf(ids: string[]): NamedRef[] {
+    return ids.map((id) => ({ id, name: label(`Analysis ${id.slice(-3)}`) }));
 }
 
 function mountCard(
     evidence: string[],
-    responses: Record<string, unknown>,
-    status = 200,
     overrides: Partial<CharacterizationSummary> = {},
 ) {
-    vi.stubGlobal(
-        "fetch",
-        vi.fn(async (url: string) =>
-            jsonResponse(responses[url.split("/").pop()!] ?? {}, status),
-        ),
-    );
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     const pinia = createPinia();
     setActivePinia(pinia);
     const summary = characterization(1, {
-        evidence,
+        evidence: evidenceOf(evidence),
         materials: [
             {
                 value: valueRef("m:vermilion", "Vermilion"),
@@ -73,14 +56,14 @@ function mountCard(
         props: { summary, scale: SCALE },
         global: { plugins: [pinia] },
     });
-    return { wrapper, store: useExplorerStore(), summary };
+    return { wrapper, store: useExplorerStore(), summary, fetchMock };
 }
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("CharacterizationCard", () => {
     it("writes each material with its degree of certainty in words", async () => {
-        const { wrapper } = mountCard([], {});
+        const { wrapper } = mountCard([]);
         expect(wrapper.find(".materials").text()).toContain("Vermilion");
         expect(wrapper.find(".materials").text()).toContain("Reliable");
         expect(wrapper.find(".scale").text()).toContain("Uncertain");
@@ -88,14 +71,14 @@ describe("CharacterizationCard", () => {
     });
 
     it("marks on the scale the level of this identification", () => {
-        const { wrapper } = mountCard([], {});
+        const { wrapper } = mountCard([]);
         const current = wrapper.findAll(".scale li[aria-current='true']");
         expect(current).toHaveLength(1);
         expect(current[0].text()).toContain("Reliable");
     });
 
     it("names an element group as the elements of its level", () => {
-        const { wrapper } = mountCard([], {}, 200, {
+        const { wrapper } = mountCard([], {
             elements: [
                 {
                     level: { ...valueRef("l:major", "major"), rank: 0 },
@@ -107,9 +90,7 @@ describe("CharacterizationCard", () => {
     });
 
     it("lists the evidence analyses by name and opens one", async () => {
-        const { wrapper, store } = mountCard([uuid(101)], {
-            [uuid(101)]: analysisWith(uuid(101), true),
-        });
+        const { wrapper, store } = mountCard([uuid(101)]);
         await flushPromises();
         const item = wrapper.find(".evidence button");
         expect(item.text()).toContain("Analysis 101");
@@ -118,10 +99,7 @@ describe("CharacterizationCard", () => {
     });
 
     it("adds the material and every evidence analysis in one step, those without data too", async () => {
-        const { wrapper, store, summary } = mountCard([uuid(101), uuid(102)], {
-            [uuid(101)]: analysisWith(uuid(101), true),
-            [uuid(102)]: analysisWith(uuid(102), false),
-        });
+        const { wrapper, store, summary } = mountCard([uuid(101), uuid(102)]);
         await flushPromises();
         await wrapper.find(".with-evidence button").trigger("click");
         expect(store.basket.map((item) => item.key)).toEqual([
@@ -133,9 +111,7 @@ describe("CharacterizationCard", () => {
     });
 
     it("refuses the batch when it does not fit", async () => {
-        const { wrapper, store } = mountCard([uuid(101)], {
-            [uuid(101)]: analysisWith(uuid(101), true),
-        });
+        const { wrapper, store } = mountCard([uuid(101)]);
         store.addManyToBasket(
             Array.from({ length: 29 }, (_, n) => `an:${uuid(300 + n)}:-`),
         );
@@ -146,18 +122,17 @@ describe("CharacterizationCard", () => {
         expect(store.basket).toHaveLength(29);
     });
 
-    it("adds its evidence even when the analyses cannot be read", async () => {
-        const { wrapper, store, summary } = mountCard([uuid(101)], {}, 503);
+    it("names its evidence without reading the analyses", async () => {
+        const { wrapper, fetchMock } = mountCard([uuid(101), uuid(102)]);
         await flushPromises();
-        await wrapper.find(".with-evidence button").trigger("click");
-        expect(store.basket.map((item) => item.key)).toEqual([
-            `ch:${summary.id}:-`,
-            `an:${uuid(101)}:-`,
-        ]);
+        expect(
+            wrapper.findAll(".evidence button").map((item) => item.text()),
+        ).toEqual(["Analysis 101", "Analysis 102"]);
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("links a web source and writes an unsafe one as plain text", () => {
-        const { wrapper } = mountCard([], {}, 200, {
+        const { wrapper } = mountCard([], {
             sources: [
                 {
                     title: label("Web page"),
@@ -174,25 +149,20 @@ describe("CharacterizationCard", () => {
     });
 
     it("asks to be closed", async () => {
-        const { wrapper } = mountCard([], {});
+        const { wrapper } = mountCard([]);
         await wrapper.find(".card-head .close").trigger("click");
         expect(wrapper.emitted("close")).toHaveLength(1);
     });
 
-    it("offers no evidence of the previous material while the next one's loads", async () => {
-        const { wrapper, store } = mountCard([uuid(101)], {
-            [uuid(101)]: analysisWith(uuid(101), true),
-        });
-        await flushPromises();
-        vi.stubGlobal(
-            "fetch",
-            vi.fn(() => new Promise(() => undefined)),
-        );
+    it("offers the evidence of the material it shows, not the previous one's", async () => {
+        const { wrapper, store } = mountCard([uuid(101)]);
         await wrapper.setProps({
-            summary: characterization(2, { evidence: [uuid(102)] }),
+            summary: characterization(2, {
+                evidence: evidenceOf([uuid(102)]),
+            }),
         });
-        await flushPromises();
         expect(wrapper.find(".evidence").text()).not.toContain("Analysis 101");
+        expect(wrapper.find(".evidence").text()).toContain("Analysis 102");
         await wrapper.find(".with-evidence button").trigger("click");
         expect(store.basket.map((item) => item.key)).toContain(
             `an:${uuid(102)}:-`,

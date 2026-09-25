@@ -1,9 +1,10 @@
 import type {
     AnalysisHit,
     AnalysisPayload,
-    Annotation,
     CharacterizationSummary,
+    DocumentAnalysis,
     DocumentHit,
+    DocumentMatch,
     DocumentPayload,
     Facet,
     FacetValue,
@@ -13,6 +14,10 @@ import type {
     Technique,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    Annotation,
+    UnlocatedAnalysis,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 
 export function uuid(n: number): string {
     return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -90,7 +95,6 @@ export function facetValue(
         id,
         label: label(text),
         count: 1,
-        selected: false,
         mark: null,
         swatch: null,
         ...overrides,
@@ -106,13 +110,13 @@ export function facet(key: Facet["key"], count: number): Facet {
             id: `${key}-${n}`,
             label: label(`${key} ${n}`),
             count: n + 1,
-            selected: false,
             mark:
                 key === "technique"
                     ? { code: `T${n}`, colour: n + 1, family: `${key}-${n}` }
                     : null,
             swatch: null,
         })),
+        total: count,
     };
 }
 
@@ -155,15 +159,89 @@ export function documentPayload(
                 characterizationCount: 0,
             },
         ],
-        annotations: [],
+        techniques: {},
+        analyses: [],
         characterizations: [],
         history: [],
         unpublishedCount: 0,
         unpublished: false,
         certaintyScale: { levels: [] },
-        unlocated: [],
         samples: [],
         ...overrides,
+    };
+}
+
+export function documentMatch(
+    overrides: Partial<DocumentMatch> = {},
+): DocumentMatch {
+    return {
+        facets: [],
+        kept: { analyses: [], characterizations: [] },
+        total: 0,
+        ...overrides,
+    };
+}
+
+export interface DocumentShown extends Partial<DocumentPayload> {
+    /** Zones drawn on the pages; their canvases must be canvases of the payload. */
+    annotations?: Annotation[];
+    unlocated?: UnlocatedAnalysis[];
+    /** Identified materials the filters do not keep. */
+    dimmed?: string[];
+    facets?: Facet[];
+}
+
+/**
+ * The document payload and the match the server sends for a document that
+ * shows `annotations` and `unlocated` (in the order of their analyses' first
+ * entry), each analysis kept when its entries match.
+ */
+export function documentResponses({
+    annotations = [],
+    unlocated = [],
+    dimmed = [],
+    facets = [],
+    ...overrides
+}: DocumentShown = {}): { payload: DocumentPayload; match: DocumentMatch } {
+    const payload = documentPayload(overrides);
+    const analyses = new Map<string, DocumentAnalysis>();
+    const techniques: Record<string, Technique> = {};
+    const kept = new Set<string>();
+    for (const entry of [...annotations, ...unlocated]) {
+        if (entry.technique) techniques[entry.technique.uri] = entry.technique;
+        if (entry.match) kept.add(entry.analysis);
+        if (!analyses.has(entry.analysis)) {
+            analyses.set(entry.analysis, {
+                id: entry.analysis,
+                name: entry.name,
+                technique: entry.technique?.uri ?? null,
+                dataKind: entry.dataKind,
+                unpublished: entry.unpublished,
+                zones: [],
+            });
+        }
+    }
+    for (const entry of annotations) {
+        const canvas = payload.canvases.findIndex(
+            (candidate) => candidate.id === entry.canvas,
+        );
+        if (canvas < 0) throw new Error(`no canvas ${entry.canvas}`);
+        analyses
+            .get(entry.analysis)!
+            .zones.push({ canvas, shape: entry.shape });
+    }
+    return {
+        payload: { ...payload, techniques, analyses: [...analyses.values()] },
+        match: documentMatch({
+            facets,
+            kept: {
+                analyses: [...kept],
+                characterizations: payload.characterizations
+                    .map((summary) => summary.id)
+                    .filter((id) => !dimmed.includes(id)),
+            },
+            total: kept.size,
+        }),
     };
 }
 

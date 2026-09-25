@@ -70,12 +70,12 @@ const featuredLoading = computed(
 );
 const techniques = computed<FacetValue[]>(
     () =>
-        overview.data.value?.facets.find((facet) => facet.key === "technique")
+        overview.data.value?.facets?.find((facet) => facet.key === "technique")
             ?.values ?? [],
 );
 const projects = computed<FacetValue[]>(
     () =>
-        overview.data.value?.facets.find((facet) => facet.key === "project")
+        overview.data.value?.facets?.find((facet) => facet.key === "project")
             ?.values ?? [],
 );
 const firstLoad = computed(

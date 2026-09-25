@@ -5,6 +5,9 @@ import type { Series } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts"
 export type ExplorerRoute =
     | "manuspectrum:explorer-search"
     | "manuspectrum:explorer-document"
+    | "manuspectrum:explorer-document-match"
+    | "manuspectrum:explorer-facet"
+    | "manuspectrum:explorer-home"
     | "manuspectrum:explorer-analysis"
     | "manuspectrum:explorer-items";
 
