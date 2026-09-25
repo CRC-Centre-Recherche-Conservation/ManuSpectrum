@@ -374,6 +374,60 @@ class DocumentRouteTests(CorpusCase):
             str(vermilion.pk), {s["id"] for s in payload["characterizations"]}
         )
 
+    def test_a_sample_used_by_an_analysis_of_the_document_is_listed_with_its_zone(
+        self,
+    ):
+        self.tile(
+            self.samples["s1"],
+            "location_in_object_of_sampling_taking",
+            self.annotation_value(
+                CANVAS,
+                {
+                    "type": "Polygon",
+                    "coordinates": [[[10, -20], [30, -20], [30, -40], [10, -20]]],
+                },
+            ),
+        )
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertEqual(
+            [s["id"] for s in payload["samples"]], [str(self.samples["s1"].pk)]
+        )
+        sample = payload["samples"][0]
+        assert_shape(self, sample, "SampleSummary")
+        self.assertEqual(sample["name"]["value"], "S1")
+        self.assertEqual(sample["zone"]["canvas"], CANVAS)
+        self.assertEqual(sample["zone"]["shape"]["type"], "polygon")
+        self.assertEqual(sample["analyses"], [str(self.analyses["open"].pk)])
+        self.assertIs(sample["unpublished"], False)
+
+    def test_a_sample_of_a_hidden_analysis_is_not_listed(self):
+        hidden = self.new_resource("analysis", "X04 — f. 1v, embargoed")
+        self.tile(hidden, "component_observed", self.refs(self.components["open"]))
+        s2 = self.new_resource("sample", "S2")
+        self.tile(hidden, "sample_used", self.refs(s2))
+        self.embargo(hidden)
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertNotIn(str(s2.pk), {s["id"] for s in payload["samples"]})
+        self.assertNotIn("S2", str(payload["samples"]))
+
+    def test_a_sample_zone_naming_the_image_service_lands_on_its_canvas(self):
+        self.tile(
+            self.samples["s1"],
+            "location_in_object_of_sampling_taking",
+            self.annotation_value(
+                "https://example.org/iiif/image/f1v",
+                {"type": "Point", "coordinates": [10, -20]},
+            ),
+        )
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertEqual([s["zone"]["canvas"] for s in payload["samples"]], [CANVAS])
+
     def test_an_embargoed_document_answers_like_an_unknown_one(self):
         self.embargo(self.documents["embargoed"])
 

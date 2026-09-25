@@ -100,6 +100,14 @@ export interface UnlocatedAnalysis {
     match: boolean;
 }
 
+export interface SampleSummary {
+    id: string;
+    name: Label;
+    zone: { canvas: string; shape: Shape } | null;
+    analyses: string[];
+    unpublished: boolean;
+}
+
 export interface HistoryLine {
     type: EventType;
     place: Label | null;
@@ -152,6 +160,7 @@ export interface DocumentPayload {
     unpublished: boolean;
     certaintyScale: CertaintyScale;
     unlocated: UnlocatedAnalysis[];
+    samples: SampleSummary[];
 }
 
 export interface FileLayer {
@@ -318,6 +327,7 @@ export const SHAPE_KEYS = {
         unpublished: true,
         certaintyScale: true,
         unlocated: true,
+        samples: true,
     } satisfies Record<keyof DocumentPayload, true>,
     Annotation: {
         key: true,
@@ -330,6 +340,13 @@ export const SHAPE_KEYS = {
         unpublished: true,
         match: true,
     } satisfies Record<keyof Annotation, true>,
+    SampleSummary: {
+        id: true,
+        name: true,
+        zone: true,
+        analyses: true,
+        unpublished: true,
+    } satisfies Record<keyof SampleSummary, true>,
     UnlocatedAnalysis: {
         analysis: true,
         name: true,

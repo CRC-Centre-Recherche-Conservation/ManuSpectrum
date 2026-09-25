@@ -7,6 +7,7 @@ import type {
     DocumentPayload,
     Facet,
     FileEntry,
+    SampleSummary,
     SearchResponse,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -120,6 +121,7 @@ export function documentPayload(
         unpublished: false,
         certaintyScale: { levels: [] },
         unlocated: [],
+        samples: [],
         ...overrides,
     };
 }
@@ -142,6 +144,23 @@ export function annotation(
         dataKind: "xy",
         unpublished: false,
         match: true,
+        ...overrides,
+    };
+}
+
+export function sample(
+    n: number,
+    overrides: Partial<SampleSummary> = {},
+): SampleSummary {
+    return {
+        id: uuid(600 + n),
+        name: label(`Sample ${n}`),
+        zone: {
+            canvas: "https://iiif.example/c1",
+            shape: { type: "rect", x: 40 * n, y: 60 * n, w: 20, h: 10 },
+        },
+        analyses: [],
+        unpublished: false,
         ...overrides,
     };
 }

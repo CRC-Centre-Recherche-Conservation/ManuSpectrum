@@ -79,6 +79,7 @@ ROLES = {
     "ch_start": ("characterization", "inference_making_start_date"),
     "ch_end": ("characterization", "inference_making_end_date"),
     "ch_source": ("characterization", "source_of_statement"),
+    "sample_zone": ("sample", "location_in_object_of_sampling_taking"),
 }
 FACET_KEYS = (
     "project",
@@ -961,6 +962,35 @@ def characterization_summaries(ids, visible, user, language, dims):
     return summaries
 
 
+def sample_summaries(analyses, visible, user, language, dims):
+    """``SampleSummary`` of the visible samples used by *analyses*, sorted by id.
+
+    *analyses* are the visible analyses of one document; each sample lists
+    those that used it. The zone is the first annotation feature of the
+    sample zone, resolved through the ``canvas_index`` *dims*.
+    """
+    readable = readable_nodegroup_ids(user)
+    sample_of = _links("analysis", "sample_used", readable)
+    used_by = defaultdict(set)
+    for analysis in analyses:
+        for sample in sample_of[analysis]:
+            if sample in visible.samples:
+                used_by[sample].add(analysis)
+    ids = sorted(used_by)
+    label_of = names(ids, language, user)
+    zones = _zone(role_node(*ROLES["sample_zone"]), ids, dims, readable)
+    return [
+        {
+            "id": s,
+            "name": label_of[s],
+            "zone": zones.get(s),
+            "analyses": sorted(used_by[s]),
+            "unpublished": s in visible.unpublished,
+        }
+        for s in ids
+    ]
+
+
 def document_payload(document_id, user, language, query=None):
     """``DocumentPayload`` of a visible document; None when it is unknown or not visible.
 
@@ -1057,6 +1087,7 @@ def document_payload(document_id, user, language, query=None):
         "unpublished": document_id in visible.unpublished,
         "certaintyScale": certainty_scale(language),
         "unlocated": unlocated,
+        "samples": sample_summaries(analyses, visible, user, language, dims),
     }
 
 

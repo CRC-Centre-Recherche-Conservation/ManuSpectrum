@@ -65,6 +65,7 @@ SHAPES = {
         "unpublished": bool,
         "certaintyScale": dict,
         "unlocated": list,
+        "samples": list,
     },
     "Annotation": {
         "key": str,
@@ -76,6 +77,13 @@ SHAPES = {
         "unpublished": bool,
         "match": bool,
         "name": "Label",
+    },
+    "SampleSummary": {
+        "id": str,
+        "name": "Label",
+        "zone": (dict, type(None)),
+        "analyses": list,
+        "unpublished": bool,
     },
     "UnlocatedAnalysis": {
         "analysis": str,
