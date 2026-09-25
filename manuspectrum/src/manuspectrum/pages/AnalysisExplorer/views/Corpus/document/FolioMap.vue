@@ -87,6 +87,7 @@ let cluster: L.MarkerClusterGroup | null = null;
 let frames: L.GeoJSON | null = null;
 let materials: L.GeoJSON | null = null;
 let order: string[] = [];
+let openedGroup: Set<string> | null = null;
 const markers = new Map<string, L.Marker>();
 const targets = new Map<string, L.Marker>();
 const images = new Map<string, L.ImageOverlay>();
@@ -197,7 +198,9 @@ function markerIcon(annotation: Annotation): L.DivIcon {
     });
 }
 
+/** The group's icon host takes no tab stop: the roving `span` inside is the target. */
 function clusterIcon(group: L.MarkerCluster): L.DivIcon {
+    group.options.keyboard = false;
     const count = group.getChildCount();
     const element = document.createElement("span");
     element.dataset.target = `${CLUSTER_PREFIX}${L.stamp(group)}`;
@@ -319,7 +322,7 @@ function drawMarks(): void {
         }
     }
     cluster.addLayers([...markers.values()]);
-    cluster.on("animationend", computeTargets);
+    cluster.on("animationend spiderfied unspiderfied", settleGroups);
     map.addLayer(cluster);
 
     frames = L.geoJSON(frameFeatures, {
@@ -472,13 +475,41 @@ function refreshStates(): void {
 
 function activate(id: string): void {
     if (id.startsWith(CLUSTER_PREFIX)) {
-        (
-            targets.get(id) as unknown as L.MarkerCluster | undefined
-        )?.zoomToBounds();
+        openGroup(id);
         return;
     }
     active.value = id;
     emit("select", { kind: "analysis", id });
+}
+
+/**
+ * Opens a marker group the way a click does: markercluster zooms to it, or
+ * spreads its markers when they stay grouped at the last zoom. The first
+ * target of the group then takes the keyboard focus.
+ */
+function openGroup(id: string): void {
+    const group = targets.get(id) as unknown as L.MarkerCluster | undefined;
+    if (!group || !cluster) return;
+    const children = new Set<L.Marker>(group.getAllChildMarkers());
+    openedGroup = new Set(
+        [...markers]
+            .filter(([, marker]) => children.has(marker))
+            .map(([analysis]) => analysis),
+    );
+    // The group turns a click carrying a cluster into its `clusterclick`.
+    cluster.fire("click", { layer: group });
+}
+
+/** Targets follow markercluster's regrouping; after `openGroup` the first target of the opened group takes the focus. */
+function settleGroups(): void {
+    computeTargets();
+    if (!openedGroup) return;
+    const opened = [...openedGroup];
+    openedGroup = null;
+    const first = order.find((target) =>
+        opened.some((analysis) => visibleTargetOf(analysis) === target),
+    );
+    if (first) moveTo(first);
 }
 
 function moveTo(id: string): void {

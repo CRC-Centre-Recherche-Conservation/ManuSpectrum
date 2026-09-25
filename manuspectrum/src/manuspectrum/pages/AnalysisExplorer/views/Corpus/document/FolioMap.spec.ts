@@ -377,4 +377,79 @@ describe("FolioMap", () => {
             wrapper.unmount();
         });
     });
+
+    describe("with marker groups", () => {
+        const NEAR = [
+            annotation(1, { shape: { type: "point", x: 100, y: 100 } }),
+            annotation(2, { shape: { type: "point", x: 300, y: 100 } }),
+        ];
+        const SAME_SPOT = [
+            annotation(1, { shape: { type: "point", x: 100, y: 100 } }),
+            annotation(2, { shape: { type: "point", x: 100, y: 100 } }),
+        ];
+        /** markercluster animates its regrouping with timeouts (jsdom has CSS transitions). */
+        async function afterRegrouping(): Promise<void> {
+            await vi.advanceTimersByTimeAsync(1000);
+            await flushPromises();
+        }
+
+        beforeEach(() => {
+            vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        const NO_IMAGE = {
+            ...canvasWithImage(),
+            image: { service: null, url: null, width: 1, height: 1 },
+        };
+
+        it("keeps the folio a single tab stop when markers are grouped", async () => {
+            const wrapper = mountFolio({ annotations: NEAR });
+            await flushPromises();
+            expect(wrapper.find(".folio-cluster").exists()).toBe(true);
+            expect(wrapper.findAll('.folio [tabindex="0"]')).toHaveLength(1);
+            wrapper.unmount();
+        });
+
+        it("zooms into a group from the keyboard and focuses its first marker", async () => {
+            const wrapper = mountFolio({ annotations: NEAR });
+            await afterRegrouping();
+            await wrapper.find(".folio-cluster").trigger("keydown", {
+                key: "Enter",
+            });
+            await afterRegrouping();
+            expect(wrapper.find(".folio-cluster").exists()).toBe(false);
+            const focused = document.activeElement as HTMLElement;
+            expect(focused.dataset.target).toBe(uuid(101));
+            expect(focused.tabIndex).toBe(0);
+            wrapper.unmount();
+        });
+
+        it("spreads a group at the last zoom and moves through its markers", async () => {
+            const wrapper = mountFolio({
+                annotations: SAME_SPOT,
+                canvas: NO_IMAGE,
+            });
+            await afterRegrouping();
+            await wrapper.find(".folio-cluster").trigger("keydown", {
+                key: "Enter",
+            });
+            await afterRegrouping();
+            const first = document.activeElement as HTMLElement;
+            expect(first.classList).toContain("folio-marker");
+            first.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "ArrowRight",
+                    bubbles: true,
+                }),
+            );
+            const second = document.activeElement as HTMLElement;
+            expect(second.classList).toContain("folio-marker");
+            expect(second.dataset.target).not.toBe(first.dataset.target);
+            wrapper.unmount();
+        });
+    });
 });
