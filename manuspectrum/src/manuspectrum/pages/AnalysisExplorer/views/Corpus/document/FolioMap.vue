@@ -19,7 +19,10 @@ import {
     shapeCentre,
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
-import { curtainable } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import {
+    curtainable,
+    overlayPane,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     nextId,
     readingOrder,
@@ -380,7 +383,12 @@ function drawMarks(): void {
     computeTargets();
 }
 
-/** Adds, updates and removes the laid layers by key; the curtain clips the one named by `curtain`. */
+/**
+ * Adds, updates and removes the laid layers by key. The curtain clips the one
+ * named by `curtain`; one curtain control lives while a layer is curtained, so
+ * its divider keeps its place when the opacity, the curtained layer or the
+ * document payload changes.
+ */
 function drawOverlays(): void {
     if (!map) return;
     const wanted = new Set(props.overlays.map((overlay) => overlay.key));
@@ -396,6 +404,7 @@ function drawOverlays(): void {
             existing.setOpacity(overlay.opacity);
             existing.setBounds(L.latLngBounds(overlay.bounds));
         } else {
+            const pane = overlayPane(map, overlay.key);
             images.set(
                 overlay.key,
                 curtainable(
@@ -403,17 +412,37 @@ function drawOverlays(): void {
                         opacity: overlay.opacity,
                         className: "folio-overlay",
                         alt: overlay.label,
+                        pane,
                     }).addTo(map),
+                    map.getPane(pane)!,
                 ),
             );
         }
     }
-    sideBySide?.remove();
-    sideBySide = null;
     const under = props.curtain ? images.get(props.curtain) : undefined;
-    if (under) {
-        sideBySide = L.control.sideBySide([], under).addTo(map);
+    if (!under) {
+        sideBySide?.remove();
+        sideBySide = null;
+    } else if (sideBySide) {
+        sideBySide.setRightLayers(under);
+    } else {
+        sideBySide = L.control
+            .sideBySide([], under)
+            .addTo(map)
+            .on("rightlayerremove", unclip);
+        (
+            sideBySide as L.SideBySide & { _range?: HTMLElement }
+        )._range?.setAttribute("aria-label", $gettext("Curtain position"));
     }
+}
+
+/** A layer that leaves the curtain keeps no clip: its pane may be laid again without it. */
+function unclip(event: L.LeafletEvent): void {
+    const { layer } = event as L.LeafletEvent & {
+        layer: { getContainer?: () => HTMLElement | undefined };
+    };
+    const container = layer.getContainer?.();
+    if (container) container.style.clip = "";
 }
 
 /** The id of the marker, or of the marker group, that shows an analysis now; null when neither is on the map. */

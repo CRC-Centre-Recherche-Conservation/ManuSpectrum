@@ -6,6 +6,7 @@ import {
     folioOverlays,
     layerImageUrl,
     overlayKey,
+    overlayPane,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     analysisPayload,
@@ -89,16 +90,24 @@ describe("folio overlays", () => {
         expect(result).toEqual([]);
     });
 
-    it("lets leaflet-side-by-side clip an image overlay", () => {
+    it("lets leaflet-side-by-side clip a laid layer through its own pane", () => {
+        const map = L.map(document.createElement("div"));
+        const name = overlayPane(map, `${uuid(101)}:0`);
+        expect(overlayPane(map, `${uuid(101)}:0`)).toBe(name);
+        const pane = map.getPane(name)!;
+        expect(pane.style.zIndex).toBe("400");
         const overlay = curtainable(
             L.imageOverlay("x.png", [
                 [0, 0],
                 [1, 1],
             ]),
+            pane,
         );
         expect(
-            typeof (overlay as unknown as { getContainer: () => unknown })
-                .getContainer,
-        ).toBe("function");
+            (
+                overlay as unknown as { getContainer: () => unknown }
+            ).getContainer(),
+        ).toBe(pane);
+        map.remove();
     });
 });

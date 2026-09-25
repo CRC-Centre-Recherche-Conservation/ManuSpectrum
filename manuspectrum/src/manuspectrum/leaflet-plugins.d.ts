@@ -7,6 +7,12 @@ declare module "leaflet" {
         setLeftLayers(layers: Layer | Layer[]): this;
         setRightLayers(layers: Layer | Layer[]): this;
         getPosition(): number;
+        // The control includes L.Evented: `leftlayeradd`, `rightlayerremove`, `dividermove`…
+        on(
+            type: string,
+            handler: LeafletEventHandlerFn,
+            context?: unknown,
+        ): this;
     }
     namespace control {
         function sideBySide(

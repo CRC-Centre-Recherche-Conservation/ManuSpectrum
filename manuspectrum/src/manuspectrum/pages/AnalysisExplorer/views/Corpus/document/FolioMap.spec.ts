@@ -117,8 +117,10 @@ beforeEach(() => {
     iiif = stubIiifLayer();
     sideBySide = vi.fn(() => ({
         addTo: vi.fn().mockReturnThis(),
+        on: vi.fn().mockReturnThis(),
         remove: vi.fn(),
-        setRightLayers: vi.fn(),
+        setRightLayers: vi.fn().mockReturnThis(),
+        _range: document.createElement("input"),
     }));
     L.control.sideBySide = sideBySide as unknown as typeof L.control.sideBySide;
 });
@@ -449,6 +451,70 @@ describe("FolioMap", () => {
             const second = document.activeElement as HTMLElement;
             expect(second.classList).toContain("folio-marker");
             expect(second.dataset.target).not.toBe(first.dataset.target);
+            wrapper.unmount();
+        });
+    });
+
+    describe("with the curtain", () => {
+        function layerOverlay(key: string, opacity = 0.5) {
+            return {
+                key,
+                url: `https://iiif.example/${key}/full/!2048,2048/0/default.jpg`,
+                bounds: [
+                    [-1, 0],
+                    [0, 2],
+                ] as [[number, number], [number, number]],
+                opacity,
+                label: key,
+            };
+        }
+
+        it("keeps one curtain across opacity changes and layer scrolls", async () => {
+            const wrapper = mountFolio({
+                overlays: [layerOverlay("a:0")],
+                curtain: "a:0",
+            });
+            await flushPromises();
+            await wrapper.setProps({ overlays: [layerOverlay("a:0", 0.8)] });
+            await wrapper.setProps({
+                overlays: [layerOverlay("a:1", 0.8)],
+                curtain: "a:1",
+            });
+            expect(sideBySide).toHaveBeenCalledTimes(1);
+            const control = sideBySide.mock.results[0].value;
+            expect(control.remove).not.toHaveBeenCalled();
+            expect(control.setRightLayers).toHaveBeenCalled();
+            wrapper.unmount();
+        });
+
+        it("clips each laid layer through a pane of its own", async () => {
+            const wrapper = mountFolio({
+                overlays: [layerOverlay("a:0")],
+                curtain: "a:0",
+            });
+            await flushPromises();
+            const image = wrapper.find("img.folio-overlay").element;
+            const pane = image.parentElement!;
+            expect(pane.classList).toContain("leaflet-pane");
+            expect(pane.classList).not.toContain("leaflet-overlay-pane");
+            const [, under] = sideBySide.mock.calls[0] as unknown as [
+                unknown,
+                { getContainer: () => HTMLElement },
+            ];
+            expect(under.getContainer()).toBe(pane);
+            wrapper.unmount();
+        });
+
+        it("names the curtain's range", async () => {
+            const wrapper = mountFolio({
+                overlays: [layerOverlay("a:0")],
+                curtain: "a:0",
+            });
+            await flushPromises();
+            const control = sideBySide.mock.results[0].value;
+            expect(control._range.getAttribute("aria-label")).toBe(
+                "Curtain position",
+            );
             wrapper.unmount();
         });
     });

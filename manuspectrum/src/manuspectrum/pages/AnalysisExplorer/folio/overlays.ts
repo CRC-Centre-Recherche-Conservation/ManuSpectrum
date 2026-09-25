@@ -12,6 +12,8 @@ import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometr
 import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const OVERLAY_SIZE = 2048;
+// Leaflet's own overlay pane level: a laid layer covers the zone outlines, as it did inside that pane.
+const OVERLAY_PANE_Z_INDEX = "400";
 
 export interface FolioOverlay {
     key: string;
@@ -75,12 +77,29 @@ export function folioOverlays(
     return result;
 }
 
-/** leaflet-side-by-side clips `layer.getContainer()`; an image overlay's container is its `<img>`. */
-export function curtainable(layer: L.ImageOverlay): L.ImageOverlay {
+/**
+ * The name of the map pane of one laid layer, created on first use at the level of the
+ * overlay pane. leaflet-side-by-side computes its clip rectangle in layer-pane
+ * coordinates: right for a pane at the layer origin, wrong for an image
+ * overlay's own `<img>`, which sits at the image's top-left corner.
+ */
+export function overlayPane(map: L.Map, key: string): string {
+    const name = `folio-overlay-${key.replace(/[^A-Za-z0-9-]/g, "-")}`;
+    if (!map.getPane(name)) {
+        map.createPane(name).style.zIndex = OVERLAY_PANE_Z_INDEX;
+    }
+    return name;
+}
+
+/** leaflet-side-by-side clips `layer.getContainer()`: a laid layer answers with its own pane. */
+export function curtainable(
+    layer: L.ImageOverlay,
+    pane: HTMLElement,
+): L.ImageOverlay {
     (
         layer as L.ImageOverlay & {
-            getContainer?: () => HTMLElement | undefined;
+            getContainer?: () => HTMLElement;
         }
-    ).getContainer = () => layer.getElement();
+    ).getContainer = () => pane;
     return layer;
 }
