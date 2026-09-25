@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -16,17 +16,32 @@ import type {
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-const props = defineProps<{
-    annotations: Annotation[];
-    unlocated: UnlocatedAnalysis[];
-    characterizations: CharacterizationSummary[];
-    samples: SampleSummary[];
-    styles: Map<string, TechniqueStyle>;
-    view: FolioView;
-}>();
+const SEPARATOR = /\s*[—–-]\s*$/;
+
+/**
+ * What the page shows, listed. A row name drops the page label and the
+ * document name it ends with (`pageLabel`, `documentName`: the screen says
+ * them already). The analyses without a position fold under their count when
+ * the page has analyses of its own.
+ */
+const props = withDefaults(
+    defineProps<{
+        annotations: Annotation[];
+        unlocated: UnlocatedAnalysis[];
+        characterizations: CharacterizationSummary[];
+        samples: SampleSummary[];
+        styles: Map<string, TechniqueStyle>;
+        view: FolioView;
+        pageLabel?: string;
+        documentName?: string;
+    }>(),
+    { pageLabel: "", documentName: "" },
+);
 const emit = defineEmits<{ select: [focus: Focus] }>();
 
-const { $gettext } = useGettext();
+const { $gettext, interpolate } = useGettext();
+
+const unlocatedOpen = ref(props.annotations.length === 0);
 
 /** One entry per analysis (an analysis may have several zones), grouped in the order of the technique styles. */
 const groups = computed(() => {
@@ -59,6 +74,31 @@ const emptyMessage = computed(() => {
         ? $gettext("No published analysis on this page.")
         : null;
 });
+
+const unlocatedTitle = computed(() =>
+    interpolate(
+        $gettext("Without a position on the image (%{n})"),
+        { n: props.unlocated.length },
+        true,
+    ),
+);
+
+/** `name` without a trailing « — page — document » (either part, in that order). */
+function shortName(name: string): string {
+    let text = name.trim();
+    for (const part of [props.documentName, props.pageLabel]) {
+        const suffix = part.trim();
+        if (suffix && text.endsWith(suffix)) {
+            const rest = text.slice(0, -suffix.length);
+            if (SEPARATOR.test(rest)) text = rest.replace(SEPARATOR, "");
+        }
+    }
+    return text || name;
+}
+
+function toggleUnlocated(): void {
+    unlocatedOpen.value = !unlocatedOpen.value;
+}
 
 function select(focus: Focus): void {
     emit("select", focus);
@@ -113,12 +153,13 @@ function select(focus: Focus): void {
                         <button
                             type="button"
                             :data-focus="`analysis:${item.analysis}`"
+                            :title="item.name.value"
                             @click="
                                 select({ kind: 'analysis', id: item.analysis })
                             "
                         >
                             <span :lang="item.name.lang">{{
-                                item.name.value
+                                shortName(item.name.value)
                             }}</span>
                         </button>
                         <span
@@ -207,9 +248,16 @@ function select(focus: Focus): void {
             class="unlocated"
         >
             <h4>
-                <span>{{ $gettext("Without a position on the image") }}</span>
+                <button
+                    type="button"
+                    class="fold"
+                    :aria-expanded="unlocatedOpen ? 'true' : 'false'"
+                    @click="toggleUnlocated"
+                >
+                    <span>{{ unlocatedTitle }}</span>
+                </button>
             </h4>
-            <ul>
+            <ul v-if="unlocatedOpen">
                 <li
                     v-for="item in props.unlocated"
                     :key="item.analysis"
@@ -218,10 +266,11 @@ function select(focus: Focus): void {
                     <button
                         type="button"
                         :data-focus="`unlocated:${item.analysis}`"
+                        :title="item.name.value"
                         @click="select({ kind: 'analysis', id: item.analysis })"
                     >
                         <span :lang="item.name.lang">{{
-                            item.name.value
+                            shortName(item.name.value)
                         }}</span>
                     </button>
                     <span
@@ -362,6 +411,19 @@ function select(focus: Focus): void {
 .on-this-page button:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
+}
+
+.on-this-page .fold {
+    font-weight: 600;
+}
+
+.on-this-page .fold::before {
+    content: "▸" / "";
+    margin-inline-end: 0.375rem;
+}
+
+.on-this-page .fold[aria-expanded="true"]::before {
+    content: "▾" / "";
 }
 
 .on-this-page .draft,

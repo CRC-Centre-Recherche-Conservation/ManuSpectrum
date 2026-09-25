@@ -40,3 +40,17 @@ export const ANNOUNCE_KEY: InjectionKey<(message: string) => void> =
 /** The last results shown; provided by the shell, read back by S1 and by the way back from S2. */
 export const RESULTS_MEMO_KEY: InjectionKey<Ref<ResultsMemo | null>> =
     Symbol("results-memo");
+
+/** What a card knew of an item it added to the Selection, shown until the item is read. */
+export interface SelectionHint {
+    title: Label;
+    /** The kind of item, translated (« spectrum », « map layer »…). */
+    kind: string;
+    /** A part of the title's item, such as a map layer's label. */
+    detail?: string;
+}
+
+/** Hints of the items added to the Selection, by key; provided by the shell. */
+export const SELECTION_HINTS_KEY: InjectionKey<
+    Ref<Map<string, SelectionHint>>
+> = Symbol("selection-hints");

@@ -95,11 +95,43 @@ describe("AnalysisCard", () => {
         expect(wrapper.find(".conditions").text()).toContain("Not provided");
     });
 
-    it("marks the default licence", () => {
+    it("says the project's licence applies when the file states none", () => {
         const file = fileEntry();
         file.license = { ...file.license, isDefault: true };
         const { wrapper } = mountCard(analysisPayload({ files: [file] }));
-        expect(wrapper.find(".licence").text()).toContain("default licence");
+        expect(wrapper.find(".licence").text()).toContain(
+            "Project licence (not stated for this file)",
+        );
+    });
+
+    it("leaves out a condition title that repeats the section's", () => {
+        const single = mountCard(
+            analysisPayload({
+                conditions: [
+                    {
+                        type: valueRef("aat:cond", "conditions"),
+                        html: "<p>40 kV</p>",
+                        lang: "en",
+                    },
+                ],
+            }),
+        ).wrapper;
+        expect(single.find(".conditions dt").exists()).toBe(false);
+        expect(single.find(".conditions").text()).toContain("40 kV");
+    });
+
+    it("names each + Selection by what it adds", () => {
+        const { wrapper } = mountCard(analysisPayload());
+        const head = wrapper.find(".card-head .add-to-selection button");
+        expect(head.text()).toBe("+ Selection");
+        expect(head.attributes("aria-label")).toBe(
+            "Add the analysis MS1_f12_XRF_03 to the Selection",
+        );
+        const row = wrapper.find(".files .add-to-selection button");
+        expect(row.text()).toBe("+ Add this file");
+        expect(row.attributes("aria-label")).toBe(
+            "Add X01_f1v.csv to the Selection",
+        );
     });
 
     it("links a DOI dataset to its resolver and writes an unsafe address as plain text", () => {

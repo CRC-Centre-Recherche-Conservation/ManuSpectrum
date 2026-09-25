@@ -817,6 +817,8 @@ function goHome(): void {
                         :samples="listedSamples"
                         :styles="styles"
                         :view="folioView"
+                        :page-label="currentCanvas?.label ?? ''"
+                        :document-name="data.name.value"
                         @select="onSelect"
                     />
                     <SelectionPanel />

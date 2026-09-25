@@ -7,7 +7,9 @@ import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/U
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
 
+import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import {
+    foldText,
     formatDateRange,
     formatSize,
     safeHref,
@@ -27,6 +29,7 @@ import type {
     Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 interface ConditionGroup {
     title: Label;
@@ -57,7 +60,8 @@ const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
 const store = useExplorerStore();
-const { $gettext } = useGettext();
+const { $gettext, interpolate } = useGettext();
+const { dataKindBadge } = useVocabulary();
 const lang = document.documentElement.lang || "en";
 const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -122,6 +126,27 @@ const conditionGroups = computed<ConditionGroup[]>(() => {
     }
     return [...groups.values()];
 });
+/** A single group whose title the section heading already says (« conditions ») shows no title of its own. */
+const conditionTitleShown = computed(() => {
+    const groups = conditionGroups.value;
+    if (groups.length !== 1) return true;
+    const title = foldText(groups[0].title.value).trim();
+    return !foldText($gettext("Measurement conditions")).includes(title);
+});
+const entryHints = computed(() => {
+    const current = analysis.value;
+    const key = entryKey.value;
+    if (!current || !key) return null;
+    const [prefix, , part] = key.split(":");
+    const file = current.files.find((entry) => entry.id === part);
+    const kind =
+        prefix === "im"
+            ? $gettext("map layer")
+            : dataKindBadge(file?.dataKind ?? "file");
+    return new Map<string, SelectionHint>([
+        [key, { title: current.name, kind }],
+    ]);
+});
 const date = computed(() =>
     analysis.value ? formatDateRange(analysis.value.date) : "",
 );
@@ -159,6 +184,29 @@ function rawLabel(file: FileEntry): string {
     return [$gettext("raw instrument"), extension, formatSize(file.size, lang)]
         .filter(Boolean)
         .join(" · ");
+}
+
+function fileHints(file: FileEntry): Map<string, SelectionHint> | null {
+    const current = analysis.value;
+    if (!current) return null;
+    return new Map([
+        [
+            fileKey(current.id, file.id),
+            {
+                title: current.name,
+                kind: dataKindBadge(file.dataKind),
+                detail: file.name,
+            },
+        ],
+    ]);
+}
+
+function addFileLabel(file: FileEntry): string {
+    return interpolate(
+        $gettext("Add %{file} to the Selection"),
+        { file: file.name },
+        true,
+    );
 }
 
 function names(refs: { name: Label }[]): string {
@@ -228,6 +276,16 @@ function focusHeading(): void {
                     v-if="entryKey"
                     :keys="[entryKey]"
                     :label="$gettext('+ Selection')"
+                    :aria-label="
+                        interpolate(
+                            $gettext(
+                                'Add the analysis %{name} to the Selection',
+                            ),
+                            { name: analysis.name.value },
+                            true,
+                        )
+                    "
+                    :hints="entryHints"
                 />
             </template>
             <button
@@ -300,7 +358,9 @@ function focusHeading(): void {
                         </template>
                         <AddToSelection
                             :keys="[fileKey(analysis.id, file.id)]"
-                            :label="$gettext('+ Selection')"
+                            :label="$gettext('+ Add this file')"
+                            :aria-label="addFileLabel(file)"
+                            :hints="fileHints(file)"
                         />
                     </li>
                 </ul>
@@ -355,7 +415,10 @@ function focusHeading(): void {
                         v-for="group in conditionGroups"
                         :key="group.title.value"
                     >
-                        <dt :lang="group.title.lang || undefined">
+                        <dt
+                            v-if="conditionTitleShown"
+                            :lang="group.title.lang || undefined"
+                        >
                             <span>{{ group.title.value }}</span>
                         </dt>
                         <dd
@@ -487,7 +550,7 @@ function focusHeading(): void {
                     v-if="licence.isDefault"
                     class="badge default"
                 >
-                    {{ $gettext("default licence") }}
+                    {{ $gettext("Project licence (not stated for this file)") }}
                 </span>
                 <span
                     v-if="attribution"

@@ -1,20 +1,40 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, useId, useTemplateRef } from "vue";
+import { computed, inject, nextTick, ref, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    ANNOUNCE_KEY,
+    SELECTION_HINTS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 /**
  * Adds all its keys to the Selection or none. Once every key is held it says
  * under which slots; when the new keys do not fit, the button is disabled and
  * says how many items for how many places left. The line that replaces the
- * button takes the keyboard focus the removed button leaves.
+ * button takes the keyboard focus the removed button leaves. `ariaLabel`
+ * names what the button adds when `label` alone does not; `hints` tell the
+ * Selection what the added items are before it has read them.
  */
-const props = defineProps<{ keys: string[]; label: string }>();
+const props = withDefaults(
+    defineProps<{
+        keys: string[];
+        label: string;
+        ariaLabel?: string;
+        hints?: ReadonlyMap<string, SelectionHint> | null;
+    }>(),
+    { ariaLabel: undefined, hints: null },
+);
 
 const announce = inject(ANNOUNCE_KEY, () => undefined);
+const selectionHints = inject(
+    SELECTION_HINTS_KEY,
+    () => ref(new Map<string, SelectionHint>()),
+    true,
+);
 
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
@@ -60,7 +80,15 @@ const heldText = computed(() =>
     ),
 );
 
+function recordHints(): void {
+    if (!props.hints || props.hints.size === 0) return;
+    const next = new Map(selectionHints.value);
+    for (const [key, hint] of props.hints) next.set(key, hint);
+    selectionHints.value = next;
+}
+
 async function add(): Promise<void> {
+    recordHints();
     const result = store.addManyToBasket(props.keys);
     if (result.refused === null && result.added.length > 0) {
         announce(
@@ -91,6 +119,7 @@ async function add(): Promise<void> {
             <button
                 type="button"
                 :disabled="tooMany || props.keys.length === 0"
+                :aria-label="props.ariaLabel"
                 :aria-describedby="tooMany ? reasonId : undefined"
                 @click="add"
             >

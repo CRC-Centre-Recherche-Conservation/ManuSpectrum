@@ -98,6 +98,28 @@ describe("ImagingPreview", () => {
         expect(wrapper.text()).toContain("no zone on this page");
     });
 
+    it("names the map it adds to the Selection, after the image", () => {
+        const { wrapper } = mountPreview();
+        const button = wrapper.find(".add-to-selection button");
+        expect(button.text()).toBe("+ Add the map Pb");
+        expect(button.attributes("aria-label")).toBe(
+            "Add the map Pb to the Selection",
+        );
+        const html = wrapper.html();
+        expect(html.indexOf("layer-image")).toBeLessThan(
+            html.indexOf("add-to-selection"),
+        );
+    });
+
+    it("shows the ends of the layer scale and says where the handle is", () => {
+        const { wrapper } = mountPreview();
+        expect(wrapper.find(".scroll .ends").text()).toContain("Pb");
+        expect(wrapper.find(".scroll .ends").text()).toContain("Hg");
+        expect(
+            wrapper.find(".scroll [role=slider]").attributes("aria-valuetext"),
+        ).toBe("Pb, layer 1 of 2");
+    });
+
     it("adds the current layer to the Selection", async () => {
         const { wrapper, store } = mountPreview();
         await wrapper.find(".add-to-selection button").trigger("click");

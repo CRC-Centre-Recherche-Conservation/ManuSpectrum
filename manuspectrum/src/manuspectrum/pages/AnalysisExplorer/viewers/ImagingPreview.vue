@@ -22,6 +22,7 @@ import type {
     FileEntry,
     FileLayer,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 const DEFAULT_OPACITY = 0.7;
 const PREVIEW_SIZE = 480;
@@ -74,6 +75,50 @@ const underCurtain = computed(
 );
 const imageUrl = computed(() =>
     layer.value ? layerImageUrl(layer.value.image, PREVIEW_SIZE) : null,
+);
+/** Where the layer scale's handle is, in words: « 550 nm, layer 4 of 13 ». */
+const valueText = computed(() =>
+    layer.value
+        ? interpolate(
+              $gettext("%{label}, layer %{n} of %{total}"),
+              {
+                  label: layer.value.label,
+                  n: position.value + 1,
+                  total: props.file.layers.length,
+              },
+              true,
+          )
+        : "",
+);
+const firstLayer = computed(() => props.file.layers[0]?.label ?? "");
+const lastLayer = computed(() => props.file.layers.at(-1)?.label ?? "");
+const addLabel = computed(() =>
+    interpolate(
+        $gettext("+ Add the map %{label}"),
+        { label: layer.value?.label ?? "" },
+        true,
+    ),
+);
+const addAriaLabel = computed(() =>
+    interpolate(
+        $gettext("Add the map %{label} to the Selection"),
+        { label: layer.value?.label ?? "" },
+        true,
+    ),
+);
+const addHints = computed(() =>
+    layer.value
+        ? new Map<string, SelectionHint>([
+              [
+                  layerKey(props.analysis.id, layer.value.index),
+                  {
+                      title: props.analysis.name,
+                      kind: $gettext("map layer"),
+                      detail: layer.value.label,
+                  },
+              ],
+          ])
+        : null,
 );
 const scrollLabel = computed(() =>
     layer.value
@@ -169,11 +214,6 @@ function onCurtainChange(event: Event): void {
             <span>{{ kindLabel(layer) }}</span>
             <span class="value">{{ layer.label }}</span>
         </p>
-        <AddToSelection
-            v-if="layer"
-            :keys="[layerKey(props.analysis.id, layer.index)]"
-            :label="$gettext('+ Selection')"
-        />
         <div
             v-if="props.file.layers.length > 1"
             class="scroll"
@@ -185,8 +225,26 @@ function onCurtainChange(event: Event): void {
                 :max="props.file.layers.length - 1"
                 :step="1"
                 :aria-label="scrollLabel"
+                :pt="{ handle: { 'aria-valuetext': valueText } }"
                 @update:model-value="moveTo"
             />
+            <span
+                class="ticks"
+                aria-hidden="true"
+            >
+                <span
+                    v-for="entry in props.file.layers"
+                    :key="entry.index"
+                    class="tick"
+                ></span>
+            </span>
+            <span
+                class="ends"
+                aria-hidden="true"
+            >
+                <span>{{ firstLayer }}</span>
+                <span>{{ lastLayer }}</span>
+            </span>
         </div>
         <p
             v-if="imageUrl && imageFailed"
@@ -213,6 +271,13 @@ function onCurtainChange(event: Event): void {
         <p class="note">
             <span>{{ $gettext("Each map keeps its own contrast.") }}</span>
         </p>
+        <AddToSelection
+            v-if="layer"
+            :keys="[layerKey(props.analysis.id, layer.index)]"
+            :label="addLabel"
+            :aria-label="addAriaLabel"
+            :hints="addHints"
+        />
         <label class="toggle">
             <input
                 class="lay"
@@ -293,6 +358,27 @@ function onCurtainChange(event: Event): void {
 .imaging-preview .opacity {
     display: grid;
     gap: 0.5rem;
+    padding-inline: 0.625rem;
+}
+
+.imaging-preview .ticks {
+    display: flex;
+    justify-content: space-between;
+}
+
+.imaging-preview .tick {
+    inline-size: 0.0625rem;
+    block-size: 0.375rem;
+    background: var(--border-hover);
+}
+
+.imaging-preview .ends {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
 }
 
 .imaging-preview .layer-image {

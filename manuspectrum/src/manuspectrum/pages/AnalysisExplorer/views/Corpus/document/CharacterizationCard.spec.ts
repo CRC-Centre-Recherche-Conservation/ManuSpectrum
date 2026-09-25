@@ -87,6 +87,25 @@ describe("CharacterizationCard", () => {
         expect(wrapper.find(".note").html()).toContain("<em>together</em>");
     });
 
+    it("marks on the scale the level of this identification", () => {
+        const { wrapper } = mountCard([], {});
+        const current = wrapper.findAll(".scale li[aria-current='true']");
+        expect(current).toHaveLength(1);
+        expect(current[0].text()).toContain("Reliable");
+    });
+
+    it("names an element group as the elements of its level", () => {
+        const { wrapper } = mountCard([], {}, 200, {
+            elements: [
+                {
+                    level: { ...valueRef("l:major", "major"), rank: 0 },
+                    values: [valueRef("e:pb", "Pb")],
+                },
+            ],
+        });
+        expect(wrapper.find(".details").text()).toContain("Elements (major)");
+    });
+
     it("lists the evidence analyses by name and opens one", async () => {
         const { wrapper, store } = mountCard([uuid(101)], {
             [uuid(101)]: analysisWith(uuid(101), true),

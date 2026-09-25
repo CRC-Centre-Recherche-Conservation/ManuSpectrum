@@ -20,12 +20,12 @@ describe("DraftBanner", () => {
         );
     });
 
-    it("counts the drafts of the page in the page scope", () => {
+    it("counts the drafts of the document in the page scope", () => {
         const wrapper = mount(DraftBanner, {
             props: { count: 1, scope: "page" },
         });
         expect(wrapper.find(".draft-banner").text()).toBe(
-            "1 draft on this page; it is marked “Draft”.",
+            "1 draft in this document; it is marked “Draft”.",
         );
     });
 });

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { useItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useItems.ts";
+import { SELECTION_HINTS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import {
     BASKET_LIMIT,
@@ -15,20 +16,44 @@ import type {
     Item,
     Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+
+/**
+ * The Selection, kept on this browser. Items read once are kept, so an
+ * addition asks the items API for the new keys only; until an item is read,
+ * its row shows what the card that added it knew (`SELECTION_HINTS_KEY`).
+ */
+const hints = inject(
+    SELECTION_HINTS_KEY,
+    () => ref(new Map<string, SelectionHint>()),
+    true,
+);
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
-const items = useItems(() => store.basket.map((item) => item.key));
 
-const byKey = computed(
-    () =>
-        new Map(
-            (items.data.value?.items ?? []).map((item) => [item.key, item]),
-        ),
+const byKey = ref(new Map<string, Item>());
+const missing = ref(new Set<string>());
+
+const items = useItems(() =>
+    store.basket
+        .map((item) => item.key)
+        .filter((key) => !byKey.value.has(key) && !missing.value.has(key)),
 );
-const missing = computed(() => new Set(items.data.value?.missing ?? []));
+
 const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
+
+watch(
+    () => items.data.value,
+    (answer) => {
+        if (!answer) return;
+        const read = new Map(byKey.value);
+        for (const item of answer.items) read.set(item.key, item);
+        byKey.value = read;
+        missing.value = new Set([...missing.value, ...answer.missing]);
+    },
+);
 const canCompare = computed(() => isViewAvailable("compare"));
 
 function kindText(item: Item): string {
@@ -73,12 +98,17 @@ function removeLabel(slot: number): string {
         class="selection-panel"
         aria-labelledby="selection-title"
     >
-        <h3 id="selection-title">
-            <span>{{ $gettext("Selection") }}</span>
-            <span class="count"
-                >{{ store.basket.length }} / {{ BASKET_LIMIT }}</span
-            >
-        </h3>
+        <header class="head">
+            <h3 id="selection-title">
+                <span>{{ $gettext("Selection") }}</span>
+                <span class="count"
+                    >{{ store.basket.length }} / {{ BASKET_LIMIT }}</span
+                >
+            </h3>
+            <p class="kept">
+                <span>{{ $gettext("Kept on this browser") }}</span>
+            </p>
+        </header>
         <p
             v-if="store.basket.length === 0"
             class="empty"
@@ -125,6 +155,17 @@ function removeLabel(slot: number): string {
                     >
                         {{ $gettext("no longer available") }}
                     </span>
+                    <template v-else-if="hints.get(row.key)">
+                        <span class="kind">{{ hints.get(row.key)!.kind }}</span>
+                        <span class="title">
+                            <span :lang="hints.get(row.key)!.title.lang">{{
+                                hints.get(row.key)!.title.value
+                            }}</span>
+                            <span v-if="hints.get(row.key)!.detail">
+                                · {{ hints.get(row.key)!.detail }}
+                            </span>
+                        </span>
+                    </template>
                     <span
                         v-else
                         class="pending ms-skeleton"
@@ -184,6 +225,16 @@ function removeLabel(slot: number): string {
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-weight: 400;
+}
+
+.selection-panel .head {
+    display: grid;
+    gap: 0.125rem;
+}
+
+.selection-panel .kept {
+    color: var(--ink-muted);
+    font-size: 0.75rem;
 }
 
 .selection-panel .empty {

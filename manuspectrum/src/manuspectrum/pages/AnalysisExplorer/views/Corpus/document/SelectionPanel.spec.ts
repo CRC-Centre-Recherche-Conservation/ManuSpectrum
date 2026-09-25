@@ -1,14 +1,17 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { nextTick, ref } from "vue";
 
 import SelectionPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SelectionPanel.vue";
 
+import { SELECTION_HINTS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
     fileEntry,
     imagingEntry,
+    label,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
@@ -55,6 +58,53 @@ describe("SelectionPanel", () => {
         const row = wrapper.find(`[data-key="${KEY}"]`);
         expect(row.find(".pending").exists()).toBe(true);
         expect(row.find(".pending").attributes("aria-label")).toBe("Loading…");
+    });
+
+    it("says the Selection is kept on this browser", () => {
+        const { wrapper } = mountPanel();
+        expect(wrapper.find(".kept").text()).toBe("Kept on this browser");
+    });
+
+    it("shows what the card knew of an item while it loads, and asks only for new keys", async () => {
+        const fetchMock = vi.fn(async (url: string) =>
+            jsonResponse({
+                items: new URLSearchParams(url.split("?")[1])
+                    .getAll("ids")
+                    .map((key) => ({
+                        key,
+                        kind: "analysis-file",
+                        analysis: analysisHit(1),
+                        file: fileEntry(),
+                    })),
+                missing: [],
+            }),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        const store = useExplorerStore();
+        const hints = ref(new Map());
+        const wrapper = mount(SelectionPanel, {
+            global: {
+                plugins: [pinia],
+                provide: { [SELECTION_HINTS_KEY as symbol]: hints },
+            },
+        });
+        store.addToBasket(KEY);
+        await flushPromises();
+        hints.value = new Map([
+            [GONE, { title: label("Zone bleue"), kind: "spectrum" }],
+        ]);
+        store.addToBasket(GONE);
+        await nextTick();
+        expect(wrapper.find(`[data-key="${GONE}"]`).text()).toContain(
+            "Zone bleue",
+        );
+        await flushPromises();
+        const asked = fetchMock.mock.calls.map(([url]) =>
+            new URLSearchParams(String(url).split("?")[1]).getAll("ids"),
+        );
+        expect(asked).toEqual([[KEY], [GONE]]);
     });
 
     it("lists the Selection with its A-labels and kinds", async () => {

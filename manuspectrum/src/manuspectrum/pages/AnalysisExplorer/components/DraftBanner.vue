@@ -22,8 +22,8 @@ const message = computed(() => {
                   props.count,
               )
             : $ngettext(
-                  "%{n} draft on this page; it is marked “Draft”.",
-                  "%{n} drafts on this page; they are marked “Draft”.",
+                  "%{n} draft in this document; it is marked “Draft”.",
+                  "%{n} drafts in this document; they are marked “Draft”.",
                   props.count,
               );
     return interpolate(text, { n: props.count }, true);

@@ -12,6 +12,7 @@ import {
     FACET_LABELS_KEY,
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
+    SELECTION_HINTS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { useBasketPersistence } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
@@ -28,7 +29,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import type {
+    ResultsMemo,
+    SelectionHint,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { SharedSelection } from "@/manuspectrum/pages/AnalysisExplorer/store/selection-link.ts";
 
 // Read before useUrlState rewrites the URL without `sel`.
@@ -56,6 +60,7 @@ const announcement = ref("");
 const facetLabels = ref(new Map<string, Label>());
 const screenFocusPending = ref(false);
 const resultsMemo = ref<ResultsMemo | null>(null);
+const selectionHints = ref(new Map<string, SelectionHint>());
 
 /** The screen shown, as CorpusView decides it: the page intro folds to one line off the home. */
 const screen = computed(() => {
@@ -67,6 +72,7 @@ const screen = computed(() => {
 provide(FACET_LABELS_KEY, facetLabels);
 provide(SCREEN_FOCUS_KEY, screenFocusPending);
 provide(RESULTS_MEMO_KEY, resultsMemo);
+provide(SELECTION_HINTS_KEY, selectionHints);
 provide(ANNOUNCE_KEY, announce);
 
 /** A new screen or another document; the same document named again by the address is neither. */

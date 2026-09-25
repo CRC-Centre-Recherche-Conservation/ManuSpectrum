@@ -65,6 +65,39 @@ describe("OnThisPage", () => {
         );
     });
 
+    it("leaves out the page and document a row name repeats", () => {
+        const wrapper = mountList({
+            annotations: [
+                annotation(1, {
+                    name: label("Zone bleue — 70r — Grenoble, Ms.76 Rés."),
+                }),
+            ],
+            pageLabel: "70r",
+            documentName: "Grenoble, Ms.76 Rés.",
+        });
+        expect(wrapper.find(".technique li button").text()).toBe("Zone bleue");
+    });
+
+    it("folds the unlocated analyses under a count when the page has its own", async () => {
+        const unlocated = [
+            {
+                analysis: uuid(150),
+                name: label("FORS_014"),
+                technique: null,
+                dataKind: "xy",
+                unpublished: false,
+                match: true,
+            },
+        ];
+        const wrapper = mountList({ annotations: [annotation(1)], unlocated });
+        const toggle = wrapper.find(".unlocated .fold");
+        expect(toggle.text()).toBe("Without a position on the image (1)");
+        expect(toggle.attributes("aria-expanded")).toBe("false");
+        expect(wrapper.find(".unlocated").text()).not.toContain("FORS_014");
+        await toggle.trigger("click");
+        expect(wrapper.find(".unlocated").text()).toContain("FORS_014");
+    });
+
     it("lists the unlocated analyses under their own heading", () => {
         const unlocated = [
             {

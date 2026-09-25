@@ -12,6 +12,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import {
     characterizationKey,
+    entryKeyOf,
     evidenceEntries,
 } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -21,6 +22,7 @@ import type {
     CharacterizationSummary,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 type Material = CharacterizationSummary["materials"][number];
 type Source = CharacterizationSummary["sources"][number];
@@ -79,6 +81,41 @@ const readFailed = computed(
 const sortedLevels = computed(() =>
     [...props.scale.levels].sort((first, second) => first.rank - second.rank),
 );
+/** The levels of certainty this identification states, marked on the scale. */
+const currentLevels = computed(
+    () =>
+        new Set(
+            props.summary.materials
+                .map((entry) => entry.confidence?.uri)
+                .filter((uri): uri is string => Boolean(uri)),
+        ),
+);
+const ownHints = computed(
+    () =>
+        new Map<string, SelectionHint>([
+            [
+                ownKey.value,
+                {
+                    title: props.summary.name,
+                    kind: $gettext("identified material"),
+                },
+            ],
+        ]),
+);
+/** The material and each supporting analysis, by the name the card read. */
+const withEvidenceHints = computed(() => {
+    const hints = new Map(ownHints.value);
+    for (const analysis of evidenceRead.value ?? []) {
+        const key = entryKeyOf(analysis);
+        if (key) {
+            hints.set(key, {
+                title: analysis.name,
+                kind: $gettext("supporting analysis"),
+            });
+        }
+    }
+    return hints;
+});
 const date = computed(() => formatDateRange(props.summary.date));
 const withoutDataNote = computed(() => {
     const count = entries.value?.withoutData.length ?? 0;
@@ -101,6 +138,16 @@ const evidenceTitle = computed(() =>
         true,
     ),
 );
+
+function elementsTitle(level: ValueRef | null): string {
+    return level
+        ? interpolate(
+              $gettext("Elements (%{level})"),
+              { level: level.label.value },
+              true,
+          )
+        : $gettext("Elements");
+}
 
 function labels(values: ValueRef[]): string {
     return values.map((value) => value.label.value).join(", ");
@@ -230,9 +277,7 @@ function focusHeading(): void {
                 :key="index"
             >
                 <dt :lang="group.level?.label.lang">
-                    <span>
-                        {{ group.level?.label.value ?? $gettext("Elements") }}
-                    </span>
+                    <span>{{ elementsTitle(group.level) }}</span>
                 </dt>
                 <dd>
                     <span>{{ labels(group.values) }}</span>
@@ -314,9 +359,18 @@ function focusHeading(): void {
                 <li
                     v-for="level in sortedLevels"
                     :key="level.uri"
+                    :class="{ 'is-current': currentLevels.has(level.uri) }"
                     :lang="level.label.lang"
+                    :aria-current="
+                        currentLevels.has(level.uri) ? 'true' : undefined
+                    "
                 >
                     <span>{{ level.label.value }}</span>
+                    <span
+                        v-if="currentLevels.has(level.uri)"
+                        class="here"
+                        >{{ $gettext("this identification") }}</span
+                    >
                 </li>
             </ol>
         </section>
@@ -348,6 +402,7 @@ function focusHeading(): void {
             <AddToSelection
                 :keys="[ownKey]"
                 :label="$gettext('+ Selection (the material alone)')"
+                :hints="ownHints"
             />
         </div>
         <div
@@ -372,6 +427,7 @@ function focusHeading(): void {
                     :label="
                         $gettext('+ Selection with its supporting analyses')
                     "
+                    :hints="withEvidenceHints"
                 />
                 <p
                     v-if="withoutDataNote"
@@ -504,5 +560,19 @@ function focusHeading(): void {
     .characterization-card dl {
         grid-template-columns: 1fr;
     }
+}
+
+.characterization-card .scale .is-current {
+    font-weight: 600;
+}
+
+.characterization-card .scale .here {
+    margin-inline-start: 0.5rem;
+    padding-inline: 0.375rem;
+    border: 0.0625rem solid var(--ink);
+    border-radius: 999rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
 }
 </style>
