@@ -1,9 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
+import { computed, onBeforeUnmount, useTemplateRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
-
-import Column from "primevue/column";
-import DataTable from "primevue/datatable";
 
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 
@@ -36,10 +33,13 @@ interface Curve {
 }
 
 const SIGNIFICANT_DIGITS = 6;
-const TABLE_ROW_HEIGHT = 28;
-const TABLE_HEIGHT = "20rem";
 const LINE_WIDTH = 2;
 
+/**
+ * The quick view of a readable spectrum and of the files of its analysis
+ * sharing its axes. Its words are the chart's accessible name; the reset of
+ * the zoom is an icon in the chart's corner, shown on hover and on focus.
+ */
 const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
 
 const store = useExplorerStore();
@@ -53,8 +53,6 @@ const numberFormat = new Intl.NumberFormat(lang, {
     maximumSignificantDigits: SIGNIFICANT_DIGITS,
 });
 
-const showTable = ref(false);
-const tableFile = ref<string | null>(null);
 // The Plotly module lives outside Vue reactivity.
 let plotly: PlotlyModule | null = null;
 
@@ -128,30 +126,6 @@ const summary = computed(() =>
         )
         .join(" "),
 );
-const tableCurve = computed(
-    () =>
-        curves.value.find((curve) => curve.file.id === tableFile.value) ??
-        curves.value[0] ??
-        null,
-);
-const tableFileId = computed({
-    get: () => tableCurve.value?.file.id ?? null,
-    set: (id: string | null) => {
-        tableFile.value = id;
-    },
-});
-const tableRows = computed(() => {
-    const curve = tableCurve.value;
-    if (!curve) return [];
-    return curve.series.x.map((x, index) => ({
-        x: numberFormat.format(x),
-        y: numberFormat.format(curve.series.y[index]),
-    }));
-});
-// The preset axis names are English whatever the page language.
-const xHeader = computed(() => props.file.viewer.xLabel || "x");
-const yHeader = computed(() => props.file.viewer.yLabel || "y");
-
 watch([curves, chart, () => store.basket], () => void draw());
 
 onBeforeUnmount(() => {
@@ -218,10 +192,6 @@ async function reset(): Promise<void> {
         await resetAxes(plotly, chart.value, xReversed.value);
     }
 }
-
-function toggleTable(): void {
-    showTable.value = !showTable.value;
-}
 </script>
 
 <template>
@@ -236,34 +206,31 @@ function toggleTable(): void {
             <LoadingSpinner />
             <span>{{ $gettext("Loading the spectra…") }}</span>
         </p>
-        <template v-if="curves.length > 0">
-            <div class="toolbar">
-                <button
-                    class="reset"
-                    type="button"
-                    @click="reset"
-                >
-                    <span>{{ $gettext("Reset") }}</span>
-                </button>
-                <button
-                    class="table-toggle"
-                    type="button"
-                    :aria-pressed="showTable ? 'true' : 'false'"
-                    @click="toggleTable"
-                >
-                    <span>{{ $gettext("Table") }}</span>
-                </button>
-            </div>
+        <div
+            v-if="curves.length > 0"
+            class="plot"
+        >
             <div
                 ref="chart"
                 class="chart"
                 role="img"
                 :aria-label="summary"
             ></div>
-            <p class="summary">
-                <span>{{ summary }}</span>
-            </p>
-        </template>
+            <button
+                type="button"
+                class="reset"
+                :aria-label="$gettext('Reset the zoom')"
+                :title="$gettext('Reset the zoom')"
+                @click="reset"
+            >
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5v2.5h2.5" />
+                </svg>
+            </button>
+        </div>
         <ul
             v-if="notes.length > 0"
             class="notes"
@@ -283,73 +250,29 @@ function toggleTable(): void {
         >
             <span>{{ $gettext("Retry") }}</span>
         </button>
-        <template v-if="showTable && tableCurve">
-            <label
-                v-if="curves.length > 1"
-                class="table-pick"
-            >
-                <span>{{ $gettext("File") }}</span>
-                <select
-                    v-model="tableFileId"
-                    class="table-file"
-                >
-                    <option
-                        v-for="curve in curves"
-                        :key="curve.file.id"
-                        :value="curve.file.id"
-                    >
-                        {{ curve.file.name }}
-                    </option>
-                </select>
-            </label>
-            <DataTable
-                class="points"
-                size="small"
-                :value="tableRows"
-                :scrollable="true"
-                :scroll-height="TABLE_HEIGHT"
-                :virtual-scroller-options="{ itemSize: TABLE_ROW_HEIGHT }"
-            >
-                <Column field="x">
-                    <template #header>
-                        <span
-                            :lang="props.file.viewer.xLabel ? 'en' : undefined"
-                        >
-                            {{ xHeader }}
-                        </span>
-                    </template>
-                </Column>
-                <Column field="y">
-                    <template #header>
-                        <span
-                            :lang="props.file.viewer.yLabel ? 'en' : undefined"
-                        >
-                            {{ yHeader }}
-                        </span>
-                    </template>
-                </Column>
-            </DataTable>
-        </template>
     </section>
 </template>
 
 <style scoped>
+.spectrum-preview {
+    display: grid;
+    gap: 0.5rem;
+}
+
 .spectrum-preview .loading {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
 }
 
-.spectrum-preview {
-    display: grid;
-    gap: 0.5rem;
+.spectrum-preview .plot {
+    position: relative;
 }
 
 .spectrum-preview .chart {
     min-block-size: 16rem;
 }
 
-.spectrum-preview .summary,
 .spectrum-preview .notes,
 .spectrum-preview .state {
     color: var(--ink-muted);
@@ -360,14 +283,41 @@ function toggleTable(): void {
     padding-inline-start: 1.25rem;
 }
 
-.spectrum-preview .toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
+.spectrum-preview .reset {
+    position: absolute;
+    inset-block-start: 0.25rem;
+    inset-inline-end: 0.25rem;
+    display: grid;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    padding: 0;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.375rem;
+    background: var(--surface);
+    color: var(--ink);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
 }
 
-.spectrum-preview button,
-.spectrum-preview select {
+.spectrum-preview .plot:hover .reset,
+.spectrum-preview .reset:focus-visible {
+    opacity: 1;
+}
+
+.spectrum-preview .reset svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.spectrum-preview .retry {
+    justify-self: start;
     min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
@@ -375,26 +325,17 @@ function toggleTable(): void {
     background: var(--surface);
     color: var(--ink);
     font: inherit;
-}
-
-.spectrum-preview button {
     cursor: pointer;
 }
 
-.spectrum-preview button:focus-visible,
-.spectrum-preview select:focus-visible {
+.spectrum-preview button:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
 }
 
-.spectrum-preview .table-pick {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-}
-
-.spectrum-preview .points {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+@media (hover: none) {
+    .spectrum-preview .reset {
+        opacity: 1;
+    }
 }
 </style>

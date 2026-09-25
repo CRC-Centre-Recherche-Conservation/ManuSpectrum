@@ -226,51 +226,23 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
-    it("gives the points of one file to the table view", async () => {
-        vi.stubGlobal(
-            "ResizeObserver",
-            class {
-                observe(): void {}
-                unobserve(): void {}
-                disconnect(): void {}
-            },
-        );
+    it("resets the zoom from an icon in the chart and shows no table nor visible summary", async () => {
         const { wrapper } = mountPreview([readable(1), readable(2)], () =>
             jsonResponse(SERIES),
         );
         await flushPromises();
-        await wrapper.find("button.table-toggle").trigger("click");
-        expect(
-            wrapper.findComponent({ name: "DataTable" }).props("value"),
-        ).toHaveLength(3);
-        expect(
-            wrapper.find("select.table-file").findAll("option"),
-        ).toHaveLength(2);
-        wrapper.unmount();
-    });
-
-    it("marks the English axis names of the table as English", async () => {
-        vi.stubGlobal(
-            "ResizeObserver",
-            class {
-                observe(): void {}
-                unobserve(): void {}
-                disconnect(): void {}
-            },
+        const reset = wrapper.find(".plot button.reset");
+        expect(reset.attributes("aria-label")).toBe("Reset the zoom");
+        expect(reset.text()).toBe("");
+        expect(wrapper.find("button.table-toggle").exists()).toBe(false);
+        expect(wrapper.findComponent({ name: "DataTable" }).exists()).toBe(
+            false,
         );
-        const file = readable(1);
-        file.viewer = {
-            ...file.viewer,
-            xLabel: "Wavelength (nm)",
-            yLabel: "Reflectance",
-        };
-        const { wrapper } = mountPreview([file], () => jsonResponse(SERIES));
-        await flushPromises();
-        await wrapper.find("button.table-toggle").trigger("click");
-        const names = wrapper
-            .findAll('th [lang="en"]')
-            .map((cell) => cell.text());
-        expect(names).toEqual(["Wavelength (nm)", "Reflectance"]);
+        expect(wrapper.find(".summary").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("points from");
+        expect(wrapper.find("[role=img]").attributes("aria-label")).toBe(
+            "P1.csv: 3 points from 1 to 3. P2.csv: 3 points from 1 to 3.",
+        );
         wrapper.unmount();
     });
 });
