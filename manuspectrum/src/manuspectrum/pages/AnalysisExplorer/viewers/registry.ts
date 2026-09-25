@@ -118,7 +118,3 @@ export function registerExternalViewer(
 export function folioLayerOf(kind: string): "points" | "zones" {
     return viewerFor(kind).folio === "frame" ? "zones" : "points";
 }
-
-export function showsSpectrum(kind: string): boolean {
-    return viewerFor(kind).kind === "xy";
-}

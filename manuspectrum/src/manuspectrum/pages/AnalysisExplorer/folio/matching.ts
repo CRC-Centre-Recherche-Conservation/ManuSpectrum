@@ -31,10 +31,6 @@ function valuesOf(
     }
 }
 
-export function hasMaterialFilters(filters: Filters): boolean {
-    return MATERIAL_KEYS.some((key) => filters[key].length > 0);
-}
-
 /**
  * Whether the filters keep an identified material on the folio: OR inside a
  * facet, AND across the material, colour, element and layer facets. The other

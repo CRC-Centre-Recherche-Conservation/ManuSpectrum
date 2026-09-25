@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
     folioLayerOf,
     registerExternalViewer,
-    showsSpectrum,
     viewerFor,
 } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
@@ -13,8 +12,6 @@ describe("viewer registry", () => {
         expect(viewerFor("chemical-imaging").folio).toBe("frame");
         expect(viewerFor("micro-imaging").folio).toBe("frame");
         expect(viewerFor("file").folio).toBe("point");
-        expect(showsSpectrum("xy")).toBe(true);
-        expect(showsSpectrum("chemical-imaging")).toBe(false);
     });
 
     it("puts frames under the imaging zones toggle and points under the point analyses toggle", () => {

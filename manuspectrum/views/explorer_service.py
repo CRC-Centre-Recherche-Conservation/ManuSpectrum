@@ -524,11 +524,12 @@ def analysis_hit(row, label_of):
 
 
 def row_filter(rows, query):
-    """The Corpus filter rule over *rows*: ``(keep, active, filters, page)``.
+    """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe)``.
 
     ``keep(row, skip=None)`` is OR inside a facet and AND across facets, and
-    the folded free text; ``skip`` leaves one facet out (open facet counts). A
-    selected value that no row carries is ignored (§3.3).
+    the folded free text ``needle``; ``skip`` leaves one facet out (open facet
+    counts). ``universe`` holds, per facet, the values the rows carry; a
+    selected value outside it is ignored (§3.3).
     """
     filters, page = parse_filters(query)
     universe = {
@@ -549,7 +550,7 @@ def row_filter(rows, query):
                 return False
         return not needle or needle in row["text"]
 
-    return keep, active, filters, page
+    return keep, active, filters, page, needle, universe
 
 
 def search_payload(query, user, language):
@@ -561,11 +562,7 @@ def search_payload(query, user, language):
     without a word.
     """
     rows = corpus_rows(user, language)
-    keep, active, filters, page = row_filter(rows, query)
-    needle = fold(filters["q"])
-    universe = {
-        key: {v for row in rows for v in _facet_values(row, key)} for key in FACET_KEYS
-    }
+    keep, active, filters, page, needle, universe = row_filter(rows, query)
 
     matching = [row for row in rows if keep(row)]
     labels = _facet_labels(rows, language, user)

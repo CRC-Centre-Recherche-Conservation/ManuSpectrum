@@ -10,7 +10,6 @@ import type {
 import type { ExternalHandle } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
 const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
-const emit = defineEmits<{ event: [name: string, detail?: unknown] }>();
 
 const host = useTemplateRef<HTMLDivElement>("host");
 let handle: ExternalHandle | null = null;
@@ -22,7 +21,8 @@ onMounted(() => {
             file: props.file,
             analysis: props.analysis,
             language: document.documentElement.lang,
-            onEvent: (name, detail) => emit("event", name, detail),
+            // No consumer yet: the card listens to no renderer event.
+            onEvent: () => undefined,
         });
     }
 });
