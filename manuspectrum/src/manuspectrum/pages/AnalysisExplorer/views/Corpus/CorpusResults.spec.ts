@@ -6,7 +6,10 @@ import PrimeVue from "primevue/config";
 
 import CorpusResults from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue";
 
-import { FACET_LABELS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    FACET_LABELS_KEY,
+    RESULTS_MEMO_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
@@ -24,6 +27,7 @@ import type {
     Facet,
     Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
@@ -37,11 +41,18 @@ function queryOf(call: unknown[]): URLSearchParams {
     return new URLSearchParams(String(call[0]).split("?")[1] ?? "");
 }
 
-function mountResults() {
+function mountResults({
+    memo = ref<ResultsMemo | null>(null),
+    attach = false,
+}: { memo?: Ref<ResultsMemo | null>; attach?: boolean } = {}) {
     return mount(CorpusResults, {
+        attachTo: attach ? document.body : undefined,
         global: {
             plugins: [pinia, PrimeVue],
-            provide: { [FACET_LABELS_KEY as symbol]: labels },
+            provide: {
+                [FACET_LABELS_KEY as symbol]: labels,
+                [RESULTS_MEMO_KEY as symbol]: memo,
+            },
         },
     });
 }
@@ -100,35 +111,92 @@ describe("CorpusResults", () => {
         expect(wrapper.find(".only-with-analyses").exists()).toBe(false);
     });
 
-    it("offers documents without analyses at zero results, with their count", async () => {
-        fetchMock.mockImplementation(async (url: string) =>
-            new URLSearchParams(url.split("?")[1]).get("onlyWithAnalyses") ===
-            "false"
-                ? jsonResponse(
-                      searchResponse({ results: [documentHit(3)], total: 1 }),
-                  )
-                : jsonResponse(searchResponse({ results: [], total: 0 })),
+    it("offers the documents without analyses under the list, and hides them again", async () => {
+        fetchMock.mockResolvedValue(
+            jsonResponse(searchResponse({ withoutAnalyses: 3 })),
         );
         const store = useExplorerStore();
-        store.setFilter("q", "zzz");
         const wrapper = mountResults();
         await flushPromises();
-        const include = wrapper.find(".include-without");
-        expect(include.text()).toBe("Include documents without analyses (1)");
-        expect(wrapper.find(".remove-filter").text()).toBe("Remove: Text: zzz");
-        await include.trigger("click");
-        expect(store.filters.onlyWithAnalyses).toBe(false);
+        expect(wrapper.find(".only-with-analyses").exists()).toBe(false);
+        const toggle = wrapper.find(".without-analyses button");
+        expect(toggle.text()).toBe("+ 3 documents without analyses — show");
+        await toggle.trigger("click");
+        await flushPromises();
+        expect(store.filters.empty).toBe(true);
+        expect(queryOf(fetchMock.mock.lastCall!).get("empty")).toBe("1");
+        expect(wrapper.find(".without-analyses button").text()).toBe(
+            "Hide the 3 documents without analyses",
+        );
     });
 
-    it("hides the include button in the analyses grain", async () => {
+    it("says nothing of documents without analyses when there are none or in the analyses grain", async () => {
         fetchMock.mockResolvedValue(
             jsonResponse(searchResponse({ results: [], total: 0 })),
         );
         useExplorerStore().setFilter("grain", "analyses");
         const wrapper = mountResults();
         await flushPromises();
-        expect(wrapper.find(".include-without").exists()).toBe(false);
+        expect(wrapper.find(".without-analyses").exists()).toBe(false);
+        expect(wrapper.find(".remove-filter").exists()).toBe(false);
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows 10, 25 or 50 results a page and asks for the size chosen", async () => {
+        fetchMock.mockResolvedValue(jsonResponse(searchResponse()));
+        const store = useExplorerStore();
+        const wrapper = mountResults();
+        await flushPromises();
+        expect(queryOf(fetchMock.mock.lastCall!).get("size")).toBeNull();
+        const sizes = wrapper.findAll(".page-size button");
+        expect(sizes.map((button) => button.text())).toEqual([
+            "10",
+            "25",
+            "50",
+        ]);
+        expect(sizes[0].attributes("aria-pressed")).toBe("true");
+        await sizes[1].trigger("click");
+        await flushPromises();
+        expect(store.filters.size).toBe(25);
+        expect(queryOf(fetchMock.mock.lastCall!).get("size")).toBe("25");
+    });
+
+    it("comes back from a document to the same results, scroll and card, without asking again", async () => {
+        fetchMock.mockResolvedValue(
+            jsonResponse(
+                searchResponse({
+                    results: [documentHit(1), documentHit(2)],
+                    total: 30,
+                    page: { number: 1, size: 10, count: 2 },
+                }),
+            ),
+        );
+        const memo = ref<ResultsMemo | null>(null);
+        const scrollTo = vi.fn();
+        vi.stubGlobal("scrollTo", scrollTo);
+        const store = useExplorerStore();
+        const first = mountResults({ memo, attach: true });
+        await flushPromises();
+        await first.find(".pagination .next").trigger("click");
+        await flushPromises();
+        Object.defineProperty(window, "scrollY", {
+            value: 640,
+            configurable: true,
+        });
+        await first
+            .findAll(".document-card .link")[1]
+            .trigger("click", { button: 0 });
+        first.unmount();
+        const calls = fetchMock.mock.calls.length;
+
+        store.setCorpusScreen("results");
+        const back = mountResults({ memo, attach: true });
+        await flushPromises();
+        expect(fetchMock.mock.calls.length).toBe(calls);
+        expect(back.find(".pagination").text()).toContain("Page 2 of 3");
+        expect(scrollTo).toHaveBeenCalledWith(0, 640);
+        expect(document.activeElement?.textContent).toBe("Manuscript 2");
+        back.unmount();
     });
 
     it("writes facet changes to the store and records the value labels", async () => {

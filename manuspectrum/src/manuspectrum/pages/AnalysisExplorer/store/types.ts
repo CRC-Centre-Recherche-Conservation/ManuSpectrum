@@ -17,10 +17,15 @@ export type ListFilterKey =
     | "project"
     | "operator";
 
+/** Results per page the search offers. */
+export type PageSize = 10 | 25 | 50;
+
 export interface Filters {
     q: string;
     grain: "documents" | "analyses";
-    onlyWithAnalyses: boolean;
+    // documents grain: also list the documents that have no analysis
+    empty: boolean;
+    size: PageSize;
     technique: string[];
     part: string[];
     material: string[];

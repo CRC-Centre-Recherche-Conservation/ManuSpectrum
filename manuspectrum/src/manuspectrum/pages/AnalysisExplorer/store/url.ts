@@ -4,6 +4,7 @@ import {
     emptyFilters,
     hasActiveFilters,
     LIST_FILTER_KEYS,
+    PAGE_SIZES,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
@@ -120,7 +121,8 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
         query.set("fview", snapshot.folioView);
     if (filters.q) query.set("q", filters.q);
     if (filters.grain !== "documents") query.set("grain", filters.grain);
-    if (!filters.onlyWithAnalyses) query.set("onlyWithAnalyses", "false");
+    if (filters.size !== PAGE_SIZES[0]) query.set("size", String(filters.size));
+    if (filters.empty) query.set("empty", "1");
     for (const key of LIST_FILTER_KEYS) {
         for (const value of [...filters[key]].sort()) query.append(key, value);
     }
@@ -139,8 +141,11 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
     filters.q = (query.get("q") ?? "").trim().slice(0, MAX_TEXT);
     filters.grain =
         query.get("grain") === "analyses" ? "analyses" : "documents";
-    filters.onlyWithAnalyses = !["0", "false", "no"].includes(
-        (query.get("onlyWithAnalyses") ?? "true").toLowerCase(),
+    filters.size =
+        PAGE_SIZES.find((size) => String(size) === query.get("size")) ??
+        PAGE_SIZES[0];
+    filters.empty = ["1", "true", "yes"].includes(
+        (query.get("empty") ?? "").toLowerCase(),
     );
     for (const key of LIST_FILTER_KEYS) {
         filters[key] = listOf(query, key);

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef } from "vue";
+import {
+    computed,
+    inject,
+    nextTick,
+    onMounted,
+    ref,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
@@ -11,6 +19,10 @@ import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/compon
 import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
 
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
+import {
+    RESULTS_MEMO_KEY,
+    SCREEN_FOCUS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import {
@@ -18,6 +30,7 @@ import {
     useSearch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import {
+    PAGE_SIZES,
     selectedFacets,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -31,34 +44,47 @@ import type {
     DocumentHit,
     FacetKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import type { PageSize } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const SKELETON_CARDS = 4;
 
+/**
+ * The results (S1). Coming back from a document opened here shows the same
+ * page of the same results again without a request, at the same scroll, with
+ * the keyboard focus on the result that was opened (`RESULTS_MEMO_KEY`).
+ */
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const { activeFilters } = useActiveFilters();
+const memo = inject(
+    RESULTS_MEMO_KEY,
+    () => ref<ResultsMemo | null>(null),
+    true,
+);
+const screenFocus = inject(SCREEN_FOCUS_KEY, null);
 const heading = useTemplateRef<HTMLElement>("heading");
-useScreenHeading(() => heading.value);
+const list = useTemplateRef<HTMLElement>("list");
 
 // Declared before useSearch, whose source reads `page` at once. A page belongs
 // to one filter set: any filter change reads as page 1 in the same tick.
 const filterKey = computed(() => searchQuery(store.filters, 1).toString());
-const pageState = ref({ key: "", number: 1 });
+const returning = memo.value?.filterKey === filterKey.value ? memo.value : null;
+const pageState = ref({
+    key: returning ? filterKey.value : "",
+    number: returning?.page ?? 1,
+});
+const restoring = ref(returning?.opened != null);
 const page = computed(() =>
     pageState.value.key === filterKey.value ? pageState.value.number : 1,
 );
 
-const search = useSearch(() => searchQuery(store.filters, page.value));
+useScreenHeading(() => (restoring.value ? null : heading.value));
+const search = useSearch(
+    () => searchQuery(store.filters, page.value),
+    (query) => (memo.value?.query === query ? memo.value.payload : null),
+);
 useFacetLabels(() => search.data.value?.facets);
-const probe = useSearch(() => {
-    const data = search.data.value;
-    const filters = store.filters;
-    const empty =
-        search.status.value === "ready" && data !== null && data.total === 0;
-    return empty && filters.grain === "documents" && filters.onlyWithAnalyses
-        ? searchQuery({ ...filters, onlyWithAnalyses: false }, 1)
-        : null;
-});
 
 const total = computed(() => search.data.value?.total ?? 0);
 const pageCount = computed(() => {
@@ -74,8 +100,27 @@ const countText = computed(() =>
         true,
     ),
 );
-const withoutAnalysesCount = computed(() =>
-    probe.status.value === "ready" ? probe.data.value?.total ?? 0 : 0,
+const withoutAnalyses = computed(() =>
+    store.filters.grain === "documents"
+        ? search.data.value?.withoutAnalyses ?? 0
+        : 0,
+);
+const withoutAnalysesText = computed(() =>
+    interpolate(
+        store.filters.empty
+            ? $ngettext(
+                  "Hide the %{n} document without analyses",
+                  "Hide the %{n} documents without analyses",
+                  withoutAnalyses.value,
+              )
+            : $ngettext(
+                  "+ %{n} document without analyses — show",
+                  "+ %{n} documents without analyses — show",
+                  withoutAnalyses.value,
+              ),
+        { n: withoutAnalyses.value },
+        true,
+    ),
 );
 const isEmpty = computed(
     () => search.status.value === "ready" && total.value === 0,
@@ -91,6 +136,36 @@ const loading = computed(() => search.status.value === "loading");
 /** Nothing to show yet: the first load of this screen. */
 const firstLoad = computed(() => loading.value && search.data.value === null);
 
+watch(
+    () => [search.data.value, search.status.value] as const,
+    ([payload, status]) => {
+        if (payload && status === "ready") {
+            memo.value = {
+                query: searchQuery(store.filters, page.value).toString(),
+                filterKey: filterKey.value,
+                page: page.value,
+                payload,
+                scroll: 0,
+                opened: null,
+            };
+        }
+    },
+    { immediate: true },
+);
+
+onMounted(async () => {
+    if (!returning || returning.opened === null) return;
+    await nextTick();
+    window.scrollTo(0, returning.scroll);
+    list.value
+        ?.querySelector<HTMLElement>(
+            `[data-result="${returning.opened}"] :is(a, button)`,
+        )
+        ?.focus({ preventScroll: true });
+    if (screenFocus) screenFocus.value = false;
+    restoring.value = false;
+});
+
 function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
     return hit.type === "document";
 }
@@ -103,15 +178,19 @@ function setGrain(grain: "documents" | "analyses"): void {
     store.setFilter("grain", grain);
 }
 
-function onOnlyWithAnalyses(event: Event): void {
-    store.setFilter(
-        "onlyWithAnalyses",
-        (event.target as HTMLInputElement).checked,
-    );
+function toggleEmpty(): void {
+    store.setFilter("empty", !store.filters.empty);
 }
 
-function includeWithoutAnalyses(): void {
-    store.setFilter("onlyWithAnalyses", false);
+function setSize(size: PageSize): void {
+    store.setFilter("size", size);
+}
+
+/** Records where the reader leaves the results, to come back there. */
+function rememberOpened(id: string): void {
+    if (memo.value) {
+        memo.value = { ...memo.value, scroll: window.scrollY, opened: id };
+    }
 }
 
 function hrefFor(id: string): string {
@@ -119,11 +198,13 @@ function hrefFor(id: string): string {
 }
 
 function openDocument(id: string): void {
+    rememberOpened(id);
     store.openDocument(id);
 }
 
 /** The document, then its card: two history entries, so Back closes the card first. */
 async function openAnalysis(hit: AnalysisHit): Promise<void> {
+    rememberOpened(hit.id);
     store.openDocument(hit.document.id, hit.canvas);
     await nextTick();
     store.focusOn({ kind: "analysis", id: hit.id });
@@ -195,17 +276,28 @@ function goHome(): void {
                         <span>{{ $gettext("Analyses") }}</span>
                     </label>
                 </fieldset>
-                <label
-                    v-if="store.filters.grain === 'documents'"
-                    class="only-with-analyses"
+                <div
+                    class="page-size"
+                    role="group"
+                    :aria-label="$gettext('Results per page')"
                 >
-                    <input
-                        type="checkbox"
-                        :checked="store.filters.onlyWithAnalyses"
-                        @change="onOnlyWithAnalyses"
-                    />
-                    <span>{{ $gettext("Only with analyses") }}</span>
-                </label>
+                    <span
+                        class="page-size-label"
+                        aria-hidden="true"
+                        >{{ $gettext("Per page") }}</span
+                    >
+                    <button
+                        v-for="size in PAGE_SIZES"
+                        :key="size"
+                        type="button"
+                        :aria-pressed="
+                            store.filters.size === size ? 'true' : 'false'
+                        "
+                        @click="setSize(size)"
+                    >
+                        <span>{{ size }}</span>
+                    </button>
+                </div>
                 <p
                     class="count"
                     aria-live="polite"
@@ -235,26 +327,6 @@ function goHome(): void {
                 <p>
                     <span>{{ $gettext("No result.") }}</span>
                 </p>
-                <button
-                    v-if="withoutAnalysesCount > 0"
-                    type="button"
-                    class="include-without"
-                    @click="includeWithoutAnalyses"
-                >
-                    <span>
-                        {{
-                            interpolate(
-                                $gettext(
-                                    "Include documents without analyses (%{n})",
-                                ),
-                                {
-                                    n: withoutAnalysesCount,
-                                },
-                                true,
-                            )
-                        }}
-                    </span>
-                </button>
                 <button
                     v-for="filter in activeFilters"
                     :key="filter.id"
@@ -292,12 +364,14 @@ function goHome(): void {
             </ul>
             <ul
                 v-else
+                ref="list"
                 class="list"
                 :aria-busy="loading ? 'true' : 'false'"
             >
                 <li
                     v-for="hit in search.data.value?.results ?? []"
                     :key="hit.id"
+                    :data-result="hit.id"
                 >
                     <DocumentCard
                         v-if="isDocument(hit)"
@@ -312,6 +386,18 @@ function goHome(): void {
                     />
                 </li>
             </ul>
+            <p
+                v-if="withoutAnalyses > 0"
+                class="without-analyses"
+            >
+                <button
+                    type="button"
+                    :aria-pressed="store.filters.empty ? 'true' : 'false'"
+                    @click="toggleEmpty"
+                >
+                    <span>{{ withoutAnalysesText }}</span>
+                </button>
+            </p>
             <nav
                 v-if="pageCount > 1 && !isEmpty"
                 class="pagination"
@@ -379,13 +465,57 @@ function goHome(): void {
     border: none;
 }
 
-.corpus-results .option,
-.corpus-results .only-with-analyses {
+.corpus-results .option {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
     min-block-size: var(--explorer-target);
     cursor: pointer;
+}
+
+.corpus-results .page-size {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+
+.corpus-results .page-size-label {
+    margin-inline-end: 0.25rem;
+    color: var(--ink-muted);
+}
+
+.corpus-results .page-size button {
+    min-inline-size: var(--explorer-target);
+    min-block-size: var(--explorer-target);
+    border: 0.0625rem solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.corpus-results .page-size button[aria-pressed="true"] {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--surface);
+}
+
+.corpus-results .without-analyses button {
+    min-block-size: var(--explorer-target);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--blue-text);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.corpus-results .without-analyses button:hover {
+    text-decoration: underline;
 }
 
 .corpus-results .count {

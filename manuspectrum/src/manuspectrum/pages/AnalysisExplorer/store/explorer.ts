@@ -26,10 +26,13 @@ import type {
     LayerToggles,
     ListFilterKey,
     Overlay,
+    PageSize,
     ToolFilters,
     ToolKind,
     ToolWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+
+export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
 
 export const LIST_FILTER_KEYS: readonly ListFilterKey[] = [
     "technique",
@@ -52,7 +55,8 @@ export function emptyFilters(): Filters {
     return {
         q: "",
         grain: "documents",
-        onlyWithAnalyses: true,
+        empty: false,
+        size: PAGE_SIZES[0],
         technique: [],
         part: [],
         material: [],
@@ -83,7 +87,7 @@ function emptyToolFilters(): ToolFilters {
     return { element: null, cell: null, pair: null };
 }
 
-/** Filters that restrict Corpus results; `eventType` (Map only), grain and onlyWithAnalyses are not among them. */
+/** Filters that restrict Corpus results; `eventType` (Map only) and the display options (grain, empty, size) are not among them. */
 export function hasActiveFilters(filters: Filters): boolean {
     return countCorpusFilters(filters) > 0;
 }
@@ -166,11 +170,12 @@ export const useExplorerStore = defineStore("explorer", () => {
     }
 
     function clearFilters(): void {
-        filters.value = {
-            ...emptyFilters(),
-            grain: filters.value.grain,
-            onlyWithAnalyses: filters.value.onlyWithAnalyses,
-        };
+        filters.value = { ...emptyFilters(), ...displayOptions() };
+    }
+
+    function displayOptions(): Pick<Filters, "grain" | "empty" | "size"> {
+        const { grain, empty, size } = filters.value;
+        return { grain, empty, size };
     }
 
     function setView(next: ExplorerView): void {
@@ -182,8 +187,8 @@ export const useExplorerStore = defineStore("explorer", () => {
     /**
      * Leaves the document screen for another Corpus screen; the document
      * screen is reached only through `openDocument`. The home screen carries
-     * no Corpus filter: going there clears them, keeping the grain, the
-     * "only with analyses" choice and the Map's event types.
+     * no Corpus filter: going there clears them, keeping the display options
+     * (grain, documents without analyses, page size) and the Map's event types.
      */
     function setCorpusScreen(screen: CorpusScreen): void {
         if (screen === "document") {
@@ -192,8 +197,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         if (screen === "home") {
             filters.value = {
                 ...emptyFilters(),
-                grain: filters.value.grain,
-                onlyWithAnalyses: filters.value.onlyWithAnalyses,
+                ...displayOptions(),
                 eventType: filters.value.eventType,
             };
         }

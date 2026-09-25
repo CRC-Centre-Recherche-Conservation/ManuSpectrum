@@ -41,7 +41,8 @@ describe("toQuery / fromQuery", () => {
                 ...emptyFilters(),
                 q: "lead white",
                 grain: "analyses",
-                onlyWithAnalyses: false,
+                size: 25,
+                empty: true,
                 technique: ["http://x/xrf", "http://x/raman"].sort(),
                 year: [2021, 2023],
                 period: [1000, 1200],
@@ -49,10 +50,23 @@ describe("toQuery / fromQuery", () => {
         };
         const query = toQuery(snapshot);
         expect(query.toString()).toBe(
-            "screen=results&q=lead+white&grain=analyses&onlyWithAnalyses=false" +
+            "screen=results&q=lead+white&grain=analyses&size=25&empty=1" +
                 "&technique=http%3A%2F%2Fx%2Framan&technique=http%3A%2F%2Fx%2Fxrf&year=2021&year=2023&period=1000%2C1200",
         );
         expect(fromQuery(query)).toEqual(snapshot);
+    });
+
+    it("reads only a page size the search offers, 10 by default", () => {
+        expect(fromQuery(new URLSearchParams("size=50")).filters.size).toBe(50);
+        expect(fromQuery(new URLSearchParams("size=7")).filters.size).toBe(10);
+        expect(fromQuery(new URLSearchParams("")).filters.size).toBe(10);
+        expect(
+            toQuery({
+                ...home(),
+                corpusScreen: "results",
+                filters: { ...emptyFilters(), size: 10 },
+            }).toString(),
+        ).toBe("screen=results");
     });
 
     it("writes nothing for the home screen", () => {
