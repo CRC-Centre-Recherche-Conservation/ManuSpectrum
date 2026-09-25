@@ -223,7 +223,7 @@ describe("CorpusDocument", () => {
         );
     });
 
-    it("counts the page's analyses the filters keep", async () => {
+    it("says on top of the page how many of its analyses the filters keep", async () => {
         stubFetch(
             documentPayload({
                 annotations: [
@@ -235,7 +235,7 @@ describe("CorpusDocument", () => {
         );
         const { wrapper } = mountScreen();
         await flushPromises();
-        expect(wrapper.find(".rail-foot").text()).toContain(
+        expect(wrapper.find(".stage .page-count").text()).toBe(
             "1 / 2 analyses on this page",
         );
     });
@@ -526,6 +526,31 @@ describe("CorpusDocument", () => {
         expect(back.text()).toBe("Back to the explorer home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
+    });
+
+    it("opens on the first page with results when filters are active and no page is named", async () => {
+        stubFetch(
+            documentPayload({
+                annotations: [
+                    annotation(1, { match: false }),
+                    annotation(2, {
+                        canvas: "https://iiif.example/c2",
+                        match: true,
+                    }),
+                ],
+            }),
+        );
+        const { wrapper } = mountScreen((store) => {
+            store.setFilter("technique", ["http://example.org/xrf"]);
+            store.openDocument(uuid(1));
+        });
+        await flushPromises();
+        expect(wrapper.findComponent(FolioStub).props("canvas")?.id).toBe(
+            "https://iiif.example/c2",
+        );
+        expect(wrapper.find(".canvas-strip").classes()).toContain(
+            "is-filtered",
+        );
     });
 
     it("keeps the page after a filter reload with a card open", async () => {

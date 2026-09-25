@@ -49,6 +49,87 @@ describe("CanvasStrip", () => {
         expect(wrapper.find("img").exists()).toBe(false);
     });
 
+    describe("with filters", () => {
+        const canvases = ["f. 1r", "f. 1v", "f. 2r", "f. 2v"].map(
+            (label, index) => ({
+                id: `https://iiif.example/c${index + 1}`,
+                label,
+                image: { service: null, url: null, width: 1, height: 1 },
+                analysisCount: 2,
+                characterizationCount: 0,
+            }),
+        );
+        const counts = new Map([
+            [
+                canvases[0].id,
+                { total: 2, matching: 0, materials: 1, samples: 0 },
+            ],
+            [
+                canvases[1].id,
+                { total: 2, matching: 2, materials: 0, samples: 3 },
+            ],
+            [
+                canvases[2].id,
+                { total: 2, matching: 0, materials: 0, samples: 0 },
+            ],
+            [
+                canvases[3].id,
+                { total: 2, matching: 1, materials: 0, samples: 0 },
+            ],
+        ]);
+
+        function mountFiltered(current = canvases[0].id) {
+            return mount(CanvasStrip, {
+                props: { canvases, current, counts, filtered: true },
+            });
+        }
+
+        it("writes per page the analyses the filters keep out of all, and marks the pages with some", () => {
+            const pages = mountFiltered().findAll("button.page");
+            expect(pages[1].find(".count [aria-hidden]").text()).toBe("2/2");
+            expect(pages[1].find(".count").text()).toContain(
+                "2 of 2 analyses in the filters",
+            );
+            expect(pages[0].find(".count [aria-hidden]").text()).toBe("0/2");
+            expect(pages[1].classes()).toContain("has-match");
+            expect(pages[0].classes()).not.toContain("has-match");
+        });
+
+        it("counts the identified materials and samples of a page", () => {
+            const pages = mountFiltered().findAll("button.page");
+            expect(pages[0].find(".materials").text()).toContain(
+                "1 identified material",
+            );
+            expect(pages[1].find(".samples").text()).toContain("3 samples");
+            expect(pages[2].find(".materials").exists()).toBe(false);
+        });
+
+        it("keeps only the pages with results on demand", async () => {
+            const wrapper = mountFiltered();
+            await wrapper.find("input.only-results").setValue(true);
+            expect(
+                wrapper.findAll("button.page").map((page) => page.text()),
+            ).toEqual([
+                expect.stringContaining("f. 1v"),
+                expect.stringContaining("f. 2v"),
+            ]);
+        });
+
+        it("goes to the previous or next page with results", async () => {
+            const wrapper = mountFiltered(canvases[2].id);
+            await wrapper.find("button.next-result").trigger("click");
+            await wrapper.find("button.previous-result").trigger("click");
+            expect(wrapper.emitted("select")).toEqual([
+                [canvases[3].id],
+                [canvases[1].id],
+            ]);
+            const last = mountFiltered(canvases[3].id);
+            expect(
+                last.find("button.next-result").attributes("disabled"),
+            ).toBeDefined();
+        });
+    });
+
     describe("keyboard", () => {
         const canvases = ["f. 1r", "f. 1v", "f. 2r", "f. 2v"].map(
             (label, index) => ({

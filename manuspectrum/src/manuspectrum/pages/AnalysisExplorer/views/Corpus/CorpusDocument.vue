@@ -38,6 +38,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { characterizationMatches } from "@/manuspectrum/pages/AnalysisExplorer/folio/matching.ts";
+import {
+    firstMatchingPage,
+    pageCounts,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import { folioOverlays } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     techniqueKey,
@@ -50,6 +54,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
+    hasActiveFilters,
     selectedFacets,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -67,6 +72,7 @@ import type {
     Focus,
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { PageCount } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { LegendEntry } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 
@@ -111,6 +117,8 @@ const side = useTemplateRef<HTMLElement>("side");
 
 const curtain = ref<string | null>(null);
 let pageToFollow = store.focus !== null;
+/** The document whose first payload has placed the page. */
+let landedOn: string | null = null;
 let openedOver: string | null = null;
 /** The `data-focus` of the list entry that opened the card, if a list entry did. */
 let openedFrom: string | null = null;
@@ -142,6 +150,10 @@ function isCanvas(
     );
 }
 
+const perPage = computed(() =>
+    data.value ? pageCounts(data.value) : new Map<string, PageCount>(),
+);
+const filtered = computed(() => hasActiveFilters(store.filters));
 const currentCanvas = computed(
     () =>
         canvases.value.find((canvas) =>
@@ -435,6 +447,19 @@ watch(data, () => {
 });
 
 /**
+ * A document opened with active filters and no page named opens on the first
+ * page with an analysis they keep; later filter changes do not move the page.
+ */
+watch(data, (current) => {
+    if (!current || landedOn === current.id) return;
+    landedOn = current.id;
+    if (store.document?.canvas || store.focus !== null || !filtered.value)
+        return;
+    const first = firstMatchingPage(current.canvases, perPage.value);
+    if (first) store.setCanvas(first);
+});
+
+/**
  * Keeps the address of the history entry a card was opened over (the one
  * current when the focus goes from none to some, before the URL records it)
  * and the list entry that opened it, if one did.
@@ -692,10 +717,11 @@ function goHome(): void {
                         :count-hint="$gettext('%{n} in this document')"
                         @change="onFacetChange"
                     />
-                    <p class="rail-foot">
-                        <span>{{ pageCount }}</span>
+                    <p
+                        v-if="store.activeFilterCount > 0"
+                        class="rail-foot"
+                    >
                         <button
-                            v-if="store.activeFilterCount > 0"
                             type="button"
                             class="clear"
                             @click="store.clearFilters()"
@@ -708,11 +734,19 @@ function goHome(): void {
                     class="stage"
                     :aria-label="$gettext('Page')"
                 >
-                    <FolioViewSwitch
-                        :view="folioView"
-                        :available="availableViews"
-                        @change="onFolioView"
-                    />
+                    <div class="stage-head">
+                        <FolioViewSwitch
+                            :view="folioView"
+                            :available="availableViews"
+                            @change="onFolioView"
+                        />
+                        <p
+                            class="page-count"
+                            aria-live="polite"
+                        >
+                            <span>{{ pageCount }}</span>
+                        </p>
+                    </div>
                     <div class="viewer">
                         <FolioMap
                             ref="folio"
@@ -741,6 +775,8 @@ function goHome(): void {
                     <CanvasStrip
                         :canvases="canvases"
                         :current="currentCanvas?.id ?? null"
+                        :counts="perPage"
+                        :filtered="filtered"
                         @select="selectCanvas"
                     />
                 </section>
@@ -989,6 +1025,20 @@ function goHome(): void {
     block-size: calc(100dvh - var(--explorer-top) - 1rem);
     min-block-size: 30rem;
     padding: 0.5rem;
+}
+
+.corpus-document .stage-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+}
+
+.corpus-document .stage-head .page-count {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
 }
 
 .corpus-document .viewer {
