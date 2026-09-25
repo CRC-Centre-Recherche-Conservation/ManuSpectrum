@@ -268,6 +268,12 @@ img { max-width: 100%; height: auto; display: block; }
     list-style: none;
 }
 
+.ms-nav-links a,
+.ms-nav-dropdown-toggle,
+.ms-nav-auth a {
+    white-space: nowrap;
+}
+
 .ms-nav-links a {
     display: block;
     padding: 0.5rem 1.1rem;
@@ -841,17 +847,32 @@ img { max-width: 100%; height: auto; display: block; }
 // ============================================================
 // RESPONSIVE — chrome subset (mirrors homepage.scss breakpoints)
 // ============================================================
+// The header switches to the menu button before its entries run out of room
+// (measured: 1236px as a visitor, 1400px signed in, where « Management » and
+// the account links join the bar).
+@mixin ms-nav-collapsed($scope: null) {
+    #{$scope} .ms-nav-links,
+    #{$scope} .ms-nav-divider,
+    #{$scope} .ms-nav-auth,
+    #{$scope} .ms-nav-github { display: none; }
+
+    #{$scope} .ms-hamburger { display: flex; }
+    #{$scope} .ms-nav { margin-left: auto; margin-right: 1rem; }
+}
+
+@media (max-width: 1260px) {
+    @include ms-nav-collapsed;
+    .ms-mobile-nav { display: flex; }
+}
+
+@media (max-width: 1420px) {
+    @include ms-nav-collapsed('.ms-header--signed-in');
+    .ms-header--signed-in ~ .ms-mobile-nav { display: flex; }
+}
+
 @media (max-width: 768px) {
     // Drives .ms-container AND the ms-container mixin at once — keep them in step.
     :root { --ms-gutter: 1.2rem; }
-
-    .ms-nav-links,
-    .ms-nav-divider,
-    .ms-nav-auth,
-    .ms-nav-github { display: none; }
-
-    .ms-hamburger { display: flex; }
-    .ms-mobile-nav { display: flex; }
 
     .ms-footer-inner { flex-direction: column; }
     .ms-footer-links { flex-direction: column; gap: 2rem; }
