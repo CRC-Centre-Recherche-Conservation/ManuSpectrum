@@ -713,17 +713,39 @@ describe("CorpusDocument", () => {
         );
     });
 
-    it("keeps the page after a filter reload with a card open", async () => {
-        stubFetch();
-        const { store } = mountScreen();
+    it("keeps the page and the scroll when a filter match arrives with a card open", async () => {
+        const fetchMock = stubFetch();
+        const { wrapper, store } = mountScreen(undefined, {
+            attachTo: document.body,
+        });
         await flushPromises();
-        store.focusOn({ kind: "analysis", id: uuid(101) });
+        wrapper
+            .findComponent(FolioStub)
+            .vm.$emit("select", { kind: "analysis", id: uuid(101) });
         await flushPromises();
         store.setCanvas("https://iiif.example/c2");
         await flushPromises();
-        store.setFilter("technique", ["http://example.org/xrf"]);
-        await flushPromises();
         expect(store.document?.canvas).toBe("https://iiif.example/c2");
+        const scrolled = vi
+            .spyOn(window, "scrollTo")
+            .mockImplementation(() => undefined);
+        const asked = fetchMock.mock.calls.length;
+        await changeFilters(() =>
+            store.setFacet("technique", ["http://example.org/xrf"]),
+        );
+        expect(
+            fetchMock.mock.calls
+                .slice(asked)
+                .some(([url]) => url.includes("/document-match/")),
+        ).toBe(true);
+        expect(store.focus).toEqual({ kind: "analysis", id: uuid(101) });
+        expect(store.document?.canvas).toBe("https://iiif.example/c2");
+        expect(wrapper.findComponent(FolioStub).props("canvas")?.id).toBe(
+            "https://iiif.example/c2",
+        );
+        expect(scrolled).not.toHaveBeenCalled();
+        scrolled.mockRestore();
+        wrapper.unmount();
     });
 
     it("stays on the page of the clicked zone of an analysis zoned on several pages", async () => {
@@ -883,6 +905,31 @@ describe("CorpusDocument", () => {
         expect(document.activeElement).toBe(
             wrapper.find(`#folio-marker-${uuid(101)}`).element,
         );
+        wrapper.unmount();
+    });
+
+    it("returns the focus to the list entry that opened the card drawer when Escape closes it", async () => {
+        narrow = true;
+        stubFetch();
+        const { wrapper, store } = mountScreen(undefined, {
+            stubs: { transition: false },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        const selector = `.on-this-page [data-focus="analysis:${uuid(101)}"]`;
+        const entry = wrapper.find(selector);
+        (entry.element as HTMLButtonElement).focus();
+        await entry.trigger("click");
+        await flushPromises();
+        expect(store.focus).toEqual({ kind: "analysis", id: uuid(101) });
+        expect(document.activeElement).not.toBe(entry.element);
+        document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", code: "Escape" }),
+        );
+        await flushPromises();
+        expect(store.focus).toBeNull();
+        expect(document.activeElement).toBe(wrapper.find(selector).element);
+        expect(focusTarget).not.toHaveBeenCalled();
         wrapper.unmount();
     });
 

@@ -18,6 +18,7 @@ from manuspectrum.views.explorer.values import (
     reference_terms,
     rewrite_legacy_url,
     shape_of,
+    site_path,
     value_refs,
 )
 
@@ -222,13 +223,15 @@ class FileEntryTests(SimpleTestCase):
         )
 
     @override_settings(EXPLORER_LEGACY_HOSTS=("192.168.122.250",))
-    def test_a_local_file_url_is_a_path_and_an_external_one_is_kept(self):
+    def test_a_local_file_url_is_a_path_an_external_web_one_is_kept_and_else_empty(
+        self,
+    ):
         urls = {
             "files/a": "/files/a",
             "https://manuspectrum.example/files/b?x=1": "/files/b?x=1",
             "http://192.168.122.250:8000/files/c": "/files/c",
             "https://zenodo.org/records/1/files/d.csv": "https://zenodo.org/records/1/files/d.csv",
-            "//cdn.example/e": "//cdn.example/e",
+            "//cdn.example/e": "",
         }
         entries = [
             {"file_id": f"f-{n}", "name": f"{n}.pdf", "url": url}
@@ -238,6 +241,22 @@ class FileEntryTests(SimpleTestCase):
         found = file_entries(entries, language="en", configs={}, kind="measurement")
 
         self.assertEqual([e["downloadUrl"] for e in found], list(urls.values()))
+
+    def test_a_file_url_that_is_neither_a_site_path_nor_http_is_refused(self):
+        refused = [
+            "javascript:alert(1)",
+            "JavaScript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "vbscript:msgbox(1)",
+            "ftp://files.example/a.csv",
+            "//evil.example/a.csv",
+            "\\\\evil.example/a.csv",
+            "/\\evil.example/a.csv",
+            "",
+            None,
+        ]
+
+        self.assertEqual([site_path(url) for url in refused], [None] * len(refused))
 
     def test_a_file_without_licence_gets_the_default_marked_as_such(self):
         with translation.override("en"):

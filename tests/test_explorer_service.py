@@ -4,11 +4,14 @@ Usage:
     python manage.py test tests.test_explorer_service --settings="tests.test_settings"
 """
 
-from uuid import NAMESPACE_URL, uuid5
+from unittest.mock import patch
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from django.core.cache import cache
 from django.http import QueryDict
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase, override_settings
+
+from arches.app.models.models import IIIFManifest
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
@@ -19,6 +22,7 @@ from manuspectrum.views.explorer.service import (
     document_payload,
     family_colours,
     fold,
+    manifest_json,
     match_payload,
     row_filter,
     search_payload,
@@ -840,3 +844,43 @@ class FamilyColourTests(SimpleTestCase):
         given = [c for c in colours.values() if c is not None]
         self.assertEqual(sorted(given), list(range(1, TECHNIQUE_PALETTE + 1)))
         self.assertEqual(list(colours.values()).count(None), 1)
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+class ManifestJsonTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.globalid = uuid4()
+        IIIFManifest.objects.create(
+            label="Local",
+            url=f"/manifest/{cls.globalid}",
+            manifest={"id": "stored"},
+            globalid=cls.globalid,
+        )
+
+    def test_a_local_manifest_with_a_query_or_a_fragment_is_read_from_the_database(
+        self,
+    ):
+        urls = [
+            f"/manifest/{self.globalid}?version=2",
+            f"/manifest/{self.globalid}/#top",
+            f"https://manuspectrum.example/manifest/{self.globalid}?x=1#y",
+        ]
+        with patch(
+            "manuspectrum.views.explorer.service.CanvasIIIF.fetch_manifest"
+        ) as fetch:
+            found = [manifest_json(url) for url in urls]
+
+        self.assertEqual(found, [{"id": "stored"}] * len(urls))
+        fetch.assert_not_called()
+
+    def test_a_manifest_named_only_in_the_query_of_an_external_url_is_fetched(self):
+        url = f"https://iiif.example/iiif?next=/manifest/{self.globalid}"
+        with patch(
+            "manuspectrum.views.explorer.service.CanvasIIIF.fetch_manifest",
+            return_value={"id": "fetched"},
+        ) as fetch:
+            found = manifest_json(url)
+
+        self.assertEqual(found, {"id": "fetched"})
+        fetch.assert_called_once_with(url)

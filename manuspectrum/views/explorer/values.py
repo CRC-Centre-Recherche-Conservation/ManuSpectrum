@@ -12,6 +12,7 @@ because the Explorer contract needs the language a name actually resolved to
 
 import os
 import re
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.urls import reverse
@@ -187,24 +188,32 @@ def axis_title(config):
 
 
 _SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
+_WEB_SCHEMES = ("http", "https")
 
 
 def site_path(url):
-    """*url* as a path on this site when it is local, else unchanged.
+    """*url* as a path on this site when it is local, an http(s) URL when it is external, else None.
 
     Local is a path, or an absolute URL on ``PUBLIC_SERVER_ADDRESS`` or on a
     host of ``EXPLORER_LEGACY_HOSTS``; a path without its leading slash gets
-    one. A protocol-relative or other absolute URL is external.
+    one. Any other scheme (``javascript:``, ``data:``, ``ftp:``), a
+    protocol-relative URL and a path a browser reads as another host
+    (``/\\host``) give None.
     """
-    url = rewrite_legacy_url(str(url or ""))
-    if url.startswith("//") or not url:
-        return url
+    url = rewrite_legacy_url(str(url or "").strip())
+    if not url or url.startswith(("//", "\\", "/\\")):
+        return None
     if not _SCHEME.match(url):
-        return "/" + url.lstrip("/")
+        return _local_path(url)
     public = settings.PUBLIC_SERVER_ADDRESS.rstrip("/")
     if public and (url == public or url.startswith(public + "/")):
-        return "/" + url[len(public) :].lstrip("/")
-    return url
+        return _local_path(url[len(public) :])
+    return url if urlsplit(url).scheme.lower() in _WEB_SCHEMES else None
+
+
+def _local_path(path):
+    path = "/" + path.lstrip("/")
+    return None if path.startswith("/\\") else path
 
 
 def file_entries(entries, *, language, configs, kind):
@@ -261,7 +270,7 @@ def file_entries(entries, *, language, configs, kind):
                 },
                 "layers": [],
                 "license": effective_license(entry, language),
-                "downloadUrl": site_path(entry.get("url")),
+                "downloadUrl": site_path(entry.get("url")) or "",
                 "previewUrl": (
                     reverse("api-spectrum-preview", kwargs={"file_id": file_id})
                     if data_kind == "xy"
