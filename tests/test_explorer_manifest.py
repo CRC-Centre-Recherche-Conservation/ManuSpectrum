@@ -24,6 +24,7 @@ LAYERS = (
     "https://example.org/iiif/maxrf/canvas/cu",
 )
 UNKNOWN = "00000000-0000-4000-8000-00000000000b"
+BUILDER = "manuspectrum.views.explorer_manifest"
 PROFILE = 'application/ld+json;profile="http://iiif.io/api/presentation/3/context.json"'
 
 
@@ -389,6 +390,51 @@ class ManifestRouteTests(CorpusCase):
                 self.assertEqual(response.status_code, 413)
                 self.assertEqual(response.content, b"")
                 self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    def refused_early(self, query, *builders):
+        patches = [
+            mock.patch(f"{BUILDER}.{name}", side_effect=AssertionError)
+            for name in builders
+        ]
+        for patch in patches:
+            patch.start()
+        try:
+            response = self.get(query)
+        finally:
+            for patch in patches:
+                patch.stop()
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.content, b"")
+
+    @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)
+    def test_too_many_folios_are_refused_before_files_and_facts_are_read(self):
+        self.refused_early(
+            self.document_query(),
+            "analysis_files",
+            "_facts",
+            "v3_canvas",
+            "data_annotation",
+        )
+
+    @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=2)
+    def test_too_many_layers_are_refused_before_any_canvas_is_built(self):
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
+
+        self.refused_early(
+            self.document_query(),
+            "analysis_files",
+            "_facts",
+            "v3_canvas",
+            "data_annotation",
+        )
+
+    @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=3)
+    def test_folios_and_layers_at_the_bound_are_served(self):
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
+
+        manifest = self.manifest(self.document_query())
+
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS, *LAYERS])
 
     def test_the_media_type_is_the_iiif_presentation_3_profile(self):
         response = self.get(self.document_query())

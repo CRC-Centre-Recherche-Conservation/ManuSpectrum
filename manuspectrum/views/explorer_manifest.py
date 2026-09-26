@@ -13,6 +13,7 @@ import functools
 import hashlib
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 from urllib.parse import quote, urlencode
 
 from django.conf import settings
@@ -35,6 +36,7 @@ from manuspectrum.views.explorer_service import (
     characterization_summaries,
     dataset_of,
     document_characterizations,
+    imaging_entries,
     manifest_json,
     names,
     permalink,
@@ -437,10 +439,10 @@ def _facts(scope, row, values, label_of, named):
     }
 
 
-def _layers(entry, folio_label, mint_id):
-    """Layer canvases of one kept imaging entry, labelled « <folio> — <layer> »."""
+def _layers(entry, folio_label, mint_id, read=manifest_json):
+    """Layer canvases of one kept imaging entry, labelled « <folio> — <layer> »; *read* reads its manifest."""
     url = entry.get("downloadUrl") or ""
-    imaging = manifest_json(url) or {}
+    imaging = read(url) or {}
     part_of = _absolute_or_self(url)
     layers = []
     for canvas, raw in zip(canvases_of(imaging), _source_canvases(imaging).values()):
@@ -491,6 +493,111 @@ def _homepage(scope):
     ]
 
 
+@dataclass(frozen=True)
+class _Placement:
+    """Where the elements of a scope fall on one document's manifest (``_placements``)."""
+
+    document: str
+    url: str
+    source: object
+    raw: dict
+    position: dict
+    analyses: list
+    zones: dict
+    first: dict
+    materials: dict
+    kept: list
+
+
+def _placements(scope):
+    """One ``_Placement`` per document of *scope*, in order: its source manifest, zones, material zones and kept canvases.
+
+    Zones are read from ``scope.nodegroups``. The kept canvases are those
+    carrying a zone of a kept analysis or of a kept identified material, or
+    every canvas with ``canvases_all``. ``ManifestTooLarge`` is raised as
+    soon as the kept canvases of the documents placed so far exceed
+    ``EXPLORER_MANIFEST_MAX_CANVASES``.
+    """
+    bundle, language, reader = scope.bundle, scope.language, scope.reader
+    readable = scope.nodegroups
+    doc_values = Values(list(scope.documents), ["doc_manifest"], reader)
+    zone_node = role_node(*ROLES["zone"])
+    material_nodegroups = {
+        "own": getattr(role_node(*ROLES["ch_zone"]), "nodegroup_id", None),
+        "component": getattr(role_node(*ROLES["comp_zone"]), "nodegroup_id", None),
+    }
+    chosen_characterizations = set(scope.characterizations)
+    limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
+    plans, planned = [], set()
+    for document in scope.documents:
+        url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
+        source = manifest_json(url) if url else None
+        listed = canvases_of(source)
+        position = {c["id"]: c for c in listed}
+        dims = canvas_index(listed)
+        analyses = [
+            a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
+        ]
+        zones, first = defaultdict(list), {}
+        for rid, feature, canvas, shape in _annotations(
+            zone_node, analyses, dims, readable
+        ):
+            if canvas in position:
+                zones[canvas].append((rid, feature, shape))
+                first.setdefault(rid, canvas)
+        materials = defaultdict(list)
+        chosen = [
+            c
+            for c in document_characterizations(bundle, document)
+            if c in chosen_characterizations
+        ]
+        for summary in characterization_summaries(
+            chosen,
+            bundle.visible,
+            reader,
+            language,
+            dims,
+            objects_of=bundle.links["objects"],
+            analysis_rows=bundle.by_id,
+        ):
+            zone = summary["zone"]
+            if (
+                zone
+                and zone["canvas"] in position
+                and material_nodegroups[zone["source"]] in readable
+            ):
+                materials[zone["canvas"]].append((summary, zone["shape"]))
+        if scope.canvases_all:
+            kept = [c["id"] for c in listed]
+        else:
+            kept = [c["id"] for c in listed if c["id"] in zones or c["id"] in materials]
+        raw = _source_canvases(source)
+        planned.update(c for c in kept if c in raw)
+        if len(planned) > limit:
+            raise ManifestTooLarge()
+        plans.append(
+            _Placement(
+                document=document,
+                url=url,
+                source=source,
+                raw=raw,
+                position=position,
+                analyses=analyses,
+                zones=zones,
+                first=first,
+                materials=materials,
+                kept=kept,
+            )
+        )
+    return plans
+
+
+def _layer_ids(entry, read=manifest_json):
+    """The canvas ids ``_layers`` gives one kept imaging entry; *read* reads its manifest."""
+    imaging = read(entry.get("downloadUrl") or "") or {}
+    return list(_source_canvases(imaging))[: len(canvases_of(imaging))]
+
+
 def build_manifest(scope):
     """The IIIF Presentation 3 manifest of *scope*, in ``scope.language``.
 
@@ -519,20 +626,32 @@ def build_manifest(scope):
     listed in the manifest's ``metadata`` with its permalink.
 
     More than ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases (folios and
-    layers) raises ``ManifestTooLarge``.
+    layers) raises ``ManifestTooLarge``, counted before anything is built:
+    the folios while the zones are placed (``_placements``), before any file
+    or fact is read, then the folios and layers once the imaging entries are
+    read, before the other files, the facts and any canvas.
     """
     bundle, language, reader = scope.bundle, scope.language, scope.reader
     mint_id = functools.partial(mint, scope.digest)
-    readable = scope.nodegroups
-    rows = {a: bundle.by_id[a] for a in scope.analyses}
+    limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
+    plans = _placements(scope)
+    planned = {c for plan in plans for c in plan.kept if c in plan.raw}
     values = Values(list(scope.analyses), ANALYSIS_KEYS, reader)
+    read_imaging = functools.cache(manifest_json)
+    imaging = {
+        a: kept_files(scope, a, imaging_entries(a, values.get(a, "imaging"), language))
+        for a in scope.analyses
+    }
+    layer_ids = {
+        c
+        for entries in imaging.values()
+        for e in entries
+        for c in _layer_ids(e, read_imaging)
+    }
+    if len(planned | layer_ids) > limit:
+        raise ManifestTooLarge()
+    rows = {a: bundle.by_id[a] for a in scope.analyses}
     configs = renderer_configs(values, scope.analyses)
-    named = set(
-        scope.names_visible({o for row in rows.values() for o in row["operators"]})
-    )
-    label_of = dict(bundle.label_of)
-    label_of.update(names(named, language, reader))
-    facts = {a: _facts(scope, row, values, label_of, named) for a, row in rows.items()}
     files = {
         a: kept_files(
             scope,
@@ -541,72 +660,27 @@ def build_manifest(scope):
         )
         for a in scope.analyses
     }
-    imaging = {
-        a: [e for e in files[a] if e.get("dataKind") == "chemical-imaging"]
-        for a in scope.analyses
-    }
-    doc_values = Values(list(scope.documents), ["doc_manifest"], reader)
-    zone_node = role_node(*ROLES["zone"])
-    material_nodegroups = {
-        "own": getattr(role_node(*ROLES["ch_zone"]), "nodegroup_id", None),
-        "component": getattr(role_node(*ROLES["comp_zone"]), "nodegroup_id", None),
-    }
+    named = set(
+        scope.names_visible({o for row in rows.values() for o in row["operators"]})
+    )
+    label_of = dict(bundle.label_of)
+    label_of.update(names(named, language, reader))
+    facts = {a: _facts(scope, row, values, label_of, named) for a, row in rows.items()}
     canvases, structures, unlocated, placed = _Canvases(), [], [], set()
     layer_ranges = {}
 
     def add_layers(analysis_id, folio_label):
         placed.add(analysis_id)
         for entry in imaging[analysis_id]:
-            for layer in _layers(entry, folio_label, mint_id):
+            for layer in _layers(entry, folio_label, mint_id, read_imaging):
                 canvases.add(layer)
                 layer_ranges.setdefault(analysis_id, []).append(layer["id"])
 
     folios = 0
-    for document in scope.documents:
-        url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
-        source = manifest_json(url) if url else None
-        listed = canvases_of(source)
-        raw = _source_canvases(source)
-        position = {c["id"]: c for c in listed}
-        dims = canvas_index(listed)
-        analyses = [
-            a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
-        ]
-        zones, first = defaultdict(list), {}
-        for rid, feature, canvas, shape in _annotations(
-            zone_node, analyses, dims, readable
-        ):
-            if canvas in position:
-                zones[canvas].append((rid, feature, shape))
-                first.setdefault(rid, canvas)
-        materials = defaultdict(list)
-        chosen = [
-            c
-            for c in document_characterizations(bundle, document)
-            if c in set(scope.characterizations)
-        ]
-        for summary in characterization_summaries(
-            chosen,
-            bundle.visible,
-            reader,
-            language,
-            dims,
-            objects_of=bundle.links["objects"],
-            analysis_rows=bundle.by_id,
-        ):
-            zone = summary["zone"]
-            if (
-                zone
-                and zone["canvas"] in position
-                and material_nodegroups[zone["source"]] in readable
-            ):
-                materials[zone["canvas"]].append((summary, zone["shape"]))
-        if scope.canvases_all:
-            if len(listed) > canvases.limit:
-                raise ManifestTooLarge()
-            kept = [c["id"] for c in listed]
-        else:
-            kept = [c["id"] for c in listed if c["id"] in zones or c["id"] in materials]
+    for plan in plans:
+        document, url, source, raw = plan.document, plan.url, plan.source, plan.raw
+        position, zones, materials = plan.position, plan.zones, plan.materials
+        analyses, first, kept = plan.analyses, plan.first, plan.kept
         after = defaultdict(list)
         for analysis_id, canvas_id in first.items():
             after[canvas_id].append(analysis_id)
