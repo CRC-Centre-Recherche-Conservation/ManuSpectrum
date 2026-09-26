@@ -198,13 +198,7 @@ class ManifestRouteTests(CorpusCase):
         node = self.nodes[("document", "facsimiles")]
         TileModel.objects.filter(
             resourceinstance=self.documents["open"], nodegroup_id=node.nodegroup_id
-        ).update(
-            data={
-                str(
-                    node.nodeid
-                ): f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{stored.globalid}"
-            }
-        )
+        ).update(data={str(node.nodeid): f"/manifest/{stored.globalid}"})
 
         with mock.patch(FETCH, side_effect=fetched) as fetch:
             response = self.client.get(
@@ -212,7 +206,15 @@ class ManifestRouteTests(CorpusCase):
             )
 
         fetch.assert_not_called()
-        self.assertEqual([c["id"] for c in response.json()["items"]], [CANVAS])
+        manifest = response.json()
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
+        assert_valid_manifest(self, manifest)
+        absolute = f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{stored.globalid}"
+        self.assertEqual(manifest["items"][0]["partOf"][0]["id"], absolute)
+        for annotation in self.annotations(manifest):
+            self.assertEqual(
+                annotation["target"]["source"]["partOf"][0]["id"], absolute
+            )
 
     def test_an_unlocated_analysis_is_in_metadata_without_annotation(self):
         manifest = self.manifest(

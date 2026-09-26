@@ -517,7 +517,12 @@ def _homepage(scope):
 
 @dataclass(frozen=True)
 class _Placement:
-    """Where the elements of a scope fall on one document's manifest (``_placements``)."""
+    """Where the elements of a scope fall on one document's manifest (``_placements``).
+
+    ``url`` is the source manifest's absolute URL (a site path is prefixed
+    with ``PUBLIC_SERVER_ADDRESS``): canvases and annotation targets name it
+    in ``partOf``.
+    """
 
     document: str
     url: str
@@ -600,7 +605,7 @@ def _placements(scope):
         plans.append(
             _Placement(
                 document=document,
-                url=url,
+                url=_absolute_or_self(url),
                 source=source,
                 raw=raw,
                 position=position,
