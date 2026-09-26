@@ -1,6 +1,6 @@
 """``GET /api/explorer/series.csv``: the Selection's spectra in long format (spec §11.2).
 
-One row per point, ``curve,analysis,file,x,y``, after ``#`` comment lines
+One row per point, ``curve,analysis,file,x,y``, after lines opening with ``#``
 that name the Selection, its drafts, each analysis's
 permalink and, per curve, its licence, attribution, renderer configuration
 and raw file. The curve is the one the XY reader draws: the file's renderer
@@ -11,8 +11,6 @@ import csv
 import datetime
 import os
 import re
-
-from defusedcsv import csv as defused_csv
 
 from django.conf import settings
 from django.http import HttpResponseBadRequest, StreamingHttpResponse
@@ -41,6 +39,7 @@ from manuspectrum.views.explorer.service import (
 HEADER = ("curve", "analysis", "file", "x", "y")
 ROWS_PER_CHUNK = 2000
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
+_FORMULA_CELL = re.compile(r"([,;])([ ]*[=+\-@\t\r])")
 
 
 class _Line:
@@ -56,17 +55,16 @@ def _clean(text):
 
 
 def _comment(text):
-    """One ``#`` comment line, written by ``defusedcsv`` as a single cell.
+    """One comment line opening with ``#``, safe to open in a spreadsheet.
 
-    The cell is quoted whenever it holds a comma, a quote or a semicolon, so
-    a spreadsheet splitting on either separator reads it as one cell opening
-    with ``#`` and never as a cell opening a formula.
+    Double quotes become single quotes, and a cell that a spreadsheet
+    splitting on ``,`` or ``;`` would read as opening a formula (``=``,
+    ``+``, ``-``, ``@``, tab or carriage return, after optional spaces)
+    gets a leading ``'`` (OWASP CSV injection). ``pandas.read_csv(comment="#")``
+    and R's ``read.csv(comment.char="#")`` skip the line.
     """
-    line = f"# {_clean(text)}"
-    quoting = csv.QUOTE_ALL if ";" in line else csv.QUOTE_MINIMAL
-    return defused_csv.writer(_Line(), lineterminator="\r\n", quoting=quoting).writerow(
-        [line]
-    )
+    line = f"# {_clean(text)}".replace('"', "'")
+    return _FORMULA_CELL.sub(r"\1'\2", line) + "\r\n"
 
 
 def _file_url(entry, entries):
