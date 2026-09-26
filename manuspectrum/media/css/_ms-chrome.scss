@@ -226,7 +226,10 @@ img { max-width: 100%; height: auto; display: block; }
     transition: background 0.4s, padding 0.4s, backdrop-filter 0.4s, box-shadow 0.4s;
 }
 
-.ms-header.scrolled {
+// An application page scrolls its own content under the header from the first
+// pixel, so its header is never transparent.
+.ms-header.scrolled,
+.ms-page--app .ms-header {
     background: rgba(250, 249, 247, 0.88);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
