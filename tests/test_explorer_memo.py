@@ -852,6 +852,16 @@ class TicketGatesTests(SimpleTestCase):
 
         self.assertEqual(found.digest, "1.2:g1")
 
+    def test_a_previous_bundle_gone_before_it_is_read_builds_as_cold(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+
+        with mock.patch.object(explorer_memo, "_load", return_value=None):
+            held = explorer_memo.ticket(None, "en", self.build)
+
+        self.assertEqual((held.stale, held.reason), (False, "cold"))
+        self.assertEqual(self.pending, [])
+
     def test_a_previous_bundle_held_by_the_cache_only_is_loaded_from_it(self):
         self.bundle()
         explorer_memo.forget_local()

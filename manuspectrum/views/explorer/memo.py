@@ -104,7 +104,7 @@ class Ticket:
     bundle (``stale``). ``permissions`` names the permission gates of the
     reader; ``reason`` why ``current`` would be built: ``data``,
     ``permissions``, ``visibility`` (the previous bundle shows a resource the
-    reader can no longer see) or ``cold``.
+    reader can no longer see) or ``cold`` (no previous bundle to answer from).
     """
 
     key: str
@@ -148,7 +148,10 @@ def ticket(user, language, build=None):
     held = replace(held, reason=reason)
     if previous is None:
         return held
-    if _shows_hidden(_load(previous), visible):
+    shown = _load(previous)
+    if shown is None:
+        return replace(held, reason="cold")
+    if _shows_hidden(shown, visible):
         return replace(held, reason="visibility")
     _rebuild_in_background(held, user, build or _service_build)
     if _stored(key):
@@ -297,7 +300,7 @@ def _load(key):
 
 
 def _shows_hidden(bundle, visible):
-    """Whether *bundle* is gone or shows a resource outside *visible*, lifecycle aside."""
+    """Whether *bundle* shows a resource outside *visible*, lifecycle aside."""
     shown = getattr(bundle, "visible", None)
     return shown is None or bool(shown.ids - visible.ids)
 
