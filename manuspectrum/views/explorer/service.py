@@ -2165,7 +2165,10 @@ def licence_labels(files):
 
 
 def analysis_payload(analysis_id, user, language):
-    """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible."""
+    """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible.
+
+    A linked resource that no longer exists is left out of the references.
+    """
     bundle = corpus_bundle(user, language)
     visible = bundle.visible
     analysis_id = str(analysis_id)
@@ -2208,7 +2211,15 @@ def analysis_payload(analysis_id, user, language):
     )
     label_of = names(ids | set(cited_by), language, user)
     slug_of = model_of(ids)
-    ref = lambda rid: {"id": rid, "model": slug_of.get(rid, ""), "name": label_of[rid]}
+
+    def ref(rid):
+        if rid not in label_of:
+            return None
+        return {"id": rid, "model": slug_of.get(rid, ""), "name": label_of[rid]}
+
+    def refs(rids):
+        return [r for r in map(ref, rids) if r]
+
     type_node, content_node = values.node("statement_type"), values.node(
         "statement_content"
     )
@@ -2238,8 +2249,8 @@ def analysis_payload(analysis_id, user, language):
         "name": row["name"],
         "technique": row["technique"],
         "instrument": ref(instruments[0]) if instruments else None,
-        "operators": [ref(o) for o in row["operators"]],
-        "projects": [ref(p) for p in projects],
+        "operators": refs(row["operators"]),
+        "projects": refs(projects),
         "date": {
             "start": row["date"],
             "end": end,
@@ -2249,7 +2260,9 @@ def analysis_payload(analysis_id, user, language):
         "sample": ref(samples[0]) if samples else None,
         "files": files,
         "conditions": conditions,
-        "evidenceOf": [{"id": c, "name": label_of[c]} for c in cited_by],
+        "evidenceOf": [
+            {"id": c, "name": label_of[c]} for c in cited_by if c in label_of
+        ],
         "dataset": dataset,
         "bibliography": [
             t

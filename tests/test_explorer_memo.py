@@ -465,6 +465,18 @@ class StaleWhileRebuildTests(MemoCase):
         self.assertEqual(self.pending, [])
         self.assertNotIn(gone, bundle.visible.analyses)
 
+    def test_a_stale_answer_drops_the_reference_to_a_deleted_operator(self):
+        first = corpus_bundle(self.anonymous, "en")
+        analysis = str(self.analyses["open"].pk)
+        ResourceInstance.objects.filter(pk=self.operator.pk).delete()
+
+        payload = analysis_payload(analysis, self.anonymous, "en")
+
+        self.assertIs(corpus_bundle(self.anonymous, "en"), first)
+        self.assertEqual(len(self.pending), 1)
+        self.assertEqual(payload["operators"], [])
+        self.assertEqual(payload["id"], analysis)
+
     def test_a_group_change_builds_in_the_request(self):
         corpus_bundle(self.editor, "en")
         with self.captureOnCommitCallbacks(execute=True):
