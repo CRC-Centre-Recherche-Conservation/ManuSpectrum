@@ -9,6 +9,7 @@ import datetime
 import io
 import json
 import re
+import zipfile
 from unittest import mock
 
 from django.http import QueryDict
@@ -21,6 +22,7 @@ from manuspectrum.views.explorer.export import (
     csv_bytes,
     package,
     ro_crate,
+    stream,
 )
 from manuspectrum.views.explorer.scopes import resolve_scope
 from manuspectrum.views.explorer.service import permalink
@@ -364,7 +366,13 @@ class RoCrateTests(PackageCase):
 
         crate = ro_crate(scope, members, EXPORTED)
 
-        self.assertEqual(crate["@context"], "https://w3id.org/ro/crate/1.1/context")
+        self.assertEqual(
+            crate["@context"],
+            [
+                "https://w3id.org/ro/crate/1.1/context",
+                {"sha256": "http://schema.org/sha256"},
+            ],
+        )
         graph = {e["@id"]: e for e in crate["@graph"]}
         descriptor = graph["ro-crate-metadata.json"]
         self.assertEqual(descriptor["@type"], "CreativeWork")
@@ -443,6 +451,42 @@ class RoCrateTests(PackageCase):
         per_file = mixed["./"]["license"]["@id"]
         self.assertEqual(mixed[per_file]["@type"], "CreativeWork")
         self.assertEqual(mixed[per_file]["name"], "Licences per file")
+
+    def test_a_file_name_with_a_space_or_a_hash_gets_an_escaped_id(self):
+        self.stored_file(self.analyses["open"], "bleu clair #2.csv", b"1,2\n")
+        scope, members = self.package(f"ids=an:{self.pk('open')}:-")
+        with mock.patch(FETCH, side_effect=fetch):
+            crate = ro_crate(scope, members, EXPORTED)
+        (member,) = [m for m in members if m.arcname.endswith("bleu clair #2.csv")]
+
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(stream(members, crate)[1])))
+        graph = {
+            e["@id"]: e
+            for e in json.loads(archive.read("ro-crate-metadata.json"))["@graph"]
+        }
+        escaped = member.arcname.replace(" ", "%20").replace("#", "%23")
+        self.assertIn(member.arcname, archive.namelist())
+        self.assertEqual(graph[escaped]["name"], "bleu clair #2.csv")
+        self.assertNotEqual(graph[escaped]["sha256"], SHA_SLOT)
+        self.assertIn({"@id": escaped}, graph["./"]["hasPart"])
+        self.assertIn({"@id": escaped}, graph[permalink(self.pk("open"))]["result"])
+
+    def test_the_publisher_is_an_organization_and_actions_hang_from_the_root(self):
+        graph = self.crate(self.document_query())
+
+        publisher = graph[graph["./"]["publisher"]["@id"]]
+        self.assertEqual(publisher["@type"], "Organization")
+        self.assertTrue(publisher["name"])
+        actions = {e["@id"] for e in graph.values() if e["@type"] == "CreateAction"}
+        self.assertEqual({m["@id"] for m in graph["./"]["mentions"]}, actions)
+
+    def test_a_package_without_licensed_file_states_no_licence(self):
+        graph = self.crate(f"ids=ch:{self.characterization.pk}:-")
+
+        self.assertNotIn("license", graph["./"])
+        self.assertFalse(
+            [e for e in graph.values() if e.get("name") == "Licences per file"]
+        )
 
     def test_the_dataset_is_referenced_not_deposited_again(self):
         members = self.members(self.document_query())

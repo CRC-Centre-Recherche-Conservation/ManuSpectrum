@@ -17,6 +17,7 @@ import os
 import posixpath
 import re
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import orjson
 from defusedcsv import csv
@@ -66,7 +67,10 @@ from manuspectrum.views.summary_service import _date
 
 CRATE_NAME = "ro-crate-metadata.json"
 CHUNK_SIZE = 1024 * 1024
-RO_CRATE_CONTEXT = "https://w3id.org/ro/crate/1.1/context"
+RO_CRATE_CONTEXT = [
+    "https://w3id.org/ro/crate/1.1/context",
+    {"sha256": "http://schema.org/sha256"},
+]
 RO_CRATE_PROFILE = "https://w3id.org/ro/crate/1.1"
 SHA256_SLOT = "0" * 64
 LICENCES_PER_FILE = "#licences-per-file"
@@ -445,9 +449,14 @@ def _readme_datasets(datasets):
     return list(found.values())
 
 
+def crate_id(arcname):
+    """The RO-Crate ``@id`` of the member *arcname*: its path, URI-escaped (``/`` kept)."""
+    return quote(arcname, safe="/")
+
+
 def _file_entity(member, licence_id):
     entity = {
-        "@id": member.arcname,
+        "@id": crate_id(member.arcname),
         "@type": "File",
         "name": posixpath.basename(member.arcname),
         "contentSize": str(member.size),
@@ -466,13 +475,17 @@ def _licence_id(licence):
 def ro_crate(scope, members, exported_at, content=None):
     """The RO-Crate 1.1 metadata of the package, as a dict; every ``sha256`` is a 64-character placeholder.
 
-    The descriptor ``ro-crate-metadata.json`` is about the root ``Dataset``
+    The ``@context`` is the RO-Crate 1.1 context extended with ``sha256``
+    (``http://schema.org/sha256``, the term RO-Crate 1.2 defines). The
+    descriptor ``ro-crate-metadata.json`` is about the root ``Dataset``
     ``./``, which has every member as ``hasPart``, the export day as
-    ``datePublished``, the licence common to all licensed members (else a
-    ``CreativeWork`` « Licences per file ») and the datasets the data come
-    from as ``isBasedOn``. Each member is a ``File`` with its size, media
-    type and licence. Each analysis is a ``CreateAction`` identified by its
-    permalink: operators as ``Person`` agents, dates, the document and
+    ``datePublished``, the site as an ``Organization`` ``publisher``, the
+    licence common to all licensed members (a ``CreativeWork`` « Licences
+    per file » when they differ, no licence when none is licensed), the
+    datasets the data come from as ``isBasedOn`` and every analysis as
+    ``mentions``. Each member is a ``File`` whose ``@id`` is its URI-escaped
+    path (``crate_id``), with its name, size, media type and licence. Each
+    analysis is a ``CreateAction`` identified by its permalink: operators as ``Person`` agents, dates, the document and
     component as ``object``, its files as ``result``, its technique as a
     ``DefinedTerm`` in ``additionalType``. No instrument and no place are
     described.
@@ -490,9 +503,10 @@ def ro_crate(scope, members, exported_at, content=None):
             licence_id = _licence_id(member.licence)
             licences[licence_id] = member.licence
     with translation.override(language):
+        root_licence = None
         if len(licences) == 1:
             root_licence = next(iter(licences))
-        else:
+        elif licences:
             root_licence = LICENCES_PER_FILE
             describe(
                 {
@@ -545,10 +559,19 @@ def ro_crate(scope, members, exported_at, content=None):
         "description": description,
         # An ISO 8601 date without time: the package records its export day only.
         "datePublished": exported_at.isoformat(),
-        "publisher": settings.APP_TITLE,
-        "license": {"@id": root_licence},
-        "hasPart": [{"@id": m.arcname} for m in members],
+        "publisher": {"@id": settings.PUBLIC_SERVER_ADDRESS},
+        "hasPart": [{"@id": crate_id(m.arcname)} for m in members],
     }
+    if root_licence:
+        root["license"] = {"@id": root_licence}
+    describe(
+        {
+            "@id": settings.PUBLIC_SERVER_ADDRESS,
+            "@type": "Organization",
+            "name": settings.APP_TITLE,
+            "url": settings.PUBLIC_SERVER_ADDRESS,
+        }
+    )
     if based_on:
         root["isBasedOn"] = [{"@id": url} for url in based_on]
     graph.append(
@@ -601,7 +624,7 @@ def ro_crate(scope, members, exported_at, content=None):
                         "name": label_of[r]["value"],
                     }
                 )
-        results = [m.arcname for m in members if m.analysis == analysis_id]
+        results = [crate_id(m.arcname) for m in members if m.analysis == analysis_id]
         if results:
             action["result"] = [{"@id": name} for name in results]
         technique = row["technique"]
@@ -616,6 +639,8 @@ def ro_crate(scope, members, exported_at, content=None):
                 }
             )
         graph.append(action)
+    if content.rows:
+        root["mentions"] = [{"@id": permalink(row["id"])} for row in content.rows]
     graph += list(contextual.values())
     return {"@context": RO_CRATE_CONTEXT, "@graph": graph}
 
@@ -854,9 +879,10 @@ def _filled(crate, members, digests):
     for member in members:
         if member.source is None:
             digests[member.arcname] = hashlib.sha256(member.data).hexdigest()
+    arcname_of = {crate_id(m.arcname): m.arcname for m in members}
     graph = [
         (
-            {**entity, "sha256": digests[entity["@id"]]}
+            {**entity, "sha256": digests[arcname_of[entity["@id"]]]}
             if entity.get("@type") == "File"
             else entity
         )
