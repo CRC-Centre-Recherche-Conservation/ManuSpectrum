@@ -288,8 +288,6 @@ def _previous(held):
     """
     other_gates = False
     for key, permissions in reversed(_live(held.scope, held.language)):
-        if key == held.current:
-            continue
         if permissions != held.permissions:
             other_gates = True
         elif _stored(key):
@@ -358,10 +356,9 @@ def _stale_key(key):
 def _count_stale(held):
     counter = _stale_key(held.current)
     try:
-        cache.add(counter, 0, LOCK_TIMEOUT)
         cache.incr(counter)
     except ValueError:
-        pass
+        cache.add(counter, 1, LOCK_TIMEOUT)
     logger.debug(
         "explorer bundle served stale",
         extra={"language": held.language, "scope_kind": _kind(held.scope)},

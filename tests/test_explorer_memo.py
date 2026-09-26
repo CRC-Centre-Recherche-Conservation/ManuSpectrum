@@ -335,6 +335,12 @@ class RememberTests(SimpleTestCase):
         self.assertLess(len(stored), len(pickle.dumps(bundle)))
         self.assertEqual(found, bundle)
 
+    def test_a_build_that_returns_nothing_is_not_stored(self):
+        found = explorer_memo.remember("k-none", "public", "en", lambda: None)
+
+        self.assertIsNone(found)
+        self.assertFalse(cache.has_key("k-none"))
+
     def test_a_stored_bundle_is_read_without_building(self):
         cache.set("k-stored", explorer_memo.pack({"stored": True}))
 
@@ -591,6 +597,55 @@ class TicketGatesTests(SimpleTestCase):
         found = explorer_memo.corpus_bundle(None, "en", self.build, held=held)
 
         self.assertEqual(found, {"digest": "1.2:g1"})
+
+    def test_a_previous_bundle_held_by_the_cache_only_is_loaded_from_it(self):
+        self.bundle()
+        explorer_memo.forget_local()
+        self.state["version"] = "1.2"
+
+        self.assertEqual(self.bundle(), {"digest": "1.1:g1"})
+        self.assertEqual(self.builds, ["1.1:g1"])
+
+    def test_a_rebuild_that_cannot_start_releases_its_lock_and_is_logged(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+
+        with (
+            mock.patch.object(
+                explorer_memo, "spawn", side_effect=RuntimeError("no thread")
+            ),
+            self.assertLogs("manuspectrum.explorer", "ERROR") as logs,
+        ):
+            held = explorer_memo.ticket(None, "en", self.build)
+
+        self.assertTrue(held.stale)
+        self.assertIsNone(cache.get(f"{held.current}:lock"))
+        self.assertIn("could not start", logs.output[0])
+
+    def test_a_rebuild_whose_bundle_is_already_stored_does_not_start(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        held = explorer_memo.ticket(None, "en", self.build)
+        self.pending.clear()
+        cache.delete(f"{held.current}:lock")
+        cache.set(held.current, explorer_memo.pack({"digest": "elsewhere"}))
+
+        explorer_memo._rebuild_in_background(held, None, self.build)
+
+        self.assertEqual(self.pending, [])
+        self.assertIsNone(cache.get(f"{held.current}:lock"))
+
+    def test_a_rebuild_that_returns_nothing_stores_nothing_and_warns(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        held = explorer_memo.ticket(None, "en", lambda *args: None)
+
+        with self.assertLogs("manuspectrum.explorer", "WARNING") as logs:
+            self.pending[0]()
+
+        self.assertIn("returned nothing", logs.output[0])
+        self.assertFalse(cache.has_key(held.current))
+        self.assertIsNone(cache.get(f"{held.current}:lock"))
 
     def test_a_synchronous_rebuild_answers_from_the_new_bundle(self):
         self.bundle()
