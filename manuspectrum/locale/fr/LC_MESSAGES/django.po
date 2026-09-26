@@ -4316,6 +4316,81 @@ msgstr ""
 "Cette configuration a été modifiée par quelqu’un d’autre depuis son "
 "chargement. Rechargez-la avant d’enregistrer."
 
+#: views/explorer_citations.py
+#, python-format
+msgid "Analyses: %(parts)s"
+msgstr "Analyses : %(parts)s"
+
+#: views/explorer_citations.py
+#, python-format
+msgid "Project: %(names)s"
+msgid_plural "Projects: %(names)s"
+msgstr[0] "Projet : %(names)s"
+msgstr[1] "Projets : %(names)s"
+
+#: views/explorer_citations.py
+#, python-format
+msgid "Licence: %(names)s"
+msgid_plural "Licences: %(names)s"
+msgstr[0] "Licence : %(names)s"
+msgstr[1] "Licences : %(names)s"
+
+#: views/explorer_citations.py
+msgid "[Dataset]"
+msgstr "[Jeu de données]"
+
+#: views/explorer_citations.py
+#, python-format
+msgid "Accessed %(date)s."
+msgstr "Consulté le %(date)s."
+
+#: views/explorer_citations.py
+#, python-format
+msgid ""
+"The data are available in %(site)s (%(permalink)s) and in %(datasets)s, "
+"under the licences given for each file."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
+"%(datasets)s, sous les licences indiquées pour chaque fichier."
+
+#: views/explorer_citations.py
+#, python-format
+msgid ""
+"The data are available in %(site)s (%(permalink)s) and in %(datasets)s, "
+"under %(licence)s."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
+"%(datasets)s, sous licence %(licence)s."
+
+#: views/explorer_citations.py
+#, python-format
+msgid ""
+"The data are available in %(site)s (%(permalink)s) and in %(datasets)s."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
+"%(datasets)s."
+
+#: views/explorer_citations.py
+#, python-format
+msgid ""
+"The data are available in %(site)s (%(permalink)s), under the licences "
+"given for each file."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s), sous les "
+"licences indiquées pour chaque fichier."
+
+#: views/explorer_citations.py
+#, python-format
+msgid "The data are available in %(site)s (%(permalink)s), under %(licence)s."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s), sous licence "
+"%(licence)s."
+
+#: views/explorer_citations.py
+#, python-format
+msgid "The data are available in %(site)s (%(permalink)s)."
+msgstr "Les données sont disponibles dans %(site)s (%(permalink)s)."
+
 #~ msgid "XRF"
 #~ msgstr "XRF"
 
