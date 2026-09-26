@@ -341,7 +341,9 @@ def _rebuild_in_background(held, user, build):
     lock a later one took. The next request after the running one ends
     starts the rebuild of the data current then. A rebuild that raised or
     returned nothing starts none for ``settings.EXPLORER_REBUILD_RETRY_AFTER``
-    seconds, readers answered from the previous bundle meanwhile.
+    seconds, readers answered from the previous bundle meanwhile. A cache
+    error while taking or releasing the lock or recording a failure is
+    logged and never leaves the guard set.
     """
     failed = _rebuild_failed(held.scope, held.language)
     if cache.get(failed):
@@ -352,18 +354,16 @@ def _rebuild_in_background(held, user, build):
             return
         _rebuilding.add(slot)
     lock, token = _rebuild_lock(held.scope, held.language), uuid.uuid4().hex
-    if not cache.add(lock, token, LOCK_TIMEOUT):
-        _free(slot)
-        return
+    extra = {"language": held.language, "scope_kind": _kind(held.scope)}
 
     def release():
-        if cache.get(lock) == token:
-            cache.delete(lock)
-        _free(slot)
-
-    if cache.has_key(held.current):
-        release()
-        return
+        try:
+            if cache.get(lock) == token:
+                cache.delete(lock)
+        except Exception:
+            logger.exception("explorer bundle rebuild lock not released", extra=extra)
+        finally:
+            _free(slot)
 
     def rebuild():
         kept = False
@@ -373,22 +373,29 @@ def _rebuild_in_background(held, user, build):
                     held, lambda: build(user, held.language, held.visible)
                 )
         except Exception:
-            logger.exception(
-                "explorer bundle rebuild failed",
-                extra={"language": held.language, "scope_kind": _kind(held.scope)},
-            )
+            logger.exception("explorer bundle rebuild failed", extra=extra)
         finally:
-            if not kept:
-                cache.set(
-                    failed, 1, getattr(settings, "EXPLORER_REBUILD_RETRY_AFTER", 60)
+            try:
+                if not kept:
+                    cache.set(
+                        failed,
+                        1,
+                        getattr(settings, "EXPLORER_REBUILD_RETRY_AFTER", 60),
+                    )
+            except Exception:
+                logger.exception(
+                    "explorer bundle rebuild failure not recorded", extra=extra
                 )
-            release()
+            finally:
+                release()
 
     try:
-        spawn(rebuild)
+        if cache.add(lock, token, LOCK_TIMEOUT) and not cache.has_key(held.current):
+            spawn(rebuild)
+            return
     except Exception:
-        release()
-        logger.exception("explorer bundle rebuild could not start")
+        logger.exception("explorer bundle rebuild could not start", extra=extra)
+    release()
 
 
 def _free(slot):

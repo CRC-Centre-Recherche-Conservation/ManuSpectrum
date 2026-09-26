@@ -873,6 +873,71 @@ class TicketGatesTests(SimpleTestCase):
         self.assertFalse(cache.has_key(held.current))
         self.assertIsNone(self.rebuild_lock())
 
+    def failing_cache(self, method, key):
+        """``explorer_memo.cache`` with *method* raising for *key*, the rest untouched."""
+        wrapped = mock.MagicMock(wraps=cache)
+        real = getattr(cache, method)
+
+        def call(name, *args, **kwargs):
+            if name == key:
+                raise ConnectionError("cache unreachable")
+            return real(name, *args, **kwargs)
+
+        getattr(wrapped, method).side_effect = call
+        return mock.patch.object(explorer_memo, "cache", wrapped)
+
+    def test_a_cache_error_releasing_the_lock_still_lets_the_next_rebuild_start(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        self.bundle()
+        lock = explorer_memo._rebuild_lock("public", "en")
+
+        with (
+            self.failing_cache("get", lock),
+            self.assertLogs("manuspectrum.explorer", "ERROR") as logs,
+        ):
+            self.pending.pop()()
+        cache.delete(lock)
+        self.state["version"] = "1.3"
+
+        self.assertEqual(self.bundle(), "1.2:g1")
+        self.assertEqual(len(self.pending), 1)
+        self.assertEqual(len(logs.output), 1)
+
+    def test_a_cache_error_recording_a_failed_rebuild_still_releases_it(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        explorer_memo.ticket(None, "en", lambda *args: None)
+        failed = explorer_memo._rebuild_failed("public", "en")
+
+        with (
+            self.failing_cache("set", failed),
+            self.assertLogs("manuspectrum.explorer", "ERROR") as logs,
+        ):
+            self.pending.pop()()
+
+        self.assertIsNone(self.rebuild_lock())
+        self.assertEqual(explorer_memo._rebuilding, set())
+        self.assertEqual(len(logs.output), 1)
+
+    def test_a_cache_error_before_a_rebuild_starts_frees_its_guard_and_lock(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        held = explorer_memo.ticket(None, "en", self.build)
+        self.pending.clear()
+        cache.delete(explorer_memo._rebuild_lock("public", "en"))
+        explorer_memo._rebuilding.clear()
+
+        with (
+            self.failing_cache("has_key", held.current),
+            self.assertLogs("manuspectrum.explorer", "ERROR"),
+        ):
+            explorer_memo._rebuild_in_background(held, None, self.build)
+
+        self.assertEqual(self.pending, [])
+        self.assertIsNone(self.rebuild_lock())
+        self.assertEqual(explorer_memo._rebuilding, set())
+
     def test_a_synchronous_rebuild_answers_from_the_new_bundle(self):
         self.bundle()
         self.state["version"] = "1.2"
