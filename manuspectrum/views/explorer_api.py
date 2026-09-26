@@ -34,6 +34,7 @@ from django.views.decorators.gzip import gzip_page
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import is_connected
 from manuspectrum.views import explorer_memo
+from manuspectrum.views.explorer_scopes import ScopeError, resolve_scope, share_payload
 from manuspectrum.views.explorer_service import (
     FACET_KEYS,
     analysis_payload,
@@ -257,3 +258,38 @@ class ExplorerItemsView(View):
             request,
             lambda: items_payload(keys, request.user, language),
         )
+
+
+@method_decorator(gzip_page, name="dispatch")
+class ExplorerShareView(View):
+    """``GET /{lang}/api/explorer/share?ids=|document=|project=[&restricted=1]``: citations, parts and export estimate of a scope.
+
+    Malformed scope parameters answer a bodyless 400; a scope with nothing
+    visible the bodyless 404. The visitor's ETag is the digest of the body:
+    the payload carries the day of consultation and counts files of imaging
+    manifests the data version does not follow.
+    """
+
+    def get(self, request):
+        language = translation.get_language()
+        try:
+            scope = resolve_scope(request.GET, request.user, language)
+        except ScopeError:
+            return HttpResponseBadRequest()
+        if scope is None:
+            return _not_found()
+        return _answer(request, lambda: share_payload(scope, datetime.date.today()))
+
+
+class ExplorerManifestView(View):
+    """``GET /iiif/v3/explorer-manifest``: the IIIF manifest of a scope; answers the bodyless 404 until its builder is registered."""
+
+    def get(self, request):
+        return _not_found()
+
+
+class UnservedProductView(View):
+    """A language-neutral product route whose builder is not registered yet: the bodyless 404."""
+
+    def get(self, request):
+        return _not_found()

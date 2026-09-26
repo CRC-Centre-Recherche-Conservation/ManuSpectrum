@@ -7,14 +7,18 @@ visible analyses and identified materials in corpus order, the per-key
 narrowing of the Selection, and whose rights build the products.
 
 Nothing is memoised here: the scope reads the memoised corpus bundle of its
-reader (``explorer_memo``) and the visibility memos.
+reader (``explorer_memo``) and the visibility memos. ``share_payload`` is the
+scope's summary for the « Share and export » panel, built per request.
 """
 
 import hashlib
+import os
 import uuid
 from dataclasses import dataclass
 
 from django.conf import settings
+from django.urls import reverse
+from django.utils import translation
 
 from manuspectrum.utils.public_visibility import (
     anonymous_user,
@@ -23,15 +27,25 @@ from manuspectrum.utils.public_visibility import (
     visible_set,
 )
 from manuspectrum.utils.role_links import role_node
+from manuspectrum.views.explorer_citations import availability, citation_entries
 from manuspectrum.views.explorer_memo import ticket
 from manuspectrum.views.explorer_service import (
     ITEM_KEY,
     ROLES,
+    Values,
+    analysis_files,
+    cited_analysis,
     corpus_bundle,
+    dataset_of,
     document_characterizations,
+    licence_labels,
     linkable,
+    names,
     parse_keys,
+    permalink,
+    product_url,
 )
+from manuspectrum.views.summary_service import _date
 from manuspectrum.views.spectrum_preview import file_record
 
 SCOPE_KINDS = ("ids", "document", "project")
@@ -354,3 +368,159 @@ def scope_file(scope, analysis_id, file_id):
     if nodegroup_id not in readable_nodegroup_ids(scope.viewer):
         return None
     return path
+
+
+def _file_bytes(scope, analysis_id, entry):
+    """Stored size of one kept entry: its recorded ``size``, else the size on disk; imaging manifests weigh 0."""
+    if entry.get("dataKind") == "chemical-imaging":
+        return 0
+    if isinstance(entry.get("size"), int) and not isinstance(entry["size"], bool):
+        return entry["size"]
+    path = scope_file(scope, analysis_id, entry.get("id"))
+    if path is None:
+        return 0
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def _share_link(scope):
+    """Where the whole scope is available on the site: the report of its document or project, else the Explorer with the Selection."""
+    if scope.subject:
+        return permalink(scope.subject)
+    with translation.override(scope.language):
+        page = reverse("analysis-explorer").lstrip("/")
+    return (
+        f"{settings.PUBLIC_SERVER_ADDRESS}{page}?sel={scope.key.removeprefix('ids=')}"
+    )
+
+
+def share_payload(scope, accessed):
+    """``SharePayload`` of *scope*: counts, citations, parts, availability, export estimate and product links.
+
+    Citations follow ``citation_entries`` (one per dataset, then one per
+    analysis without dataset); operators and projects are named only when
+    both the reader and the viewer may name them. ``export`` sums the kept
+    files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
+    ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
+    one export per document. ``seriesCsv`` is given for a Selection holding
+    spectra only, ``exportRestricted`` when the viewer's default build left
+    restricted items out. *accessed* is the day of consultation.
+    """
+    bundle, language = scope.bundle, scope.language
+    rows = [bundle.by_id[a] for a in scope.analyses]
+    values = Values(
+        list(scope.analyses),
+        ["dataset", "end", "files", "micro", "imaging"],
+        scope.reader,
+    )
+    links = bundle.links
+    projects_of = {
+        row["id"]: [
+            p
+            for p in links["projects"].get(row["id"], ())
+            if p in bundle.visible.projects
+        ]
+        for row in rows
+    }
+    named = set(
+        scope.names_visible(
+            {o for row in rows for o in row["operators"]}
+            | {p for ids in projects_of.values() for p in ids}
+        )
+    )
+    label_of = names(named, language, scope.reader)
+    groups, all_licences, datasets = [], [], []
+    files_count = bytes_count = spectra = 0
+    for row in rows:
+        analysis_id = row["id"]
+        kept = kept_files(
+            scope,
+            analysis_id,
+            analysis_files(analysis_id, scope.reader, language, values=values),
+        )
+        files_count += len(kept)
+        bytes_count += sum(_file_bytes(scope, analysis_id, e) for e in kept)
+        spectra += sum(
+            1 for e in kept if e.get("dataKind") == "xy" and e.get("role") == "readable"
+        )
+        end = values.first(analysis_id, "end")
+        dataset = dataset_of(values.first(analysis_id, "dataset"))
+        licences = licence_labels(kept)
+        all_licences += licences
+        datasets.append(dataset)
+        groups.append(
+            (
+                dataset,
+                [
+                    cited_analysis(
+                        row,
+                        _date(end) if isinstance(end, str) else None,
+                        label_of,
+                        [o for o in row["operators"] if o in named],
+                        [p for p in projects_of[analysis_id] if p in named],
+                    )
+                ],
+                licences,
+            )
+        )
+    over = (
+        bytes_count > settings.EXPLORER_EXPORT_MAX_BYTES
+        or files_count > settings.EXPLORER_EXPORT_MAX_FILES
+    )
+    flags = "&restricted=1" if scope.restricted else ""
+    documents = []
+    if over and len(scope.documents) > 1:
+        documents = [
+            {
+                "id": d,
+                "name": bundle.label_of[d],
+                "url": product_url("explorer-export", f"document={d}{flags}", language),
+            }
+            for d in scope.documents
+        ]
+    return {
+        "scope": {
+            "kind": scope.kind,
+            "key": scope.key,
+            "analyses": len(scope.analyses),
+            "characterizations": len(scope.characterizations),
+            "spectra": spectra,
+            "drafts": scope.drafts,
+            "restricted": scope.restricted,
+            "restrictedAvailable": scope.restricted_available,
+            "missing": list(scope.missing),
+        },
+        "citations": citation_entries(groups, language=language, accessed=accessed),
+        "parts": [
+            {"id": row["id"], "name": row["name"], "permalink": permalink(row["id"])}
+            for row in rows
+        ],
+        "availability": availability(
+            datasets,
+            licences=all_licences,
+            permalink=_share_link(scope),
+            language=language,
+        ),
+        "export": {
+            "files": files_count,
+            "bytes": bytes_count,
+            "overLimit": over,
+            "documents": documents,
+        },
+        "links": {
+            "manifest": product_url("iiif-v3-explorer-manifest", scope.key, language),
+            "seriesCsv": (
+                product_url("explorer-series-csv", scope.key, language)
+                if scope.kind == "ids" and spectra
+                else None
+            ),
+            "export": product_url("explorer-export", scope.key, language),
+            "exportRestricted": (
+                product_url("explorer-export", f"{scope.key}&restricted=1", language)
+                if scope.restricted_available
+                else None
+            ),
+        },
+    }

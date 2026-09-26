@@ -38,7 +38,10 @@ from manuspectrum.views.explorer_api import (
     ExplorerFacetView,
     ExplorerHomeView,
     ExplorerItemsView,
+    ExplorerManifestView,
     ExplorerSearchView,
+    ExplorerShareView,
+    UnservedProductView,
 )
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.knockout_templates import knockout_template
@@ -241,6 +244,9 @@ urlpatterns.append(
 urlpatterns.append(
     path("api/explorer/items", ExplorerItemsView.as_view(), name="explorer-items")
 )
+urlpatterns.append(
+    path("api/explorer/share", ExplorerShareView.as_view(), name="explorer-share")
+)
 
 if settings.ROOT_URLCONF == __name__:
     # set_language must live INSIDE i18n_patterns: Django's view calls
@@ -387,6 +393,28 @@ urlpatterns.append(
         SpectrumPreviewView.as_view(),
         name="api-spectrum-preview",
     )
+)
+
+### Explorer products of a scope (manifest, series CSV, data package).
+###
+### Language-neutral: a IIIF client dereferences the manifest and a browser
+### downloads the files; the language is the `lang` query parameter.
+urlpatterns.append(
+    path(
+        "iiif/v3/explorer-manifest",
+        ExplorerManifestView.as_view(),
+        name="iiif-v3-explorer-manifest",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/series.csv",
+        UnservedProductView.as_view(),
+        name="explorer-series-csv",
+    )
+)
+urlpatterns.append(
+    path("api/explorer/export", UnservedProductView.as_view(), name="explorer-export")
 )
 
 ### Manuspectrum URL - IIIF Annotations

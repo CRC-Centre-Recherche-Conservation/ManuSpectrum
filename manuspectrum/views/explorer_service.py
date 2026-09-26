@@ -8,6 +8,7 @@ may read, links off the tiles by role (D6), and a resource outside
 ``visible_set`` never reaches a payload, a facet or a name.
 """
 
+import datetime
 import functools
 import hashlib
 import html
@@ -29,6 +30,7 @@ from django.db.models.functions import Cast
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils import translation
+from django.utils.http import urlencode
 
 from arches.app.models.models import (
     IIIFManifest,
@@ -50,6 +52,11 @@ from manuspectrum.utils.public_visibility import (
 )
 from manuspectrum.utils.role_links import readable_links, role_node
 from manuspectrum.views import explorer_memo
+from manuspectrum.views.explorer_citations import (
+    CitedAnalysis,
+    citation_entry,
+    person_name,
+)
 from manuspectrum.views.explorer_conditions import clean_html, conditions_of
 from manuspectrum.views.explorer_values import (
     FALLBACK_LANGUAGE,
@@ -2101,6 +2108,41 @@ def report_url(resource_id, language):
         return reverse("resource_report", kwargs={"resourceid": resource_id})
 
 
+def permalink(resource_id):
+    """Absolute URL of the Arches report of *resource_id*, as citations and exports name it."""
+    return f"{settings.PUBLIC_SERVER_ADDRESS}report/{resource_id}"
+
+
+def product_url(route, query, language):
+    """Absolute URL of the language-neutral product *route* for the scope *query* in *language*.
+
+    *query* is an ``ExportScope.key`` (``ids=…``, ``document=…``, ``project=…``
+    and their flags); ``lang`` is appended.
+    """
+    path = reverse(route).lstrip("/")
+    return f"{settings.PUBLIC_SERVER_ADDRESS}{path}?{query}&{urlencode({'lang': language})}"
+
+
+def cited_analysis(row, end, label_of, operators, projects):
+    """``CitedAnalysis`` of a corpus *row*; *operators* and *projects* are the ids the citation may name."""
+    return CitedAnalysis(
+        id=row["id"],
+        name=row["name"]["value"],
+        permalink=permalink(row["id"]),
+        start=row["date"],
+        end=end,
+        authors=tuple(
+            person_name(label_of[o]["value"]) for o in operators if o in label_of
+        ),
+        projects=tuple(label_of[p]["value"] for p in projects if p in label_of),
+    )
+
+
+def licence_labels(files):
+    """Labels of the licences of *files* (``FileEntry``), in file order."""
+    return [f["license"]["label"]["value"] for f in files if f.get("license")]
+
+
 def analysis_payload(analysis_id, user, language):
     """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible."""
     bundle = corpus_bundle(user, language)
@@ -2160,6 +2202,9 @@ def analysis_payload(analysis_id, user, language):
         else []
     )
     end = values.first(analysis_id, "end")
+    end = _date(end) if isinstance(end, str) else None
+    files = analysis_files(analysis_id, user, language)
+    dataset = dataset_of(values.first(analysis_id, "dataset"))
     return {
         "id": analysis_id,
         "name": row["name"],
@@ -2169,15 +2214,15 @@ def analysis_payload(analysis_id, user, language):
         "projects": [ref(p) for p in projects],
         "date": {
             "start": row["date"],
-            "end": _date(end) if isinstance(end, str) else None,
+            "end": end,
         },
         "document": ref(document),
         "component": ref(component) if component else None,
         "sample": ref(samples[0]) if samples else None,
-        "files": analysis_files(analysis_id, user, language),
+        "files": files,
         "conditions": conditions,
         "evidenceOf": [{"id": c, "name": label_of[c]} for c in cited_by],
-        "dataset": dataset_of(values.first(analysis_id, "dataset")),
+        "dataset": dataset,
         "bibliography": [
             t
             for t in (
@@ -2186,8 +2231,17 @@ def analysis_payload(analysis_id, user, language):
             )
             if t
         ],
-        "citation": None,
-        "permalink": f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis_id}",
+        "citation": citation_entry(
+            dataset,
+            [cited_analysis(row, end, label_of, row["operators"], projects)],
+            licences=licence_labels(files),
+            language=language,
+            accessed=datetime.date.today(),
+        ),
+        "manifest": product_url(
+            "iiif-v3-explorer-manifest", f"ids=an:{analysis_id}:-", language
+        ),
+        "permalink": permalink(analysis_id),
         "reportUrl": report_url(analysis_id, language),
         "certaintyScale": certainty_scale(language),
         "unpublished": row["unpublished"],

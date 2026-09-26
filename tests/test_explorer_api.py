@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.http import QueryDict
 from django.test import SimpleTestCase
@@ -662,7 +663,52 @@ class AnalysisRouteTests(CorpusCase):
         self.assertTrue(
             payload["permalink"].endswith(f"report/{self.analyses['open'].pk}")
         )
-        self.assertIsNone(payload["citation"])
+        assert_shape(self, payload["citation"], "Citation")
+
+    def test_the_analysis_carries_its_citation(self):
+        analysis = str(self.analyses["open"].pk)
+
+        citation = self.get(analysis).json()["citation"]
+
+        permalink = f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis}"
+        self.assertEqual(citation["csl"]["type"], "dataset")
+        self.assertEqual(citation["csl"]["DOI"], "10.48579/pro/zeejth")
+        self.assertEqual(citation["csl"]["title"], "HEU, S. 2024")
+        self.assertEqual(
+            citation["csl"]["author"], [{"family": "Robinet", "given": "L."}]
+        )
+        self.assertEqual(citation["csl"]["collection-title"], "EMMA")
+        self.assertIn(f"X01 — f. 1v ({permalink})", citation["csl"]["note"])
+        self.assertTrue(citation["bibtex"].startswith("@dataset{robinetnd"))
+        self.assertTrue(citation["ris"].startswith("TY  - DATA"))
+        self.assertIn(permalink, citation["availability"])
+        self.assertIn("https://doi.org/10.48579/pro/zeejth", citation["availability"])
+
+    def test_an_analysis_without_dataset_is_cited_as_its_record(self):
+        analysis = str(self.analyses["on_document"].pk)
+
+        citation = self.get(analysis).json()["citation"]
+
+        self.assertEqual(citation["csl"]["id"], analysis)
+        self.assertEqual(citation["csl"]["title"], "FORS_009 — f. 1v")
+        self.assertEqual(citation["csl"]["publisher"], settings.APP_TITLE)
+        self.assertEqual(
+            citation["csl"]["URL"], f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis}"
+        )
+        self.assertNotIn("DOI", citation["csl"])
+
+    def test_the_analysis_names_its_manifest_by_absolute_url(self):
+        analysis = str(self.analyses["open"].pk)
+
+        english = self.get(analysis).json()["manifest"]
+        french = self.client.get(f"/fr/api/explorer/analysis/{analysis}").json()
+
+        self.assertEqual(
+            english,
+            f"{settings.PUBLIC_SERVER_ADDRESS}iiif/v3/explorer-manifest"
+            f"?ids=an:{analysis}:-&lang=en",
+        )
+        self.assertTrue(french["manifest"].endswith("&lang=fr"))
 
     def test_the_report_link_is_a_path_in_the_language_of_the_request(self):
         analysis = self.analyses["open"].pk

@@ -68,7 +68,7 @@ def _clean(text):
     return " ".join(str(text or "").split())
 
 
-def _person(text):
+def person_name(text):
     """``{"family", "given"}`` of ``Family, Given``; ``{"literal"}`` of a name without comma."""
     family, comma, given = text.partition(",")
     family, given = family.strip(), given.strip()
@@ -83,7 +83,7 @@ def parse_dataverse(text):
     if not match:
         return None
     authors = tuple(
-        _person(name) for name in match["authors"].split(";") if name.strip()
+        person_name(name) for name in match["authors"].split(";") if name.strip()
     )
     if not authors:
         return None
