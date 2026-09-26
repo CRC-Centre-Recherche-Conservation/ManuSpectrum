@@ -27,7 +27,8 @@ from manuspectrum.views.explorer.scopes import (
     share_payload,
 )
 from tests.explorer_contract import assert_shape
-from tests.explorer_fixtures import XY_CONFIG_ID
+from manuspectrum.views.explorer.service import manifest_json
+from tests.explorer_fixtures import CANVAS, MANIFEST, XY_CONFIG_ID
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 
 UNKNOWN = "00000000-0000-4000-8000-00000000000a"
@@ -418,6 +419,30 @@ class ShareRouteTests(CorpusCase):
 
         self.assertIsNotNone(placed["links"]["manifest"])
         self.assertIsNone(unplaced["links"]["manifest"])
+
+    def test_the_manifest_link_reads_source_manifests_until_one_places_a_canvas(
+        self,
+    ):
+        other = "https://example.org/iiif/ms211/manifest"
+        self.tile(self.documents["embargoed"], "facsimiles", other)
+        self.tile(
+            self.analyses["embargoed"],
+            "literal_location_of_analysis",
+            self.annotation_value(CANVAS, {"type": "Point", "coordinates": [1, -1]}),
+        )
+        with mock.patch(
+            "manuspectrum.views.explorer.scopes.manifest_json",
+            wraps=manifest_json,
+        ) as read:
+            payload = self.get(
+                f"ids=an:{self.pk('open')}:-,an:{self.pk('embargoed')}:-"
+            ).json()
+
+        self.assertIsNotNone(payload["links"]["manifest"])
+        sources = [
+            c.args[0] for c in read.call_args_list if c.args[0] in (MANIFEST, other)
+        ]
+        self.assertEqual(len(sources), 1)
 
     def test_links_encode_a_key_carrying_url_delimiters(self):
         key = f"af:{self.pk('open')}:x&y#z%w"

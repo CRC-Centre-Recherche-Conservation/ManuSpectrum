@@ -530,7 +530,7 @@ class _Placement:
 
 
 def _placements(scope):
-    """One ``_Placement`` per document of *scope*, in order: its source manifest, zones, material zones and kept canvases.
+    """One ``_Placement`` per document of *scope*, in order, each built when it is reached: its source manifest, zones, material zones and kept canvases.
 
     Zones are read from ``scope.nodegroups``. The kept canvases are those
     carrying a zone of a kept analysis or of a kept identified material, or
@@ -548,7 +548,7 @@ def _placements(scope):
     }
     chosen_characterizations = set(scope.characterizations)
     limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
-    plans, planned = [], set()
+    planned = set()
     for document in scope.documents:
         url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
         source = scope.read_manifest(url) if url else None
@@ -595,7 +595,7 @@ def _placements(scope):
         planned.update(c for c in kept if c in raw)
         if len(planned) > limit:
             raise ManifestTooLarge()
-        plans.append(
+        yield (
             _Placement(
                 document=document,
                 url=_absolute_or_self(url),
@@ -609,7 +609,6 @@ def _placements(scope):
                 kept=kept,
             )
         )
-    return plans
 
 
 def _layer_ids(entry, read=manifest_json):
@@ -642,18 +641,10 @@ def canvas_plan(scope):
     then the folios and layers once the imaging entries are read. Every
     manifest is read through ``scope.read_manifest``, once per scope.
     """
-    plans = _placements(scope)
+    plans = list(_placements(scope))
     planned = {c for plan in plans for c in plan.kept if c in plan.raw}
-    values = Values(list(scope.analyses), ANALYSIS_KEYS, scope.reader)
+    values, imaging = _imaging(scope)
     read_imaging = scope.read_manifest
-    imaging = {
-        a: kept_files(
-            scope,
-            a,
-            imaging_entries(a, values.get(a, "imaging"), scope.language, read_imaging),
-        )
-        for a in scope.analyses
-    }
     layer_ids = {
         c
         for entries in imaging.values()
@@ -667,15 +658,43 @@ def canvas_plan(scope):
     )
 
 
+def _imaging(scope):
+    """``(values, imaging)``: the ``ANALYSIS_KEYS`` of the analyses of *scope* and the imaging entries it keeps of each."""
+    values = Values(list(scope.analyses), ANALYSIS_KEYS, scope.reader)
+    imaging = {
+        a: kept_files(
+            scope,
+            a,
+            imaging_entries(
+                a, values.get(a, "imaging"), scope.language, scope.read_manifest
+            ),
+        )
+        for a in scope.analyses
+    }
+    return values, imaging
+
+
 def has_canvases(scope):
-    """Whether the manifest of *scope* holds a canvas; a scope over the canvas bound holds some."""
+    """Whether the manifest of *scope* holds a canvas; a scope over the canvas bound holds some.
+
+    Documents are placed in order until one keeps a folio; the imaging
+    layers are read only when none does.
+    """
     try:
-        return bool(canvas_plan(scope).canvases)
+        for plan in _placements(scope):
+            if any(c in plan.raw for c in plan.kept):
+                return True
+        _, imaging = _imaging(scope)
     except ManifestTooLarge:
         return True
+    return any(
+        _layer_ids(e, scope.read_manifest)
+        for entries in imaging.values()
+        for e in entries
+    )
 
 
-def build_manifest(scope, plan=None):
+def build_manifest(scope):
     """The IIIF Presentation 3 manifest of *scope*, in ``scope.language``.
 
     ``id`` is the manifest's own URL (``product_url``), ``homepage`` the
@@ -703,11 +722,10 @@ def build_manifest(scope, plan=None):
 
     A scope that places no canvas has no manifest: None. More than
     ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases (folios and layers) raises
-    ``ManifestTooLarge``; both are decided by ``canvas_plan`` (*plan* when
-    the caller already holds it) before any other file, fact or canvas is
-    read.
+    ``ManifestTooLarge``; both are decided by ``canvas_plan`` before any
+    other file, fact or canvas is read.
     """
-    plan = plan or canvas_plan(scope)
+    plan = canvas_plan(scope)
     if not plan.canvases:
         return None
     bundle, language, reader = scope.bundle, scope.language, scope.reader
