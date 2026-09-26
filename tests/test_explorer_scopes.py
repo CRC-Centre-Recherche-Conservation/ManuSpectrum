@@ -11,7 +11,10 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.http import QueryDict
 
+from arches.app.models.models import ResourceInstance
+
 from tests import test_explorer_api as api
+from tests.explorer_fixtures import DRAFT
 from tests.test_explorer_api import ReadRightsCase
 
 from manuspectrum.views.explorer.scopes import (
@@ -210,6 +213,19 @@ class ScopeTests(ReadRightsCase):
         self.make_draft(self.characterization)
 
         self.assertEqual(self.resolve(document).drafts, 2)
+
+    def test_drafts_are_counted_on_the_bundle_served_while_it_is_rebuilt(self):
+        document = f"document={self.documents['open'].pk}"
+        before = self.resolve(document)
+        ResourceInstance.objects.filter(pk=self.analyses["open"].pk).update(
+            resource_instance_lifecycle_state_id=DRAFT
+        )
+
+        with mock.patch("manuspectrum.views.explorer.memo.spawn"):
+            stale = self.resolve(document)
+
+        self.assertIs(stale.bundle, before.bundle)
+        self.assertEqual(stale.drafts, before.drafts)
 
     def test_an_af_key_narrows_to_its_file_and_an_im_key_to_its_imaging_manifest(self):
         self.tile(
