@@ -4,14 +4,20 @@ Usage:
     python manage.py test tests.test_explorer_share --settings="tests.test_settings"
 """
 
+import datetime
 from unittest import mock
 
 from django.conf import settings
+from django.db import connection
+from django.http import QueryDict
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import TileModel
 
+from manuspectrum.views.explorer_scopes import resolve_scope, share_payload
 from tests.explorer_contract import assert_shape
+from tests.explorer_fixtures import XY_CONFIG_ID
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 
 CSV = "11111111-1111-4111-8111-111111111111"
@@ -250,3 +256,43 @@ class ShareRouteTests(CorpusCase):
             french["availability"].startswith("Les données sont disponibles")
         )
         self.assertTrue(french["links"]["manifest"].endswith("&lang=fr"))
+
+
+class ShareCostTests(CorpusCase):
+    def project_of(self, name, count):
+        project = self.new_resource("project", name)
+        for n in range(count):
+            analysis = self.new_resource("analysis", f"{name} {n}")
+            self.tile(
+                analysis, "component_observed", self.refs(self.components["open"])
+            )
+            self.tile(analysis, "analysis_by_project", self.refs(project))
+            self.tile(
+                analysis,
+                "measurement_point_data",
+                [
+                    {
+                        "file_id": f"{n + 1:08d}-aaaa-4aaa-8aaa-{len(name):012d}",
+                        "name": f"{name}_{n}.csv",
+                        "size": 100,
+                        "type": "text/csv",
+                        "url": f"/files/{n + 1:08d}-aaaa-4aaa-8aaa-{len(name):012d}",
+                        "rendererConfig": XY_CONFIG_ID,
+                    }
+                ],
+            )
+        return project
+
+    def share_queries(self, project):
+        query = QueryDict(f"project={project.pk}")
+        scope = resolve_scope(query, self.anonymous, "en")
+        share_payload(scope, datetime.date(2026, 9, 26))
+        with CaptureQueriesContext(connection) as queries:
+            share_payload(scope, datetime.date(2026, 9, 26))
+        return len(queries)
+
+    def test_the_share_payload_reads_the_same_queries_for_one_or_five_analyses(self):
+        one = self.project_of("Single", 1)
+        five = self.project_of("Bulk project", 5)
+
+        self.assertEqual(self.share_queries(five), self.share_queries(one))

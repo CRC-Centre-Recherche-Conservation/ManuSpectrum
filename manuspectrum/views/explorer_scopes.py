@@ -44,6 +44,7 @@ from manuspectrum.views.explorer_service import (
     parse_keys,
     permalink,
     product_url,
+    renderer_configs,
 )
 from manuspectrum.views.summary_service import _date
 from manuspectrum.views.spectrum_preview import file_record
@@ -415,6 +416,7 @@ def share_payload(scope, accessed):
         ["dataset", "end", "files", "micro", "imaging"],
         scope.reader,
     )
+    configs = renderer_configs(values, scope.analyses)
     links = bundle.links
     projects_of = {
         row["id"]: [
@@ -438,7 +440,9 @@ def share_payload(scope, accessed):
         kept = kept_files(
             scope,
             analysis_id,
-            analysis_files(analysis_id, scope.reader, language, values=values),
+            analysis_files(
+                analysis_id, scope.reader, language, values=values, configs=configs
+            ),
         )
         files_count += len(kept)
         bytes_count += sum(_file_bytes(scope, analysis_id, e) for e in kept)

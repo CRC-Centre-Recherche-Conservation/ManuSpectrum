@@ -2066,25 +2066,35 @@ def imaging_entries(analysis_id, manifest_values, language):
     return entries
 
 
-def analysis_files(analysis_id, user, language, values=None):
-    """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging.
-
-    *values* lets a caller with several analyses share one batched ``Values``
-    lookup instead of one tile query per analysis.
-    """
-    if values is None:
-        values = Values([analysis_id], ["files", "micro", "imaging"], user)
+def renderer_configs(values, analysis_ids):
+    """``{config id: config}`` of the renderer configurations the measurement files of *analysis_ids* name, in one query."""
     config_ids = {
         e.get("rendererConfig")
+        for analysis_id in analysis_ids
         for e in values.get(analysis_id, "files")
         if isinstance(e, dict) and e.get("rendererConfig")
     }
-    configs = {
+    if not config_ids:
+        return {}
+    return {
         str(config_id): config
         for config_id, config in RendererConfig.objects.filter(
             configid__in=list(config_ids)
         ).values_list("configid", "config")
     }
+
+
+def analysis_files(analysis_id, user, language, values=None, configs=None):
+    """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging.
+
+    *values* and *configs* (``renderer_configs``) let a caller with several
+    analyses share one batched tile lookup and one configuration lookup
+    instead of one of each per analysis.
+    """
+    if values is None:
+        values = Values([analysis_id], ["files", "micro", "imaging"], user)
+    if configs is None:
+        configs = renderer_configs(values, [analysis_id])
     return (
         file_entries(
             values.get(analysis_id, "files"),
@@ -2306,6 +2316,9 @@ def items_payload(keys, user, language):
     shared_values = (
         Values(file_ids, ["files", "micro", "imaging"], user) if file_ids else None
     )
+    shared_configs = (
+        renderer_configs(shared_values, file_ids) if shared_values else None
+    )
     files_of, items, missing = {}, [], []
     for key, match in parsed:
         if not match:
@@ -2329,7 +2342,9 @@ def items_payload(keys, user, language):
             missing.append(key)
             continue
         if rid not in files_of:
-            files_of[rid] = analysis_files(rid, user, language, values=shared_values)
+            files_of[rid] = analysis_files(
+                rid, user, language, values=shared_values, configs=shared_configs
+            )
         if kind == "an":
             items.append(
                 {
