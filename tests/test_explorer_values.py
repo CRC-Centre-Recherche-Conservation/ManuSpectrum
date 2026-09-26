@@ -13,6 +13,7 @@ from manuspectrum.views.explorer.values import (
     axis_key,
     dataset_of,
     dataset_url,
+    doi_of,
     file_entries,
     label,
     name_of,
@@ -148,6 +149,22 @@ class DatasetUrlTests(SimpleTestCase):
                 self.assertEqual(
                     dataset_url({"url": url}), "https://doi.org/10.48579/PRO/ZEEJTH"
                 )
+
+    def test_a_landing_page_naming_a_doi_is_kept_as_written(self):
+        for url in (
+            "https://entrepot.recherche.data.gouv.fr/dataset.xhtml"
+            "?persistentId=doi:10.57745/ABCDEF&version=2.0",
+            "https://zenodo.org/records/1?doi=10.5281/zenodo.1#files",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(dataset_url({"url": url}), url)
+                self.assertIsNone(doi_of(url))
+
+    def test_a_doi_stops_at_a_query_or_a_fragment(self):
+        self.assertEqual(
+            dataset_url({"url": "https://doi.org/10.5281/zenodo.1?download=1#x"}),
+            "https://doi.org/10.5281/zenodo.1",
+        )
 
     def test_a_web_address_is_kept_and_anything_else_is_none(self):
         self.assertEqual(
