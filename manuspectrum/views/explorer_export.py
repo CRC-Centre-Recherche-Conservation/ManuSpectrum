@@ -631,9 +631,13 @@ def _built(name, data, media_type):
 
 
 def _data_members(scope, content, zones):
-    """The data files and imaging manifests of *scope*, laid out ``data/<document>/<folio>/<analysis>/<file>``."""
+    """``(members, unfetched)``: the data files and imaging manifests of *scope*, laid out ``data/<document>/<folio>/<analysis>/<file>``.
+
+    *unfetched* lists ``(analysis name, manifest URL)`` for each imaging
+    manifest that could not be read; it has no member.
+    """
     bundle = scope.bundle
-    taken, members = set(), []
+    taken, members, unfetched = set(), [], []
     for row in content.rows:
         analysis_id = row["id"]
         document = bundle.chains.get(analysis_id, (None, None))[0]
@@ -663,6 +667,7 @@ def _data_members(scope, content, zones):
             if entry.get("dataKind") == "chemical-imaging":
                 manifest = manifest_json(entry.get("downloadUrl"))
                 if not isinstance(manifest, dict):
+                    unfetched.append((row["name"]["value"], entry.get("downloadUrl")))
                     continue
                 imaging += 1
                 data = _json_bytes(manifest)
@@ -702,7 +707,7 @@ def _data_members(scope, content, zones):
                     analysis_id,
                 )
             )
-    return members
+    return members, unfetched
 
 
 class ExportTooLarge(Exception):
@@ -716,7 +721,7 @@ def package(scope, exported_at=None):
     the day of consultation of the citations. A manifest over
     ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases is left out and the README
     says why; imaging manifests go in as JSON, the README saying their images
-    are served by IIIF. More data files than ``EXPLORER_EXPORT_MAX_FILES``,
+    are served by IIIF, and naming each one that could not be fetched. More data files than ``EXPLORER_EXPORT_MAX_FILES``,
     or more of their bytes than ``EXPLORER_EXPORT_MAX_BYTES``, raise
     ``ExportTooLarge`` before anything else is built and before any file is
     opened.
@@ -729,7 +734,7 @@ def _assemble(scope, exported_at):
     language = scope.language
     content = scope_content(scope, ("statement_type", "statement_content"))
     zones = analysis_zones(scope)
-    data = _data_members(scope, content, zones)
+    data, unfetched = _data_members(scope, content, zones)
     files = [m for m in data if m.source is not None]
     if (
         len(files) > settings.EXPLORER_EXPORT_MAX_FILES
@@ -788,6 +793,14 @@ def _assemble(scope, exported_at):
                     "Chemical imaging is given as IIIF manifests (imaging-<n>.json); "
                     "their images are served by IIIF image servers and are not in the package."
                 )
+            )
+        for name, url in unfetched:
+            notes.append(
+                _(
+                    "Not included: the imaging manifest %(url)s of %(analysis)s "
+                    "could not be fetched."
+                )
+                % {"url": _markdown_cell(url), "analysis": _markdown_cell(name)}
             )
     columns, rows = analyses_table(scope, content, zones)
     built += [

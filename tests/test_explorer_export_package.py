@@ -307,6 +307,21 @@ class TablesTests(PackageCase):
         self.assertEqual(member.size, len(member.data))
         self.assertIn("IIIF", self.text(members["README.md"]))
 
+    def test_an_imaging_manifest_that_cannot_be_fetched_is_named_in_the_readme(self):
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
+        scope = self.scope(f"ids=an:{self.pk('open')}:-")
+        unreachable = lambda url, *a, **k: None if url == IMAGING else fetch(url)
+
+        with mock.patch(FETCH, side_effect=unreachable):
+            members = {m.arcname: m for m in package(scope, EXPORTED)}
+
+        self.assertFalse([n for n in members if "imaging-" in n])
+        readme = self.text(members["README.md"])
+        self.assertIn("Not included", readme)
+        self.assertIn(IMAGING, readme)
+        self.assertIn("could not be fetched", readme)
+        self.assertIn("X01 — f. 1v", readme)
+
 
 class CitationFilesTests(PackageCase):
     def test_citations_come_from_the_generator_one_per_dataset(self):
