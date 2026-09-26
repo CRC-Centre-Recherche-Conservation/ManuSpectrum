@@ -1,7 +1,17 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, useId, useTemplateRef } from "vue";
+import {
+    computed,
+    defineAsyncComponent,
+    inject,
+    ref,
+    useId,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
+import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
+import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
@@ -13,7 +23,12 @@ import {
     formatSize,
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
+import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import {
+    analysisContentState,
+    miradorLink,
+} from "@/manuspectrum/pages/AnalysisExplorer/share/content-state.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { viewerFor } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
@@ -23,6 +38,7 @@ import type {
     AnalysisPayload,
     FileEntry,
     Label,
+    Shape,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -38,7 +54,9 @@ const COPYRIGHT = "©";
  * The card of the analysis `analysisId`. `handle` may still hold the previous
  * analysis while this one loads: the card shows only a payload of
  * `analysisId`, and its heading (one element from loading to loaded) says it
- * is loading meanwhile.
+ * is loading meanwhile. `zone` (a source canvas id and a shape in its pixels)
+ * gives the IIIF link of the analysis: a Content State on the analysis
+ * manifest, copied or opened in Mirador; an unlocated analysis has none.
  */
 const props = withDefaults(
     defineProps<{
@@ -48,12 +66,15 @@ const props = withDefaults(
         headingId?: string;
         /** False hides « Close » where the container has its own. */
         closable?: boolean;
+        zone?: { canvas: string; shape: Shape } | null;
     }>(),
-    { headingId: undefined, closable: true },
+    { headingId: undefined, closable: true, zone: null },
 );
 
 const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
+
+const miradorUrl = inject(MIRADOR_URL_KEY, "");
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
@@ -62,6 +83,7 @@ const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
 
 const previews = new Map<string, Component>();
+const contentState = ref("");
 
 const analysis = computed(() =>
     props.handle.data.value?.id === props.analysisId
@@ -151,6 +173,32 @@ const attribution = computed(() => {
 });
 /** The Arches report of the analysis on this site, opened in a new tab. */
 const reportHref = computed(() => safeHref(analysis.value?.reportUrl));
+const miradorHref = computed(() =>
+    contentState.value
+        ? miradorLink(miradorUrl, { contentState: contentState.value })
+        : null,
+);
+
+watch(
+    () => [analysis.value?.manifest ?? null, props.zone] as const,
+    async ([manifest, zone]) => {
+        contentState.value = "";
+        if (!manifest || !zone) return;
+        try {
+            const state = await analysisContentState(
+                manifest,
+                zone.canvas,
+                zone.shape,
+            );
+            if (analysis.value?.manifest === manifest && props.zone === zone) {
+                contentState.value = state;
+            }
+        } catch {
+            contentState.value = "";
+        }
+    },
+    { immediate: true },
+);
 
 function previewOf(file: FileEntry): Component {
     const entry = viewerFor(file.dataKind);
@@ -486,6 +534,42 @@ function focusHeading(): void {
                 </template>
             </dl>
 
+            <section
+                class="cite"
+                :aria-labelledby="`${sectionId}-cite`"
+            >
+                <h4 :id="`${sectionId}-cite`">
+                    <span>{{ $gettext("Cite") }}</span>
+                </h4>
+                <CitationBlock :citation="analysis.citation" />
+                <div
+                    v-if="props.zone"
+                    class="iiif"
+                >
+                    <CopyButton
+                        :text="contentState"
+                        :label="$gettext('Copy the IIIF link')"
+                    />
+                    <a
+                        v-if="miradorHref"
+                        class="mirador"
+                        rel="noopener"
+                        target="_blank"
+                        :href="miradorHref"
+                    >
+                        <span>{{ $gettext("Open in Mirador") }}</span>
+                        <span class="visually-hidden">{{
+                            $gettext("(new tab)")
+                        }}</span>
+                        <span
+                            class="new-tab"
+                            aria-hidden="true"
+                            >↗</span
+                        >
+                    </a>
+                </div>
+            </section>
+
             <p
                 v-if="licence"
                 class="licence"
@@ -625,6 +709,13 @@ function focusHeading(): void {
     gap: 0.5rem;
     padding: 0;
     list-style: none;
+}
+
+.analysis-card .iiif {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem 1rem;
 }
 
 .analysis-card .files li,

@@ -1,9 +1,14 @@
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
+import { parseContentState } from "@iiif/helpers/content-state";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, ref, shallowRef } from "vue";
 
+import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
+import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
 import AnalysisCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue";
+
+import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
@@ -15,13 +20,25 @@ import {
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
-import type { AnalysisPayload } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    AnalysisPayload,
+    Shape,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
+
+const CANVAS = "https://iiif.example/ms1/canvas/f12";
+const MIRADOR = "https://viewer.example/mirador/";
+
+interface CardExtras {
+    zone?: { canvas: string; shape: Shape } | null;
+    mirador?: string;
+}
 
 function mountCard(
     payload: AnalysisPayload | null,
     status: RequestStatus = "ready",
     analysisId: string = payload?.id ?? uuid(101),
+    { zone = null, mirador = "" }: CardExtras = {},
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -32,8 +49,12 @@ function mountCard(
         retry: () => undefined,
     };
     const wrapper = mount(AnalysisCard, {
-        props: { handle, analysisId },
-        global: { plugins: [pinia], stubs: { SpectrumPreview: true } },
+        props: { handle, analysisId, zone },
+        global: {
+            plugins: [pinia],
+            stubs: { SpectrumPreview: true },
+            provide: { [MIRADOR_URL_KEY as symbol]: mirador },
+        },
     });
     return { wrapper, store: useExplorerStore() };
 }
@@ -263,5 +284,91 @@ describe("AnalysisCard", () => {
         expect(ids[0]).toBeTruthy();
         expect(ids[0]).not.toBe(ids[1]);
         expect(sections[0].attributes("aria-labelledby")).toBe(ids[0]);
+    });
+
+    it("shows the citation of the analysis", () => {
+        const payload = analysisPayload();
+        const { wrapper } = mountCard(payload);
+
+        const block = wrapper.findComponent(CitationBlock);
+        expect(block.exists()).toBe(true);
+        expect(block.props("citation")).toEqual(payload.citation);
+        expect(wrapper.find(".cite").text()).toContain("Cite");
+    });
+
+    it("copies the IIIF link of the analysis zone", async () => {
+        const payload = analysisPayload();
+        const shape: Shape = { type: "rect", x: 10, y: 20, w: 30, h: 40 };
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            zone: { canvas: CANVAS, shape },
+        });
+        await flushPromises();
+
+        const copy = wrapper
+            .findAllComponents(CopyButton)
+            .find((button) => button.props("label") === "Copy the IIIF link");
+        const state = parseContentState(copy?.props("text") as string) as {
+            target: {
+                source: { id: string; partOf: { id: string }[] };
+                selector: { value: string };
+            };
+        };
+        expect(state.target.source.id).toBe(CANVAS);
+        expect(state.target.source.partOf[0].id).toBe(payload.manifest);
+        expect(state.target.selector.value).toBe("xywh=10,20,30,40");
+    });
+
+    it("opens the analysis zone in Mirador when a viewer is set", async () => {
+        const payload = analysisPayload();
+        const zone = {
+            canvas: CANVAS,
+            shape: { type: "point", x: 1, y: 2 } as Shape,
+        };
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            zone,
+            mirador: MIRADOR,
+        });
+        await flushPromises();
+
+        const href = wrapper.find("a.mirador").attributes("href") as string;
+        const content = new URL(href).searchParams.get("iiif-content");
+        const copy = wrapper
+            .findAllComponents(CopyButton)
+            .find((button) => button.props("label") === "Copy the IIIF link");
+        expect(content).toBe(copy?.props("text"));
+
+        const without = mountCard(payload, "ready", payload.id, { zone });
+        await flushPromises();
+        expect(without.wrapper.find("a.mirador").exists()).toBe(false);
+    });
+
+    it("offers no IIIF link for an unlocated analysis", async () => {
+        const { wrapper } = mountCard(analysisPayload(), "ready", undefined, {
+            mirador: MIRADOR,
+        });
+        await flushPromises();
+
+        const labels = wrapper
+            .findAllComponents(CopyButton)
+            .map((button) => button.props("label"));
+        expect(labels).not.toContain("Copy the IIIF link");
+        expect(wrapper.find("a.mirador").exists()).toBe(false);
+    });
+
+    it("keeps the dataset link next to the citation", () => {
+        const payload = analysisPayload({
+            dataset: {
+                url: "https://doi.org/10.48579/PRO/ZEEJTH",
+                isDoi: true,
+                label: "Parchment data",
+            },
+        });
+        const { wrapper } = mountCard(payload);
+
+        const dataset = wrapper.find(
+            'a[href="https://doi.org/10.48579/PRO/ZEEJTH"]',
+        );
+        expect(dataset.exists()).toBe(true);
+        expect(wrapper.findComponent(CitationBlock).exists()).toBe(true);
     });
 });
