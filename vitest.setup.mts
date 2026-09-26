@@ -1,5 +1,19 @@
 import { beforeAll, vi } from 'vitest';
 
+// jsdom has no ResizeObserver; PrimeVue's TabList observes its own size.
+class NoResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+}
+if (!('ResizeObserver' in globalThis)) {
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+        value: NoResizeObserver,
+        configurable: true,
+        writable: true,
+    });
+}
+
 beforeAll(() => {
     vi.mock('arches', () => ({
         default: '',

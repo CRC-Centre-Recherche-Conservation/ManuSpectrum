@@ -27,10 +27,10 @@ afterEach(() => {
     document.body.innerHTML = "";
 });
 
-function mountButton(text: string, announce = vi.fn()) {
+function mountButton(text: string, announce = vi.fn(), iconOnly = false) {
     const wrapper = mount(CopyButton, {
         attachTo: document.body,
-        props: { text, label: "Copy BibTeX" },
+        props: { text, label: "Copy BibTeX", iconOnly },
         global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
     });
     return { wrapper, announce };
@@ -93,6 +93,24 @@ describe("CopyButton", () => {
     it("is named by its label", () => {
         const { wrapper } = mountButton("x");
         expect(wrapper.find("button").text()).toBe("Copy BibTeX");
+        wrapper.unmount();
+    });
+
+    it("as an icon, is named by its label and shows a check once copied", async () => {
+        document.execCommand = vi.fn(() => true);
+        const { wrapper } = mountButton("@dataset{x}", vi.fn(), true);
+        const button = wrapper.find("button");
+
+        expect(button.attributes("aria-label")).toBe("Copy BibTeX");
+        expect(button.attributes("title")).toBe("Copy BibTeX");
+        expect(button.text()).toBe("");
+        expect(button.find("svg.copy").exists()).toBe(true);
+
+        await button.trigger("click");
+        await flushPromises();
+
+        expect(button.find("svg.check").exists()).toBe(true);
+        expect(button.find("svg.copy").exists()).toBe(false);
         wrapper.unmount();
     });
 });

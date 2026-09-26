@@ -542,6 +542,11 @@ function focusHeading(): void {
                     <span>{{ $gettext("Cite") }}</span>
                 </h4>
                 <CitationBlock :citation="analysis.citation" />
+                <CopyButton
+                    class="availability"
+                    :text="analysis.availability"
+                    :label="$gettext('Copy the data availability statement')"
+                />
                 <div
                     v-if="props.zone"
                     class="iiif"
@@ -709,6 +714,10 @@ function focusHeading(): void {
     gap: 0.5rem;
     padding: 0;
     list-style: none;
+}
+
+.analysis-card .cite .availability {
+    justify-self: start;
 }
 
 .analysis-card .iiif {

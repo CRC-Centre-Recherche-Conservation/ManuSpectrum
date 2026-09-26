@@ -35,8 +35,9 @@ const CITATIONS_FOLDED_AFTER = 3;
  * « Share and export »: a button, shown when the view offers a scope (the
  * open document, the Selection, a project filtered alone), that opens a
  * drawer on the right (from the bottom on a phone) with three groups: Cite
- * (the availability statement, the share link, one citation per dataset,
- * the first three shown until the reader asks for the others),
+ * (the availability statement, the share link, one citation per dataset
+ * then per project of the analyses without one, the first three shown
+ * until the reader asks for the others),
  * Data (spectra CSV, data package with its announced size, one package per
  * document over the export limit) and IIIF (manifest, Mirador when
  * `EXPLORER_MIRADOR_URL` is set). The share payload is asked only while the

@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from unittest import mock
 
+import bibtexparser
+
 from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.http import QueryDict
@@ -668,34 +670,36 @@ class AnalysisRouteTests(CorpusCase):
     def test_the_analysis_carries_its_citation(self):
         analysis = str(self.analyses["open"].pk)
 
-        citation = self.get(analysis).json()["citation"]
+        payload = self.get(analysis).json()
 
         permalink = f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis}"
-        self.assertEqual(citation["csl"]["type"], "dataset")
-        self.assertEqual(citation["csl"]["DOI"], "10.48579/pro/zeejth")
-        self.assertEqual(citation["csl"]["title"], "HEU, S. 2024")
-        self.assertEqual(
-            citation["csl"]["author"], [{"family": "Robinet", "given": "L."}]
-        )
-        self.assertEqual(citation["csl"]["collection-title"], "EMMA")
-        self.assertIn(f"X01 — f. 1v ({permalink})", citation["csl"]["note"])
+        citation = payload["citation"]
+        self.assertEqual(set(citation), {"text", "bibtex"})
+        fields = bibtexparser.parse_string(citation["bibtex"]).entries[0].fields_dict
         self.assertTrue(citation["bibtex"].startswith("@dataset{robinetnd"))
-        self.assertTrue(citation["ris"].startswith("TY  - DATA"))
-        self.assertIn(permalink, citation["availability"])
-        self.assertIn("https://doi.org/10.48579/pro/zeejth", citation["availability"])
+        self.assertEqual(fields["doi"].value, "10.48579/pro/zeejth")
+        self.assertEqual(fields["title"].value, "HEU, S. 2024")
+        self.assertEqual(fields["author"].value, "Robinet, L.")
+        self.assertIn("Project: EMMA", fields["note"].value)
+        self.assertIn(f"({permalink})", fields["note"].value)
+        for text in ("Robinet, L.", "HEU, S. 2024", "EMMA", "doi.org/10.48579"):
+            self.assertIn(text, citation["text"])
+        self.assertIn(permalink, payload["availability"])
+        self.assertIn("https://doi.org/10.48579/pro/zeejth", payload["availability"])
 
     def test_an_analysis_without_dataset_is_cited_as_its_record(self):
         analysis = str(self.analyses["on_document"].pk)
 
         citation = self.get(analysis).json()["citation"]
 
-        self.assertEqual(citation["csl"]["id"], analysis)
-        self.assertEqual(citation["csl"]["title"], "FORS_009 — f. 1v")
-        self.assertEqual(citation["csl"]["publisher"], settings.APP_TITLE)
+        fields = bibtexparser.parse_string(citation["bibtex"]).entries[0].fields_dict
+        self.assertEqual(fields["title"].value, r"FORS\_009 {\textemdash} f. 1v")
+        self.assertEqual(fields["publisher"].value, settings.APP_TITLE)
         self.assertEqual(
-            citation["csl"]["URL"], f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis}"
+            fields["url"].value, f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis}"
         )
-        self.assertNotIn("DOI", citation["csl"])
+        self.assertNotIn("doi", fields)
+        self.assertTrue(citation["text"].startswith("FORS_009 — f. 1v [Dataset]"))
 
     def test_the_analysis_names_its_manifest_by_absolute_url(self):
         analysis = str(self.analyses["open"].pk)

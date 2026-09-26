@@ -264,13 +264,10 @@ export interface FileEntry {
     zone: Shape | null;
 }
 
-/** A dataset citation: the recommended text, its structured forms and the data availability statement. */
+/** A dataset citation: its recommended text and its BibTeX entry (the data package carries RIS and CSL-JSON too). */
 export interface Citation {
-    recommended: string;
-    csl: object;
+    text: string;
     bibtex: string;
-    ris: string;
-    availability: string;
 }
 
 export type ShareScopeKind = "ids" | "document" | "project";
@@ -288,12 +285,6 @@ export interface ShareScope {
     /** Items the default build leaves out for a signed-in reader; 0 for a visitor. */
     restrictedAvailable: number;
     missing: string[];
-}
-
-export interface SharePart {
-    id: string;
-    name: Label;
-    permalink: string;
 }
 
 export interface ShareDocument {
@@ -324,9 +315,8 @@ export interface ShareLinks {
 /** `GET /{lang}/api/explorer/share`: what « Share and export » offers for one scope. */
 export interface SharePayload {
     scope: ShareScope;
-    /** One per dataset, then one per analysis without dataset. */
+    /** One per dataset, then one per project (else document) of the analyses without dataset. */
     citations: Citation[];
-    parts: SharePart[];
     availability: string;
     export: ShareExport;
     links: ShareLinks;
@@ -350,6 +340,8 @@ export interface AnalysisPayload {
     dataset: { url: string; isDoi: boolean; label: string | null } | null;
     bibliography: Label[];
     citation: Citation;
+    /** The data availability statement of this analysis. */
+    availability: string;
     /** Absolute URL of the IIIF manifest of this analysis. */
     manifest: string;
     permalink: string;
@@ -402,13 +394,10 @@ export const SHAPE_KEYS = {
         keyof Ref,
         true
     >,
-    Citation: {
-        recommended: true,
-        csl: true,
-        bibtex: true,
-        ris: true,
-        availability: true,
-    } satisfies Record<keyof Citation, true>,
+    Citation: { text: true, bibtex: true } satisfies Record<
+        keyof Citation,
+        true
+    >,
     ValueRef: { id: true, uri: true, label: true } satisfies Record<
         keyof ValueRef,
         true
@@ -567,6 +556,7 @@ export const SHAPE_KEYS = {
         dataset: true,
         bibliography: true,
         citation: true,
+        availability: true,
         manifest: true,
         permalink: true,
         reportUrl: true,
@@ -601,7 +591,6 @@ export const SHAPE_KEYS = {
     SharePayload: {
         scope: true,
         citations: true,
-        parts: true,
         availability: true,
         export: true,
         links: true,
@@ -617,10 +606,6 @@ export const SHAPE_KEYS = {
         restrictedAvailable: true,
         missing: true,
     } satisfies Record<keyof ShareScope, true>,
-    SharePart: { id: true, name: true, permalink: true } satisfies Record<
-        keyof SharePart,
-        true
-    >,
     ShareExport: {
         files: true,
         bytes: true,

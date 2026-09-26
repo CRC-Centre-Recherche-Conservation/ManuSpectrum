@@ -2,10 +2,10 @@ msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:465
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:477
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:562
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:639
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:466
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:478
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:567
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:644
 msgid "(new tab)"
 msgstr ""
 
@@ -284,6 +284,10 @@ msgstr ""
 msgid "Bibliography"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:47
+msgid "BibTeX"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:156
 msgid "Browse the whole corpus"
 msgstr ""
@@ -304,7 +308,7 @@ msgstr ""
 msgid "Chips"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:289
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:290
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:542
 msgid "Cite"
 msgstr ""
@@ -361,49 +365,41 @@ msgstr ""
 msgid "Configuration saved."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:270
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:271
 msgid "Contains drafts (%{n})"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:280
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:281
 msgid "Contains restricted-access data"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue:23
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue:39
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue:27
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue:79
 msgid "Copied"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:31
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:33
 msgid "Copy BibTeX"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:39
-msgid "Copy CSL-JSON"
-msgstr ""
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:35
-msgid "Copy RIS"
-msgstr ""
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:27
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:34
 msgid "Copy the citation"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:43
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:298
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:299
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:548
 msgid "Copy the data availability statement"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:551
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:556
 msgid "Copy the IIIF link"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:454
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:455
 msgid "Copy the manifest URL"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:305
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:306
 msgid "Copy the share link"
 msgstr ""
 
@@ -419,11 +415,11 @@ msgstr ""
 msgid "Curtain: compare with the page"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:338
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:339
 msgid "Data"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:385
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:386
 msgid "Data package (ZIP, %{size})"
 msgstr ""
 
@@ -584,7 +580,7 @@ msgstr ""
 msgid "French label override"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:638
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:643
 msgid "Full record"
 msgstr ""
 
@@ -635,7 +631,7 @@ msgstr ""
 msgid "Ignore"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:449
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:450
 msgid "IIIF"
 msgstr ""
 
@@ -647,7 +643,7 @@ msgstr ""
 msgid "In the Selection as %{slots}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:352
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:353
 msgid "Include restricted-access data (%{n})"
 msgstr ""
 
@@ -706,7 +702,7 @@ msgstr ""
 msgid "Layers, in order: %{label}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:577
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:582
 msgid "Licence"
 msgstr ""
 
@@ -797,7 +793,7 @@ msgstr ""
 msgid "Move up"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:146
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:147
 msgid "My Selection (%{n})"
 msgstr ""
 
@@ -889,12 +885,12 @@ msgstr ""
 msgid "Open a document to see where each analysis was made."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:475
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:560
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:476
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:565
 msgid "Open in Mirador"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:463
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:464
 msgid "Open the manifest"
 msgstr ""
 
@@ -978,7 +974,7 @@ msgstr ""
 msgid "Project"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:597
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:602
 msgid "Project licence (not stated for this file)"
 msgstr ""
 
@@ -1145,8 +1141,8 @@ msgstr ""
 msgid "Selection: %{values}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:188
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:207
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:189
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:208
 msgid "Share and export"
 msgstr ""
 
@@ -1164,7 +1160,7 @@ msgstr ""
 msgid "Show fewer"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:321
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:322
 msgid "Show the other citation"
 msgid_plural "Show the %{n} other citations"
 msgstr[0] ""
@@ -1186,7 +1182,7 @@ msgstr ""
 msgid "Sources"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:368
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:369
 msgid "Spectra (CSV)"
 msgstr ""
 
@@ -1215,7 +1211,7 @@ msgstr ""
 msgid "supporting analysis"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:613
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:618
 msgid "Supporting analysis of"
 msgstr ""
 
@@ -1228,6 +1224,7 @@ msgid "Techniques on this page"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:57
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue:44
 msgid "Text"
 msgstr ""
 
@@ -1239,7 +1236,7 @@ msgstr ""
 msgid "The service is not answering right now."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:244
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:245
 msgid "These data are no longer available."
 msgstr ""
 
@@ -1259,7 +1256,7 @@ msgstr ""
 msgid "This configuration could not be saved."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:143
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:144
 msgid "This document"
 msgstr ""
 
@@ -1283,15 +1280,15 @@ msgstr ""
 msgid "This node no longer exists in the model."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:403
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:404
 msgid "This package (%{size}) is over the export limit: export one document at a time."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:414
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:415
 msgid "This package (%{size}) is over the export limit."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:144
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:145
 msgid "This project"
 msgstr ""
 
@@ -1303,7 +1300,7 @@ msgstr ""
 msgid "Updating…"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:214
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:215
 msgid "What to share"
 msgstr ""
 

@@ -271,7 +271,7 @@ class ExplorerItemsView(View):
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerShareView(View):
-    """``GET /{lang}/api/explorer/share?ids=|document=|project=[&restricted=1]``: citations, parts and export estimate of a scope.
+    """``GET /{lang}/api/explorer/share?ids=|document=|project=[&restricted=1]``: citations and export estimate of a scope.
 
     Malformed scope parameters answer a bodyless 400; a scope with nothing
     visible the bodyless 404. The visitor's ETag is the digest of the body:

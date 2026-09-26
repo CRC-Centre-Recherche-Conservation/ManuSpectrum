@@ -145,7 +145,7 @@ describe("ShareExportPanel", () => {
     it("lists one citation per dataset", async () => {
         const second = {
             ...analysisPayload().citation,
-            recommended: "HEU, S. 2024. Parchment data [Dataset].",
+            text: "HEU, S. 2024. Parchment data [Dataset].",
         };
         answer = () =>
             jsonResponse(
@@ -165,7 +165,7 @@ describe("ShareExportPanel", () => {
     it("folds a long list of citations after the first three", async () => {
         const citations = [1, 2, 3, 4, 5].map((n) => ({
             ...analysisPayload().citation,
-            recommended: `Citation ${n}`,
+            text: `Citation ${n}`,
         }));
         answer = () => jsonResponse(sharePayload({ citations }));
         const { wrapper } = await openPanel();

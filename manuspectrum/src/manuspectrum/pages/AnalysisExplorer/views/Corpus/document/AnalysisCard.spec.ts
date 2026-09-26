@@ -1,6 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { parseContentState } from "@iiif/helpers/content-state";
 import { createPinia, setActivePinia } from "pinia";
+import PrimeVue from "primevue/config";
 import { describe, expect, it } from "vitest";
 import { defineComponent, h, ref, shallowRef } from "vue";
 
@@ -51,7 +52,7 @@ function mountCard(
     const wrapper = mount(AnalysisCard, {
         props: { handle, analysisId, zone },
         global: {
-            plugins: [pinia],
+            plugins: [pinia, PrimeVue],
             stubs: { SpectrumPreview: true },
             provide: { [MIRADOR_URL_KEY as symbol]: mirador },
         },
@@ -275,7 +276,12 @@ describe("AnalysisCard", () => {
                 h(AnalysisCard, { handle, analysisId: uuid(101) }),
                 h(AnalysisCard, { handle, analysisId: uuid(101) }),
             ]),
-            { global: { plugins: [pinia], stubs: { SpectrumPreview: true } } },
+            {
+                global: {
+                    plugins: [pinia, PrimeVue],
+                    stubs: { SpectrumPreview: true },
+                },
+            },
         );
         const sections = wrapper.findAll(".conditions");
         const ids = sections.map((section) =>
@@ -294,6 +300,20 @@ describe("AnalysisCard", () => {
         expect(block.exists()).toBe(true);
         expect(block.props("citation")).toEqual(payload.citation);
         expect(wrapper.find(".cite").text()).toContain("Cite");
+    });
+
+    it("copies the data availability statement of the analysis", () => {
+        const payload = analysisPayload();
+        const { wrapper } = mountCard(payload);
+
+        const copy = wrapper
+            .findAllComponents(CopyButton)
+            .find(
+                (button) =>
+                    button.props("label") ===
+                    "Copy the data availability statement",
+            );
+        expect(copy?.props("text")).toBe(payload.availability);
     });
 
     it("copies the IIIF link of the analysis zone", async () => {

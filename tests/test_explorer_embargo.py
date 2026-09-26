@@ -223,7 +223,7 @@ class ConnectedExportTests(ProductsCase):
         manifest = json.loads(products[f"manifest {document}"])
         series = products[f"series {self.scopes()[0]}"]
         self.assertTrue(share["scope"]["restricted"])
-        self.assertIn(hidden, [p["id"] for p in share["parts"]])
+        self.assertTrue(any(hidden in c["bibtex"] for c in share["citations"]))
         self.assertIn("Contains restricted-access data", manifest["summary"]["en"])
         self.assertIn("X01 — f. 1v", json.dumps(manifest, ensure_ascii=False))
         self.assertIn("# Contains restricted-access data\r\n", series)

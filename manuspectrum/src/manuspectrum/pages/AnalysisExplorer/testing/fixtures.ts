@@ -446,12 +446,10 @@ export function analysisPayload(
         dataset: null,
         bibliography: [],
         citation: {
-            recommended: `MS1_f12_XRF_03 [Dataset]. ManuSpectrum. http://testserver/report/${uuid(101)}. Accessed 2026-09-26.`,
-            csl: { type: "dataset", id: uuid(101), title: "MS1_f12_XRF_03" },
+            text: `MS1_f12_XRF_03 [Dataset]. ManuSpectrum. http://testserver/report/${uuid(101)}. Accessed 2026-09-26.`,
             bibtex: "@dataset{manuspectrumnd000000,\n\ttitle = {MS1_f12_XRF_03}\n}\n",
-            ris: "TY  - DATA\nTI  - MS1_f12_XRF_03\nER  - \n",
-            availability: `The data are available in ManuSpectrum (http://testserver/report/${uuid(101)}).`,
         },
+        availability: `The data are available in ManuSpectrum (http://testserver/report/${uuid(101)}).`,
         manifest: `http://testserver/iiif/v3/explorer-manifest?ids=an:${uuid(101)}:-&lang=en`,
         permalink: `http://testserver/report/${uuid(101)}`,
         reportUrl: `/en/report/${uuid(101)}`,
@@ -481,13 +479,6 @@ export function sharePayload(
             missing: [],
         },
         citations: [analysisPayload().citation],
-        parts: [
-            {
-                id: uuid(101),
-                name: label("MS1_f12_XRF_03"),
-                permalink: `http://testserver/report/${uuid(101)}`,
-            },
-        ],
         availability: `The data are available in ManuSpectrum (http://testserver/report/${uuid(1)}).`,
         export: { files: 2, bytes: 2_400_000, overLimit: false, documents: [] },
         links: {

@@ -1,5 +1,8 @@
 """Citations of the Analysis Explorer: one dataset entry in CSL-JSON, BibTeX, RIS and plain text.
 
+The data package carries every form; the Explorer's payloads carry the text
+and BibTeX of an entry (``shown_citation``).
+
 The cited object is the dataset (CSL ``dataset``, RIS ``DATA``, biblatex
 ``@dataset``). A complete Dataverse citation stored as the dataset's label is
 the recommended text as written, and its authors, year, title, DOI, publisher
@@ -360,6 +363,11 @@ def _entry(dataset, analyses, licences, accessed, home=None):
             [dataset], licences, ", ".join(a.permalink for a in analyses)
         ),
     }
+
+
+def shown_citation(entry):
+    """The ``Citation`` of the Explorer's payloads for *entry*: its recommended ``text`` and its ``bibtex``."""
+    return {"text": entry["recommended"], "bibtex": entry["bibtex"]}
 
 
 def citation_entries(groups, *, language, accessed):

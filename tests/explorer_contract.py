@@ -19,13 +19,7 @@ TECHNIQUE = {
 TECHNIQUE_MARK = {"code": str, "colour": (int, type(None)), "family": str}
 RANKED_VALUE = {"id": str, "uri": str, "label": "Label", "rank": int}
 NAMED_REF = {"id": str, "name": "Label"}
-CITATION = {
-    "recommended": str,
-    "csl": dict,
-    "bibtex": str,
-    "ris": str,
-    "availability": str,
-}
+CITATION = {"text": str, "bibtex": str}
 IMAGE_REF = {
     "service": (str, type(None)),
     "url": (str, type(None)),
@@ -158,6 +152,7 @@ SHAPES = {
         "dataset": (dict, type(None)),
         "bibliography": list,
         "citation": "Citation",
+        "availability": str,
         "manifest": str,
         "permalink": str,
         "reportUrl": str,
@@ -184,7 +179,6 @@ SHAPES = {
     "SharePayload": {
         "scope": "ShareScope",
         "citations": list,
-        "parts": list,
         "availability": str,
         "export": "ShareExport",
         "links": "ShareLinks",
@@ -200,7 +194,6 @@ SHAPES = {
         "restrictedAvailable": int,
         "missing": list,
     },
-    "SharePart": {"id": str, "name": "Label", "permalink": str},
     "ShareExport": {"files": int, "bytes": int, "overLimit": bool, "documents": list},
     "ShareDocument": {"id": str, "name": "Label", "url": str},
     "ShareLinks": {

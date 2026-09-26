@@ -1,11 +1,15 @@
-"""The share payload of a scope: citations, parts, availability, export estimate and product links.
+"""The share payload of a scope: citations, availability, export estimate and product links.
 
 Usage:
     python manage.py test tests.test_explorer_share --settings="tests.test_settings"
 """
 
 import datetime
+import json
+import re
 from unittest import mock
+
+import bibtexparser
 from urllib.parse import parse_qs, quote, urlsplit
 
 from django.conf import settings
@@ -28,6 +32,11 @@ from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 
 CSV = "11111111-1111-4111-8111-111111111111"
 UNKNOWN = "00000000-0000-4000-8000-00000000000a"
+
+
+def cited(citation):
+    """The fields of the one BibTeX entry of a payload *citation*."""
+    return bibtexparser.parse_string(citation["bibtex"]).entries[0].fields_dict
 
 
 class ShareRouteTests(CorpusCase):
@@ -55,25 +64,15 @@ class ShareRouteTests(CorpusCase):
                 assert_shape(self, payload, "SharePayload")
                 for citation in payload["citations"]:
                     assert_shape(self, citation, "Citation")
-                for part in payload["parts"]:
-                    assert_shape(self, part, "SharePart")
                 for document in payload["export"]["documents"]:
                     assert_shape(self, document, "ShareDocument")
                 self.assertTrue(payload["citations"])
                 self.assertEqual(payload["scope"]["key"], query)
 
-    def test_the_parts_are_the_scope_analyses_with_their_permalinks(self):
+    def test_the_scope_counts_its_analyses_drafts_and_materials(self):
         payload = self.get(f"document={self.documents['open'].pk}").json()
 
-        self.assertEqual(
-            [p["id"] for p in payload["parts"]],
-            [self.pk("on_document"), self.pk("open"), self.pk("draft")],
-        )
-        for part in payload["parts"]:
-            self.assertEqual(
-                part["permalink"],
-                f"{settings.PUBLIC_SERVER_ADDRESS}report/{part['id']}",
-            )
+        self.assertEqual(payload["scope"]["analyses"], 3)
         self.assertEqual(payload["scope"]["drafts"], 1)
         self.assertEqual(payload["scope"]["characterizations"], 1)
 
@@ -126,10 +125,17 @@ class ShareRouteTests(CorpusCase):
         payload = self.get(f"document={self.documents['open'].pk}").json()
 
         self.assertEqual(
-            [c["csl"]["id"] for c in payload["citations"]],
-            ["10.48579/pro/zeejth", self.pk("draft")],
+            [
+                cited(c).get("doi") and cited(c)["doi"].value
+                for c in payload["citations"]
+            ],
+            ["10.48579/pro/zeejth", None],
         )
-        note = payload["citations"][0]["csl"]["note"]
+        self.assertEqual(
+            cited(payload["citations"][1])["url"].value,
+            f"{settings.PUBLIC_SERVER_ADDRESS}report/{self.pk('draft')}",
+        )
+        note = cited(payload["citations"][0])["note"].value
         for key in ("open", "on_document"):
             self.assertIn(f"report/{self.pk(key)}", note)
         self.assertIn(
@@ -138,23 +144,27 @@ class ShareRouteTests(CorpusCase):
         )
         self.assertIn("https://doi.org/10.48579/pro/zeejth", payload["availability"])
 
+    def test_a_citation_carries_its_text_and_its_bibtex_only(self):
+        payload = self.get(f"document={self.documents['open'].pk}").json()
+
+        for citation in payload["citations"]:
+            self.assertEqual(set(citation), {"text", "bibtex"})
+            self.assertIn(settings.APP_TITLE, citation["text"])
+            self.assertTrue(citation["bibtex"].startswith("@dataset{"))
+
     def test_analyses_without_a_dataset_are_cited_once_per_project(self):
         side = self.projects["side"]
         self.tile(self.analyses["draft"], "analysis_by_project", self.refs(side))
 
         payload = self.get(f"document={self.documents['open'].pk}").json()
 
+        self.assertEqual(len(payload["citations"]), 2)
+        fields = cited(payload["citations"][1])
+        self.assertEqual(fields["title"].value, "Side project")
         self.assertEqual(
-            [c["csl"]["id"] for c in payload["citations"]],
-            ["10.48579/pro/zeejth", str(side.pk)],
+            fields["url"].value, f"{settings.PUBLIC_SERVER_ADDRESS}report/{side.pk}"
         )
-        cited = payload["citations"][1]["csl"]
-        self.assertEqual(cited["title"], "Side project")
-        self.assertEqual(
-            cited["URL"], f"{settings.PUBLIC_SERVER_ADDRESS}report/{side.pk}"
-        )
-        for key in ("on_document", "draft"):
-            self.assertIn(f"report/{self.pk(key)}", cited["note"])
+        self.assertIn("2 analyses", fields["note"].value)
 
     def test_an_analysis_without_project_is_cited_under_its_document(self):
         document = self.documents["open"]
@@ -296,7 +306,7 @@ class ShareRouteTests(CorpusCase):
         payload = self.get(f"document={self.documents['open'].pk}&restricted=1").json()
 
         self.assertTrue(payload["scope"]["restricted"])
-        self.assertIn(self.pk("open"), [p["id"] for p in payload["parts"]])
+        self.assertEqual(payload["scope"]["analyses"], 3)
         self.assertIn("&restricted=1", payload["links"]["export"])
         self.assertIn("&restricted=1", payload["links"]["manifest"])
         self.assertIsNone(payload["links"]["exportRestricted"])
@@ -356,6 +366,19 @@ class ShareCostTests(CorpusCase):
         with CaptureQueriesContext(connection) as queries:
             share_payload(scope, datetime.date(2026, 9, 26))
         return len(queries)
+
+    def test_a_project_payload_names_none_of_its_analyses(self):
+        project = self.project_of("Bulk project", 5)
+        scope = resolve_scope(QueryDict(f"project={project.pk}"), self.anonymous, "en")
+
+        payload = share_payload(scope, datetime.date(2026, 9, 26))
+
+        self.assertNotIn("parts", payload)
+        self.assertEqual(len(payload["citations"]), 1)
+        self.assertEqual(
+            set(re.findall(r"report/([0-9a-f-]{36})", json.dumps(payload))),
+            {str(project.pk)},
+        )
 
     def test_the_share_payload_reads_the_same_queries_for_one_or_five_analyses(self):
         one = self.project_of("Single", 1)

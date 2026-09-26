@@ -55,6 +55,7 @@ from manuspectrum.views import explorer_memo
 from manuspectrum.views.explorer_citations import (
     CitedAnalysis,
     citation_entry,
+    shown_citation,
     person_name,
 )
 from manuspectrum.views.explorer_conditions import clean_html, conditions_of
@@ -2215,6 +2216,13 @@ def analysis_payload(analysis_id, user, language):
     end = _date(end) if isinstance(end, str) else None
     files = analysis_files(analysis_id, user, language)
     dataset = dataset_of(values.first(analysis_id, "dataset"))
+    citation = citation_entry(
+        dataset,
+        [cited_analysis(row, end, label_of, row["operators"], projects)],
+        licences=licence_labels(files),
+        language=language,
+        accessed=datetime.date.today(),
+    )
     return {
         "id": analysis_id,
         "name": row["name"],
@@ -2241,13 +2249,8 @@ def analysis_payload(analysis_id, user, language):
             )
             if t
         ],
-        "citation": citation_entry(
-            dataset,
-            [cited_analysis(row, end, label_of, row["operators"], projects)],
-            licences=licence_labels(files),
-            language=language,
-            accessed=datetime.date.today(),
-        ),
+        "citation": shown_citation(citation),
+        "availability": citation["availability"],
         "manifest": product_url(
             "iiif-v3-explorer-manifest", f"ids=an:{analysis_id}:-", language
         ),

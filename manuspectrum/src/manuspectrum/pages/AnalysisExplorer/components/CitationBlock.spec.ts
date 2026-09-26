@@ -1,4 +1,5 @@
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
+import PrimeVue from "primevue/config";
 import { describe, expect, it } from "vitest";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
@@ -12,34 +13,52 @@ function citation(overrides: Partial<Citation> = {}): Citation {
     return { ...analysisPayload().citation, ...overrides };
 }
 
-describe("CitationBlock", () => {
-    it("shows the recommended text as text", () => {
-        const wrapper = mount(CitationBlock, {
-            props: {
-                citation: citation({ recommended: "Heu, S. <b>Parchment</b>" }),
-            },
-        });
+function mountBlock(given: Citation) {
+    return mount(CitationBlock, {
+        props: { citation: given },
+        global: { plugins: [PrimeVue] },
+    });
+}
 
-        const text = wrapper.find(".recommended");
+describe("CitationBlock", () => {
+    it("shows the text citation first, as text", () => {
+        const wrapper = mountBlock(
+            citation({ text: "Heu, S. <b>Parchment</b>" }),
+        );
+
+        const tabs = wrapper.findAll("[role=tab]");
+        expect(tabs.map((tab) => tab.text())).toEqual(["Text", "BibTeX"]);
+        expect(tabs[0].attributes("aria-selected")).toBe("true");
+        const text = wrapper.find(".text");
         expect(text.text()).toBe("Heu, S. <b>Parchment</b>");
         expect(text.find("b").exists()).toBe(false);
     });
 
-    it("copies BibTeX, RIS, CSL-JSON and the availability statement", () => {
+    it("has one copy button that copies the form shown", async () => {
         const given = citation();
-        const wrapper = mount(CitationBlock, { props: { citation: given } });
+        const wrapper = mountBlock(given);
 
-        const copied = Object.fromEntries(
-            wrapper
-                .findAllComponents(CopyButton)
-                .map((button) => [button.props("label"), button.props("text")]),
-        );
-        expect(copied).toEqual({
-            "Copy the citation": given.recommended,
-            "Copy BibTeX": given.bibtex,
-            "Copy RIS": given.ris,
-            "Copy CSL-JSON": JSON.stringify(given.csl, null, 2),
-            "Copy the data availability statement": given.availability,
+        const copies = () => wrapper.findAllComponents(CopyButton);
+        expect(copies()).toHaveLength(1);
+        expect(copies()[0].props()).toMatchObject({
+            text: given.text,
+            label: "Copy the citation",
         });
+
+        await wrapper.findAll("[role=tab]")[1].trigger("click");
+        await flushPromises();
+
+        expect(wrapper.find("pre.bibtex").text()).toBe(given.bibtex.trim());
+        expect(copies()).toHaveLength(1);
+        expect(copies()[0].props()).toMatchObject({
+            text: given.bibtex,
+            label: "Copy BibTeX",
+        });
+    });
+
+    it("offers no RIS or CSL-JSON form", () => {
+        const wrapper = mountBlock(citation());
+
+        expect(wrapper.text()).not.toMatch(/RIS|CSL/);
     });
 });

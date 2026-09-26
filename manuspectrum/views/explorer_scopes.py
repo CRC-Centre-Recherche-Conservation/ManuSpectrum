@@ -30,7 +30,12 @@ from manuspectrum.utils.public_visibility import (
     visible_set,
 )
 from manuspectrum.utils.role_links import role_node
-from manuspectrum.views.explorer_citations import Home, availability, citation_entries
+from manuspectrum.views.explorer_citations import (
+    Home,
+    availability,
+    citation_entries,
+    shown_citation,
+)
 from manuspectrum.views.explorer_memo import ticket
 from manuspectrum.views.explorer_service import (
     ITEM_KEY,
@@ -599,10 +604,11 @@ def scope_content(scope, keys=()):
 
 
 def share_payload(scope, accessed):
-    """``SharePayload`` of *scope*: counts, citations, parts, availability, export estimate and product links.
+    """``SharePayload`` of *scope*: counts, citations, availability, export estimate and product links.
 
     Citations follow ``citation_entries`` (one per dataset, then one per
-    ``citation_home`` of the analyses without dataset); operators and projects are named only when
+    ``citation_home`` of the analyses without dataset), as their text and
+    BibTeX (``shown_citation``); operators and projects are named only when
     both the reader and the viewer may name them. ``export`` sums the kept
     files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
     ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
@@ -657,12 +663,11 @@ def share_payload(scope, accessed):
             "restrictedAvailable": scope.restricted_available,
             "missing": list(scope.missing),
         },
-        "citations": citation_entries(
-            content.groups, language=language, accessed=accessed
-        ),
-        "parts": [
-            {"id": row["id"], "name": row["name"], "permalink": permalink(row["id"])}
-            for row in rows
+        "citations": [
+            shown_citation(entry)
+            for entry in citation_entries(
+                content.groups, language=language, accessed=accessed
+            )
         ],
         "availability": availability(
             content.datasets,
