@@ -6,7 +6,10 @@ import {
     hasImageFailed,
     markImageFailed,
 } from "@/manuspectrum/pages/AnalysisExplorer/failed-images.ts";
-import { formatDateRange } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
+import {
+    formatDateRange,
+    safeHref,
+} from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
 import type {
     DocumentHit,
@@ -15,7 +18,8 @@ import type {
 
 /**
  * A document of the results: title, shelfmark, holding, dates, type, a short
- * description and its number of analyses. A thumbnail the server refuses
+ * description and its number of analyses. The thumbnail is drawn only from
+ * a site path or an http(s) address (`safeHref`); one the server refuses
  * leaves the neutral placeholder, and is not asked for again in this tab.
  */
 const props = defineProps<{ hit: DocumentHit; href: string }>();
@@ -23,8 +27,9 @@ const emit = defineEmits<{ open: [id: string] }>();
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 
+const thumbnail = computed(() => safeHref(props.hit.thumbnail));
 const thumbnailFailed = ref(
-    props.hit.thumbnail !== null && hasImageFailed(props.hit.thumbnail),
+    thumbnail.value !== null && hasImageFailed(thumbnail.value),
 );
 
 const countText = computed(() =>
@@ -48,7 +53,7 @@ const facts = computed(() =>
 const hasFacts = computed(() => facts.value.length > 0 || dates.value !== "");
 
 function onThumbnailError(): void {
-    if (props.hit.thumbnail) markImageFailed(props.hit.thumbnail);
+    if (thumbnail.value) markImageFailed(thumbnail.value);
     thumbnailFailed.value = true;
 }
 
@@ -70,10 +75,10 @@ function open(event: MouseEvent): void {
     <article class="document-card">
         <span class="thumbnail">
             <img
-                v-if="props.hit.thumbnail && !thumbnailFailed"
+                v-if="thumbnail && !thumbnailFailed"
                 alt=""
                 loading="lazy"
-                :src="props.hit.thumbnail"
+                :src="thumbnail"
                 @error="onThumbnailError"
             />
         </span>

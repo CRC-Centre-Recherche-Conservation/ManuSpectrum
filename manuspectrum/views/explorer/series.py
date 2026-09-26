@@ -120,6 +120,7 @@ def _plan(scope):
                 scope.language,
                 values=values,
                 configs=configs,
+                read=scope.read_manifest,
             ),
         )
         for analysis_id in scope.analyses

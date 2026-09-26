@@ -30,7 +30,6 @@ from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import XY_CONFIG_ID
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 
-CSV = "11111111-1111-4111-8111-111111111111"
 UNKNOWN = "00000000-0000-4000-8000-00000000000a"
 
 
@@ -198,18 +197,43 @@ class ShareRouteTests(CorpusCase):
 
         self.assertEqual(homes, {str(main.pk)})
 
-    def test_the_export_estimate_sums_the_kept_files(self):
+    def test_the_export_estimate_sums_the_stored_files_of_the_scope(self):
+        spectrum = self.stored_file(self.analyses["open"], "X01.csv", b"1,2\n" * 10)
+        self.stored_file(self.analyses["open"], "X01.mca", b"\x00" * 9)
         whole = self.get(f"ids=an:{self.pk('open')}:-").json()
-        narrowed = self.get(f"ids=af:{self.pk('open')}:{CSV}").json()
+        narrowed = self.get(f"ids=af:{self.pk('open')}:{spectrum}").json()
 
         self.assertEqual(
             whole["export"],
-            {"files": 2, "bytes": 4200 + 900, "overLimit": False, "documents": []},
+            {"files": 2, "bytes": 40 + 9, "overLimit": False, "documents": []},
         )
         self.assertEqual(whole["scope"]["spectra"], 1)
         self.assertEqual(
-            (narrowed["export"]["files"], narrowed["export"]["bytes"]), (1, 4200)
+            (narrowed["export"]["files"], narrowed["export"]["bytes"]), (1, 40)
         )
+
+    @override_settings(EXPLORER_EXPORT_MAX_BYTES=100)
+    def test_the_estimate_and_the_export_apply_one_size_rule(self):
+        self.stored_file(self.analyses["on_document"], "big.csv", b"x" * 500)
+        node = self.nodes[("analysis", "measurement_point_data")]
+        tile = TileModel.objects.get(
+            resourceinstance=self.analyses["on_document"],
+            nodegroup_id=node.nodegroup_id,
+        )
+        data = dict(tile.data)
+        data[str(node.nodeid)] = [{**e, "size": 10} for e in data[str(node.nodeid)]] + [
+            {"file_id": UNKNOWN, "name": "gone.csv", "size": 20}
+        ]
+        TileModel.objects.filter(pk=tile.pk).update(data=data)
+        query = f"ids=an:{self.pk('on_document')}:-"
+
+        estimate = self.get(query).json()["export"]
+        with mock.patch(FETCH, return_value=MANIFEST_JSON):
+            export = self.client.get(f"/api/explorer/export?{query}")
+
+        self.assertEqual((estimate["files"], estimate["bytes"]), (1, 500))
+        self.assertTrue(estimate["overLimit"])
+        self.assertEqual(export.status_code, 413)
 
     def test_a_file_without_a_recorded_size_is_measured_in_storage(self):
         file_id = self.stored_file(
@@ -232,6 +256,8 @@ class ShareRouteTests(CorpusCase):
 
     @override_settings(EXPLORER_EXPORT_MAX_BYTES=1)
     def test_over_the_limits_lists_per_document_exports(self):
+        for key in ("open", "embargoed"):
+            self.stored_file(self.analyses[key], f"{key}.csv", b"1,2\n")
         spanning = self.get(
             f"ids=an:{self.pk('open')}:-,an:{self.pk('embargoed')}:-"
         ).json()
@@ -261,6 +287,8 @@ class ShareRouteTests(CorpusCase):
     def test_a_project_over_the_limits_splits_into_its_items_per_document(self):
         main = self.projects["main"]
         self.tile(self.analyses["embargoed"], "analysis_by_project", self.refs(main))
+        for key in ("open", "embargoed"):
+            self.stored_file(self.analyses[key], f"{key}.csv", b"1,2\n")
 
         documents = self.get(f"project={main.pk}").json()["export"]["documents"]
 
@@ -277,6 +305,8 @@ class ShareRouteTests(CorpusCase):
 
     @override_settings(EXPLORER_EXPORT_MAX_FILES=1)
     def test_more_files_than_the_limit_is_over_the_limit(self):
+        for name in ("a.csv", "b.csv"):
+            self.stored_file(self.analyses["open"], name, b"1,2\n")
         self.assertTrue(
             self.get(f"ids=an:{self.pk('open')}:-").json()["export"]["overLimit"]
         )

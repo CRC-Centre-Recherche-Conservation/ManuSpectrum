@@ -329,7 +329,13 @@ describe("AnalysisCard", () => {
         const copy = wrapper
             .findAllComponents(CopyButton)
             .find((button) => button.props("label") === "Copy the IIIF link");
-        const state = parseContentState(copy?.props("text") as string) as {
+        const link = new URL(copy?.props("text") as string);
+        expect(`${link.origin}${link.pathname}`).toBe(
+            payload.manifest.split("?")[0],
+        );
+        const state = parseContentState(
+            link.searchParams.get("iiif-content") as string,
+        ) as {
             target: {
                 source: { id: string; partOf: { id: string }[] };
                 selector: { value: string };
@@ -353,11 +359,11 @@ describe("AnalysisCard", () => {
         await flushPromises();
 
         const href = wrapper.find("a.mirador").attributes("href") as string;
-        const content = new URL(href).searchParams.get("iiif-content");
         const copy = wrapper
             .findAllComponents(CopyButton)
             .find((button) => button.props("label") === "Copy the IIIF link");
-        expect(content).toBe(copy?.props("text"));
+        expect(copy?.props("text")).toBe(href);
+        expect(new URL(href).searchParams.get("iiif-content")).toBeTruthy();
 
         const without = mountCard(payload, "ready", payload.id, { zone });
         await flushPromises();

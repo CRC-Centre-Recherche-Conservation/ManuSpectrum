@@ -2023,8 +2023,12 @@ def layer_of(index, text, image):
     }
 
 
-def imaging_entries(analysis_id, manifest_values, language):
-    """``FileEntry`` of each imaging manifest of an analysis (maXRF, hyperspectral, other); its canvases are the layers, numbered across manifests."""
+def imaging_entries(analysis_id, manifest_values, language, read=None):
+    """``FileEntry`` of each imaging manifest of an analysis (maXRF, hyperspectral, other); its canvases are the layers, numbered across manifests.
+
+    *read* reads a manifest by URL: a caller's memoised reader, else ``manifest_json``.
+    """
+    read = read or manifest_json
     entries, index = [], 0
     for position, value in enumerate(manifest_values):
         url = rewrite_legacy_url(
@@ -2032,7 +2036,7 @@ def imaging_entries(analysis_id, manifest_values, language):
         )
         if not url:
             continue
-        manifest = manifest_json(url) or {}
+        manifest = read(url) or {}
         layers = []
         for canvas in canvases_of(manifest):
             layers.append(layer_of(index, canvas["label"], canvas["image"]))
@@ -2089,12 +2093,13 @@ def renderer_configs(values, analysis_ids):
     }
 
 
-def analysis_files(analysis_id, user, language, values=None, configs=None):
+def analysis_files(analysis_id, user, language, values=None, configs=None, read=None):
     """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging.
 
     *values* and *configs* (``renderer_configs``) let a caller with several
     analyses share one batched tile lookup and one configuration lookup
-    instead of one of each per analysis.
+    instead of one of each per analysis; *read* reads the imaging manifests
+    (``imaging_entries``).
     """
     if values is None:
         values = Values([analysis_id], ["files", "micro", "imaging"], user)
@@ -2113,7 +2118,9 @@ def analysis_files(analysis_id, user, language, values=None, configs=None):
             configs={},
             kind="micro-imaging",
         )
-        + imaging_entries(analysis_id, values.get(analysis_id, "imaging"), language)
+        + imaging_entries(
+            analysis_id, values.get(analysis_id, "imaging"), language, read
+        )
     )
 
 

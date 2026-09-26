@@ -18,6 +18,7 @@ from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 from tests.test_explorer_service import XRF
 
 from manuspectrum.views.explorer.export import (
+    _assemble,
     arcname,
     csv_bytes,
     package,
@@ -314,6 +315,18 @@ class TablesTests(PackageCase):
         self.assertEqual(member.media_type, "application/ld+json")
         self.assertEqual(member.size, len(member.data))
         self.assertIn("IIIF", self.text(members["README.md"]))
+
+    def test_each_manifest_is_read_once_per_package(self):
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
+        scope = self.scope(self.document_query())
+
+        with mock.patch(FETCH, side_effect=fetch) as fetched:
+            members, _ = _assemble(scope, EXPORTED)
+
+        self.assertIn("manifest.json", {m.arcname for m in members})
+        urls = [call.args[0] for call in fetched.call_args_list]
+        self.assertIn(IMAGING, urls)
+        self.assertEqual(len(urls), len(set(urls)), urls)
 
     def test_an_imaging_manifest_that_cannot_be_fetched_is_named_in_the_readme(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)

@@ -63,4 +63,14 @@ describe("DocumentCard", () => {
         });
         expect(other.find("img").exists()).toBe(true);
     });
+
+    it("draws no thumbnail from an address outside http(s)", () => {
+        const wrapper = mount(DocumentCard, {
+            props: {
+                hit: { ...documentHit(5), thumbnail: "javascript:alert(1)" },
+                href: "?doc=x",
+            },
+        });
+        expect(wrapper.find("img").exists()).toBe(false);
+    });
 });

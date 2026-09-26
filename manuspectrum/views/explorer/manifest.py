@@ -551,7 +551,7 @@ def _placements(scope):
     plans, planned = [], set()
     for document in scope.documents:
         url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
-        source = manifest_json(url) if url else None
+        source = scope.read_manifest(url) if url else None
         listed = canvases_of(source)
         position = {c["id"]: c for c in listed}
         dims = canvas_index(listed)
@@ -639,16 +639,18 @@ def canvas_plan(scope):
     """``CanvasPlan`` of *scope*; ``ManifestTooLarge`` over ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases.
 
     The folios are counted while the zones are placed (``_placements``),
-    then the folios and layers once the imaging entries are read. Each
-    imaging manifest is read once.
+    then the folios and layers once the imaging entries are read. Every
+    manifest is read through ``scope.read_manifest``, once per scope.
     """
     plans = _placements(scope)
     planned = {c for plan in plans for c in plan.kept if c in plan.raw}
     values = Values(list(scope.analyses), ANALYSIS_KEYS, scope.reader)
-    read_imaging = functools.cache(manifest_json)
+    read_imaging = scope.read_manifest
     imaging = {
         a: kept_files(
-            scope, a, imaging_entries(a, values.get(a, "imaging"), scope.language)
+            scope,
+            a,
+            imaging_entries(a, values.get(a, "imaging"), scope.language, read_imaging),
         )
         for a in scope.analyses
     }
@@ -718,7 +720,9 @@ def build_manifest(scope, plan=None):
         a: kept_files(
             scope,
             a,
-            analysis_files(a, reader, language, values=values, configs=configs),
+            analysis_files(
+                a, reader, language, values=values, configs=configs, read=read_imaging
+            ),
         )
         for a in scope.analyses
     }

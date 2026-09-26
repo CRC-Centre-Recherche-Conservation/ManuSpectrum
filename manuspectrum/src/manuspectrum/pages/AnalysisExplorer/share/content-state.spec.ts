@@ -3,6 +3,7 @@ import { parseContentState } from "@iiif/helpers/content-state";
 
 import {
     analysisContentState,
+    contentStateLink,
     miradorLink,
 } from "@/manuspectrum/pages/AnalysisExplorer/share/content-state.ts";
 
@@ -117,5 +118,22 @@ describe("miradorLink", () => {
             miradorLink("javascript:alert(1)", { manifest: MANIFEST }),
         ).toBeNull();
         expect(miradorLink("/relative", { manifest: MANIFEST })).toBeNull();
+    });
+});
+
+describe("contentStateLink", () => {
+    const MANIFEST =
+        "https://site.example/iiif/v3/explorer-manifest?ids=an:x:-";
+
+    it("is the viewer's link when a viewer is set", () => {
+        expect(contentStateLink(MIRADOR, MANIFEST, "abc_-")).toBe(
+            miradorLink(MIRADOR, { contentState: "abc_-" }),
+        );
+    });
+
+    it("is the manifest URL carrying iiif-content without a viewer", () => {
+        const link = new URL(contentStateLink("", MANIFEST, "abc_-"));
+        expect(link.searchParams.get("ids")).toBe("an:x:-");
+        expect(link.searchParams.get("iiif-content")).toBe("abc_-");
     });
 });

@@ -44,6 +44,7 @@ from manuspectrum.views.explorer.service import (
     document_characterizations,
     licence_labels,
     linkable,
+    manifest_json,
     names,
     parse_keys,
     permalink,
@@ -105,6 +106,11 @@ class ExportScope:
     def nodegroups(self):
         """The nodegroup ids the reader may read."""
         return readable_nodegroup_ids(self.reader)
+
+    @functools.cached_property
+    def read_manifest(self):
+        """``manifest_json`` memoised for the products of this scope: each manifest is read once."""
+        return functools.cache(manifest_json)
 
     @functools.cached_property
     def file_nodegroups(self):
@@ -415,24 +421,21 @@ def stored_sizes(scope, content):
     return sizes
 
 
-def _recorded_size(entry):
-    size = entry.get("size")
-    return size if isinstance(size, int) and not isinstance(size, bool) else None
+def export_size(stored):
+    """``(files, bytes, over)`` of a data package holding the files of *stored* (``stored_sizes``).
 
-
-def _file_bytes(entry, paths, analysis_id):
-    """Stored size of one kept entry: its recorded ``size``, else its size on disk (*paths* from ``scope_files``); imaging manifests weigh 0."""
-    if entry.get("dataKind") == "chemical-imaging":
-        return 0
-    if _recorded_size(entry) is not None:
-        return _recorded_size(entry)
-    path = paths.get((analysis_id, entry.get("id")))
-    if path is None:
-        return 0
-    try:
-        return os.path.getsize(path)
-    except OSError:
-        return 0
+    The one rule of the share estimate and of the export's 413: the data
+    files ``scope_files`` lets through and that exist on disk, at their size
+    on disk; *over* when they exceed ``EXPLORER_EXPORT_MAX_FILES`` or
+    ``EXPLORER_EXPORT_MAX_BYTES``.
+    """
+    files = len(stored)
+    size = sum(bytes_ for _, bytes_ in stored.values())
+    over = (
+        files > settings.EXPLORER_EXPORT_MAX_FILES
+        or size > settings.EXPLORER_EXPORT_MAX_BYTES
+    )
+    return files, size, over
 
 
 def share_link(scope):
@@ -526,7 +529,12 @@ def scope_content(scope, keys=()):
             scope,
             analysis_id,
             analysis_files(
-                analysis_id, scope.reader, language, values=values, configs=configs
+                analysis_id,
+                scope.reader,
+                language,
+                values=values,
+                configs=configs,
+                read=scope.read_manifest,
             ),
         )
         end = values.first(analysis_id, "end")
@@ -600,40 +608,26 @@ def share_payload(scope, accessed):
     Citations follow ``citation_entries`` (one per dataset, then one per
     ``citation_home`` of the analyses without dataset), as their text and
     BibTeX (``shown_citation``); operators and projects are named only when
-    the reader may name them. ``export`` sums the kept
-    files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
-    ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
-    one export per document, holding the scope's items there (``_per_document``). ``manifest`` is given only when the scope's
-    manifest holds a canvas (``has_canvases``), ``seriesCsv`` for a Selection
-    holding spectra only. Each product is a ``product_link``: the panel follows
-    its ``path`` and copies or hands external viewers its ``url``. *accessed*
-    is the day of consultation.
+    the reader may name them. ``export`` counts the package as the export
+    does (``export_size``); over the limits, a scope spanning several
+    documents lists one export per document, holding the scope's items
+    there (``_per_document``). ``manifest`` is given only when the scope's
+    manifest holds a canvas (``has_canvases``), ``seriesCsv`` for a
+    Selection holding spectra only. Each product is a ``product_link``: the
+    panel follows its ``path`` and copies or hands external viewers its
+    ``url``. *accessed* is the day of consultation.
     """
     from manuspectrum.views.explorer.manifest import has_canvases
 
     bundle, language = scope.bundle, scope.language
     content = scope_content(scope)
     rows = content.rows
-    unsized = scope_files(
-        scope,
-        [
-            (analysis_id, e.get("id"))
-            for analysis_id, kept in content.files.items()
-            for e in kept
-            if e.get("dataKind") != "chemical-imaging" and _recorded_size(e) is None
-        ],
-    )
-    files_count = bytes_count = spectra = 0
-    for row in rows:
-        kept = content.files[row["id"]]
-        files_count += len(kept)
-        bytes_count += sum(_file_bytes(e, unsized, row["id"]) for e in kept)
-        spectra += sum(
-            1 for e in kept if e.get("dataKind") == "xy" and e.get("role") == "readable"
-        )
-    over = (
-        bytes_count > settings.EXPLORER_EXPORT_MAX_BYTES
-        or files_count > settings.EXPLORER_EXPORT_MAX_FILES
+    files_count, bytes_count, over = export_size(stored_sizes(scope, content))
+    spectra = sum(
+        1
+        for row in rows
+        for e in content.files[row["id"]]
+        if e.get("dataKind") == "xy" and e.get("role") == "readable"
     )
     documents = []
     if over and len(scope.documents) > 1:

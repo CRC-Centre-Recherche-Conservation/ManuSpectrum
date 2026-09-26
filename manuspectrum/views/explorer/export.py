@@ -44,6 +44,7 @@ from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifes
 from manuspectrum.views.explorer.scopes import (
     ScopeError,
     export_language,
+    export_size,
     resolve_scope,
     scope_content,
     share_link,
@@ -57,7 +58,6 @@ from manuspectrum.views.explorer.service import (
     canvases_of,
     characterization_summaries,
     dataset_of,
-    manifest_json,
     names,
     permalink,
     plain_text,
@@ -173,7 +173,7 @@ def analysis_zones(scope):
     zones = {}
     for document in scope.documents:
         url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
-        listed = canvases_of(manifest_json(url)) if url else []
+        listed = canvases_of(scope.read_manifest(url)) if url else []
         labels = {c["id"]: c["label"] for c in listed}
         analyses = [
             a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
@@ -680,7 +680,7 @@ def _data_members(scope, content, zones, stored):
         imaging = 0
         for entry in content.files[analysis_id]:
             if entry.get("dataKind") == "chemical-imaging":
-                manifest = manifest_json(entry.get("downloadUrl"))
+                manifest = scope.read_manifest(entry.get("downloadUrl"))
                 if not isinstance(manifest, dict):
                     unfetched.append((row["name"]["value"], entry.get("downloadUrl")))
                     continue
@@ -746,16 +746,7 @@ def _assemble(scope, exported_at):
     language = scope.language
     content = scope_content(scope, ("statement_type", "statement_content"))
     stored = stored_sizes(scope, content)
-    sizes = [
-        stored[(analysis_id, entry.get("id"))][1]
-        for analysis_id, entries in content.files.items()
-        for entry in entries
-        if (analysis_id, entry.get("id")) in stored
-    ]
-    if (
-        len(sizes) > settings.EXPLORER_EXPORT_MAX_FILES
-        or sum(sizes) > settings.EXPLORER_EXPORT_MAX_BYTES
-    ):
+    if export_size(stored)[2]:
         raise ExportTooLarge()
     zones = analysis_zones(scope)
     data, unfetched = _data_members(scope, content, zones, stored)
