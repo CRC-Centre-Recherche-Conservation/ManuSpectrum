@@ -4,6 +4,7 @@ Usage:
     python manage.py test tests.test_explorer_memo --settings="tests.test_settings"
 """
 
+import json
 import pickle
 import threading
 import time
@@ -16,6 +17,7 @@ from django.core.cache import cache
 from django.db import connection
 from django.http import QueryDict
 from django.test import SimpleTestCase, override_settings
+from django.utils import translation
 from guardian.models import GroupObjectPermission
 
 from arches.app.models.models import (
@@ -56,15 +58,15 @@ class MemoCase(ServiceCase):
         guards.start()
         self.addCleanup(guards.stop)
 
-    def rename_by_sql(self, resource, name):
+    def rename_by_sql(self, resource, name, language="en"):
         node = self.nodes[("analysis", "label_of_name")]
         with connection.cursor() as cursor:
             cursor.execute(
                 "UPDATE tiles SET tiledata = jsonb_set(tiledata, %s, %s::jsonb) "
                 "WHERE resourceinstanceid = %s AND nodegroupid = %s",
                 [
-                    [str(node.nodeid), "en", "value"],
-                    f'"{name}"',
+                    [str(node.nodeid), language],
+                    json.dumps({"value": name, "direction": "ltr"}),
                     str(resource.pk),
                     str(node.nodegroup_id),
                 ],
@@ -392,6 +394,19 @@ class StaleWhileRebuildTests(MemoCase):
             self.name_of(corpus_bundle(self.anonymous, "en")), "X01 renamed meanwhile"
         )
 
+    def test_a_french_rebuild_run_under_another_language_keeps_french_labels(self):
+        first = corpus_bundle(self.anonymous, "fr")
+        self.rename_by_sql(self.analyses["open"], "X01 renommée", language="fr")
+
+        stale = corpus_bundle(self.anonymous, "fr")
+        with translation.override("en"):
+            self.pending[0]()
+
+        self.assertIs(stale, first)
+        self.assertEqual(
+            self.name_of(corpus_bundle(self.anonymous, "fr")), "X01 renommée"
+        )
+
     def test_the_rebuilt_bundle_is_read_from_the_cache_by_another_process(self):
         corpus_bundle(self.anonymous, "en")
         self.rename_by_sql(self.analyses["open"], "X01 in another process")
@@ -607,6 +622,9 @@ class StaleWhileRebuildTests(MemoCase):
         )
 
 
+REAL_SPAWN = explorer_memo.spawn
+
+
 @dataclass(frozen=True)
 class FakeBundle:
     digest: str
@@ -691,6 +709,36 @@ class TicketGatesTests(SimpleTestCase):
         self.state["version"] = "1.4"
 
         self.assertEqual(self.bundle(), "1.3:g1")
+
+    @override_settings(EXPLORER_BACKGROUND_REBUILD=True)
+    def test_a_rebuild_in_a_real_thread_builds_in_the_language_of_its_ticket(self):
+        languages, threads, go = [], [], threading.Event()
+
+        def build(user, language, visible):
+            if threading.current_thread() is not threading.main_thread():
+                go.wait(5)
+            languages.append(translation.get_language())
+            return FakeBundle(visible.digest, visible)
+
+        def start(target):
+            threads.append(REAL_SPAWN(target))
+
+        explorer_memo.corpus_bundle(None, "fr", build)
+        self.state["version"] = "1.2"
+        with (
+            mock.patch.object(explorer_memo, "spawn", start),
+            translation.override("en"),
+        ):
+            served = explorer_memo.corpus_bundle(None, "fr", build).digest
+            go.set()
+            threads[0].join(5)
+
+        self.assertEqual(served, "1.1:g1")
+        self.assertFalse(threads[0].is_alive())
+        self.assertEqual(languages[-1], "fr")
+        self.assertEqual(
+            explorer_memo.corpus_bundle(None, "fr", build).digest, "1.2:g1"
+        )
 
     def test_a_rebuild_releases_only_the_lock_it_holds(self):
         self.bundle()
