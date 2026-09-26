@@ -1,3 +1,6 @@
+from urllib.parse import urlsplit
+
+from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.views.generic import TemplateView
@@ -14,7 +17,9 @@ class AnalysisExplorerPageView(TemplateView):
     (``never_cache``), because the header reads the user. A URL carrying a
     query is marked noindex; the canonical never carries one.
     ``explorer_connected`` hands the application the server's own
-    ``is_connected`` answer for the reader.
+    ``is_connected`` answer for the reader; ``explorer_mirador_url`` the
+    ``EXPLORER_MIRADOR_URL`` viewer, only when it is an absolute http(s)
+    address.
     """
 
     template_name = "views/pages/analysis-explorer.htm"
@@ -23,4 +28,11 @@ class AnalysisExplorerPageView(TemplateView):
         context = super().get_context_data(**kwargs)
         context["robots_noindex"] = bool(self.request.GET)
         context["explorer_connected"] = is_connected(self.request.user)
+        context["explorer_mirador_url"] = _web_address(settings.EXPLORER_MIRADOR_URL)
         return context
+
+
+def _web_address(value):
+    """*value* when it is an absolute http(s) URL, else an empty string."""
+    parts = urlsplit(value or "")
+    return value if parts.scheme in ("http", "https") and parts.netloc else ""

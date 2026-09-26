@@ -2,7 +2,7 @@ import json
 import re
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 JSON_LD = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
@@ -56,6 +56,23 @@ class AnalysisExplorerPageTests(TestCase):
         self.client.force_login(user)
         connected = self.client.get(reverse("analysis-explorer")).content.decode()
         self.assertIn('data-connected="true"', connected)
+
+    @override_settings(EXPLORER_MIRADOR_URL="https://viewer.example/mirador/?a=1&b=2")
+    def test_mount_point_carries_the_mirador_viewer_address(self):
+        page = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertIn(
+            'data-mirador-url="https://viewer.example/mirador/?a=1&amp;b=2"', page
+        )
+
+    @override_settings(EXPLORER_MIRADOR_URL="")
+    def test_mount_point_has_no_mirador_viewer_without_the_setting(self):
+        page = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertNotIn("data-mirador-url", page)
+
+    @override_settings(EXPLORER_MIRADOR_URL="javascript:alert(1)")
+    def test_a_mirador_setting_that_is_not_a_web_address_is_ignored(self):
+        page = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertNotIn("data-mirador-url", page)
 
     def test_page_is_never_stored_by_a_shared_cache(self):
         cache_control = self.client.get(reverse("analysis-explorer"))["Cache-Control"]

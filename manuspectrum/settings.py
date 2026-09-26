@@ -789,6 +789,9 @@ EXPLORER_EXPORT_MAX_BYTES = 500 * 1024 * 1024
 EXPLORER_EXPORT_MAX_FILES = 2000
 # Most canvases one Explorer IIIF manifest lists; above it, 413.
 EXPLORER_MANIFEST_MAX_CANVASES = 1000
+# Mirador viewer (mirador-xyviewer) the Explorer opens its IIIF products in, as
+# ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
+EXPLORER_MIRADOR_URL = ""
 
 try:
     from .package_settings import *
