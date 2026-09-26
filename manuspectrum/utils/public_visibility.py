@@ -212,20 +212,6 @@ def reader_scope(user):
     return str(user.pk) if is_connected(user) else "anonymous"
 
 
-def explorer_scope(user):
-    """Scope of the Explorer's memos: ``"public"`` shared by every reader, else ``reader_scope``.
-
-    Shared only while ``perm_scope`` finds no restriction in the deployment
-    and the reader has readable nodegroups: a reader without a profile never
-    lands on the shared entry.
-    """
-    from manuspectrum.views.summary_service import perm_scope
-
-    if perm_scope(user) == "public" and readable_nodegroup_ids(user):
-        return "public"
-    return reader_scope(user)
-
-
 def draft_state_id_set():
     """Ids, as strings, of the lifecycle states that mean "not published yet"."""
     from arches.app.models.models import ResourceInstanceLifecycleState

@@ -377,21 +377,15 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertNotIn("ETag", response)
 
-    def test_drafts_and_restricted_inclusion_are_marked_in_the_summary(self):
+    def test_drafts_are_marked_in_the_summary(self):
         self.embargo(self.analyses["open"])
         self.client.force_login(self.editor)
 
         default = self.manifest(self.document_query())
-        restricted = self.manifest(f"{self.document_query()}&restricted=1")
         open_only = self.manifest(f"ids=an:{self.pk('on_document')}:-")
 
         self.assertEqual(default["summary"], {"en": ["Contains drafts"]})
-        self.assertEqual(
-            restricted["summary"],
-            {"en": ["Contains drafts", "Contains restricted-access data"]},
-        )
-        self.assertIn("X01 — f. 1v", json.dumps(restricted, ensure_ascii=False))
-        self.assertTrue(restricted["id"].endswith("&restricted=1&lang=en"))
+        self.assertNotIn("X01 — f. 1v", json.dumps(default, ensure_ascii=False))
         self.assertNotIn("summary", open_only)
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)

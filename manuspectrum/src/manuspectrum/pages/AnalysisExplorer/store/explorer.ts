@@ -151,7 +151,6 @@ export const useExplorerStore = defineStore("explorer", () => {
         toolFilters: emptyToolFilters(),
         tools: [],
     });
-    const session = ref<{ connected: boolean }>({ connected: false });
     /** Rail groups folded to their heading; not in the address. */
     const collapsedGroups = ref<FacetGroup[]>([]);
     /** Which colour facet the rail's Colour toggle shows; not in the address. */
@@ -416,7 +415,6 @@ export const useExplorerStore = defineStore("explorer", () => {
         overlays,
         basket,
         compare,
-        session,
         collapsedGroups,
         colourLevel,
         legendOpen,

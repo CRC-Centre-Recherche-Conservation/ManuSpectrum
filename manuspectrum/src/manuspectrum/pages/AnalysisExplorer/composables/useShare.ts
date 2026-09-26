@@ -15,17 +15,14 @@ import type { OfferedScope } from "@/manuspectrum/pages/AnalysisExplorer/share/s
 
 export const SHARE_ROUTE = "manuspectrum:explorer-share";
 
-/** What « Share and export » offers for `scope`, with the restricted-access items when `restricted`; no request without a scope. */
+/** What « Share and export » offers for `scope`; no request without a scope. */
 export function useShare(
     scope: MaybeRefOrGetter<OfferedScope | null>,
-    restricted: MaybeRefOrGetter<boolean>,
 ): RequestHandle<SharePayload> {
     return useRequest(
         () => {
             const current = toValue(scope);
-            return current
-                ? shareQuery(current, toValue(restricted)).toString()
-                : null;
+            return current ? shareQuery(current).toString() : null;
         },
         (query, signal, reload) =>
             getJson<SharePayload>(SHARE_ROUTE, {

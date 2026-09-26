@@ -24,15 +24,10 @@ from arches.app.models.models import (
     GraphXPublishedGraph,
     ResourceInstance,
     TileModel,
-    UserProfile,
 )
 
 from manuspectrum.utils.data_version import data_version, prune_data_changes
-from manuspectrum.utils.public_visibility import (
-    VisibleSet,
-    explorer_scope,
-    forget_visibility,
-)
+from manuspectrum.utils.public_visibility import VisibleSet, forget_visibility
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer import service as explorer_service
 from manuspectrum.views.explorer.service import (
@@ -200,25 +195,8 @@ class NextReadTests(MemoCase):
         )
 
 
-class ScopeTests(MemoCase):
-    def test_every_reader_is_on_the_public_scope_while_nothing_is_restricted(self):
-        self.assertEqual(explorer_scope(self.anonymous), "public")
-        self.assertEqual(explorer_scope(self.editor), "public")
-
-    def test_a_restriction_puts_each_reader_on_its_own_scope(self):
-        self.embargo(self.documents["embargoed"])
-
-        self.assertEqual(explorer_scope(self.anonymous), "anonymous")
-        self.assertEqual(explorer_scope(self.editor), str(self.editor.pk))
-
-    def test_a_reader_without_a_profile_is_never_on_the_public_scope(self):
-        reader = User.objects.create_user("explorer_no_profile", password="pw")
-        UserProfile.objects.filter(user=reader).delete()
-        reader = User.objects.get(pk=reader.pk)
-
-        self.assertEqual(explorer_scope(reader), str(reader.pk))
-
-    def test_restricted_readers_never_share_a_bundle(self):
+class BundleKeyTests(MemoCase):
+    def test_readers_with_other_rights_never_share_a_bundle(self):
         self.embargo(self.documents["embargoed"])
         with mock.patch.object(
             explorer_service, "build_bundle", wraps=explorer_service.build_bundle
@@ -229,6 +207,19 @@ class ScopeTests(MemoCase):
         self.assertEqual(build.call_count, 2)
         readers = {call.args[0] for call in build.call_args_list}
         self.assertEqual(readers, {self.anonymous, self.editor})
+
+    def test_readers_with_the_same_rights_share_one_bundle(self):
+        self.embargo(self.documents["embargoed"])
+        other = User.objects.create_user("explorer_editor_2", password="pw")
+        other.groups.add(Group.objects.get(name="Resource Editor"))
+        with mock.patch.object(
+            explorer_service, "build_bundle", wraps=explorer_service.build_bundle
+        ) as build:
+            first = corpus_bundle(self.editor, "en")
+            second = corpus_bundle(other, "en")
+
+        self.assertEqual(build.call_count, 1)
+        self.assertIs(second, first)
 
     def test_one_reader_has_one_bundle_per_language(self):
         english = corpus_bundle(self.anonymous, "en")
@@ -300,7 +291,7 @@ class RememberTests(SimpleTestCase):
             return {"bundle": len(builds)}
 
         def call():
-            results.append(explorer_memo.remember("k-par", "public", "en", build))
+            results.append(explorer_memo.remember("k-par", "en", build))
 
         threads = [threading.Thread(target=call) for _ in range(8)]
         for thread in threads:
@@ -313,16 +304,16 @@ class RememberTests(SimpleTestCase):
 
     def test_a_process_keeps_at_most_its_local_entries(self):
         for n in range(explorer_memo.LOCAL_ENTRIES + 2):
-            explorer_memo.remember(f"k-local-{n}", f"s{n}", "en", lambda: {"n": 1})
+            explorer_memo.remember(f"k-local-{n}", "en", lambda: {"n": 1})
 
         self.assertEqual(len(explorer_memo._local), explorer_memo.LOCAL_ENTRIES)
         self.assertNotIn("k-local-0", explorer_memo._local)
 
-    def test_only_the_last_live_entries_of_a_scope_stay_stored(self):
+    def test_only_the_last_live_entries_of_a_language_stay_stored(self):
         keys = [f"k-live-{n}" for n in range(explorer_memo.LIVE_ENTRIES + 1)]
         for key in keys:
-            explorer_memo.remember(key, "public", "en", lambda: {"n": 1})
-        explorer_memo.remember("k-other", "public", "fr", lambda: {"n": 1})
+            explorer_memo.remember(key, "en", lambda: {"n": 1})
+        explorer_memo.remember("k-other", "fr", lambda: {"n": 1})
 
         self.assertIsNone(cache.get(keys[0]))
         for key in keys[1:] + ["k-other"]:
@@ -330,12 +321,12 @@ class RememberTests(SimpleTestCase):
 
     def test_a_stored_bundle_is_compressed_and_round_trips(self):
         bundle = {"rows": ["same row"] * 500}
-        explorer_memo.remember("k-packed", "public", "en", lambda: bundle)
+        explorer_memo.remember("k-packed", "en", lambda: bundle)
         explorer_memo.forget_local()
 
         stored = cache.get("k-packed")
         found = explorer_memo.remember(
-            "k-packed", "public", "en", mock.Mock(side_effect=AssertionError)
+            "k-packed", "en", mock.Mock(side_effect=AssertionError)
         )
 
         self.assertIsInstance(stored, bytes)
@@ -343,7 +334,7 @@ class RememberTests(SimpleTestCase):
         self.assertEqual(found, bundle)
 
     def test_a_build_that_returns_nothing_is_not_stored(self):
-        found = explorer_memo.remember("k-none", "public", "en", lambda: None)
+        found = explorer_memo.remember("k-none", "en", lambda: None)
 
         self.assertIsNone(found)
         self.assertFalse(cache.has_key("k-none"))
@@ -352,7 +343,7 @@ class RememberTests(SimpleTestCase):
         cache.set("k-stored", explorer_memo.pack({"stored": True}))
 
         found = explorer_memo.remember(
-            "k-stored", "public", "en", mock.Mock(side_effect=AssertionError)
+            "k-stored", "en", mock.Mock(side_effect=AssertionError)
         )
 
         self.assertEqual(found, {"stored": True})
@@ -530,9 +521,7 @@ class StaleWhileRebuildTests(MemoCase):
         self.assertEqual(len(logs.records), 1)
         self.assertIn("rebuild failed", logs.output[0])
 
-        cache.delete(
-            explorer_memo._rebuild_failed(explorer_scope(self.anonymous), "en")
-        )
+        cache.delete(explorer_memo._rebuild_failed("en"))
         self.assertIs(corpus_bundle(self.anonymous, "en"), first)
         self.pending.pop()()
         self.assertEqual(
@@ -585,17 +574,15 @@ class StaleWhileRebuildTests(MemoCase):
                 "rows",
                 "stored_bytes",
                 "language",
-                "scope_kind",
                 "reason",
                 "background",
                 "stale_served",
             )
         }
         self.assertEqual(
-            {k: fields[k] for k in ("language", "scope_kind", "reason", "background")},
+            {k: fields[k] for k in ("language", "reason", "background")},
             {
                 "language": "en",
-                "scope_kind": "reader",
                 "reason": "cold",
                 "background": False,
             },
@@ -617,8 +604,8 @@ class StaleWhileRebuildTests(MemoCase):
 
         record = logs.records[-1]
         self.assertEqual(
-            (record.reason, record.background, record.stale_served, record.scope_kind),
-            ("data", True, 2, "public"),
+            (record.reason, record.background, record.stale_served),
+            ("data", True, 2),
         )
 
 
@@ -651,7 +638,6 @@ class TicketGatesTests(SimpleTestCase):
             ("spawn", self.pending.append),
             ("data_version", lambda: self.state["version"]),
             ("permission_epoch", lambda: self.state["epoch"]),
-            ("explorer_scope", lambda user: "public"),
             (
                 "visible_set",
                 lambda user, version: VisibleSet(
@@ -674,7 +660,7 @@ class TicketGatesTests(SimpleTestCase):
         return explorer_memo.corpus_bundle(None, "en", self.build).digest
 
     def rebuild_lock(self):
-        return cache.get(explorer_memo._rebuild_lock("public", "en"))
+        return cache.get(explorer_memo._rebuild_lock("en"))
 
     def test_data_versions_in_a_row_run_one_rebuild_at_a_time(self):
         self.bundle()
@@ -692,7 +678,7 @@ class TicketGatesTests(SimpleTestCase):
         self.assertEqual(self.builds, ["1.1:g1", "1.2:g1", "1.5:g1"])
 
     def release_rebuild(self):
-        cache.delete(explorer_memo._rebuild_lock("public", "en"))
+        cache.delete(explorer_memo._rebuild_lock("en"))
         explorer_memo._rebuilding.clear()
 
     def test_rebuilds_ending_out_of_order_never_answer_older_data(self):
@@ -710,23 +696,20 @@ class TicketGatesTests(SimpleTestCase):
 
         self.assertEqual(self.bundle(), "1.3:g1")
 
-    def test_a_process_runs_one_background_rebuild_across_scopes(self):
-        readers = ("reader-1", "reader-2", "reader-3")
+    def test_a_process_runs_one_background_rebuild_across_languages(self):
+        def served(language):
+            return explorer_memo.corpus_bundle(None, language, self.build).digest
 
-        def served(reader):
-            return explorer_memo.corpus_bundle(reader, "en", self.build).digest
+        for language in ("en", "fr"):
+            served(language)
+        self.state["version"] = "1.2"
+        answers = [served(language) for language in ("en", "fr")]
+        self.assertEqual(len(self.pending), 1)
 
-        with mock.patch.object(explorer_memo, "explorer_scope", lambda user: user):
-            for reader in readers:
-                served(reader)
-            self.state["version"] = "1.2"
-            answers = [served(reader) for reader in readers]
-            self.assertEqual(len(self.pending), 1)
+        self.pending.pop()()
+        self.assertEqual(served("fr"), "1.1:g1")
 
-            self.pending.pop()()
-            self.assertEqual(served("reader-2"), "1.1:g1")
-
-        self.assertEqual(answers, ["1.1:g1"] * 3)
+        self.assertEqual(answers, ["1.1:g1"] * 2)
         self.assertEqual(len(self.pending), 1)
 
     def test_two_commits_sharing_a_last_sequence_answer_from_the_later_one(self):
@@ -773,7 +756,7 @@ class TicketGatesTests(SimpleTestCase):
         self.bundle()
         self.state["version"] = "1.2"
         self.bundle()
-        lock = explorer_memo._rebuild_lock("public", "en")
+        lock = explorer_memo._rebuild_lock("en")
         cache.set(lock, "another owner")
 
         self.pending.pop()()
@@ -796,7 +779,7 @@ class TicketGatesTests(SimpleTestCase):
         self.bundle()
         self.state["version"] = "1.2"
         self.bundle()
-        cache.delete(explorer_memo._rebuild_lock("public", "en"))
+        cache.delete(explorer_memo._rebuild_lock("en"))
         self.state["version"] = "1.3"
 
         self.assertEqual(self.bundle(), "1.1:g1")
@@ -891,7 +874,7 @@ class TicketGatesTests(SimpleTestCase):
         self.state["version"] = "1.2"
         held = explorer_memo.ticket(None, "en", self.build)
         self.pending.clear()
-        cache.delete(explorer_memo._rebuild_lock("public", "en"))
+        cache.delete(explorer_memo._rebuild_lock("en"))
         explorer_memo._rebuilding.clear()
         cache.set(held.current, explorer_memo.pack(FakeBundle("elsewhere")))
 
@@ -929,7 +912,7 @@ class TicketGatesTests(SimpleTestCase):
         self.bundle()
         self.state["version"] = "1.2"
         self.bundle()
-        lock = explorer_memo._rebuild_lock("public", "en")
+        lock = explorer_memo._rebuild_lock("en")
 
         with (
             self.failing_cache("get", lock),
@@ -947,7 +930,7 @@ class TicketGatesTests(SimpleTestCase):
         self.bundle()
         self.state["version"] = "1.2"
         explorer_memo.ticket(None, "en", lambda *args: None)
-        failed = explorer_memo._rebuild_failed("public", "en")
+        failed = explorer_memo._rebuild_failed("en")
 
         with (
             self.failing_cache("set", failed),
@@ -964,7 +947,7 @@ class TicketGatesTests(SimpleTestCase):
         self.state["version"] = "1.2"
         held = explorer_memo.ticket(None, "en", self.build)
         self.pending.clear()
-        cache.delete(explorer_memo._rebuild_lock("public", "en"))
+        cache.delete(explorer_memo._rebuild_lock("en"))
         explorer_memo._rebuilding.clear()
 
         with (

@@ -1,7 +1,7 @@
 """``GET /api/explorer/series.csv``: the Selection's spectra in long format (spec §11.2).
 
 One row per point, ``curve,analysis,file,x,y``, after ``#`` comment lines
-that name the Selection, its drafts and restricted data, each analysis's
+that name the Selection, its drafts, each analysis's
 permalink and, per curve, its licence, attribution, renderer configuration
 and raw file. The curve is the one the XY reader draws: the file's renderer
 configuration decides its columns and normalisation; it is never decimated.
@@ -99,8 +99,6 @@ def _plan(scope):
     ]
     if scope.drafts:
         comments.append(_("Contains drafts"))
-    if scope.restricted:
-        comments.append(_("Contains restricted-access data"))
     curves, per_analysis, per_curve = [], [], []
     entries_of = {
         analysis_id: kept_files(
@@ -216,7 +214,7 @@ def series_lines(scope):
 
 
 class ExplorerSeriesView(View):
-    """``GET /api/explorer/series.csv?ids=…[&restricted=1][&lang=]``: the Selection's spectra, a private download.
+    """``GET /api/explorer/series.csv?ids=…[&lang=]``: the Selection's spectra, a private download.
 
     Only an ``ids`` scope; any other scope, malformed parameters or an
     unknown language answer a bodyless 400, a Selection with nothing visible
@@ -228,7 +226,7 @@ class ExplorerSeriesView(View):
             return HttpResponseBadRequest()
         try:
             language = export_language(request.GET)
-            scope = resolve_scope(request.GET, request.user, language)
+            scope = resolve_scope(request.GET, language)
         except ScopeError:
             return HttpResponseBadRequest()
         if scope is None:

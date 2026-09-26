@@ -9,10 +9,13 @@ Usage:
 """
 
 import datetime
+import io
 import json
+import zipfile
 from unittest import mock
 
 from django.contrib.auth.models import Group
+from guardian.shortcuts import remove_perm
 
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 
@@ -57,21 +60,19 @@ class ProductsCase(CorpusCase):
         response = self.client.get(f"/api/explorer/series.csv?{query}")
         return csv_body(response) if response.status_code == 200 else None
 
-    def products(self, suffix=""):
+    def products(self):
         """``{channel: body}`` of every product of every scope; the share's ``scope.missing`` echo is left out."""
         found = {}
         for query in self.scopes():
-            share = self.share(query + suffix)
+            share = self.share(query)
             if share is not None:
                 share["scope"].pop("missing")
             found[f"share {query}"] = json.dumps(share, ensure_ascii=False)
-            found[f"manifest {query}"] = (self.manifest(query + suffix) or b"").decode()
+            found[f"manifest {query}"] = (self.manifest(query) or b"").decode()
         ids = self.scopes()[0]
-        found[f"series {ids}"] = self.series(ids + suffix) or ""
+        found[f"series {ids}"] = self.series(ids) or ""
         return found
 
-
-class EmbargoMatrixTests(ProductsCase):
     def everything(self):
         products = self.products()
         with mock.patch(FETCH, return_value=MANIFEST_JSON):
@@ -100,6 +101,8 @@ class EmbargoMatrixTests(ProductsCase):
                 "parts": self.client.get("/en/api/explorer/facet/part").content,
             }
 
+
+class EmbargoMatrixTests(ProductsCase):
     def test_an_embargoed_analysis_appears_in_no_payload(self):
         hidden = str(self.analyses["on_document"].pk)
         stored = self.stored_file(
@@ -143,19 +146,6 @@ class EmbargoMatrixTests(ProductsCase):
             self.manifest(f"ids={kept},{unknown}"),
         )
 
-    def test_a_signed_in_reader_never_fills_the_visitors_answer(self):
-        hidden = str(self.analyses["on_document"].pk)
-        self.embargo(self.analyses["on_document"])
-        self.client.force_login(self.editor)
-        editor = self.client.get("/en/api/explorer/search")
-        self.client.logout()
-        visitor = self.client.get("/en/api/explorer/search")
-
-        self.assertEqual(editor["Cache-Control"], "private, no-store")
-        self.assertEqual(visitor["Cache-Control"], "public, no-cache")
-        self.assertIn(hidden, editor.content.decode())
-        self.assertNotIn(hidden, visitor.content.decode())
-
     def test_the_visitor_sees_the_draft_analysis_marked_unpublished(self):
         visitor = json.loads(self.client.get("/en/api/explorer/search").content)
 
@@ -174,8 +164,8 @@ class EmbargoMatrixTests(ProductsCase):
         self.assertEqual(json.loads(response.content), visitor)
 
 
-class ConnectedExportTests(ProductsCase):
-    """A signed-in reader's products are the visitor's unless they ask for restricted data (spec §4)."""
+class PublicViewForEveryoneTests(ProductsCase):
+    """Discover shows every reader what the visitor sees (spec D59)."""
 
     def setUp(self):
         super().setUp()
@@ -185,53 +175,69 @@ class ConnectedExportTests(ProductsCase):
         self.stored_file(
             self.analyses["on_document"], "FORS_009.csv", b"5,6\n7,8\n", config=UNKNOWN
         )
-        self.embargo(self.analyses["open"])
 
-    def without_restricted_hints(self, products):
-        """*products* without the share fields that offer a signed-in reader the restricted build."""
-        found = {}
-        for channel, body in products.items():
-            if channel.startswith("share ") and body != "null":
-                share = json.loads(body)
-                share["scope"].pop("restrictedAvailable")
-                share["links"].pop("exportRestricted")
-                body = json.dumps(share, ensure_ascii=False)
-            found[channel] = body
+    def export(self, query):
+        """``{member name: bytes}`` of the data package of *query*, or None."""
+        with mock.patch(FETCH, return_value=MANIFEST_JSON):
+            response = self.client.get(f"/api/explorer/export?{query}")
+        if response.status_code != 200:
+            return None
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
+        return {name: archive.read(name) for name in sorted(archive.namelist())}
+
+    def seen(self):
+        """Every Explorer answer the current client gets, the data packages included."""
+        found = {
+            k: v if isinstance(v, str) else v.decode()
+            for k, v in self.everything().items()
+        }
+        for query in self.scopes():
+            package = self.export(query)
+            found[f"export {query}"] = (
+                ""
+                if package is None
+                else "".join(
+                    f"{name}\n{data.decode(errors='replace')}\n"
+                    for name, data in package.items()
+                )
+            )
         return found
 
-    def test_a_connected_readers_default_products_equal_the_visitors(self):
-        visitor = self.products()
+    def test_a_signed_in_reader_with_a_grant_sees_exactly_the_visitors_payloads(self):
+        self.embargo(self.analyses["open"])
+        visitor = self.seen()
         self.client.force_login(self.editor)
-        reader = self.products()
+        reader = self.seen()
+        response = self.client.get("/en/api/explorer/search")
 
-        self.assertEqual(
-            self.without_restricted_hints(reader),
-            self.without_restricted_hints(visitor),
-        )
-        self.assertNotIn(str(self.analyses["open"].pk), "".join(reader.values()))
-        share = json.loads(reader[f"share {self.scopes()[1]}"])
-        self.assertEqual(share["scope"]["restrictedAvailable"], 1)
+        self.assertEqual(reader, visitor)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
 
-    def test_restricted_inclusion_is_marked_on_every_product(self):
+    def test_an_embargoed_resource_appears_for_no_reader(self):
         hidden = str(self.analyses["open"].pk)
+        self.embargo(self.analyses["open"])
+
+        for login in (None, self.editor):
+            if login:
+                self.client.force_login(login)
+            for channel, body in self.seen().items():
+                self.assertNotIn(hidden, body, f"{login} {channel}")
+                self.assertNotIn("X01.csv", body, f"{login} {channel}")
+
+    def test_lifting_the_embargo_makes_the_resource_appear(self):
+        hidden = str(self.analyses["open"].pk)
+        self.embargo(self.analyses["open"])
         self.client.force_login(self.editor)
+        before = self.client.get("/en/api/explorer/search").content.decode()
 
-        products = self.products("&restricted=1")
+        with self.captureOnCommitCallbacks(execute=True):
+            remove_perm(
+                "no_access_to_resourceinstance", self.anonymous, self.analyses["open"]
+            )
+        reader = self.client.get("/en/api/explorer/search").content.decode()
+        self.client.logout()
+        visitor = self.client.get("/en/api/explorer/search").content.decode()
 
-        document = self.scopes()[1]
-        share = json.loads(products[f"share {document}"])
-        manifest = json.loads(products[f"manifest {document}"])
-        series = products[f"series {self.scopes()[0]}"]
-        self.assertTrue(share["scope"]["restricted"])
-        self.assertTrue(any(hidden in c["bibtex"] for c in share["citations"]))
-        self.assertIn("Contains restricted-access data", manifest["summary"]["en"])
-        self.assertIn("X01 — f. 1v", json.dumps(manifest, ensure_ascii=False))
-        self.assertIn("# Contains restricted-access data\r\n", series)
-        self.assertIn(hidden, series)
-
-    def test_a_visitor_asking_restricted_gets_the_visitors_products(self):
-        plain = self.products()
-        asking = self.products("&restricted=1")
-
-        self.assertEqual(asking, plain)
-        self.assertNotIn(str(self.analyses["open"].pk), "".join(asking.values()))
+        self.assertNotIn(hidden, before)
+        self.assertIn(hidden, reader)
+        self.assertIn(hidden, visitor)

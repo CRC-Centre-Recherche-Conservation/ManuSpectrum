@@ -3,11 +3,12 @@
 The share payload, the IIIF manifest, ``series.csv`` and the data package take
 the same parameters, ``?ids=`` (Selection keys), ``?document=<uuid>`` or
 ``?project=<uuid>``, and resolve them here into one ``ExportScope``: the
-visible analyses and identified materials in corpus order, the per-key
-narrowing of the Selection, and whose rights build the products.
+visible analyses and identified materials in corpus order and the per-key
+narrowing of the Selection. Every product is built with the visitor's
+rights (``anonymous_user()``), whoever asks (spec D59).
 
-Nothing is memoised here: the scope reads the memoised corpus bundle of its
-reader (``explorer.memo``) and the visibility memos. ``share_payload`` is the
+Nothing is memoised here: the scope reads the memoised corpus bundle of the
+visitor (``explorer.memo``) and the visibility memos. ``share_payload`` is the
 scope's summary for the « Share and export » panel, built per request.
 """
 
@@ -23,12 +24,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import translation
 
-from manuspectrum.utils.public_visibility import (
-    anonymous_user,
-    is_connected,
-    readable_nodegroup_ids,
-    visible_set,
-)
+from manuspectrum.utils.public_visibility import anonymous_user, readable_nodegroup_ids
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.views.explorer.citations import (
     Home,
@@ -69,22 +65,18 @@ class ExportScope:
     """One resolved export scope.
 
     ``key`` is the canonical query (``ids=<sorted keys that resolved>``,
-    ``document=<uuid>`` or ``project=<uuid>``, then ``&canvases=all`` and
-    ``&restricted=1`` when they apply) and ``digest`` its 12-hex sha1, which names minted IIIF ids
+    ``document=<uuid>`` or ``project=<uuid>``, then ``&canvases=all`` when
+    it applies) and ``digest`` its 12-hex sha1, which names minted IIIF ids
     and file names. ``params`` are the ``(name, value)`` pairs of ``key`` and
     ``query`` their URL-encoded form, which every link to a product carries. ``analyses`` follow the corpus order of the bundle,
     ``characterizations`` and ``documents`` are sorted (documents by name).
     ``narrowed`` maps an analysis id to the ``file:<id>`` / ``layer:<n>``
     parts its keys named; an analysis absent from it is whole. ``missing``
     lists the ``ids`` keys that resolved to nothing visible. ``drafts``
-    counts the kept analyses and materials in a Draft state. ``restricted``
-    says the products are built with a signed-in reader's own rights and hold
-    items the visitor cannot see; ``restricted_available`` counts, for a
-    signed-in reader's default build only, the items left out for that
-    reason. ``reader`` is whose rights build the products, ``viewer`` the
-    requesting user, ``bundle`` the reader's corpus bundle in ``language``.
-    ``viewer_nodegroups``, ``nodegroups`` (read by both the reader and the
-    viewer) and ``file_nodegroups`` are read once per scope.
+    counts the kept analyses and materials in a Draft state. ``reader`` is
+    whose rights build the products (the visitor), ``bundle`` its corpus
+    bundle in ``language``. ``nodegroups`` (the reader's readable
+    nodegroups) and ``file_nodegroups`` are read once per scope.
     """
 
     kind: str
@@ -98,11 +90,8 @@ class ExportScope:
     narrowed: dict
     missing: tuple
     drafts: int
-    restricted: bool
-    restricted_available: int
     canvases_all: bool
     reader: object
-    viewer: object
     bundle: object
     language: str
 
@@ -112,16 +101,9 @@ class ExportScope:
         return urlencode(self.params, safe=":,")
 
     @functools.cached_property
-    def viewer_nodegroups(self):
-        """The nodegroup ids the viewer may read."""
-        return readable_nodegroup_ids(self.viewer)
-
-    @functools.cached_property
     def nodegroups(self):
-        """The nodegroup ids both the reader and the viewer may read."""
-        if self.reader is self.viewer:
-            return self.viewer_nodegroups
-        return readable_nodegroup_ids(self.reader) & self.viewer_nodegroups
+        """The nodegroup ids the reader may read."""
+        return readable_nodegroup_ids(self.reader)
 
     @functools.cached_property
     def file_nodegroups(self):
@@ -129,11 +111,8 @@ class ExportScope:
         return _role_nodegroups()
 
     def names_visible(self, resource_ids):
-        """The ids among *resource_ids* a product may name: ``linkable`` for the reader and the viewer, sorted."""
-        kept = set(linkable(resource_ids, self.reader))
-        if self.viewer is not self.reader:
-            kept &= set(linkable(resource_ids, self.viewer))
-        return sorted(kept)
+        """The ids among *resource_ids* a product may name: ``linkable`` for the reader, sorted."""
+        return sorted(linkable(resource_ids, self.reader))
 
 
 @dataclass(frozen=True)
@@ -155,7 +134,7 @@ def export_language(query):
 
 
 def _parameters(query):
-    """``(kind, value, canvases_all, restricted)`` of *query*, or ``ScopeError``."""
+    """``(kind, value, canvases_all)`` of *query*, or ``ScopeError``."""
     given = [kind for kind in SCOPE_KINDS if kind in query]
     if len(given) != 1:
         raise ScopeError("exactly one scope parameter is expected")
@@ -177,10 +156,7 @@ def _parameters(query):
     canvases = query.getlist("canvases")
     if canvases and (kind != "document" or canvases != ["all"]):
         raise ScopeError("canvases=all is for a document scope only")
-    restricted = query.getlist("restricted")
-    if restricted and restricted != ["1"]:
-        raise ScopeError("restricted takes 1 only")
-    return kind, value, bool(canvases), bool(restricted)
+    return kind, value, bool(canvases)
 
 
 def _items(kind, value, bundle):
@@ -253,20 +229,17 @@ def _documents(bundle, analyses, characterizations):
     return tuple(d for d in bundle.documents if d in found)
 
 
-def resolve_scope(query, user, language):
-    """The ``ExportScope`` of *query* for *user* in *language*; None when nothing in it is visible.
+def resolve_scope(query, language):
+    """The ``ExportScope`` of *query* in *language*, built as the visitor; None when nothing in it is visible.
 
     Exactly one of ``ids``, ``document`` and ``project`` is given: ``ids``
     holds at most ``EXPLORER_ITEMS_MAX`` keys, each matching ``ITEM_KEY``;
     ``document`` and ``project`` a UUID. ``canvases=all`` goes with
-    ``document`` only and ``restricted`` takes ``1`` only. Anything else
-    raises ``ScopeError``.
+    ``document`` only. Anything else raises ``ScopeError``.
 
-    A visitor builds as themself and ``restricted`` is ignored. A signed-in
-    reader builds as the visitor (``anonymous_user()``) and keeps only what
-    their own ``visible_set`` also holds; with ``restricted=1`` they build
-    with their own rights. A document or project outside the reader's (or the
-    viewer's) visible set resolves to None, like an unknown one. A document
+    Whoever asks, the scope is resolved with the visitor's rights
+    (``anonymous_user()``). A document or project outside the visitor's
+    visible set resolves to None, like an unknown one. A document
     holds its analyses and the materials observed on it or its parts; a
     project the analyses it runs and the materials citing one of them in
     evidence. ``an:<id>:-`` keys keep a whole analysis, ``af:`` and ``im:``
@@ -275,45 +248,21 @@ def resolve_scope(query, user, language):
     keep an identified material; keys resolving to nothing visible go to
     ``missing``, and an ``ids`` scope with nothing left is None.
     """
-    kind, value, canvases_all, wants_restricted = _parameters(query)
-    connected = is_connected(user)
-    restricted_build = connected and wants_restricted
-    reader = user if restricted_build or not connected else anonymous_user()
-    held = ticket(reader, language)
-    bundle = corpus_bundle(reader, language, held)
+    kind, value, canvases_all = _parameters(query)
+    reader = anonymous_user()
+    bundle = corpus_bundle(reader, language, ticket(reader, language))
     items = _items(kind, value, bundle)
     if items is None:
         return None
-    restricted_available, viewer_ids = 0, None
-    if connected and reader is not user:
-        viewer_ids = visible_set(user).ids
-        if kind != "ids" and value not in viewer_ids:
-            return None
-        items = _Items(
-            items.analyses & viewer_ids,
-            items.characterizations & viewer_ids,
-            {a: p for a, p in items.narrowed.items() if a in viewer_ids},
-        )
-        viewer_items = _items(
-            kind, value, corpus_bundle(user, language, ticket(user, language))
-        )
-        if viewer_items is not None:
-            restricted_available = len(
-                (viewer_items.analyses | viewer_items.characterizations)
-                - (items.analyses | items.characterizations)
-            )
     kept = items.analyses | items.characterizations
     if kind == "ids" and not kept:
         return None
-    restricted = restricted_build and bool(kept - visible_set(anonymous_user()).ids)
 
     missing = _missing(value, items) if kind == "ids" else ()
     named = ",".join(k for k in value if k not in missing) if kind == "ids" else value
     params = [(kind, named)]
     if canvases_all:
         params.append(("canvases", "all"))
-    if restricted:
-        params.append(("restricted", "1"))
     key = "&".join(f"{name}={v}" for name, v in params)
     analyses = tuple(sorted(items.analyses, key=bundle.order.__getitem__))
     characterizations = tuple(sorted(items.characterizations))
@@ -325,19 +274,12 @@ def resolve_scope(query, user, language):
         subject=None if kind == "ids" else value,
         analyses=analyses,
         characterizations=characterizations,
-        documents=tuple(
-            d
-            for d in _documents(bundle, analyses, characterizations)
-            if viewer_ids is None or d in viewer_ids
-        ),
+        documents=_documents(bundle, analyses, characterizations),
         narrowed=items.narrowed,
         missing=missing,
         drafts=len(kept & bundle.visible.unpublished),
-        restricted=restricted,
-        restricted_available=restricted_available,
         canvases_all=canvases_all,
         reader=reader,
-        viewer=user,
         bundle=bundle,
         language=language,
     )
@@ -357,10 +299,10 @@ def kept_files(scope, analysis_id, files):
 
     A whole analysis keeps every entry; ``file:<id>`` keeps that measurement
     or micro-imaging entry, ``layer:<n>`` the imaging entry holding layer
-    ``n``. An entry whose role nodegroup the viewer cannot read is dropped.
+    ``n``. An entry whose role nodegroup the reader cannot read is dropped.
     """
     narrowed = scope.narrowed.get(analysis_id)
-    readable = scope.viewer_nodegroups
+    readable = scope.nodegroups
     nodegroup_of = scope.file_nodegroups
     kept = []
     for entry in files:
@@ -493,8 +435,7 @@ class ScopeContent:
     their tile values (``CONTENT_KEYS`` and any key asked for), ``files`` the
     kept ``FileEntry`` list of each analysis (``kept_files``), ``projects``
     the visible projects of each analysis, ``named`` the operators and
-    projects both the reader and the viewer may name and ``label_of`` their
-    names. ``groups`` are the ``citation_entries`` groups, one per analysis
+    projects the reader may name and ``label_of`` their names. ``groups`` are the ``citation_entries`` groups, one per analysis
     with its ``citation_home``, ``datasets`` and ``licences`` what
     ``availability`` reads.
     """
@@ -513,8 +454,7 @@ class ScopeContent:
 def citation_home(scope, analysis_id, projects, label_of):
     """``Home`` an analysis without dataset is cited under: the scope's project, else its first named project by name, else its document.
 
-    *projects* are the analysis's projects both the reader and the viewer may
-    name. An analysis without project nor document has no home (None).
+    *projects* are the analysis's projects the reader may name. An analysis without project nor document has no home (None).
     """
     named = [p for p in projects if p in label_of]
     if scope.kind == "project" and scope.subject in named:
@@ -609,12 +549,11 @@ def share_payload(scope, accessed):
     Citations follow ``citation_entries`` (one per dataset, then one per
     ``citation_home`` of the analyses without dataset), as their text and
     BibTeX (``shown_citation``); operators and projects are named only when
-    both the reader and the viewer may name them. ``export`` sums the kept
+    the reader may name them. ``export`` sums the kept
     files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
     ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
     one export per document. ``seriesCsv`` is given for a Selection holding
-    spectra only, ``exportRestricted`` when the viewer's default build left
-    restricted items out. Each product is a ``product_link``: the panel follows
+    spectra only. Each product is a ``product_link``: the panel follows
     its ``path`` and copies or hands external viewers its ``url``. *accessed*
     is the day of consultation.
     """
@@ -642,14 +581,13 @@ def share_payload(scope, accessed):
         bytes_count > settings.EXPLORER_EXPORT_MAX_BYTES
         or files_count > settings.EXPLORER_EXPORT_MAX_FILES
     )
-    flags = "&restricted=1" if scope.restricted else ""
     documents = []
     if over and len(scope.documents) > 1:
         documents = [
             {
                 "id": d,
                 "name": bundle.label_of[d],
-                **product_link("explorer-export", f"document={d}{flags}", language),
+                **product_link("explorer-export", f"document={d}", language),
             }
             for d in scope.documents
         ]
@@ -661,8 +599,6 @@ def share_payload(scope, accessed):
             "characterizations": len(scope.characterizations),
             "spectra": spectra,
             "drafts": scope.drafts,
-            "restricted": scope.restricted,
-            "restrictedAvailable": scope.restricted_available,
             "missing": list(scope.missing),
         },
         "citations": [
@@ -693,10 +629,5 @@ def share_payload(scope, accessed):
                 else None
             ),
             "export": product_link("explorer-export", scope.query, language),
-            "exportRestricted": (
-                product_link("explorer-export", f"{scope.query}&restricted=1", language)
-                if scope.restricted_available
-                else None
-            ),
         },
     }

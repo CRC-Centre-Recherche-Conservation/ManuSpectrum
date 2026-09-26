@@ -168,9 +168,7 @@ class ShareRouteTests(CorpusCase):
 
     def test_an_analysis_without_project_is_cited_under_its_document(self):
         document = self.documents["open"]
-        scope = resolve_scope(
-            QueryDict(f"document={document.pk}"), self.anonymous, "en"
-        )
+        scope = resolve_scope(QueryDict(f"document={document.pk}"), "en")
 
         homes = {group[1][0].id: group[3] for group in scope_content(scope).groups}
 
@@ -190,7 +188,7 @@ class ShareRouteTests(CorpusCase):
         main = self.projects["main"]
         earlier = self.new_resource("project", "Atramenta")
         self.tile(self.analyses["open"], "analysis_by_project", self.refs(earlier))
-        scope = resolve_scope(QueryDict(f"project={main.pk}"), self.anonymous, "en")
+        scope = resolve_scope(QueryDict(f"project={main.pk}"), "en")
 
         homes = {group[3].id for group in scope_content(scope).groups}
 
@@ -284,39 +282,17 @@ class ShareRouteTests(CorpusCase):
                     },
                 )
 
-    def test_a_visitor_sees_no_restricted_count(self):
+    def test_a_signed_in_reader_gets_the_visitors_share_payload(self):
         self.embargo(self.analyses["open"])
         query = f"document={self.documents['open'].pk}"
 
         visitor = self.get(query).json()
         self.client.force_login(self.editor)
-        reader = self.get(query).json()
+        reader = self.get(f"{query}&restricted=1").json()
 
-        self.assertEqual(visitor["scope"]["restrictedAvailable"], 0)
-        self.assertFalse(visitor["scope"]["restricted"])
-        self.assertIsNone(visitor["links"]["exportRestricted"])
-        self.assertNotIn(self.pk("open"), str(visitor))
-        self.assertEqual(reader["scope"]["restrictedAvailable"], 1)
-        path = f"/api/explorer/export?{query}&restricted=1&lang=en"
-        self.assertEqual(
-            reader["links"]["exportRestricted"],
-            {"path": path, "url": f"{settings.PUBLIC_SERVER_ADDRESS}{path[1:]}"},
-        )
+        self.assertEqual(reader, visitor)
         self.assertNotIn(self.pk("open"), str(reader))
-
-    def test_restricted_scope_is_marked_and_its_links_keep_it(self):
-        self.embargo(self.analyses["open"])
-        self.client.force_login(self.editor)
-
-        payload = self.get(f"document={self.documents['open'].pk}&restricted=1").json()
-
-        self.assertTrue(payload["scope"]["restricted"])
-        self.assertEqual(payload["scope"]["analyses"], 3)
-        for name in ("export", "manifest"):
-            for form in ("path", "url"):
-                with self.subTest(link=name, form=form):
-                    self.assertIn("&restricted=1", payload["links"][name][form])
-        self.assertIsNone(payload["links"]["exportRestricted"])
+        self.assertNotIn("restricted", json.dumps(reader))
 
     def test_links_encode_a_key_carrying_url_delimiters(self):
         key = f"af:{self.pk('open')}:x&y#z%w"
@@ -372,7 +348,7 @@ class ShareCostTests(CorpusCase):
 
     def share_queries(self, project):
         query = QueryDict(f"project={project.pk}")
-        scope = resolve_scope(query, self.anonymous, "en")
+        scope = resolve_scope(query, "en")
         share_payload(scope, datetime.date(2026, 9, 26))
         with CaptureQueriesContext(connection) as queries:
             share_payload(scope, datetime.date(2026, 9, 26))
@@ -380,7 +356,7 @@ class ShareCostTests(CorpusCase):
 
     def test_a_project_payload_names_none_of_its_analyses(self):
         project = self.project_of("Bulk project", 5)
-        scope = resolve_scope(QueryDict(f"project={project.pk}"), self.anonymous, "en")
+        scope = resolve_scope(QueryDict(f"project={project.pk}"), "en")
 
         payload = share_payload(scope, datetime.date(2026, 9, 26))
 

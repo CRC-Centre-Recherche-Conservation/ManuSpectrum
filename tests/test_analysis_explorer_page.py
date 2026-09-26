@@ -1,7 +1,6 @@
 import json
 import re
 
-from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -48,14 +47,6 @@ class AnalysisExplorerPageTests(TestCase):
         self.assertTrue(blocks)
         for block in blocks:
             json.loads(block)
-
-    def test_mount_point_carries_the_connection_flag(self):
-        anonymous = self.client.get(reverse("analysis-explorer")).content.decode()
-        self.assertIn('data-connected="false"', anonymous)
-        user = User.objects.create_user("explorer-reader", password="unused-in-tests")
-        self.client.force_login(user)
-        connected = self.client.get(reverse("analysis-explorer")).content.decode()
-        self.assertIn('data-connected="true"', connected)
 
     @override_settings(EXPLORER_MIRADOR_URL="https://viewer.example/mirador/?a=1&b=2")
     def test_mount_point_carries_the_mirador_viewer_address(self):

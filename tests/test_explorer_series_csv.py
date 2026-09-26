@@ -122,7 +122,7 @@ class SeriesCsvTests(CorpusCase):
             self.pk("draft"): self.spectrum(key="draft", name="B.csv"),
         }
         query = self.selection("on_document", "draft")
-        order = resolve_scope(QueryDict(query), self.anonymous, "en").analyses
+        order = resolve_scope(QueryDict(query), "en").analyses
 
         _, rows = self.split(self.text(query))
 

@@ -44,19 +44,9 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("AnalysisExplorer", () => {
-    it("records the server's connection flag", () => {
-        window.history.replaceState(null, "", "/en/discover");
-        mount(AnalysisExplorer, {
-            props: { connected: true },
-            global: { plugins: [pinia] },
-        });
-        expect(useExplorerStore().session.connected).toBe(true);
-    });
-
     it("opens the screen the URL names", async () => {
         window.history.replaceState(null, "", "/en/discover?q=gold");
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia] },
         });
         await flushPromises();
@@ -67,7 +57,6 @@ describe("AnalysisExplorer", () => {
     it("names the screen shown on the page body, for the page intro", async () => {
         window.history.replaceState(null, "", "/en/discover?q=gold");
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia] },
         });
         await flushPromises();
@@ -85,7 +74,6 @@ describe("AnalysisExplorer", () => {
         document.body.append(bar);
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia] },
             attachTo: document.body,
         });
@@ -109,7 +97,7 @@ describe("AnalysisExplorer", () => {
         document.body.append(bar);
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false, miradorUrl: "https://viewer.example/" },
+            props: { miradorUrl: "https://viewer.example/" },
             global: { plugins: [pinia, PrimeVue] },
             attachTo: document.body,
         });
@@ -135,7 +123,6 @@ describe("AnalysisExplorer", () => {
     it("prompts for a shared Selection and removes sel from the URL", async () => {
         window.history.replaceState(null, "", `/en/discover?sel=${KEY}`);
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia] },
         });
         await flushPromises();
@@ -164,7 +151,6 @@ describe("AnalysisExplorer", () => {
         );
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia] },
             attachTo: document.body,
         });
@@ -198,7 +184,6 @@ describe("AnalysisExplorer", () => {
         );
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia] },
             attachTo: document.body,
         });
@@ -219,7 +204,6 @@ describe("AnalysisExplorer", () => {
     it("moves the focus to the screen heading when the shared Selection prompt closes", async () => {
         window.history.replaceState(null, "", `/en/discover?sel=${KEY}`);
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia] },
             attachTo: document.body,
         });
@@ -265,7 +249,6 @@ describe("AnalysisExplorer", () => {
             "/en/discover?screen=results&grain=analyses",
         );
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia, PrimeVue] },
         });
         await flushPromises();
@@ -292,7 +275,6 @@ describe("AnalysisExplorer", () => {
         );
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            props: { connected: false },
             global: { plugins: [pinia] },
             attachTo: document.body,
         });

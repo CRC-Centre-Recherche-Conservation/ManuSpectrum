@@ -23,7 +23,7 @@ Canvases and annotations resolve in this order:
    its permalink.
 4. An identified material is placed by its own zone, else by the zone of
    the first object it observes that has one; it becomes a ``describing``
-   annotation. A zone whose nodegroup the reader or the viewer cannot read
+   annotation. A zone whose nodegroup the reader cannot read
    counts as absent, for analyses and materials alike.
 5. The canvases kept are those carrying an annotation, or every canvas of
    the document with ``canvases=all``. The layers of an imaging entry
@@ -627,7 +627,7 @@ def build_manifest(scope):
     Explorer page of the scope. The label names the project of a project
     scope, else the Selection (« Selection of n pages of <document> » or
     « … of k documents »). The manifest carries no ``rights``; ``summary``
-    says when the scope holds drafts or restricted-access data.
+    says when the scope holds drafts.
 
     Per document, in ``scope.documents`` order, its manifest (the
     ``doc_manifest`` role, read by ``manifest_json``) gives the canvases:
@@ -636,8 +636,7 @@ def build_manifest(scope):
     ``v3_canvas``. A canvas's ``annotations`` hold one ``data_annotation``
     per analysis zone and one ``describing`` annotation per material zone
     (a plain-text ``TextualBody`` naming the materials and their certainty).
-    Zones are read from the nodegroups both the reader and the viewer may
-    read. The layers of each kept imaging entry follow the canvas of the
+    Zones are read from the nodegroups the reader may read. The layers of each kept imaging entry follow the canvas of the
     analysis's first zone, labelled « <folio> — <layer> »; the layers of an
     analysis without a zone follow the canvases of its document (or come
     last). ``structures`` holds one Range per document and one per analysis
@@ -788,8 +787,6 @@ def build_manifest(scope):
     summary = []
     if scope.drafts:
         summary.append(_("Contains drafts"))
-    if scope.restricted:
-        summary.append(_("Contains restricted-access data"))
     if summary:
         manifest["summary"] = {language: summary}
     if unlocated:

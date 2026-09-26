@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-26 04:32-0500\n"
+"POT-Creation-Date: 2026-09-26 11:52-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -131,15 +131,15 @@ msgstr ""
 msgid "References"
 msgstr ""
 
-#: settings.py:555
+#: settings.py:561
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:592
+#: settings.py:598
 msgid "English"
 msgstr "English"
 
-#: settings.py:593
+#: settings.py:599
 msgid "French"
 msgstr ""
 
@@ -305,7 +305,7 @@ msgid ""
 "identifier."
 msgstr ""
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:505
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:501
 msgid "Licences per file"
 msgstr ""
 
@@ -4179,41 +4179,36 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr ""
 
-#: views/explorer/export.py:385
+#: views/explorer/export.py:383
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer/export.py:392 views/explorer/manifest.py:790
+#: views/explorer/export.py:390 views/explorer/manifest.py:789
 #: views/explorer/series.py:101
 msgid "Contains drafts"
 msgstr ""
 
-#: views/explorer/export.py:394 views/explorer/manifest.py:792
-#: views/explorer/series.py:103
-msgid "Contains restricted-access data"
-msgstr ""
-
-#: views/explorer/export.py:507
+#: views/explorer/export.py:503
 msgid "Each file carries its own licence, given with the file."
 msgstr ""
 
-#: views/explorer/export.py:785
+#: views/explorer/export.py:781
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
 "%(count)d canvases): open it by document."
 msgstr ""
 
-#: views/explorer/export.py:795
+#: views/explorer/export.py:791
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
 "are served by IIIF image servers and are not in the package."
 msgstr ""
 
-#: views/explorer/export.py:802
+#: views/explorer/export.py:798
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
@@ -4250,7 +4245,7 @@ msgid_plural "Selection of %(count)d pages of %(documents)d documents"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer/manifest.py:798
+#: views/explorer/manifest.py:795
 msgid "Without a position on the image"
 msgstr ""
 
@@ -4284,14 +4279,14 @@ msgstr ""
 msgid "Generated on %(date)s"
 msgstr ""
 
-#: views/explorer/series.py:144
+#: views/explorer/series.py:142
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
 "%(url)s"
 msgstr ""
 
-#: views/explorer/series.py:159
+#: views/explorer/series.py:157
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr ""

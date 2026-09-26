@@ -165,8 +165,7 @@ def _dataset_url(dataset):
 def analysis_zones(scope):
     """``{analysis id: {"canvas", "label", "shape"}}``: the first zone of each analysis on a canvas of its document's manifest.
 
-    Zones are read from the nodegroup both the reader and the viewer may
-    read; the canvas is resolved as ``build_manifest`` resolves it.
+    Zones are read from the nodegroup the reader may read; the canvas is resolved as ``build_manifest`` resolves it.
     """
     bundle = scope.bundle
     readable = scope.nodegroups
@@ -221,8 +220,7 @@ def analyses_table(scope, content, zones):
     instrument roles), *zones* its ``analysis_zones``. Measurement conditions
     take one column per statement type label (``conditions: <label>``),
     untyped statements the column ``conditions``, as plain text. Operators,
-    projects and instruments are named only when both the reader and the
-    viewer may name them.
+    projects and instruments are named only when the reader may name them.
     """
     bundle, language = scope.bundle, scope.language
     values = content.values
@@ -390,8 +388,6 @@ def _marks(scope):
     marks = []
     if scope.drafts:
         marks.append(_("Contains drafts"))
-    if scope.restricted:
-        marks.append(_("Contains restricted-access data"))
     return marks
 
 
@@ -905,7 +901,7 @@ def _too_large():
 
 
 class ExplorerExportView(View):
-    """``GET /api/explorer/export?ids=|document=|project=[&canvases=all][&restricted=1][&lang=]``: the data package, a private download.
+    """``GET /api/explorer/export?ids=|document=|project=[&canvases=all][&lang=]``: the data package, a private download.
 
     ``lang`` absent is ``LANGUAGE_CODE``; an unknown language or malformed
     scope parameters answer a bodyless 400, a scope with nothing visible the
@@ -921,7 +917,7 @@ class ExplorerExportView(View):
             return HttpResponseBadRequest()
         with translation.override(language):
             try:
-                scope = resolve_scope(request.GET, request.user, language)
+                scope = resolve_scope(request.GET, language)
             except ScopeError:
                 return HttpResponseBadRequest()
             if scope is None:

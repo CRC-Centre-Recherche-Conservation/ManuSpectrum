@@ -477,8 +477,6 @@ export function sharePayload(
             characterizations: 0,
             spectra: 1,
             drafts: 0,
-            restricted: false,
-            restrictedAvailable: 0,
             missing: [],
         },
         citations: [analysisPayload().citation],
@@ -488,7 +486,6 @@ export function sharePayload(
             manifest: product("iiif/v3/explorer-manifest"),
             seriesCsv: null,
             export: product("api/explorer/export"),
-            exportRestricted: null,
         },
         ...overrides,
     };

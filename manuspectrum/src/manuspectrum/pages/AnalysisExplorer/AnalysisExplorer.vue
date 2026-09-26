@@ -48,16 +48,12 @@ const INITIAL_SELECTION = parseSelection(
 );
 
 /** `miradorUrl`: the viewer of `EXPLORER_MIRADOR_URL`, empty when none is set. */
-const props = withDefaults(
-    defineProps<{ connected: boolean; miradorUrl?: string }>(),
-    { miradorUrl: "" },
-);
+const props = withDefaults(defineProps<{ miradorUrl?: string }>(), {
+    miradorUrl: "",
+});
 
 const store = useExplorerStore();
 
-store.$patch((state) => {
-    state.session.connected = props.connected;
-});
 useBasketPersistence(store);
 useUrlState({
     snapshot: () => snapshotOf(store),

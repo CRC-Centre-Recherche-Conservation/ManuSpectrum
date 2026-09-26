@@ -17,10 +17,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { miradorLink } from "@/manuspectrum/pages/AnalysisExplorer/share/content-state.ts";
-import {
-    offeredScopes,
-    shareQuery,
-} from "@/manuspectrum/pages/AnalysisExplorer/share/scope.ts";
+import { offeredScopes } from "@/manuspectrum/pages/AnalysisExplorer/share/scope.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { SELECTION_PARAM } from "@/manuspectrum/pages/AnalysisExplorer/store/selection-link.ts";
 
@@ -42,8 +39,7 @@ const CITATIONS_FOLDED_AFTER = 3;
  * document over the export limit) and IIIF (manifest, Mirador when
  * `EXPLORER_MIRADOR_URL` is set). Links follow each product's site `path`;
  * copies and Mirador take its absolute `url`. The share payload is asked
- * only while the drawer is open. A signed-in reader whose scope holds
- * restricted items may include them; the products then say so.
+ * only while the drawer is open. Every reader gets the visitor's view.
  */
 const miradorUrl = inject(MIRADOR_URL_KEY, "");
 
@@ -55,12 +51,8 @@ const lang = document.documentElement.lang || "en";
 
 const open = ref(false);
 const chosenKind = ref<OfferedScope["kind"] | null>(null);
-/** The unrestricted query the reader asked restricted data for; any other scope is unrestricted. */
-const restrictedFor = ref<string | null>(null);
 /** The payload query whose citations are all shown. */
 const unfoldedFor = ref<string | null>(null);
-/** Restricted items of the default build, by its query. */
-const restrictedCounts = ref(new Map<string, number>());
 
 const offered = computed(() =>
     offeredScopes({
@@ -77,28 +69,14 @@ const scope = computed<OfferedScope | null>(
         offered.value[0] ??
         null,
 );
-const scopeQuery = computed(() =>
-    scope.value ? shareQuery(scope.value).toString() : "",
-);
-const restricted = computed(
-    () => scopeQuery.value !== "" && restrictedFor.value === scopeQuery.value,
-);
 
-const share = useShare(() => (open.value ? scope.value : null), restricted);
+const share = useShare(() => (open.value ? scope.value : null));
 
 const failed = computed(
     () =>
         share.status.value === "unavailable" || share.status.value === "error",
 );
 const payload = computed(() => (failed.value ? null : share.data.value));
-const restrictedCount = computed(
-    () => restrictedCounts.value.get(scopeQuery.value) ?? 0,
-);
-const restrictedOffered = computed(
-    () =>
-        store.session.connected &&
-        (restricted.value || restrictedCount.value > 0),
-);
 const citationsUnfolded = computed(
     () =>
         share.loaded.value !== null && unfoldedFor.value === share.loaded.value,
@@ -129,16 +107,6 @@ watch(open, async (isOpen, wasOpen) => {
     button.value?.focus();
 });
 
-watch(
-    () => share.data.value,
-    (data) => {
-        if (!data || data.scope.restricted) return;
-        const counts = new Map(restrictedCounts.value);
-        counts.set(share.loaded.value ?? "", data.scope.restrictedAvailable);
-        restrictedCounts.value = counts;
-    },
-);
-
 function show(): void {
     open.value = true;
 }
@@ -159,11 +127,6 @@ function chooseScope(kind: OfferedScope["kind"]): void {
 
 function unfoldCitations(): void {
     unfoldedFor.value = share.loaded.value;
-}
-
-function toggleRestricted(event: Event): void {
-    const checked = (event.target as HTMLInputElement).checked;
-    restrictedFor.value = checked ? scopeQuery.value : null;
 }
 
 /** The address a reader shares: the page with the Selection's keys for a Selection, the page shown otherwise. */
@@ -260,15 +223,10 @@ function shareLink(): string {
                 ></p>
                 <template v-else>
                     <p
-                        v-if="
-                            payload.scope.drafts > 0 || payload.scope.restricted
-                        "
+                        v-if="payload.scope.drafts > 0"
                         class="marks"
                     >
-                        <span
-                            v-if="payload.scope.drafts > 0"
-                            class="badge"
-                        >
+                        <span class="badge">
                             {{
                                 interpolate(
                                     $gettext("Contains drafts (%{n})"),
@@ -276,12 +234,6 @@ function shareLink(): string {
                                     true,
                                 )
                             }}
-                        </span>
-                        <span
-                            v-if="payload.scope.restricted"
-                            class="badge"
-                        >
-                            {{ $gettext("Contains restricted-access data") }}
                         </span>
                     </p>
 
@@ -341,27 +293,6 @@ function shareLink(): string {
                         <h4 id="share-data">
                             <span>{{ $gettext("Data") }}</span>
                         </h4>
-                        <label
-                            v-if="restrictedOffered"
-                            class="restricted"
-                        >
-                            <input
-                                type="checkbox"
-                                :checked="restricted"
-                                @change="toggleRestricted"
-                            />
-                            <span>
-                                {{
-                                    interpolate(
-                                        $gettext(
-                                            "Include restricted-access data (%{n})",
-                                        ),
-                                        { n: restrictedCount },
-                                        true,
-                                    )
-                                }}
-                            </span>
-                        </label>
                         <ul class="downloads">
                             <li v-if="safeHref(payload.links.seriesCsv?.path)">
                                 <a
@@ -628,14 +559,6 @@ function shareLink(): string {
 .share-panel .more:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
-}
-
-.share-panel .restricted {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-block-size: var(--explorer-target, 2.75rem);
-    cursor: pointer;
 }
 
 .share-panel .loading {

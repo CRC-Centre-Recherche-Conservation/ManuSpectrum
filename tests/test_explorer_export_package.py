@@ -57,20 +57,20 @@ class PackageCase(CorpusCase):
     def pk(self, key):
         return str(self.analyses[key].pk)
 
-    def scope(self, query, user=None, language="en"):
+    def scope(self, query, language="en"):
         with mock.patch(FETCH, side_effect=fetch):
-            return resolve_scope(QueryDict(query), user or self.anonymous, language)
+            return resolve_scope(QueryDict(query), language)
 
-    def package(self, query, user=None, language="en"):
-        scope = self.scope(query, user, language)
+    def package(self, query, language="en"):
+        scope = self.scope(query, language)
         with mock.patch(FETCH, side_effect=fetch):
             return scope, package(scope, EXPORTED)
 
-    def members(self, query, user=None, language="en"):
-        return {m.arcname: m for m in self.package(query, user, language)[1]}
+    def members(self, query, language="en"):
+        return {m.arcname: m for m in self.package(query, language)[1]}
 
-    def crate(self, query, user=None):
-        scope, members = self.package(query, user)
+    def crate(self, query):
+        scope, members = self.package(query)
         with mock.patch(FETCH, side_effect=fetch):
             graph = ro_crate(scope, members, EXPORTED)["@graph"]
         return {e["@id"]: e for e in graph}
@@ -477,20 +477,11 @@ class ReadmeTests(PackageCase):
                 self.assertIn("CC BY 4.0", readme)
                 self.assertIn(citations[0]["title"], readme)
 
-    def test_drafts_and_restricted_inclusion_are_marked_in_the_readme(self):
+    def test_drafts_are_marked_in_the_readme(self):
         drafts = self.members(f"ids=an:{self.pk('draft')}:-")
         plain = self.members(f"ids=an:{self.pk('open')}:-")
-        self.embargo(self.analyses["open"])
-        restricted = self.members(
-            f"ids=an:{self.pk('open')}:-&restricted=1", user=self.editor
-        )
         french = self.members(f"ids=an:{self.pk('draft')}:-", language="fr")
 
         self.assertIn("Contains drafts", self.text(drafts["README.md"]))
         self.assertIn("Contient des brouillons", self.text(french["README.md"]))
         self.assertNotIn("Contains drafts", self.text(plain["README.md"]))
-        self.assertNotIn("restricted", self.text(plain["README.md"]).lower())
-        self.assertIn(
-            "Contains restricted-access data", self.text(restricted["README.md"])
-        )
-        self.assertIn(self.pk("open"), self.text(restricted["metadata/analyses.csv"]))

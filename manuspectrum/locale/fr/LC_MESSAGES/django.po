@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-26 04:32-0500\n"
+"POT-Creation-Date: 2026-09-26 11:52-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -129,15 +129,15 @@ msgstr "Correspondances de termes"
 msgid "References"
 msgstr "Références"
 
-#: settings.py:555
+#: settings.py:561
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:592
+#: settings.py:598
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:593
+#: settings.py:599
 msgid "French"
 msgstr "Français"
 
@@ -323,7 +323,7 @@ msgstr ""
 "Les données proviennent des jeux de données ci-dessous ; citez-les et "
 "réutilisez-les par leur identifiant."
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:505
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:501
 msgid "Licences per file"
 msgstr "Licences par fichier"
 
@@ -4363,28 +4363,23 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr "Les données sont disponibles dans %(site)s (%(permalink)s)."
 
-#: views/explorer/export.py:385
+#: views/explorer/export.py:383
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] "Sélection de %(count)d élément"
 msgstr[1] "Sélection de %(count)d éléments"
 
-#: views/explorer/export.py:392 views/explorer/manifest.py:790
+#: views/explorer/export.py:390 views/explorer/manifest.py:789
 #: views/explorer/series.py:101
 msgid "Contains drafts"
 msgstr "Contient des brouillons"
 
-#: views/explorer/export.py:394 views/explorer/manifest.py:792
-#: views/explorer/series.py:103
-msgid "Contains restricted-access data"
-msgstr "Contient des données à accès restreint"
-
-#: views/explorer/export.py:507
+#: views/explorer/export.py:503
 msgid "Each file carries its own licence, given with the file."
 msgstr "Chaque fichier porte sa propre licence, indiquée avec le fichier."
 
-#: views/explorer/export.py:785
+#: views/explorer/export.py:781
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
@@ -4393,7 +4388,7 @@ msgstr ""
 "Le manifeste IIIF de cette portée est trop volumineux pour être inclus (plus "
 "de %(count)d canvases) : ouvrez-le par document."
 
-#: views/explorer/export.py:795
+#: views/explorer/export.py:791
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
 "are served by IIIF image servers and are not in the package."
@@ -4402,7 +4397,7 @@ msgstr ""
 "json) ; ses images sont servies par des serveurs d'images IIIF et ne sont "
 "pas dans le paquet."
 
-#: views/explorer/export.py:802
+#: views/explorer/export.py:798
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
@@ -4441,7 +4436,7 @@ msgid_plural "Selection of %(count)d pages of %(documents)d documents"
 msgstr[0] "Sélection de %(count)d folio de %(documents)d documents"
 msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
 
-#: views/explorer/manifest.py:798
+#: views/explorer/manifest.py:795
 msgid "Without a position on the image"
 msgstr "Sans position sur l'image"
 
@@ -4475,7 +4470,7 @@ msgstr "%(site)s : spectres d'une Sélection"
 msgid "Generated on %(date)s"
 msgstr "Produit le %(date)s"
 
-#: views/explorer/series.py:144
+#: views/explorer/series.py:142
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
@@ -4484,7 +4479,7 @@ msgstr ""
 "exclu : %(file)s — la licence %(licence)s interdit les œuvres dérivées ; "
 "fichier brut : %(url)s"
 
-#: views/explorer/series.py:159
+#: views/explorer/series.py:157
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
@@ -4603,6 +4598,7 @@ msgid ""
 msgstr ""
 "Cette configuration a été modifiée par quelqu’un d’autre depuis son "
 "chargement. Rechargez-la avant d’enregistrer."
+
 
 #~ msgid "XRF"
 #~ msgstr "XRF"

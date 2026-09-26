@@ -190,8 +190,6 @@ SHAPES = {
         "characterizations": int,
         "spectra": int,
         "drafts": int,
-        "restricted": bool,
-        "restrictedAvailable": int,
         "missing": list,
     },
     "ShareExport": {"files": int, "bytes": int, "overLimit": bool, "documents": list},
@@ -201,7 +199,6 @@ SHAPES = {
         "manifest": "ProductLink",
         "seriesCsv": ("ProductLink", type(None)),
         "export": "ProductLink",
-        "exportRestricted": ("ProductLink", type(None)),
     },
 }
 
