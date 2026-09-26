@@ -1,8 +1,8 @@
-import { flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { parseContentState } from "@iiif/helpers/content-state";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { defineComponent, h, ref, shallowRef } from "vue";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
@@ -26,6 +26,8 @@ import type {
     Shape,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
+
+enableAutoUnmount(afterEach);
 
 const CANVAS = "https://iiif.example/ms1/canvas/f12";
 const MIRADOR = "https://viewer.example/mirador/";

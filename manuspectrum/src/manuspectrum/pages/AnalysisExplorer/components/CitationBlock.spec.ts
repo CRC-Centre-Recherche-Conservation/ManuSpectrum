@@ -1,6 +1,6 @@
-import { flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import PrimeVue from "primevue/config";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
@@ -8,6 +8,8 @@ import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyBut
 import { analysisPayload } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 import type { Citation } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
+enableAutoUnmount(afterEach);
 
 function citation(overrides: Partial<Citation> = {}): Citation {
     return { ...analysisPayload().citation, ...overrides };
