@@ -1,4 +1,4 @@
-import { onScopeDispose, watch } from "vue";
+import { onScopeDispose, ref, watch } from "vue";
 
 import {
     readStorage,
@@ -10,6 +10,7 @@ import {
     normalizeItemKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 
+import type { Ref } from "vue";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type { BasketItem } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
@@ -79,12 +80,25 @@ export function serializeBasket(items: readonly BasketItem[]): string {
  * in `ms-explorer-basket-touched-v1`. A `storage` event is adopted as it is,
  * a storage clear (`key` null) empties the Selection. A stored Selection
  * left unchanged for more than `SELECTION_MAX_AGE_DAYS` is emptied on start
- * and `expired` is true; one stored without a date is kept and dated now.
- * Without storage the Selection lives in memory for the page's lifetime.
+ * and `expired` turns true; so it does when another tab empties this tab's
+ * Selection for age (the stored date is then past the maximum age). One
+ * stored without a date is kept and dated now. Without storage the
+ * Selection lives in memory for the page's lifetime.
  */
 export function useBasketPersistence(store: ExplorerStore): {
-    expired: boolean;
+    expired: Ref<boolean>;
 } {
+    const expired = ref(false);
+
+    function tooOld(): boolean {
+        const touched = Number(readStorage(BASKET_TOUCHED_KEY));
+        return (
+            Number.isFinite(touched) &&
+            touched > 0 &&
+            Date.now() - touched > SELECTION_MAX_AGE_DAYS * DAY_MS
+        );
+    }
+
     function adopt(items: BasketItem[]): void {
         if (serializeBasket(items) !== serializeBasket(store.basket)) {
             store.$patch((state) => {
@@ -97,19 +111,22 @@ export function useBasketPersistence(store: ExplorerStore): {
         if (event.key === null) {
             adopt([]);
         } else if (event.key === BASKET_STORAGE_KEY) {
-            adopt(parseBasket(event.newValue));
+            const items = parseBasket(event.newValue);
+            if (items.length === 0 && store.basket.length > 0 && tooOld()) {
+                expired.value = true;
+            }
+            adopt(items);
         }
     }
 
     let stored = parseBasket(readStorage(BASKET_STORAGE_KEY));
-    let expired = false;
     if (stored.length > 0) {
         const touched = Number(readStorage(BASKET_TOUCHED_KEY));
         if (!Number.isFinite(touched) || touched <= 0) {
             writeStorage(BASKET_TOUCHED_KEY, String(Date.now()));
-        } else if (Date.now() - touched > SELECTION_MAX_AGE_DAYS * DAY_MS) {
+        } else if (tooOld()) {
             stored = [];
-            expired = true;
+            expired.value = true;
             writeStorage(BASKET_STORAGE_KEY, serializeBasket(stored));
         }
     }

@@ -57,8 +57,10 @@ describe("AnalysisExplorer", () => {
         await flushPromises();
 
         const notice = wrapper.find(".selection-expired");
-        expect(notice.attributes("role")).toBe("status");
         expect(notice.text()).toContain("more than 90 days");
+        expect(wrapper.find(".announcer").text()).toContain(
+            "more than 90 days",
+        );
         expect(useExplorerStore().basket).toEqual([]);
         await notice.find("button").trigger("click");
         expect(wrapper.find(".selection-expired").exists()).toBe(false);

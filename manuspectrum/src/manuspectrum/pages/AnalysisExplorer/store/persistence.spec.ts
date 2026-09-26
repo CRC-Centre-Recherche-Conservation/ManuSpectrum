@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, nextTick } from "vue";
+import { defineComponent, h, nextTick, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
@@ -13,6 +13,7 @@ import {
     useBasketPersistence,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
 
+import type { Ref } from "vue";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 const ORIGINAL = Object.getOwnPropertyDescriptor(window, "localStorage");
@@ -25,20 +26,24 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 function mountPersistence(): {
     store: ExplorerStore;
-    expired: boolean;
+    expired: Ref<boolean>;
     unmount: () => void;
 } {
     const store = useExplorerStore();
-    let expired = false;
+    const held = { expired: ref(false) };
     const wrapper = mount(
         defineComponent({
             setup() {
-                expired = useBasketPersistence(store).expired;
+                held.expired = useBasketPersistence(store).expired;
                 return () => h("div");
             },
         }),
     );
-    return { store, expired, unmount: () => wrapper.unmount() };
+    return {
+        store,
+        expired: held.expired,
+        unmount: () => wrapper.unmount(),
+    };
 }
 
 function basketWrites(setItem: { mock: { calls: unknown[][] } }): number {
@@ -202,7 +207,7 @@ describe("Selection expiry", () => {
             String(NOW - SELECTION_MAX_AGE_DAYS * DAY_MS - 1),
         );
         const { store, expired } = mountPersistence();
-        expect(expired).toBe(true);
+        expect(expired.value).toBe(true);
         expect(store.basket).toEqual([]);
         expect(window.localStorage.getItem(BASKET_STORAGE_KEY)).toBe("[]");
     });
@@ -213,17 +218,53 @@ describe("Selection expiry", () => {
             String(NOW - SELECTION_MAX_AGE_DAYS * DAY_MS),
         );
         const { store, expired } = mountPersistence();
-        expect(expired).toBe(false);
+        expect(expired.value).toBe(false);
         expect(store.basket).toHaveLength(1);
     });
 
     it("keeps a Selection stored without a date and dates it now", () => {
         const { store, expired } = mountPersistence();
-        expect(expired).toBe(false);
+        expect(expired.value).toBe(false);
         expect(store.basket).toHaveLength(1);
         expect(window.localStorage.getItem(BASKET_TOUCHED_KEY)).toBe(
             String(NOW),
         );
+    });
+
+    it("says so when another tab empties the Selection for age", async () => {
+        window.localStorage.setItem(
+            BASKET_TOUCHED_KEY,
+            String(NOW - SELECTION_MAX_AGE_DAYS * DAY_MS),
+        );
+        const { store, expired } = mountPersistence();
+        expect(store.basket).toHaveLength(1);
+        vi.setSystemTime(NOW + DAY_MS);
+        window.localStorage.setItem(BASKET_STORAGE_KEY, "[]");
+        window.dispatchEvent(
+            new StorageEvent("storage", {
+                key: BASKET_STORAGE_KEY,
+                newValue: "[]",
+            }),
+        );
+        await nextTick();
+        expect(store.basket).toEqual([]);
+        expect(expired.value).toBe(true);
+    });
+
+    it("says nothing when another tab empties the Selection by hand", async () => {
+        window.localStorage.setItem(BASKET_TOUCHED_KEY, String(NOW - DAY_MS));
+        const { store, expired } = mountPersistence();
+        window.localStorage.setItem(BASKET_STORAGE_KEY, "[]");
+        window.localStorage.setItem(BASKET_TOUCHED_KEY, String(NOW));
+        window.dispatchEvent(
+            new StorageEvent("storage", {
+                key: BASKET_STORAGE_KEY,
+                newValue: "[]",
+            }),
+        );
+        await nextTick();
+        expect(store.basket).toEqual([]);
+        expect(expired.value).toBe(false);
     });
 
     it("dates every change of this tab, never a read or another tab's value", async () => {

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    provide,
+    ref,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
@@ -56,8 +64,8 @@ const props = withDefaults(defineProps<{ miradorUrl?: string }>(), {
 const store = useExplorerStore();
 const { $gettext } = useGettext();
 
-/** The stored Selection was emptied for age on this load; the notice stays until dismissed. */
-const selectionExpired = ref(useBasketPersistence(store).expired);
+/** The stored Selection was emptied for age (on this load or by another tab); the notice stays until dismissed. */
+const { expired: selectionExpired } = useBasketPersistence(store);
 useUrlState({
     snapshot: () => snapshotOf(store),
     toQuery,
@@ -115,6 +123,22 @@ function announce(message: string): void {
     });
 }
 
+function announceExpiry(): void {
+    announce(
+        $gettext(
+            "Your Selection, unchanged for more than 90 days, has been emptied.",
+        ),
+    );
+}
+
+onMounted(() => {
+    if (selectionExpired.value) announceExpiry();
+});
+
+watch(selectionExpired, (expired) => {
+    if (expired) announceExpiry();
+});
+
 function onSelectionResolved(message: string): void {
     sharedSelection.value = null;
     announcement.value = message;
@@ -134,7 +158,6 @@ function onSelectionResolved(message: string): void {
         <p
             v-if="selectionExpired"
             class="selection-expired"
-            role="status"
         >
             <span>{{
                 $gettext(
