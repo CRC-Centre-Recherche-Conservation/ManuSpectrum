@@ -25,18 +25,21 @@ trigger cost about a third of a build. The cycles a build leaves behind
 collected after it.
 
 Stale while rebuilding. When the current key holds no bundle but a live
-bundle of the same language was built under the same permission
-gates (epoch, hidden resources, readable nodegroups and models: everything
-but the data) and shows no resource the reader can no longer see, ``ticket``
+bundle of the same language was built under the same permission gates
+(epoch, hidden resources, readable nodegroups and models: everything but
+the data) and shows no resource the reader can no longer see, ``ticket``
 names that bundle and the reader is answered from it at once, while one
 rebuild runs in the background: one at a time in a process, whatever its
 language, and one per language across processes, started through
-``spawn`` by the caller that takes the language's rebuild lock. The others keep reading the
-previous bundle until the new one is stored; a data change during a
-rebuild is rebuilt by the first request after it ends. A change of permission gates, a
-resource the previous bundle shows that the current visible set leaves out
-(a link to a hidden Project, a deletion), or no previous bundle, builds in
-the request.
+``spawn`` by the caller that takes the language's rebuild lock. The others
+keep reading the previous bundle until the new one is stored; a data
+change during a rebuild is rebuilt by the first request after it ends.
+Meanwhile a resource made visible by the new data is still absent from the
+bundle served: its document or analysis answers 404 for those few seconds,
+and the new analyses of a document read as not matching the filters. A
+change of permission gates, a resource the previous bundle shows that the
+current visible set leaves out (a link to a hidden Project, a deletion), or
+no previous bundle, builds in the request.
 
 One ``INFO`` line per build on the ``manuspectrum.explorer`` logger, its
 fields in ``extra``: ``duration_s``, ``rows``, ``stored_bytes``,

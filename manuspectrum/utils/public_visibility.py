@@ -30,7 +30,9 @@ Both sets are memoised per reader for ``PERM_SCOPE_TTL`` under a permission
 epoch. ``manuspectrum.signals`` drops the epoch once a transaction writing an
 object grant, a group membership or a model permission commits, so every
 memo starts over. Guardian's bulk ``assign_perm`` on a queryset
-(``bulk_create``) sends no signal; the TTL bounds that case.
+(``bulk_create``) sends no signal; the TTL bounds that case, up to about
+twice ``PERM_SCOPE_TTL`` for ``visible_set``, whose memo is built from the
+other memos.
 """
 
 import hashlib
@@ -284,7 +286,9 @@ def visible_set(user, version=None):
     Memoised per reader, permission epoch and data version (*version*, a
     ``data_version()`` the caller already read, else read here) for
     ``PERM_SCOPE_TTL``: a lifecycle change or a new link shows at the next
-    request, a grant written without a signal within that delay. ``digest``
+    request; a grant written without a signal can take up to about twice
+    that delay, the visible set being built from a ``hidden_resource_ids``
+    memo that may be as old. ``digest``
     names the sets and the reader's gates they were decided with (hidden
     resources, readable nodegroups and models): two readers with the same
     digest see the same thing. ``gates`` names those gates alone: two states
