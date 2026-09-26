@@ -2124,14 +2124,24 @@ def permalink(resource_id):
     return f"{settings.PUBLIC_SERVER_ADDRESS}report/{resource_id}"
 
 
-def product_url(route, query, language):
-    """Absolute URL of the language-neutral product *route* for the scope *query* in *language*.
+def product_path(route, query, language):
+    """Path on this site of the language-neutral product *route* for the scope *query* in *language*.
 
     *query* is an URL-encoded ``ExportScope.query`` (``ids=…``,
     ``document=…``, ``project=…`` and their flags); ``lang`` is appended.
     """
-    path = reverse(route).lstrip("/")
-    return f"{settings.PUBLIC_SERVER_ADDRESS}{path}?{query}&{urlencode({'lang': language})}"
+    return f"{reverse(route)}?{query}&{urlencode({'lang': language})}"
+
+
+def product_url(route, query, language):
+    """Absolute URL of ``product_path``, as a copied link, an external viewer or an IIIF id names it."""
+    return f"{settings.PUBLIC_SERVER_ADDRESS}{product_path(route, query, language).lstrip('/')}"
+
+
+def product_link(route, query, language):
+    """``ProductLink`` of ``product_path``: its ``path`` for a link followed on this site, its ``url`` for what leaves it."""
+    path = product_path(route, query, language)
+    return {"url": f"{settings.PUBLIC_SERVER_ADDRESS}{path.lstrip('/')}", "path": path}
 
 
 def cited_analysis(row, end, label_of, operators, projects):

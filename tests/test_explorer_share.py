@@ -242,10 +242,11 @@ class ShareRouteTests(CorpusCase):
             sorted(str(self.documents[k].pk) for k in ("open", "embargoed")),
         )
         for document in documents:
+            assert_shape(self, document, "ShareDocument")
+            path = f"/api/explorer/export?document={document['id']}&lang=en"
+            self.assertEqual(document["path"], path)
             self.assertEqual(
-                document["url"],
-                f"{settings.PUBLIC_SERVER_ADDRESS}api/explorer/export"
-                f"?document={document['id']}&lang=en",
+                document["url"], f"{settings.PUBLIC_SERVER_ADDRESS}{path[1:]}"
             )
         self.assertTrue(single["export"]["overLimit"])
         self.assertEqual(single["export"]["documents"], [])
@@ -261,23 +262,27 @@ class ShareRouteTests(CorpusCase):
         without = self.get(f"ids=an:{self.pk('on_document')}:-").json()["links"]
         document = self.get(f"document={self.documents['open'].pk}").json()["links"]
 
-        self.assertEqual(
-            with_spectra["seriesCsv"],
-            f"{settings.PUBLIC_SERVER_ADDRESS}api/explorer/series.csv"
-            f"?ids=an:{self.pk('open')}:-&lang=en",
-        )
+        self.assertIsNotNone(with_spectra["seriesCsv"])
         self.assertIsNone(without["seriesCsv"])
         self.assertIsNone(document["seriesCsv"])
-        self.assertEqual(
-            with_spectra["manifest"],
-            f"{settings.PUBLIC_SERVER_ADDRESS}iiif/v3/explorer-manifest"
-            f"?ids=an:{self.pk('open')}:-&lang=en",
-        )
-        self.assertEqual(
-            with_spectra["export"],
-            f"{settings.PUBLIC_SERVER_ADDRESS}api/explorer/export"
-            f"?ids=an:{self.pk('open')}:-&lang=en",
-        )
+
+    def test_links_are_site_paths_to_follow_and_absolute_urls_to_copy(self):
+        links = self.get(f"ids=an:{self.pk('open')}:-").json()["links"]
+        query = f"?ids=an:{self.pk('open')}:-&lang=en"
+
+        for name, path in (
+            ("seriesCsv", f"/api/explorer/series.csv{query}"),
+            ("manifest", f"/iiif/v3/explorer-manifest{query}"),
+            ("export", f"/api/explorer/export{query}"),
+        ):
+            with self.subTest(link=name):
+                self.assertEqual(
+                    links[name],
+                    {
+                        "path": path,
+                        "url": f"{settings.PUBLIC_SERVER_ADDRESS}{path[1:]}",
+                    },
+                )
 
     def test_a_visitor_sees_no_restricted_count(self):
         self.embargo(self.analyses["open"])
@@ -292,10 +297,10 @@ class ShareRouteTests(CorpusCase):
         self.assertIsNone(visitor["links"]["exportRestricted"])
         self.assertNotIn(self.pk("open"), str(visitor))
         self.assertEqual(reader["scope"]["restrictedAvailable"], 1)
+        path = f"/api/explorer/export?{query}&restricted=1&lang=en"
         self.assertEqual(
             reader["links"]["exportRestricted"],
-            f"{settings.PUBLIC_SERVER_ADDRESS}api/explorer/export"
-            f"?{query}&restricted=1&lang=en",
+            {"path": path, "url": f"{settings.PUBLIC_SERVER_ADDRESS}{path[1:]}"},
         )
         self.assertNotIn(self.pk("open"), str(reader))
 
@@ -307,8 +312,10 @@ class ShareRouteTests(CorpusCase):
 
         self.assertTrue(payload["scope"]["restricted"])
         self.assertEqual(payload["scope"]["analyses"], 3)
-        self.assertIn("&restricted=1", payload["links"]["export"])
-        self.assertIn("&restricted=1", payload["links"]["manifest"])
+        for name in ("export", "manifest"):
+            for form in ("path", "url"):
+                with self.subTest(link=name, form=form):
+                    self.assertIn("&restricted=1", payload["links"][name][form])
         self.assertIsNone(payload["links"]["exportRestricted"])
 
     def test_links_encode_a_key_carrying_url_delimiters(self):
@@ -318,10 +325,13 @@ class ShareRouteTests(CorpusCase):
 
         self.assertEqual(payload["scope"]["key"], f"ids={key}")
         for name in ("manifest", "export"):
-            with self.subTest(link=name):
-                parts = urlsplit(payload["links"][name])
-                self.assertEqual(parts.fragment, "")
-                self.assertEqual(parse_qs(parts.query), {"ids": [key], "lang": ["en"]})
+            for form in ("path", "url"):
+                with self.subTest(link=name, form=form):
+                    parts = urlsplit(payload["links"][name][form])
+                    self.assertEqual(parts.fragment, "")
+                    self.assertEqual(
+                        parse_qs(parts.query), {"ids": [key], "lang": ["en"]}
+                    )
 
     def test_the_payload_is_in_the_request_language(self):
         query = f"ids=an:{self.pk('on_document')}:-"
@@ -331,7 +341,8 @@ class ShareRouteTests(CorpusCase):
         self.assertTrue(
             french["availability"].startswith("Les données sont disponibles")
         )
-        self.assertTrue(french["links"]["manifest"].endswith("&lang=fr"))
+        self.assertTrue(french["links"]["manifest"]["url"].endswith("&lang=fr"))
+        self.assertTrue(french["links"]["manifest"]["path"].endswith("&lang=fr"))
 
 
 class ShareCostTests(CorpusCase):

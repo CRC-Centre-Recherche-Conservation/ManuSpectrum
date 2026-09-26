@@ -287,11 +287,18 @@ export interface ShareScope {
     missing: string[];
 }
 
-export interface ShareDocument {
+/** One product of a scope: `path` is followed on this site, `url` is copied or handed to what leaves it. */
+export interface ProductLink {
+    /** Absolute URL from `PUBLIC_SERVER_ADDRESS`. */
+    url: string;
+    /** Path on this site (`/…?…&lang=…`). */
+    path: string;
+}
+
+/** The data package of this document alone. */
+export interface ShareDocument extends ProductLink {
     id: string;
     name: Label;
-    /** Absolute URL of the data package of this document alone. */
-    url: string;
 }
 
 export interface ShareExport {
@@ -302,14 +309,14 @@ export interface ShareExport {
     documents: ShareDocument[];
 }
 
-/** Absolute URLs of the scope's products. */
+/** The scope's products. */
 export interface ShareLinks {
-    manifest: string;
+    manifest: ProductLink;
     /** Only for a Selection holding spectra. */
-    seriesCsv: string | null;
-    export: string;
+    seriesCsv: ProductLink | null;
+    export: ProductLink;
     /** Only when a signed-in reader's default build left restricted items out. */
-    exportRestricted: string | null;
+    exportRestricted: ProductLink | null;
 }
 
 /** `GET /{lang}/api/explorer/share`: what « Share and export » offers for one scope. */
@@ -612,8 +619,14 @@ export const SHAPE_KEYS = {
         overLimit: true,
         documents: true,
     } satisfies Record<keyof ShareExport, true>,
-    ShareDocument: { id: true, name: true, url: true } satisfies Record<
-        keyof ShareDocument,
+    ShareDocument: {
+        id: true,
+        name: true,
+        url: true,
+        path: true,
+    } satisfies Record<keyof ShareDocument, true>,
+    ProductLink: { url: true, path: true } satisfies Record<
+        keyof ProductLink,
         true
     >,
     ShareLinks: {

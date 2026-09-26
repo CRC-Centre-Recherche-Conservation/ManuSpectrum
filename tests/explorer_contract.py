@@ -195,12 +195,13 @@ SHAPES = {
         "missing": list,
     },
     "ShareExport": {"files": int, "bytes": int, "overLimit": bool, "documents": list},
-    "ShareDocument": {"id": str, "name": "Label", "url": str},
+    "ShareDocument": {"id": str, "name": "Label", "url": str, "path": str},
+    "ProductLink": {"url": str, "path": str},
     "ShareLinks": {
-        "manifest": str,
-        "seriesCsv": (str, type(None)),
-        "export": str,
-        "exportRestricted": (str, type(None)),
+        "manifest": "ProductLink",
+        "seriesCsv": ("ProductLink", type(None)),
+        "export": "ProductLink",
+        "exportRestricted": ("ProductLink", type(None)),
     },
 }
 

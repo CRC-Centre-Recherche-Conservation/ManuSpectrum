@@ -10,6 +10,7 @@ import type {
     FacetValue,
     FileEntry,
     HomeResponse,
+    ProductLink,
     SampleSummary,
     SearchResponse,
     SharePayload,
@@ -464,8 +465,10 @@ export function sharePayload(
     overrides: Partial<SharePayload> = {},
 ): SharePayload {
     const query = `document=${uuid(1)}`;
-    const product = (path: string): string =>
-        `http://testserver/${path}?${query}&lang=en`;
+    const product = (route: string): ProductLink => {
+        const path = `/${route}?${query}&lang=en`;
+        return { url: `http://testserver${path}`, path };
+    };
     return {
         scope: {
             kind: "document",

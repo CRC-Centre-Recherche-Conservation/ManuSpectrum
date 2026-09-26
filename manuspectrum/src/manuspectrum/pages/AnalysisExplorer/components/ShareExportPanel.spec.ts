@@ -199,7 +199,10 @@ describe("ShareExportPanel", () => {
         wrapper.unmount();
 
         forgetPayloads();
-        const csv = "http://testserver/api/explorer/series.csv?ids=x&lang=en";
+        const csv = {
+            url: "http://testserver/api/explorer/series.csv?ids=x&lang=en",
+            path: "/api/explorer/series.csv?ids=x&lang=en",
+        };
         answer = () =>
             jsonResponse(
                 sharePayload({
@@ -208,7 +211,7 @@ describe("ShareExportPanel", () => {
             );
         const again = await openPanel();
         const link = drawer().querySelector("a.series");
-        expect(link?.getAttribute("href")).toBe(csv);
+        expect(link?.getAttribute("href")).toBe(csv.path);
         expect(link?.hasAttribute("download")).toBe(true);
         again.wrapper.unmount();
     });
@@ -217,7 +220,9 @@ describe("ShareExportPanel", () => {
         const { wrapper } = await openPanel();
         const link = drawer().querySelector("a.package");
         expect(link?.textContent).toContain("Data package (ZIP, 2.4 MB)");
-        expect(link?.getAttribute("href")).toBe(sharePayload().links.export);
+        expect(link?.getAttribute("href")).toBe(
+            sharePayload().links.export.path,
+        );
         wrapper.unmount();
     });
 
@@ -227,11 +232,13 @@ describe("ShareExportPanel", () => {
                 id: uuid(1),
                 name: label("Ms 59"),
                 url: "http://testserver/api/explorer/export?document=a",
+                path: "/api/explorer/export?document=a",
             },
             {
                 id: uuid(2),
                 name: label("Ms 60"),
                 url: "http://testserver/api/explorer/export?document=b",
+                path: "/api/explorer/export?document=b",
             },
         ];
         answer = () =>
@@ -252,8 +259,8 @@ describe("ShareExportPanel", () => {
             "This package (600 MB) is over the export limit: export one document at a time.",
         );
         expect(links()).toMatchObject({
-            "Ms 59": perDocument[0].url,
-            "Ms 60": perDocument[1].url,
+            "Ms 59": perDocument[0].path,
+            "Ms 60": perDocument[1].path,
         });
         wrapper.unmount();
     });
@@ -294,7 +301,10 @@ describe("ShareExportPanel", () => {
             },
             links: {
                 ...sharePayload().links,
-                export: `${sharePayload().links.export}&restricted=1`,
+                export: {
+                    url: `${sharePayload().links.export.url}&restricted=1`,
+                    path: `${sharePayload().links.export.path}&restricted=1`,
+                },
             },
         };
         answer = (url) =>
@@ -310,7 +320,7 @@ describe("ShareExportPanel", () => {
             `/en/api/explorer/share?document=${DOCUMENT}&restricted=1`,
         );
         expect(drawer().querySelector("a.package")?.getAttribute("href")).toBe(
-            withRestricted.links.export,
+            withRestricted.links.export.path,
         );
         expect(drawer().textContent).toContain(
             "Contains restricted-access data",
@@ -348,17 +358,17 @@ describe("ShareExportPanel", () => {
         wrapper.unmount();
     });
 
-    it("copies the manifest URL", async () => {
+    it("copies the manifest's absolute URL and opens its site path", async () => {
         const { wrapper } = await openPanel();
         const copy = wrapper
             .findAllComponents(CopyButton)
             .find(
                 (button) => button.props("label") === "Copy the manifest URL",
             );
-        expect(copy?.props("text")).toBe(sharePayload().links.manifest);
+        expect(copy?.props("text")).toBe(sharePayload().links.manifest.url);
         const opened = drawer().querySelector("a.manifest");
         expect(opened?.getAttribute("href")).toBe(
-            sharePayload().links.manifest,
+            sharePayload().links.manifest.path,
         );
         expect(opened?.getAttribute("target")).toBe("_blank");
         wrapper.unmount();
@@ -383,7 +393,7 @@ describe("ShareExportPanel", () => {
         const { wrapper } = await openPanel({ mirador: MIRADOR });
         const href = drawer().querySelector("a.mirador")?.getAttribute("href");
         expect(new URL(href as string).searchParams.get("manifest")).toBe(
-            sharePayload().links.manifest,
+            sharePayload().links.manifest.url,
         );
         wrapper.unmount();
     });

@@ -51,7 +51,7 @@ from manuspectrum.views.explorer_service import (
     names,
     parse_keys,
     permalink,
-    product_url,
+    product_link,
     renderer_configs,
 )
 from manuspectrum.views.summary_service import _date
@@ -614,7 +614,9 @@ def share_payload(scope, accessed):
     ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
     one export per document. ``seriesCsv`` is given for a Selection holding
     spectra only, ``exportRestricted`` when the viewer's default build left
-    restricted items out. *accessed* is the day of consultation.
+    restricted items out. Each product is a ``product_link``: the panel follows
+    its ``path`` and copies or hands external viewers its ``url``. *accessed*
+    is the day of consultation.
     """
     bundle, language = scope.bundle, scope.language
     content = scope_content(scope)
@@ -647,7 +649,7 @@ def share_payload(scope, accessed):
             {
                 "id": d,
                 "name": bundle.label_of[d],
-                "url": product_url("explorer-export", f"document={d}{flags}", language),
+                **product_link("explorer-export", f"document={d}{flags}", language),
             }
             for d in scope.documents
         ]
@@ -682,15 +684,17 @@ def share_payload(scope, accessed):
             "documents": documents,
         },
         "links": {
-            "manifest": product_url("iiif-v3-explorer-manifest", scope.query, language),
+            "manifest": product_link(
+                "iiif-v3-explorer-manifest", scope.query, language
+            ),
             "seriesCsv": (
-                product_url("explorer-series-csv", scope.query, language)
+                product_link("explorer-series-csv", scope.query, language)
                 if scope.kind == "ids" and spectra
                 else None
             ),
-            "export": product_url("explorer-export", scope.query, language),
+            "export": product_link("explorer-export", scope.query, language),
             "exportRestricted": (
-                product_url("explorer-export", f"{scope.query}&restricted=1", language)
+                product_link("explorer-export", f"{scope.query}&restricted=1", language)
                 if scope.restricted_available
                 else None
             ),
