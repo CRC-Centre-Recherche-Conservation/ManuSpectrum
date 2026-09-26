@@ -196,7 +196,7 @@ SHAPES = {
     "ShareDocument": {"id": str, "name": "Label", "url": str, "path": str},
     "ProductLink": {"url": str, "path": str},
     "ShareLinks": {
-        "manifest": "ProductLink",
+        "manifest": ("ProductLink", type(None)),
         "seriesCsv": ("ProductLink", type(None)),
         "export": "ProductLink",
     },

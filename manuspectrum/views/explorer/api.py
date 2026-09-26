@@ -299,8 +299,8 @@ class ExplorerManifestView(View):
     """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all][&lang=]``: the IIIF v3 manifest of a scope.
 
     ``lang`` absent is ``LANGUAGE_CODE``; an unknown language or malformed
-    scope parameters answer a bodyless 400, a scope with nothing visible the
-    bodyless 404, a manifest over ``EXPLORER_MANIFEST_MAX_CANVASES``
+    scope parameters answer a bodyless 400, a scope with nothing visible or
+    placing no canvas the bodyless 404, a manifest over ``EXPLORER_MANIFEST_MAX_CANVASES``
     canvases a bodyless 413. The visitor's ETag is the digest of the body:
     the manifest embeds source manifests the data version does not follow.
     """
@@ -323,4 +323,6 @@ class ExplorerManifestView(View):
                 response = HttpResponse(status=413)
                 response["Cache-Control"] = "private, no-store"
                 return response
+        if manifest is None:
+            return _not_found()
         return _answer(request, lambda: manifest, content_type=IIIF_MEDIA_TYPE)

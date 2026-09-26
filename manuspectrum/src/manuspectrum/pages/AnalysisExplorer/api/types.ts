@@ -307,7 +307,8 @@ export interface ShareExport {
 
 /** The scope's products. */
 export interface ShareLinks {
-    manifest: ProductLink;
+    /** Only when the scope's manifest holds a canvas. */
+    manifest: ProductLink | null;
     /** Only for a Selection holding spectra. */
     seriesCsv: ProductLink | null;
     export: ProductLink;

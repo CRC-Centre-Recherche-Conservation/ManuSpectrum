@@ -37,7 +37,8 @@ const CITATIONS_FOLDED_AFTER = 3;
  * until the reader asks for the others),
  * Data (spectra CSV, data package with its announced size, one package per
  * document over the export limit) and IIIF (manifest, Mirador when
- * `EXPLORER_MIRADOR_URL` is set). Links follow each product's site `path`;
+ * `EXPLORER_MIRADOR_URL` is set), shown only when the scope's manifest
+ * holds a canvas. Links follow each product's site `path`;
  * copies and Mirador take its absolute `url`. The share payload is asked
  * only while the drawer is open. Every reader gets the visitor's view.
  */
@@ -93,11 +94,10 @@ const foldedCount = computed(
 const packageSize = computed(() =>
     formatSize(payload.value?.export.bytes ?? null, lang),
 );
+const manifestLink = computed(() => payload.value?.links.manifest ?? null);
 const miradorHref = computed(() =>
-    payload.value
-        ? miradorLink(miradorUrl, {
-              manifest: payload.value.links.manifest.url,
-          })
+    manifestLink.value
+        ? miradorLink(miradorUrl, { manifest: manifestLink.value.url })
         : null,
 );
 
@@ -379,6 +379,7 @@ function shareLink(): string {
                     </section>
 
                     <section
+                        v-if="manifestLink"
                         class="group"
                         aria-labelledby="share-iiif"
                     >
@@ -387,15 +388,15 @@ function shareLink(): string {
                         </h4>
                         <div class="actions">
                             <CopyButton
-                                :text="payload.links.manifest.url"
+                                :text="manifestLink.url"
                                 :label="$gettext('Copy the manifest URL')"
                             />
                             <a
-                                v-if="safeHref(payload.links.manifest.path)"
+                                v-if="safeHref(manifestLink.path)"
                                 class="manifest external"
                                 rel="noopener"
                                 target="_blank"
-                                :href="safeHref(payload.links.manifest.path)!"
+                                :href="safeHref(manifestLink.path)!"
                             >
                                 <span>{{ $gettext("Open the manifest") }}</span>
                                 <span class="visually-hidden">

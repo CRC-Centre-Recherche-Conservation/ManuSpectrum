@@ -552,11 +552,14 @@ def share_payload(scope, accessed):
     the reader may name them. ``export`` sums the kept
     files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
     ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
-    one export per document. ``seriesCsv`` is given for a Selection holding
-    spectra only. Each product is a ``product_link``: the panel follows
+    one export per document. ``manifest`` is given only when the scope's
+    manifest holds a canvas (``has_canvases``), ``seriesCsv`` for a Selection
+    holding spectra only. Each product is a ``product_link``: the panel follows
     its ``path`` and copies or hands external viewers its ``url``. *accessed*
     is the day of consultation.
     """
+    from manuspectrum.views.explorer.manifest import has_canvases
+
     bundle, language = scope.bundle, scope.language
     content = scope_content(scope)
     rows = content.rows
@@ -620,8 +623,10 @@ def share_payload(scope, accessed):
             "documents": documents,
         },
         "links": {
-            "manifest": product_link(
-                "iiif-v3-explorer-manifest", scope.query, language
+            "manifest": (
+                product_link("iiif-v3-explorer-manifest", scope.query, language)
+                if has_canvases(scope)
+                else None
             ),
             "seriesCsv": (
                 product_link("explorer-series-csv", scope.query, language)

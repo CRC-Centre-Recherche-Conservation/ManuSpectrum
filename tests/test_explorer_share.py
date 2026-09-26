@@ -294,6 +294,13 @@ class ShareRouteTests(CorpusCase):
         self.assertNotIn(self.pk("open"), str(reader))
         self.assertNotIn("restricted", json.dumps(reader))
 
+    def test_a_scope_placing_no_canvas_offers_no_manifest(self):
+        placed = self.get(f"ids=an:{self.pk('open')}:-").json()
+        unplaced = self.get(f"ids=an:{self.pk('embargoed')}:-").json()
+
+        self.assertIsNotNone(placed["links"]["manifest"])
+        self.assertIsNone(unplaced["links"]["manifest"])
+
     def test_links_encode_a_key_carrying_url_delimiters(self):
         key = f"af:{self.pk('open')}:x&y#z%w"
 

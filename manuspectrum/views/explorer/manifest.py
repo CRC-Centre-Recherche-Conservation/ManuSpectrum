@@ -625,7 +625,62 @@ def _layer_ids(entry, read=manifest_json):
     return list(_source_canvases(imaging))[: len(canvases_of(imaging))]
 
 
-def build_manifest(scope):
+@dataclass(frozen=True, eq=False)
+class CanvasPlan:
+    """The canvases a scope's manifest holds, decided before anything else is built (``canvas_plan``).
+
+    ``placements`` are the ``_placements`` of the scope, ``values`` the
+    ``ANALYSIS_KEYS`` of its analyses, ``imaging`` the kept imaging entries
+    of each analysis, ``read_imaging`` the memoised reader of their
+    manifests and ``canvases`` the ids of every folio and layer canvas.
+    """
+
+    placements: list
+    values: object
+    imaging: dict
+    read_imaging: object
+    canvases: frozenset
+
+
+def canvas_plan(scope):
+    """``CanvasPlan`` of *scope*; ``ManifestTooLarge`` over ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases.
+
+    The folios are counted while the zones are placed (``_placements``),
+    then the folios and layers once the imaging entries are read. Each
+    imaging manifest is read once.
+    """
+    plans = _placements(scope)
+    planned = {c for plan in plans for c in plan.kept if c in plan.raw}
+    values = Values(list(scope.analyses), ANALYSIS_KEYS, scope.reader)
+    read_imaging = functools.cache(manifest_json)
+    imaging = {
+        a: kept_files(
+            scope, a, imaging_entries(a, values.get(a, "imaging"), scope.language)
+        )
+        for a in scope.analyses
+    }
+    layer_ids = {
+        c
+        for entries in imaging.values()
+        for e in entries
+        for c in _layer_ids(e, read_imaging)
+    }
+    if len(planned | layer_ids) > settings.EXPLORER_MANIFEST_MAX_CANVASES:
+        raise ManifestTooLarge()
+    return CanvasPlan(
+        plans, values, imaging, read_imaging, frozenset(planned | layer_ids)
+    )
+
+
+def has_canvases(scope):
+    """Whether the manifest of *scope* holds a canvas; a scope over the canvas bound holds some."""
+    try:
+        return bool(canvas_plan(scope).canvases)
+    except ManifestTooLarge:
+        return True
+
+
+def build_manifest(scope, plan=None):
     """The IIIF Presentation 3 manifest of *scope*, in ``scope.language``.
 
     ``id`` is the manifest's own URL (``product_url``), ``homepage`` the
@@ -641,8 +696,8 @@ def build_manifest(scope):
     ``v3_canvas``. A canvas's ``annotations`` hold one ``data_annotation``
     per analysis zone and one ``describing`` annotation per material zone
     (a plain-text ``TextualBody`` naming the materials and their certainty).
-    Zones are read from the nodegroups the reader may read. The layers of each kept imaging entry follow the canvas of the
-    analysis's first zone, labelled « <folio> — <layer> »; the layers of an
+    Zones are read from the nodegroups the reader may read. The layers of
+    each kept imaging entry follow the canvas of the analysis's first zone, labelled « <folio> — <layer> »; the layers of an
     analysis without a zone follow the canvases of its document (or come
     last). ``structures`` holds one Range per document and one per analysis
     with imaging layers.
@@ -651,31 +706,19 @@ def build_manifest(scope):
     unreadable, or a zone on an unknown canvas) has no annotation and is
     listed in the manifest's ``metadata`` with its permalink.
 
-    More than ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases (folios and
-    layers) raises ``ManifestTooLarge``, counted before anything is built:
-    the folios while the zones are placed (``_placements``), before any file
-    or fact is read, then the folios and layers once the imaging entries are
-    read, before the other files, the facts and any canvas.
+    A scope that places no canvas has no manifest: None. More than
+    ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases (folios and layers) raises
+    ``ManifestTooLarge``; both are decided by ``canvas_plan`` (*plan* when
+    the caller already holds it) before any other file, fact or canvas is
+    read.
     """
+    plan = plan or canvas_plan(scope)
+    if not plan.canvases:
+        return None
     bundle, language, reader = scope.bundle, scope.language, scope.reader
     mint_id = functools.partial(mint, scope.digest)
-    limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
-    plans = _placements(scope)
-    planned = {c for plan in plans for c in plan.kept if c in plan.raw}
-    values = Values(list(scope.analyses), ANALYSIS_KEYS, reader)
-    read_imaging = functools.cache(manifest_json)
-    imaging = {
-        a: kept_files(scope, a, imaging_entries(a, values.get(a, "imaging"), language))
-        for a in scope.analyses
-    }
-    layer_ids = {
-        c
-        for entries in imaging.values()
-        for e in entries
-        for c in _layer_ids(e, read_imaging)
-    }
-    if len(planned | layer_ids) > limit:
-        raise ManifestTooLarge()
+    plans, values, imaging = plan.placements, plan.values, plan.imaging
+    read_imaging = plan.read_imaging
     rows = {a: bundle.by_id[a] for a in scope.analyses}
     configs = renderer_configs(values, scope.analyses)
     files = {

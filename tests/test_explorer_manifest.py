@@ -126,10 +126,11 @@ class ManifestRouteTests(CorpusCase):
             self.document_query(),
             f"{self.document_query()}&canvases=all",
             f"project={self.projects['main'].pk}",
-            f"ids=an:{self.pk('embargoed')}:-",
         ):
             with self.subTest(query=query):
-                assert_valid_manifest(self, self.manifest(query))
+                manifest = self.manifest(query)
+                assert_valid_manifest(self, manifest)
+                self.assertTrue(manifest["items"])
 
     def test_only_canvases_carrying_an_element_by_default(self):
         manifest = self.manifest(self.document_query())
@@ -231,6 +232,12 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(
             [a["label"]["en"][0] for a in self.annotations(manifest)], ["X01 — f. 1v"]
         )
+
+    def test_a_scope_placing_no_canvas_answers_a_bodyless_404(self):
+        response = self.get(f"ids=an:{self.pk('embargoed')}:-")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"")
 
     def test_imaging_layers_are_canvases_with_one_range_per_analysis(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)

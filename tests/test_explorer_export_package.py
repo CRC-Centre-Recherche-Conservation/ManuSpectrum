@@ -213,6 +213,12 @@ class LayoutTests(PackageCase):
         self.assertIn(f"document={self.documents['open'].pk}", manifest["id"])
         self.assertEqual(members["manifest.json"].media_type, "application/ld+json")
 
+    def test_a_scope_placing_no_canvas_ships_no_manifest(self):
+        members = self.members(f"ids=an:{self.pk('embargoed')}:-")
+
+        self.assertNotIn("manifest.json", members)
+        self.assertNotIn("manifest.json", self.text(members["README.md"]))
+
 
 class TablesTests(PackageCase):
     def test_analyses_table_has_one_column_per_condition_type(self):

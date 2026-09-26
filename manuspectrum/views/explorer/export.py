@@ -768,13 +768,13 @@ def _assemble(scope, exported_at):
     notes = []
     with translation.override(language):
         try:
-            built.append(
-                _built(
-                    "manifest.json",
-                    _json_bytes(build_manifest(scope)),
-                    "application/ld+json",
+            manifest = build_manifest(scope)
+            if manifest is not None:
+                built.append(
+                    _built(
+                        "manifest.json", _json_bytes(manifest), "application/ld+json"
+                    )
                 )
-            )
         except ManifestTooLarge:
             notes.append(
                 _(

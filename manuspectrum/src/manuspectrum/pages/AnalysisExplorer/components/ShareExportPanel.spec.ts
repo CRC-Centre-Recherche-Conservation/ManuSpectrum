@@ -293,10 +293,10 @@ describe("ShareExportPanel", () => {
             .find(
                 (button) => button.props("label") === "Copy the manifest URL",
             );
-        expect(copy?.props("text")).toBe(sharePayload().links.manifest.url);
+        expect(copy?.props("text")).toBe(sharePayload().links.manifest?.url);
         const opened = drawer().querySelector("a.manifest");
         expect(opened?.getAttribute("href")).toBe(
-            sharePayload().links.manifest.path,
+            sharePayload().links.manifest?.path,
         );
         expect(opened?.getAttribute("target")).toBe("_blank");
         wrapper.unmount();
@@ -321,8 +321,21 @@ describe("ShareExportPanel", () => {
         const { wrapper } = await openPanel({ mirador: MIRADOR });
         const href = drawer().querySelector("a.mirador")?.getAttribute("href");
         expect(new URL(href as string).searchParams.get("manifest")).toBe(
-            sharePayload().links.manifest.url,
+            sharePayload().links.manifest?.url,
         );
+        wrapper.unmount();
+    });
+
+    it("offers no IIIF product when the scope places no canvas", async () => {
+        const unplaced = sharePayload();
+        unplaced.links = { ...unplaced.links, manifest: null };
+        answer = () => jsonResponse(unplaced);
+
+        const { wrapper } = await openPanel({ mirador: MIRADOR });
+
+        expect(drawer().querySelector("#share-iiif")).toBeNull();
+        expect(drawer().querySelector("a.mirador")).toBeNull();
+        expect(drawer().querySelector("a.manifest")).toBeNull();
         wrapper.unmount();
     });
 });
