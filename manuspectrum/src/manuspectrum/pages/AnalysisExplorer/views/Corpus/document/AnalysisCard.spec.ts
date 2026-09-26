@@ -331,7 +331,7 @@ describe("AnalysisCard", () => {
             .find((button) => button.props("label") === "Copy the IIIF link");
         const link = new URL(copy?.props("text") as string);
         expect(`${link.origin}${link.pathname}`).toBe(
-            payload.manifest.split("?")[0],
+            payload.manifest?.split("?")[0],
         );
         const state = parseContentState(
             link.searchParams.get("iiif-content") as string,

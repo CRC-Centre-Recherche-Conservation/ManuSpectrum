@@ -153,7 +153,7 @@ SHAPES = {
         "bibliography": list,
         "citation": "Citation",
         "availability": str,
-        "manifest": str,
+        "manifest": (str, type(None)),
         "permalink": str,
         "reportUrl": str,
         "certaintyScale": dict,

@@ -344,8 +344,8 @@ export interface AnalysisPayload {
     citation: Citation;
     /** The data availability statement of this analysis. */
     availability: string;
-    /** Absolute URL of the IIIF manifest of this analysis. */
-    manifest: string;
+    /** Absolute URL of the IIIF manifest of this analysis; null when it places no canvas. */
+    manifest: string | null;
     permalink: string;
     /** Path of the Arches report on this site, in the request language. */
     reportUrl: string;

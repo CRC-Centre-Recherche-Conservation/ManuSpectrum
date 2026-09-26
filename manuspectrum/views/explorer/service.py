@@ -2189,10 +2189,23 @@ def licence_labels(files):
     return [f["license"]["label"]["value"] for f in files if f.get("license")]
 
 
+def _analysis_manifest(analysis_id, language):
+    """The URL of the Explorer manifest of one analysis, or None when that manifest holds no canvas (``has_canvases``)."""
+    from manuspectrum.views.explorer.manifest import has_canvases
+    from manuspectrum.views.explorer.scopes import resolve_scope
+
+    query = f"ids=an:{analysis_id}:-"
+    scope = resolve_scope(QueryDict(query), language)
+    if scope is None or not has_canvases(scope):
+        return None
+    return product_url("iiif-v3-explorer-manifest", query, language)
+
+
 def analysis_payload(analysis_id, user, language):
     """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible.
 
     A linked resource that no longer exists is left out of the references.
+    ``manifest`` is None when the analysis places no canvas.
     """
     bundle = corpus_bundle(user, language)
     visible = bundle.visible
@@ -2299,9 +2312,7 @@ def analysis_payload(analysis_id, user, language):
         ],
         "citation": shown_citation(citation),
         "availability": citation["availability"],
-        "manifest": product_url(
-            "iiif-v3-explorer-manifest", f"ids=an:{analysis_id}:-", language
-        ),
+        "manifest": _analysis_manifest(analysis_id, language),
         "permalink": permalink(analysis_id),
         "reportUrl": report_url(analysis_id, language),
         "certaintyScale": certainty_scale(language),
