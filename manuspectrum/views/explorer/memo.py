@@ -301,7 +301,7 @@ def _shows_hidden(bundle, visible):
 
 
 def _previous(held):
-    """The stored live key with the newest data under the gates of *held*, and why *held* is missing.
+    """The live key with the newest data stored under *held*'s gates, and why *held* is missing.
 
     ``data`` when there is one; else ``permissions`` when the scope and
     language have live keys built under other gates, ``cold`` when not.
@@ -326,14 +326,23 @@ def _rebuild_lock(scope, language):
     return f"{stable_cache_key('explorer-rebuild', scope, language)}:lock"
 
 
+def _rebuild_failed(scope, language):
+    return f"{stable_cache_key('explorer-rebuild', scope, language)}:failed"
+
+
 def _rebuild_in_background(held, user, build):
     """Start the rebuild of ``held.current`` unless one of its scope and language runs.
 
     One rebuild per scope and language at a time: in this process (a guard
     set) and across processes (a cache lock). A caller that finds either
     taken starts nothing; the next request after the running one ends
-    starts the rebuild of the data current then.
+    starts the rebuild of the data current then. A rebuild that raised or
+    returned nothing starts none for ``settings.EXPLORER_REBUILD_RETRY_AFTER``
+    seconds, readers answered from the previous bundle meanwhile.
     """
+    failed = _rebuild_failed(held.scope, held.language)
+    if cache.get(failed):
+        return
     slot = (held.scope, held.language)
     with _rebuilding_lock:
         if slot in _rebuilding:
@@ -353,15 +362,22 @@ def _rebuild_in_background(held, user, build):
         return
 
     def rebuild():
+        kept = False
         try:
             with translation.override(held.language):
-                _build_and_keep(held, lambda: build(user, held.language, held.visible))
+                kept = _build_and_keep(
+                    held, lambda: build(user, held.language, held.visible)
+                )
         except Exception:
             logger.exception(
                 "explorer bundle rebuild failed",
                 extra={"language": held.language, "scope_kind": _kind(held.scope)},
             )
         finally:
+            if not kept:
+                cache.set(
+                    failed, 1, getattr(settings, "EXPLORER_REBUILD_RETRY_AFTER", 60)
+                )
             release()
 
     try:
@@ -377,6 +393,7 @@ def _free(slot):
 
 
 def _build_and_keep(held, build):
+    """Build and store ``held.current`` unless newer data is live; False when it gave nothing."""
     started = time.monotonic()
     with _collector_paused():
         bundle = build()
@@ -385,13 +402,13 @@ def _build_and_keep(held, build):
             "explorer bundle rebuild returned nothing",
             extra={"language": held.language, "scope_kind": _kind(held.scope)},
         )
-        return
+        return False
     if _superseded(held):
         logger.info(
             "explorer bundle rebuild superseded by newer data",
             extra={"language": held.language, "scope_kind": _kind(held.scope)},
         )
-        return
+        return True
     packed = pack(bundle)
     cache.set(held.current, packed, settings.EXPLORER_BUNDLE_TTL)
     _retire_previous(
@@ -408,6 +425,7 @@ def _build_and_keep(held, build):
         packed,
         True,
     )
+    return True
 
 
 def _stale_key(key):
@@ -486,7 +504,7 @@ def _superseded(held):
 
 
 def _retire_previous(scope, language, key, permissions="", version=""):
-    """Keep the ``LIVE_ENTRIES`` bundles of a scope and language with the newest data, delete the others."""
+    """Keep the ``LIVE_ENTRIES`` bundles of a scope and language with the newest data."""
     live = sorted(
         [e for e in _live(scope, language) if e[0] != key]
         + [(key, permissions, version)],

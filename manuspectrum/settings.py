@@ -792,6 +792,8 @@ EXPLORER_BUNDLE_TTL = 2 * 60 * 60
 # Rebuild a corpus bundle after a data change in a background thread, readers
 # answered from the previous bundle meanwhile; False rebuilds in the request.
 EXPLORER_BACKGROUND_REBUILD = True
+# Seconds no background rebuild of a scope and language starts after one failed.
+EXPLORER_REBUILD_RETRY_AFTER = 60
 # Largest data package the Explorer streams (sum of the stored file sizes); above it, 413.
 EXPLORER_EXPORT_MAX_BYTES = 500 * 1024 * 1024
 # Most files one data package holds; above it, 413.

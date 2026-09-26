@@ -498,7 +498,7 @@ class StaleWhileRebuildTests(MemoCase):
         self.assertEqual(build.call_count, 1)
         self.assertEqual(self.pending, [])
 
-    def test_a_failing_rebuild_is_logged_and_the_next_request_retries(self):
+    def test_a_failing_rebuild_is_logged_once_and_retried_after_its_delay(self):
         first = corpus_bundle(self.anonymous, "en")
         self.rename_by_sql(self.analyses["open"], "X01 after a failure")
 
@@ -507,14 +507,37 @@ class StaleWhileRebuildTests(MemoCase):
             self.assertLogs("manuspectrum.explorer", "ERROR") as logs,
         ):
             self.assertIs(corpus_bundle(self.anonymous, "en"), first)
-            self.pending[0]()
-        self.assertIs(corpus_bundle(self.anonymous, "en"), first)
-        self.pending[1]()
+            self.pending.pop()()
+            served = [corpus_bundle(self.anonymous, "en") for _ in range(3)]
 
+        self.assertTrue(all(bundle is first for bundle in served))
+        self.assertEqual(self.pending, [])
+        self.assertEqual(len(logs.records), 1)
         self.assertIn("rebuild failed", logs.output[0])
+
+        cache.delete(
+            explorer_memo._rebuild_failed(explorer_scope(self.anonymous), "en")
+        )
+        self.assertIs(corpus_bundle(self.anonymous, "en"), first)
+        self.pending.pop()()
         self.assertEqual(
             self.name_of(corpus_bundle(self.anonymous, "en")), "X01 after a failure"
         )
+
+    @override_settings(EXPLORER_REBUILD_RETRY_AFTER=0)
+    def test_without_a_retry_delay_the_next_request_retries_a_failed_rebuild(self):
+        first = corpus_bundle(self.anonymous, "en")
+        self.rename_by_sql(self.analyses["open"], "X01 retried at once")
+
+        with (
+            self.builds(side_effect=RuntimeError("boom")),
+            self.assertLogs("manuspectrum.explorer", "ERROR"),
+        ):
+            corpus_bundle(self.anonymous, "en")
+            self.pending.pop()()
+        self.assertIs(corpus_bundle(self.anonymous, "en"), first)
+
+        self.assertEqual(len(self.pending), 1)
 
     def test_the_etag_of_a_stale_answer_names_the_bundle_served(self):
         before = self.client.get("/en/api/explorer/search")
