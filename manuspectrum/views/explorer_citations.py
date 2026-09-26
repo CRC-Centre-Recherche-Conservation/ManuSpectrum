@@ -7,6 +7,8 @@ and version fill the structured forms. Any other dataset, and an analysis
 without dataset, is cited as its ManuSpectrum record, built from the metadata
 of the analyses: title, visible operators as authors, projects, measurement
 dates, permalink, licences; publisher ``settings.APP_TITLE``; no ``issued``.
+Several analyses without dataset under one ``Home`` (their project, else
+their document) are cited once, as that record with the analyses as parts.
 
 No field is ever written empty: a missing value leaves its key or tag out.
 The module reads no database; the caller passes what the reader may see and
@@ -51,6 +53,15 @@ class CitedAnalysis:
     end: str | None
     authors: tuple = ()
     projects: tuple = field(default=())
+
+
+@dataclass(frozen=True)
+class Home:
+    """The ManuSpectrum record several analyses without dataset are cited as: a project, else their document."""
+
+    id: str
+    name: str
+    permalink: str
 
 
 @dataclass(frozen=True)
@@ -150,10 +161,20 @@ def _name_text(author):
     return f"{author['family']}, {author['given']}"
 
 
+def _latex(text):
+    """``unicode_to_latex`` of *text*, one ``; ``-separated piece at a time.
+
+    pylatexenc's encoder takes a time quadratic in the length of its input;
+    its rules replace one character at a time, so the pieces give the same
+    result.
+    """
+    return "; ".join(unicode_to_latex(piece) for piece in text.split("; "))
+
+
 def _bibtex_name(author):
     if "literal" in author:
-        return "{" + unicode_to_latex(author["literal"]) + "}"
-    return f"{unicode_to_latex(author['family'])}, {unicode_to_latex(author['given'])}"
+        return "{" + _latex(author["literal"]) + "}"
+    return f"{_latex(author['family'])}, {_latex(author['given'])}"
 
 
 class _RisWriter(rispy.RisWriter):
@@ -168,7 +189,7 @@ def _bibtex(key, fields):
         [
             bib.Field(
                 name,
-                value if name in VERBATIM_BIBTEX_FIELDS else unicode_to_latex(value),
+                value if name in VERBATIM_BIBTEX_FIELDS else _latex(value),
             )
             for name, value in fields
             if value
@@ -179,22 +200,34 @@ def _bibtex(key, fields):
     return bibtexparser.write_string(library).strip() + "\n"
 
 
-def citation_entry(dataset, analyses, *, licences, language, accessed):
+def citation_entry(dataset, analyses, *, licences, language, accessed, home=None):
     """``Citation`` of *dataset* (a ``dataset_of`` value, or None) for *analyses* (``CitedAnalysis``).
 
     *licences* are the labels of the analyses' file licences; *accessed* is the
     day of consultation (``datetime.date``). Strings are in *language*.
+    Without dataset, several analyses are cited as their *home* (``Home``):
+    its id, name and permalink; one analysis is cited as itself. The text and
+    BibTeX of a home citation give the number of analyses and the home's
+    permalink; its CSL-JSON and RIS notes list every analysis.
     """
     with translation.override(language):
-        return _entry(dataset, list(analyses), _unique(licences), accessed)
+        return _entry(dataset, list(analyses), _unique(licences), accessed, home)
 
 
-def _entry(dataset, analyses, licences, accessed):
+def _entry(dataset, analyses, licences, accessed, home=None):
     parsed = parse_dataverse(dataset["label"]) if dataset else None
-    entry_id = dataset_id(dataset) or analyses[0].id
+    home = home if not dataset and home and len(analyses) > 1 else None
+    entry_id = dataset_id(dataset) or (home.id if home else analyses[0].id)
     events = _event_range(analyses)
     parts = "; ".join(f"{_clean(a.name)} ({a.permalink})" for a in analyses)
     note = _("Analyses: %(parts)s") % {"parts": parts}
+    count = (
+        ngettext("%(count)d analysis", "%(count)d analyses", len(analyses))
+        % {"count": len(analyses)}
+        if home
+        else None
+    )
+    shown_note = f"{count}: {home.permalink}" if home else note
     extra_notes = []
     if parsed:
         authors = list(parsed.authors)
@@ -208,14 +241,24 @@ def _entry(dataset, analyses, licences, accessed):
             for author in a.authors
         )
         title = _clean(dataset and dataset["label"]) or (
-            _clean(analyses[0].name)
-            if len(analyses) == 1
-            else _dataset_url(dataset) if dataset else _clean(analyses[0].name)
+            _clean(home.name)
+            if home
+            else (
+                _clean(analyses[0].name)
+                if len(analyses) == 1
+                else _dataset_url(dataset) if dataset else _clean(analyses[0].name)
+            )
         )
         publisher, version, year = settings.APP_TITLE, None, None
         doi = _doi(dataset["url"]) if dataset else None
-        url = _dataset_url(dataset) if dataset else analyses[0].permalink
-        projects = _unique(_clean(p) for a in analyses for p in a.projects)
+        url = (
+            _dataset_url(dataset)
+            if dataset
+            else home.permalink if home else analyses[0].permalink
+        )
+        projects = _unique(
+            _clean(p) for a in analyses for p in a.projects if _clean(p) != title
+        )
         licence = "; ".join(licences) or None
         if projects:
             extra_notes.append(
@@ -267,7 +310,7 @@ def _entry(dataset, analyses, licences, accessed):
             ("year", str(year) if year else None),
             ("eventdate", "/".join(_iso(p) for p in events) if events else None),
             ("urldate", accessed.isoformat()),
-            ("note", ". ".join([*extra_notes, note])),
+            ("note", ". ".join([*extra_notes, shown_note])),
         ],
     )
 
@@ -299,7 +342,7 @@ def _entry(dataset, analyses, licences, accessed):
         heading = f"{title} {kind}"
         if events:
             heading += ", " + "–".join(_iso(p) for p in events)
-        pieces += [heading, *projects, publisher, url]
+        pieces += [heading, *([count] if count else []), *projects, publisher, url]
         if licence:
             pieces.append(licence)
         recommended = (
@@ -320,26 +363,36 @@ def _entry(dataset, analyses, licences, accessed):
 
 
 def citation_entries(groups, *, language, accessed):
-    """One ``Citation`` per dataset, then one per analysis without dataset.
+    """One ``Citation`` per dataset, then one per ``Home`` of the analyses without dataset.
 
-    *groups* are ``(dataset | None, [CitedAnalysis], licence labels)``; groups
-    naming one dataset (by ``dataset_id``) are cited together.
+    *groups* are ``(dataset | None, [CitedAnalysis], licence labels, Home | None)``;
+    groups naming one dataset (by ``dataset_id``) are cited together, groups
+    without dataset under one home (by ``Home.id``) too. An analysis without
+    dataset nor home is cited alone.
     """
-    datasets, records = {}, []
-    for dataset, analyses, licences in groups:
-        key = dataset_id(dataset)
-        if key is None:
-            records += [(None, [a], list(licences)) for a in analyses]
-            continue
-        if key not in datasets:
-            datasets[key] = (dataset, [], [])
-        datasets[key][1].extend(analyses)
-        datasets[key][2].extend(licences)
+    datasets, records = {}, {}
+    for dataset, analyses, licences, home in groups:
+        key = ("dataset", dataset_id(dataset))
+        if key[1] is None:
+            key = ("home", home.id) if home else ("analysis", analyses[0].id)
+        target = datasets if key[0] == "dataset" else records
+        if key not in target:
+            target[key] = (dataset, [], [], home)
+        target[key][1].extend(analyses)
+        target[key][2].extend(licences)
     return [
         citation_entry(
-            dataset, analyses, licences=licences, language=language, accessed=accessed
+            dataset,
+            analyses,
+            licences=licences,
+            language=language,
+            accessed=accessed,
+            home=home,
         )
-        for dataset, analyses, licences in [*datasets.values(), *records]
+        for dataset, analyses, licences, home in [
+            *datasets.values(),
+            *records.values(),
+        ]
     ]
 
 

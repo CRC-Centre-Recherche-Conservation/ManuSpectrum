@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-25 21:27-0500\n"
+"POT-Creation-Date: 2026-09-26 04:32-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -305,7 +305,7 @@ msgid ""
 "identifier."
 msgstr ""
 
-#: templates/explorer/export_readme.md:31 views/explorer_export.py:508
+#: templates/explorer/export_readme.md:31 views/explorer_export.py:505
 msgid "Licences per file"
 msgstr ""
 
@@ -323,14 +323,14 @@ msgstr ""
 #: templates/views/components/ms-file-license.htm:15
 #: templates/views/components/widgets/file-xy.htm:9
 #: templates/views/pages/team.htm:89 templates/views/pages/team.htm:176
-#: views/explorer_manifest.py:289
+#: views/explorer_manifest.py:312
 msgid "Licence"
 msgstr "Licence"
 
 #: templates/explorer/export_readme.md:33
 #: templates/views/components/ms-file-workbench.htm:44
 #: templates/views/components/ms-file-workbench.htm:47
-#: views/explorer_manifest.py:230 views/explorer_manifest.py:294
+#: views/explorer_manifest.py:253 views/explorer_manifest.py:317
 msgid "Attribution"
 msgstr "Attribution"
 
@@ -2817,7 +2817,7 @@ msgstr "Resource type to create"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:23
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:392
-#: views/explorer_manifest.py:337
+#: views/explorer_manifest.py:360
 msgid "Document"
 msgstr "Document"
 
@@ -2827,7 +2827,7 @@ msgstr "Manuscript, book, printed text"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
 #: templates/views/pages/conceptual-model.htm:191
-#: views/explorer_manifest.py:338
+#: views/explorer_manifest.py:361
 msgid "Component"
 msgstr "Component"
 
@@ -4108,142 +4108,149 @@ msgstr "The descriptor list is malformed."
 msgid "The manuscript identifier is malformed."
 msgstr "The manuscript identifier is malformed."
 
-#: views/explorer_citations.py:197
+#: views/explorer_citations.py:226
 #, python-format
 msgid "Analyses: %(parts)s"
 msgstr ""
 
-#: views/explorer_citations.py:222
+#: views/explorer_citations.py:228
+#, python-format
+msgid "%(count)d analysis"
+msgid_plural "%(count)d analyses"
+msgstr[0] "%(count)d analysis"
+msgstr[1] "%(count)d analyses"
+
+#: views/explorer_citations.py:268
 #, python-format
 msgid "Project: %(names)s"
 msgid_plural "Projects: %(names)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer_citations.py:227
+#: views/explorer_citations.py:273
 #, python-format
 msgid "Licence: %(names)s"
 msgid_plural "Licences: %(names)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer_citations.py:298
+#: views/explorer_citations.py:344
 msgid "[Dataset]"
 msgstr ""
 
-#: views/explorer_citations.py:308
+#: views/explorer_citations.py:354
 #, python-format
 msgid "Accessed %(date)s."
 msgstr ""
 
-#: views/explorer_citations.py:373
+#: views/explorer_citations.py:434
 #, python-format
 msgid ""
 "The data are available in %(site)s (%(permalink)s) and in %(datasets)s, "
 "under the licences given for each file."
 msgstr ""
 
-#: views/explorer_citations.py:378
+#: views/explorer_citations.py:439
 #, python-format
 msgid ""
 "The data are available in %(site)s (%(permalink)s) and in %(datasets)s, "
 "under %(licence)s."
 msgstr ""
 
-#: views/explorer_citations.py:383
+#: views/explorer_citations.py:444
 #, python-format
 msgid "The data are available in %(site)s (%(permalink)s) and in %(datasets)s."
 msgstr ""
 
-#: views/explorer_citations.py:387
+#: views/explorer_citations.py:448
 #, python-format
 msgid ""
 "The data are available in %(site)s (%(permalink)s), under the licences given "
 "for each file."
 msgstr ""
 
-#: views/explorer_citations.py:392
+#: views/explorer_citations.py:453
 #, python-format
 msgid "The data are available in %(site)s (%(permalink)s), under %(licence)s."
 msgstr ""
 
-#: views/explorer_citations.py:395
+#: views/explorer_citations.py:456
 #, python-format
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr ""
 
-#: views/explorer_export.py:388
+#: views/explorer_export.py:385
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer_export.py:395 views/explorer_manifest.py:695
+#: views/explorer_export.py:392 views/explorer_manifest.py:790
 #: views/explorer_series.py:101
 msgid "Contains drafts"
 msgstr ""
 
-#: views/explorer_export.py:397 views/explorer_manifest.py:697
+#: views/explorer_export.py:394 views/explorer_manifest.py:792
 #: views/explorer_series.py:103
 msgid "Contains restricted-access data"
 msgstr ""
 
-#: views/explorer_export.py:510
+#: views/explorer_export.py:507
 msgid "Each file carries its own licence, given with the file."
 msgstr ""
 
-#: views/explorer_export.py:783
+#: views/explorer_export.py:785
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
 "%(count)d canvases): open it by document."
 msgstr ""
 
-#: views/explorer_export.py:793
+#: views/explorer_export.py:795
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
 "are served by IIIF image servers and are not in the package."
 msgstr ""
 
-#: views/explorer_export.py:800
+#: views/explorer_export.py:802
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
 "fetched."
 msgstr ""
 
-#: views/explorer_manifest.py:333
+#: views/explorer_manifest.py:356
 msgid "Technique"
 msgstr ""
 
-#: views/explorer_manifest.py:334
+#: views/explorer_manifest.py:357
 msgid "Dates"
 msgstr ""
 
-#: views/explorer_manifest.py:335
+#: views/explorer_manifest.py:358
 msgid "Operators"
 msgstr ""
 
-#: views/explorer_manifest.py:336
+#: views/explorer_manifest.py:359
 msgid "Conditions"
 msgstr ""
 
-#: views/explorer_manifest.py:464
+#: views/explorer_manifest.py:487
 #, python-format
 msgid "Selection of %(count)d page of %(document)s"
 msgid_plural "Selection of %(count)d pages of %(document)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer_manifest.py:469
+#: views/explorer_manifest.py:492
 #, python-format
 msgid "Selection of %(count)d page of %(documents)d documents"
 msgid_plural "Selection of %(count)d pages of %(documents)d documents"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer_manifest.py:703
+#: views/explorer_manifest.py:798
 msgid "Without a position on the image"
 msgstr ""
 
@@ -4277,14 +4284,14 @@ msgstr ""
 msgid "Generated on %(date)s"
 msgstr ""
 
-#: views/explorer_series.py:133
+#: views/explorer_series.py:144
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
 "%(url)s"
 msgstr ""
 
-#: views/explorer_series.py:148
+#: views/explorer_series.py:159
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr ""

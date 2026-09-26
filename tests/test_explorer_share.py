@@ -16,7 +16,12 @@ from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import TileModel
 
-from manuspectrum.views.explorer_scopes import resolve_scope, share_payload
+from manuspectrum.views.explorer_citations import Home
+from manuspectrum.views.explorer_scopes import (
+    resolve_scope,
+    scope_content,
+    share_payload,
+)
 from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import XY_CONFIG_ID
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
@@ -132,6 +137,54 @@ class ShareRouteTests(CorpusCase):
             payload["availability"],
         )
         self.assertIn("https://doi.org/10.48579/pro/zeejth", payload["availability"])
+
+    def test_analyses_without_a_dataset_are_cited_once_per_project(self):
+        side = self.projects["side"]
+        self.tile(self.analyses["draft"], "analysis_by_project", self.refs(side))
+
+        payload = self.get(f"document={self.documents['open'].pk}").json()
+
+        self.assertEqual(
+            [c["csl"]["id"] for c in payload["citations"]],
+            ["10.48579/pro/zeejth", str(side.pk)],
+        )
+        cited = payload["citations"][1]["csl"]
+        self.assertEqual(cited["title"], "Side project")
+        self.assertEqual(
+            cited["URL"], f"{settings.PUBLIC_SERVER_ADDRESS}report/{side.pk}"
+        )
+        for key in ("on_document", "draft"):
+            self.assertIn(f"report/{self.pk(key)}", cited["note"])
+
+    def test_an_analysis_without_project_is_cited_under_its_document(self):
+        document = self.documents["open"]
+        scope = resolve_scope(
+            QueryDict(f"document={document.pk}"), self.anonymous, "en"
+        )
+
+        homes = {group[1][0].id: group[3] for group in scope_content(scope).groups}
+
+        self.assertEqual(
+            homes[self.pk("draft")],
+            Home(
+                str(document.pk),
+                "Ms 59",
+                f"{settings.PUBLIC_SERVER_ADDRESS}report/{document.pk}",
+            ),
+        )
+        self.assertEqual(
+            homes[self.pk("on_document")].id, str(self.projects["side"].pk)
+        )
+
+    def test_a_project_scope_cites_under_its_project(self):
+        main = self.projects["main"]
+        earlier = self.new_resource("project", "Atramenta")
+        self.tile(self.analyses["open"], "analysis_by_project", self.refs(earlier))
+        scope = resolve_scope(QueryDict(f"project={main.pk}"), self.anonymous, "en")
+
+        homes = {group[3].id for group in scope_content(scope).groups}
+
+        self.assertEqual(homes, {str(main.pk)})
 
     def test_the_export_estimate_sums_the_kept_files(self):
         whole = self.get(f"ids=an:{self.pk('open')}:-").json()

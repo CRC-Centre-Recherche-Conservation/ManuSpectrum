@@ -5,18 +5,22 @@ Usage:
 """
 
 import datetime
+from unittest import mock
 
 import bibtexparser
 import rispy
 from django.conf import settings
 from django.test import SimpleTestCase
+from pylatexenc.latexencode import unicode_to_latex
 
 from manuspectrum.views.explorer_citations import (
     CitedAnalysis,
+    Home,
     availability,
     citation_entries,
     citation_entry,
     dataset_id,
+    _latex,
     parse_dataverse,
 )
 
@@ -39,6 +43,18 @@ def analysis(n, *, start="2023-04-01", end=None, authors=(), projects=()):
         authors=tuple(authors),
         projects=tuple(projects),
     )
+
+
+PROJECT = Home(
+    "00000000-0000-4000-8000-0000000000a1",
+    "Parchment project",
+    f"{BASE}report/00000000-0000-4000-8000-0000000000a1",
+)
+DOCUMENT = Home(
+    "00000000-0000-4000-8000-0000000000d1",
+    "Ms 59",
+    f"{BASE}report/00000000-0000-4000-8000-0000000000d1",
+)
 
 
 def dataverse_dataset(url=DOI_URL):
@@ -287,11 +303,12 @@ class EntriesTests(SimpleTestCase):
     def test_one_entry_per_dataset_deduplicated_by_doi(self):
         entries = citation_entries(
             [
-                (dataverse_dataset(), [analysis(1)], ["CC BY 4.0"]),
+                (dataverse_dataset(), [analysis(1)], ["CC BY 4.0"], PROJECT),
                 (
                     {"url": "10.1234/abc/xyz", "isDoi": True, "label": DATAVERSE},
                     [analysis(2)],
                     ["CC0 1.0"],
+                    DOCUMENT,
                 ),
             ],
             language="en",
@@ -301,20 +318,91 @@ class EntriesTests(SimpleTestCase):
         self.assertIn(analysis(1).permalink, entries[0]["csl"]["note"])
         self.assertIn(analysis(2).permalink, entries[0]["csl"]["note"])
 
-    def test_analyses_without_a_dataset_get_one_entry_each(self):
+    def test_analyses_without_a_dataset_are_cited_once_per_home(self):
         entries = citation_entries(
             [
-                (None, [analysis(1)], []),
-                (dataverse_dataset(), [analysis(2)], []),
-                (None, [analysis(3)], []),
+                (
+                    None,
+                    [analysis(1, projects=["Parchment project", "Ink survey"])],
+                    ["CC BY 4.0"],
+                    PROJECT,
+                ),
+                (dataverse_dataset(), [analysis(2)], [], PROJECT),
+                (None, [analysis(3)], ["CC0 1.0"], PROJECT),
+                (None, [analysis(4)], [], DOCUMENT),
+                (None, [analysis(5)], [], DOCUMENT),
             ],
             language="en",
             accessed=ACCESSED,
         )
+
         self.assertEqual(
             [e["csl"]["id"] for e in entries],
-            ["10.1234/abc/xyz", analysis(1).id, analysis(3).id],
+            ["10.1234/abc/xyz", PROJECT.id, DOCUMENT.id],
         )
+        for entry, home, parts in (
+            (entries[1], PROJECT, (1, 3)),
+            (entries[2], DOCUMENT, (4, 5)),
+        ):
+            self.assertEqual(entry["csl"]["title"], home.name)
+            self.assertEqual(entry["csl"]["URL"], home.permalink)
+            self.assertIn(home.permalink, entry["recommended"])
+            for n in parts:
+                self.assertIn(analysis(n).permalink, entry["csl"]["note"])
+        self.assertEqual(entries[1]["csl"]["license"], "CC BY 4.0; CC0 1.0")
+        self.assertEqual(entries[1]["csl"]["collection-title"], "Ink survey")
+        self.assertEqual(entries[1]["recommended"].count("Parchment project"), 1)
+
+    def test_a_grouped_citation_shows_the_count_and_the_home_only(self):
+        one, two = analysis(1), analysis(2)
+        entry = citation_entries(
+            [(None, [one], [], PROJECT), (None, [two], [], PROJECT)],
+            language="en",
+            accessed=ACCESSED,
+        )[0]
+
+        note = bibtexparser.parse_string(entry["bibtex"]).entries[0]["note"]
+        for shown in (note, entry["recommended"]):
+            self.assertIn("2 analyses", shown)
+            self.assertIn(PROJECT.permalink, shown)
+        for cited in (one, two):
+            self.assertNotIn(cited.permalink, entry["bibtex"])
+            self.assertNotIn(cited.permalink, entry["recommended"])
+            self.assertIn(cited.permalink, entry["csl"]["note"])
+            self.assertIn(cited.permalink, entry["ris"])
+
+    def test_one_analysis_without_a_dataset_is_cited_as_itself(self):
+        entries = citation_entries(
+            [(None, [analysis(1)], [], PROJECT), (None, [analysis(2)], [], None)],
+            language="en",
+            accessed=ACCESSED,
+        )
+
+        self.assertEqual(
+            [e["csl"]["id"] for e in entries], [analysis(1).id, analysis(2).id]
+        )
+        self.assertEqual(entries[0]["csl"]["title"], "XRF 1")
+        self.assertEqual(entries[0]["csl"]["URL"], analysis(1).permalink)
+
+
+class LatexTests(SimpleTestCase):
+    def test_pieces_are_encoded_like_the_whole(self):
+        text = "Doe & Co; 50 % {x}; Æthelred — f. 1v_2; café #3; ~$"
+
+        self.assertEqual(_latex(text), unicode_to_latex(text))
+
+    def test_the_encoder_reads_one_part_at_a_time(self):
+        parts = [analysis(n % 10) for n in range(500)]
+
+        with mock.patch(
+            "manuspectrum.views.explorer_citations.unicode_to_latex",
+            wraps=unicode_to_latex,
+        ) as encoder:
+            citation_entries(
+                [(None, parts, [], PROJECT)], language="en", accessed=ACCESSED
+            )
+
+        self.assertLess(max(len(call.args[0]) for call in encoder.call_args_list), 200)
 
 
 class AvailabilityTests(SimpleTestCase):

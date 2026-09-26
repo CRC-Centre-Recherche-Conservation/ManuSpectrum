@@ -30,7 +30,7 @@ from manuspectrum.utils.public_visibility import (
     visible_set,
 )
 from manuspectrum.utils.role_links import role_node
-from manuspectrum.views.explorer_citations import availability, citation_entries
+from manuspectrum.views.explorer_citations import Home, availability, citation_entries
 from manuspectrum.views.explorer_memo import ticket
 from manuspectrum.views.explorer_service import (
     ITEM_KEY,
@@ -489,8 +489,9 @@ class ScopeContent:
     kept ``FileEntry`` list of each analysis (``kept_files``), ``projects``
     the visible projects of each analysis, ``named`` the operators and
     projects both the reader and the viewer may name and ``label_of`` their
-    names. ``groups`` are the ``citation_entries`` groups, one per analysis,
-    ``datasets`` and ``licences`` what ``availability`` reads.
+    names. ``groups`` are the ``citation_entries`` groups, one per analysis
+    with its ``citation_home``, ``datasets`` and ``licences`` what
+    ``availability`` reads.
     """
 
     rows: list
@@ -502,6 +503,28 @@ class ScopeContent:
     groups: list
     datasets: list
     licences: list
+
+
+def citation_home(scope, analysis_id, projects, label_of):
+    """``Home`` an analysis without dataset is cited under: the scope's project, else its first named project by name, else its document.
+
+    *projects* are the analysis's projects both the reader and the viewer may
+    name. An analysis without project nor document has no home (None).
+    """
+    named = [p for p in projects if p in label_of]
+    if scope.kind == "project" and scope.subject in named:
+        home = scope.subject
+    elif named:
+        home = min(named, key=lambda p: (label_of[p]["value"].casefold(), p))
+    else:
+        chain = scope.bundle.chains.get(analysis_id)
+        if not chain:
+            return None
+        document = chain[0]
+        return Home(
+            document, scope.bundle.label_of[document]["value"], permalink(document)
+        )
+    return Home(home, label_of[home]["value"], permalink(home))
 
 
 def scope_content(scope, keys=()):
@@ -545,6 +568,7 @@ def scope_content(scope, keys=()):
         licences = licence_labels(files[analysis_id])
         all_licences += licences
         datasets.append(dataset)
+        projects = [p for p in projects_of[analysis_id] if p in named]
         groups.append(
             (
                 dataset,
@@ -554,10 +578,11 @@ def scope_content(scope, keys=()):
                         _date(end) if isinstance(end, str) else None,
                         label_of,
                         [o for o in row["operators"] if o in named],
-                        [p for p in projects_of[analysis_id] if p in named],
+                        projects,
                     )
                 ],
                 licences,
+                citation_home(scope, analysis_id, projects, label_of),
             )
         )
     return ScopeContent(
@@ -577,7 +602,7 @@ def share_payload(scope, accessed):
     """``SharePayload`` of *scope*: counts, citations, parts, availability, export estimate and product links.
 
     Citations follow ``citation_entries`` (one per dataset, then one per
-    analysis without dataset); operators and projects are named only when
+    ``citation_home`` of the analyses without dataset); operators and projects are named only when
     both the reader and the viewer may name them. ``export`` sums the kept
     files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
     ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists

@@ -335,6 +335,21 @@ class CitationFilesTests(PackageCase):
         self.assertEqual(self.text(members["citations.bib"]).count("@dataset"), 3)
         self.assertEqual(self.text(members["citations.ris"]).count("TY  - DATA"), 3)
 
+    def test_a_grouped_citation_lists_its_analyses_in_the_package(self):
+        side = self.projects["side"]
+        self.tile(self.analyses["draft"], "analysis_by_project", self.refs(side))
+
+        members = self.members(self.document_query())
+
+        entry = next(
+            e
+            for e in json.loads(members["citations.json"].data)
+            if e["id"] == str(side.pk)
+        )
+        for key in ("on_document", "draft"):
+            self.assertIn(permalink(self.pk(key)), entry["note"])
+            self.assertIn(permalink(self.pk(key)), self.text(members["citations.ris"]))
+
 
 class RoCrateTests(PackageCase):
     def test_ro_crate_has_the_descriptor_and_the_root_dataset(self):
