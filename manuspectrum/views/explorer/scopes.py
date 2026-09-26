@@ -658,7 +658,10 @@ def share_payload(scope, accessed):
         "citations": [
             shown_citation(entry)
             for entry in citation_entries(
-                content.groups, language=language, accessed=accessed
+                content.groups,
+                language=language,
+                accessed=accessed,
+                link=share_link(scope),
             )
         ],
         "availability": availability(

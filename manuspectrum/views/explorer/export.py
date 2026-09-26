@@ -62,7 +62,7 @@ from manuspectrum.views.explorer.service import (
     permalink,
     plain_text,
 )
-from manuspectrum.views.explorer.values import rewrite_legacy_url
+from manuspectrum.views.explorer.values import dataset_url, rewrite_legacy_url
 from manuspectrum.views.summary_service import _date
 
 CRATE_NAME = "ro-crate-metadata.json"
@@ -159,11 +159,6 @@ def csv_bytes(columns, rows):
 
 def _json_bytes(value):
     return orjson.dumps(value, option=orjson.OPT_INDENT_2)
-
-
-def _dataset_url(dataset):
-    url = (dataset or {}).get("url") or ""
-    return f"https://doi.org/{url}" if url.startswith("10.") else url or None
 
 
 def analysis_zones(scope):
@@ -301,7 +296,7 @@ def analyses_table(scope, content, zones):
                 "attributions": _unique(
                     (f.get("license") or {}).get("attribution") for f in files
                 ),
-                "dataset": _dataset_url(
+                "dataset": dataset_url(
                     dataset_of(values.first(analysis_id, "dataset"))
                 ),
                 "permalink": permalink(analysis_id),
@@ -441,7 +436,7 @@ def readme(
 def _readme_datasets(datasets):
     found = {}
     for dataset in datasets:
-        url = _dataset_url(dataset)
+        url = dataset_url(dataset)
         if url and url not in found:
             parsed = parse_dataverse(dataset.get("label"))
             title = parsed.title if parsed else dataset.get("label")
@@ -541,7 +536,7 @@ def ro_crate(scope, members, exported_at, content=None):
         describe(entity)
     based_on = []
     for dataset in content.datasets:
-        url = _dataset_url(dataset)
+        url = dataset_url(dataset)
         if url and url not in based_on:
             based_on.append(url)
             describe(
@@ -765,7 +760,10 @@ def _assemble(scope, exported_at):
     zones = analysis_zones(scope)
     data, unfetched = _data_members(scope, content, zones, stored)
     citations = citation_entries(
-        content.groups, language=language, accessed=exported_at
+        content.groups,
+        language=language,
+        accessed=exported_at,
+        link=share_link(scope),
     )
     availability_text = availability(
         content.datasets,

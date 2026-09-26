@@ -136,8 +136,12 @@ class ShareRouteTests(CorpusCase):
             f"{settings.PUBLIC_SERVER_ADDRESS}report/{self.pk('draft')}",
         )
         note = cited(payload["citations"][0])["note"].value
+        self.assertIn(
+            f"2 analyses: {settings.PUBLIC_SERVER_ADDRESS}report/{self.documents['open'].pk}",
+            note,
+        )
         for key in ("open", "on_document"):
-            self.assertIn(f"report/{self.pk(key)}", note)
+            self.assertNotIn(f"report/{self.pk(key)}", note)
         self.assertIn(
             f"{settings.PUBLIC_SERVER_ADDRESS}report/{self.documents['open'].pk}",
             payload["availability"],

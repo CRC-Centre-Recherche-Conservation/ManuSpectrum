@@ -150,6 +150,28 @@ def dataset_of(value):
     }
 
 
+DOI = re.compile(r"(10\.\d{4,9}/\S+)", re.IGNORECASE)
+
+
+def doi_of(url):
+    """The DOI *url* names (``10.…``, trailing punctuation removed), as written; None when it names none."""
+    match = DOI.search(url or "")
+    return match[1].rstrip(".,;:") if match else None
+
+
+def dataset_url(dataset):
+    """The one web address of *dataset* (a ``dataset_of`` value): ``https://doi.org/<doi>`` when it names a DOI, else its http(s) URL; None otherwise.
+
+    Citations, the IIIF manifest and the data package read a dataset's
+    address through this function alone.
+    """
+    url = (dataset or {}).get("url") or ""
+    doi = doi_of(url)
+    if doi:
+        return f"https://doi.org/{doi}"
+    return url if url.startswith(("http://", "https://")) else None
+
+
 def rewrite_legacy_url(url):
     """*url* with a host of ``EXPLORER_LEGACY_HOSTS`` replaced by ``PUBLIC_SERVER_ADDRESS``."""
     for host in getattr(settings, "EXPLORER_LEGACY_HOSTS", ()):

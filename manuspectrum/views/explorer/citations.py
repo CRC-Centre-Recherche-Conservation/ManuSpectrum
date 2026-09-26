@@ -32,7 +32,8 @@ from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 from pylatexenc.latexencode import unicode_to_latex
 
-DOI = re.compile(r"(10\.\d{4,9}/\S+)", re.IGNORECASE)
+from manuspectrum.views.explorer.values import dataset_url, doi_of
+
 DATAVERSE = re.compile(
     r"^(?P<authors>.+?),\s*(?P<year>\d{4}),\s*[\"“](?P<title>[^\"”]+)[\"”],\s*"
     r"(?P<url>https?://(?:dx\.)?doi\.org/(?P<doi>10\.\d{4,9}/[^\s,]+)),\s*"
@@ -113,8 +114,8 @@ def parse_dataverse(text):
 
 
 def _doi(url):
-    match = DOI.search(url or "")
-    return match[1].rstrip(".,;:").lower() if match else None
+    doi = doi_of(url)
+    return doi.lower() if doi else None
 
 
 def dataset_id(dataset):
@@ -122,14 +123,6 @@ def dataset_id(dataset):
     if not dataset:
         return None
     return _doi(dataset["url"]) or dataset["url"]
-
-
-def _dataset_url(dataset):
-    url = dataset["url"]
-    if url.startswith(("http://", "https://")):
-        return url
-    doi = _doi(url)
-    return f"https://doi.org/{doi}" if doi else url
 
 
 def _parts(value):
@@ -203,34 +196,41 @@ def _bibtex(key, fields):
     return bibtexparser.write_string(library).strip() + "\n"
 
 
-def citation_entry(dataset, analyses, *, licences, language, accessed, home=None):
+def citation_entry(
+    dataset, analyses, *, licences, language, accessed, home=None, link=None
+):
     """``Citation`` of *dataset* (a ``dataset_of`` value, or None) for *analyses* (``CitedAnalysis``).
 
     *licences* are the labels of the analyses' file licences; *accessed* is the
     day of consultation (``datetime.date``). Strings are in *language*.
     Without dataset, several analyses are cited as their *home* (``Home``):
-    its id, name and permalink; one analysis is cited as itself. The text and
-    BibTeX of a home citation give the number of analyses and the home's
-    permalink; its CSL-JSON and RIS notes list every analysis.
+    its id, name and permalink; one analysis is cited as itself. A dataset
+    is titled by its label, else by its address (``dataset_url``). The text
+    and BibTeX of a citation of several analyses give their number and where
+    they are listed: the home's permalink, else *link* (the share link of the
+    scope), else the dataset's address; its CSL-JSON and RIS notes list every
+    analysis.
     """
     with translation.override(language):
-        return _entry(dataset, list(analyses), _unique(licences), accessed, home)
+        return _entry(dataset, list(analyses), _unique(licences), accessed, home, link)
 
 
-def _entry(dataset, analyses, licences, accessed, home=None):
+def _entry(dataset, analyses, licences, accessed, home=None, link=None):
     parsed = parse_dataverse(dataset["label"]) if dataset else None
     home = home if not dataset and home and len(analyses) > 1 else None
     entry_id = dataset_id(dataset) or (home.id if home else analyses[0].id)
     events = _event_range(analyses)
     parts = "; ".join(f"{_clean(a.name)} ({a.permalink})" for a in analyses)
     note = _("Analyses: %(parts)s") % {"parts": parts}
+    address = dataset_url(dataset)
+    listed = home.permalink if home else (link or address)
     count = (
         ngettext("%(count)d analysis", "%(count)d analyses", len(analyses))
         % {"count": len(analyses)}
-        if home
+        if len(analyses) > 1 and listed
         else None
     )
-    shown_note = f"{count}: {home.permalink}" if home else note
+    shown_note = f"{count}: {listed}" if count else note
     extra_notes = []
     if parsed:
         authors = list(parsed.authors)
@@ -243,22 +243,13 @@ def _entry(dataset, analyses, licences, accessed, home=None):
             for a in analyses
             for author in a.authors
         )
-        title = _clean(dataset and dataset["label"]) or (
-            _clean(home.name)
-            if home
-            else (
-                _clean(analyses[0].name)
-                if len(analyses) == 1
-                else _dataset_url(dataset) if dataset else _clean(analyses[0].name)
-            )
-        )
+        if dataset:
+            title = _clean(dataset["label"]) or address or _clean(dataset["url"])
+        else:
+            title = _clean(home.name) if home else _clean(analyses[0].name)
         publisher, version, year = settings.APP_TITLE, None, None
         doi = _doi(dataset["url"]) if dataset else None
-        url = (
-            _dataset_url(dataset)
-            if dataset
-            else home.permalink if home else analyses[0].permalink
-        )
+        url = address or (home.permalink if home else analyses[0].permalink)
         projects = _unique(
             _clean(p) for a in analyses for p in a.projects if _clean(p) != title
         )
@@ -345,6 +336,8 @@ def _entry(dataset, analyses, licences, accessed, home=None):
         heading = f"{title} {kind}"
         if events:
             heading += ", " + "–".join(_iso(p) for p in events)
+        if count and listed != url:
+            count = f"{count}: {listed}"
         pieces += [heading, *([count] if count else []), *projects, publisher, url]
         if licence:
             pieces.append(licence)
@@ -370,9 +363,11 @@ def shown_citation(entry):
     return {"text": entry["recommended"], "bibtex": entry["bibtex"]}
 
 
-def citation_entries(groups, *, language, accessed):
+def citation_entries(groups, *, language, accessed, link):
     """One ``Citation`` per dataset, then one per ``Home`` of the analyses without dataset.
 
+    *link* is where the analyses of the scope are listed (its share link);
+    a citation of several analyses of one dataset points to it.
     *groups* are ``(dataset | None, [CitedAnalysis], licence labels, Home | None)``;
     groups naming one dataset (by ``dataset_id``) are cited together, groups
     without dataset under one home (by ``Home.id``) too. An analysis without
@@ -396,6 +391,7 @@ def citation_entries(groups, *, language, accessed):
             language=language,
             accessed=accessed,
             home=home,
+            link=link,
         )
         for dataset, analyses, licences, home in [
             *datasets.values(),
@@ -418,8 +414,7 @@ def _availability(datasets, licences, permalink):
             continue
         seen.add(key)
         parsed = parse_dataverse(dataset["label"])
-        doi = _doi(dataset["url"])
-        locator = f"https://doi.org/{doi}" if doi else dataset["url"]
+        locator = dataset_url(dataset) or dataset["url"]
         title = parsed.title if parsed else _clean(dataset["label"])
         named.append(f"{title} ({locator})" if title else locator)
     values = {

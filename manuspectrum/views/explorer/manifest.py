@@ -67,7 +67,7 @@ from manuspectrum.views.explorer.service import (
     renderer_configs,
 )
 from manuspectrum.views.explorer.scopes import kept_files
-from manuspectrum.views.explorer.values import rewrite_legacy_url
+from manuspectrum.views.explorer.values import dataset_url, rewrite_legacy_url
 from manuspectrum.views.summary_service import _date
 
 PRESENTATION_3 = "http://iiif.io/api/presentation/3/context.json"
@@ -279,13 +279,6 @@ def absolute_url(url):
     return None
 
 
-def _dataset_url(dataset):
-    url = (dataset or {}).get("url") or ""
-    if url.startswith("10."):
-        return f"https://doi.org/{url}"
-    return url if url.startswith(("http://", "https://")) else None
-
-
 def _body(entry, language):
     """Annotation body of one ``FileEntry``: a ``Dataset``, or the ``Manifest`` of an imaging entry; None without a URL."""
     url = absolute_url(entry.get("downloadUrl"))
@@ -345,9 +338,9 @@ def data_annotation(annotation_id, analysis, files, target, language):
             }
         ]
         dataset = analysis.get("dataset")
-        dataset_url = _dataset_url(dataset)
-        if dataset_url:
-            link = {"id": dataset_url, "type": "Dataset", "format": "text/html"}
+        address = dataset_url(dataset)
+        if address:
+            link = {"id": address, "type": "Dataset", "format": "text/html"}
             if dataset.get("label"):
                 link["label"] = {language: [dataset["label"]]}
             see_also.append(link)

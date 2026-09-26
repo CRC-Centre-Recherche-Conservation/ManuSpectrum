@@ -452,6 +452,21 @@ class RoCrateTests(PackageCase):
         self.assertEqual(mixed[per_file]["@type"], "CreativeWork")
         self.assertEqual(mixed[per_file]["name"], "Licences per file")
 
+    def test_two_spellings_of_one_doi_are_one_dataset(self):
+        self.tile(
+            self.analyses["on_document"],
+            "dataset_url",
+            {"url": "https://dx.doi.org/10.48579/PRO/ZEEJTH", "url_label": ""},
+        )
+
+        graph = self.crate(self.document_query())
+
+        self.assertEqual(graph["./"]["isBasedOn"], [{"@id": DOI}])
+        datasets = [
+            e for e in graph.values() if e["@type"] == "Dataset" and e["@id"] != "./"
+        ]
+        self.assertEqual([d["@id"] for d in datasets], [DOI])
+
     def test_a_file_name_with_a_space_or_a_hash_gets_an_escaped_id(self):
         self.stored_file(self.analyses["open"], "bleu clair #2.csv", b"1,2\n")
         scope, members = self.package(f"ids=an:{self.pk('open')}:-")
