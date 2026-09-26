@@ -319,10 +319,21 @@ class ExplorerCase(TestCase):
         }
 
     def setUp(self):
+        """Clear the caches and give the test its own ``MEDIA_ROOT``.
+
+        The media override is enabled before a method-level
+        ``override_settings`` and disabled after it: the two nest, and each
+        restores the settings it found.
+        """
         cache.clear()
         caches["user_permission"].clear()
         self.addCleanup(cache.clear)
         self.addCleanup(caches["user_permission"].clear)
+        self._media_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._media_root, True)
+        media = override_settings(MEDIA_ROOT=self._media_root)
+        media.enable()
+        self.addCleanup(media.disable)
 
     def embargo(self, resource):
         with self.captureOnCommitCallbacks(execute=True):
@@ -340,18 +351,12 @@ class ExplorerCase(TestCase):
     ):
         """Store *content* as the file *name* of *analysis*; returns its file id.
 
-        The bytes go under a ``MEDIA_ROOT`` private to the test, the ``File``
+        The bytes go under the test's own ``MEDIA_ROOT`` (``setUp``), the ``File``
         row hangs from the analysis's tile of *node_alias* (created when
         missing), and that tile's file list gets the entry, with *licence*
         (``{"id", "url"}``) and the renderer configuration id *config* when
         given.
         """
-        if not getattr(self, "_media_root", None):
-            self._media_root = tempfile.mkdtemp()
-            self.addCleanup(shutil.rmtree, self._media_root, True)
-            media = override_settings(MEDIA_ROOT=self._media_root)
-            media.enable()
-            self.addCleanup(media.disable)
         node = self.nodes[("analysis", node_alias)]
         tile = TileModel.objects.filter(
             resourceinstance=analysis, nodegroup_id=node.nodegroup_id
