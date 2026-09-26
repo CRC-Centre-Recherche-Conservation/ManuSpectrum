@@ -27,9 +27,11 @@ bundle of the same scope and language was built under the same permission
 gates (epoch, hidden resources, readable nodegroups and models: everything
 but the data) and shows no resource the reader can no longer see, ``ticket``
 names that bundle and the reader is answered from it at once, while one
-rebuild of the current key runs in the background: the caller that takes the
-key's build lock starts it through ``spawn``, the others keep reading the
-previous bundle until the new one is stored. A change of permission gates, a
+rebuild runs in the background: one per scope and language at a time, in a
+process and across processes, started through ``spawn`` by the caller that
+takes the scope and language's rebuild lock. The others keep reading the
+previous bundle until the new one is stored; a data change during a
+rebuild is rebuilt by the first request after it ends. A change of permission gates, a
 resource the previous bundle shows that the current visible set leaves out
 (a link to a hidden Project, a deletion), or no previous bundle, builds in
 the request.
@@ -79,6 +81,8 @@ LOCAL_ENTRIES = 2
 _local = OrderedDict()
 _local_lock = threading.Lock()
 _build_lock = threading.Lock()
+_rebuilding = set()
+_rebuilding_lock = threading.Lock()
 _collector_lock = threading.Lock()
 _collector_pauses = 0
 _collector_was_enabled = False
@@ -307,13 +311,34 @@ def _previous(held):
     return None, "permissions" if other_gates else "cold"
 
 
+def _rebuild_lock(scope, language):
+    return f"{stable_cache_key('explorer-rebuild', scope, language)}:lock"
+
+
 def _rebuild_in_background(held, user, build):
-    """Start the one rebuild of ``held.current``, unless a caller holds its build lock."""
-    lock = f"{held.current}:lock"
+    """Start the rebuild of ``held.current`` unless one of its scope and language runs.
+
+    One rebuild per scope and language at a time: in this process (a guard
+    set) and across processes (a cache lock). A caller that finds either
+    taken starts nothing; the next request after the running one ends
+    starts the rebuild of the data current then.
+    """
+    slot = (held.scope, held.language)
+    with _rebuilding_lock:
+        if slot in _rebuilding:
+            return
+        _rebuilding.add(slot)
+    lock = _rebuild_lock(held.scope, held.language)
     if not cache.add(lock, 1, LOCK_TIMEOUT):
+        _free(slot)
         return
-    if cache.has_key(held.current):
+
+    def release():
         cache.delete(lock)
+        _free(slot)
+
+    if cache.has_key(held.current):
+        release()
         return
 
     def rebuild():
@@ -326,13 +351,18 @@ def _rebuild_in_background(held, user, build):
                 extra={"language": held.language, "scope_kind": _kind(held.scope)},
             )
         finally:
-            cache.delete(lock)
+            release()
 
     try:
         spawn(rebuild)
     except Exception:
-        cache.delete(lock)
+        release()
         logger.exception("explorer bundle rebuild could not start")
+
+
+def _free(slot):
+    with _rebuilding_lock:
+        _rebuilding.discard(slot)
 
 
 def _build_and_keep(held, build):

@@ -52,6 +52,9 @@ class MemoCase(ServiceCase):
         super().setUp()
         explorer_memo.forget_local()
         self.addCleanup(explorer_memo.forget_local)
+        guards = mock.patch.object(explorer_memo, "_rebuilding", set())
+        guards.start()
+        self.addCleanup(guards.stop)
 
     def rename_by_sql(self, resource, name):
         node = self.nodes[("analysis", "label_of_name")]
@@ -561,8 +564,9 @@ class StaleWhileRebuildTests(MemoCase):
         )
         self.assertGreater(fields["rows"], 0)
         self.assertGreater(fields["stored_bytes"], 0)
-        self.assertNotIn(str(self.editor.pk), record.getMessage())
+        self.assertNotIn(self.editor.username, record.getMessage())
         self.assertNotIn(self.editor.pk, fields.values())
+        self.assertFalse(hasattr(record, "user"))
 
     def test_a_background_build_logs_the_stale_answers_it_covered(self):
         corpus_bundle(self.anonymous, "en")
@@ -593,6 +597,9 @@ class TicketGatesTests(SimpleTestCase):
         self.addCleanup(cache.clear)
         self.addCleanup(explorer_memo.forget_local)
         self.pending = []
+        guards = mock.patch.object(explorer_memo, "_rebuilding", set())
+        guards.start()
+        self.addCleanup(guards.stop)
         self.state = {
             "version": "1.1",
             "gates": "g1",
@@ -624,6 +631,46 @@ class TicketGatesTests(SimpleTestCase):
 
     def bundle(self):
         return explorer_memo.corpus_bundle(None, "en", self.build).digest
+
+    def rebuild_lock(self):
+        return cache.get(explorer_memo._rebuild_lock("public", "en"))
+
+    def test_data_versions_in_a_row_run_one_rebuild_at_a_time(self):
+        self.bundle()
+        for version in ("1.2", "1.3", "1.4", "1.5"):
+            self.state["version"] = version
+            self.assertEqual(self.bundle(), "1.1:g1")
+        self.assertEqual(len(self.pending), 1)
+
+        self.pending.pop()()
+        self.assertEqual(self.bundle(), "1.2:g1")
+        self.assertEqual(len(self.pending), 1)
+        self.pending.pop()()
+
+        self.assertEqual(self.bundle(), "1.5:g1")
+        self.assertEqual(self.builds, ["1.1:g1", "1.2:g1", "1.5:g1"])
+
+    def test_a_rebuild_running_in_another_process_starts_none_here(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        self.bundle()
+        explorer_memo._rebuilding.clear()
+        self.state["version"] = "1.3"
+
+        self.assertEqual(self.bundle(), "1.1:g1")
+        self.assertEqual(len(self.pending), 1)
+
+    def test_a_rebuild_running_in_this_process_starts_none_after_its_lock_expired(
+        self,
+    ):
+        self.bundle()
+        self.state["version"] = "1.2"
+        self.bundle()
+        cache.delete(explorer_memo._rebuild_lock("public", "en"))
+        self.state["version"] = "1.3"
+
+        self.assertEqual(self.bundle(), "1.1:g1")
+        self.assertEqual(len(self.pending), 1)
 
     def test_new_hidden_resources_with_the_same_data_build_in_the_request(self):
         self.bundle()
@@ -696,7 +743,7 @@ class TicketGatesTests(SimpleTestCase):
             held = explorer_memo.ticket(None, "en", self.build)
 
         self.assertTrue(held.stale)
-        self.assertIsNone(cache.get(f"{held.current}:lock"))
+        self.assertIsNone(self.rebuild_lock())
         self.assertIn("could not start", logs.output[0])
 
     def test_a_rebuild_whose_bundle_is_already_stored_does_not_start(self):
@@ -704,13 +751,14 @@ class TicketGatesTests(SimpleTestCase):
         self.state["version"] = "1.2"
         held = explorer_memo.ticket(None, "en", self.build)
         self.pending.clear()
-        cache.delete(f"{held.current}:lock")
+        cache.delete(explorer_memo._rebuild_lock("public", "en"))
+        explorer_memo._rebuilding.clear()
         cache.set(held.current, explorer_memo.pack(FakeBundle("elsewhere")))
 
         explorer_memo._rebuild_in_background(held, None, self.build)
 
         self.assertEqual(self.pending, [])
-        self.assertIsNone(cache.get(f"{held.current}:lock"))
+        self.assertIsNone(self.rebuild_lock())
 
     def test_a_rebuild_that_returns_nothing_stores_nothing_and_warns(self):
         self.bundle()
@@ -722,7 +770,7 @@ class TicketGatesTests(SimpleTestCase):
 
         self.assertIn("returned nothing", logs.output[0])
         self.assertFalse(cache.has_key(held.current))
-        self.assertIsNone(cache.get(f"{held.current}:lock"))
+        self.assertIsNone(self.rebuild_lock())
 
     def test_a_synchronous_rebuild_answers_from_the_new_bundle(self):
         self.bundle()
@@ -737,11 +785,12 @@ class TicketGatesTests(SimpleTestCase):
     ):
         self.bundle()
         self.state["version"] = "1.2"
-        current = explorer_memo.ticket(None, "en", self.build).current
-        self.pending.clear()
         explorer_memo.ticket(None, "en", self.build)
+        self.pending.clear()
+        held = explorer_memo.ticket(None, "en", self.build)
 
-        self.assertTrue(cache.get(f"{current}:lock"))
+        self.assertTrue(self.rebuild_lock())
+        self.assertTrue(held.stale)
         self.assertEqual(self.pending, [])
 
 
