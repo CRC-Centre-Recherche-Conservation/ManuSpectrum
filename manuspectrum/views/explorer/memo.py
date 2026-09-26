@@ -93,6 +93,11 @@ _collector_pauses = 0
 _collector_was_enabled = False
 
 
+def _clock():
+    """Wall-clock seconds, shared by every process: when a background rebuild ended."""
+    return time.time()
+
+
 def bundle_key(language, version, epoch, digest):
     return stable_cache_key("explorer-bundle", language, version, epoch, digest)
 
@@ -341,6 +346,19 @@ def _rebuild_failed(language):
     return f"{stable_cache_key('explorer-rebuild', language)}:failed"
 
 
+def _rebuild_ended(language):
+    return f"{stable_cache_key('explorer-rebuild', language)}:ended"
+
+
+def _deferred(language):
+    """Whether the last background rebuild of *language* ended less than ``EXPLORER_REBUILD_MIN_INTERVAL`` seconds ago."""
+    interval = getattr(settings, "EXPLORER_REBUILD_MIN_INTERVAL", 0)
+    if interval <= 0:
+        return False
+    ended = cache.get(_rebuild_ended(language))
+    return ended is not None and _clock() - ended < interval
+
+
 def _rebuild_in_background(held, user, build):
     """Start the rebuild of ``held.current`` unless this process or its language runs one.
 
@@ -352,12 +370,23 @@ def _rebuild_in_background(held, user, build):
     lock a later one took. The next request after the running one ends
     starts the rebuild of the data current then. A rebuild that raised or
     returned nothing starts none for ``settings.EXPLORER_REBUILD_RETRY_AFTER``
-    seconds, readers answered from the previous bundle meanwhile. A cache
-    error while taking or releasing the lock or recording a failure is
-    logged and never leaves the guard set.
+    seconds, readers answered from the previous bundle meanwhile. Once a
+    rebuild ends with a bundle (stored, or superseded by newer data), none
+    starts for its language during
+    ``settings.EXPLORER_REBUILD_MIN_INTERVAL`` seconds (0: no floor): readers
+    of newer data are answered from the previous bundle and the first
+    request after the interval starts the rebuild; a ``DEBUG`` line with
+    ``deferred`` says so. A cache error while taking or releasing the lock
+    or recording a failure is logged and never leaves the guard set.
     """
     failed = _rebuild_failed(held.language)
     if cache.get(failed):
+        return
+    if _deferred(held.language):
+        logger.debug(
+            "explorer bundle rebuild deferred",
+            extra={"language": held.language, "deferred": True},
+        )
         return
     slot = held.language
     with _rebuilding_lock:
@@ -392,6 +421,12 @@ def _rebuild_in_background(held, user, build):
                         failed,
                         1,
                         getattr(settings, "EXPLORER_REBUILD_RETRY_AFTER", 60),
+                    )
+                elif getattr(settings, "EXPLORER_REBUILD_MIN_INTERVAL", 0) > 0:
+                    cache.set(
+                        _rebuild_ended(held.language),
+                        _clock(),
+                        settings.EXPLORER_REBUILD_MIN_INTERVAL,
                     )
             except Exception:
                 logger.exception(

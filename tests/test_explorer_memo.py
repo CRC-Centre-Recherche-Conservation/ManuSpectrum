@@ -722,6 +722,49 @@ class TicketGatesTests(SimpleTestCase):
         cache.delete(explorer_memo._rebuild_lock("en"))
         explorer_memo._rebuilding.clear()
 
+    def run_versions(self, versions):
+        for version in versions:
+            self.state["version"] = version
+            self.bundle()
+            while self.pending:
+                self.pending.pop()()
+
+    @override_settings(EXPLORER_REBUILD_MIN_INTERVAL=30)
+    def test_data_versions_within_the_interval_run_one_rebuild(self):
+        clock = [1000.0]
+        with mock.patch.object(explorer_memo, "_clock", lambda: clock[0]):
+            self.bundle()
+            self.run_versions([f"1.{n}" for n in range(2, 12)])
+            self.assertEqual(self.builds, ["1.1:g1", "1.2:g1"])
+            self.assertEqual(self.bundle(), "1.2:g1")
+
+            clock[0] += 29
+            self.run_versions(["1.12"])
+            self.assertEqual(self.builds, ["1.1:g1", "1.2:g1"])
+
+            clock[0] += 2
+            self.run_versions(["1.13"])
+        self.assertEqual(self.builds, ["1.1:g1", "1.2:g1", "1.13:g1"])
+        self.assertEqual(self.bundle(), "1.13:g1")
+
+    @override_settings(EXPLORER_REBUILD_MIN_INTERVAL=30)
+    def test_a_permission_change_inside_the_interval_builds_at_once(self):
+        with mock.patch.object(explorer_memo, "_clock", lambda: 1000.0):
+            self.bundle()
+            self.run_versions(["1.2"])
+            self.state["gates"] = "g2"
+            self.state["version"] = "1.3"
+
+            self.assertEqual(self.bundle(), "1.3:g2")
+        self.assertEqual(self.builds, ["1.1:g1", "1.2:g1", "1.3:g2"])
+
+    @override_settings(EXPLORER_REBUILD_MIN_INTERVAL=0)
+    def test_no_interval_rebuilds_every_new_version(self):
+        with mock.patch.object(explorer_memo, "_clock", lambda: 1000.0):
+            self.bundle()
+            self.run_versions(["1.2", "1.3", "1.4"])
+        self.assertEqual(self.builds, ["1.1:g1", "1.2:g1", "1.3:g1", "1.4:g1"])
+
     def test_rebuilds_ending_out_of_order_never_answer_older_data(self):
         self.bundle()
         self.state["version"] = "1.2"
