@@ -141,11 +141,9 @@ class _Items:
 def export_language(query):
     """The language of a machine route: ``lang``, else ``LANGUAGE_CODE``.
 
-    A code outside ``settings.LANGUAGES`` raises ``ScopeError``.
+    Either way, a code outside ``settings.LANGUAGES`` raises ``ScopeError``.
     """
-    if "lang" not in query:
-        return settings.LANGUAGE_CODE
-    language = query.get("lang")
+    language = query.get("lang") if "lang" in query else settings.LANGUAGE_CODE
     if language not in dict(settings.LANGUAGES):
         raise ScopeError("unknown language")
     return language

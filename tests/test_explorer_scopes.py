@@ -89,6 +89,10 @@ class ScopeTests(ReadRightsCase):
             with self.subTest(text=text), self.assertRaises(ScopeError):
                 export_language(QueryDict(text))
 
+    def test_a_default_language_outside_languages_is_refused_like_a_given_one(self):
+        with self.settings(LANGUAGE_CODE="xx"), self.assertRaises(ScopeError):
+            export_language(QueryDict(""))
+
     def test_an_unknown_document_and_an_embargoed_one_both_resolve_to_none(self):
         self.embargo(self.documents["embargoed"])
 

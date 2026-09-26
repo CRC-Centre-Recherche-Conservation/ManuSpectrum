@@ -7,6 +7,28 @@ serializer (``supplementing``, ``Dataset`` bodies, ``seeAlso`` report) so
 IIIF clients reading those read these the same way. ``build_manifest``
 assembles the manifest of an ``ExportScope`` per request; nothing is
 memoised.
+
+Canvases and annotations resolve in this order:
+
+1. Each document of the scope gives its source manifest (the
+   ``doc_manifest`` role, legacy host rewritten, read by ``manifest_json``);
+   a document without one, or whose manifest cannot be read, gives no
+   canvas.
+2. A zone is stored under a canvas id or under the image service Arches'
+   viewer drew (``canvas_index`` maps both to the canvas id). A zone on a
+   canvas the source manifest does not list is ignored.
+3. An analysis is placed by its zones on the canvases of its own document;
+   each zone becomes one ``supplementing`` annotation there. An analysis
+   with no placed zone has no annotation and is listed in ``metadata`` with
+   its permalink.
+4. An identified material is placed by its own zone, else by the zone of
+   the first object it observes that has one; it becomes a ``describing``
+   annotation. A zone whose nodegroup the reader or the viewer cannot read
+   counts as absent, for analyses and materials alike.
+5. The canvases kept are those carrying an annotation, or every canvas of
+   the document with ``canvases=all``. The layers of an imaging entry
+   follow the canvas of its analysis's first zone, else its document's
+   canvases, else the end of the manifest.
 """
 
 import functools

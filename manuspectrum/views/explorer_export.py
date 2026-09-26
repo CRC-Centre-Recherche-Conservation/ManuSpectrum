@@ -548,6 +548,7 @@ def ro_crate(scope, members, exported_at, content=None):
         "@type": "Dataset",
         "name": title,
         "description": description,
+        # An ISO 8601 date without time: the package records its export day only.
         "datePublished": exported_at.isoformat(),
         "publisher": settings.APP_TITLE,
         "license": {"@id": root_licence},
