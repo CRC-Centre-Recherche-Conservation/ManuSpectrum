@@ -1,9 +1,6 @@
 import type { InjectionKey, Ref } from "vue";
 
-import type {
-    Label,
-    SearchResponse,
-} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 /** The last results shown (S1) and where the reader left them, to come back to them as they were. */
 export interface ResultsMemo {
@@ -12,7 +9,9 @@ export interface ResultsMemo {
     /** The filters it was reached with (query string at page 1), and its page. */
     filterKey: string;
     page: number;
-    payload: SearchResponse;
+    /** Number of results and grain of the page shown, for the way back from a document. */
+    total: number;
+    grain: "documents" | "analyses";
     /** Window scroll and id of the result opened, recorded when one is opened. */
     scroll: number;
     opened: string | null;

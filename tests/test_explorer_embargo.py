@@ -8,6 +8,7 @@ Usage:
     python manage.py test tests.test_explorer_embargo --settings="tests.test_settings"
 """
 
+import datetime
 import json
 from unittest import mock
 
@@ -34,6 +35,14 @@ class EmbargoMatrixTests(CorpusCase):
                     "/en/api/explorer/items",
                     {"ids": f"ch:{self.characterization.pk}:-"},
                 ).content,
+                "match": self.client.get(
+                    f"/en/api/explorer/document/{self.documents['open'].pk}/match"
+                ).content,
+                "home": self.client.get(
+                    "/en/api/explorer/home",
+                    {"day": datetime.date.today().isoformat()},
+                ).content,
+                "parts": self.client.get("/en/api/explorer/facet/part").content,
             }
 
     def test_an_embargoed_analysis_appears_in_no_payload(self):

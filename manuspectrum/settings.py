@@ -475,6 +475,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "arches.app.tasks.delete_file",
         "schedule": CELERY_SEARCH_EXPORT_CHECK,
     },
+    # Rows of the Explorer's data-version ledger older than a week.
+    "prune-data-changes": {
+        "task": "manuspectrum.prune_data_changes",
+        "schedule": 24 * 3600,
+    },
     # Off: arches.app.tasks.message is `def message(arg): return arg`. It
     # notifies nothing and costs one broker round-trip plus an INSERT and an
     # UPDATE in django_celery_results_taskresult every hour to log a constant
@@ -774,6 +779,10 @@ EXPLORER_LEGACY_HOSTS = ()
 EXPLORER_ITEMS_MAX = 30
 # Seconds the homepage technique list is kept per language.
 EXPLORER_TECHNIQUES_TTL = 600
+# Seconds a compressed corpus bundle of the Explorer stays in the default cache
+# (~3 MB each). Entries stored under a previous code prefix are never read again
+# and expire by this TTL.
+EXPLORER_BUNDLE_TTL = 2 * 60 * 60
 
 try:
     from .package_settings import *

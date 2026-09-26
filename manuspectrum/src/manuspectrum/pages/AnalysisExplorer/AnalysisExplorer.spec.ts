@@ -5,10 +5,12 @@ import PrimeVue from "primevue/config";
 
 import AnalysisExplorer from "@/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue";
 
+import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
     analysisPayload,
+    documentMatch,
     documentPayload,
     searchResponse,
     uuid,
@@ -25,6 +27,7 @@ const KEY = "ch:00000000-0000-4000-8000-000000000001:-";
 let pinia: Pinia;
 
 beforeEach(() => {
+    forgetPayloads();
     pinia = createPinia();
     setActivePinia(pinia);
     window.localStorage.clear();
@@ -123,9 +126,11 @@ describe("AnalysisExplorer", () => {
         vi.stubGlobal(
             "fetch",
             vi.fn(async (url: string) =>
-                url.includes("explorer-document")
-                    ? jsonResponse(documentPayload())
-                    : jsonResponse(searchResponse()),
+                url.includes("explorer-document-match")
+                    ? jsonResponse(documentMatch())
+                    : url.includes("explorer-document")
+                      ? jsonResponse(documentPayload())
+                      : jsonResponse(searchResponse()),
             ),
         );
         window.history.replaceState(null, "", "/en/discover");
@@ -155,9 +160,11 @@ describe("AnalysisExplorer", () => {
         vi.stubGlobal(
             "fetch",
             vi.fn(async (url: string) =>
-                url.includes("explorer-document")
-                    ? jsonResponse(documentPayload())
-                    : jsonResponse(searchResponse()),
+                url.includes("explorer-document-match")
+                    ? jsonResponse(documentMatch())
+                    : url.includes("explorer-document")
+                      ? jsonResponse(documentPayload())
+                      : jsonResponse(searchResponse()),
             ),
         );
         window.history.replaceState(null, "", "/en/discover");
@@ -210,6 +217,9 @@ describe("AnalysisExplorer", () => {
                             ],
                         }),
                     );
+                }
+                if (url.includes("explorer-document-match")) {
+                    return jsonResponse(documentMatch());
                 }
                 if (url.includes("explorer-document")) {
                     return jsonResponse(documentPayload());

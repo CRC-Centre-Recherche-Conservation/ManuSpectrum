@@ -446,6 +446,18 @@ class SpectrumPreviewViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 304)
 
+    def test_a_gzipped_series_carries_a_weak_etag_that_revalidates(self):
+        path = self.written(".csv", "".join(f"{400 + n}.0,{n}.5\n" for n in range(100)))
+
+        response = self.get(path, HTTP_ACCEPT_ENCODING="gzip")
+        again = self.get(
+            path, HTTP_ACCEPT_ENCODING="gzip", HTTP_IF_NONE_MATCH=response["ETag"]
+        )
+
+        self.assertEqual(response["Content-Encoding"], "gzip")
+        self.assertTrue(response["ETag"].startswith('W/"'))
+        self.assertEqual(again.status_code, 304)
+
     def test_the_payload_of_one_file_is_built_once(self):
         path = self.written(".csv")
 

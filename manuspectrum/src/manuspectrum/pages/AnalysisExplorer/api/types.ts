@@ -4,6 +4,8 @@
 export type Label = { value: string; lang: string };
 export type Ref = { id: string; model: string; name: Label };
 export type ValueRef = { id: string; uri: string; label: Label };
+/** A resource named in the request language. */
+export type NamedRef = { id: string; name: Label };
 export type RankedValue = ValueRef & { rank: number };
 /**
  * Identity of a technique on every screen, the same in every language and
@@ -54,17 +56,23 @@ export interface FacetValue {
     id: string;
     label: Label;
     count: number;
-    selected: boolean;
     /** Technique values only. */
     mark: TechniqueMark | null;
     /** Colour values only: CSS colour of the concept, the same in every language; null when its labels name none. */
     swatch: string | null;
 }
 
+/**
+ * A facet of the search. On the whole-corpus search a lazy facet (`part`)
+ * lists its first values and the selected ones; `total` is the number of
+ * values it has, which `GET facet/<key>` lists in full; with `document=<id>`
+ * that route answers the facet of one document's match.
+ */
 export interface Facet {
     key: FacetKey;
     group: FacetGroup;
     values: FacetValue[];
+    total: number;
 }
 
 export interface DocumentHit {
@@ -100,31 +108,53 @@ export interface SearchResponse {
     total: number;
     page: { number: number; size: number; count: number };
     results: (DocumentHit | AnalysisHit)[];
-    facets: Facet[];
+    /** Null when the query said `facets=0`. */
+    facets: Facet[] | null;
     unpublishedCount: number;
     /** Documents without analyses the query would list with `empty=1` (0 outside the documents grain). */
     withoutAnalyses: number;
 }
 
-export interface Annotation {
-    key: string;
-    analysis: string;
-    name: Label;
-    canvas: string;
-    shape: Shape;
-    technique: Technique | null;
-    dataKind: DataKind;
-    unpublished: boolean;
-    match: boolean;
+/** Body of `GET home?day=YYYY-MM-DD`: the explorer home of the reader's day. */
+export interface HomeResponse {
+    /** Documents with a visible analysis. */
+    documentCount: number;
+    techniques: FacetValue[];
+    projects: FacetValue[];
+    /** The document of the day among those, in name order; null without any. */
+    featured: DocumentHit | null;
+    unpublishedCount: number;
 }
 
-export interface UnlocatedAnalysis {
-    analysis: string;
+/** One zone of an analysis on a page: `canvas` is the position of the page in `DocumentPayload.canvases`. */
+export interface AnalysisZone {
+    canvas: number;
+    shape: Shape;
+}
+
+/** An analysis of a document; `technique` is a key of `DocumentPayload.techniques`; no zone: not located on a page. */
+export interface DocumentAnalysis {
+    id: string;
     name: Label;
-    technique: Technique | null;
+    technique: string | null;
     dataKind: DataKind;
     unpublished: boolean;
-    match: boolean;
+    zones: AnalysisZone[];
+}
+
+export interface MatchKept {
+    /** The analyses the filters keep; null when no filter is active (every analysis kept). */
+    analyses: string[] | null;
+    characterizations: string[];
+}
+
+/** Body of `GET document/<id>/match`: what the Corpus filters keep in one document, by the rule of the search. */
+export interface DocumentMatch {
+    /** The values the document's analyses carry plus the selected ones. */
+    facets: Facet[];
+    kept: MatchKept;
+    /** Number of analyses kept. */
+    total: number;
 }
 
 export interface SampleSummary {
@@ -154,7 +184,8 @@ export interface CharacterizationSummary {
     layers: ValueRef[];
     elements: { level: RankedValue | null; values: ValueRef[] }[];
     zone: { canvas: string; shape: Shape; source: "own" | "component" } | null;
-    evidence: string[];
+    /** The visible analyses cited, in id order. */
+    evidence: NamedRef[];
     note: { html: string; lang: string } | null;
     sources: { title: Label | null; url: string | null; ref: Ref | null }[];
     authors: Ref[];
@@ -174,19 +205,21 @@ export interface DocumentCanvas {
     characterizationCount: number;
 }
 
+/** Body of `GET document/<id>`, the same whatever the filters (`DocumentMatch` says what they keep). */
 export interface DocumentPayload {
     id: string;
     name: Label;
     holding: Label | null;
     manifest: string | null;
     canvases: DocumentCanvas[];
-    annotations: Annotation[];
+    /** Each technique of the document's analyses, by uri. */
+    techniques: Record<string, Technique>;
+    analyses: DocumentAnalysis[];
     characterizations: CharacterizationSummary[];
     history: HistoryLine[];
     unpublishedCount: number;
     unpublished: boolean;
     certaintyScale: CertaintyScale;
-    unlocated: UnlocatedAnalysis[];
     samples: SampleSummary[];
 }
 
@@ -252,7 +285,8 @@ export interface AnalysisPayload {
     sample: Ref | null;
     files: FileEntry[];
     conditions: { type: ValueRef | null; html: string; lang: string }[];
-    evidenceOf: CharacterizationSummary[];
+    /** The identified materials citing this analysis as evidence. */
+    evidenceOf: NamedRef[];
     dataset: { url: string; isDoi: boolean; label: string | null } | null;
     bibliography: Label[];
     citation: Citation | null;
@@ -316,6 +350,7 @@ export const SHAPE_KEYS = {
         label: true,
         rank: true,
     } satisfies Record<keyof RankedValue, true>,
+    NamedRef: { id: true, name: true } satisfies Record<keyof NamedRef, true>,
     ImageRef: {
         service: true,
         url: true,
@@ -334,15 +369,16 @@ export const SHAPE_KEYS = {
         keyof TechniqueMark,
         true
     >,
-    Facet: { key: true, group: true, values: true } satisfies Record<
-        keyof Facet,
-        true
-    >,
+    Facet: {
+        key: true,
+        group: true,
+        values: true,
+        total: true,
+    } satisfies Record<keyof Facet, true>,
     FacetValue: {
         id: true,
         label: true,
         count: true,
-        selected: true,
         mark: true,
         swatch: true,
     } satisfies Record<keyof FacetValue, true>,
@@ -354,6 +390,13 @@ export const SHAPE_KEYS = {
         unpublishedCount: true,
         withoutAnalyses: true,
     } satisfies Record<keyof SearchResponse, true>,
+    HomeResponse: {
+        documentCount: true,
+        techniques: true,
+        projects: true,
+        featured: true,
+        unpublishedCount: true,
+    } satisfies Record<keyof HomeResponse, true>,
     DocumentHit: {
         type: true,
         id: true,
@@ -386,26 +429,35 @@ export const SHAPE_KEYS = {
         holding: true,
         manifest: true,
         canvases: true,
-        annotations: true,
+        techniques: true,
+        analyses: true,
         characterizations: true,
         history: true,
         unpublishedCount: true,
         unpublished: true,
         certaintyScale: true,
-        unlocated: true,
         samples: true,
     } satisfies Record<keyof DocumentPayload, true>,
-    Annotation: {
-        key: true,
-        analysis: true,
+    DocumentAnalysis: {
+        id: true,
         name: true,
-        canvas: true,
-        shape: true,
         technique: true,
         dataKind: true,
         unpublished: true,
-        match: true,
-    } satisfies Record<keyof Annotation, true>,
+        zones: true,
+    } satisfies Record<keyof DocumentAnalysis, true>,
+    AnalysisZone: { canvas: true, shape: true } satisfies Record<
+        keyof AnalysisZone,
+        true
+    >,
+    DocumentMatch: { facets: true, kept: true, total: true } satisfies Record<
+        keyof DocumentMatch,
+        true
+    >,
+    MatchKept: { analyses: true, characterizations: true } satisfies Record<
+        keyof MatchKept,
+        true
+    >,
     SampleSummary: {
         id: true,
         name: true,
@@ -413,14 +465,6 @@ export const SHAPE_KEYS = {
         analyses: true,
         unpublished: true,
     } satisfies Record<keyof SampleSummary, true>,
-    UnlocatedAnalysis: {
-        analysis: true,
-        name: true,
-        technique: true,
-        dataKind: true,
-        unpublished: true,
-        match: true,
-    } satisfies Record<keyof UnlocatedAnalysis, true>,
     CharacterizationSummary: {
         id: true,
         name: true,

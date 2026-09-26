@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 
 import SharedSelectionPrompt from "@/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue";
 
+import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
@@ -25,6 +26,7 @@ function mountPrompt(truncated = 0) {
 }
 
 beforeEach(() => {
+    forgetPayloads();
     pinia = createPinia();
     setActivePinia(pinia);
     vi.stubGlobal(

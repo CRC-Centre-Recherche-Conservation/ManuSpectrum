@@ -1,9 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { effectScope, nextTick, ref } from "vue";
 import { flushPromises } from "@vue/test-utils";
 
-import { getJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import {
+    getJson,
+    peekJson,
+    prefetchJson,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
+import {
+    filterQuery,
+    filtersOf,
     searchQuery,
     useSearch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
@@ -12,7 +19,25 @@ import { searchResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/fi
 
 vi.mock("@/manuspectrum/pages/AnalysisExplorer/api/http.ts", () => ({
     getJson: vi.fn(),
+    peekJson: vi.fn(() => null),
+    prefetchJson: vi.fn(),
+    UnavailableError: class extends Error {},
 }));
+
+beforeEach(() => {
+    vi.mocked(getJson).mockReset();
+    vi.mocked(peekJson).mockReset();
+    vi.mocked(peekJson).mockReturnValue(null);
+    vi.mocked(prefetchJson).mockReset();
+});
+
+afterEach(() => vi.useRealTimers());
+
+function sentQueries(): string[] {
+    return vi
+        .mocked(getJson)
+        .mock.calls.map((call) => String(call[1]?.query ?? ""));
+}
 
 describe("searchQuery", () => {
     it("always sends the grain, and nothing else by default", () => {
@@ -51,10 +76,18 @@ describe("searchQuery", () => {
         ).toBe("grain=analyses");
     });
 
-    it("limits the search to one document", () => {
+    it("gives the filters alone, without grain, page size nor page", () => {
         expect(
-            searchQuery(emptyFilters(), 1, { document: "d-1" }).toString(),
-        ).toBe("grain=documents&document=d-1");
+            filterQuery({
+                ...emptyFilters(),
+                q: "lead",
+                grain: "analyses",
+                size: 25,
+                empty: true,
+                technique: ["t2", "t1"],
+                year: [2021],
+            }).toString(),
+        ).toBe("q=lead&technique=t1&technique=t2&year=2021");
     });
 
     it("asks for one page of a given size", () => {
@@ -80,9 +113,80 @@ describe("useSearch", () => {
         expect(getJson).toHaveBeenCalledWith("manuspectrum:explorer-search", {
             query: new URLSearchParams("grain=documents&page=2"),
             signal: expect.any(AbortSignal),
+            reload: false,
         });
         expect(search?.status.value).toBe("ready");
         expect(search?.data.value).toBe(payload);
         scope.stop();
+    });
+
+    it("asks for no facets when the client holds those of the filters", async () => {
+        vi.mocked(getJson).mockResolvedValue(searchResponse());
+        const held = new Set(["q=lead"]);
+        const source = ref(new URLSearchParams("q=lead&grain=documents"));
+        const scope = effectScope();
+        const search = scope.run(() =>
+            useSearch(() => source.value, {
+                holdsFacets: (filters) => held.has(filters),
+            }),
+        )!;
+        source.value = new URLSearchParams("q=lead&grain=documents&page=2");
+        await nextTick();
+        source.value = new URLSearchParams("q=tin&grain=documents");
+        await nextTick();
+        search.prefetch(new URLSearchParams("q=lead&grain=documents&page=3"));
+        expect(sentQueries()).toEqual([
+            "q=lead&grain=documents&facets=0",
+            "q=lead&grain=documents&page=2&facets=0",
+            "q=tin&grain=documents",
+        ]);
+        expect(String(vi.mocked(prefetchJson).mock.calls[0][1]?.query)).toBe(
+            "q=lead&grain=documents&page=3&facets=0",
+        );
+        scope.stop();
+    });
+
+    it("waits for the filters to settle, not for a page change", async () => {
+        vi.useFakeTimers();
+        vi.mocked(getJson).mockResolvedValue(searchResponse());
+        const source = ref(new URLSearchParams("grain=documents"));
+        const scope = effectScope();
+        scope.run(() =>
+            useSearch(() => source.value, { debounceFilters: true }),
+        );
+        source.value = new URLSearchParams("grain=documents&page=2");
+        await nextTick();
+        expect(getJson).toHaveBeenCalledTimes(2);
+        source.value = new URLSearchParams("q=a&grain=documents");
+        await nextTick();
+        source.value = new URLSearchParams("q=ab&grain=documents");
+        await nextTick();
+        expect(getJson).toHaveBeenCalledTimes(2);
+        vi.advanceTimersByTime(DEBOUNCE_MS);
+        expect(sentQueries().at(-1)).toBe("q=ab&grain=documents");
+        expect(getJson).toHaveBeenCalledTimes(3);
+        scope.stop();
+    });
+
+    it("answers from the tab memo without a request", () => {
+        const payload = searchResponse({ total: 9 });
+        vi.mocked(peekJson).mockReturnValue(payload);
+        const scope = effectScope();
+        const search = scope.run(() =>
+            useSearch(() => new URLSearchParams("grain=documents")),
+        )!;
+        expect(search.data.value).toBe(payload);
+        expect(getJson).not.toHaveBeenCalled();
+        scope.stop();
+    });
+});
+
+describe("filtersOf", () => {
+    it("keeps the filters of a search query only", () => {
+        expect(
+            filtersOf(
+                "q=a&grain=analyses&size=25&empty=1&page=2&facets=0&part=p",
+            ),
+        ).toBe("q=a&part=p");
     });
 });

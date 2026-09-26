@@ -5,7 +5,6 @@ import { useGettext } from "vue3-gettext";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
 
-import { useEvidence } from "@/manuspectrum/pages/AnalysisExplorer/composables/useEvidence.ts";
 import {
     formatDateRange,
     safeHref,
@@ -42,34 +41,14 @@ defineExpose({ focusHeading });
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
-const evidence = useEvidence(() => props.summary.evidence);
 const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
 
 const ownKey = computed(() => characterizationKey(props.summary.id));
-/** The evidence analyses read for this material; null while they load or when the data held is another material's. */
-const evidenceRead = computed(() => {
-    const read = evidence.data.value;
-    if (evidence.status.value !== "ready" || !read) return null;
-    const ids = read.map((analysis) => analysis.id);
-    return ids.length === props.summary.evidence.length &&
-        ids.every((id, index) => id === props.summary.evidence[index])
-        ? read
-        : null;
-});
-const names = computed(
-    () =>
-        new Map(
-            (evidenceRead.value ?? []).map((analysis) => [
-                analysis.id,
-                analysis.name,
-            ]),
-        ),
-);
 /** The material and every analysis it cites, whether or not an analysis holds data to show. */
 const withEvidenceKeys = computed(() => [
     ownKey.value,
-    ...props.summary.evidence.map((id) => analysisKey(id)),
+    ...props.summary.evidence.map((entry) => analysisKey(entry.id)),
 ]);
 const sortedLevels = computed(() =>
     [...props.scale.levels].sort((first, second) => first.rank - second.rank),
@@ -95,12 +74,12 @@ const ownHints = computed(
             ],
         ]),
 );
-/** The material and each supporting analysis the card has read, by its name. */
+/** The material and each supporting analysis, by its name. */
 const withEvidenceHints = computed(() => {
     const hints = new Map(ownHints.value);
-    for (const analysis of evidenceRead.value ?? []) {
-        hints.set(analysisKey(analysis.id), {
-            title: analysis.name,
+    for (const entry of props.summary.evidence) {
+        hints.set(analysisKey(entry.id), {
+            title: entry.name,
             kind: $gettext("supporting analysis"),
         });
     }
@@ -139,13 +118,6 @@ function proportionText(entry: Material): string {
 
 function sourceText(source: Source): string {
     return source.title?.value ?? source.ref?.name.value ?? source.url ?? "";
-}
-
-function evidenceName(id: string, index: number): string {
-    return (
-        names.value.get(id)?.value ??
-        interpolate($gettext("Analysis %{n}"), { n: index + 1 }, true)
-    );
 }
 
 function openAnalysis(id: string): void {
@@ -361,14 +333,15 @@ function focusHeading(): void {
             </h4>
             <ul>
                 <li
-                    v-for="(id, index) in props.summary.evidence"
-                    :key="id"
+                    v-for="entry in props.summary.evidence"
+                    :key="entry.id"
                 >
                     <button
                         type="button"
-                        @click="openAnalysis(id)"
+                        :lang="entry.name.lang"
+                        @click="openAnalysis(entry.id)"
                     >
-                        <span>{{ evidenceName(id, index) }}</span>
+                        <span>{{ entry.name.value }}</span>
                     </button>
                 </li>
             </ul>

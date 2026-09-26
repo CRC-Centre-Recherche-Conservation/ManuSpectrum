@@ -33,7 +33,10 @@ from manuspectrum.views.iiif_annotation import (
 from manuspectrum.views.analysis_explorer import AnalysisExplorerPageView
 from manuspectrum.views.explorer_api import (
     ExplorerAnalysisView,
+    ExplorerDocumentMatchView,
     ExplorerDocumentView,
+    ExplorerFacetView,
+    ExplorerHomeView,
     ExplorerItemsView,
     ExplorerSearchView,
 )
@@ -210,6 +213,23 @@ urlpatterns.append(
         ExplorerDocumentView.as_view(),
         name="explorer-document",
     )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/document/<uuid:resourceid>/match",
+        ExplorerDocumentMatchView.as_view(),
+        name="explorer-document-match",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/facet/<str:key>",
+        ExplorerFacetView.as_view(),
+        name="explorer-facet",
+    )
+)
+urlpatterns.append(
+    path("api/explorer/home", ExplorerHomeView.as_view(), name="explorer-home")
 )
 urlpatterns.append(
     path(

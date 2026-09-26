@@ -6,6 +6,8 @@ import { defineComponent, h, ref } from "vue";
 
 import CorpusDocument from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue";
 
+import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import { RESULTS_MEMO_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
@@ -18,9 +20,11 @@ import {
     annotation,
     characterization,
     documentPayload,
+    documentResponses,
+    facet,
     facetValue,
+    label,
     sample,
-    searchResponse,
     technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -30,6 +34,7 @@ import type { Pinia } from "pinia";
 import type { Component, PropType } from "vue";
 
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import type { DocumentShown } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type { LayerToggles } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
@@ -40,7 +45,13 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     ) =>
         name === "manuspectrum:explorer-search"
             ? "/en/api/explorer/search"
-            : `/en/api/explorer/${name.split("explorer-")[1]}/${parameters.resourceid}`,
+            : `/en/api/explorer/${name.split("explorer-")[1]}/${parameters.resourceid ?? parameters.key}`,
+}));
+
+const loadPlotly = vi.hoisted(() => vi.fn(async () => ({})));
+
+vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", () => ({
+    loadPlotly,
 }));
 
 const focusTarget = vi.fn();
@@ -99,6 +110,7 @@ let narrow = false;
 let pinia: Pinia;
 
 beforeEach(() => {
+    forgetPayloads();
     narrow = false;
     focusTarget.mockClear();
     focusCurrent.mockClear();
@@ -114,18 +126,40 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** Runs a change of filters and lets the match wait out its debounce. */
+async function changeFilters(change: () => void): Promise<void> {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    change();
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    vi.useRealTimers();
+    await flushPromises();
+}
+
 function stubFetch(
-    payload = documentPayload({
+    shown: DocumentShown = {
         annotations: [
             annotation(1),
             annotation(2, { canvas: "https://iiif.example/c2" }),
         ],
-    }),
+    },
     status = 200,
 ) {
+    const { payload, match } = documentResponses(shown);
     const fetchMock = vi.fn(async (url: string) => {
-        if (url.includes("/search")) {
-            return jsonResponse(searchResponse({ results: [] }));
+        if (url.includes("/document-match/")) {
+            return jsonResponse(structuredClone(match), status);
+        }
+        if (url.includes("/facet/")) {
+            const find = new URL(url, "http://x").searchParams.get("find");
+            const asked = match.facets.find((entry) =>
+                url.includes(`/facet/${entry.key}?`),
+            )!;
+            return jsonResponse({
+                ...asked,
+                values: asked.values.filter((value) =>
+                    value.label.value.endsWith(find ?? ""),
+                ),
+            });
         }
         if (url.includes("/analysis/")) {
             const id = url.split("/analysis/")[1].split("?")[0];
@@ -167,24 +201,69 @@ function mountScreen(
 }
 
 describe("CorpusDocument", () => {
-    it("asks the document with the Corpus filters", async () => {
+    it("asks the document once and its match with the Corpus filters", async () => {
         const fetchMock = stubFetch();
         const { store } = mountScreen();
-        store.setFilter("technique", ["http://example.org/xrf"]);
         await flushPromises();
-        const documentCalls = fetchMock.mock.calls
-            .map(([url]) => String(url))
-            .filter((url) => url.includes("/document/"));
-        expect(documentCalls.at(-1)).toContain("technique=http");
+        await changeFilters(() =>
+            store.setFilter("technique", ["http://example.org/xrf"]),
+        );
+        const calls = fetchMock.mock.calls.map(([url]) => String(url));
+        expect(calls.filter((url) => url.includes("/document/"))).toEqual([
+            `/en/api/explorer/document/${uuid(1)}`,
+        ]);
+        expect(
+            calls.filter((url) => url.includes("/document-match/")).at(-1),
+        ).toContain("technique=http");
+    });
+
+    it("shows the match loading at once and asks for it once for quick filter changes", async () => {
+        const fetchMock = stubFetch();
+        const { wrapper, store } = mountScreen();
+        await flushPromises();
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const before = fetchMock.mock.calls.length;
+        for (const technique of ["t1", "t2", "t3"]) {
+            store.setFilter("technique", [
+                ...store.filters.technique,
+                technique,
+            ]);
+            await flushPromises();
+            expect(wrapper.find("[role=status]").text()).toBe("Updating…");
+        }
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        vi.useRealTimers();
+        await flushPromises();
+        const asked = fetchMock.mock.calls
+            .slice(before)
+            .map(([url]) => String(url));
+        expect(asked).toHaveLength(1);
+        expect(asked[0]).toContain("technique=t1&technique=t2&technique=t3");
+    });
+
+    it("starts loading the spectrum viewer when a spectrum analysis gets the focus", async () => {
+        loadPlotly.mockClear();
+        stubFetch({
+            annotations: [
+                annotation(1, { dataKind: "file" }),
+                annotation(2, { dataKind: "xy" }),
+            ],
+        });
+        const { store } = mountScreen();
+        await flushPromises();
+        store.focusOn({ kind: "analysis", id: uuid(101) });
+        await flushPromises();
+        expect(loadPlotly).not.toHaveBeenCalled();
+        store.focusOn({ kind: "analysis", id: uuid(102) });
+        await flushPromises();
+        expect(loadPlotly).toHaveBeenCalledTimes(1);
     });
 
     it("names the document, its holding and its counts", async () => {
-        stubFetch(
-            documentPayload({
-                annotations: [annotation(1), annotation(2)],
-                characterizations: [characterization(1)],
-            }),
-        );
+        stubFetch({
+            annotations: [annotation(1), annotation(2)],
+            characterizations: [characterization(1)],
+        });
         const { wrapper } = mountScreen();
         await flushPromises();
         expect(wrapper.find(".document-bar h2").text()).toBe("Manuscript 1");
@@ -214,7 +293,7 @@ describe("CorpusDocument", () => {
                 service: `https://iiif.example/image/p${index + 1}`,
             },
         }));
-        stubFetch(documentPayload({ canvases }));
+        stubFetch({ canvases });
         const { wrapper } = mountScreen((store) =>
             store.openDocument(uuid(1), "https://iiif.example/image/p2/"),
         );
@@ -225,15 +304,13 @@ describe("CorpusDocument", () => {
     });
 
     it("says on top of the page how many of its analyses the filters keep", async () => {
-        stubFetch(
-            documentPayload({
-                annotations: [
-                    annotation(1),
-                    annotation(2, { match: false }),
-                    annotation(3, { canvas: "https://iiif.example/c2" }),
-                ],
-            }),
-        );
+        stubFetch({
+            annotations: [
+                annotation(1),
+                annotation(2, { match: false }),
+                annotation(3, { canvas: "https://iiif.example/c2" }),
+            ],
+        });
         const { wrapper } = mountScreen();
         await flushPromises();
         expect(wrapper.find(".stage .page-count").text()).toBe(
@@ -243,11 +320,13 @@ describe("CorpusDocument", () => {
 
     describe("folio views", () => {
         function everything() {
-            return documentPayload({
+            return {
                 annotations: [annotation(1)],
                 characterizations: [
                     characterization(1, {
-                        evidence: [uuid(101)],
+                        evidence: [
+                            { id: uuid(101), name: label("MS1_f12_XRF_01") },
+                        ],
                         zone: {
                             canvas: "https://iiif.example/c1",
                             shape: { type: "point", x: 10, y: 10 },
@@ -264,7 +343,7 @@ describe("CorpusDocument", () => {
                         },
                     }),
                 ],
-            });
+            };
         }
 
         it("offers the views the page has and draws and lists the one chosen", async () => {
@@ -423,7 +502,7 @@ describe("CorpusDocument", () => {
                 match: true,
             },
         ];
-        stubFetch(documentPayload({ manifest: null, canvases: [], unlocated }));
+        stubFetch({ manifest: null, canvases: [], unlocated });
         const { wrapper } = mountScreen();
         await flushPromises();
         expect(wrapper.find(".on-this-page").text()).toContain("FORS_014");
@@ -448,14 +527,14 @@ describe("CorpusDocument", () => {
     });
 
     it("shows S7 for an unknown or refused document", async () => {
-        stubFetch(documentPayload(), 404);
+        stubFetch({}, 404);
         const { wrapper } = mountScreen();
         await flushPromises();
         expect(wrapper.text()).toContain("This item is not available.");
     });
 
     it("offers one way home when a document opened from the home is unavailable", async () => {
-        stubFetch(documentPayload(), 404);
+        stubFetch({}, 404);
         const { wrapper } = mountScreen();
         await flushPromises();
         const homeLabels = wrapper
@@ -486,7 +565,8 @@ describe("CorpusDocument", () => {
             query: "grain=documents",
             filterKey: "grain=documents",
             page: 1,
-            payload: searchResponse({ total: 30 }),
+            total: 30,
+            grain: "documents",
             scroll: 0,
             opened: uuid(1),
         });
@@ -506,19 +586,47 @@ describe("CorpusDocument", () => {
     it("counts its filters in this document only", async () => {
         const fetchMock = stubFetch();
         const { wrapper, store } = mountScreen();
-        store.setFilter("technique", ["http://example.org/xrf"]);
-        await flushPromises();
-        const search = fetchMock.mock.calls
+        await changeFilters(() =>
+            store.setFilter("technique", ["http://example.org/xrf"]),
+        );
+        const match = fetchMock.mock.calls
             .map(([url]) => String(url))
-            .filter((url) => url.includes("/search"))
+            .filter((url) => url.includes("/document-match/"))
             .at(-1)!;
-        const query = new URLSearchParams(search.split("?")[1]);
-        expect(query.get("document")).toBe(uuid(1));
-        expect(query.get("grain")).toBe("analyses");
+        expect(match.split("?")[0]).toBe(
+            `/en/api/explorer/document-match/${uuid(1)}`,
+        );
+        const query = new URLSearchParams(match.split("?")[1]);
+        expect(query.get("grain")).toBeNull();
         expect(query.get("technique")).toBe("http://example.org/xrf");
         expect(wrapper.find(".rail .rail-title").text()).toBe(
             "Filters of this document",
         );
+    });
+
+    it("searches a facet of this document through the server under the filters it shows", async () => {
+        const fetchMock = stubFetch({
+            annotations: [annotation(1)],
+            facets: [facet("project", 12)],
+        });
+        const { wrapper, store } = mountScreen();
+        await changeFilters(() => store.setFilter("technique", ["t1"]));
+        await wrapper.find(".rail input[type=search]").setValue("11");
+        await flushPromises();
+        const asked = fetchMock.mock.calls
+            .map(([url]) => String(url))
+            .filter((url) => url.includes("/facet/"));
+        expect(asked).toHaveLength(1);
+        const [path, search] = asked[0].split("?");
+        expect(path).toBe("/en/api/explorer/facet/project");
+        const query = new URLSearchParams(search);
+        expect(query.get("document")).toBe(uuid(1));
+        expect(query.get("technique")).toBe("t1");
+        expect(query.get("find")).toBe("11");
+        expect(query.get("grain")).toBeNull();
+        expect(
+            wrapper.findAll(".rail .value .label").map((item) => item.text()),
+        ).toEqual(["project 11"]);
     });
 
     it("goes back to the explorer home when opened from it", async () => {
@@ -532,17 +640,15 @@ describe("CorpusDocument", () => {
     });
 
     it("opens on the first page with results when filters are active and no page is named", async () => {
-        stubFetch(
-            documentPayload({
-                annotations: [
-                    annotation(1, { match: false }),
-                    annotation(2, {
-                        canvas: "https://iiif.example/c2",
-                        match: true,
-                    }),
-                ],
-            }),
-        );
+        stubFetch({
+            annotations: [
+                annotation(1, { match: false }),
+                annotation(2, {
+                    canvas: "https://iiif.example/c2",
+                    match: true,
+                }),
+            ],
+        });
         const { wrapper } = mountScreen((store) => {
             store.setFilter("technique", ["http://example.org/xrf"]);
             store.openDocument(uuid(1));
@@ -570,17 +676,15 @@ describe("CorpusDocument", () => {
     });
 
     it("stays on the page of the clicked zone of an analysis zoned on several pages", async () => {
-        stubFetch(
-            documentPayload({
-                annotations: [
-                    annotation(2, { key: "on-c1" }),
-                    annotation(2, {
-                        key: "on-c2",
-                        canvas: "https://iiif.example/c2",
-                    }),
-                ],
-            }),
-        );
+        stubFetch({
+            annotations: [
+                annotation(2, { key: "on-c1" }),
+                annotation(2, {
+                    key: "on-c2",
+                    canvas: "https://iiif.example/c2",
+                }),
+            ],
+        });
         const { store } = mountScreen();
         await flushPromises();
         store.setCanvas("https://iiif.example/c2");
@@ -594,13 +698,10 @@ describe("CorpusDocument", () => {
         const fetchMock = stubFetch();
         const { wrapper, store } = mountScreen();
         await flushPromises();
-        fetchMock.mockImplementation(async (url: string) =>
-            url.includes("/search")
-                ? jsonResponse(searchResponse({ results: [] }))
-                : jsonResponse({}, 503),
+        fetchMock.mockImplementation(async () => jsonResponse({}, 503));
+        await changeFilters(() =>
+            store.setFilter("technique", ["http://example.org/xrf"]),
         );
-        store.setFilter("technique", ["http://example.org/xrf"]);
-        await flushPromises();
         expect(wrapper.find(".document-bar h2").exists()).toBe(true);
         expect(wrapper.text()).toContain(
             "The service is not answering right now.",
@@ -680,14 +781,16 @@ describe("CorpusDocument", () => {
     });
 
     it("gives the keyboard focus to the new card's heading when a card opens a card of the other kind", async () => {
-        stubFetch(
-            documentPayload({
-                annotations: [annotation(1)],
-                characterizations: [
-                    characterization(1, { evidence: [uuid(101)] }),
-                ],
-            }),
-        );
+        stubFetch({
+            annotations: [annotation(1)],
+            characterizations: [
+                characterization(1, {
+                    evidence: [
+                        { id: uuid(101), name: label("MS1_f12_XRF_01") },
+                    ],
+                }),
+            ],
+        });
         const { wrapper, store } = mountScreen(undefined, {
             stubs: { AnalysisCard: false, CharacterizationCard: false },
             attachTo: document.body,
@@ -804,18 +907,16 @@ describe("CorpusDocument", () => {
         });
 
         it("lists in the legend only the techniques drawn on the page, with their counts", async () => {
-            stubFetch(
-                documentPayload({
-                    annotations: [
-                        annotation(1),
-                        annotation(2, {
-                            technique: technique("t:fors", "FORS", 2),
-                            canvas: "https://iiif.example/c2",
-                        }),
-                        annotation(3),
-                    ],
-                }),
-            );
+            stubFetch({
+                annotations: [
+                    annotation(1),
+                    annotation(2, {
+                        technique: technique("t:fors", "FORS", 2),
+                        canvas: "https://iiif.example/c2",
+                    }),
+                    annotation(3),
+                ],
+            });
             const { wrapper } = mountScreen();
             await flushPromises();
             expect(
@@ -830,37 +931,25 @@ describe("CorpusDocument", () => {
 
         it("draws a technique in the rail and on the folio in the colour the server gives it", async () => {
             const fors = technique("t:fors", "FORS", 7, "t:fors", "FORS");
-            stubFetch(
-                documentPayload({
-                    annotations: [annotation(1, { technique: fors })],
-                }),
-            );
-            const fetchMock = vi.mocked(fetch);
-            const document = fetchMock.getMockImplementation()!;
-            fetchMock.mockImplementation(async (url, init) =>
-                String(url).includes("/search")
-                    ? jsonResponse(
-                          searchResponse({
-                              results: [],
-                              facets: [
-                                  {
-                                      key: "technique",
-                                      group: "analysis",
-                                      values: [
-                                          facetValue("t:fors", "FORS", {
-                                              mark: {
-                                                  code: "FORS",
-                                                  colour: 7,
-                                                  family: "t:fors",
-                                              },
-                                          }),
-                                      ],
-                                  },
-                              ],
-                          }),
-                      )
-                    : document(url, init),
-            );
+            stubFetch({
+                annotations: [annotation(1, { technique: fors })],
+                facets: [
+                    {
+                        key: "technique",
+                        group: "analysis",
+                        values: [
+                            facetValue("t:fors", "FORS", {
+                                mark: {
+                                    code: "FORS",
+                                    colour: 7,
+                                    family: "t:fors",
+                                },
+                            }),
+                        ],
+                        total: 1,
+                    },
+                ],
+            });
             const { wrapper } = mountScreen();
             await flushPromises();
             const styles = wrapper

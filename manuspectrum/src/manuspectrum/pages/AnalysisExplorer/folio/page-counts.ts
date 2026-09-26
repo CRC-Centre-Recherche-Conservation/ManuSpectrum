@@ -1,7 +1,5 @@
-import type {
-    DocumentCanvas,
-    DocumentPayload,
-} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { DocumentCanvas } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { DocumentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 
 export interface PageCount {
     /** Analyses with a zone on the page, each counted once. */
@@ -25,7 +23,7 @@ function countOf(counts: Map<string, PageCount>, canvas: string): PageCount {
 /** What each page of a document holds, by canvas id. */
 export function pageCounts(
     payload: Pick<
-        DocumentPayload,
+        DocumentView,
         "annotations" | "characterizations" | "samples"
     >,
 ): Map<string, PageCount> {

@@ -37,11 +37,11 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 
 import type {
-    Annotation,
     CharacterizationSummary,
     DocumentCanvas,
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type {

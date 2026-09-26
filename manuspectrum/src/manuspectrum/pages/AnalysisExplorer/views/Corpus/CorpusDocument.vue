@@ -29,14 +29,15 @@ import SampleCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/docum
 import { searchOf } from "@/manuspectrum/public/useUrlState.ts";
 import { useAnalysis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnalysis.ts";
 import { useDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocument.ts";
+import {
+    facetQueryOf,
+    useDocumentMatch,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentMatch.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
-import {
-    searchQuery,
-    useSearch,
-} from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
+import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
+import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
-import { characterizationMatches } from "@/manuspectrum/pages/AnalysisExplorer/folio/matching.ts";
 import {
     firstMatchingPage,
     pageCounts,
@@ -56,9 +57,9 @@ import {
     introBar,
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { warmViewer } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 import {
     hasActiveFilters,
-    PAGE_SIZES,
     selectedFacets,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -88,22 +89,28 @@ const props = defineProps<{ documentId: string }>();
 
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
-const payload = useDocument(
+const payload = useDocument(() => props.documentId);
+const match = useDocumentMatch(
     () => props.documentId,
-    () => searchQuery(store.filters, 1),
-);
-const search = useSearch(() =>
-    searchQuery({ ...store.filters, grain: "analyses" }, 1, {
-        document: props.documentId,
-        size: PAGE_SIZES[0],
-    }),
+    () => filterQuery(store.filters),
 );
 const resultsMemo = inject(
     RESULTS_MEMO_KEY,
     () => ref<ResultsMemo | null>(null),
     true,
 );
-useFacetLabels(() => search.data.value?.facets);
+/** The match of this document; a match of the document shown before is not taken. */
+const currentMatch = computed(() =>
+    match.data.value?.documentId === props.documentId
+        ? match.data.value.match
+        : null,
+);
+/** The query the rail searches its facets with: the filters of the match shown, on this document. */
+const facetQuery = computed(() => {
+    const loaded = match.loaded.value;
+    return currentMatch.value && loaded ? facetQueryOf(loaded) : null;
+});
+useFacetLabels(() => currentMatch.value?.facets);
 const focusedAnalysis = computed(() =>
     store.focus?.kind === "analysis" ? store.focus.id : null,
 );
@@ -129,16 +136,31 @@ let openedOver: string | null = null;
 /** The `data-focus` of the list entry that opened the card, if a list entry did. */
 let openedFrom: string | null = null;
 
+/** The document's payload under the match of the current filters (every analysis kept until the first match). */
 const data = computed(() =>
-    payload.data.value?.id === props.documentId ? payload.data.value : null,
+    payload.data.value?.id === props.documentId
+        ? documentView(payload.data.value, currentMatch.value)
+        : null,
 );
-const failed = computed(
+const busy = computed(
     () =>
-        payload.status.value === "error" ||
-        payload.status.value === "unavailable",
+        payload.status.value === "loading" || match.status.value === "loading",
+);
+function hasFailed(status: string): boolean {
+    return status === "error" || status === "unavailable";
+}
+const failed = computed(
+    () => hasFailed(payload.status.value) || hasFailed(match.status.value),
+);
+const failedStatus = computed(() =>
+    payload.status.value === "error" || match.status.value === "error"
+        ? "error"
+        : "unavailable",
 );
 /** S7 replaces the screen only when this document was never shown; a failed reload is reported inline. */
-const isUnavailable = computed(() => failed.value && data.value === null);
+const isUnavailable = computed(
+    () => hasFailed(payload.status.value) && data.value === null,
+);
 const certaintyScale = computed(
     () => data.value?.certaintyScale ?? { levels: [] },
 );
@@ -290,7 +312,7 @@ const cardOpen = computed(
 );
 const lit = computed(() =>
     openCharacterization.value
-        ? new Set(openCharacterization.value.evidence)
+        ? new Set(openCharacterization.value.evidence.map((entry) => entry.id))
         : null,
 );
 const dimmedMaterials = computed(
@@ -299,11 +321,7 @@ const dimmedMaterials = computed(
             (data.value?.characterizations ?? [])
                 .filter(
                     (summary) =>
-                        !characterizationMatches(
-                            summary,
-                            store.filters,
-                            search.data.value?.facets ?? [],
-                        ),
+                        !data.value?.keptCharacterizations.has(summary.id),
                 )
                 .map((summary) => summary.id),
         ),
@@ -395,20 +413,21 @@ const backLabel = computed(() => {
     if (store.documentOrigin !== "results") {
         return $gettext("Back to the explorer home");
     }
-    const payload = resultsMemo.value?.payload;
-    if (!payload) return $gettext("Results");
-    const text = payload.results.some((hit) => hit.type === "analysis")
-        ? $ngettext(
-              "Results (%{n} analysis)",
-              "Results (%{n} analyses)",
-              payload.total,
-          )
-        : $ngettext(
-              "Results (%{n} document)",
-              "Results (%{n} documents)",
-              payload.total,
-          );
-    return interpolate(text, { n: payload.total }, true);
+    const shown = resultsMemo.value;
+    if (!shown) return $gettext("Results");
+    const text =
+        shown.grain === "analyses"
+            ? $ngettext(
+                  "Results (%{n} analysis)",
+                  "Results (%{n} analyses)",
+                  shown.total,
+              )
+            : $ngettext(
+                  "Results (%{n} document)",
+                  "Results (%{n} documents)",
+                  shown.total,
+              );
+    return interpolate(text, { n: shown.total }, true);
 });
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
@@ -444,16 +463,36 @@ watch(data, () => {
 
 /**
  * A document opened with active filters and no page named opens on the first
- * page with an analysis they keep; later filter changes do not move the page.
+ * page with an analysis they keep, once their match has arrived; later filter
+ * changes do not move the page.
  */
 watch(data, (current) => {
     if (!current || landedOn === current.id) return;
+    if (filtered.value && currentMatch.value === null) return;
     landedOn = current.id;
     if (store.document?.canvas || store.focus !== null || !filtered.value)
         return;
     const first = firstMatchingPage(current.canvases, perPage.value);
     if (first) store.setCanvas(first);
 });
+
+/** The preview of a focused analysis (Plotly for a spectrum) loads alongside its payload. */
+watch(
+    () => {
+        const id = focusedAnalysis.value;
+        const current = data.value;
+        if (id === null || current === null) return null;
+        return (
+            [...current.annotations, ...current.unlocated].find(
+                (entry) => entry.analysis === id,
+            )?.dataKind ?? null
+        );
+    },
+    (kind) => {
+        if (kind !== null) warmViewer(kind);
+    },
+    { immediate: true },
+);
 
 /**
  * Keeps the address of the history entry a card was opened over (the one
@@ -514,6 +553,12 @@ function followFocus(): void {
     if (pages.length > 0 && !pages.some((canvas) => canvas === here)) {
         store.setCanvas(pages[0]);
     }
+}
+
+/** Reloads what failed: the document, its match, or both. */
+function retry(): void {
+    if (hasFailed(payload.status.value)) payload.retry();
+    if (hasFailed(match.status.value)) match.retry();
 }
 
 function onSelect(focus: Focus): void {
@@ -627,7 +672,7 @@ function goHome(): void {
             </button>
         </nav>
         <BusyStatus
-            :busy="payload.status.value === 'loading'"
+            :busy="busy"
             :first="data === null"
         />
         <Teleport
@@ -647,7 +692,7 @@ function goHome(): void {
             v-if="isUnavailable"
             :status="payload.status.value === 'error' ? 'error' : 'unavailable'"
             :hide-home="store.documentOrigin !== 'results'"
-            @retry="payload.retry"
+            @retry="retry"
             @home="goHome"
         />
         <div
@@ -692,17 +737,13 @@ function goHome(): void {
             <DraftBanner :count="data.unpublishedCount" />
             <UnavailableState
                 v-if="failed"
-                :status="
-                    payload.status.value === 'error' ? 'error' : 'unavailable'
-                "
+                :status="failedStatus"
                 :hide-home="true"
-                @retry="payload.retry"
+                @retry="retry"
             />
             <div
                 class="workspace"
-                :aria-busy="
-                    payload.status.value === 'loading' ? 'true' : 'false'
-                "
+                :aria-busy="busy ? 'true' : 'false'"
                 @keydown="onWorkspaceKeydown"
             >
                 <RailPanel
@@ -712,9 +753,10 @@ function goHome(): void {
                     :show-label="showLabel"
                 >
                     <FacetRail
-                        :facets="search.data.value?.facets ?? []"
+                        :facets="currentMatch?.facets ?? []"
                         :selected="selectedFacets(store.filters)"
                         :count-hint="$gettext('%{n} in this document')"
+                        :facet-query="facetQuery"
                         @change="onFacetChange"
                     />
                     <p

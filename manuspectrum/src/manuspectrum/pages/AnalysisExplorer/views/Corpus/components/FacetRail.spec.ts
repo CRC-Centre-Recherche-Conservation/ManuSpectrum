@@ -1,18 +1,28 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 
 import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue";
 
+import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     facet,
     facetValue,
-    label,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
+import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
+
 import type { Facet } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
+vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+    generateArchesURL: (
+        name: string,
+        parameters: Record<string, string> = {},
+    ) => `/en/${name}/${parameters.key ?? ""}`,
+}));
 
 function mountRail(props: InstanceType<typeof FacetRail>["$props"]) {
     return mount(FacetRail, { props, global: { plugins: [PrimeVue] } });
@@ -76,9 +86,8 @@ describe("FacetRail", () => {
         ]);
     });
 
-    it("checks what the filters hold, not what the last payload said", () => {
+    it("checks what the filters hold", () => {
         const colour = facet("colour", 2);
-        colour.values[1].selected = true;
         const wrapper = mountRail({
             facets: [colour],
             selected: { colour: ["colour-0"] },
@@ -86,24 +95,12 @@ describe("FacetRail", () => {
         expect(checkedIds(wrapper)).toEqual(["colour-0"]);
     });
 
-    it("filters a long facet by a search box, ignoring accents and case", async () => {
-        const part: Facet = facet("part", 12);
-        part.values[10].label = label("Initiale « É » ornée");
+    it("has no search box without the filters of the facets", () => {
         const wrapper = mountRail({
-            facets: [part, facet("colour", 3)],
+            facets: [facet("part", 12)],
             selected: {},
         });
-        const boxes = wrapper.findAll("input[type=search]");
-        expect(boxes).toHaveLength(1);
-        await boxes[0].setValue("ORNÉE");
-        expect(
-            wrapper.findAll(".facet")[0].findAll("input[type=checkbox]"),
-        ).toHaveLength(1);
-        expect(wrapper.findAll(".facet")[0].text()).toContain(
-            "Initiale « É » ornée",
-        );
-        await boxes[0].setValue("zzz");
-        expect(wrapper.findAll(".facet")[0].text()).toContain("No match");
+        expect(wrapper.find("input[type=search]").exists()).toBe(false);
     });
 
     it("draws the swatch the server gives a colour and none without one", () => {
@@ -114,6 +111,7 @@ describe("FacetRail", () => {
                 facetValue("c1", "Azzurro", { swatch: "royalblue" }),
                 facetValue("c2", "Polychrome"),
             ],
+            total: 2,
         };
         const wrapper = mountRail({ facets: [colour], selected: {} });
         const rows = wrapper.findAll(".value");
@@ -135,6 +133,7 @@ describe("FacetRail", () => {
                     mark: { code: "OM", colour: null, family: "t:om" },
                 }),
             ],
+            total: 2,
         };
         const wrapper = mountRail({ facets: [technique], selected: {} });
         const rows = wrapper.findAll(".value");
@@ -226,10 +225,170 @@ describe("FacetRail", () => {
                     "ATRAMENTA — Encres ferrogalliques et carbonées",
                 ),
             ],
+            total: 1,
         };
         const wrapper = mountRail({ facets: [project], selected: {} });
         expect(wrapper.find(".value .label").attributes("title")).toBe(
             "ATRAMENTA — Encres ferrogalliques et carbonées",
         );
+    });
+});
+
+describe("FacetRail with a facet the server cut short", () => {
+    const fetchMock = vi.fn();
+    /** The first six parts of 20 and the selected one; the server holds the others. */
+    const full = facet("part", 20);
+    const cut: Facet = {
+        ...full,
+        values: [...full.values.slice(0, 6), full.values[15]],
+    };
+
+    function asked(): string[] {
+        return fetchMock.mock.calls.map(([url]) => String(url));
+    }
+
+    beforeEach(() => {
+        forgetPayloads();
+        fetchMock.mockReset();
+        fetchMock.mockImplementation(async (url: string) => {
+            const find = new URL(url, "http://x").searchParams.get("find");
+            return jsonResponse(
+                find
+                    ? {
+                          ...full,
+                          values: full.values.filter((value) =>
+                              value.label.value.endsWith(find),
+                          ),
+                      }
+                    : full,
+            );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+    });
+
+    it("counts every value on Show all and asks the server for them under the filters", async () => {
+        const wrapper = mountRail({
+            facets: [cut],
+            selected: { part: ["part-15"] },
+            facetQuery: "technique=t1",
+        });
+        expect(fetchMock).not.toHaveBeenCalled();
+        const more = wrapper.find(".more");
+        expect(more.text()).toBe("Show all (20)");
+        await more.trigger("click");
+        await flushPromises();
+        expect(asked()).toEqual([
+            "/en/manuspectrum:explorer-facet/part?technique=t1",
+        ]);
+        expect(wrapper.findAll("input[type=checkbox]")).toHaveLength(20);
+        expect(checkedIds(wrapper)).toEqual(["part-15"]);
+    });
+
+    it("searches the server once the typed text settles", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const wrapper = mountRail({
+            facets: [cut],
+            selected: {},
+            facetQuery: "",
+        });
+        const search = wrapper.find("input[type=search]");
+        await search.setValue("1");
+        await search.setValue("12");
+        await flushPromises();
+        expect(asked()).toEqual([
+            "/en/manuspectrum:explorer-facet/part?find=1",
+        ]);
+        await search.setValue("17");
+        await flushPromises();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        await flushPromises();
+        expect(asked()[1]).toBe("/en/manuspectrum:explorer-facet/part?find=17");
+        expect(
+            wrapper.findAll(".value .label").map((item) => item.text()),
+        ).toEqual(["part 17"]);
+    });
+
+    it("shows the server's answer to a search in a facet it holds whole", async () => {
+        const whole = facet("part", 12);
+        fetchMock.mockImplementation(async () =>
+            jsonResponse({ ...whole, values: [whole.values[3]] }),
+        );
+        const wrapper = mountRail({
+            facets: [whole],
+            selected: {},
+            facetQuery: "",
+        });
+        await wrapper.find("input[type=search]").setValue("ORNÉE");
+        await flushPromises();
+        expect(asked()).toEqual([
+            "/en/manuspectrum:explorer-facet/part?find=ORN%C3%89E",
+        ]);
+        expect(
+            wrapper.findAll(".value .label").map((item) => item.text()),
+        ).toEqual(["part 3"]);
+    });
+
+    it("keeps a ticked value shown when the server's answer lacks it", async () => {
+        const wrapper = mountRail({
+            facets: [cut],
+            selected: { part: ["part-15"] },
+            facetQuery: "",
+        });
+        await wrapper.find("input[type=search]").setValue("17");
+        await flushPromises();
+        expect(
+            wrapper.findAll(".value .label").map((item) => item.text()),
+        ).toEqual(["part 17", "part 15"]);
+        expect(checkedIds(wrapper)).toEqual(["part-15"]);
+    });
+
+    it("marks the values busy until the server answers the typed text", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const wrapper = mountRail({
+            facets: [cut],
+            selected: {},
+            facetQuery: "",
+        });
+        const search = wrapper.find("input[type=search]");
+        await search.setValue("1");
+        await flushPromises();
+        expect(wrapper.find(".values").classes()).not.toContain("busy");
+        await search.setValue("17");
+        expect(wrapper.find(".values").classes()).toContain("busy");
+        expect(wrapper.find(".values").attributes("aria-busy")).toBe("true");
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        await flushPromises();
+        expect(wrapper.find(".values").classes()).not.toContain("busy");
+    });
+
+    it("searches one document's facet under its scope and unfolds it without asking", async () => {
+        const whole = facet("part", 12);
+        const wrapper = mountRail({
+            facets: [whole],
+            selected: {},
+            facetQuery: "technique=t1&document=d1",
+        });
+        await wrapper.find(".more").trigger("click");
+        await flushPromises();
+        expect(fetchMock).not.toHaveBeenCalled();
+        await wrapper.find("input[type=search]").setValue("11");
+        await flushPromises();
+        expect(asked()).toEqual([
+            "/en/manuspectrum:explorer-facet/part?technique=t1&document=d1&find=11",
+        ]);
+    });
+
+    it("shows what it holds without the filters of the facets", async () => {
+        const wrapper = mountRail({ facets: [cut], selected: {} });
+        await wrapper.find(".more").trigger("click");
+        await flushPromises();
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(wrapper.findAll("input[type=checkbox]")).toHaveLength(7);
     });
 });
