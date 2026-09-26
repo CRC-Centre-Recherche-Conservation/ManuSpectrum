@@ -20,6 +20,7 @@ import unicodedata
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import nh3
 import orjson
@@ -1517,11 +1518,14 @@ _LOCAL_MANIFEST = re.compile(r"/manifest/(?P<uuid>[0-9a-fA-F-]{36})/?$")
 
 
 def manifest_json(url):
-    """Manifest JSON of *url*: a local ``/manifest/<uuid>`` is read from ``IIIFManifest`` in the database, never over HTTP."""
+    """Manifest JSON of *url*: a local ``/manifest/<uuid>`` is read from ``IIIFManifest`` in the database, never over HTTP.
+
+    The path of *url* names the manifest; its query and fragment are ignored.
+    """
     url = rewrite_legacy_url(url or "")
     if not url:
         return None
-    match = _LOCAL_MANIFEST.search(url)
+    match = _LOCAL_MANIFEST.search(urlsplit(url).path)
     if match and (
         url.startswith("/") or url.startswith(settings.PUBLIC_SERVER_ADDRESS)
     ):
