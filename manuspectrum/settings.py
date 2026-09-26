@@ -783,6 +783,12 @@ EXPLORER_TECHNIQUES_TTL = 600
 # (~3 MB each). Entries stored under a previous code prefix are never read again
 # and expire by this TTL.
 EXPLORER_BUNDLE_TTL = 2 * 60 * 60
+# Largest data package the Explorer streams (sum of the stored file sizes); above it, 413.
+EXPLORER_EXPORT_MAX_BYTES = 500 * 1024 * 1024
+# Most files one data package holds; above it, 413.
+EXPLORER_EXPORT_MAX_FILES = 2000
+# Most canvases one Explorer IIIF manifest lists; above it, 413.
+EXPLORER_MANIFEST_MAX_CANVASES = 1000
 
 try:
     from .package_settings import *
