@@ -12,6 +12,7 @@ import type {
     HomeResponse,
     SampleSummary,
     SearchResponse,
+    SharePayload,
     Technique,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -456,6 +457,45 @@ export function analysisPayload(
         reportUrl: `/en/report/${uuid(101)}`,
         certaintyScale: { levels: [] },
         unpublished: false,
+        ...overrides,
+    };
+}
+
+/** A share payload of a document with one analysis, no dataset, within the export bounds. */
+export function sharePayload(
+    overrides: Partial<SharePayload> = {},
+): SharePayload {
+    const query = `document=${uuid(1)}`;
+    const product = (path: string): string =>
+        `http://testserver/${path}?${query}&lang=en`;
+    return {
+        scope: {
+            kind: "document",
+            key: query,
+            analyses: 1,
+            characterizations: 0,
+            spectra: 1,
+            drafts: 0,
+            restricted: false,
+            restrictedAvailable: 0,
+            missing: [],
+        },
+        citations: [analysisPayload().citation],
+        parts: [
+            {
+                id: uuid(101),
+                name: label("MS1_f12_XRF_03"),
+                permalink: `http://testserver/report/${uuid(101)}`,
+            },
+        ],
+        availability: `The data are available in ManuSpectrum (http://testserver/report/${uuid(1)}).`,
+        export: { files: 2, bytes: 2_400_000, overLimit: false, documents: [] },
+        links: {
+            manifest: product("iiif/v3/explorer-manifest"),
+            seriesCsv: null,
+            export: product("api/explorer/export"),
+            exportRestricted: null,
+        },
         ...overrides,
     };
 }
