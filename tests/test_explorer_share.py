@@ -239,15 +239,37 @@ class ShareRouteTests(CorpusCase):
             sorted(d["id"] for d in documents),
             sorted(str(self.documents[k].pk) for k in ("open", "embargoed")),
         )
+        key_of = {
+            str(self.documents["open"].pk): f"an:{self.pk('open')}:-",
+            str(self.documents["embargoed"].pk): f"an:{self.pk('embargoed')}:-",
+        }
         for document in documents:
             assert_shape(self, document, "ShareDocument")
-            path = f"/api/explorer/export?document={document['id']}&lang=en"
+            path = f"/api/explorer/export?ids={key_of[document['id']]}&lang=en"
             self.assertEqual(document["path"], path)
             self.assertEqual(
                 document["url"], f"{settings.PUBLIC_SERVER_ADDRESS}{path[1:]}"
             )
         self.assertTrue(single["export"]["overLimit"])
         self.assertEqual(single["export"]["documents"], [])
+
+    @override_settings(EXPLORER_EXPORT_MAX_BYTES=1)
+    def test_a_project_over_the_limits_splits_into_its_items_per_document(self):
+        main = self.projects["main"]
+        self.tile(self.analyses["embargoed"], "analysis_by_project", self.refs(main))
+
+        documents = self.get(f"project={main.pk}").json()["export"]["documents"]
+
+        paths = {d["id"]: d["path"] for d in documents}
+        opened = str(self.documents["open"].pk)
+        self.assertEqual(
+            paths[opened],
+            f"/api/explorer/export?project={main.pk}&document={opened}&lang=en",
+        )
+        scope = resolve_scope(QueryDict(f"project={main.pk}&document={opened}"), "en")
+        self.assertEqual(scope.analyses, (self.pk("open"),))
+        self.assertEqual(scope.key, f"project={main.pk}&document={opened}")
+        self.assertEqual(scope.documents, (opened,))
 
     @override_settings(EXPLORER_EXPORT_MAX_FILES=1)
     def test_more_files_than_the_limit_is_over_the_limit(self):

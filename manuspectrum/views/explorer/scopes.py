@@ -65,8 +65,9 @@ class ExportScope:
     """One resolved export scope.
 
     ``key`` is the canonical query (``ids=<sorted keys that resolved>``,
-    ``document=<uuid>`` or ``project=<uuid>``, then ``&canvases=all`` when
-    it applies) and ``digest`` its 12-hex sha1, which names minted IIIF ids
+    ``document=<uuid>``, ``project=<uuid>`` or
+    ``project=<uuid>&document=<uuid>``, then ``&canvases=all`` when it
+    applies) and ``digest`` its 12-hex sha1, which names minted IIIF ids
     and file names. ``params`` are the ``(name, value)`` pairs of ``key`` and
     ``query`` their URL-encoded form, which every link to a product carries. ``analyses`` follow the corpus order of the bundle,
     ``characterizations`` and ``documents`` are sorted (documents by name).
@@ -134,8 +135,15 @@ def export_language(query):
 
 
 def _parameters(query):
-    """``(kind, value, canvases_all)`` of *query*, or ``ScopeError``."""
+    """``(kind, value, canvases_all, within)`` of *query*, or ``ScopeError``.
+
+    *within* is the document a ``project`` scope is narrowed to by a
+    ``document`` parameter given with it, else None.
+    """
     given = [kind for kind in SCOPE_KINDS if kind in query]
+    within = None
+    if given == ["document", "project"]:
+        within, given = _subject(query, "document"), ["project"]
     if len(given) != 1:
         raise ScopeError("exactly one scope parameter is expected")
     kind = given[0]
@@ -146,21 +154,25 @@ def _parameters(query):
         if not all(ITEM_KEY.match(key) for key in value):
             raise ScopeError("malformed key")
     else:
-        values = query.getlist(kind)
-        if len(values) != 1:
-            raise ScopeError("one subject is expected")
-        try:
-            value = str(uuid.UUID(values[0]))
-        except ValueError as error:
-            raise ScopeError("the subject is not a UUID") from error
+        value = _subject(query, kind)
     canvases = query.getlist("canvases")
     if canvases and (kind != "document" or canvases != ["all"]):
         raise ScopeError("canvases=all is for a document scope only")
-    return kind, value, bool(canvases)
+    return kind, value, bool(canvases), within
 
 
-def _items(kind, value, bundle):
-    """The items *bundle* holds for one scope, or None when its subject is not visible."""
+def _subject(query, kind):
+    values = query.getlist(kind)
+    if len(values) != 1:
+        raise ScopeError("one subject is expected")
+    try:
+        return str(uuid.UUID(values[0]))
+    except ValueError as error:
+        raise ScopeError("the subject is not a UUID") from error
+
+
+def _items(kind, value, bundle, within=None):
+    """The items *bundle* holds for one scope, or None when its subject (or *within*) is not visible."""
     visible = bundle.visible
     if kind == "document":
         if value not in visible.documents:
@@ -171,10 +183,15 @@ def _items(kind, value, bundle):
             {},
         )
     if kind == "project":
-        if value not in visible.projects:
+        if value not in visible.projects or (
+            within is not None and within not in visible.documents
+        ):
             return None
         analyses = frozenset(
-            row["id"] for row in bundle.rows if value in row["projects"]
+            row["id"]
+            for row in bundle.rows
+            if value in row["projects"]
+            and (within is None or bundle.chains.get(row["id"], (None,))[0] == within)
         )
         return _Items(
             analyses,
@@ -234,8 +251,10 @@ def resolve_scope(query, language):
 
     Exactly one of ``ids``, ``document`` and ``project`` is given: ``ids``
     holds at most ``EXPLORER_ITEMS_MAX`` keys, each matching ``ITEM_KEY``;
-    ``document`` and ``project`` a UUID. ``canvases=all`` goes with
-    ``document`` only. Anything else raises ``ScopeError``.
+    ``document`` and ``project`` a UUID. ``project`` may come with a
+    ``document``, which narrows it to its items on that document.
+    ``canvases=all`` goes with a ``document`` scope only. Anything else
+    raises ``ScopeError``.
 
     Whoever asks, the scope is resolved with the visitor's rights
     (``anonymous_user()``). A document or project outside the visitor's
@@ -248,10 +267,10 @@ def resolve_scope(query, language):
     keep an identified material; keys resolving to nothing visible go to
     ``missing``, and an ``ids`` scope with nothing left is None.
     """
-    kind, value, canvases_all = _parameters(query)
+    kind, value, canvases_all, within = _parameters(query)
     reader = anonymous_user()
     bundle = corpus_bundle(reader, language, ticket(reader, language))
-    items = _items(kind, value, bundle)
+    items = _items(kind, value, bundle, within)
     if items is None:
         return None
     kept = items.analyses | items.characterizations
@@ -261,6 +280,8 @@ def resolve_scope(query, language):
     missing = _missing(value, items) if kind == "ids" else ()
     named = ",".join(k for k in value if k not in missing) if kind == "ids" else value
     params = [(kind, named)]
+    if within:
+        params.append(("document", within))
     if canvases_all:
         params.append(("canvases", "all"))
     key = "&".join(f"{name}={v}" for name, v in params)
@@ -543,6 +564,36 @@ def scope_content(scope, keys=()):
     )
 
 
+def _per_document(scope):
+    """``{document: query}``: the part of *scope* on each of its documents, in ``scope.documents`` order.
+
+    A Selection keeps its keys whose analysis (or, for an identified
+    material, one of whose objects) is on the document; a project becomes
+    ``project=<uuid>&document=<uuid>``.
+    """
+    bundle = scope.bundle
+    if scope.kind == "project":
+        return {
+            d: urlencode([("project", scope.subject), ("document", d)])
+            for d in scope.documents
+        }
+    keys_of = {d: [] for d in scope.documents}
+    for key in scope.params[0][1].split(","):
+        prefix, rid, _ = ITEM_KEY.match(key).groups()
+        if prefix == "ch":
+            found = _documents(bundle, (), (rid,))
+        else:
+            found = bundle.chains.get(rid, (None,))[:1]
+        for d in found:
+            if d in keys_of:
+                keys_of[d].append(key)
+    return {
+        d: urlencode([("ids", ",".join(keys))], safe=":,")
+        for d, keys in keys_of.items()
+        if keys
+    }
+
+
 def share_payload(scope, accessed):
     """``SharePayload`` of *scope*: counts, citations, availability, export estimate and product links.
 
@@ -552,7 +603,7 @@ def share_payload(scope, accessed):
     the reader may name them. ``export`` sums the kept
     files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
     ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
-    one export per document. ``manifest`` is given only when the scope's
+    one export per document, holding the scope's items there (``_per_document``). ``manifest`` is given only when the scope's
     manifest holds a canvas (``has_canvases``), ``seriesCsv`` for a Selection
     holding spectra only. Each product is a ``product_link``: the panel follows
     its ``path`` and copies or hands external viewers its ``url``. *accessed*
@@ -590,9 +641,9 @@ def share_payload(scope, accessed):
             {
                 "id": d,
                 "name": bundle.label_of[d],
-                **product_link("explorer-export", f"document={d}", language),
+                **product_link("explorer-export", query, language),
             }
-            for d in scope.documents
+            for d, query in _per_document(scope).items()
         ]
     return {
         "scope": {

@@ -67,6 +67,22 @@ class ScopeTests(ReadRightsCase):
         with self.assertRaises(ScopeError):
             self.resolve("document=not-a-uuid")
 
+    def test_a_project_narrowed_to_a_document_keeps_its_items_there(self):
+        main, opened = self.projects["main"].pk, self.documents["open"].pk
+
+        scope = self.resolve(f"project={main}&document={opened}")
+        elsewhere = self.resolve(
+            f"project={main}&document={self.documents['embargoed'].pk}"
+        )
+
+        self.assertEqual(scope.analyses, (self.pk("open"),))
+        self.assertEqual(scope.subject, str(main))
+        self.assertEqual(elsewhere.analyses, ())
+        with self.assertRaises(ScopeError):
+            self.resolve(f"project={main}&document={opened}&ids=an:{self.pk('open')}:-")
+        with self.assertRaises(ScopeError):
+            self.resolve(f"project={main}&document={opened}&canvases=all")
+
     def test_canvases_all_outside_a_document_scope_is_a_bad_request(self):
         with self.assertRaises(ScopeError):
             self.resolve(f"project={self.projects['main'].pk}&canvases=all")
