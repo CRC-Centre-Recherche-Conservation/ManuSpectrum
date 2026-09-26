@@ -10,7 +10,10 @@ import json
 import zipfile
 from unittest import mock
 
+from django.core.cache import caches
+from django.db import connection
 from django.http import QueryDict
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import File
 
@@ -21,6 +24,8 @@ from manuspectrum.views.explorer_export import package
 from manuspectrum.views.explorer_scopes import resolve_scope
 
 UNKNOWN = "00000000-0000-4000-8000-00000000000c"
+EXPORT = "manuspectrum.views.explorer_export"
+CACHE_CALLS = ("get", "get_many", "set", "add", "delete")
 MARKER = b"hidden-spectrum-bytes"
 
 
@@ -178,6 +183,70 @@ class BoundsTests(ExportCase):
 
         with self.assertRaises(RuntimeError):
             b"".join(response.streaming_content)
+
+
+class EarlyRefusalTests(ExportCase):
+    def setUp(self):
+        super().setUp()
+        self.stored_file(self.analyses["open"], "X01.csv", b"1,2\n3,4\n")
+        self.stored_file(self.analyses["open"], "X01.mca", b"\x00" * 100)
+
+    def refused(self, **limits):
+        with (
+            self.settings(**limits),
+            mock.patch(f"{EXPORT}.analysis_zones", side_effect=AssertionError),
+            mock.patch(f"{EXPORT}._data_members", side_effect=AssertionError),
+            mock.patch(f"{EXPORT}.build_manifest", side_effect=AssertionError),
+        ):
+            return self.get(self.document_query())
+
+    def test_too_many_files_are_refused_before_any_member_is_built(self):
+        self.assert_bodyless(self.refused(EXPLORER_EXPORT_MAX_FILES=1), 413)
+
+    def test_too_many_bytes_are_refused_before_any_member_is_built(self):
+        self.assert_bodyless(self.refused(EXPLORER_EXPORT_MAX_BYTES=107), 413)
+
+
+class ConstantWorkTests(ExportCase):
+    def work(self, query):
+        """``(SQL queries, cache calls)`` of a warm ``package`` of *query*."""
+        with mock.patch(FETCH, side_effect=fetch):
+            scope = resolve_scope(QueryDict(query), self.anonymous, "en")
+            package(scope, EXPORTED)
+        backend = type(caches["default"])
+        calls = []
+
+        def spy(name):
+            real = getattr(backend, name)
+
+            def counted(cache, *args, **kwargs):
+                calls.append(name)
+                return real(cache, *args, **kwargs)
+
+            return counted
+
+        patches = [mock.patch.object(backend, n, spy(n)) for n in CACHE_CALLS]
+        with CaptureQueriesContext(connection) as queries:
+            with mock.patch(FETCH, side_effect=fetch):
+                for patch in patches:
+                    patch.start()
+                try:
+                    package(scope, EXPORTED)
+                finally:
+                    for patch in patches:
+                        patch.stop()
+        return len(queries), len(calls)
+
+    def test_reading_the_files_costs_the_same_for_one_file_or_many(self):
+        query = f"ids=an:{self.pk('open')}:-"
+        self.stored_file(self.analyses["open"], "X01.csv", b"1,2\n")
+        one = self.work(query)
+        for index in range(2, 7):
+            self.stored_file(self.analyses["open"], f"X0{index}.csv", b"1,2\n")
+
+        many = self.work(query)
+
+        self.assertEqual(many, one)
 
 
 class VisibilityTests(ExportCase):

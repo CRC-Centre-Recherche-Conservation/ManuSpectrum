@@ -31,7 +31,6 @@ from django.utils.translation import ngettext
 from django.views import View
 from zipstream import ZIP_STORED, ZipStream
 
-from manuspectrum.utils.public_visibility import readable_nodegroup_ids
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.views.explorer_api import _not_found
 from manuspectrum.views.explorer_citations import (
@@ -46,8 +45,8 @@ from manuspectrum.views.explorer_scopes import (
     export_language,
     resolve_scope,
     scope_content,
-    scope_file,
     share_link,
+    stored_sizes,
 )
 from manuspectrum.views.explorer_service import (
     ROLES,
@@ -170,9 +169,7 @@ def analysis_zones(scope):
     read; the canvas is resolved as ``build_manifest`` resolves it.
     """
     bundle = scope.bundle
-    readable = readable_nodegroup_ids(scope.reader) & readable_nodegroup_ids(
-        scope.viewer
-    )
+    readable = scope.nodegroups
     doc_values = Values(list(scope.documents), ["doc_manifest"], scope.reader)
     zone_node = role_node(*ROLES["zone"])
     zones = {}
@@ -630,10 +627,11 @@ def _built(name, data, media_type):
     return Member(name, len(data), None, data, media_type, None, None)
 
 
-def _data_members(scope, content, zones):
+def _data_members(scope, content, zones, stored):
     """``(members, unfetched)``: the data files and imaging manifests of *scope*, laid out ``data/<document>/<folio>/<analysis>/<file>``.
 
-    *unfetched* lists ``(analysis name, manifest URL)`` for each imaging
+    *stored* is the scope's ``stored_sizes``; an entry absent from it has no
+    member. *unfetched* lists ``(analysis name, manifest URL)`` for each imaging
     manifest that could not be read; it has no member.
     """
     bundle = scope.bundle
@@ -684,13 +682,9 @@ def _data_members(scope, content, zones):
                     )
                 )
                 continue
-            path = scope_file(scope, analysis_id, entry.get("id"))
-            if path is None:
+            if (analysis_id, entry.get("id")) not in stored:
                 continue
-            try:
-                size = os.path.getsize(path)
-            except OSError:
-                continue
+            path, size = stored[(analysis_id, entry.get("id"))]
             members.append(
                 Member(
                     arcname(
@@ -721,10 +715,11 @@ def package(scope, exported_at=None):
     the day of consultation of the citations. A manifest over
     ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases is left out and the README
     says why; imaging manifests go in as JSON, the README saying their images
-    are served by IIIF, and naming each one that could not be fetched. More data files than ``EXPLORER_EXPORT_MAX_FILES``,
-    or more of their bytes than ``EXPLORER_EXPORT_MAX_BYTES``, raise
-    ``ExportTooLarge`` before anything else is built and before any file is
-    opened.
+    are served by IIIF, and naming each one that could not be fetched. More
+    data files than ``EXPLORER_EXPORT_MAX_FILES``, or more of their bytes than
+    ``EXPLORER_EXPORT_MAX_BYTES``, raise ``ExportTooLarge`` right after the
+    scope's content is read: before zones, members, manifest or tables are
+    built and before any file is opened.
     """
     return _assemble(scope, exported_at or datetime.date.today())[0]
 
@@ -733,14 +728,20 @@ def _assemble(scope, exported_at):
     """``(members, content)`` of ``package``; *content* is the ``ScopeContent`` the RO-Crate reads."""
     language = scope.language
     content = scope_content(scope, ("statement_type", "statement_content"))
-    zones = analysis_zones(scope)
-    data, unfetched = _data_members(scope, content, zones)
-    files = [m for m in data if m.source is not None]
+    stored = stored_sizes(scope, content)
+    sizes = [
+        stored[(analysis_id, entry.get("id"))][1]
+        for analysis_id, entries in content.files.items()
+        for entry in entries
+        if (analysis_id, entry.get("id")) in stored
+    ]
     if (
-        len(files) > settings.EXPLORER_EXPORT_MAX_FILES
-        or sum(m.size for m in files) > settings.EXPLORER_EXPORT_MAX_BYTES
+        len(sizes) > settings.EXPLORER_EXPORT_MAX_FILES
+        or sum(sizes) > settings.EXPLORER_EXPORT_MAX_BYTES
     ):
         raise ExportTooLarge()
+    zones = analysis_zones(scope)
+    data, unfetched = _data_members(scope, content, zones, stored)
     citations = citation_entries(
         content.groups, language=language, accessed=exported_at
     )

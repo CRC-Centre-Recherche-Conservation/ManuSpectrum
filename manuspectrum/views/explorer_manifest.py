@@ -23,7 +23,6 @@ from django.utils.translation import ngettext
 
 from manuspectrum.constants.licenses import iiif_rights
 from manuspectrum.utils.iiif_tools import CanvasIIIF
-from manuspectrum.utils.public_visibility import readable_nodegroup_ids
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.views.explorer_conditions import conditions_of
 from manuspectrum.views.explorer_service import (
@@ -524,7 +523,7 @@ def build_manifest(scope):
     """
     bundle, language, reader = scope.bundle, scope.language, scope.reader
     mint_id = functools.partial(mint, scope.digest)
-    readable = readable_nodegroup_ids(reader) & readable_nodegroup_ids(scope.viewer)
+    readable = scope.nodegroups
     rows = {a: bundle.by_id[a] for a in scope.analyses}
     values = Values(list(scope.analyses), ANALYSIS_KEYS, reader)
     configs = renderer_configs(values, scope.analyses)

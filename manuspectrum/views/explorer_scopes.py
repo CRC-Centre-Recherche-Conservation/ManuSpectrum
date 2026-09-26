@@ -11,11 +11,13 @@ reader (``explorer_memo``) and the visibility memos. ``share_payload`` is the
 scope's summary for the « Share and export » panel, built per request.
 """
 
+import functools
 import hashlib
 import os
 import uuid
 from dataclasses import dataclass
 
+from arches.app.models.models import File
 from django.conf import settings
 from django.urls import reverse
 from django.utils import translation
@@ -47,7 +49,6 @@ from manuspectrum.views.explorer_service import (
     renderer_configs,
 )
 from manuspectrum.views.summary_service import _date
-from manuspectrum.views.spectrum_preview import file_record
 
 SCOPE_KINDS = ("ids", "document", "project")
 ROLE_OF_KIND = {"micro-imaging": "micro", "chemical-imaging": "imaging"}
@@ -75,6 +76,8 @@ class ExportScope:
     signed-in reader's default build only, the items left out for that
     reason. ``reader`` is whose rights build the products, ``viewer`` the
     requesting user, ``bundle`` the reader's corpus bundle in ``language``.
+    ``viewer_nodegroups``, ``nodegroups`` (read by both the reader and the
+    viewer) and ``file_nodegroups`` are read once per scope.
     """
 
     kind: str
@@ -94,6 +97,23 @@ class ExportScope:
     viewer: object
     bundle: object
     language: str
+
+    @functools.cached_property
+    def viewer_nodegroups(self):
+        """The nodegroup ids the viewer may read."""
+        return readable_nodegroup_ids(self.viewer)
+
+    @functools.cached_property
+    def nodegroups(self):
+        """The nodegroup ids both the reader and the viewer may read."""
+        if self.reader is self.viewer:
+            return self.viewer_nodegroups
+        return readable_nodegroup_ids(self.reader) & self.viewer_nodegroups
+
+    @functools.cached_property
+    def file_nodegroups(self):
+        """``{file role: nodegroup id}`` of the roles ``kept_files`` reads."""
+        return _role_nodegroups()
 
     def names_visible(self, resource_ids):
         """The ids among *resource_ids* a product may name: ``linkable`` for the reader and the viewer, sorted."""
@@ -310,10 +330,13 @@ def resolve_scope(query, user, language):
     )
 
 
-def _role_nodegroup(entry):
-    role = ROLE_OF_KIND.get(entry.get("dataKind"), "files")
-    node = role_node(*ROLES[role])
-    return node.nodegroup_id if node else None
+def _role_nodegroups():
+    """``{role: nodegroup id}`` of the file roles ``kept_files`` reads."""
+    found = {}
+    for role in {*ROLE_OF_KIND.values(), "files"}:
+        node = role_node(*ROLES[role])
+        found[role] = node.nodegroup_id if node else None
+    return found
 
 
 def kept_files(scope, analysis_id, files):
@@ -324,10 +347,12 @@ def kept_files(scope, analysis_id, files):
     ``n``. An entry whose role nodegroup the viewer cannot read is dropped.
     """
     narrowed = scope.narrowed.get(analysis_id)
-    readable = readable_nodegroup_ids(scope.viewer)
+    readable = scope.viewer_nodegroups
+    nodegroup_of = scope.file_nodegroups
     kept = []
     for entry in files:
-        if _role_nodegroup(entry) not in readable:
+        role = ROLE_OF_KIND.get(entry.get("dataKind"), "files")
+        if nodegroup_of[role] not in readable:
             continue
         if narrowed is not None:
             if entry.get("dataKind") == "chemical-imaging":
@@ -342,44 +367,90 @@ def kept_files(scope, analysis_id, files):
     return kept
 
 
-def scope_file(scope, analysis_id, file_id):
-    """The stored path of one file of *scope*, or None when a gate refuses it.
-
-    The file is read through its ``File`` row: the tile holding it belongs
-    to *analysis_id*, the analysis is in the scope (and, when narrowed, the
-    file is one of its named parts), and the tile's nodegroup is readable by
-    both the reader and the viewer. A file id found in tile data alone is
-    never trusted.
-    """
-    if analysis_id not in scope.analyses:
-        return None
+def _file_uuid(file_id):
     try:
-        file_id = str(uuid.UUID(str(file_id)))
+        return str(uuid.UUID(str(file_id)))
     except ValueError:
         return None
-    narrowed = scope.narrowed.get(analysis_id)
-    if narrowed is not None and f"file:{file_id}" not in narrowed:
-        return None
-    record = file_record(file_id)
-    if record is None:
-        return None
-    path, resource_id, _, nodegroup_id = record
-    if resource_id != analysis_id:
-        return None
-    if nodegroup_id not in readable_nodegroup_ids(scope.reader):
-        return None
-    if nodegroup_id not in readable_nodegroup_ids(scope.viewer):
-        return None
-    return path
 
 
-def _file_bytes(scope, analysis_id, entry):
-    """Stored size of one kept entry: its recorded ``size``, else the size on disk; imaging manifests weigh 0."""
+def scope_files(scope, wanted):
+    """``{(analysis id, file id): stored path}`` of the pairs of *wanted* the gates of *scope* let through.
+
+    Each file is read through its ``File`` row, all rows in one query: the
+    tile holding it belongs to the analysis, the analysis is in the scope
+    (and, when narrowed, the file is one of its named parts), and the tile's
+    nodegroup is in ``scope.nodegroups``. A file id found in tile data alone
+    is never trusted; a pair refused by a gate is absent from the answer.
+    """
+    asked = {}
+    for analysis_id, file_id in wanted:
+        normal = _file_uuid(file_id)
+        if normal is None or analysis_id not in scope.analyses:
+            continue
+        narrowed = scope.narrowed.get(analysis_id)
+        if narrowed is not None and f"file:{normal}" not in narrowed:
+            continue
+        asked[(analysis_id, file_id)] = normal
+    if not asked:
+        return {}
+    storage = File._meta.get_field("path").storage
+    rows = {
+        str(fileid): (name, str(resource_id), str(nodegroup_id))
+        for fileid, name, resource_id, nodegroup_id in File.objects.filter(
+            pk__in=set(asked.values()), tile__isnull=False
+        ).values_list(
+            "fileid", "path", "tile__resourceinstance_id", "tile__nodegroup_id"
+        )
+    }
+    found = {}
+    for (analysis_id, file_id), normal in asked.items():
+        name, resource_id, nodegroup_id = rows.get(normal, (None, None, None))
+        if name and resource_id == analysis_id and nodegroup_id in scope.nodegroups:
+            found[(analysis_id, file_id)] = storage.path(name)
+    return found
+
+
+def scope_file(scope, analysis_id, file_id):
+    """The stored path of one file of *scope*, or None when a gate of ``scope_files`` refuses it."""
+    return scope_files(scope, [(analysis_id, file_id)]).get((analysis_id, file_id))
+
+
+def stored_sizes(scope, content):
+    """``{(analysis id, file id): (path, size on disk)}`` of the data files of *content* that ``scope_files`` lets through.
+
+    Imaging entries (manifests) and files missing on disk are left out.
+    """
+    paths = scope_files(
+        scope,
+        [
+            (analysis_id, entry.get("id"))
+            for analysis_id, entries in content.files.items()
+            for entry in entries
+            if entry.get("dataKind") != "chemical-imaging"
+        ],
+    )
+    sizes = {}
+    for pair, path in paths.items():
+        try:
+            sizes[pair] = (path, os.path.getsize(path))
+        except OSError:
+            continue
+    return sizes
+
+
+def _recorded_size(entry):
+    size = entry.get("size")
+    return size if isinstance(size, int) and not isinstance(size, bool) else None
+
+
+def _file_bytes(entry, paths, analysis_id):
+    """Stored size of one kept entry: its recorded ``size``, else its size on disk (*paths* from ``scope_files``); imaging manifests weigh 0."""
     if entry.get("dataKind") == "chemical-imaging":
         return 0
-    if isinstance(entry.get("size"), int) and not isinstance(entry["size"], bool):
-        return entry["size"]
-    path = scope_file(scope, analysis_id, entry.get("id"))
+    if _recorded_size(entry) is not None:
+        return _recorded_size(entry)
+    path = paths.get((analysis_id, entry.get("id")))
     if path is None:
         return 0
     try:
@@ -510,11 +581,20 @@ def share_payload(scope, accessed):
     bundle, language = scope.bundle, scope.language
     content = scope_content(scope)
     rows = content.rows
+    unsized = scope_files(
+        scope,
+        [
+            (analysis_id, e.get("id"))
+            for analysis_id, kept in content.files.items()
+            for e in kept
+            if e.get("dataKind") != "chemical-imaging" and _recorded_size(e) is None
+        ],
+    )
     files_count = bytes_count = spectra = 0
     for row in rows:
         kept = content.files[row["id"]]
         files_count += len(kept)
-        bytes_count += sum(_file_bytes(scope, row["id"], e) for e in kept)
+        bytes_count += sum(_file_bytes(e, unsized, row["id"]) for e in kept)
         spectra += sum(
             1 for e in kept if e.get("dataKind") == "xy" and e.get("role") == "readable"
         )

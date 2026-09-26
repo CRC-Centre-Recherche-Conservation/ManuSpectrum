@@ -27,7 +27,7 @@ from manuspectrum.views.explorer_scopes import (
     export_language,
     kept_files,
     resolve_scope,
-    scope_file,
+    scope_files,
 )
 from manuspectrum.views.explorer_service import (
     Values,
@@ -86,7 +86,7 @@ def _curve_line(number, name, entry, entries, config, config_id):
 def _plan(scope):
     """``(comment lines, curves)`` of *scope*; each curve is ``(label, analysis id, file id, path, config)``.
 
-    A readable XY entry ``scope_file`` refuses is left out without a line.
+    A readable XY entry ``scope_files`` refuses is left out without a line.
     One under a no-derivatives licence, one outside ``XY_TEXT_FILE_FORMATS``
     or over ``SPECTRUM_PREVIEW_MAX_BYTES`` gets a comment line naming its
     file and is never read.
@@ -102,9 +102,8 @@ def _plan(scope):
     if scope.restricted:
         comments.append(_("Contains restricted-access data"))
     curves, per_analysis, per_curve = [], [], []
-    for analysis_id in scope.analyses:
-        name = scope.bundle.by_id[analysis_id]["name"]["value"]
-        entries = kept_files(
+    entries_of = {
+        analysis_id: kept_files(
             scope,
             analysis_id,
             analysis_files(
@@ -115,14 +114,26 @@ def _plan(scope):
                 configs=configs,
             ),
         )
-        readable = [
+        for analysis_id in scope.analyses
+    }
+    readable_of = {
+        analysis_id: [
             e
             for e in entries
             if e.get("dataKind") == "xy" and e.get("role") == "readable"
         ]
+        for analysis_id, entries in entries_of.items()
+    }
+    paths = scope_files(
+        scope,
+        [(a, e.get("id")) for a, readable in readable_of.items() for e in readable],
+    )
+    for analysis_id in scope.analyses:
+        name = scope.bundle.by_id[analysis_id]["name"]["value"]
+        entries, readable = entries_of[analysis_id], readable_of[analysis_id]
         listed = False
         for entry in readable:
-            path = scope_file(scope, analysis_id, entry.get("id"))
+            path = paths.get((analysis_id, entry.get("id")))
             if path is None:
                 continue
             listed = True
