@@ -16,7 +16,6 @@ import mimetypes
 import os
 import posixpath
 import re
-import struct
 from dataclasses import dataclass
 
 import orjson
@@ -870,35 +869,7 @@ def _filled(crate, members, digests):
     return {**crate, "@graph": graph}
 
 
-LOCAL_HEADER = b"PK\x03\x04"
-CENTRAL_HEADER = b"PK\x01\x02"
-
-
-def _dos_day(day):
-    """The ZIP (MS-DOS) time and date fields of *day* at 00:00, as stored in an entry header."""
-    return struct.pack("<HH", 0, (day.year - 1980) << 9 | day.month << 5 | day.day)
-
-
-def _restamp(header, signature, offset, stamp):
-    """*header* with the 4 bytes at *offset* (time, date) replaced by *stamp*; a header without *signature* raises ``RuntimeError``."""
-    if not header.startswith(signature):
-        raise RuntimeError("unexpected ZIP header layout")
-    return header[:offset] + stamp + header[offset + 4 :]
-
-
-class _Progress:
-    """How many member iterables the archive has started and finished reading."""
-
-    def __init__(self):
-        self.started = self.ended = 0
-
-    def track(self, chunks):
-        self.started += 1
-        yield from chunks
-        self.ended += 1
-
-
-def stream(members, crate, day):
+def stream(members, crate):
     """``(length, iterator)`` of the stored ZIP of *members* followed by ``ro-crate-metadata.json``.
 
     Every entry is ``ZIP_STORED`` and the stream is sized, so its length is
@@ -907,22 +878,14 @@ def stream(members, crate, day):
     collected on the way in the length of its placeholder (64 hexadecimal
     characters per checksum, sorted keys). A size that does not match raises
     ``RuntimeError`` inside the iterator.
-
-    Every entry is dated *day* at 00:00, in its local and its central header,
-    so the same data exported the same day gives the same bytes. zipstream-ng
-    dates an entry when it streams it and takes no date: the iterator holds
-    each chunk back by one, and the chunk yielded just before a member's
-    data is read is that member's local header; the one central header per
-    member follows the last member.
     """
     archive = ZipStream(compress_type=ZIP_STORED, sized=True)
-    progress, digests = _Progress(), {}
+    digests = {}
     for member in members:
         if member.source is None:
-            chunks = iter([member.data])
+            archive.add(member.data, member.arcname)
         else:
-            chunks = _file_chunks(member, digests)
-        archive.add(progress.track(chunks), member.arcname, size=member.size)
+            archive.add(_file_chunks(member, digests), member.arcname, size=member.size)
     placeholder = _crate_bytes(crate)
 
     def crate_chunks():
@@ -931,27 +894,8 @@ def stream(members, crate, day):
             raise RuntimeError("the RO-Crate metadata changed length")
         yield data
 
-    archive.add(progress.track(crate_chunks()), CRATE_NAME, size=len(placeholder))
-    count, stamp = len(members) + 1, _dos_day(day)
-
-    def dated():
-        held, headers, central = None, 0, None
-        for chunk in archive:
-            if progress.started > headers:
-                headers = progress.started
-                held = _restamp(held, LOCAL_HEADER, 10, stamp)
-            if held is not None:
-                yield held
-            if central is not None and central < count:
-                chunk = _restamp(chunk, CENTRAL_HEADER, 12, stamp)
-                central += 1
-            elif central is None and progress.ended == count:
-                central = 0
-            held = chunk
-        if held is not None:
-            yield held
-
-    return len(archive), dated()
+    archive.add(crate_chunks(), CRATE_NAME, size=len(placeholder))
+    return len(archive), iter(archive)
 
 
 def _too_large():
@@ -988,7 +932,7 @@ class ExplorerExportView(View):
             except ExportTooLarge:
                 return _too_large()
             crate = ro_crate(scope, members, exported_at, content)
-        length, body = stream(members, crate, exported_at)
+        length, body = stream(members, crate)
         response = StreamingHttpResponse(body, content_type="application/zip")
         response["Content-Length"] = str(length)
         response["Content-Disposition"] = content_disposition_header(

@@ -4,11 +4,9 @@ Usage:
     python manage.py test tests.test_explorer_export --settings="tests.test_settings"
 """
 
-import datetime
 import hashlib
 import io
 import json
-import time
 import zipfile
 from unittest import mock
 
@@ -118,21 +116,6 @@ class ArchiveTests(ExportCase):
 
         self.assertEqual(
             names, [m.arcname for m in members] + ["ro-crate-metadata.json"]
-        )
-
-    def test_every_entry_is_dated_the_export_day(self):
-        with self.archive(self.document_query()) as archive:
-            dates = {info.date_time for info in archive.infolist()}
-
-        self.assertEqual(dates, {datetime.date.today().timetuple()[:6]})
-
-    def test_two_downloads_of_the_same_data_are_byte_identical(self):
-        first = self.download(self.document_query())[1]
-        with mock.patch("time.localtime", return_value=time.localtime(0)):
-            second = self.download(self.document_query())[1]
-
-        self.assertEqual(
-            hashlib.sha256(first).hexdigest(), hashlib.sha256(second).hexdigest()
         )
 
     def test_the_download_is_a_private_attachment(self):
