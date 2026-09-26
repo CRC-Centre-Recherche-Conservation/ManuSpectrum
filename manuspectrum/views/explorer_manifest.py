@@ -1,31 +1,71 @@
 """The Explorer's IIIF Presentation 3 manifest of a scope (spec §11.1).
 
-Building blocks, without database access: minted ids, selectors and targets,
-source canvases (v2 or v3) as v3 canvases, and the data annotations of an
-analysis. Annotations keep the shape of the project's v3 annotation
+The building blocks work without database access: minted ids, selectors and
+targets, source canvases (v2 or v3) as v3 canvases, and the data annotations
+of an analysis. Annotations keep the shape of the project's v3 annotation
 serializer (``supplementing``, ``Dataset`` bodies, ``seeAlso`` report) so
-IIIF clients reading those read these the same way.
+IIIF clients reading those read these the same way. ``build_manifest``
+assembles the manifest of an ``ExportScope`` per request; nothing is
+memoised.
 """
 
+import functools
 import hashlib
 import re
-from urllib.parse import quote
+from collections import defaultdict
+from urllib.parse import quote, urlencode
 
 from django.conf import settings
 from django.urls import reverse
 from django.utils import translation
 from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 
 from manuspectrum.constants.licenses import iiif_rights
 from manuspectrum.utils.iiif_tools import CanvasIIIF
+from manuspectrum.utils.public_visibility import readable_nodegroup_ids
+from manuspectrum.utils.role_links import role_node
+from manuspectrum.views.explorer_conditions import conditions_of
+from manuspectrum.views.explorer_service import (
+    ROLES,
+    Values,
+    _annotations,
+    analysis_files,
+    canvas_index,
+    canvases_of,
+    characterization_summaries,
+    dataset_of,
+    document_characterizations,
+    manifest_json,
+    names,
+    permalink,
+    plain_text,
+    product_url,
+    renderer_configs,
+)
+from manuspectrum.views.explorer_scopes import kept_files
 from manuspectrum.views.explorer_values import rewrite_legacy_url
+from manuspectrum.views.summary_service import _date
 
 PRESENTATION_3 = "http://iiif.io/api/presentation/3/context.json"
 MEDIA_FRAGMENTS = "http://www.w3.org/TR/media-frags/"
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 OCTET_STREAM = "application/octet-stream"
+ANALYSIS_KEYS = [
+    "files",
+    "micro",
+    "imaging",
+    "dataset",
+    "end",
+    "statement_type",
+    "statement_content",
+]
 _LEVEL = re.compile(r"level([0-2])")
 _MIME = re.compile(r"^[a-z][a-z0-9.+-]*/[a-z0-9.+-]+$")
+
+
+class ManifestTooLarge(Exception):
+    """The manifest would hold more than ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases."""
 
 
 def mint(scope_digest, *parts):
@@ -313,3 +353,364 @@ def data_annotation(annotation_id, analysis, files, target, language):
             "seeAlso": see_also,
             "metadata": metadata,
         }
+
+
+def _source_canvases(manifest):
+    """``{canvas id: raw canvas}`` of a v2 or v3 manifest, in manifest order, ids with legacy hosts rewritten."""
+    if not isinstance(manifest, dict):
+        return {}
+    if CanvasIIIF.detect_version(manifest) == 3:
+        raw = manifest.get("items") or []
+    else:
+        raw = ((manifest.get("sequences") or [{}])[0] or {}).get("canvases") or []
+    found = {}
+    for canvas in raw:
+        canvas_id = canvas.get("id") or canvas.get("@id")
+        if canvas_id:
+            found.setdefault(rewrite_legacy_url(canvas_id), canvas)
+    return found
+
+
+def _key(text):
+    return hashlib.sha1(str(text).encode(), usedforsecurity=False).hexdigest()[:12]
+
+
+class _Canvases:
+    """The manifest's canvases in order, each id once, bounded by ``EXPLORER_MANIFEST_MAX_CANVASES``."""
+
+    def __init__(self):
+        self.items, self.ids = [], set()
+        self.limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
+
+    def add(self, canvas):
+        if canvas["id"] in self.ids:
+            return
+        if len(self.items) >= self.limit:
+            raise ManifestTooLarge()
+        self.items.append(canvas)
+        self.ids.add(canvas["id"])
+
+
+def _material_text(summary):
+    """Material names of an identified material summary, each with its certainty."""
+    texts = []
+    for material in summary["materials"]:
+        text = material["value"]["label"]["value"]
+        if material["confidence"]:
+            text += f" ({material['confidence']['label']['value']})"
+        texts.append(text)
+    return "; ".join(texts) or summary["name"]["value"]
+
+
+def _facts(scope, row, values, label_of, named):
+    """What ``data_annotation`` says of one analysis *row*."""
+    end = values.first(row["id"], "end")
+    end = _date(end) if isinstance(end, str) else None
+    dates = " – ".join(dict.fromkeys(d for d in (row["date"], end) if d))
+    type_node = values.node("statement_type")
+    content_node = values.node("statement_content")
+    conditions = (
+        conditions_of(
+            values.tiles(row["id"], "statement_content"),
+            type_node.nodeid if type_node else "",
+            content_node.nodeid,
+            scope.language,
+        )
+        if content_node
+        else []
+    )
+    document, component = scope.bundle.chains.get(row["id"], (None, None))
+    technique = row["technique"]
+    return {
+        "name": row["name"]["value"],
+        "permalink": permalink(row["id"]),
+        "dataset": dataset_of(values.first(row["id"], "dataset")),
+        "technique": technique["label"]["value"] if technique else None,
+        "dates": dates or None,
+        "operators": [
+            label_of[o]["value"]
+            for o in row["operators"]
+            if o in named and o in label_of
+        ],
+        "conditions": [plain_text(c["html"]) for c in conditions],
+        "document": label_of[document]["value"] if document in label_of else None,
+        "component": label_of[component]["value"] if component in label_of else None,
+    }
+
+
+def _layers(entry, folio_label, mint_id):
+    """Layer canvases of one kept imaging entry, labelled « <folio> — <layer> »."""
+    url = entry.get("downloadUrl") or ""
+    imaging = manifest_json(url) or {}
+    part_of = _absolute_or_self(url)
+    layers = []
+    for canvas, raw in zip(canvases_of(imaging), _source_canvases(imaging).values()):
+        label = " — ".join(t for t in (folio_label, canvas["label"]) if t)
+        layers.append(layer_canvas(raw, imaging, part_of, {"none": [label]}, mint_id))
+    return layers
+
+
+def _absolute_or_self(url):
+    return absolute_url(url) or url
+
+
+def _label(scope, folios, label_of):
+    if scope.kind == "project":
+        return names({scope.subject}, scope.language, scope.reader)[scope.subject][
+            "value"
+        ]
+    if len(scope.documents) == 1:
+        return ngettext(
+            "Selection of %(count)d page of %(document)s",
+            "Selection of %(count)d pages of %(document)s",
+            folios,
+        ) % {"count": folios, "document": label_of[scope.documents[0]]["value"]}
+    return ngettext(
+        "Selection of %(count)d page of %(documents)d documents",
+        "Selection of %(count)d pages of %(documents)d documents",
+        folios,
+    ) % {"count": folios, "documents": len(scope.documents)}
+
+
+def _homepage(scope):
+    """The Explorer page of the scope: its document, its project filter or its Selection."""
+    with translation.override(scope.language):
+        page = reverse("analysis-explorer").lstrip("/")
+    if scope.kind == "document":
+        query = urlencode({"doc": scope.subject})
+    elif scope.kind == "project":
+        query = urlencode({"project": scope.subject})
+    else:
+        query = f"sel={scope.key.split('&')[0].removeprefix('ids=')}"
+    return [
+        {
+            "id": f"{settings.PUBLIC_SERVER_ADDRESS}{page}?{query}",
+            "type": "Text",
+            "format": "text/html",
+            "label": {scope.language: [settings.APP_TITLE]},
+        }
+    ]
+
+
+def build_manifest(scope):
+    """The IIIF Presentation 3 manifest of *scope*, in ``scope.language``.
+
+    ``id`` is the manifest's own URL (``product_url``), ``homepage`` the
+    Explorer page of the scope. The label names the project of a project
+    scope, else the Selection (« Selection of n pages of <document> » or
+    « … of k documents »). The manifest carries no ``rights``; ``summary``
+    says when the scope holds drafts or restricted-access data.
+
+    Per document, in ``scope.documents`` order, its manifest (the
+    ``doc_manifest`` role, read by ``manifest_json``) gives the canvases:
+    those carrying a zone of a kept analysis or of a kept identified
+    material, or all of them with ``canvases_all``, each converted by
+    ``v3_canvas``. A canvas's ``annotations`` hold one ``data_annotation``
+    per analysis zone and one ``describing`` annotation per material zone
+    (a plain-text ``TextualBody`` naming the materials and their certainty).
+    Zones are read from the nodegroups both the reader and the viewer may
+    read. The layers of each kept imaging entry follow the canvas of the
+    analysis's first zone, labelled « <folio> — <layer> »; the layers of an
+    analysis without a zone follow the canvases of its document (or come
+    last). ``structures`` holds one Range per document and one per analysis
+    with imaging layers.
+
+    An analysis without a zone on a canvas of its document's manifest (none,
+    unreadable, or a zone on an unknown canvas) has no annotation and is
+    listed in the manifest's ``metadata`` with its permalink.
+
+    More than ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases (folios and
+    layers) raises ``ManifestTooLarge``.
+    """
+    bundle, language, reader = scope.bundle, scope.language, scope.reader
+    mint_id = functools.partial(mint, scope.digest)
+    readable = readable_nodegroup_ids(reader) & readable_nodegroup_ids(scope.viewer)
+    rows = {a: bundle.by_id[a] for a in scope.analyses}
+    values = Values(list(scope.analyses), ANALYSIS_KEYS, reader)
+    configs = renderer_configs(values, scope.analyses)
+    named = set(
+        scope.names_visible({o for row in rows.values() for o in row["operators"]})
+    )
+    label_of = dict(bundle.label_of)
+    label_of.update(names(named, language, reader))
+    facts = {a: _facts(scope, row, values, label_of, named) for a, row in rows.items()}
+    files = {
+        a: kept_files(
+            scope,
+            a,
+            analysis_files(a, reader, language, values=values, configs=configs),
+        )
+        for a in scope.analyses
+    }
+    imaging = {
+        a: [e for e in files[a] if e.get("dataKind") == "chemical-imaging"]
+        for a in scope.analyses
+    }
+    doc_values = Values(list(scope.documents), ["doc_manifest"], reader)
+    zone_node = role_node(*ROLES["zone"])
+    material_nodegroups = {
+        "own": getattr(role_node(*ROLES["ch_zone"]), "nodegroup_id", None),
+        "component": getattr(role_node(*ROLES["comp_zone"]), "nodegroup_id", None),
+    }
+    canvases, structures, unlocated, placed = _Canvases(), [], [], set()
+    layer_ranges = {}
+
+    def add_layers(analysis_id, folio_label):
+        placed.add(analysis_id)
+        for entry in imaging[analysis_id]:
+            for layer in _layers(entry, folio_label, mint_id):
+                canvases.add(layer)
+                layer_ranges.setdefault(analysis_id, []).append(layer["id"])
+
+    folios = 0
+    for document in scope.documents:
+        url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
+        source = manifest_json(url) if url else None
+        listed = canvases_of(source)
+        raw = _source_canvases(source)
+        position = {c["id"]: c for c in listed}
+        dims = canvas_index(listed)
+        analyses = [
+            a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
+        ]
+        zones, first = defaultdict(list), {}
+        for rid, feature, canvas, shape in _annotations(
+            zone_node, analyses, dims, readable
+        ):
+            if canvas in position:
+                zones[canvas].append((rid, feature, shape))
+                first.setdefault(rid, canvas)
+        materials = defaultdict(list)
+        chosen = [
+            c
+            for c in document_characterizations(bundle, document)
+            if c in set(scope.characterizations)
+        ]
+        for summary in characterization_summaries(
+            chosen,
+            bundle.visible,
+            reader,
+            language,
+            dims,
+            objects_of=bundle.links["objects"],
+            analysis_rows=bundle.by_id,
+        ):
+            zone = summary["zone"]
+            if (
+                zone
+                and zone["canvas"] in position
+                and material_nodegroups[zone["source"]] in readable
+            ):
+                materials[zone["canvas"]].append((summary, zone["shape"]))
+        if scope.canvases_all:
+            if len(listed) > canvases.limit:
+                raise ManifestTooLarge()
+            kept = [c["id"] for c in listed]
+        else:
+            kept = [c["id"] for c in listed if c["id"] in zones or c["id"] in materials]
+        after = defaultdict(list)
+        for analysis_id, canvas_id in first.items():
+            after[canvas_id].append(analysis_id)
+        folio_ids = []
+        for canvas_id in kept:
+            if canvas_id not in raw:
+                continue
+            canvas = v3_canvas(raw[canvas_id], source, url, mint_id)
+            items = [
+                data_annotation(
+                    mint_id("annotation", rid, feature),
+                    facts[rid],
+                    files[rid],
+                    target(canvas_id, url, shape),
+                    language,
+                )
+                for rid, feature, shape in zones.get(canvas_id, ())
+            ] + [
+                {
+                    "id": mint_id("material", summary["id"]),
+                    "type": "Annotation",
+                    "motivation": "describing",
+                    "label": {language: [summary["name"]["value"]]},
+                    "body": {
+                        "type": "TextualBody",
+                        "value": _material_text(summary),
+                        "format": "text/plain",
+                        "language": language,
+                    },
+                    "target": target(canvas_id, url, shape),
+                }
+                for summary, shape in materials.get(canvas_id, ())
+            ]
+            if items:
+                canvas["annotations"] = [
+                    {
+                        "id": mint_id("annotations", _key(canvas_id)),
+                        "type": "AnnotationPage",
+                        "items": items,
+                    }
+                ]
+            canvases.add(canvas)
+            folio_ids.append(canvas_id)
+            folios += 1
+            for analysis_id in after.get(canvas_id, ()):
+                add_layers(analysis_id, position[canvas_id]["label"])
+        for analysis_id in analyses:
+            if analysis_id not in first:
+                unlocated.append(analysis_id)
+                add_layers(analysis_id, facts[analysis_id]["name"])
+        if folio_ids:
+            structures.append(
+                {
+                    "id": mint_id("range", document),
+                    "type": "Range",
+                    "label": {language: [label_of[document]["value"]]},
+                    "items": [{"id": c, "type": "Canvas"} for c in folio_ids],
+                }
+            )
+    for analysis_id in scope.analyses:
+        if analysis_id not in placed:
+            unlocated.append(analysis_id)
+            add_layers(analysis_id, facts[analysis_id]["name"])
+    for analysis_id in scope.analyses:
+        if analysis_id in layer_ranges:
+            structures.append(
+                {
+                    "id": mint_id("range", analysis_id),
+                    "type": "Range",
+                    "label": {language: [facts[analysis_id]["name"]]},
+                    "items": [
+                        {"id": c, "type": "Canvas"} for c in layer_ranges[analysis_id]
+                    ],
+                }
+            )
+
+    manifest = {
+        "@context": PRESENTATION_3,
+        "id": product_url("iiif-v3-explorer-manifest", scope.key, language),
+        "type": "Manifest",
+        "label": {language: [_label(scope, folios, label_of)]},
+    }
+    summary = []
+    if scope.drafts:
+        summary.append(_("Contains drafts"))
+    if scope.restricted:
+        summary.append(_("Contains restricted-access data"))
+    if summary:
+        manifest["summary"] = {language: summary}
+    if unlocated:
+        manifest["metadata"] = [
+            {
+                "label": {language: [_("Without a position on the image")]},
+                "value": {
+                    language: [
+                        f"{facts[a]['name']} — {facts[a]['permalink']}"
+                        for a in unlocated
+                    ]
+                },
+            }
+        ]
+    manifest["homepage"] = _homepage(scope)
+    manifest["items"] = canvases.items
+    if structures:
+        manifest["structures"] = structures
+    return manifest

@@ -34,7 +34,13 @@ from django.views.decorators.gzip import gzip_page
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import is_connected
 from manuspectrum.views import explorer_memo
-from manuspectrum.views.explorer_scopes import ScopeError, resolve_scope, share_payload
+from manuspectrum.views.explorer_manifest import ManifestTooLarge, build_manifest
+from manuspectrum.views.explorer_scopes import (
+    ScopeError,
+    export_language,
+    resolve_scope,
+    share_payload,
+)
 from manuspectrum.views.explorer_service import (
     FACET_KEYS,
     analysis_payload,
@@ -51,6 +57,9 @@ from manuspectrum.views.explorer_service import (
 )
 
 HOME_DAY_MARGIN = datetime.timedelta(days=1)
+IIIF_MEDIA_TYPE = (
+    'application/ld+json;profile="http://iiif.io/api/presentation/3/context.json"'
+)
 
 
 def _shared(request):
@@ -64,7 +73,7 @@ def _not_found():
     return response
 
 
-def _answer(request, build, token=None):
+def _answer(request, build, token=None, content_type="application/json"):
     """The HTTP answer for the payload ``build()`` returns; None is the not-found answer.
 
     *token* names the payload before it is built; without it the ETag is the
@@ -79,13 +88,13 @@ def _answer(request, build, token=None):
         return _not_found()
     body = orjson.dumps(payload)
     if not shared:
-        response = HttpResponse(body, content_type="application/json")
+        response = HttpResponse(body, content_type=content_type)
         response["Cache-Control"] = "private, no-store"
         return response
     etag = etag or '"%s"' % hashlib.md5(body, usedforsecurity=False).hexdigest()
     if etag_already_held(request, etag):
         return _not_modified(etag)
-    response = HttpResponse(body, content_type="application/json")
+    response = HttpResponse(body, content_type=content_type)
     response["ETag"] = etag
     response["Cache-Control"] = "public, no-cache"
     return response
@@ -281,11 +290,36 @@ class ExplorerShareView(View):
         return _answer(request, lambda: share_payload(scope, datetime.date.today()))
 
 
+@method_decorator(gzip_page, name="dispatch")
 class ExplorerManifestView(View):
-    """``GET /iiif/v3/explorer-manifest``: the IIIF manifest of a scope; answers the bodyless 404 until its builder is registered."""
+    """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all][&restricted=1][&lang=]``: the IIIF v3 manifest of a scope.
+
+    ``lang`` absent is ``LANGUAGE_CODE``; an unknown language or malformed
+    scope parameters answer a bodyless 400, a scope with nothing visible the
+    bodyless 404, a manifest over ``EXPLORER_MANIFEST_MAX_CANVASES``
+    canvases a bodyless 413. The visitor's ETag is the digest of the body:
+    the manifest embeds source manifests the data version does not follow.
+    """
 
     def get(self, request):
-        return _not_found()
+        try:
+            language = export_language(request.GET)
+        except ScopeError:
+            return HttpResponseBadRequest()
+        with translation.override(language):
+            try:
+                scope = resolve_scope(request.GET, request.user, language)
+            except ScopeError:
+                return HttpResponseBadRequest()
+            if scope is None:
+                return _not_found()
+            try:
+                manifest = build_manifest(scope)
+            except ManifestTooLarge:
+                response = HttpResponse(status=413)
+                response["Cache-Control"] = "private, no-store"
+                return response
+        return _answer(request, lambda: manifest, content_type=IIIF_MEDIA_TYPE)
 
 
 class UnservedProductView(View):

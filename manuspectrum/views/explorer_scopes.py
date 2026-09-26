@@ -61,9 +61,9 @@ class ScopeError(ValueError):
 class ExportScope:
     """One resolved export scope.
 
-    ``key`` is the canonical query (``ids=<sorted keys>``, ``document=<uuid>``
-    or ``project=<uuid>``, then ``&canvases=all`` and ``&restricted=1`` when
-    they apply) and ``digest`` its 12-hex sha1, which names minted IIIF ids
+    ``key`` is the canonical query (``ids=<sorted keys that resolved>``,
+    ``document=<uuid>`` or ``project=<uuid>``, then ``&canvases=all`` and
+    ``&restricted=1`` when they apply) and ``digest`` its 12-hex sha1, which names minted IIIF ids
     and file names. ``analyses`` follow the corpus order of the bundle,
     ``characterizations`` and ``documents`` are sorted (documents by name).
     ``narrowed`` maps an analysis id to the ``file:<id>`` / ``layer:<n>``
@@ -276,7 +276,9 @@ def resolve_scope(query, user, language):
         return None
     restricted = restricted_build and bool(kept - visible_set(anonymous_user()).ids)
 
-    key = f"{kind}={','.join(value) if kind == 'ids' else value}"
+    missing = _missing(value, items) if kind == "ids" else ()
+    named = ",".join(k for k in value if k not in missing) if kind == "ids" else value
+    key = f"{kind}={named}"
     if canvases_all:
         key += "&canvases=all"
     if restricted:
@@ -296,7 +298,7 @@ def resolve_scope(query, user, language):
             if viewer_ids is None or d in viewer_ids
         ),
         narrowed=items.narrowed,
-        missing=_missing(value, items) if kind == "ids" else (),
+        missing=missing,
         drafts=len(kept & held.visible.unpublished),
         restricted=restricted,
         restricted_available=restricted_available,

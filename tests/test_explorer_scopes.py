@@ -146,7 +146,7 @@ class ScopeTests(ReadRightsCase):
         self.assertEqual(scope.narrowed, {})
         self.assertEqual(
             scope.key,
-            "ids=" + ",".join(sorted([kept, material, hidden, unknown, not_whole])),
+            "ids=" + ",".join(sorted([kept, material])),
         )
 
     def test_ids_with_no_visible_key_resolve_to_none(self):

@@ -4391,6 +4391,48 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr "Les données sont disponibles dans %(site)s (%(permalink)s)."
 
+#: views/explorer_manifest.py
+msgid "Technique"
+msgstr "Technique"
+
+#: views/explorer_manifest.py
+msgid "Dates"
+msgstr "Dates"
+
+#: views/explorer_manifest.py
+msgid "Operators"
+msgstr "Opérateurs"
+
+#: views/explorer_manifest.py
+msgid "Conditions"
+msgstr "Conditions"
+
+#: views/explorer_manifest.py
+msgid "Contains drafts"
+msgstr "Contient des brouillons"
+
+#: views/explorer_manifest.py
+msgid "Contains restricted-access data"
+msgstr "Contient des données à accès restreint"
+
+#: views/explorer_manifest.py
+msgid "Without a position on the image"
+msgstr "Sans position sur l'image"
+
+#: views/explorer_manifest.py
+#, python-format
+msgid "Selection of %(count)d page of %(document)s"
+msgid_plural "Selection of %(count)d pages of %(document)s"
+msgstr[0] "Sélection de %(count)d folio de %(document)s"
+msgstr[1] "Sélection de %(count)d folios de %(document)s"
+
+#: views/explorer_manifest.py
+#, python-format
+msgid "Selection of %(count)d page of %(documents)d documents"
+msgid_plural "Selection of %(count)d pages of %(documents)d documents"
+msgstr[0] "Sélection de %(count)d folio de %(documents)d documents"
+msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
+
 #~ msgid "XRF"
 #~ msgstr "XRF"
 
