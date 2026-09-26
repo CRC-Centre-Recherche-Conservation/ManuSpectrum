@@ -685,7 +685,7 @@ class AnalysisRouteTests(CorpusCase):
         for text in ("Robinet, L.", "HEU, S. 2024", "EMMA", "doi.org/10.48579"):
             self.assertIn(text, citation["text"])
         self.assertIn(permalink, payload["availability"])
-        self.assertIn("https://doi.org/10.48579/pro/zeejth", payload["availability"])
+        self.assertIn("https://doi.org/10.48579/PRO/ZEEJTH", payload["availability"])
 
     def test_an_analysis_without_dataset_is_cited_as_its_record(self):
         analysis = str(self.analyses["on_document"].pk)
