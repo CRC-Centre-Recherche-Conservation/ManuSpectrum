@@ -4477,6 +4477,83 @@ msgstr ""
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
 
+#: templates/explorer/export_readme.md
+#, python-format
+msgid "Data package exported from %(site)s on %(date)s."
+msgstr "Paquet de données exporté de %(site)s le %(date)s."
+
+#: templates/explorer/export_readme.md
+msgid "Contents"
+msgstr "Contenu"
+
+#: templates/explorer/export_readme.md
+msgid "this file."
+msgstr "ce fichier."
+
+#: templates/explorer/export_readme.md
+msgid "the data files, raw and readable, unchanged."
+msgstr "les fichiers de données, bruts et lisibles, inchangés."
+
+#: templates/explorer/export_readme.md
+msgid "one row per analysis: technique, object, zone, operators, dates, instrument, projects, measurement conditions, licences, dataset, permalink."
+msgstr "une ligne par analyse : technique, objet, zone, opérateurs, dates, instrument, projets, conditions de mesure, licences, jeu de données, permalien."
+
+#: templates/explorer/export_readme.md
+msgid "one row per identified material: materials and certainty, colours, layers, elements by level, analyses cited in evidence, note."
+msgstr "une ligne par matériau identifié : matériaux et degré de certitude, couleurs, couches, éléments par niveau, analyses citées en preuve, note."
+
+#: templates/explorer/export_readme.md
+msgid "the citations in BibTeX, RIS and CSL-JSON."
+msgstr "les citations en BibTeX, RIS et CSL-JSON."
+
+#: templates/explorer/export_readme.md
+msgid "the IIIF Presentation 3 manifest of the same scope."
+msgstr "le manifeste IIIF Presentation 3 de la même portée."
+
+#: templates/explorer/export_readme.md
+msgid "the RO-Crate 1.1 description of the package, with the SHA-256 checksum of every file."
+msgstr "la description RO-Crate 1.1 du paquet, avec la somme de contrôle SHA-256 de chaque fichier."
+
+#: templates/explorer/export_readme.md
+msgid "Data availability"
+msgstr "Disponibilité des données"
+
+#: templates/explorer/export_readme.md
+msgid "The data come from the datasets below; cite and reuse them by their identifier."
+msgstr "Les données proviennent des jeux de données ci-dessous ; citez-les et réutilisez-les par leur identifiant."
+
+#: templates/explorer/export_readme.md views/explorer_export.py
+msgid "Licences per file"
+msgstr "Licences par fichier"
+
+#: templates/explorer/export_readme.md
+msgid "Size (bytes)"
+msgstr "Taille (octets)"
+
+#: templates/explorer/export_readme.md
+msgid "No data file."
+msgstr "Aucun fichier de données."
+
+#: views/explorer_export.py
+msgid "Each file carries its own licence, given with the file."
+msgstr "Chaque fichier porte sa propre licence, indiquée avec le fichier."
+
+#: views/explorer_export.py
+#, python-format
+msgid "The IIIF manifest of this scope is too large to be included (more than %(count)d canvases): open it by document."
+msgstr "Le manifeste IIIF de cette portée est trop volumineux pour être inclus (plus de %(count)d canvases) : ouvrez-le par document."
+
+#: views/explorer_export.py
+msgid "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images are served by IIIF image servers and are not in the package."
+msgstr "L'imagerie chimique est fournie sous forme de manifestes IIIF (imaging-<n>.json) ; ses images sont servies par des serveurs d'images IIIF et ne sont pas dans le paquet."
+
+#: views/explorer_export.py
+#, python-format
+msgid "Selection of %(count)d item"
+msgid_plural "Selection of %(count)d items"
+msgstr[0] "Sélection de %(count)d élément"
+msgstr[1] "Sélection de %(count)d éléments"
+
 #~ msgid "XRF"
 #~ msgstr "XRF"
 

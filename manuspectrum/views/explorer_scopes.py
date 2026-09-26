@@ -388,7 +388,7 @@ def _file_bytes(scope, analysis_id, entry):
         return 0
 
 
-def _share_link(scope):
+def share_link(scope):
     """Where the whole scope is available on the site: the report of its document or project, else the Explorer with the Selection."""
     if scope.subject:
         return permalink(scope.subject)
@@ -399,23 +399,40 @@ def _share_link(scope):
     )
 
 
-def share_payload(scope, accessed):
-    """``SharePayload`` of *scope*: counts, citations, parts, availability, export estimate and product links.
+CONTENT_KEYS = ("dataset", "end", "files", "micro", "imaging")
 
-    Citations follow ``citation_entries`` (one per dataset, then one per
-    analysis without dataset); operators and projects are named only when
-    both the reader and the viewer may name them. ``export`` sums the kept
-    files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
-    ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
-    one export per document. ``seriesCsv`` is given for a Selection holding
-    spectra only, ``exportRestricted`` when the viewer's default build left
-    restricted items out. *accessed* is the day of consultation.
+
+@dataclass(frozen=True, eq=False)
+class ScopeContent:
+    """What the products of a scope read of its analyses, in one batched pass.
+
+    ``rows`` are the corpus rows of ``scope.analyses`` in order, ``values``
+    their tile values (``CONTENT_KEYS`` and any key asked for), ``files`` the
+    kept ``FileEntry`` list of each analysis (``kept_files``), ``projects``
+    the visible projects of each analysis, ``named`` the operators and
+    projects both the reader and the viewer may name and ``label_of`` their
+    names. ``groups`` are the ``citation_entries`` groups, one per analysis,
+    ``datasets`` and ``licences`` what ``availability`` reads.
     """
+
+    rows: list
+    values: object
+    files: dict
+    projects: dict
+    named: frozenset
+    label_of: dict
+    groups: list
+    datasets: list
+    licences: list
+
+
+def scope_content(scope, keys=()):
+    """``ScopeContent`` of *scope*; *keys* are further ``ROLES`` read with the content keys."""
     bundle, language = scope.bundle, scope.language
     rows = [bundle.by_id[a] for a in scope.analyses]
     values = Values(
         list(scope.analyses),
-        ["dataset", "end", "files", "micro", "imaging"],
+        list(dict.fromkeys([*CONTENT_KEYS, *keys])),
         scope.reader,
     )
     configs = renderer_configs(values, scope.analyses)
@@ -428,32 +445,26 @@ def share_payload(scope, accessed):
         ]
         for row in rows
     }
-    named = set(
+    named = frozenset(
         scope.names_visible(
             {o for row in rows for o in row["operators"]}
             | {p for ids in projects_of.values() for p in ids}
         )
     )
     label_of = names(named, language, scope.reader)
-    groups, all_licences, datasets = [], [], []
-    files_count = bytes_count = spectra = 0
+    files, groups, datasets, all_licences = {}, [], [], []
     for row in rows:
         analysis_id = row["id"]
-        kept = kept_files(
+        files[analysis_id] = kept_files(
             scope,
             analysis_id,
             analysis_files(
                 analysis_id, scope.reader, language, values=values, configs=configs
             ),
         )
-        files_count += len(kept)
-        bytes_count += sum(_file_bytes(scope, analysis_id, e) for e in kept)
-        spectra += sum(
-            1 for e in kept if e.get("dataKind") == "xy" and e.get("role") == "readable"
-        )
         end = values.first(analysis_id, "end")
         dataset = dataset_of(values.first(analysis_id, "dataset"))
-        licences = licence_labels(kept)
+        licences = licence_labels(files[analysis_id])
         all_licences += licences
         datasets.append(dataset)
         groups.append(
@@ -470,6 +481,42 @@ def share_payload(scope, accessed):
                 ],
                 licences,
             )
+        )
+    return ScopeContent(
+        rows=rows,
+        values=values,
+        files=files,
+        projects=projects_of,
+        named=named,
+        label_of=label_of,
+        groups=groups,
+        datasets=datasets,
+        licences=all_licences,
+    )
+
+
+def share_payload(scope, accessed):
+    """``SharePayload`` of *scope*: counts, citations, parts, availability, export estimate and product links.
+
+    Citations follow ``citation_entries`` (one per dataset, then one per
+    analysis without dataset); operators and projects are named only when
+    both the reader and the viewer may name them. ``export`` sums the kept
+    files (``kept_files``); over ``EXPLORER_EXPORT_MAX_BYTES`` or
+    ``EXPLORER_EXPORT_MAX_FILES`` a scope spanning several documents lists
+    one export per document. ``seriesCsv`` is given for a Selection holding
+    spectra only, ``exportRestricted`` when the viewer's default build left
+    restricted items out. *accessed* is the day of consultation.
+    """
+    bundle, language = scope.bundle, scope.language
+    content = scope_content(scope)
+    rows = content.rows
+    files_count = bytes_count = spectra = 0
+    for row in rows:
+        kept = content.files[row["id"]]
+        files_count += len(kept)
+        bytes_count += sum(_file_bytes(scope, row["id"], e) for e in kept)
+        spectra += sum(
+            1 for e in kept if e.get("dataKind") == "xy" and e.get("role") == "readable"
         )
     over = (
         bytes_count > settings.EXPLORER_EXPORT_MAX_BYTES
@@ -498,15 +545,17 @@ def share_payload(scope, accessed):
             "restrictedAvailable": scope.restricted_available,
             "missing": list(scope.missing),
         },
-        "citations": citation_entries(groups, language=language, accessed=accessed),
+        "citations": citation_entries(
+            content.groups, language=language, accessed=accessed
+        ),
         "parts": [
             {"id": row["id"], "name": row["name"], "permalink": permalink(row["id"])}
             for row in rows
         ],
         "availability": availability(
-            datasets,
-            licences=all_licences,
-            permalink=_share_link(scope),
+            content.datasets,
+            licences=content.licences,
+            permalink=share_link(scope),
             language=language,
         ),
         "export": {
