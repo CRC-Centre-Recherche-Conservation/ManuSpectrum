@@ -25,18 +25,21 @@ collected after it.
 Stale while rebuilding. When the current key holds no bundle but a live
 bundle of the same scope and language was built under the same permission
 gates (epoch, hidden resources, readable nodegroups and models: everything
-but the data), ``ticket`` names that bundle and the reader is answered from
-it at once, while one rebuild of the current key runs in the background:
-the caller that takes the key's build lock starts it through ``spawn``, the
-others keep reading the previous bundle until the new one is stored. A
-change of permission gates, or no previous bundle, builds in the request.
+but the data) and shows no resource the reader can no longer see, ``ticket``
+names that bundle and the reader is answered from it at once, while one
+rebuild of the current key runs in the background: the caller that takes the
+key's build lock starts it through ``spawn``, the others keep reading the
+previous bundle until the new one is stored. A change of permission gates, a
+resource the previous bundle shows that the current visible set leaves out
+(a link to a hidden Project, a deletion), or no previous bundle, builds in
+the request.
 
 One ``INFO`` line per build on the ``manuspectrum.explorer`` logger, its
 fields in ``extra``: ``duration_s``, ``rows``, ``stored_bytes``,
 ``language``, ``scope_kind`` (``public`` for the shared scope, else
-``reader``), ``reason`` (``data``, ``permissions``, ``cold``),
-``background`` and ``stale_served`` (answers given from the previous bundle
-while it ran).
+``reader``), ``reason`` (``data``, ``permissions``, ``visibility``,
+``cold``), ``background`` and ``stale_served`` (answers given from the
+previous bundle while it ran).
 
 A bundle is shared between threads and requests: callers read it, never
 change it.
@@ -93,7 +96,8 @@ class Ticket:
     and permissions. They differ while a rebuild of ``current`` runs and the
     reader is answered from the previous bundle (``stale``). ``permissions``
     names the permission gates of the reader; ``reason`` why ``current``
-    would be built: ``data``, ``permissions`` or ``cold``.
+    would be built: ``data``, ``permissions``, ``visibility`` (the previous
+    bundle shows a resource the reader can no longer see) or ``cold``.
     """
 
     key: str
@@ -135,6 +139,8 @@ def ticket(user, language, build=None):
     held = replace(held, reason=reason)
     if previous is None:
         return held
+    if _shows_hidden(_load(previous), visible):
+        return replace(held, reason="visibility")
     _rebuild_in_background(held, user, build or _service_build)
     if _stored(key):
         return held
@@ -278,6 +284,12 @@ def _load(key):
             found = unpack(stored)
             _local_put(key, found)
         return found
+
+
+def _shows_hidden(bundle, visible):
+    """Whether *bundle* is gone or shows a resource outside *visible*, lifecycle aside."""
+    shown = getattr(bundle, "visible", None)
+    return shown is None or bool(shown.ids - visible.ids)
 
 
 def _previous(held):

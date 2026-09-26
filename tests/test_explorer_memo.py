@@ -7,6 +7,7 @@ Usage:
 import pickle
 import threading
 import time
+from dataclasses import dataclass
 from unittest import mock
 
 from django.contrib.auth.models import Group, Permission, User
@@ -33,6 +34,7 @@ from manuspectrum.utils.public_visibility import (
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer import service as explorer_service
 from manuspectrum.views.explorer.service import (
+    analysis_payload,
     corpus_bundle,
     document_payload,
     match_payload,
@@ -430,6 +432,39 @@ class StaleWhileRebuildTests(MemoCase):
         self.assertEqual(self.pending, [])
         self.assertNotIn(str(self.documents["open"].pk), bundle.visible.documents)
 
+    def test_an_analysis_linked_under_a_hidden_project_is_never_served_stale(self):
+        self.embargo(self.projects["side"])
+        first = corpus_bundle(self.anonymous, "en")
+        analysis = str(self.analyses["open"].pk)
+        self.tile(
+            self.analyses["open"],
+            "analysis_by_project",
+            self.refs(self.projects["side"]),
+        )
+
+        with self.builds() as build:
+            bundle = corpus_bundle(self.anonymous, "en")
+            payload = analysis_payload(analysis, self.anonymous, "en")
+
+        self.assertIn(analysis, first.visible.analyses)
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(self.pending, [])
+        self.assertNotIn(analysis, bundle.visible.analyses)
+        self.assertIsNone(payload)
+
+    def test_a_deleted_analysis_is_never_served_stale(self):
+        first = corpus_bundle(self.anonymous, "en")
+        gone = str(self.analyses["on_document"].pk)
+        ResourceInstance.objects.filter(pk=gone).delete()
+
+        with self.builds() as build:
+            bundle = corpus_bundle(self.anonymous, "en")
+
+        self.assertIn(gone, first.visible.analyses)
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(self.pending, [])
+        self.assertNotIn(gone, bundle.visible.analyses)
+
     def test_a_group_change_builds_in_the_request(self):
         corpus_bundle(self.editor, "en")
         with self.captureOnCommitCallbacks(execute=True):
@@ -533,6 +568,12 @@ class StaleWhileRebuildTests(MemoCase):
         )
 
 
+@dataclass(frozen=True)
+class FakeBundle:
+    digest: str
+    visible: VisibleSet = VisibleSet()
+
+
 class TicketGatesTests(SimpleTestCase):
     def setUp(self):
         cache.clear()
@@ -540,7 +581,12 @@ class TicketGatesTests(SimpleTestCase):
         self.addCleanup(cache.clear)
         self.addCleanup(explorer_memo.forget_local)
         self.pending = []
-        self.state = {"version": "1.1", "gates": "g1", "epoch": "e1"}
+        self.state = {
+            "version": "1.1",
+            "gates": "g1",
+            "epoch": "e1",
+            "analyses": {"a1", "a2"},
+        }
         for name, fake in (
             ("spawn", self.pending.append),
             ("data_version", lambda: self.state["version"]),
@@ -549,6 +595,7 @@ class TicketGatesTests(SimpleTestCase):
             (
                 "visible_set",
                 lambda user, version: VisibleSet(
+                    analyses=frozenset(self.state["analyses"]),
                     digest=f"{version}:{self.state['gates']}",
                     gates=self.state["gates"],
                 ),
@@ -561,30 +608,48 @@ class TicketGatesTests(SimpleTestCase):
 
     def build(self, user, language, visible):
         self.builds.append(visible.digest)
-        return {"digest": visible.digest}
+        return FakeBundle(visible.digest, visible)
 
     def bundle(self):
-        return explorer_memo.corpus_bundle(None, "en", self.build)
+        return explorer_memo.corpus_bundle(None, "en", self.build).digest
 
     def test_new_hidden_resources_with_the_same_data_build_in_the_request(self):
         self.bundle()
         self.state["gates"] = "g2"
 
-        self.assertEqual(self.bundle(), {"digest": "1.1:g2"})
+        self.assertEqual(self.bundle(), "1.1:g2")
         self.assertEqual(self.pending, [])
 
     def test_new_hidden_resources_and_new_data_build_in_the_request(self):
         self.bundle()
         self.state.update(version="1.2", gates="g2")
 
-        self.assertEqual(self.bundle(), {"digest": "1.2:g2"})
+        self.assertEqual(self.bundle(), "1.2:g2")
         self.assertEqual(self.pending, [])
 
     def test_new_data_under_the_same_gates_answers_from_the_previous_bundle(self):
         self.bundle()
         self.state["version"] = "1.2"
 
-        self.assertEqual(self.bundle(), {"digest": "1.1:g1"})
+        self.assertEqual(self.bundle(), "1.1:g1")
+        self.assertEqual(len(self.pending), 1)
+
+    def test_new_data_hiding_a_resource_the_previous_bundle_shows_builds_in_the_request(
+        self,
+    ):
+        self.bundle()
+        self.state.update(version="1.2", analyses={"a1"})
+        held = explorer_memo.ticket(None, "en", self.build)
+
+        self.assertEqual(self.bundle(), "1.2:g1")
+        self.assertEqual((held.stale, held.reason), (False, "visibility"))
+        self.assertEqual(self.pending, [])
+
+    def test_new_data_adding_a_resource_answers_from_the_previous_bundle(self):
+        self.bundle()
+        self.state.update(version="1.2", analyses={"a1", "a2", "a3"})
+
+        self.assertEqual(self.bundle(), "1.1:g1")
         self.assertEqual(len(self.pending), 1)
 
     def test_a_previous_bundle_gone_from_the_cache_is_rebuilt_in_the_request(self):
@@ -596,14 +661,14 @@ class TicketGatesTests(SimpleTestCase):
 
         found = explorer_memo.corpus_bundle(None, "en", self.build, held=held)
 
-        self.assertEqual(found, {"digest": "1.2:g1"})
+        self.assertEqual(found.digest, "1.2:g1")
 
     def test_a_previous_bundle_held_by_the_cache_only_is_loaded_from_it(self):
         self.bundle()
         explorer_memo.forget_local()
         self.state["version"] = "1.2"
 
-        self.assertEqual(self.bundle(), {"digest": "1.1:g1"})
+        self.assertEqual(self.bundle(), "1.1:g1")
         self.assertEqual(self.builds, ["1.1:g1"])
 
     def test_a_rebuild_that_cannot_start_releases_its_lock_and_is_logged(self):
@@ -628,7 +693,7 @@ class TicketGatesTests(SimpleTestCase):
         held = explorer_memo.ticket(None, "en", self.build)
         self.pending.clear()
         cache.delete(f"{held.current}:lock")
-        cache.set(held.current, explorer_memo.pack({"digest": "elsewhere"}))
+        cache.set(held.current, explorer_memo.pack(FakeBundle("elsewhere")))
 
         explorer_memo._rebuild_in_background(held, None, self.build)
 
@@ -652,7 +717,7 @@ class TicketGatesTests(SimpleTestCase):
         self.state["version"] = "1.2"
 
         with mock.patch.object(explorer_memo, "spawn", lambda target: target()):
-            self.assertEqual(self.bundle(), {"digest": "1.2:g1"})
+            self.assertEqual(self.bundle(), "1.2:g1")
         self.assertEqual(self.builds, ["1.1:g1", "1.2:g1"])
 
     def test_one_caller_holding_the_build_lock_leaves_the_others_on_the_previous_bundle(
