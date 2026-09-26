@@ -103,7 +103,7 @@ describe("AnalysisExplorer", () => {
         bar.remove();
     });
 
-    it("mounts the share button next to the Selection button", async () => {
+    it("mounts the share button just before the Selection button", async () => {
         const bar = document.createElement("div");
         bar.id = "ms-explorer-intro-bar";
         document.body.append(bar);
@@ -127,7 +127,7 @@ describe("AnalysisExplorer", () => {
                       ? "selection"
                       : null,
         );
-        expect(owners).toEqual(["selection", "share"]);
+        expect(owners).toEqual(["share", "selection"]);
         wrapper.unmount();
         bar.remove();
     });

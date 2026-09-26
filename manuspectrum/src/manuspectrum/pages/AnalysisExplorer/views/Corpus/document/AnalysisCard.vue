@@ -718,6 +718,10 @@ function focusHeading(): void {
     gap: 0.375rem 1rem;
 }
 
+.analysis-card .mirador {
+    gap: 0.25rem;
+}
+
 .analysis-card .files li,
 .analysis-card .not-in-chart li,
 .analysis-card .licence {

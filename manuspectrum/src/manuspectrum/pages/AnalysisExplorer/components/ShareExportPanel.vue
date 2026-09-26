@@ -29,12 +29,14 @@ import type { OfferedScope } from "@/manuspectrum/pages/AnalysisExplorer/share/s
 const PHONE_QUERY = "(max-width: 30rem)";
 const TITLE_ID = "share-title";
 const SCOPE_INPUT = "share-scope";
+const CITATIONS_FOLDED_AFTER = 3;
 
 /**
  * « Share and export »: a button, shown when the view offers a scope (the
  * open document, the Selection, a project filtered alone), that opens a
  * drawer on the right (from the bottom on a phone) with three groups: Cite
- * (one citation per dataset, the availability statement, the share link),
+ * (the availability statement, the share link, one citation per dataset,
+ * the first three shown until the reader asks for the others),
  * Data (spectra CSV, data package with its announced size, one package per
  * document over the export limit) and IIIF (manifest, Mirador when
  * `EXPLORER_MIRADOR_URL` is set). The share payload is asked only while the
@@ -44,7 +46,7 @@ const SCOPE_INPUT = "share-scope";
 const miradorUrl = inject(MIRADOR_URL_KEY, "");
 
 const store = useExplorerStore();
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 const phone = useMediaQuery(PHONE_QUERY);
 const button = useTemplateRef<HTMLButtonElement>("button");
 const lang = document.documentElement.lang || "en";
@@ -53,6 +55,8 @@ const open = ref(false);
 const chosenKind = ref<OfferedScope["kind"] | null>(null);
 /** The unrestricted query the reader asked restricted data for; any other scope is unrestricted. */
 const restrictedFor = ref<string | null>(null);
+/** The payload query whose citations are all shown. */
+const unfoldedFor = ref<string | null>(null);
 /** Restricted items of the default build, by its query. */
 const restrictedCounts = ref(new Map<string, number>());
 
@@ -92,6 +96,19 @@ const restrictedOffered = computed(
     () =>
         store.session.connected &&
         (restricted.value || restrictedCount.value > 0),
+);
+const citationsUnfolded = computed(
+    () =>
+        share.loaded.value !== null && unfoldedFor.value === share.loaded.value,
+);
+const shownCitations = computed(() => {
+    const citations = payload.value?.citations ?? [];
+    return citationsUnfolded.value
+        ? citations
+        : citations.slice(0, CITATIONS_FOLDED_AFTER);
+});
+const foldedCount = computed(
+    () => (payload.value?.citations.length ?? 0) - shownCitations.value.length,
 );
 const packageSize = computed(() =>
     formatSize(payload.value?.export.bytes ?? null, lang),
@@ -134,6 +151,10 @@ function scopeLabel(option: OfferedScope): string {
 
 function chooseScope(kind: OfferedScope["kind"]): void {
     chosenKind.value = kind;
+}
+
+function unfoldCitations(): void {
+    unfoldedFor.value = share.loaded.value;
 }
 
 function toggleRestricted(event: Event): void {
@@ -267,11 +288,6 @@ function shareLink(): string {
                         <h4 id="share-cite">
                             <span>{{ $gettext("Cite") }}</span>
                         </h4>
-                        <CitationBlock
-                            v-for="(citation, index) in payload.citations"
-                            :key="index"
-                            :citation="citation"
-                        />
                         <p class="availability">
                             <span>{{ payload.availability }}</span>
                         </p>
@@ -289,6 +305,29 @@ function shareLink(): string {
                                 :label="$gettext('Copy the share link')"
                             />
                         </div>
+                        <CitationBlock
+                            v-for="(citation, index) in shownCitations"
+                            :key="index"
+                            :citation="citation"
+                        />
+                        <button
+                            v-if="foldedCount > 0"
+                            type="button"
+                            class="more"
+                            @click="unfoldCitations"
+                        >
+                            <span>{{
+                                interpolate(
+                                    $ngettext(
+                                        "Show the other citation",
+                                        "Show the %{n} other citations",
+                                        foldedCount,
+                                    ),
+                                    { n: foldedCount },
+                                    true,
+                                )
+                            }}</span>
+                        </button>
                     </section>
 
                     <section
@@ -565,6 +604,24 @@ function shareLink(): string {
 
 .share-panel .external::after {
     content: "↗";
+}
+
+.share-panel .more {
+    justify-self: start;
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding-inline: 0.75rem;
+    border: 0.0625rem dashed var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.share-panel .more:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 .share-panel .restricted {

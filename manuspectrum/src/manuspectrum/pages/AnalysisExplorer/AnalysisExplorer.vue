@@ -129,8 +129,8 @@ function onSelectionResolved(message: string): void {
             :to="`#${INTRO_BAR_ID}`"
             :disabled="!hasIntroBar"
         >
+            <ShareExportPanel class="share" />
             <SelectionDrawer class="selection" />
-            <ShareExportPanel />
         </Teleport>
         <ViewTabs />
         <SharedSelectionPrompt

@@ -162,6 +162,37 @@ describe("ShareExportPanel", () => {
         wrapper.unmount();
     });
 
+    it("folds a long list of citations after the first three", async () => {
+        const citations = [1, 2, 3, 4, 5].map((n) => ({
+            ...analysisPayload().citation,
+            recommended: `Citation ${n}`,
+        }));
+        answer = () => jsonResponse(sharePayload({ citations }));
+        const { wrapper } = await openPanel();
+
+        expect(wrapper.findAllComponents(CitationBlock)).toHaveLength(3);
+        const more = drawer().querySelector<HTMLButtonElement>("button.more");
+        expect(more?.textContent?.trim()).toBe("Show the 2 other citations");
+
+        more?.click();
+        await flushPromises();
+        expect(wrapper.findAllComponents(CitationBlock)).toHaveLength(5);
+        expect(drawer().querySelector("button.more")).toBeNull();
+        wrapper.unmount();
+    });
+
+    it("puts the availability statement before the citations", async () => {
+        const { wrapper } = await openPanel();
+        const cite = drawer().querySelector(".group");
+        const order = [...(cite?.children ?? [])].map(
+            (element) => element.className,
+        );
+        expect(order.indexOf("availability")).toBeLessThan(
+            order.findIndex((name) => name.includes("citation-block")),
+        );
+        wrapper.unmount();
+    });
+
     it("shows the CSV only when the scope has spectra", async () => {
         const { wrapper } = await openPanel();
         expect(drawer().querySelector("a.series")).toBeNull();

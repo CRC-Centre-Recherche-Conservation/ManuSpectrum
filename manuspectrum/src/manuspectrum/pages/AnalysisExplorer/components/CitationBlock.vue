@@ -66,6 +66,11 @@ const cslJson = computed(() =>
 .citation-block .copies {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.375rem;
+    gap: 0.25rem;
+}
+
+.citation-block .copy-button {
+    padding-inline: 0.625rem;
+    font-size: 0.75rem;
 }
 </style>
