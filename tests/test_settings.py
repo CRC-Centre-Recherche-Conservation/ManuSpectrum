@@ -62,6 +62,10 @@ CACHES = {
 }
 
 LOGGING["loggers"]["arches"]["level"] = "ERROR"
+LOGGING["loggers"]["manuspectrum.explorer"]["level"] = "WARNING"
+
+# A test runs in one transaction another thread's connection cannot see.
+EXPLORER_BACKGROUND_REBUILD = False
 
 ELASTICSEARCH_PREFIX = "test"
 

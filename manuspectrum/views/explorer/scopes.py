@@ -332,7 +332,7 @@ def resolve_scope(query, user, language):
         ),
         narrowed=items.narrowed,
         missing=missing,
-        drafts=len(kept & held.visible.unpublished),
+        drafts=len(kept & bundle.visible.unpublished),
         restricted=restricted,
         restricted_available=restricted_available,
         canvases_all=canvases_all,

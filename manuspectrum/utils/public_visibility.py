@@ -265,6 +265,7 @@ class VisibleSet:
     unpublished: frozenset = frozenset()
     evidence: dict = field(default_factory=dict)
     digest: str = ""
+    gates: str = ""
 
     @property
     def ids(self):
@@ -300,7 +301,9 @@ def visible_set(user, version=None):
     request, a grant written without a signal within that delay. ``digest``
     names the sets and the reader's gates they were decided with (hidden
     resources, readable nodegroups and models): two readers with the same
-    digest see the same thing.
+    digest see the same thing. ``gates`` names those gates alone: two states
+    with the same gates differ by their data, never by what the reader may
+    read.
     """
     version = data_version() if version is None else version
     key = f"public-visibility:visible:{_epoch()}:{version}:{reader_scope(user)}"
@@ -378,13 +381,19 @@ def _visible_for(user):
         "unpublished": frozenset(unpublished),
     }
     digest = hashlib.sha1(usedforsecurity=False)
-    for name, ids in [
-        *sets.items(),
+    gates = hashlib.sha1(usedforsecurity=False)
+    for name, ids in sets.items():
+        digest.update(f"{name}:{','.join(sorted(map(str, ids)))};".encode())
+    for name, ids in (
         ("hidden", hidden),
         ("nodegroups", nodegroups),
         ("graphs", graphs),
-    ]:
-        digest.update(f"{name}:{','.join(sorted(map(str, ids)))};".encode())
+    ):
+        part = f"{name}:{','.join(sorted(map(str, ids)))};".encode()
+        digest.update(part)
+        gates.update(part)
     for c in sorted(evidence):
         digest.update(f"{c}>{','.join(evidence[c])};".encode())
-    return VisibleSet(**sets, evidence=evidence, digest=digest.hexdigest())
+    return VisibleSet(
+        **sets, evidence=evidence, digest=digest.hexdigest(), gates=gates.hexdigest()
+    )
