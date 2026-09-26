@@ -7,7 +7,7 @@ Usage:
 import csv
 import io
 import uuid
-from unittest import mock
+from unittest import mock, skipUnless
 
 from django.conf import settings
 from django.http import QueryDict
@@ -18,6 +18,11 @@ from manuspectrum.models import RendererConfig
 from manuspectrum.views.explorer.scopes import resolve_scope
 from manuspectrum.views.explorer.series import HEADER
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
+
+try:
+    import pandas
+except ImportError:
+    pandas = None
 
 FORS = {
     "presetKey": "fors",
@@ -229,10 +234,14 @@ class SeriesCsvTests(CorpusCase):
         for row in csv.reader(data[1:]):
             self.assertEqual(len(row), len(HEADER))
             float(row[3]), float(row[4])
-        try:
-            import pandas
-        except ImportError:
-            return
+
+    @skipUnless(pandas, "pandas is not installed")
+    def test_pandas_skips_the_metadata_lines_as_comments(self):
+        self.spectrum()
+        self.spectrum(key="open", name='a,"=1";@b.csv')
+
+        text = self.text(self.selection("on_document", "open"))
+
         frame = pandas.read_csv(io.StringIO(text), comment="#")
         self.assertEqual(list(frame.columns), list(HEADER))
         self.assertEqual(len(frame), 4)
