@@ -27,9 +27,10 @@ bundle of the same scope and language was built under the same permission
 gates (epoch, hidden resources, readable nodegroups and models: everything
 but the data) and shows no resource the reader can no longer see, ``ticket``
 names that bundle and the reader is answered from it at once, while one
-rebuild runs in the background: one per scope and language at a time, in a
-process and across processes, started through ``spawn`` by the caller that
-takes the scope and language's rebuild lock. The others keep reading the
+rebuild runs in the background: one at a time in a process, whatever its
+scope and language, and one per scope and language across processes,
+started through ``spawn`` by the caller that takes the scope and language's
+rebuild lock. The others keep reading the
 previous bundle until the new one is stored; a data change during a
 rebuild is rebuilt by the first request after it ends. A change of permission gates, a
 resource the previous bundle shows that the current visible set leaves out
@@ -339,11 +340,12 @@ def _rebuild_failed(scope, language):
 
 
 def _rebuild_in_background(held, user, build):
-    """Start the rebuild of ``held.current`` unless one of its scope and language runs.
+    """Start the rebuild of ``held.current`` unless this process or its scope and language runs one.
 
-    One rebuild per scope and language at a time: in this process (a guard
-    set) and across processes (a cache lock). A caller that finds either
-    taken starts nothing. The lock holds its owner's token and only that
+    One background rebuild at a time in this process, whatever its scope
+    and language (a guard set), and one per scope and language across
+    processes (a cache lock). A caller that finds either taken starts
+    nothing and is answered from the previous bundle. The lock holds its owner's token and only that
     owner deletes it: a rebuild that outlived ``LOCK_TIMEOUT`` leaves the
     lock a later one took. The next request after the running one ends
     starts the rebuild of the data current then. A rebuild that raised or
@@ -357,7 +359,7 @@ def _rebuild_in_background(held, user, build):
         return
     slot = (held.scope, held.language)
     with _rebuilding_lock:
-        if slot in _rebuilding:
+        if _rebuilding:
             return
         _rebuilding.add(slot)
     lock, token = _rebuild_lock(held.scope, held.language), uuid.uuid4().hex

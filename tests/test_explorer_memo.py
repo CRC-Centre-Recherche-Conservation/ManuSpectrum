@@ -710,6 +710,25 @@ class TicketGatesTests(SimpleTestCase):
 
         self.assertEqual(self.bundle(), "1.3:g1")
 
+    def test_a_process_runs_one_background_rebuild_across_scopes(self):
+        readers = ("reader-1", "reader-2", "reader-3")
+
+        def served(reader):
+            return explorer_memo.corpus_bundle(reader, "en", self.build).digest
+
+        with mock.patch.object(explorer_memo, "explorer_scope", lambda user: user):
+            for reader in readers:
+                served(reader)
+            self.state["version"] = "1.2"
+            answers = [served(reader) for reader in readers]
+            self.assertEqual(len(self.pending), 1)
+
+            self.pending.pop()()
+            self.assertEqual(served("reader-2"), "1.1:g1")
+
+        self.assertEqual(answers, ["1.1:g1"] * 3)
+        self.assertEqual(len(self.pending), 1)
+
     def test_two_commits_sharing_a_last_sequence_answer_from_the_later_one(self):
         self.state["version"] = "6.11"
         self.bundle()
