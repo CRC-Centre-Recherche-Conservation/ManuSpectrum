@@ -295,7 +295,8 @@ def _entry(dataset, analyses, licences, accessed):
         pieces = []
         if authors:
             pieces.append("; ".join(_name_text(a) for a in authors))
-        heading = f"{title} {_('[Dataset]')}"
+        kind = _("[Dataset]")
+        heading = f"{title} {kind}"
         if events:
             heading += ", " + "–".join(_iso(p) for p in events)
         pieces += [heading, *projects, publisher, url]
