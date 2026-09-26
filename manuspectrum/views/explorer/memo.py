@@ -316,11 +316,18 @@ def _previous(held):
 
 
 def _order(version):
-    """Where a ``data_version()`` stands in time: its last ledger sequence, -1 when unknown."""
+    """Where a ``data_version()`` stands in time: ``(last sequence, count)``, ``(-1, -1)`` when unknown.
+
+    Two commits can share a last sequence (a transaction whose last write is
+    older commits later); the row count, which grows with each committed
+    transaction under one last sequence, orders them. A prune lowers the
+    count but writes a higher sequence.
+    """
+    count, _, last = str(version).partition(".")
     try:
-        return int(str(version).rpartition(".")[2])
+        return int(last), int(count)
     except ValueError:
-        return -1
+        return -1, -1
 
 
 def _rebuild_lock(scope, language):

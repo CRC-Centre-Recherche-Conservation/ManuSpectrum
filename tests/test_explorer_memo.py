@@ -710,6 +710,16 @@ class TicketGatesTests(SimpleTestCase):
 
         self.assertEqual(self.bundle(), "1.3:g1")
 
+    def test_two_commits_sharing_a_last_sequence_answer_from_the_later_one(self):
+        self.state["version"] = "6.11"
+        self.bundle()
+        self.state["version"] = "7.11"
+        self.bundle()
+        self.pending.pop()()
+        self.state["version"] = "8.12"
+
+        self.assertEqual(self.bundle(), "7.11:g1")
+
     @override_settings(EXPLORER_BACKGROUND_REBUILD=True)
     def test_a_rebuild_in_a_real_thread_builds_in_the_language_of_its_ticket(self):
         languages, threads, go = [], [], threading.Event()
