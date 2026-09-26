@@ -140,6 +140,22 @@ class DataVersionTests(MemoCase):
             cursor.execute("SELECT count(*) FROM ms_data_change WHERE txid = -1")
             self.assertEqual(cursor.fetchone()[0], 0)
 
+    def test_a_prune_whose_mark_fails_deletes_nothing(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO ms_data_change (txid, at) "
+                "VALUES (-1, now() - interval '8 days')"
+            )
+        before = data_version()
+
+        with (
+            mock.patch("manuspectrum.utils.data_version._MARK_SQL", "SELECT nope"),
+            self.assertRaises(Exception),
+        ):
+            prune_data_changes(7)
+
+        self.assertEqual(data_version(), before)
+
 
 class NextReadTests(MemoCase):
     def builds(self):
@@ -318,6 +334,31 @@ class RememberTests(SimpleTestCase):
         self.assertIsNone(cache.get(keys[0]))
         for key in keys[1:] + ["k-other"]:
             self.assertIsNotNone(cache.get(key))
+
+    def test_concurrent_retirements_keep_every_new_key_live(self):
+        real_live = explorer_memo._live
+
+        def slow_live(language):
+            found = real_live(language)
+            time.sleep(0.2)
+            return found
+
+        with mock.patch.object(explorer_memo, "_live", slow_live):
+            threads = [
+                threading.Thread(
+                    target=explorer_memo._retire_previous,
+                    args=("en", f"k-race-{n}", "g", f"1.{n}"),
+                )
+                for n in (1, 2)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+        self.assertEqual(
+            {key for key, _, _ in real_live("en")}, {"k-race-1", "k-race-2"}
+        )
 
     def test_a_stored_bundle_is_compressed_and_round_trips(self):
         bundle = {"rows": ["same row"] * 500}

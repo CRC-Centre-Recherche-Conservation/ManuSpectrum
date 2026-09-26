@@ -49,7 +49,7 @@ describe("DocumentCard", () => {
         expect(wrapper.find(".thumbnail").exists()).toBe(true);
     });
 
-    it("does not ask again in this tab for a thumbnail that failed", async () => {
+    it("does not ask again for a while for a thumbnail that failed", async () => {
         const first = mount(DocumentCard, {
             props: { hit: documentHit(2), href: "?doc=x" },
         });

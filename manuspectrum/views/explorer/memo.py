@@ -78,6 +78,7 @@ BUILD_WAIT = 45
 LOCK_TIMEOUT = 90
 LIVE_ENTRIES = 2
 LOCAL_ENTRIES = 2
+POINTER_LOCK_WAIT = 5
 
 _local = OrderedDict()
 _local_lock = threading.Lock()
@@ -511,15 +512,35 @@ def _superseded(held):
 
 
 def _retire_previous(language, key, permissions="", version=""):
-    """Keep the ``LIVE_ENTRIES`` bundles of a language with the newest data."""
-    live = sorted(
-        [e for e in _live(language) if e[0] != key] + [(key, permissions, version)],
-        key=lambda e: _order(e[2]),
-    )
-    for old, _, _ in live[:-LIVE_ENTRIES]:
-        cache.delete(old)
-    cache.set(
-        _live_pointer(language),
-        live[-LIVE_ENTRIES:],
-        settings.EXPLORER_BUNDLE_TTL,
-    )
+    """Keep the ``LIVE_ENTRIES`` bundles of a language with the newest data.
+
+    The live pointer is read, changed and written under a cache lock held by
+    one caller across processes, so two builds ending together both land in
+    it. A caller that waits ``POINTER_LOCK_WAIT`` seconds without the lock
+    updates the pointer anyway and logs it.
+    """
+    lock, token = f"{_live_pointer(language)}:lock", uuid.uuid4().hex
+    deadline = time.monotonic() + POINTER_LOCK_WAIT
+    while not cache.add(lock, token, POINTER_LOCK_WAIT):
+        if time.monotonic() > deadline:
+            logger.warning(
+                "explorer bundle live pointer updated without its lock",
+                extra={"language": language},
+            )
+            break
+        time.sleep(0.01)
+    try:
+        live = sorted(
+            [e for e in _live(language) if e[0] != key] + [(key, permissions, version)],
+            key=lambda e: _order(e[2]),
+        )
+        for old, _, _ in live[:-LIVE_ENTRIES]:
+            cache.delete(old)
+        cache.set(
+            _live_pointer(language),
+            live[-LIVE_ENTRIES:],
+            settings.EXPLORER_BUNDLE_TTL,
+        )
+    finally:
+        if cache.get(lock) == token:
+            cache.delete(lock)

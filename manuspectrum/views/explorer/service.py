@@ -660,6 +660,8 @@ def _corpus_rows(user, language, visible, chains, projects_of):
     rows = []
     for a in analyses:
         document, component = chains[a]
+        if document not in label_of or (component and component not in label_of):
+            continue
         technique_value = values.first(a, "technique")
         techniques = memo.refs(technique_value)
         technique = None
@@ -812,7 +814,12 @@ LINK_ROLES = {
 
 
 def build_bundle(user, language, visible):
-    """The ``CorpusBundle`` of *user* in *language* over *visible*."""
+    """The ``CorpusBundle`` of *user* in *language* over *visible*.
+
+    A resource deleted while the bundle builds (``names`` no longer finds
+    it) is left out with the rows that run through it; the next data
+    version leaves it out of *visible* as well.
+    """
     readable = readable_nodegroup_ids(user)
     links = {
         name: {
@@ -825,9 +832,6 @@ def build_bundle(user, language, visible):
     rows, characterization_values = _corpus_rows(
         user, language, visible, chains, links["projects"]
     )
-    by_document = defaultdict(list)
-    for row in rows:
-        by_document[row["document"]].append(row)
     label_of = names(
         {r["document"] for r in rows}
         | {r["component"] for r in rows if r["component"]}
@@ -835,6 +839,16 @@ def build_bundle(user, language, visible):
         language,
         user,
     )
+    rows = [
+        r
+        for r in rows
+        if r["document"] in label_of
+        and (not r["component"] or r["component"] in label_of)
+    ]
+    documents = [d for d in visible.documents if d in label_of]
+    by_document = defaultdict(list)
+    for row in rows:
+        by_document[row["document"]].append(row)
     folds = {}
 
     def folded(text):
@@ -842,7 +856,7 @@ def build_bundle(user, language, visible):
             folds[text] = fold(text)
         return folds[text]
 
-    names_folded = {d: folded(label_of[d]["value"]) for d in visible.documents}
+    names_folded = {d: folded(label_of[d]["value"]) for d in documents}
     return CorpusBundle(
         visible=visible,
         chains=chains,
@@ -867,7 +881,7 @@ def build_bundle(user, language, visible):
         },
         label_of=label_of,
         folded=names_folded,
-        documents=sorted(visible.documents, key=lambda d: (names_folded[d], d)),
+        documents=sorted(documents, key=lambda d: (names_folded[d], d)),
         order={
             row["id"]: (
                 folded(label_of[row["document"]]["value"]),

@@ -7,7 +7,7 @@ ETL, raw SQL, ``psql``. ``data_version()`` names the committed state; a write
 becomes visible in it when its transaction commits, like the rows it wrote.
 """
 
-from django.db import connection
+from django.db import connection, transaction
 
 DATA_CHANGE_TABLES = (
     "tiles",
@@ -45,10 +45,11 @@ def data_version():
 def prune_data_changes(days=PRUNE_AFTER_DAYS):
     """Delete the ledger rows older than *days*; returns how many went.
 
-    A prune that deletes rows also writes one, so the version after it is
-    one no earlier state had.
+    A prune that deletes rows also writes one, in the same transaction, so
+    readers see the version before it or the one after it, which no earlier
+    state had.
     """
-    with connection.cursor() as cursor:
+    with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute(_PRUNE_SQL, [days])
         deleted = cursor.rowcount
         if deleted:

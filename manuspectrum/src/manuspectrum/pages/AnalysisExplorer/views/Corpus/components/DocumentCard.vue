@@ -20,7 +20,8 @@ import type {
  * A document of the results: title, shelfmark, holding, dates, type, a short
  * description and its number of analyses. The thumbnail is drawn only from
  * a site path or an http(s) address (`safeHref`); one the server refuses
- * leaves the neutral placeholder, and is not asked for again in this tab.
+ * leaves the neutral placeholder, and is not asked for again for a minute
+ * (`IMAGE_RETRY_AFTER_MS`).
  */
 const props = defineProps<{ hit: DocumentHit; href: string }>();
 const emit = defineEmits<{ open: [id: string] }>();
