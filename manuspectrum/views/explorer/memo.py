@@ -1,7 +1,7 @@
 """Memo of the Explorer's corpus bundle: one per reader scope, language and data version.
 
 A bundle holds everything a request derives from the whole visible corpus
-(rows, facet universe and labels, names, link maps); ``explorer_service``
+(rows, facet universe and labels, names, link maps); ``explorer.service``
 builds it, this module keeps it. The key carries the ``explorer_scope`` of
 the reader, the language, ``data_version()``, the permission epoch and the
 digest of the reader's ``visible_set``; the data version and the visible set

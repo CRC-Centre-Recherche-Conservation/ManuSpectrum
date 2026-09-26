@@ -2,12 +2,13 @@
 
 Every function takes the reader and the request language. What a request
 derives from the whole visible corpus is a ``CorpusBundle``, memoised by
-``explorer_memo`` per reader scope, language and data version; the rest is
+``explorer.memo`` per reader scope, language and data version; the rest is
 built per request. Values are read off the tiles of the nodegroups the reader
 may read, links off the tiles by role (D6), and a resource outside
 ``visible_set`` never reaches a payload, a facet or a name.
 """
 
+import datetime
 import functools
 import hashlib
 import html
@@ -29,6 +30,7 @@ from django.db.models.functions import Cast
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils import translation
+from django.utils.http import urlencode
 
 from arches.app.models.models import (
     IIIFManifest,
@@ -49,9 +51,15 @@ from manuspectrum.utils.public_visibility import (
     visible_set,
 )
 from manuspectrum.utils.role_links import readable_links, role_node
-from manuspectrum.views import explorer_memo
-from manuspectrum.views.explorer_conditions import clean_html, conditions_of
-from manuspectrum.views.explorer_values import (
+from manuspectrum.views.explorer import memo as explorer_memo
+from manuspectrum.views.explorer.citations import (
+    CitedAnalysis,
+    citation_entry,
+    shown_citation,
+    person_name,
+)
+from manuspectrum.views.explorer.conditions import clean_html, conditions_of
+from manuspectrum.views.explorer.values import (
     FALLBACK_LANGUAGE,
     acronym,
     dataset_of,
@@ -873,9 +881,9 @@ def build_bundle(user, language, visible):
 
 
 def corpus_bundle(user, language, ticket=None):
-    """The memoised ``CorpusBundle`` of *user* in *language* (``explorer_memo``).
+    """The memoised ``CorpusBundle`` of *user* in *language* (``explorer.memo``).
 
-    *ticket* is the ``explorer_memo.ticket`` the caller already read.
+    *ticket* is the ``explorer.memo.ticket`` the caller already read.
     """
     return explorer_memo.corpus_bundle(user, language, build_bundle, held=ticket)
 
@@ -2059,25 +2067,35 @@ def imaging_entries(analysis_id, manifest_values, language):
     return entries
 
 
-def analysis_files(analysis_id, user, language, values=None):
-    """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging.
-
-    *values* lets a caller with several analyses share one batched ``Values``
-    lookup instead of one tile query per analysis.
-    """
-    if values is None:
-        values = Values([analysis_id], ["files", "micro", "imaging"], user)
+def renderer_configs(values, analysis_ids):
+    """``{config id: config}`` of the renderer configurations the measurement files of *analysis_ids* name, in one query."""
     config_ids = {
         e.get("rendererConfig")
+        for analysis_id in analysis_ids
         for e in values.get(analysis_id, "files")
         if isinstance(e, dict) and e.get("rendererConfig")
     }
-    configs = {
+    if not config_ids:
+        return {}
+    return {
         str(config_id): config
         for config_id, config in RendererConfig.objects.filter(
             configid__in=list(config_ids)
         ).values_list("configid", "config")
     }
+
+
+def analysis_files(analysis_id, user, language, values=None, configs=None):
+    """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging.
+
+    *values* and *configs* (``renderer_configs``) let a caller with several
+    analyses share one batched tile lookup and one configuration lookup
+    instead of one of each per analysis.
+    """
+    if values is None:
+        values = Values([analysis_id], ["files", "micro", "imaging"], user)
+    if configs is None:
+        configs = renderer_configs(values, [analysis_id])
     return (
         file_entries(
             values.get(analysis_id, "files"),
@@ -2099,6 +2117,51 @@ def report_url(resource_id, language):
     """Path of the Arches report of *resource_id* on this site, in *language*."""
     with translation.override(language):
         return reverse("resource_report", kwargs={"resourceid": resource_id})
+
+
+def permalink(resource_id):
+    """Absolute URL of the Arches report of *resource_id*, as citations and exports name it."""
+    return f"{settings.PUBLIC_SERVER_ADDRESS}report/{resource_id}"
+
+
+def product_path(route, query, language):
+    """Path on this site of the language-neutral product *route* for the scope *query* in *language*.
+
+    *query* is an URL-encoded ``ExportScope.query`` (``ids=…``,
+    ``document=…``, ``project=…`` and their flags); ``lang`` is appended.
+    """
+    return f"{reverse(route)}?{query}&{urlencode({'lang': language})}"
+
+
+def product_url(route, query, language):
+    """Absolute URL of ``product_path``, as a copied link, an external viewer or an IIIF id names it."""
+    return f"{settings.PUBLIC_SERVER_ADDRESS}{product_path(route, query, language).lstrip('/')}"
+
+
+def product_link(route, query, language):
+    """``ProductLink`` of ``product_path``: its ``path`` for a link followed on this site, its ``url`` for what leaves it."""
+    path = product_path(route, query, language)
+    return {"url": f"{settings.PUBLIC_SERVER_ADDRESS}{path.lstrip('/')}", "path": path}
+
+
+def cited_analysis(row, end, label_of, operators, projects):
+    """``CitedAnalysis`` of a corpus *row*; *operators* and *projects* are the ids the citation may name."""
+    return CitedAnalysis(
+        id=row["id"],
+        name=row["name"]["value"],
+        permalink=permalink(row["id"]),
+        start=row["date"],
+        end=end,
+        authors=tuple(
+            person_name(label_of[o]["value"]) for o in operators if o in label_of
+        ),
+        projects=tuple(label_of[p]["value"] for p in projects if p in label_of),
+    )
+
+
+def licence_labels(files):
+    """Labels of the licences of *files* (``FileEntry``), in file order."""
+    return [f["license"]["label"]["value"] for f in files if f.get("license")]
 
 
 def analysis_payload(analysis_id, user, language):
@@ -2160,6 +2223,16 @@ def analysis_payload(analysis_id, user, language):
         else []
     )
     end = values.first(analysis_id, "end")
+    end = _date(end) if isinstance(end, str) else None
+    files = analysis_files(analysis_id, user, language)
+    dataset = dataset_of(values.first(analysis_id, "dataset"))
+    citation = citation_entry(
+        dataset,
+        [cited_analysis(row, end, label_of, row["operators"], projects)],
+        licences=licence_labels(files),
+        language=language,
+        accessed=datetime.date.today(),
+    )
     return {
         "id": analysis_id,
         "name": row["name"],
@@ -2169,15 +2242,15 @@ def analysis_payload(analysis_id, user, language):
         "projects": [ref(p) for p in projects],
         "date": {
             "start": row["date"],
-            "end": _date(end) if isinstance(end, str) else None,
+            "end": end,
         },
         "document": ref(document),
         "component": ref(component) if component else None,
         "sample": ref(samples[0]) if samples else None,
-        "files": analysis_files(analysis_id, user, language),
+        "files": files,
         "conditions": conditions,
         "evidenceOf": [{"id": c, "name": label_of[c]} for c in cited_by],
-        "dataset": dataset_of(values.first(analysis_id, "dataset")),
+        "dataset": dataset,
         "bibliography": [
             t
             for t in (
@@ -2186,8 +2259,12 @@ def analysis_payload(analysis_id, user, language):
             )
             if t
         ],
-        "citation": None,
-        "permalink": f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis_id}",
+        "citation": shown_citation(citation),
+        "availability": citation["availability"],
+        "manifest": product_url(
+            "iiif-v3-explorer-manifest", f"ids=an:{analysis_id}:-", language
+        ),
+        "permalink": permalink(analysis_id),
         "reportUrl": report_url(analysis_id, language),
         "certaintyScale": certainty_scale(language),
         "unpublished": row["unpublished"],
@@ -2252,6 +2329,9 @@ def items_payload(keys, user, language):
     shared_values = (
         Values(file_ids, ["files", "micro", "imaging"], user) if file_ids else None
     )
+    shared_configs = (
+        renderer_configs(shared_values, file_ids) if shared_values else None
+    )
     files_of, items, missing = {}, [], []
     for key, match in parsed:
         if not match:
@@ -2275,7 +2355,9 @@ def items_payload(keys, user, language):
             missing.append(key)
             continue
         if rid not in files_of:
-            files_of[rid] = analysis_files(rid, user, language, values=shared_values)
+            files_of[rid] = analysis_files(
+                rid, user, language, values=shared_values, configs=shared_configs
+            )
         if kind == "an":
             items.append(
                 {

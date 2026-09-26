@@ -10,8 +10,10 @@ import type {
     FacetValue,
     FileEntry,
     HomeResponse,
+    ProductLink,
     SampleSummary,
     SearchResponse,
+    SharePayload,
     Technique,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -444,11 +446,50 @@ export function analysisPayload(
         evidenceOf: [],
         dataset: null,
         bibliography: [],
-        citation: null,
+        citation: {
+            text: `MS1_f12_XRF_03 [Dataset]. ManuSpectrum. http://testserver/report/${uuid(101)}. Accessed 2026-09-26.`,
+            bibtex: "@dataset{manuspectrumnd000000,\n\ttitle = {MS1_f12_XRF_03}\n}\n",
+        },
+        availability: `The data are available in ManuSpectrum (http://testserver/report/${uuid(101)}).`,
+        manifest: `http://testserver/iiif/v3/explorer-manifest?ids=an:${uuid(101)}:-&lang=en`,
         permalink: `http://testserver/report/${uuid(101)}`,
         reportUrl: `/en/report/${uuid(101)}`,
         certaintyScale: { levels: [] },
         unpublished: false,
+        ...overrides,
+    };
+}
+
+/** A share payload of a document with one analysis, no dataset, within the export bounds. */
+export function sharePayload(
+    overrides: Partial<SharePayload> = {},
+): SharePayload {
+    const query = `document=${uuid(1)}`;
+    const product = (route: string): ProductLink => {
+        const path = `/${route}?${query}&lang=en`;
+        return { url: `http://testserver${path}`, path };
+    };
+    return {
+        scope: {
+            kind: "document",
+            key: query,
+            analyses: 1,
+            characterizations: 0,
+            spectra: 1,
+            drafts: 0,
+            restricted: false,
+            restrictedAvailable: 0,
+            missing: [],
+        },
+        citations: [analysisPayload().citation],
+        availability: `The data are available in ManuSpectrum (http://testserver/report/${uuid(1)}).`,
+        export: { files: 2, bytes: 2_400_000, overLimit: false, documents: [] },
+        links: {
+            manifest: product("iiif/v3/explorer-manifest"),
+            seriesCsv: null,
+            export: product("api/explorer/export"),
+            exportRestricted: null,
+        },
         ...overrides,
     };
 }

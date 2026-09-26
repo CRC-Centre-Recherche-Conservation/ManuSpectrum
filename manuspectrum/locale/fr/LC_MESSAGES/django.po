@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 15:42-0500\n"
+"POT-Creation-Date: 2026-09-26 04:32-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -129,15 +129,15 @@ msgstr "Correspondances de termes"
 msgid "References"
 msgstr "Références"
 
-#: settings.py:550
+#: settings.py:555
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:587
+#: settings.py:592
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:588
+#: settings.py:593
 msgid "French"
 msgstr "Français"
 
@@ -256,6 +256,105 @@ msgstr ""
 #: templates/errors/404.htm:64
 msgid "Search the data"
 msgstr "Rechercher dans les données"
+
+#: templates/explorer/export_readme.md:3
+#, python-format
+msgid "Data package exported from %(site)s on %(date)s."
+msgstr "Paquet de données exporté de %(site)s le %(date)s."
+
+#: templates/explorer/export_readme.md:7
+msgid "Contents"
+msgstr "Contenu"
+
+#: templates/explorer/export_readme.md:9
+msgid "this file."
+msgstr "ce fichier."
+
+#: templates/explorer/export_readme.md:10
+msgid "the data files, raw and readable, unchanged."
+msgstr "les fichiers de données, bruts et lisibles, inchangés."
+
+#: templates/explorer/export_readme.md:11
+msgid ""
+"one row per analysis: technique, object, zone, operators, dates, instrument, "
+"projects, measurement conditions, licences, dataset, permalink."
+msgstr ""
+"une ligne par analyse : technique, objet, zone, opérateurs, dates, "
+"instrument, projets, conditions de mesure, licences, jeu de données, "
+"permalien."
+
+#: templates/explorer/export_readme.md:12
+msgid ""
+"one row per identified material: materials and certainty, colours, layers, "
+"elements by level, analyses cited in evidence, note."
+msgstr ""
+"une ligne par matériau identifié : matériaux et degré de certitude, "
+"couleurs, couches, éléments par niveau, analyses citées en preuve, note."
+
+#: templates/explorer/export_readme.md:13
+msgid "the citations in BibTeX, RIS and CSL-JSON."
+msgstr "les citations en BibTeX, RIS et CSL-JSON."
+
+#: templates/explorer/export_readme.md:14
+msgid "the IIIF Presentation 3 manifest of the same scope."
+msgstr "le manifeste IIIF Presentation 3 de la même portée."
+
+#: templates/explorer/export_readme.md:15
+msgid ""
+"the RO-Crate 1.1 description of the package, with the SHA-256 checksum of "
+"every file."
+msgstr ""
+"la description RO-Crate 1.1 du paquet, avec la somme de contrôle SHA-256 de "
+"chaque fichier."
+
+#: templates/explorer/export_readme.md:19 templates/views/pages/team.htm:164
+msgid "How to cite"
+msgstr "Comment citer"
+
+#: templates/explorer/export_readme.md:23
+msgid "Data availability"
+msgstr "Disponibilité des données"
+
+#: templates/explorer/export_readme.md:27
+msgid ""
+"The data come from the datasets below; cite and reuse them by their "
+"identifier."
+msgstr ""
+"Les données proviennent des jeux de données ci-dessous ; citez-les et "
+"réutilisez-les par leur identifiant."
+
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:505
+msgid "Licences per file"
+msgstr "Licences par fichier"
+
+#: templates/explorer/export_readme.md:33 templates/javascript.htm:160
+#: templates/javascript.htm:167
+msgid "Path"
+msgstr "Chemin"
+
+#: templates/explorer/export_readme.md:33
+msgid "Size (bytes)"
+msgstr "Taille (octets)"
+
+#: templates/explorer/export_readme.md:33
+#: templates/views/components/ms-file-license.htm:14
+#: templates/views/components/ms-file-license.htm:15
+#: templates/views/components/widgets/file-xy.htm:9
+#: templates/views/pages/team.htm:89 templates/views/pages/team.htm:176
+#: views/explorer/manifest.py:312
+msgid "Licence"
+msgstr "Licence"
+
+#: templates/explorer/export_readme.md:33
+#: templates/views/components/ms-file-workbench.htm:44
+#: templates/views/components/ms-file-workbench.htm:47
+#: views/explorer/manifest.py:253 views/explorer/manifest.py:317
+msgid "Attribution"
+msgstr "Attribution"
+
+#: templates/explorer/export_readme.md:36
+msgid "No data file."
+msgstr "Aucun fichier de données."
 
 #: templates/help/create-project-workflow-help.htm:5
 msgid "New Project Workflow"
@@ -981,15 +1080,15 @@ msgstr "Enluminures"
 msgid "Explore by technique"
 msgstr "Explorer par technique"
 
-#: templates/index.htm:633
+#: templates/index.htm:634
 msgid "Access advanced search"
 msgstr "Accéder à la recherche avancée"
 
-#: templates/index.htm:646 templates/views/pages/team.htm:190
+#: templates/index.htm:647 templates/views/pages/team.htm:190
 msgid "Our Partners"
 msgstr "Nos Partenaires"
 
-#: templates/index.htm:650 templates/views/pages/team.htm:193
+#: templates/index.htm:651 templates/views/pages/team.htm:193
 msgid "Ministry of Culture"
 msgstr "Ministère de la Culture"
 
@@ -1656,10 +1755,6 @@ msgstr "∗ = obligatoire"
 msgid "CIDOC-CRM class"
 msgstr "Classe CIDOC-CRM"
 
-#: templates/javascript.htm:160 templates/javascript.htm:167
-msgid "Path"
-msgstr "Chemin"
-
 #: templates/javascript.htm:161 templates/javascript.htm:173
 msgid "Cardinality"
 msgstr "Cardinalité"
@@ -2222,13 +2317,6 @@ msgstr ""
 msgid "Triggered by"
 msgstr "Déclenchée par"
 
-#: templates/views/components/ms-file-license.htm:14
-#: templates/views/components/ms-file-license.htm:15
-#: templates/views/components/widgets/file-xy.htm:9
-#: templates/views/pages/team.htm:89 templates/views/pages/team.htm:176
-msgid "Licence"
-msgstr "Licence"
-
 #: templates/views/components/ms-file-license.htm:20
 msgid "Licence name"
 msgstr "Nom de la licence"
@@ -2270,11 +2358,6 @@ msgid ""
 msgstr ""
 "Énoncé concis que les technologies d'assistance peuvent prononcer pour "
 "transmettre le sens du fichier"
-
-#: templates/views/components/ms-file-workbench.htm:44
-#: templates/views/components/ms-file-workbench.htm:47
-msgid "Attribution"
-msgstr "Attribution"
 
 #: templates/views/components/ms-file-workbench.htm:51
 #: templates/views/components/ms-file-workbench.htm:54
@@ -2838,6 +2921,7 @@ msgstr "Type de ressource à créer"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:23
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:392
+#: views/explorer/manifest.py:360
 msgid "Document"
 msgstr "Document"
 
@@ -2847,6 +2931,7 @@ msgstr "Manuscrit, livre, texte imprimé"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
 #: templates/views/pages/conceptual-model.htm:191
+#: views/explorer/manifest.py:361
 msgid "Component"
 msgstr "Composant"
 
@@ -3271,7 +3356,7 @@ msgstr "Ouvrir le projet"
 #: templates/views/pages/analysis-explorer.htm:4
 #: templates/views/pages/analysis-explorer.htm:6
 #: templates/views/pages/analysis-explorer.htm:17
-#: templates/views/pages/analysis-explorer.htm:31
+#: templates/views/pages/analysis-explorer.htm:29
 msgid "Analysis explorer"
 msgstr "Explorateur d'analyses"
 
@@ -3293,7 +3378,7 @@ msgstr ""
 msgid "Home"
 msgstr "Accueil"
 
-#: templates/views/pages/analysis-explorer.htm:34
+#: templates/views/pages/analysis-explorer.htm:33
 msgid ""
 "Search the analyses of written heritage by technique, material, project or "
 "year, then open a document to see where each analysis was made."
@@ -4103,10 +4188,6 @@ msgstr "Réutilisation"
 msgid "Citing, funding and licence"
 msgstr "Citation, financement et licence"
 
-#: templates/views/pages/team.htm:164
-msgid "How to cite"
-msgstr "Comment citer"
-
 #: templates/views/pages/team.htm:165
 msgid "If you reuse data or the platform in a publication, please cite:"
 msgstr ""
@@ -4200,6 +4281,213 @@ msgstr "La liste de descripteurs est mal formée."
 #: views/biblissima_proxy.py:2291
 msgid "The manuscript identifier is malformed."
 msgstr "L'identifiant du manuscrit est mal formé."
+
+#: views/explorer/citations.py:226
+#, python-format
+msgid "Analyses: %(parts)s"
+msgstr "Analyses : %(parts)s"
+
+#: views/explorer/citations.py:228
+#, python-format
+msgid "%(count)d analysis"
+msgid_plural "%(count)d analyses"
+msgstr[0] "%(count)d analyse"
+msgstr[1] "%(count)d analyses"
+
+#: views/explorer/citations.py:268
+#, python-format
+msgid "Project: %(names)s"
+msgid_plural "Projects: %(names)s"
+msgstr[0] "Projet : %(names)s"
+msgstr[1] "Projets : %(names)s"
+
+#: views/explorer/citations.py:273
+#, python-format
+msgid "Licence: %(names)s"
+msgid_plural "Licences: %(names)s"
+msgstr[0] "Licence : %(names)s"
+msgstr[1] "Licences : %(names)s"
+
+#: views/explorer/citations.py:344
+msgid "[Dataset]"
+msgstr "[Jeu de données]"
+
+#: views/explorer/citations.py:354
+#, python-format
+msgid "Accessed %(date)s."
+msgstr "Consulté le %(date)s."
+
+#: views/explorer/citations.py:434
+#, python-format
+msgid ""
+"The data are available in %(site)s (%(permalink)s) and in %(datasets)s, "
+"under the licences given for each file."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
+"%(datasets)s, sous les licences indiquées pour chaque fichier."
+
+#: views/explorer/citations.py:439
+#, python-format
+msgid ""
+"The data are available in %(site)s (%(permalink)s) and in %(datasets)s, "
+"under %(licence)s."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
+"%(datasets)s, sous licence %(licence)s."
+
+#: views/explorer/citations.py:444
+#, python-format
+msgid "The data are available in %(site)s (%(permalink)s) and in %(datasets)s."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
+"%(datasets)s."
+
+#: views/explorer/citations.py:448
+#, python-format
+msgid ""
+"The data are available in %(site)s (%(permalink)s), under the licences given "
+"for each file."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s), sous les "
+"licences indiquées pour chaque fichier."
+
+#: views/explorer/citations.py:453
+#, python-format
+msgid "The data are available in %(site)s (%(permalink)s), under %(licence)s."
+msgstr ""
+"Les données sont disponibles dans %(site)s (%(permalink)s), sous licence "
+"%(licence)s."
+
+#: views/explorer/citations.py:456
+#, python-format
+msgid "The data are available in %(site)s (%(permalink)s)."
+msgstr "Les données sont disponibles dans %(site)s (%(permalink)s)."
+
+#: views/explorer/export.py:385
+#, python-format
+msgid "Selection of %(count)d item"
+msgid_plural "Selection of %(count)d items"
+msgstr[0] "Sélection de %(count)d élément"
+msgstr[1] "Sélection de %(count)d éléments"
+
+#: views/explorer/export.py:392 views/explorer/manifest.py:790
+#: views/explorer/series.py:101
+msgid "Contains drafts"
+msgstr "Contient des brouillons"
+
+#: views/explorer/export.py:394 views/explorer/manifest.py:792
+#: views/explorer/series.py:103
+msgid "Contains restricted-access data"
+msgstr "Contient des données à accès restreint"
+
+#: views/explorer/export.py:507
+msgid "Each file carries its own licence, given with the file."
+msgstr "Chaque fichier porte sa propre licence, indiquée avec le fichier."
+
+#: views/explorer/export.py:785
+#, python-format
+msgid ""
+"The IIIF manifest of this scope is too large to be included (more than "
+"%(count)d canvases): open it by document."
+msgstr ""
+"Le manifeste IIIF de cette portée est trop volumineux pour être inclus (plus "
+"de %(count)d canvases) : ouvrez-le par document."
+
+#: views/explorer/export.py:795
+msgid ""
+"Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
+"are served by IIIF image servers and are not in the package."
+msgstr ""
+"L'imagerie chimique est fournie sous forme de manifestes IIIF (imaging-<n>."
+"json) ; ses images sont servies par des serveurs d'images IIIF et ne sont "
+"pas dans le paquet."
+
+#: views/explorer/export.py:802
+#, python-format
+msgid ""
+"Not included: the imaging manifest %(url)s of %(analysis)s could not be "
+"fetched."
+msgstr ""
+"Non inclus : le manifeste d'imagerie %(url)s de %(analysis)s n'a pas pu être "
+"récupéré."
+
+#: views/explorer/manifest.py:356
+msgid "Technique"
+msgstr "Technique"
+
+#: views/explorer/manifest.py:357
+msgid "Dates"
+msgstr "Dates"
+
+#: views/explorer/manifest.py:358
+msgid "Operators"
+msgstr "Opérateurs"
+
+#: views/explorer/manifest.py:359
+msgid "Conditions"
+msgstr "Conditions"
+
+#: views/explorer/manifest.py:487
+#, python-format
+msgid "Selection of %(count)d page of %(document)s"
+msgid_plural "Selection of %(count)d pages of %(document)s"
+msgstr[0] "Sélection de %(count)d folio de %(document)s"
+msgstr[1] "Sélection de %(count)d folios de %(document)s"
+
+#: views/explorer/manifest.py:492
+#, python-format
+msgid "Selection of %(count)d page of %(documents)d documents"
+msgid_plural "Selection of %(count)d pages of %(documents)d documents"
+msgstr[0] "Sélection de %(count)d folio de %(documents)d documents"
+msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
+
+#: views/explorer/manifest.py:798
+msgid "Without a position on the image"
+msgstr "Sans position sur l'image"
+
+#: views/explorer/series.py:75
+#, python-format
+msgid "licence %(licence)s"
+msgstr "licence %(licence)s"
+
+#: views/explorer/series.py:77
+#, python-format
+msgid "attribution %(text)s"
+msgstr "attribution %(text)s"
+
+#: views/explorer/series.py:79
+#, python-format
+msgid "configuration %(name)s"
+msgstr "configuration %(name)s"
+
+#: views/explorer/series.py:82
+#, python-format
+msgid "raw file %(url)s"
+msgstr "fichier brut %(url)s"
+
+#: views/explorer/series.py:97
+#, python-format
+msgid "%(site)s: spectra of a Selection"
+msgstr "%(site)s : spectres d'une Sélection"
+
+#: views/explorer/series.py:98
+#, python-format
+msgid "Generated on %(date)s"
+msgstr "Produit le %(date)s"
+
+#: views/explorer/series.py:144
+#, python-format
+msgid ""
+"excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
+"%(url)s"
+msgstr ""
+"exclu : %(file)s — la licence %(licence)s interdit les œuvres dérivées ; "
+"fichier brut : %(url)s"
+
+#: views/explorer/series.py:159
+#, python-format
+msgid "not in the CSV: %(file)s; file: %(url)s"
+msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
 
 #: views/model_graph_service.py:103
 msgid "String"

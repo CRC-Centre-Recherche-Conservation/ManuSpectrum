@@ -19,6 +19,7 @@ TECHNIQUE = {
 TECHNIQUE_MARK = {"code": str, "colour": (int, type(None)), "family": str}
 RANKED_VALUE = {"id": str, "uri": str, "label": "Label", "rank": int}
 NAMED_REF = {"id": str, "name": "Label"}
+CITATION = {"text": str, "bibtex": str}
 IMAGE_REF = {
     "service": (str, type(None)),
     "url": (str, type(None)),
@@ -33,6 +34,7 @@ SHAPES = {
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
     "NamedRef": NAMED_REF,
+    "Citation": CITATION,
     "Technique": TECHNIQUE,
     "TechniqueMark": TECHNIQUE_MARK,
     "Facet": {"key": str, "group": str, "values": list, "total": int},
@@ -149,7 +151,9 @@ SHAPES = {
         "evidenceOf": list,
         "dataset": (dict, type(None)),
         "bibliography": list,
-        "citation": (dict, type(None)),
+        "citation": "Citation",
+        "availability": str,
+        "manifest": str,
         "permalink": str,
         "reportUrl": str,
         "certaintyScale": dict,
@@ -172,6 +176,33 @@ SHAPES = {
     },
     "AnalysisItem": {"key": str, "kind": str, "analysis": "AnalysisHit", "files": list},
     "ItemsResponse": {"items": list, "missing": list},
+    "SharePayload": {
+        "scope": "ShareScope",
+        "citations": list,
+        "availability": str,
+        "export": "ShareExport",
+        "links": "ShareLinks",
+    },
+    "ShareScope": {
+        "kind": str,
+        "key": str,
+        "analyses": int,
+        "characterizations": int,
+        "spectra": int,
+        "drafts": int,
+        "restricted": bool,
+        "restrictedAvailable": int,
+        "missing": list,
+    },
+    "ShareExport": {"files": int, "bytes": int, "overLimit": bool, "documents": list},
+    "ShareDocument": {"id": str, "name": "Label", "url": str, "path": str},
+    "ProductLink": {"url": str, "path": str},
+    "ShareLinks": {
+        "manifest": "ProductLink",
+        "seriesCsv": ("ProductLink", type(None)),
+        "export": "ProductLink",
+        "exportRestricted": ("ProductLink", type(None)),
+    },
 }
 
 

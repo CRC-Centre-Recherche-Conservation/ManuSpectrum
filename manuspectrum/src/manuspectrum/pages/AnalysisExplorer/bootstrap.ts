@@ -72,6 +72,9 @@ export async function startAnalysisExplorer(): Promise<void> {
     await mountPublicApp({
         component: AnalysisExplorer,
         mountPoint,
-        initialProps: { connected: mountPoint.dataset.connected === "true" },
+        initialProps: {
+            connected: mountPoint.dataset.connected === "true",
+            miradorUrl: mountPoint.dataset.miradorUrl ?? "",
+        },
     });
 }

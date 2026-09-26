@@ -6,14 +6,19 @@ here is created Active on purpose. The test database lists the core
 datatypes only; the project datatype ``manifest`` is registered here.
 """
 
+import mimetypes
+import shutil
+import tempfile
 import uuid
 
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache, caches
-from django.test import TestCase
+from django.core.files.base import ContentFile
+from django.test import TestCase, override_settings
 
 from arches.app.models.models import (
     DDataType,
+    File,
     GraphModel,
     Node,
     NodeGroup,
@@ -314,14 +319,68 @@ class ExplorerCase(TestCase):
         }
 
     def setUp(self):
+        """Clear the caches and give the test its own ``MEDIA_ROOT``.
+
+        The media override is enabled before a method-level
+        ``override_settings`` and disabled after it: the two nest, and each
+        restores the settings it found.
+        """
         cache.clear()
         caches["user_permission"].clear()
         self.addCleanup(cache.clear)
         self.addCleanup(caches["user_permission"].clear)
+        self._media_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._media_root, True)
+        media = override_settings(MEDIA_ROOT=self._media_root)
+        media.enable()
+        self.addCleanup(media.disable)
 
     def embargo(self, resource):
         with self.captureOnCommitCallbacks(execute=True):
             assign_perm("no_access_to_resourceinstance", self.anonymous, resource)
+
+    def stored_file(
+        self,
+        analysis,
+        name,
+        content,
+        *,
+        licence=None,
+        config=None,
+        node_alias="measurement_point_data",
+    ):
+        """Store *content* as the file *name* of *analysis*; returns its file id.
+
+        The bytes go under the test's own ``MEDIA_ROOT`` (``setUp``), the ``File``
+        row hangs from the analysis's tile of *node_alias* (created when
+        missing), and that tile's file list gets the entry, with *licence*
+        (``{"id", "url"}``) and the renderer configuration id *config* when
+        given.
+        """
+        node = self.nodes[("analysis", node_alias)]
+        tile = TileModel.objects.filter(
+            resourceinstance=analysis, nodegroup_id=node.nodegroup_id
+        ).first() or self.tile(analysis, node_alias, [])
+        row = File(fileid=uuid.uuid4(), tile=tile)
+        row.path.save(name, ContentFile(content), save=False)
+        File.objects.bulk_create([row])
+        file_id = str(row.fileid)
+        entry = {
+            "file_id": file_id,
+            "name": name,
+            "size": len(content),
+            "type": mimetypes.guess_type(name)[0] or "",
+            "url": f"/files/{file_id}",
+            "status": "uploaded",
+        }
+        if licence:
+            entry["license"] = licence
+        if config:
+            entry["rendererConfig"] = config
+        data = dict(tile.data or {})
+        data[str(node.nodeid)] = [*(data.get(str(node.nodeid)) or []), entry]
+        TileModel.objects.filter(pk=tile.pk).update(data=data)
+        return file_id
 
     def make_draft(self, resource):
         ResourceInstance.objects.filter(pk=resource.pk).update(

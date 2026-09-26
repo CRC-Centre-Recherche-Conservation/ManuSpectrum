@@ -9,7 +9,8 @@ export type ExplorerRoute =
     | "manuspectrum:explorer-facet"
     | "manuspectrum:explorer-home"
     | "manuspectrum:explorer-analysis"
-    | "manuspectrum:explorer-items";
+    | "manuspectrum:explorer-items"
+    | "manuspectrum:explorer-share";
 
 export interface JsonRequestOptions {
     urlParameters?: Record<string, string>;

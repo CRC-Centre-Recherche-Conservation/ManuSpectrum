@@ -8,7 +8,7 @@ from django.test import SimpleTestCase, override_settings
 from django.utils import translation
 
 from manuspectrum.constants.licenses import effective_license
-from manuspectrum.views.explorer_values import (
+from manuspectrum.views.explorer.values import (
     acronym,
     axis_key,
     dataset_of,

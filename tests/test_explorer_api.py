@@ -9,6 +9,9 @@ import json
 from pathlib import Path
 from unittest import mock
 
+import bibtexparser
+
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.http import QueryDict
 from django.test import SimpleTestCase
@@ -20,8 +23,8 @@ from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import CANVAS, MANIFEST, XY_CONFIG_ID
 from tests.test_explorer_service import AZURITE, FORS, XRF, ServiceCase
 
-from manuspectrum.views import explorer_service
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer import service as explorer_service
+from manuspectrum.views.explorer.service import (
     PREVIEW_SIZE,
     imaging_entries,
     layer_of,
@@ -662,7 +665,54 @@ class AnalysisRouteTests(CorpusCase):
         self.assertTrue(
             payload["permalink"].endswith(f"report/{self.analyses['open'].pk}")
         )
-        self.assertIsNone(payload["citation"])
+        assert_shape(self, payload["citation"], "Citation")
+
+    def test_the_analysis_carries_its_citation(self):
+        analysis = str(self.analyses["open"].pk)
+
+        payload = self.get(analysis).json()
+
+        permalink = f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis}"
+        citation = payload["citation"]
+        self.assertEqual(set(citation), {"text", "bibtex"})
+        fields = bibtexparser.parse_string(citation["bibtex"]).entries[0].fields_dict
+        self.assertTrue(citation["bibtex"].startswith("@dataset{robinetnd"))
+        self.assertEqual(fields["doi"].value, "10.48579/pro/zeejth")
+        self.assertEqual(fields["title"].value, "HEU, S. 2024")
+        self.assertEqual(fields["author"].value, "Robinet, L.")
+        self.assertIn("Project: EMMA", fields["note"].value)
+        self.assertIn(f"({permalink})", fields["note"].value)
+        for text in ("Robinet, L.", "HEU, S. 2024", "EMMA", "doi.org/10.48579"):
+            self.assertIn(text, citation["text"])
+        self.assertIn(permalink, payload["availability"])
+        self.assertIn("https://doi.org/10.48579/pro/zeejth", payload["availability"])
+
+    def test_an_analysis_without_dataset_is_cited_as_its_record(self):
+        analysis = str(self.analyses["on_document"].pk)
+
+        citation = self.get(analysis).json()["citation"]
+
+        fields = bibtexparser.parse_string(citation["bibtex"]).entries[0].fields_dict
+        self.assertEqual(fields["title"].value, r"FORS\_009 {\textemdash} f. 1v")
+        self.assertEqual(fields["publisher"].value, settings.APP_TITLE)
+        self.assertEqual(
+            fields["url"].value, f"{settings.PUBLIC_SERVER_ADDRESS}report/{analysis}"
+        )
+        self.assertNotIn("doi", fields)
+        self.assertTrue(citation["text"].startswith("FORS_009 — f. 1v [Dataset]"))
+
+    def test_the_analysis_names_its_manifest_by_absolute_url(self):
+        analysis = str(self.analyses["open"].pk)
+
+        english = self.get(analysis).json()["manifest"]
+        french = self.client.get(f"/fr/api/explorer/analysis/{analysis}").json()
+
+        self.assertEqual(
+            english,
+            f"{settings.PUBLIC_SERVER_ADDRESS}iiif/v3/explorer-manifest"
+            f"?ids=an:{analysis}:-&lang=en",
+        )
+        self.assertTrue(french["manifest"].endswith("&lang=fr"))
 
     def test_the_report_link_is_a_path_in_the_language_of_the_request(self):
         analysis = self.analyses["open"].pk
@@ -743,7 +793,7 @@ class ItemsRouteTests(CorpusCase):
         unknown = f"im:{self.analyses['open'].pk}:99"
 
         with mock.patch(
-            "manuspectrum.views.explorer_service.manifest_json",
+            "manuspectrum.views.explorer.service.manifest_json",
             return_value=self.IMAGING_MANIFEST,
         ):
             payload = self.get([key, unknown]).json()
@@ -782,7 +832,7 @@ class ItemsRouteTests(CorpusCase):
         )
 
         with mock.patch(
-            "manuspectrum.views.explorer_service.manifest_json",
+            "manuspectrum.views.explorer.service.manifest_json",
             return_value=self.IMAGING_MANIFEST,
         ):
             payload = self.get([f"an:{self.analyses['open'].pk}:-"]).json()
@@ -1143,7 +1193,7 @@ class ImagingEntriesTests(SimpleTestCase):
 
     def test_layer_indices_continue_across_manifests_and_bands_sort_by_value(self):
         with mock.patch(
-            "manuspectrum.views.explorer_service.manifest_json",
+            "manuspectrum.views.explorer.service.manifest_json",
             side_effect=[self.MANIFEST_A, self.MANIFEST_B],
         ):
             entries = imaging_entries(

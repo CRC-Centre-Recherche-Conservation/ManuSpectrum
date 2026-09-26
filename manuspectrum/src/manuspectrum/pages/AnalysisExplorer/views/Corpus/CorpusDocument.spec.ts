@@ -94,6 +94,7 @@ function cardStub(name: string): Component {
             analysisNames: { type: Map, default: null },
             headingId: { type: String, default: undefined },
             closable: { type: Boolean, default: true },
+            zone: { type: Object, default: null },
         },
         emits: ["close"],
         setup(props, { expose }) {
@@ -462,6 +463,56 @@ describe("CorpusDocument", () => {
             true,
         );
         expect(wrapper.find(".on-this-page").exists()).toBe(false);
+    });
+
+    it("hands the card the page and zone of the analysis, the page shown first", async () => {
+        stubFetch({
+            annotations: [
+                annotation(1),
+                annotation(1, {
+                    canvas: "https://iiif.example/c2",
+                    shape: { type: "point", x: 7, y: 8 },
+                }),
+                annotation(2, { canvas: "https://iiif.example/c2" }),
+            ],
+        });
+        const { wrapper, store } = mountScreen((explorer) =>
+            explorer.openDocument(uuid(1), "https://iiif.example/c2"),
+        );
+        await flushPromises();
+        store.focusOn({ kind: "analysis", id: uuid(101) });
+        await flushPromises();
+
+        expect(
+            wrapper.findComponent({ name: "AnalysisCard" }).props("zone"),
+        ).toEqual({
+            canvas: "https://iiif.example/c2",
+            shape: { type: "point", x: 7, y: 8 },
+        });
+    });
+
+    it("hands the card no zone for an unlocated analysis", async () => {
+        stubFetch({
+            annotations: [annotation(1)],
+            unlocated: [
+                {
+                    analysis: uuid(103),
+                    name: { value: "FORS_014", lang: "en" },
+                    technique: null,
+                    dataKind: "xy" as const,
+                    unpublished: false,
+                    match: true,
+                },
+            ],
+        });
+        const { wrapper, store } = mountScreen();
+        await flushPromises();
+        store.focusOn({ kind: "analysis", id: uuid(103) });
+        await flushPromises();
+
+        expect(
+            wrapper.findComponent({ name: "AnalysisCard" }).props("zone"),
+        ).toBeNull();
     });
 
     it("returns the focus to the marker when the card closes", async () => {

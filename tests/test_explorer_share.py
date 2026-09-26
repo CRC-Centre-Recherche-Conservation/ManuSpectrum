@@ -1,0 +1,398 @@
+"""The share payload of a scope: citations, availability, export estimate and product links.
+
+Usage:
+    python manage.py test tests.test_explorer_share --settings="tests.test_settings"
+"""
+
+import datetime
+import json
+import re
+from unittest import mock
+
+import bibtexparser
+from urllib.parse import parse_qs, quote, urlsplit
+
+from django.conf import settings
+from django.db import connection
+from django.http import QueryDict
+from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
+
+from arches.app.models.models import TileModel
+
+from manuspectrum.views.explorer.citations import Home
+from manuspectrum.views.explorer.scopes import (
+    resolve_scope,
+    scope_content,
+    share_payload,
+)
+from tests.explorer_contract import assert_shape
+from tests.explorer_fixtures import XY_CONFIG_ID
+from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
+
+CSV = "11111111-1111-4111-8111-111111111111"
+UNKNOWN = "00000000-0000-4000-8000-00000000000a"
+
+
+def cited(citation):
+    """The fields of the one BibTeX entry of a payload *citation*."""
+    return bibtexparser.parse_string(citation["bibtex"]).entries[0].fields_dict
+
+
+class ShareRouteTests(CorpusCase):
+    def get(self, query):
+        with mock.patch(FETCH, return_value=MANIFEST_JSON):
+            return self.client.get(f"/en/api/explorer/share?{query}")
+
+    def pk(self, key):
+        return str(self.analyses[key].pk)
+
+    def scopes(self):
+        return (
+            f"ids=an:{self.pk('open')}:-",
+            f"document={self.documents['open'].pk}",
+            f"project={self.projects['main'].pk}",
+        )
+
+    def test_share_payload_has_the_contract_shape(self):
+        for query in self.scopes():
+            with self.subTest(query=query):
+                response = self.get(query)
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                assert_shape(self, payload, "SharePayload")
+                for citation in payload["citations"]:
+                    assert_shape(self, citation, "Citation")
+                for document in payload["export"]["documents"]:
+                    assert_shape(self, document, "ShareDocument")
+                self.assertTrue(payload["citations"])
+                self.assertEqual(payload["scope"]["key"], query)
+
+    def test_the_scope_counts_its_analyses_drafts_and_materials(self):
+        payload = self.get(f"document={self.documents['open'].pk}").json()
+
+        self.assertEqual(payload["scope"]["analyses"], 3)
+        self.assertEqual(payload["scope"]["drafts"], 1)
+        self.assertEqual(payload["scope"]["characterizations"], 1)
+
+    def test_a_visitor_gets_public_no_cache_with_an_etag(self):
+        query = f"document={self.documents['open'].pk}"
+        response = self.get(query)
+
+        self.assertEqual(response["Cache-Control"], "public, no-cache")
+        with mock.patch(FETCH, return_value=MANIFEST_JSON):
+            again = self.client.get(
+                f"/en/api/explorer/share?{query}", HTTP_IF_NONE_MATCH=response["ETag"]
+            )
+        self.assertEqual(again.status_code, 304)
+
+    def test_a_connected_reader_gets_private_no_store(self):
+        self.client.force_login(self.editor)
+
+        response = self.get(f"document={self.documents['open'].pk}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertNotIn("ETag", response)
+
+    def test_unknown_and_embargoed_documents_answer_the_same_404(self):
+        self.embargo(self.documents["embargoed"])
+
+        unknown = self.get(f"document={UNKNOWN}")
+        embargoed = self.get(f"document={self.documents['embargoed'].pk}")
+
+        for response in (unknown, embargoed):
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.content, b"")
+            self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    def test_no_scope_is_a_bad_request_without_body(self):
+        for query in ("", "ids=", f"document={self.documents['open'].pk}&canvases=x"):
+            with self.subTest(query=query):
+                response = self.get(query)
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.content, b"")
+
+    def test_one_citation_per_dataset(self):
+        self.tile(
+            self.analyses["on_document"],
+            "dataset_url",
+            {"url": "10.48579/pro/zeejth", "url_label": ""},
+        )
+
+        payload = self.get(f"document={self.documents['open'].pk}").json()
+
+        self.assertEqual(
+            [
+                cited(c).get("doi") and cited(c)["doi"].value
+                for c in payload["citations"]
+            ],
+            ["10.48579/pro/zeejth", None],
+        )
+        self.assertEqual(
+            cited(payload["citations"][1])["url"].value,
+            f"{settings.PUBLIC_SERVER_ADDRESS}report/{self.pk('draft')}",
+        )
+        note = cited(payload["citations"][0])["note"].value
+        for key in ("open", "on_document"):
+            self.assertIn(f"report/{self.pk(key)}", note)
+        self.assertIn(
+            f"{settings.PUBLIC_SERVER_ADDRESS}report/{self.documents['open'].pk}",
+            payload["availability"],
+        )
+        self.assertIn("https://doi.org/10.48579/pro/zeejth", payload["availability"])
+
+    def test_a_citation_carries_its_text_and_its_bibtex_only(self):
+        payload = self.get(f"document={self.documents['open'].pk}").json()
+
+        for citation in payload["citations"]:
+            self.assertEqual(set(citation), {"text", "bibtex"})
+            self.assertIn(settings.APP_TITLE, citation["text"])
+            self.assertTrue(citation["bibtex"].startswith("@dataset{"))
+
+    def test_analyses_without_a_dataset_are_cited_once_per_project(self):
+        side = self.projects["side"]
+        self.tile(self.analyses["draft"], "analysis_by_project", self.refs(side))
+
+        payload = self.get(f"document={self.documents['open'].pk}").json()
+
+        self.assertEqual(len(payload["citations"]), 2)
+        fields = cited(payload["citations"][1])
+        self.assertEqual(fields["title"].value, "Side project")
+        self.assertEqual(
+            fields["url"].value, f"{settings.PUBLIC_SERVER_ADDRESS}report/{side.pk}"
+        )
+        self.assertIn("2 analyses", fields["note"].value)
+
+    def test_an_analysis_without_project_is_cited_under_its_document(self):
+        document = self.documents["open"]
+        scope = resolve_scope(
+            QueryDict(f"document={document.pk}"), self.anonymous, "en"
+        )
+
+        homes = {group[1][0].id: group[3] for group in scope_content(scope).groups}
+
+        self.assertEqual(
+            homes[self.pk("draft")],
+            Home(
+                str(document.pk),
+                "Ms 59",
+                f"{settings.PUBLIC_SERVER_ADDRESS}report/{document.pk}",
+            ),
+        )
+        self.assertEqual(
+            homes[self.pk("on_document")].id, str(self.projects["side"].pk)
+        )
+
+    def test_a_project_scope_cites_under_its_project(self):
+        main = self.projects["main"]
+        earlier = self.new_resource("project", "Atramenta")
+        self.tile(self.analyses["open"], "analysis_by_project", self.refs(earlier))
+        scope = resolve_scope(QueryDict(f"project={main.pk}"), self.anonymous, "en")
+
+        homes = {group[3].id for group in scope_content(scope).groups}
+
+        self.assertEqual(homes, {str(main.pk)})
+
+    def test_the_export_estimate_sums_the_kept_files(self):
+        whole = self.get(f"ids=an:{self.pk('open')}:-").json()
+        narrowed = self.get(f"ids=af:{self.pk('open')}:{CSV}").json()
+
+        self.assertEqual(
+            whole["export"],
+            {"files": 2, "bytes": 4200 + 900, "overLimit": False, "documents": []},
+        )
+        self.assertEqual(whole["scope"]["spectra"], 1)
+        self.assertEqual(
+            (narrowed["export"]["files"], narrowed["export"]["bytes"]), (1, 4200)
+        )
+
+    def test_a_file_without_a_recorded_size_is_measured_in_storage(self):
+        file_id = self.stored_file(
+            self.analyses["on_document"], "extra.csv", b"x" * 300
+        )
+        tile = TileModel.objects.get(
+            resourceinstance=self.analyses["on_document"],
+            nodegroup_id=self.nodes[
+                ("analysis", "measurement_point_data")
+            ].nodegroup_id,
+        )
+        node = str(self.nodes[("analysis", "measurement_point_data")].nodeid)
+        data = dict(tile.data)
+        data[node] = [{k: v for k, v in e.items() if k != "size"} for e in data[node]]
+        TileModel.objects.filter(pk=tile.pk).update(data=data)
+
+        export = self.get(f"ids=af:{self.pk('on_document')}:{file_id}").json()["export"]
+
+        self.assertEqual((export["files"], export["bytes"]), (1, 300))
+
+    @override_settings(EXPLORER_EXPORT_MAX_BYTES=1)
+    def test_over_the_limits_lists_per_document_exports(self):
+        spanning = self.get(
+            f"ids=an:{self.pk('open')}:-,an:{self.pk('embargoed')}:-"
+        ).json()
+        single = self.get(f"document={self.documents['open'].pk}").json()
+
+        self.assertTrue(spanning["export"]["overLimit"])
+        documents = spanning["export"]["documents"]
+        self.assertEqual(
+            sorted(d["id"] for d in documents),
+            sorted(str(self.documents[k].pk) for k in ("open", "embargoed")),
+        )
+        for document in documents:
+            assert_shape(self, document, "ShareDocument")
+            path = f"/api/explorer/export?document={document['id']}&lang=en"
+            self.assertEqual(document["path"], path)
+            self.assertEqual(
+                document["url"], f"{settings.PUBLIC_SERVER_ADDRESS}{path[1:]}"
+            )
+        self.assertTrue(single["export"]["overLimit"])
+        self.assertEqual(single["export"]["documents"], [])
+
+    @override_settings(EXPLORER_EXPORT_MAX_FILES=1)
+    def test_more_files_than_the_limit_is_over_the_limit(self):
+        self.assertTrue(
+            self.get(f"ids=an:{self.pk('open')}:-").json()["export"]["overLimit"]
+        )
+
+    def test_series_link_only_for_a_selection_with_spectra(self):
+        with_spectra = self.get(f"ids=an:{self.pk('open')}:-").json()["links"]
+        without = self.get(f"ids=an:{self.pk('on_document')}:-").json()["links"]
+        document = self.get(f"document={self.documents['open'].pk}").json()["links"]
+
+        self.assertIsNotNone(with_spectra["seriesCsv"])
+        self.assertIsNone(without["seriesCsv"])
+        self.assertIsNone(document["seriesCsv"])
+
+    def test_links_are_site_paths_to_follow_and_absolute_urls_to_copy(self):
+        links = self.get(f"ids=an:{self.pk('open')}:-").json()["links"]
+        query = f"?ids=an:{self.pk('open')}:-&lang=en"
+
+        for name, path in (
+            ("seriesCsv", f"/api/explorer/series.csv{query}"),
+            ("manifest", f"/iiif/v3/explorer-manifest{query}"),
+            ("export", f"/api/explorer/export{query}"),
+        ):
+            with self.subTest(link=name):
+                self.assertEqual(
+                    links[name],
+                    {
+                        "path": path,
+                        "url": f"{settings.PUBLIC_SERVER_ADDRESS}{path[1:]}",
+                    },
+                )
+
+    def test_a_visitor_sees_no_restricted_count(self):
+        self.embargo(self.analyses["open"])
+        query = f"document={self.documents['open'].pk}"
+
+        visitor = self.get(query).json()
+        self.client.force_login(self.editor)
+        reader = self.get(query).json()
+
+        self.assertEqual(visitor["scope"]["restrictedAvailable"], 0)
+        self.assertFalse(visitor["scope"]["restricted"])
+        self.assertIsNone(visitor["links"]["exportRestricted"])
+        self.assertNotIn(self.pk("open"), str(visitor))
+        self.assertEqual(reader["scope"]["restrictedAvailable"], 1)
+        path = f"/api/explorer/export?{query}&restricted=1&lang=en"
+        self.assertEqual(
+            reader["links"]["exportRestricted"],
+            {"path": path, "url": f"{settings.PUBLIC_SERVER_ADDRESS}{path[1:]}"},
+        )
+        self.assertNotIn(self.pk("open"), str(reader))
+
+    def test_restricted_scope_is_marked_and_its_links_keep_it(self):
+        self.embargo(self.analyses["open"])
+        self.client.force_login(self.editor)
+
+        payload = self.get(f"document={self.documents['open'].pk}&restricted=1").json()
+
+        self.assertTrue(payload["scope"]["restricted"])
+        self.assertEqual(payload["scope"]["analyses"], 3)
+        for name in ("export", "manifest"):
+            for form in ("path", "url"):
+                with self.subTest(link=name, form=form):
+                    self.assertIn("&restricted=1", payload["links"][name][form])
+        self.assertIsNone(payload["links"]["exportRestricted"])
+
+    def test_links_encode_a_key_carrying_url_delimiters(self):
+        key = f"af:{self.pk('open')}:x&y#z%w"
+
+        payload = self.get(f"ids={quote(key, safe=':')}").json()
+
+        self.assertEqual(payload["scope"]["key"], f"ids={key}")
+        for name in ("manifest", "export"):
+            for form in ("path", "url"):
+                with self.subTest(link=name, form=form):
+                    parts = urlsplit(payload["links"][name][form])
+                    self.assertEqual(parts.fragment, "")
+                    self.assertEqual(
+                        parse_qs(parts.query), {"ids": [key], "lang": ["en"]}
+                    )
+
+    def test_the_payload_is_in_the_request_language(self):
+        query = f"ids=an:{self.pk('on_document')}:-"
+        with mock.patch(FETCH, return_value=MANIFEST_JSON):
+            french = self.client.get(f"/fr/api/explorer/share?{query}").json()
+
+        self.assertTrue(
+            french["availability"].startswith("Les données sont disponibles")
+        )
+        self.assertTrue(french["links"]["manifest"]["url"].endswith("&lang=fr"))
+        self.assertTrue(french["links"]["manifest"]["path"].endswith("&lang=fr"))
+
+
+class ShareCostTests(CorpusCase):
+    def project_of(self, name, count):
+        project = self.new_resource("project", name)
+        for n in range(count):
+            analysis = self.new_resource("analysis", f"{name} {n}")
+            self.tile(
+                analysis, "component_observed", self.refs(self.components["open"])
+            )
+            self.tile(analysis, "analysis_by_project", self.refs(project))
+            self.tile(
+                analysis,
+                "measurement_point_data",
+                [
+                    {
+                        "file_id": f"{n + 1:08d}-aaaa-4aaa-8aaa-{len(name):012d}",
+                        "name": f"{name}_{n}.csv",
+                        "size": 100,
+                        "type": "text/csv",
+                        "url": f"/files/{n + 1:08d}-aaaa-4aaa-8aaa-{len(name):012d}",
+                        "rendererConfig": XY_CONFIG_ID,
+                    }
+                ],
+            )
+        return project
+
+    def share_queries(self, project):
+        query = QueryDict(f"project={project.pk}")
+        scope = resolve_scope(query, self.anonymous, "en")
+        share_payload(scope, datetime.date(2026, 9, 26))
+        with CaptureQueriesContext(connection) as queries:
+            share_payload(scope, datetime.date(2026, 9, 26))
+        return len(queries)
+
+    def test_a_project_payload_names_none_of_its_analyses(self):
+        project = self.project_of("Bulk project", 5)
+        scope = resolve_scope(QueryDict(f"project={project.pk}"), self.anonymous, "en")
+
+        payload = share_payload(scope, datetime.date(2026, 9, 26))
+
+        self.assertNotIn("parts", payload)
+        self.assertEqual(len(payload["citations"]), 1)
+        self.assertEqual(
+            set(re.findall(r"report/([0-9a-f-]{36})", json.dumps(payload))),
+            {str(project.pk)},
+        )
+
+    def test_the_share_payload_reads_the_same_queries_for_one_or_five_analyses(self):
+        one = self.project_of("Single", 1)
+        five = self.project_of("Bulk project", 5)
+
+        self.assertEqual(self.share_queries(five), self.share_queries(one))

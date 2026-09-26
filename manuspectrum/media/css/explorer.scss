@@ -74,7 +74,7 @@ body.ms-page--app::after {
     line-height: 1.6;
 }
 
-// The explorer's bar (back link, Selection) is mounted here by the app.
+// The explorer's bar (back link, Share and export, Selection) is mounted here by the app.
 .ms-explorer-intro__bar {
     display: flex;
     flex-wrap: wrap;
@@ -87,8 +87,14 @@ body.ms-page--app::after {
         display: none;
     }
 
+    > .share,
     > .selection {
         order: 1;
+    }
+
+    > .share,
+    > .selection:first-child,
+    > :not(.share) + .selection {
         margin-inline-start: auto;
     }
 }
@@ -207,8 +213,17 @@ body.ms-page--app .ms-skeleton {
     inline-size: min(22rem, calc(100% - 3rem));
 }
 
+.p-drawer-mask.p-drawer-right .p-drawer.explorer-share-drawer {
+    inline-size: min(30rem, calc(100% - 3rem));
+}
+
+.p-drawer-mask.p-drawer-bottom .p-drawer.explorer-share-drawer {
+    block-size: min(85dvh, calc(100% - 3rem));
+}
+
 .p-drawer.explorer-card-drawer,
-.p-drawer.explorer-rail-drawer {
+.p-drawer.explorer-rail-drawer,
+.p-drawer.explorer-share-drawer {
     font-size: 0.8125rem;
     line-height: 1.5;
 }

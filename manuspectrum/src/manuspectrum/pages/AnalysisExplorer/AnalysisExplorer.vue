@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
 import SelectionDrawer from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue";
+import ShareExportPanel from "@/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue";
 import SharedSelectionPrompt from "@/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue";
 import ViewTabs from "@/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.vue";
 import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusView.vue";
@@ -11,6 +12,7 @@ import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
 import {
     ANNOUNCE_KEY,
     FACET_LABELS_KEY,
+    MIRADOR_URL_KEY,
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
     SELECTION_HINTS_KEY,
@@ -45,7 +47,11 @@ const INITIAL_SELECTION = parseSelection(
     new URLSearchParams(window.location.search).get(SELECTION_PARAM),
 );
 
-const props = defineProps<{ connected: boolean }>();
+/** `miradorUrl`: the viewer of `EXPLORER_MIRADOR_URL`, empty when none is set. */
+const props = withDefaults(
+    defineProps<{ connected: boolean; miradorUrl?: string }>(),
+    { miradorUrl: "" },
+);
 
 const store = useExplorerStore();
 
@@ -80,6 +86,7 @@ provide(SCREEN_FOCUS_KEY, screenFocusPending);
 provide(RESULTS_MEMO_KEY, resultsMemo);
 provide(SELECTION_HINTS_KEY, selectionHints);
 provide(ANNOUNCE_KEY, announce);
+provide(MIRADOR_URL_KEY, props.miradorUrl);
 
 /** A new screen or another document; the same document named again by the address is neither. */
 watch(
@@ -122,6 +129,7 @@ function onSelectionResolved(message: string): void {
             :to="`#${INTRO_BAR_ID}`"
             :disabled="!hasIntroBar"
         >
+            <ShareExportPanel class="share" />
             <SelectionDrawer class="selection" />
         </Teleport>
         <ViewTabs />

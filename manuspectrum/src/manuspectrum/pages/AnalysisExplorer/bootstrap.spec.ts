@@ -73,7 +73,7 @@ describe("startAnalysisExplorer", () => {
 
     it("mounts on the page's mount point with the server's connection flag", async () => {
         document.body.innerHTML =
-            '<div id="ms-explorer-app" data-connected="true"></div>';
+            '<div id="ms-explorer-app" data-connected="true" data-mirador-url="https://viewer.example/"></div>';
         await startAnalysisExplorer();
         const mountPoint = document.getElementById(
             "ms-explorer-app",
@@ -81,17 +81,22 @@ describe("startAnalysisExplorer", () => {
         expect(mountPublicApp).toHaveBeenCalledWith(
             expect.objectContaining({
                 mountPoint,
-                initialProps: { connected: true },
+                initialProps: {
+                    connected: true,
+                    miradorUrl: "https://viewer.example/",
+                },
             }),
         );
         expect(mountPoint.dataset.bundle).toBe(EXPLORER_CHUNK_MARKER);
     });
 
-    it("reads a missing flag as a visitor", async () => {
+    it("reads a missing flag as a visitor and a missing viewer as none", async () => {
         document.body.innerHTML = '<div id="ms-explorer-app"></div>';
         await startAnalysisExplorer();
         expect(mountPublicApp).toHaveBeenCalledWith(
-            expect.objectContaining({ initialProps: { connected: false } }),
+            expect.objectContaining({
+                initialProps: { connected: false, miradorUrl: "" },
+            }),
         );
     });
 

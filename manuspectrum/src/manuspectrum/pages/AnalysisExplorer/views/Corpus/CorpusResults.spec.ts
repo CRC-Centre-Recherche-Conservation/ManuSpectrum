@@ -25,6 +25,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 
 import type { Ref } from "vue";
 import type { Pinia } from "pinia";
+import type { VueWrapper } from "@vue/test-utils";
 
 import type {
     Facet,
@@ -39,6 +40,8 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 const fetchMock = vi.fn();
 let pinia: Pinia;
 let labels: Ref<Map<string, Label>>;
+/** Every wrapper a test mounts; those it leaves mounted are unmounted after it, their pending searches with them. */
+const mounted: VueWrapper[] = [];
 
 function queryOf(call: unknown[]): URLSearchParams {
     return new URLSearchParams(String(call[0]).split("?")[1] ?? "");
@@ -48,7 +51,7 @@ function mountResults({
     memo = ref<ResultsMemo | null>(null),
     attach = false,
 }: { memo?: Ref<ResultsMemo | null>; attach?: boolean } = {}) {
-    return mount(CorpusResults, {
+    const wrapper = mount(CorpusResults, {
         attachTo: attach ? document.body : undefined,
         global: {
             plugins: [pinia, PrimeVue],
@@ -58,6 +61,8 @@ function mountResults({
             },
         },
     });
+    mounted.push(wrapper);
+    return wrapper;
 }
 
 beforeEach(() => {
@@ -69,7 +74,13 @@ beforeEach(() => {
     vi.stubGlobal("fetch", fetchMock);
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+    for (const wrapper of mounted.splice(0)) {
+        if (wrapper.exists()) wrapper.unmount();
+    }
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+});
 
 describe("CorpusResults", () => {
     it("announces the result count with the right plural and lists document cards", async () => {

@@ -264,12 +264,69 @@ export interface FileEntry {
     zone: Shape | null;
 }
 
+/** A dataset citation: its recommended text and its BibTeX entry (the data package carries RIS and CSL-JSON too). */
 export interface Citation {
-    recommended: string;
-    csl: object;
+    text: string;
     bibtex: string;
-    ris: string;
+}
+
+export type ShareScopeKind = "ids" | "document" | "project";
+
+export interface ShareScope {
+    kind: ShareScopeKind;
+    /** Canonical query of the scope (`ids=…`, `document=…`, `project=…`, then its flags). */
+    key: string;
+    analyses: number;
+    characterizations: number;
+    spectra: number;
+    drafts: number;
+    /** The products hold restricted-access items (built with the signed-in reader's rights). */
+    restricted: boolean;
+    /** Items the default build leaves out for a signed-in reader; 0 for a visitor. */
+    restrictedAvailable: number;
+    missing: string[];
+}
+
+/** One product of a scope: `path` is followed on this site, `url` is copied or handed to what leaves it. */
+export interface ProductLink {
+    /** Absolute URL from `PUBLIC_SERVER_ADDRESS`. */
+    url: string;
+    /** Path on this site (`/…?…&lang=…`). */
+    path: string;
+}
+
+/** The data package of this document alone. */
+export interface ShareDocument extends ProductLink {
+    id: string;
+    name: Label;
+}
+
+export interface ShareExport {
+    files: number;
+    bytes: number;
+    overLimit: boolean;
+    /** One export per document, only when over the limit and the scope spans several documents. */
+    documents: ShareDocument[];
+}
+
+/** The scope's products. */
+export interface ShareLinks {
+    manifest: ProductLink;
+    /** Only for a Selection holding spectra. */
+    seriesCsv: ProductLink | null;
+    export: ProductLink;
+    /** Only when a signed-in reader's default build left restricted items out. */
+    exportRestricted: ProductLink | null;
+}
+
+/** `GET /{lang}/api/explorer/share`: what « Share and export » offers for one scope. */
+export interface SharePayload {
+    scope: ShareScope;
+    /** One per dataset, then one per project (else document) of the analyses without dataset. */
+    citations: Citation[];
     availability: string;
+    export: ShareExport;
+    links: ShareLinks;
 }
 
 export interface AnalysisPayload {
@@ -289,7 +346,11 @@ export interface AnalysisPayload {
     evidenceOf: NamedRef[];
     dataset: { url: string; isDoi: boolean; label: string | null } | null;
     bibliography: Label[];
-    citation: Citation | null;
+    citation: Citation;
+    /** The data availability statement of this analysis. */
+    availability: string;
+    /** Absolute URL of the IIIF manifest of this analysis. */
+    manifest: string;
     permalink: string;
     /** Path of the Arches report on this site, in the request language. */
     reportUrl: string;
@@ -338,6 +399,10 @@ export const SHAPE_KEYS = {
     Label: { value: true, lang: true } satisfies Record<keyof Label, true>,
     Ref: { id: true, model: true, name: true } satisfies Record<
         keyof Ref,
+        true
+    >,
+    Citation: { text: true, bibtex: true } satisfies Record<
+        keyof Citation,
         true
     >,
     ValueRef: { id: true, uri: true, label: true } satisfies Record<
@@ -498,6 +563,8 @@ export const SHAPE_KEYS = {
         dataset: true,
         bibliography: true,
         citation: true,
+        availability: true,
+        manifest: true,
         permalink: true,
         reportUrl: true,
         certaintyScale: true,
@@ -528,4 +595,44 @@ export const SHAPE_KEYS = {
         keyof ItemsResponse,
         true
     >,
+    SharePayload: {
+        scope: true,
+        citations: true,
+        availability: true,
+        export: true,
+        links: true,
+    } satisfies Record<keyof SharePayload, true>,
+    ShareScope: {
+        kind: true,
+        key: true,
+        analyses: true,
+        characterizations: true,
+        spectra: true,
+        drafts: true,
+        restricted: true,
+        restrictedAvailable: true,
+        missing: true,
+    } satisfies Record<keyof ShareScope, true>,
+    ShareExport: {
+        files: true,
+        bytes: true,
+        overLimit: true,
+        documents: true,
+    } satisfies Record<keyof ShareExport, true>,
+    ShareDocument: {
+        id: true,
+        name: true,
+        url: true,
+        path: true,
+    } satisfies Record<keyof ShareDocument, true>,
+    ProductLink: { url: true, path: true } satisfies Record<
+        keyof ProductLink,
+        true
+    >,
+    ShareLinks: {
+        manifest: true,
+        seriesCsv: true,
+        export: true,
+        exportRestricted: true,
+    } satisfies Record<keyof ShareLinks, true>,
 } as const;

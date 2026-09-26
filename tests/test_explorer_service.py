@@ -12,7 +12,7 @@ from django.test import SimpleTestCase
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer.service import (
     TECHNIQUE_PALETTE,
     ancestor_terms,
     corpus_rows,
