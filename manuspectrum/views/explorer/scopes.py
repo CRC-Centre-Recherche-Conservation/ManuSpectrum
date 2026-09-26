@@ -577,15 +577,18 @@ def _per_document(scope):
 
     A Selection keeps its keys whose analysis (or, for an identified
     material, one of whose objects) is on the document; a project becomes
-    ``project=<uuid>&document=<uuid>``. A document scope has no split: ``{}``.
+    ``project=<uuid>&document=<uuid>`` on each document holding one of its
+    analyses. A document scope has no split: ``{}``.
     """
     bundle = scope.bundle
     if scope.kind == "document":
         return {}
     if scope.kind == "project":
+        analysed = {bundle.chains[a][0] for a in scope.analyses if a in bundle.chains}
         return {
             d: urlencode([("project", scope.subject), ("document", d)])
             for d in scope.documents
+            if d in analysed
         }
     keys_of = {d: [] for d in scope.documents}
     for key in scope.params[0][1].split(","):
@@ -614,9 +617,9 @@ def share_payload(scope, accessed):
     ``citation_home`` of the analyses without dataset), as their text and
     BibTeX (``shown_citation``); operators and projects are named only when
     the reader may name them. ``export`` counts the package as the export
-    does (``export_size``); over the limits, a scope spanning several
-    documents lists one export per document, holding the scope's items
-    there (``_per_document``). ``manifest`` is given only when the scope's
+    does (``export_size``); over the limits, a scope whose items span
+    several documents lists one export per document, holding the scope's
+    items there (``_per_document``). ``manifest`` is given only when the scope's
     manifest holds a canvas (``has_canvases``), ``seriesCsv`` for a
     Selection holding spectra only. Each product is a ``product_link``: the
     panel follows its ``path`` and copies or hands external viewers its
@@ -634,15 +637,16 @@ def share_payload(scope, accessed):
         for e in content.files[row["id"]]
         if e.get("dataKind") == "xy" and e.get("role") == "readable"
     )
+    split = _per_document(scope) if over else {}
     documents = []
-    if over and scope.kind != "document" and len(scope.documents) > 1:
+    if len(split) > 1:
         documents = [
             {
                 "id": d,
                 "name": bundle.label_of[d],
                 **product_link("explorer-export", query, language),
             }
-            for d, query in _per_document(scope).items()
+            for d, query in split.items()
         ]
     return {
         "scope": {

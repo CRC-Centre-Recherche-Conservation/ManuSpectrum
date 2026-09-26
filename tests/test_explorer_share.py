@@ -326,6 +326,45 @@ class ShareRouteTests(CorpusCase):
         self.assertEqual(scope.key, f"project={main.pk}&document={opened}")
         self.assertEqual(scope.documents, (opened,))
 
+    @override_settings(EXPLORER_EXPORT_MAX_BYTES=1)
+    def test_a_project_split_leaves_out_documents_without_its_analyses(self):
+        main = self.projects["main"]
+        self.tile(self.analyses["embargoed"], "analysis_by_project", self.refs(main))
+        for key in ("open", "embargoed"):
+            self.stored_file(self.analyses[key], f"{key}.csv", b"1,2\n")
+        second = self.new_resource("document", "Second document")
+        node = self.nodes[("characterization", "object_observed")]
+        TileModel.objects.filter(
+            resourceinstance=self.characterization, nodegroup_id=node.nodegroup_id
+        ).update(data={str(node.nodeid): self.refs(self.components["open"], second)})
+
+        documents = self.get(f"project={main.pk}").json()["export"]["documents"]
+
+        self.assertEqual(
+            sorted(d["id"] for d in documents),
+            sorted(str(self.documents[k].pk) for k in ("open", "embargoed")),
+        )
+
+    @override_settings(EXPLORER_EXPORT_MAX_BYTES=1)
+    def test_a_project_on_one_document_is_not_split(self):
+        main = self.projects["main"]
+        self.stored_file(self.analyses["open"], "open.csv", b"1,2\n")
+        node = self.nodes[("characterization", "object_observed")]
+        TileModel.objects.filter(
+            resourceinstance=self.characterization, nodegroup_id=node.nodegroup_id
+        ).update(
+            data={
+                str(node.nodeid): self.refs(
+                    self.components["open"], self.documents["embargoed"]
+                )
+            }
+        )
+
+        export = self.get(f"project={main.pk}").json()["export"]
+
+        self.assertTrue(export["overLimit"])
+        self.assertEqual(export["documents"], [])
+
     @override_settings(EXPLORER_EXPORT_MAX_FILES=1)
     def test_more_files_than_the_limit_is_over_the_limit(self):
         for name in ("a.csv", "b.csv"):
