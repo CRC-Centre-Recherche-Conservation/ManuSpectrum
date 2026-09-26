@@ -35,8 +35,11 @@ language, and one per language across processes, started through
 keep reading the previous bundle until the new one is stored; a data
 change during a rebuild is rebuilt by the first request after it ends.
 Meanwhile a resource made visible by the new data is still absent from the
-bundle served: its document or analysis answers 404 for those few seconds,
-and the new analyses of a document read as not matching the filters. A
+bundle served: its document or analysis answers 404, and the new analyses
+of a document read as not matching the filters, until the rebuild is
+stored. Since background rebuilds of a language start at most once per
+``EXPLORER_REBUILD_MIN_INTERVAL`` seconds, that window lasts up to the
+interval plus one build. A
 change of permission gates, a resource the previous bundle shows that the
 current visible set leaves out (a link to a hidden Project, a deletion), or
 no previous bundle, builds in the request.
