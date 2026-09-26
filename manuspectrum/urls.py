@@ -43,6 +43,7 @@ from manuspectrum.views.explorer_api import (
     ExplorerShareView,
     UnservedProductView,
 )
+from manuspectrum.views.explorer_series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
@@ -409,7 +410,7 @@ urlpatterns.append(
 urlpatterns.append(
     path(
         "api/explorer/series.csv",
-        UnservedProductView.as_view(),
+        ExplorerSeriesView.as_view(),
         name="explorer-series-csv",
     )
 )

@@ -4433,6 +4433,50 @@ msgid_plural "Selection of %(count)d pages of %(documents)d documents"
 msgstr[0] "Sélection de %(count)d folio de %(documents)d documents"
 msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
 
+#: views/explorer_series.py
+#, python-format
+msgid "%(site)s: spectra of a Selection"
+msgstr "%(site)s : spectres d'une Sélection"
+
+#: views/explorer_series.py
+#, python-format
+msgid "Generated on %(date)s"
+msgstr "Produit le %(date)s"
+
+#: views/explorer_series.py
+#, python-format
+msgid "licence %(licence)s"
+msgstr "licence %(licence)s"
+
+#: views/explorer_series.py
+#, python-format
+msgid "attribution %(text)s"
+msgstr "attribution %(text)s"
+
+#: views/explorer_series.py
+#, python-format
+msgid "configuration %(name)s"
+msgstr "configuration %(name)s"
+
+#: views/explorer_series.py
+#, python-format
+msgid "raw file %(url)s"
+msgstr "fichier brut %(url)s"
+
+#: views/explorer_series.py
+#, python-format
+msgid ""
+"excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
+"%(url)s"
+msgstr ""
+"exclu : %(file)s — la licence %(licence)s interdit les œuvres dérivées ; "
+"fichier brut : %(url)s"
+
+#: views/explorer_series.py
+#, python-format
+msgid "not in the CSV: %(file)s; file: %(url)s"
+msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
+
 #~ msgid "XRF"
 #~ msgstr "XRF"
 
