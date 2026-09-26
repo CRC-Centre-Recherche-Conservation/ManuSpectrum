@@ -12,7 +12,7 @@ in ``media/js/utils/file-license.js``.
 """
 
 import json
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from django.utils import translation
 from django.utils.translation import gettext_lazy as _
@@ -143,6 +143,22 @@ def effective_license(entry, language):
         and (urlparse(url).hostname or "") in RIGHTS_REGISTRY_HOSTS,
         "isDefault": is_default,
     }
+
+
+def iiif_rights(licence):
+    """The IIIF ``rights`` value of an ``effective_license()`` result, or None.
+
+    IIIF Presentation 3 ``rights`` takes a Creative Commons or
+    RightsStatements.org URI in its ``http://`` form; a licence hosted
+    anywhere else, or without a URL, has none.
+    """
+    url = (licence or {}).get("url")
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if (parsed.hostname or "") not in RIGHTS_REGISTRY_HOSTS:
+        return None
+    return urlunparse(parsed._replace(scheme="http"))
 
 
 def catalogue_json():

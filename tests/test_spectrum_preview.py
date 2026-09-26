@@ -32,6 +32,7 @@ from manuspectrum.utils.spectrum_preview import (
     decimate,
     is_supported,
     parse_rows,
+    read_series,
 )
 from manuspectrum.utils.xy_transforms import (
     SUPPORTED_MULTI_Y,
@@ -344,6 +345,40 @@ class BuildPreviewTests(SimpleTestCase):
         result = build_preview(self.written("\n".join(CSV_LINES)), 200, config)
 
         self.assertTrue(result["x_reversed"])
+
+    def rows(self, points):
+        return "\n".join(f"{x},{y}" for x, y in points)
+
+    def test_read_series_keeps_every_point(self):
+        path = self.written(self.rows((i, i * 2) for i in range(5000)))
+
+        series = read_series(path)
+
+        self.assertEqual(len(series["x"]), 5000)
+        self.assertEqual(series["y"][-1], 9998.0)
+        self.assertFalse(series["x_reversed"])
+
+    def test_read_series_applies_the_configuration(self):
+        series = read_series(self.written(FORS_CSV), FORS_CONFIG)
+
+        self.assertEqual(series["x"], [350.0, 351.0, 353.0])
+        self.assertEqual(series["y"], [0.1, 0.1, 0.05])
+
+    def test_read_series_of_a_single_point_draws_nothing(self):
+        self.assertIsNone(read_series(self.written("1,2")))
+
+    def test_build_preview_decimates_what_read_series_reads(self):
+        path = self.written(self.rows((i, (i % 7) - 3) for i in range(5000)))
+
+        whole, preview = read_series(path), build_preview(path, 200)
+
+        self.assertLessEqual(len(preview["x"]), 200)
+        self.assertEqual(preview["n_source"], len(whole["x"]))
+        points = set(zip(whole["x"], whole["y"]))
+        self.assertTrue(set(zip(preview["x"], preview["y"])) <= points)
+        self.assertEqual(
+            (min(preview["y"]), max(preview["y"])), (min(whole["y"]), max(whole["y"]))
+        )
 
 
 class SpectrumPreviewViewTests(SimpleTestCase):
