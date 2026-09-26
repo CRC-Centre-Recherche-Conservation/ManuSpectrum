@@ -44,6 +44,26 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("AnalysisExplorer", () => {
+    it("says once, politely, that an old Selection was emptied", async () => {
+        window.localStorage.setItem(
+            "ms-explorer-basket-v1",
+            JSON.stringify([{ key: KEY, slot: 0 }]),
+        );
+        window.localStorage.setItem("ms-explorer-basket-touched-v1", "1");
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+
+        const notice = wrapper.find(".selection-expired");
+        expect(notice.attributes("role")).toBe("status");
+        expect(notice.text()).toContain("more than 90 days");
+        expect(useExplorerStore().basket).toEqual([]);
+        await notice.find("button").trigger("click");
+        expect(wrapper.find(".selection-expired").exists()).toBe(false);
+    });
+
     it("opens the screen the URL names", async () => {
         window.history.replaceState(null, "", "/en/discover?q=gold");
         const wrapper = mount(AnalysisExplorer, {

@@ -6,6 +6,8 @@ import { createPinia, setActivePinia } from "pinia";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     BASKET_STORAGE_KEY,
+    BASKET_TOUCHED_KEY,
+    SELECTION_MAX_AGE_DAYS,
     parseBasket,
     serializeBasket,
     useBasketPersistence,
@@ -19,17 +21,29 @@ function key(n: number): string {
     return `ch:00000000-0000-4000-8000-${String(n).padStart(12, "0")}:-`;
 }
 
-function mountPersistence(): { store: ExplorerStore; unmount: () => void } {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function mountPersistence(): {
+    store: ExplorerStore;
+    expired: boolean;
+    unmount: () => void;
+} {
     const store = useExplorerStore();
+    let expired = false;
     const wrapper = mount(
         defineComponent({
             setup() {
-                useBasketPersistence(store);
+                expired = useBasketPersistence(store).expired;
                 return () => h("div");
             },
         }),
     );
-    return { store, unmount: () => wrapper.unmount() };
+    return { store, expired, unmount: () => wrapper.unmount() };
+}
+
+function basketWrites(setItem: { mock: { calls: unknown[][] } }): number {
+    return setItem.mock.calls.filter((call) => call[0] === BASKET_STORAGE_KEY)
+        .length;
 }
 
 beforeEach(() => {
@@ -103,10 +117,10 @@ describe("useBasketPersistence", () => {
         const setItem = vi.spyOn(Storage.prototype, "setItem");
         store.addToBasket(key(1));
         await nextTick();
-        expect(setItem).toHaveBeenCalledTimes(1);
+        expect(basketWrites(setItem)).toBe(1);
         store.addToBasket(key(1));
         await nextTick();
-        expect(setItem).toHaveBeenCalledTimes(1);
+        expect(basketWrites(setItem)).toBe(1);
     });
 
     it("adopts the other tab's Selection as it is", async () => {
@@ -165,5 +179,76 @@ describe("useBasketPersistence", () => {
             }),
         );
         expect(store.basket).toEqual([]);
+    });
+});
+
+describe("Selection expiry", () => {
+    const NOW = Date.UTC(2026, 8, 27);
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(NOW);
+        window.localStorage.setItem(
+            BASKET_STORAGE_KEY,
+            JSON.stringify([{ key: key(1), slot: 0 }]),
+        );
+    });
+
+    afterEach(() => vi.useRealTimers());
+
+    it("drops a Selection left unchanged for more than the maximum age, and says so", () => {
+        window.localStorage.setItem(
+            BASKET_TOUCHED_KEY,
+            String(NOW - SELECTION_MAX_AGE_DAYS * DAY_MS - 1),
+        );
+        const { store, expired } = mountPersistence();
+        expect(expired).toBe(true);
+        expect(store.basket).toEqual([]);
+        expect(window.localStorage.getItem(BASKET_STORAGE_KEY)).toBe("[]");
+    });
+
+    it("keeps a Selection changed within the maximum age", () => {
+        window.localStorage.setItem(
+            BASKET_TOUCHED_KEY,
+            String(NOW - SELECTION_MAX_AGE_DAYS * DAY_MS),
+        );
+        const { store, expired } = mountPersistence();
+        expect(expired).toBe(false);
+        expect(store.basket).toHaveLength(1);
+    });
+
+    it("keeps a Selection stored without a date and dates it now", () => {
+        const { store, expired } = mountPersistence();
+        expect(expired).toBe(false);
+        expect(store.basket).toHaveLength(1);
+        expect(window.localStorage.getItem(BASKET_TOUCHED_KEY)).toBe(
+            String(NOW),
+        );
+    });
+
+    it("dates every change of this tab, never a read or another tab's value", async () => {
+        window.localStorage.setItem(BASKET_TOUCHED_KEY, String(NOW - DAY_MS));
+        const { store } = mountPersistence();
+        expect(window.localStorage.getItem(BASKET_TOUCHED_KEY)).toBe(
+            String(NOW - DAY_MS),
+        );
+        const incoming = JSON.stringify([{ key: key(2), slot: 1 }]);
+        window.localStorage.setItem(BASKET_STORAGE_KEY, incoming);
+        window.dispatchEvent(
+            new StorageEvent("storage", {
+                key: BASKET_STORAGE_KEY,
+                newValue: incoming,
+            }),
+        );
+        await nextTick();
+        expect(window.localStorage.getItem(BASKET_TOUCHED_KEY)).toBe(
+            String(NOW - DAY_MS),
+        );
+        vi.setSystemTime(NOW + 1000);
+        store.addToBasket(key(3));
+        await nextTick();
+        expect(window.localStorage.getItem(BASKET_TOUCHED_KEY)).toBe(
+            String(NOW + 1000),
+        );
     });
 });

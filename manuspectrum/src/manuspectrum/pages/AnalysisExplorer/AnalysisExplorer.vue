@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
+import { useGettext } from "vue3-gettext";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
 import SelectionDrawer from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue";
@@ -53,8 +54,10 @@ const props = withDefaults(defineProps<{ miradorUrl?: string }>(), {
 });
 
 const store = useExplorerStore();
+const { $gettext } = useGettext();
 
-useBasketPersistence(store);
+/** The stored Selection was emptied for age on this load; the notice stays until dismissed. */
+const selectionExpired = ref(useBasketPersistence(store).expired);
 useUrlState({
     snapshot: () => snapshotOf(store),
     toQuery,
@@ -128,6 +131,23 @@ function onSelectionResolved(message: string): void {
             <ShareExportPanel class="share" />
             <SelectionDrawer class="selection" />
         </Teleport>
+        <p
+            v-if="selectionExpired"
+            class="selection-expired"
+            role="status"
+        >
+            <span>{{
+                $gettext(
+                    "Your Selection, unchanged for more than 90 days, has been emptied.",
+                )
+            }}</span>
+            <button
+                type="button"
+                @click="selectionExpired = false"
+            >
+                <span>{{ $gettext("Close") }}</span>
+            </button>
+        </p>
         <ViewTabs />
         <SharedSelectionPrompt
             v-if="sharedSelection"
@@ -150,6 +170,26 @@ function onSelectionResolved(message: string): void {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
+}
+
+.analysis-explorer .selection-expired {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
+}
+
+.analysis-explorer .selection-expired button {
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding-inline: 0.5rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .analysis-explorer .announcer {
