@@ -12,6 +12,8 @@ import datetime
 import os
 import re
 
+from defusedcsv import csv as defused_csv
+
 from django.conf import settings
 from django.http import HttpResponseBadRequest, StreamingHttpResponse
 from django.utils import translation
@@ -39,7 +41,6 @@ from manuspectrum.views.explorer.service import (
 HEADER = ("curve", "analysis", "file", "x", "y")
 ROWS_PER_CHUNK = 2000
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
-_FORMULA_CELL = re.compile(r",(?=[=+\-@])")
 
 
 class _Line:
@@ -55,8 +56,17 @@ def _clean(text):
 
 
 def _comment(text):
-    """One ``#`` comment line; a comma never opens a spreadsheet cell with a formula character."""
-    return _FORMULA_CELL.sub(", ", f"# {_clean(text)}") + "\r\n"
+    """One ``#`` comment line, written by ``defusedcsv`` as a single cell.
+
+    The cell is quoted whenever it holds a comma, a quote or a semicolon, so
+    a spreadsheet splitting on either separator reads it as one cell opening
+    with ``#`` and never as a cell opening a formula.
+    """
+    line = f"# {_clean(text)}"
+    quoting = csv.QUOTE_ALL if ";" in line else csv.QUOTE_MINIMAL
+    return defused_csv.writer(_Line(), lineterminator="\r\n", quoting=quoting).writerow(
+        [line]
+    )
 
 
 def _file_url(entry, entries):

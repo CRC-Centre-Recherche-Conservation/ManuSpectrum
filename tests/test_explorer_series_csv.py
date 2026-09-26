@@ -57,11 +57,9 @@ class SeriesCsvTests(CorpusCase):
     def split(self, text):
         """``(comment lines, csv rows)`` of a body."""
         lines = text.splitlines()
-        comments = [line for line in lines if line.startswith("#")]
+        comments = [line for line in lines if line.startswith(("#", '"#'))]
         rows = list(
-            csv.reader(
-                io.StringIO("\n".join(l for l in lines if not l.startswith("#")))
-            )
+            csv.reader(io.StringIO("\n".join(l for l in lines if l not in comments)))
         )
         return comments, rows
 
@@ -152,7 +150,8 @@ class SeriesCsvTests(CorpusCase):
 
         comments, _ = self.split(self.text(self.selection("on_document")))
 
-        (curve,) = [c for c in comments if c.startswith("# c1:")]
+        texts = [next(csv.reader([c]))[0] for c in comments]
+        (curve,) = [t for t in texts if t.startswith("# c1:")]
         self.assertIn("FORS_009 — f. 1v — Y.csv", curve)
         self.assertIn("https://creativecommons.org/licenses/by/4.0/", curve)
         self.assertIn("CRC, Paris", curve)
@@ -185,6 +184,22 @@ class SeriesCsvTests(CorpusCase):
             for cell in next(csv.reader([line]))[1:]:
                 self.assertFalse(cell[:1] in ("=", "+", "-", "@"), line)
             self.assertNotIn("\r", line)
+
+    def test_a_quoted_or_semicolon_formula_stays_inside_its_comment_cell(self):
+        self.spectrum(name='x,"=HYPERLINK(""https://evil"",""Open"")",y.csv')
+        self.spectrum(key="open", name="a;=cmd|' /C calc'!A0.csv")
+
+        lines = self.text(self.selection("on_document", "open")).splitlines()
+        comments = lines[
+            : next(i for i, l in enumerate(lines) if l.startswith("curve"))
+        ]
+
+        for line in comments:
+            for delimiter in (",", ";"):
+                with self.subTest(line=line, delimiter=delimiter):
+                    cells = next(csv.reader([line], delimiter=delimiter))
+                    self.assertEqual(len(cells), 1)
+                    self.assertTrue(cells[0].startswith("#"))
 
     def test_a_raw_instrument_file_is_never_read(self):
         self.stored_file(self.analyses["on_document"], "Z.mca", b"1,2\n3,4\n")
