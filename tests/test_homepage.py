@@ -6,7 +6,7 @@ from django.http import QueryDict
 from django.test import TestCase, override_settings
 
 from manuspectrum.utils.public_visibility import anonymous_user
-from manuspectrum.views.explorer_service import search_payload
+from manuspectrum.views.explorer.service import search_payload
 from tests.explorer_fixtures import ExplorerCase
 
 NOSCRIPT = re.compile(r"<noscript>(.*?)</noscript>", re.S)
@@ -144,10 +144,10 @@ class DiscoverEntryTests(TestCase):
     def test_homepage_survives_a_failing_explorer_search(self):
         with (
             mock.patch(
-                "manuspectrum.views.explorer_home.search_payload",
+                "manuspectrum.views.explorer.home.search_payload",
                 side_effect=RuntimeError("broken facet"),
             ) as search,
-            self.assertLogs("manuspectrum.views.explorer_home", "ERROR"),
+            self.assertLogs("manuspectrum.views.explorer.home", "ERROR"),
         ):
             response = self.client.get("/en/")
             self.client.get("/en/")
@@ -184,7 +184,7 @@ class HomepageTechniquesTests(ExplorerCase):
         cache.clear()
 
     def test_only_techniques_with_visible_analyses_are_listed(self):
-        from manuspectrum.views.explorer_home import homepage_techniques
+        from manuspectrum.views.explorer.home import homepage_techniques
 
         facet = {
             "key": "technique",
@@ -204,7 +204,7 @@ class HomepageTechniquesTests(ExplorerCase):
             ],
         }
         with mock.patch(
-            "manuspectrum.views.explorer_home.search_payload",
+            "manuspectrum.views.explorer.home.search_payload",
             return_value={"facets": [facet]},
         ) as search:
             listed = homepage_techniques("en")
@@ -213,7 +213,7 @@ class HomepageTechniquesTests(ExplorerCase):
         self.assertEqual(search.call_args.args[0].get("grain"), "analyses")
 
     def test_the_list_follows_the_real_facet_of_the_fixture(self):
-        from manuspectrum.views.explorer_home import homepage_techniques
+        from manuspectrum.views.explorer.home import homepage_techniques
 
         listed = homepage_techniques("en")
         uris = {t["id"] for t in listed}
@@ -224,10 +224,10 @@ class HomepageTechniquesTests(ExplorerCase):
         )
 
     def test_the_list_is_memoised_per_language(self):
-        from manuspectrum.views.explorer_home import homepage_techniques
+        from manuspectrum.views.explorer.home import homepage_techniques
 
         with mock.patch(
-            "manuspectrum.views.explorer_home.search_payload",
+            "manuspectrum.views.explorer.home.search_payload",
             return_value={"facets": []},
         ) as search:
             homepage_techniques("en")

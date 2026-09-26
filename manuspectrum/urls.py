@@ -31,7 +31,7 @@ from manuspectrum.views.iiif_annotation import (
     IIIFAnnotationViewV2,
 )
 from manuspectrum.views.analysis_explorer import AnalysisExplorerPageView
-from manuspectrum.views.explorer_api import (
+from manuspectrum.views.explorer.api import (
     ExplorerAnalysisView,
     ExplorerDocumentMatchView,
     ExplorerDocumentView,
@@ -42,8 +42,8 @@ from manuspectrum.views.explorer_api import (
     ExplorerSearchView,
     ExplorerShareView,
 )
-from manuspectrum.views.explorer_export import ExplorerExportView
-from manuspectrum.views.explorer_series import ExplorerSeriesView
+from manuspectrum.views.explorer.export import ExplorerExportView
+from manuspectrum.views.explorer.series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView

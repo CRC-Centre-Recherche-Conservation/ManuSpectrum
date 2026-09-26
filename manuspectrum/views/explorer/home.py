@@ -8,7 +8,7 @@ from django.http import QueryDict
 
 from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.public_visibility import anonymous_user
-from manuspectrum.views.explorer_service import search_payload
+from manuspectrum.views.explorer.service import search_payload
 
 logger = logging.getLogger(__name__)
 

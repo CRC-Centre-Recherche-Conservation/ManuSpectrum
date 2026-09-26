@@ -23,8 +23,8 @@ from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import CANVAS, MANIFEST, XY_CONFIG_ID
 from tests.test_explorer_service import AZURITE, FORS, XRF, ServiceCase
 
-from manuspectrum.views import explorer_service
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer import service as explorer_service
+from manuspectrum.views.explorer.service import (
     PREVIEW_SIZE,
     imaging_entries,
     layer_of,
@@ -793,7 +793,7 @@ class ItemsRouteTests(CorpusCase):
         unknown = f"im:{self.analyses['open'].pk}:99"
 
         with mock.patch(
-            "manuspectrum.views.explorer_service.manifest_json",
+            "manuspectrum.views.explorer.service.manifest_json",
             return_value=self.IMAGING_MANIFEST,
         ):
             payload = self.get([key, unknown]).json()
@@ -832,7 +832,7 @@ class ItemsRouteTests(CorpusCase):
         )
 
         with mock.patch(
-            "manuspectrum.views.explorer_service.manifest_json",
+            "manuspectrum.views.explorer.service.manifest_json",
             return_value=self.IMAGING_MANIFEST,
         ):
             payload = self.get([f"an:{self.analyses['open'].pk}:-"]).json()
@@ -1193,7 +1193,7 @@ class ImagingEntriesTests(SimpleTestCase):
 
     def test_layer_indices_continue_across_manifests_and_bands_sort_by_value(self):
         with mock.patch(
-            "manuspectrum.views.explorer_service.manifest_json",
+            "manuspectrum.views.explorer.service.manifest_json",
             side_effect=[self.MANIFEST_A, self.MANIFEST_B],
         ):
             entries = imaging_entries(

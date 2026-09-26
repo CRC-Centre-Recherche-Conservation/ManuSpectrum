@@ -25,7 +25,7 @@ LAYERS = (
     "https://example.org/iiif/maxrf/canvas/cu",
 )
 UNKNOWN = "00000000-0000-4000-8000-00000000000b"
-BUILDER = "manuspectrum.views.explorer_manifest"
+BUILDER = "manuspectrum.views.explorer.manifest"
 PROFILE = 'application/ld+json;profile="http://iiif.io/api/presentation/3/context.json"'
 
 

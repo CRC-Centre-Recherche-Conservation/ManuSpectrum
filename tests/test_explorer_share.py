@@ -20,8 +20,8 @@ from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import TileModel
 
-from manuspectrum.views.explorer_citations import Home
-from manuspectrum.views.explorer_scopes import (
+from manuspectrum.views.explorer.citations import Home
+from manuspectrum.views.explorer.scopes import (
     resolve_scope,
     scope_content,
     share_payload,

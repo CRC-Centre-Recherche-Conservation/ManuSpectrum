@@ -1,7 +1,7 @@
 from django import template
 from django.utils.translation import get_language
 
-from manuspectrum.views.explorer_home import homepage_techniques
+from manuspectrum.views.explorer.home import homepage_techniques
 
 register = template.Library()
 

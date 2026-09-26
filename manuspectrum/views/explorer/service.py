@@ -2,7 +2,7 @@
 
 Every function takes the reader and the request language. What a request
 derives from the whole visible corpus is a ``CorpusBundle``, memoised by
-``explorer_memo`` per reader scope, language and data version; the rest is
+``explorer.memo`` per reader scope, language and data version; the rest is
 built per request. Values are read off the tiles of the nodegroups the reader
 may read, links off the tiles by role (D6), and a resource outside
 ``visible_set`` never reaches a payload, a facet or a name.
@@ -51,15 +51,15 @@ from manuspectrum.utils.public_visibility import (
     visible_set,
 )
 from manuspectrum.utils.role_links import readable_links, role_node
-from manuspectrum.views import explorer_memo
-from manuspectrum.views.explorer_citations import (
+from manuspectrum.views.explorer import memo as explorer_memo
+from manuspectrum.views.explorer.citations import (
     CitedAnalysis,
     citation_entry,
     shown_citation,
     person_name,
 )
-from manuspectrum.views.explorer_conditions import clean_html, conditions_of
-from manuspectrum.views.explorer_values import (
+from manuspectrum.views.explorer.conditions import clean_html, conditions_of
+from manuspectrum.views.explorer.values import (
     FALLBACK_LANGUAGE,
     acronym,
     dataset_of,
@@ -881,9 +881,9 @@ def build_bundle(user, language, visible):
 
 
 def corpus_bundle(user, language, ticket=None):
-    """The memoised ``CorpusBundle`` of *user* in *language* (``explorer_memo``).
+    """The memoised ``CorpusBundle`` of *user* in *language* (``explorer.memo``).
 
-    *ticket* is the ``explorer_memo.ticket`` the caller already read.
+    *ticket* is the ``explorer.memo.ticket`` the caller already read.
     """
     return explorer_memo.corpus_bundle(user, language, build_bundle, held=ticket)
 

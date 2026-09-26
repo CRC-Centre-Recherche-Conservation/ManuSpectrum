@@ -10,7 +10,7 @@ from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 from lxml import etree
 
-from manuspectrum.views.explorer_manifest import (
+from manuspectrum.views.explorer.manifest import (
     PRESENTATION_3,
     data_annotation,
     layer_canvas,

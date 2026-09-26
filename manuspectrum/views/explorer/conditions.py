@@ -9,7 +9,7 @@ import re
 
 import nh3
 
-from manuspectrum.views.explorer_values import label, string_texts, value_refs
+from manuspectrum.views.explorer.values import label, string_texts, value_refs
 
 ALLOWED_TAGS = frozenset({"p", "br", "em", "strong", "ul", "ol", "li", "sub", "sup"})
 _EMPTY = re.compile(r"^(\s|&nbsp;|<br\s*/?>|<p>\s*</p>)*$", re.IGNORECASE)

@@ -7,7 +7,7 @@ visible analyses and identified materials in corpus order, the per-key
 narrowing of the Selection, and whose rights build the products.
 
 Nothing is memoised here: the scope reads the memoised corpus bundle of its
-reader (``explorer_memo``) and the visibility memos. ``share_payload`` is the
+reader (``explorer.memo``) and the visibility memos. ``share_payload`` is the
 scope's summary for the « Share and export » panel, built per request.
 """
 
@@ -30,14 +30,14 @@ from manuspectrum.utils.public_visibility import (
     visible_set,
 )
 from manuspectrum.utils.role_links import role_node
-from manuspectrum.views.explorer_citations import (
+from manuspectrum.views.explorer.citations import (
     Home,
     availability,
     citation_entries,
     shown_citation,
 )
-from manuspectrum.views.explorer_memo import ticket
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer.memo import ticket
+from manuspectrum.views.explorer.service import (
     ITEM_KEY,
     ROLES,
     Values,

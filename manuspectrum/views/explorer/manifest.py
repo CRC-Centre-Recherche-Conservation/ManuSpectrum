@@ -47,8 +47,8 @@ from django.utils.translation import ngettext
 from manuspectrum.constants.licenses import iiif_rights
 from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.utils.role_links import role_node
-from manuspectrum.views.explorer_conditions import conditions_of
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer.conditions import conditions_of
+from manuspectrum.views.explorer.service import (
     ROLES,
     Values,
     _annotations,
@@ -66,8 +66,8 @@ from manuspectrum.views.explorer_service import (
     product_url,
     renderer_configs,
 )
-from manuspectrum.views.explorer_scopes import kept_files
-from manuspectrum.views.explorer_values import rewrite_legacy_url
+from manuspectrum.views.explorer.scopes import kept_files
+from manuspectrum.views.explorer.values import rewrite_legacy_url
 from manuspectrum.views.summary_service import _date
 
 PRESENTATION_3 = "http://iiif.io/api/presentation/3/context.json"

@@ -20,16 +20,16 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from manuspectrum.utils.spectrum_preview import is_supported, read_series
-from manuspectrum.views.explorer_api import _not_found
-from manuspectrum.views.explorer_manifest import absolute_url
-from manuspectrum.views.explorer_scopes import (
+from manuspectrum.views.explorer.api import _not_found
+from manuspectrum.views.explorer.manifest import absolute_url
+from manuspectrum.views.explorer.scopes import (
     ScopeError,
     export_language,
     kept_files,
     resolve_scope,
     scope_files,
 )
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer.service import (
     Values,
     analysis_files,
     permalink,

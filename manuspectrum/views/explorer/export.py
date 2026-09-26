@@ -32,15 +32,15 @@ from django.views import View
 from zipstream import ZIP_STORED, ZipStream
 
 from manuspectrum.utils.role_links import role_node
-from manuspectrum.views.explorer_api import _not_found
-from manuspectrum.views.explorer_citations import (
+from manuspectrum.views.explorer.api import _not_found
+from manuspectrum.views.explorer.citations import (
     availability,
     citation_entries,
     parse_dataverse,
 )
-from manuspectrum.views.explorer_conditions import conditions_of
-from manuspectrum.views.explorer_manifest import ManifestTooLarge, build_manifest
-from manuspectrum.views.explorer_scopes import (
+from manuspectrum.views.explorer.conditions import conditions_of
+from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifest
+from manuspectrum.views.explorer.scopes import (
     ScopeError,
     export_language,
     resolve_scope,
@@ -48,7 +48,7 @@ from manuspectrum.views.explorer_scopes import (
     share_link,
     stored_sizes,
 )
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer.service import (
     ROLES,
     Values,
     _annotations,
@@ -61,7 +61,7 @@ from manuspectrum.views.explorer_service import (
     permalink,
     plain_text,
 )
-from manuspectrum.views.explorer_values import rewrite_legacy_url
+from manuspectrum.views.explorer.values import rewrite_legacy_url
 from manuspectrum.views.summary_service import _date
 
 CRATE_NAME = "ro-crate-metadata.json"

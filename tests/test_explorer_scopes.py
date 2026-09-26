@@ -14,19 +14,19 @@ from django.http import QueryDict
 from tests import test_explorer_api as api
 from tests.test_explorer_api import ReadRightsCase
 
-from manuspectrum.views.explorer_scopes import (
+from manuspectrum.views.explorer.scopes import (
     ScopeError,
     export_language,
     kept_files,
     resolve_scope,
     scope_file,
 )
-from manuspectrum.views.explorer_service import analysis_files
+from manuspectrum.views.explorer.service import analysis_files
 
 CSV = api.ItemsRouteTests.CSV
 MCA = "22222222-2222-4222-8222-222222222222"
 UNKNOWN = "00000000-0000-4000-8000-00000000000a"
-MANIFEST_JSON = "manuspectrum.views.explorer_service.manifest_json"
+MANIFEST_JSON = "manuspectrum.views.explorer.service.manifest_json"
 
 
 class ScopeTests(ReadRightsCase):

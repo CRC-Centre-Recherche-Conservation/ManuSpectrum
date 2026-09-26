@@ -26,8 +26,9 @@ from arches.app.models.models import (
 
 from manuspectrum.utils.data_version import data_version, prune_data_changes
 from manuspectrum.utils.public_visibility import explorer_scope
-from manuspectrum.views import explorer_memo, explorer_service
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer import memo as explorer_memo
+from manuspectrum.views.explorer import service as explorer_service
+from manuspectrum.views.explorer.service import (
     corpus_bundle,
     document_payload,
     match_payload,

@@ -33,15 +33,15 @@ from django.views.decorators.gzip import gzip_page
 
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import is_connected
-from manuspectrum.views import explorer_memo
-from manuspectrum.views.explorer_manifest import ManifestTooLarge, build_manifest
-from manuspectrum.views.explorer_scopes import (
+from manuspectrum.views.explorer import memo as explorer_memo
+from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifest
+from manuspectrum.views.explorer.scopes import (
     ScopeError,
     export_language,
     resolve_scope,
     share_payload,
 )
-from manuspectrum.views.explorer_service import (
+from manuspectrum.views.explorer.service import (
     FACET_KEYS,
     analysis_payload,
     document_payload,

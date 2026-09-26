@@ -15,7 +15,7 @@ from django.http import QueryDict
 from arches.app.models.models import TileModel
 
 from manuspectrum.models import RendererConfig
-from manuspectrum.views.explorer_scopes import resolve_scope
+from manuspectrum.views.explorer.scopes import resolve_scope
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 
 FORS = {
@@ -189,7 +189,7 @@ class SeriesCsvTests(CorpusCase):
     def test_a_raw_instrument_file_is_never_read(self):
         self.stored_file(self.analyses["on_document"], "Z.mca", b"1,2\n3,4\n")
 
-        with mock.patch("manuspectrum.views.explorer_series.read_series") as read:
+        with mock.patch("manuspectrum.views.explorer.series.read_series") as read:
             self.text(self.selection("on_document"))
 
         read.assert_not_called()
@@ -199,7 +199,7 @@ class SeriesCsvTests(CorpusCase):
 
         with (
             self.settings(SPECTRUM_PREVIEW_MAX_BYTES=10),
-            mock.patch("manuspectrum.views.explorer_series.read_series") as read,
+            mock.patch("manuspectrum.views.explorer.series.read_series") as read,
         ):
             comments, rows = self.split(self.text(self.selection("on_document")))
 

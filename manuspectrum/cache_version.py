@@ -30,10 +30,10 @@ CACHE_SHAPE_MODULES = (
     # The per-reader visibility memos: hidden resources, readable nodegroups.
     "utils/public_visibility.py",
     # The homepage technique memo (the Explorer search it reads, and its build).
-    "views/explorer_service.py",
-    "views/explorer_home.py",
+    "views/explorer/service.py",
+    "views/explorer/home.py",
     # The Explorer's corpus bundle: its keys and what each layer keeps.
-    "views/explorer_memo.py",
+    "views/explorer/memo.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

@@ -20,11 +20,11 @@ from arches.app.models.models import File
 from tests.test_explorer_export_package import BY, EXPORTED, fetch
 from tests.test_explorer_api import FETCH, CorpusCase
 
-from manuspectrum.views.explorer_export import package
-from manuspectrum.views.explorer_scopes import resolve_scope
+from manuspectrum.views.explorer.export import package
+from manuspectrum.views.explorer.scopes import resolve_scope
 
 UNKNOWN = "00000000-0000-4000-8000-00000000000c"
-EXPORT = "manuspectrum.views.explorer_export"
+EXPORT = "manuspectrum.views.explorer.export"
 CACHE_CALLS = ("get", "get_many", "set", "add", "delete")
 MARKER = b"hidden-spectrum-bytes"
 
@@ -146,7 +146,7 @@ class BoundsTests(ExportCase):
         with (
             self.settings(EXPLORER_EXPORT_MAX_BYTES=107),
             mock.patch(
-                "manuspectrum.views.explorer_export.open", create=True
+                "manuspectrum.views.explorer.export.open", create=True
             ) as opened,
         ):
             response = self.get(self.document_query())

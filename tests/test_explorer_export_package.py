@@ -16,14 +16,14 @@ from django.http import QueryDict
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 from tests.test_explorer_service import XRF
 
-from manuspectrum.views.explorer_export import (
+from manuspectrum.views.explorer.export import (
     arcname,
     csv_bytes,
     package,
     ro_crate,
 )
-from manuspectrum.views.explorer_scopes import resolve_scope
-from manuspectrum.views.explorer_service import permalink
+from manuspectrum.views.explorer.scopes import resolve_scope
+from manuspectrum.views.explorer.service import permalink
 
 IMAGING = "https://example.org/iiif/maxrf/manifest"
 IMAGING_SOURCE = {

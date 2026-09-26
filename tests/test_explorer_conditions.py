@@ -6,7 +6,7 @@ Usage:
 
 from django.test import SimpleTestCase
 
-from manuspectrum.views.explorer_conditions import clean_html, conditions_of
+from manuspectrum.views.explorer.conditions import clean_html, conditions_of
 
 TYPE, CONTENT = "node-type", "node-content"
 

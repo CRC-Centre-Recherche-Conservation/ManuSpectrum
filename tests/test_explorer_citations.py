@@ -13,7 +13,7 @@ from django.conf import settings
 from django.test import SimpleTestCase
 from pylatexenc.latexencode import unicode_to_latex
 
-from manuspectrum.views.explorer_citations import (
+from manuspectrum.views.explorer.citations import (
     CitedAnalysis,
     Home,
     availability,
@@ -395,7 +395,7 @@ class LatexTests(SimpleTestCase):
         parts = [analysis(n % 10) for n in range(500)]
 
         with mock.patch(
-            "manuspectrum.views.explorer_citations.unicode_to_latex",
+            "manuspectrum.views.explorer.citations.unicode_to_latex",
             wraps=unicode_to_latex,
         ) as encoder:
             citation_entries(
