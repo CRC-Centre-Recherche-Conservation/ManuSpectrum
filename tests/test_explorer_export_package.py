@@ -379,18 +379,12 @@ class RoCrateTests(PackageCase):
 
         crate = ro_crate(scope, members, EXPORTED)
 
-        self.assertEqual(
-            crate["@context"],
-            [
-                "https://w3id.org/ro/crate/1.1/context",
-                {"sha256": "http://schema.org/sha256"},
-            ],
-        )
+        self.assertEqual(crate["@context"], "https://w3id.org/ro/crate/1.2/context")
         graph = {e["@id"]: e for e in crate["@graph"]}
         descriptor = graph["ro-crate-metadata.json"]
         self.assertEqual(descriptor["@type"], "CreativeWork")
         self.assertEqual(
-            descriptor["conformsTo"], {"@id": "https://w3id.org/ro/crate/1.1"}
+            descriptor["conformsTo"], {"@id": "https://w3id.org/ro/crate/1.2"}
         )
         self.assertEqual(descriptor["about"], {"@id": "./"})
         root = graph["./"]
@@ -508,6 +502,46 @@ class RoCrateTests(PackageCase):
         actions = {e["@id"] for e in graph.values() if e["@type"] == "CreateAction"}
         self.assertEqual({m["@id"] for m in graph["./"]["mentions"]}, actions)
 
+    def test_every_entity_is_typed_named_and_reachable_from_the_root(self):
+        self.stored_file(self.analyses["open"], "X01.csv", b"1,2\n", licence=BY)
+        self.stored_file(self.analyses["open"], "X01c.csv", b"1,2\n", licence=ND)
+
+        graph = self.crate(self.document_query())
+
+        def references(value):
+            if isinstance(value, list):
+                for item in value:
+                    yield from references(item)
+            elif isinstance(value, dict):
+                self.assertEqual(set(value), {"@id"}, value)
+                yield value["@id"]
+
+        reached, pending = set(), ["./"]
+        while pending:
+            entity = graph[pending.pop()]
+            if entity["@id"] in reached:
+                continue
+            reached.add(entity["@id"])
+            for key, value in entity.items():
+                if not key.startswith("@"):
+                    pending += [i for i in references(value) if i in graph]
+        for entity in graph.values():
+            self.assertTrue(entity["@type"], entity)
+            if entity["@id"] != "ro-crate-metadata.json":
+                self.assertTrue(entity.get("name"), entity)
+                self.assertIn(entity["@id"], reached)
+
+    def test_a_licence_is_described_with_its_name_identifier_and_summary(self):
+        self.stored_file(self.analyses["open"], "X01.csv", b"1,2\n", licence=BY)
+
+        graph = self.crate(f"ids=an:{self.pk('open')}:-")
+
+        licence = graph[BY["url"]]
+        self.assertEqual(licence["@type"], "CreativeWork")
+        self.assertEqual(licence["name"], "CC BY 4.0")
+        self.assertEqual(licence["identifier"], "CC-BY-4.0")
+        self.assertTrue(licence["description"])
+
     def test_a_package_without_licensed_file_states_no_licence(self):
         graph = self.crate(f"ids=ch:{self.characterization.pk}:-")
 
@@ -552,6 +586,7 @@ class ReadmeTests(PackageCase):
                     self.assertIn(name, readme)
                 self.assertIn("metadata/analyses.csv", readme)
                 self.assertIn("ro-crate-metadata.json", readme)
+                self.assertIn("RO-Crate 1.2", readme)
                 self.assertIn("CC BY 4.0", readme)
                 self.assertIn(citations[0]["title"], readme)
 

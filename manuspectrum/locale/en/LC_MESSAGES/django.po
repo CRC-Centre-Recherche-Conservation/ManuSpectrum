@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-26 12:47-0500\n"
+"POT-Creation-Date: 2026-09-26 13:17-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -287,7 +287,7 @@ msgstr ""
 
 #: templates/explorer/export_readme.md:15
 msgid ""
-"the RO-Crate 1.1 description of the package, with the SHA-256 checksum of "
+"the RO-Crate 1.2 description of the package, with the SHA-256 checksum of "
 "every file."
 msgstr ""
 
@@ -305,7 +305,7 @@ msgid ""
 "identifier."
 msgstr ""
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:510
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:509
 msgid "Licences per file"
 msgstr ""
 
@@ -4179,36 +4179,40 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr ""
 
-#: views/explorer/export.py:382
+#: views/explorer/export.py:379
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer/export.py:389 views/explorer/manifest.py:834
+#: views/explorer/export.py:386 views/explorer/manifest.py:834
 #: views/explorer/series.py:111
 msgid "Contains drafts"
 msgstr ""
 
-#: views/explorer/export.py:512
+#: views/explorer/export.py:511
 msgid "Each file carries its own licence, given with the file."
 msgstr ""
 
-#: views/explorer/export.py:795
+#: views/explorer/export.py:515
+msgid "Licence of the files of this package that name it."
+msgstr ""
+
+#: views/explorer/export.py:797
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
 "%(count)d canvases): open it by document."
 msgstr ""
 
-#: views/explorer/export.py:805
+#: views/explorer/export.py:807
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
 "are served by IIIF image servers and are not in the package."
 msgstr ""
 
-#: views/explorer/export.py:812
+#: views/explorer/export.py:814
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "

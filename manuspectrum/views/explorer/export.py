@@ -67,11 +67,8 @@ from manuspectrum.views.summary_service import _date
 
 CRATE_NAME = "ro-crate-metadata.json"
 CHUNK_SIZE = 1024 * 1024
-RO_CRATE_CONTEXT = [
-    "https://w3id.org/ro/crate/1.1/context",
-    {"sha256": "http://schema.org/sha256"},
-]
-RO_CRATE_PROFILE = "https://w3id.org/ro/crate/1.1"
+RO_CRATE_CONTEXT = "https://w3id.org/ro/crate/1.2/context"
+RO_CRATE_PROFILE = "https://w3id.org/ro/crate/1.2"
 SHA256_SLOT = "0" * 64
 LICENCES_PER_FILE = "#licences-per-file"
 OCTET_STREAM = "application/octet-stream"
@@ -468,11 +465,11 @@ def _licence_id(licence):
 
 
 def ro_crate(scope, members, exported_at, content=None):
-    """The RO-Crate 1.1 metadata of the package, as a dict; every ``sha256`` is a 64-character placeholder.
+    """The RO-Crate 1.2 metadata of the package, as a dict; every ``sha256`` is a 64-character placeholder.
 
-    The ``@context`` is the RO-Crate 1.1 context extended with ``sha256``
-    (``http://schema.org/sha256``, the term RO-Crate 1.2 defines). The
-    descriptor ``ro-crate-metadata.json`` is about the root ``Dataset``
+    The ``@context`` is the RO-Crate 1.2 context by reference, which defines
+    ``sha256``. The descriptor ``ro-crate-metadata.json`` conforms to
+    ``https://w3id.org/ro/crate/1.2`` and is about the root ``Dataset``
     ``./``, which has every member as ``hasPart``, the export day as
     ``datePublished``, the site as an ``Organization`` ``publisher``, the
     licence common to all licensed members (a ``CreativeWork`` « Licences
@@ -482,8 +479,10 @@ def ro_crate(scope, members, exported_at, content=None):
     path (``crate_id``), with its name, size, media type and licence. Each
     analysis is a ``CreateAction`` identified by its permalink: operators as ``Person`` agents, dates, the document and
     component as ``object``, its files as ``result``, its technique as a
-    ``DefinedTerm`` in ``additionalType``. No instrument and no place are
-    described.
+    ``DefinedTerm`` in ``additionalType``. A licence is a ``CreativeWork``
+    identified by its URL, with its name, SPDX ``identifier`` and a
+    ``description``. Every entity has a name and is reachable from the root.
+    No instrument and no place are described.
     """
     content = content or scope_content(scope)
     bundle, language = scope.bundle, scope.language
@@ -513,6 +512,7 @@ def ro_crate(scope, members, exported_at, content=None):
                     ),
                 }
             )
+        licence_summary = _("Licence of the files of this package that name it.")
         title = _title(scope)
         description = " ".join(
             [
@@ -530,6 +530,8 @@ def ro_crate(scope, members, exported_at, content=None):
             "@id": licence_id,
             "@type": "CreativeWork",
             "name": licence["label"]["value"],
+            "identifier": licence["id"],
+            "description": licence_summary,
         }
         if licence.get("url"):
             entity["url"] = licence["url"]
