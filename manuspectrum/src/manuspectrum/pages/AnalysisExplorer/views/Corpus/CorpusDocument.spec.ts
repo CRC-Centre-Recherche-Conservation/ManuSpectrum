@@ -908,6 +908,31 @@ describe("CorpusDocument", () => {
         wrapper.unmount();
     });
 
+    it("returns the focus to the list entry that opened the card drawer when Escape closes it", async () => {
+        narrow = true;
+        stubFetch();
+        const { wrapper, store } = mountScreen(undefined, {
+            stubs: { transition: false },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        const selector = `.on-this-page [data-focus="analysis:${uuid(101)}"]`;
+        const entry = wrapper.find(selector);
+        (entry.element as HTMLButtonElement).focus();
+        await entry.trigger("click");
+        await flushPromises();
+        expect(store.focus).toEqual({ kind: "analysis", id: uuid(101) });
+        expect(document.activeElement).not.toBe(entry.element);
+        document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", code: "Escape" }),
+        );
+        await flushPromises();
+        expect(store.focus).toBeNull();
+        expect(document.activeElement).toBe(wrapper.find(selector).element);
+        expect(focusTarget).not.toHaveBeenCalled();
+        wrapper.unmount();
+    });
+
     describe("layout and keyboard", () => {
         it("offers skip links to the page, the filters and the card", async () => {
             stubFetch();
