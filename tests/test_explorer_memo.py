@@ -692,6 +692,17 @@ class TicketGatesTests(SimpleTestCase):
 
         self.assertEqual(self.bundle(), "1.3:g1")
 
+    def test_a_rebuild_releases_only_the_lock_it_holds(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        self.bundle()
+        lock = explorer_memo._rebuild_lock("public", "en")
+        cache.set(lock, "another owner")
+
+        self.pending.pop()()
+
+        self.assertEqual(cache.get(lock), "another owner")
+
     def test_a_rebuild_running_in_another_process_starts_none_here(self):
         self.bundle()
         self.state["version"] = "1.2"

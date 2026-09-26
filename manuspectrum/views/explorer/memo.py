@@ -52,6 +52,7 @@ import logging
 import pickle
 import threading
 import time
+import uuid
 import zlib
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -335,7 +336,9 @@ def _rebuild_in_background(held, user, build):
 
     One rebuild per scope and language at a time: in this process (a guard
     set) and across processes (a cache lock). A caller that finds either
-    taken starts nothing; the next request after the running one ends
+    taken starts nothing. The lock holds its owner's token and only that
+    owner deletes it: a rebuild that outlived ``LOCK_TIMEOUT`` leaves the
+    lock a later one took. The next request after the running one ends
     starts the rebuild of the data current then. A rebuild that raised or
     returned nothing starts none for ``settings.EXPLORER_REBUILD_RETRY_AFTER``
     seconds, readers answered from the previous bundle meanwhile.
@@ -348,13 +351,14 @@ def _rebuild_in_background(held, user, build):
         if slot in _rebuilding:
             return
         _rebuilding.add(slot)
-    lock = _rebuild_lock(held.scope, held.language)
-    if not cache.add(lock, 1, LOCK_TIMEOUT):
+    lock, token = _rebuild_lock(held.scope, held.language), uuid.uuid4().hex
+    if not cache.add(lock, token, LOCK_TIMEOUT):
         _free(slot)
         return
 
     def release():
-        cache.delete(lock)
+        if cache.get(lock) == token:
+            cache.delete(lock)
         _free(slot)
 
     if cache.has_key(held.current):
