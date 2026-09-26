@@ -577,9 +577,11 @@ def _per_document(scope):
 
     A Selection keeps its keys whose analysis (or, for an identified
     material, one of whose objects) is on the document; a project becomes
-    ``project=<uuid>&document=<uuid>``.
+    ``project=<uuid>&document=<uuid>``. A document scope has no split: ``{}``.
     """
     bundle = scope.bundle
+    if scope.kind == "document":
+        return {}
     if scope.kind == "project":
         return {
             d: urlencode([("project", scope.subject), ("document", d)])
@@ -587,7 +589,10 @@ def _per_document(scope):
         }
     keys_of = {d: [] for d in scope.documents}
     for key in scope.params[0][1].split(","):
-        prefix, rid, _ = ITEM_KEY.match(key).groups()
+        match = ITEM_KEY.match(key)
+        if match is None:
+            continue
+        prefix, rid, _ = match.groups()
         if prefix == "ch":
             found = _documents(bundle, (), (rid,))
         else:
@@ -630,7 +635,7 @@ def share_payload(scope, accessed):
         if e.get("dataKind") == "xy" and e.get("role") == "readable"
     )
     documents = []
-    if over and len(scope.documents) > 1:
+    if over and scope.kind != "document" and len(scope.documents) > 1:
         documents = [
             {
                 "id": d,

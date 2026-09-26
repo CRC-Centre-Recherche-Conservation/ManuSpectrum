@@ -284,6 +284,29 @@ class ShareRouteTests(CorpusCase):
         self.assertEqual(single["export"]["documents"], [])
 
     @override_settings(EXPLORER_EXPORT_MAX_BYTES=1)
+    def test_a_document_over_the_limits_whose_material_spans_documents_is_not_split(
+        self,
+    ):
+        node = self.nodes[("characterization", "object_observed")]
+        TileModel.objects.filter(
+            resourceinstance=self.characterization, nodegroup_id=node.nodegroup_id
+        ).update(
+            data={
+                str(node.nodeid): self.refs(
+                    self.components["open"], self.documents["embargoed"]
+                )
+            }
+        )
+        self.stored_file(self.analyses["open"], "open.csv", b"1,2\n")
+
+        response = self.get(f"document={self.documents['open'].pk}")
+
+        self.assertEqual(response.status_code, 200)
+        export = response.json()["export"]
+        self.assertTrue(export["overLimit"])
+        self.assertEqual(export["documents"], [])
+
+    @override_settings(EXPLORER_EXPORT_MAX_BYTES=1)
     def test_a_project_over_the_limits_splits_into_its_items_per_document(self):
         main = self.projects["main"]
         self.tile(self.analyses["embargoed"], "analysis_by_project", self.refs(main))
