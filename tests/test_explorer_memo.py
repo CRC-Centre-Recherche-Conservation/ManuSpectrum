@@ -650,6 +650,25 @@ class TicketGatesTests(SimpleTestCase):
         self.assertEqual(self.bundle(), "1.5:g1")
         self.assertEqual(self.builds, ["1.1:g1", "1.2:g1", "1.5:g1"])
 
+    def release_rebuild(self):
+        cache.delete(explorer_memo._rebuild_lock("public", "en"))
+        explorer_memo._rebuilding.clear()
+
+    def test_rebuilds_ending_out_of_order_never_answer_older_data(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        self.bundle()
+        self.release_rebuild()
+        self.state["version"] = "1.3"
+        self.bundle()
+        older, newer = self.pending
+
+        newer()
+        older()
+        self.state["version"] = "1.4"
+
+        self.assertEqual(self.bundle(), "1.3:g1")
+
     def test_a_rebuild_running_in_another_process_starts_none_here(self):
         self.bundle()
         self.state["version"] = "1.2"

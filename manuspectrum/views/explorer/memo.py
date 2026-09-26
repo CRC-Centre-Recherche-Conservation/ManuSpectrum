@@ -97,11 +97,12 @@ class Ticket:
     """What names the bundle a reader is answered from in one language, read before any memo.
 
     ``key`` is the bundle served; ``current`` the bundle of the current data
-    and permissions. They differ while a rebuild of ``current`` runs and the
-    reader is answered from the previous bundle (``stale``). ``permissions``
-    names the permission gates of the reader; ``reason`` why ``current``
-    would be built: ``data``, ``permissions``, ``visibility`` (the previous
-    bundle shows a resource the reader can no longer see) or ``cold``.
+    (``data_version`` ``version``) and permissions. They differ while a
+    rebuild of ``current`` runs and the reader is answered from the previous
+    bundle (``stale``). ``permissions`` names the permission gates of the
+    reader; ``reason`` why ``current`` would be built: ``data``,
+    ``permissions``, ``visibility`` (the previous bundle shows a resource the
+    reader can no longer see) or ``cold``.
     """
 
     key: str
@@ -111,6 +112,7 @@ class Ticket:
     current: str = ""
     permissions: str = ""
     reason: str = "cold"
+    version: str = ""
 
     @property
     def stale(self):
@@ -136,6 +138,7 @@ def ticket(user, language, build=None):
         visible=visible,
         current=key,
         permissions=stable_cache_key("explorer-gates", epoch, visible.gates),
+        version=version,
     )
     if _stored(key):
         return held
@@ -171,10 +174,11 @@ def corpus_bundle(user, language, build, held=None):
         lambda: build(user, language, held.visible),
         permissions=held.permissions,
         reason=held.reason,
+        version=held.version,
     )
 
 
-def remember(key, scope, language, build, permissions="", reason="cold"):
+def remember(key, scope, language, build, permissions="", reason="cold", version=""):
     """The bundle stored under *key*, from this process, else the cache, else ``build()``."""
     found = _local_get(key)
     if found is not None:
@@ -201,7 +205,7 @@ def remember(key, scope, language, build, permissions="", reason="cold"):
             settings.EXPLORER_BUNDLE_TTL,
             lock_timeout=LOCK_TIMEOUT,
             wait=BUILD_WAIT,
-            kept=lambda _: _retire_previous(scope, language, key, permissions),
+            kept=lambda _: _retire_previous(scope, language, key, permissions, version),
         )
         found = built[0] if built else unpack(stored)
         _local_put(key, found)
@@ -297,18 +301,25 @@ def _shows_hidden(bundle, visible):
 
 
 def _previous(held):
-    """The newest stored live key built under the gates of *held*, and why *held* is missing.
+    """The stored live key with the newest data under the gates of *held*, and why *held* is missing.
 
     ``data`` when there is one; else ``permissions`` when the scope and
     language have live keys built under other gates, ``cold`` when not.
     """
-    other_gates = False
-    for key, permissions in reversed(_live(held.scope, held.language)):
-        if permissions != held.permissions:
-            other_gates = True
-        elif _stored(key):
+    live = _live(held.scope, held.language)
+    same = [e for e in live if e[1] == held.permissions]
+    for key, _, _ in sorted(same, key=lambda e: _order(e[2]), reverse=True):
+        if _stored(key):
             return key, "data"
-    return None, "permissions" if other_gates else "cold"
+    return None, "permissions" if len(same) < len(live) else "cold"
+
+
+def _order(version):
+    """Where a ``data_version()`` stands in time: its last ledger sequence, -1 when unknown."""
+    try:
+        return int(str(version).rpartition(".")[2])
+    except ValueError:
+        return -1
 
 
 def _rebuild_lock(scope, language):
@@ -375,9 +386,17 @@ def _build_and_keep(held, build):
             extra={"language": held.language, "scope_kind": _kind(held.scope)},
         )
         return
+    if _superseded(held):
+        logger.info(
+            "explorer bundle rebuild superseded by newer data",
+            extra={"language": held.language, "scope_kind": _kind(held.scope)},
+        )
+        return
     packed = pack(bundle)
     cache.set(held.current, packed, settings.EXPLORER_BUNDLE_TTL)
-    _retire_previous(held.scope, held.language, held.current, held.permissions)
+    _retire_previous(
+        held.scope, held.language, held.current, held.permissions, held.version
+    )
     _local_put(held.current, bundle)
     _log_build(
         held.current,
@@ -454,17 +473,26 @@ def _live_pointer(scope, language):
 
 
 def _live(scope, language):
-    """The live ``(key, permissions)`` of a scope and language, oldest first."""
-    return [
-        tuple(entry) if isinstance(entry, (list, tuple)) else (entry, None)
-        for entry in cache.get(_live_pointer(scope, language)) or []
-    ]
+    """The live ``(key, permissions, version)`` of a scope and language, oldest data first."""
+    return [tuple(e) for e in cache.get(_live_pointer(scope, language)) or []]
 
 
-def _retire_previous(scope, language, key, permissions=""):
-    """Keep the last ``LIVE_ENTRIES`` stored bundles of a scope and language, delete the older ones."""
-    live = [e for e in _live(scope, language) if e[0] != key] + [(key, permissions)]
-    for old, _ in live[:-LIVE_ENTRIES]:
+def _superseded(held):
+    """Whether a live bundle of *held*'s gates holds newer data than ``held.current``."""
+    return any(
+        permissions == held.permissions and _order(version) > _order(held.version)
+        for _, permissions, version in _live(held.scope, held.language)
+    )
+
+
+def _retire_previous(scope, language, key, permissions="", version=""):
+    """Keep the ``LIVE_ENTRIES`` bundles of a scope and language with the newest data, delete the others."""
+    live = sorted(
+        [e for e in _live(scope, language) if e[0] != key]
+        + [(key, permissions, version)],
+        key=lambda e: _order(e[2]),
+    )
+    for old, _, _ in live[:-LIVE_ENTRIES]:
         cache.delete(old)
     cache.set(
         _live_pointer(scope, language),
