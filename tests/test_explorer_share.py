@@ -6,6 +6,7 @@ Usage:
 
 import datetime
 from unittest import mock
+from urllib.parse import parse_qs, quote, urlsplit
 
 from django.conf import settings
 from django.db import connection
@@ -246,6 +247,18 @@ class ShareRouteTests(CorpusCase):
         self.assertIn("&restricted=1", payload["links"]["export"])
         self.assertIn("&restricted=1", payload["links"]["manifest"])
         self.assertIsNone(payload["links"]["exportRestricted"])
+
+    def test_links_encode_a_key_carrying_url_delimiters(self):
+        key = f"af:{self.pk('open')}:x&y#z%w"
+
+        payload = self.get(f"ids={quote(key, safe=':')}").json()
+
+        self.assertEqual(payload["scope"]["key"], f"ids={key}")
+        for name in ("manifest", "export"):
+            with self.subTest(link=name):
+                parts = urlsplit(payload["links"][name])
+                self.assertEqual(parts.fragment, "")
+                self.assertEqual(parse_qs(parts.query), {"ids": [key], "lang": ["en"]})
 
     def test_the_payload_is_in_the_request_language(self):
         query = f"ids=an:{self.pk('on_document')}:-"

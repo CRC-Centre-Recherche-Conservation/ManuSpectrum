@@ -7,6 +7,7 @@ Usage:
 import copy
 import json
 from unittest import mock
+from urllib.parse import parse_qs, quote, urlsplit
 
 from django.conf import settings
 from django.test import override_settings
@@ -279,6 +280,18 @@ class ManifestRouteTests(CorpusCase):
             manifest["homepage"][0]["id"],
             f"{settings.PUBLIC_SERVER_ADDRESS}en/discover?doc={self.documents['open'].pk}",
         )
+
+    def test_the_id_and_homepage_encode_a_key_carrying_url_delimiters(self):
+        key = f"af:{self.pk('open')}:x&y#z%w"
+
+        manifest = self.manifest(f"ids={quote(key, safe=':')}")
+
+        manifest_id = urlsplit(manifest["id"])
+        homepage = urlsplit(manifest["homepage"][0]["id"])
+        self.assertEqual(manifest_id.fragment, "")
+        self.assertEqual(parse_qs(manifest_id.query), {"ids": [key], "lang": ["en"]})
+        self.assertEqual(homepage.fragment, "")
+        self.assertEqual(parse_qs(homepage.query), {"sel": [key]})
 
     def test_labels_follow_lang(self):
         query = f"ids=an:{self.pk('open')}:-"

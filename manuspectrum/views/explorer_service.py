@@ -2126,8 +2126,8 @@ def permalink(resource_id):
 def product_url(route, query, language):
     """Absolute URL of the language-neutral product *route* for the scope *query* in *language*.
 
-    *query* is an ``ExportScope.key`` (``ids=…``, ``document=…``, ``project=…``
-    and their flags); ``lang`` is appended.
+    *query* is an URL-encoded ``ExportScope.query`` (``ids=…``,
+    ``document=…``, ``project=…`` and their flags); ``lang`` is appended.
     """
     path = reverse(route).lstrip("/")
     return f"{settings.PUBLIC_SERVER_ADDRESS}{path}?{query}&{urlencode({'lang': language})}"

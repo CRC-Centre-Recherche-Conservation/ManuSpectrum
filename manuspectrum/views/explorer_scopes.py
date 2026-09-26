@@ -16,6 +16,7 @@ import hashlib
 import os
 import uuid
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 from arches.app.models.models import File
 from django.conf import settings
@@ -65,7 +66,8 @@ class ExportScope:
     ``key`` is the canonical query (``ids=<sorted keys that resolved>``,
     ``document=<uuid>`` or ``project=<uuid>``, then ``&canvases=all`` and
     ``&restricted=1`` when they apply) and ``digest`` its 12-hex sha1, which names minted IIIF ids
-    and file names. ``analyses`` follow the corpus order of the bundle,
+    and file names. ``params`` are the ``(name, value)`` pairs of ``key`` and
+    ``query`` their URL-encoded form, which every link to a product carries. ``analyses`` follow the corpus order of the bundle,
     ``characterizations`` and ``documents`` are sorted (documents by name).
     ``narrowed`` maps an analysis id to the ``file:<id>`` / ``layer:<n>``
     parts its keys named; an analysis absent from it is whole. ``missing``
@@ -82,6 +84,7 @@ class ExportScope:
 
     kind: str
     key: str
+    params: tuple
     digest: str
     subject: str | None
     analyses: tuple
@@ -97,6 +100,11 @@ class ExportScope:
     viewer: object
     bundle: object
     language: str
+
+    @property
+    def query(self):
+        """``params`` as a URL query; ``:`` and ``,`` stay readable."""
+        return urlencode(self.params, safe=":,")
 
     @functools.cached_property
     def viewer_nodegroups(self):
@@ -298,16 +306,18 @@ def resolve_scope(query, user, language):
 
     missing = _missing(value, items) if kind == "ids" else ()
     named = ",".join(k for k in value if k not in missing) if kind == "ids" else value
-    key = f"{kind}={named}"
+    params = [(kind, named)]
     if canvases_all:
-        key += "&canvases=all"
+        params.append(("canvases", "all"))
     if restricted:
-        key += "&restricted=1"
+        params.append(("restricted", "1"))
+    key = "&".join(f"{name}={v}" for name, v in params)
     analyses = tuple(sorted(items.analyses, key=bundle.order.__getitem__))
     characterizations = tuple(sorted(items.characterizations))
     return ExportScope(
         kind=kind,
         key=key,
+        params=tuple(params),
         digest=hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()[:12],
         subject=None if kind == "ids" else value,
         analyses=analyses,
@@ -465,9 +475,8 @@ def share_link(scope):
         return permalink(scope.subject)
     with translation.override(scope.language):
         page = reverse("analysis-explorer").lstrip("/")
-    return (
-        f"{settings.PUBLIC_SERVER_ADDRESS}{page}?sel={scope.key.removeprefix('ids=')}"
-    )
+    selection = urlencode({"sel": scope.params[0][1]}, safe=":,")
+    return f"{settings.PUBLIC_SERVER_ADDRESS}{page}?{selection}"
 
 
 CONTENT_KEYS = ("dataset", "end", "files", "micro", "imaging")
@@ -645,15 +654,15 @@ def share_payload(scope, accessed):
             "documents": documents,
         },
         "links": {
-            "manifest": product_url("iiif-v3-explorer-manifest", scope.key, language),
+            "manifest": product_url("iiif-v3-explorer-manifest", scope.query, language),
             "seriesCsv": (
-                product_url("explorer-series-csv", scope.key, language)
+                product_url("explorer-series-csv", scope.query, language)
                 if scope.kind == "ids" and spectra
                 else None
             ),
-            "export": product_url("explorer-export", scope.key, language),
+            "export": product_url("explorer-export", scope.query, language),
             "exportRestricted": (
-                product_url("explorer-export", f"{scope.key}&restricted=1", language)
+                product_url("explorer-export", f"{scope.query}&restricted=1", language)
                 if scope.restricted_available
                 else None
             ),

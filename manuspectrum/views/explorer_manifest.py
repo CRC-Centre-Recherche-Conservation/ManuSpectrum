@@ -482,7 +482,7 @@ def _homepage(scope):
     elif scope.kind == "project":
         query = urlencode({"project": scope.subject})
     else:
-        query = f"sel={scope.key.split('&')[0].removeprefix('ids=')}"
+        query = urlencode({"sel": scope.params[0][1]}, safe=":,")
     return [
         {
             "id": f"{settings.PUBLIC_SERVER_ADDRESS}{page}?{query}",
@@ -759,7 +759,7 @@ def build_manifest(scope):
 
     manifest = {
         "@context": PRESENTATION_3,
-        "id": product_url("iiif-v3-explorer-manifest", scope.key, language),
+        "id": product_url("iiif-v3-explorer-manifest", scope.query, language),
         "type": "Manifest",
         "label": {language: [_label(scope, folios, label_of)]},
     }
