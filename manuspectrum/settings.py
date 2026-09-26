@@ -357,6 +357,12 @@ LOGGING = {
             "level": "DEBUG",  # or consider ERROR if this is too noisy
             "propagate": True,
         },
+        # One INFO line per Explorer corpus bundle build (explorer.memo).
+        "manuspectrum.explorer": {
+            "handlers": ["file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         # consider adding your own project here if it logs
     },
 }
@@ -783,6 +789,9 @@ EXPLORER_TECHNIQUES_TTL = 600
 # (~3 MB each). Entries stored under a previous code prefix are never read again
 # and expire by this TTL.
 EXPLORER_BUNDLE_TTL = 2 * 60 * 60
+# Rebuild a corpus bundle after a data change in a background thread, readers
+# answered from the previous bundle meanwhile; False rebuilds in the request.
+EXPLORER_BACKGROUND_REBUILD = True
 # Largest data package the Explorer streams (sum of the stored file sizes); above it, 413.
 EXPLORER_EXPORT_MAX_BYTES = 500 * 1024 * 1024
 # Most files one data package holds; above it, 413.

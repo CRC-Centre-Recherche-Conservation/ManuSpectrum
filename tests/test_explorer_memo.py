@@ -14,7 +14,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from django.db import connection
 from django.http import QueryDict
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from guardian.models import GroupObjectPermission
 
 from arches.app.models.models import (
@@ -25,7 +25,11 @@ from arches.app.models.models import (
 )
 
 from manuspectrum.utils.data_version import data_version, prune_data_changes
-from manuspectrum.utils.public_visibility import explorer_scope
+from manuspectrum.utils.public_visibility import (
+    VisibleSet,
+    explorer_scope,
+    forget_visibility,
+)
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer import service as explorer_service
 from manuspectrum.views.explorer.service import (
@@ -339,3 +343,293 @@ class RememberTests(SimpleTestCase):
         )
 
         self.assertEqual(found, {"stored": True})
+
+
+class StaleWhileRebuildTests(MemoCase):
+    def setUp(self):
+        super().setUp()
+        self.pending = []
+        spawn = mock.patch.object(explorer_memo, "spawn", self.pending.append)
+        spawn.start()
+        self.addCleanup(spawn.stop)
+
+    def builds(self, **kwargs):
+        return mock.patch.object(
+            explorer_service,
+            "build_bundle",
+            **(kwargs or {"wraps": explorer_service.build_bundle}),
+        )
+
+    def name_of(self, bundle):
+        return bundle.by_id[str(self.analyses["open"].pk)]["name"]["value"]
+
+    def test_a_data_change_answers_from_the_previous_bundle_while_one_rebuild_runs(
+        self,
+    ):
+        first = corpus_bundle(self.anonymous, "en")
+        self.rename_by_sql(self.analyses["open"], "X01 renamed meanwhile")
+
+        with self.builds() as build:
+            served = [corpus_bundle(self.anonymous, "en") for _ in range(3)]
+            self.assertEqual(build.call_count, 0)
+            self.assertEqual(len(self.pending), 1)
+            self.pending[0]()
+
+        self.assertEqual(build.call_count, 1)
+        self.assertTrue(all(bundle is first for bundle in served))
+        self.assertEqual(
+            self.name_of(corpus_bundle(self.anonymous, "en")), "X01 renamed meanwhile"
+        )
+
+    def test_the_rebuilt_bundle_is_read_from_the_cache_by_another_process(self):
+        corpus_bundle(self.anonymous, "en")
+        self.rename_by_sql(self.analyses["open"], "X01 in another process")
+        corpus_bundle(self.anonymous, "en")
+        self.pending[0]()
+        explorer_memo.forget_local()
+
+        with self.builds(side_effect=AssertionError):
+            found = corpus_bundle(self.anonymous, "en")
+
+        self.assertEqual(self.name_of(found), "X01 in another process")
+
+    def test_a_lifecycle_change_answers_from_the_previous_bundle(self):
+        first = corpus_bundle(self.anonymous, "en")
+        ResourceInstance.objects.filter(pk=self.analyses["open"].pk).update(
+            resource_instance_lifecycle_state_id=DRAFT
+        )
+
+        self.assertIs(corpus_bundle(self.anonymous, "en"), first)
+        self.assertEqual(len(self.pending), 1)
+
+    def test_a_new_permission_epoch_builds_in_the_request(self):
+        first = corpus_bundle(self.anonymous, "en")
+        forget_visibility()
+
+        with self.builds() as build:
+            second = corpus_bundle(self.anonymous, "en")
+
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(self.pending, [])
+        self.assertIsNot(second, first)
+
+    def test_an_embargo_builds_in_the_request(self):
+        corpus_bundle(self.anonymous, "en")
+        self.embargo(self.documents["open"])
+
+        with self.builds() as build:
+            bundle = corpus_bundle(self.anonymous, "en")
+
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(self.pending, [])
+        self.assertNotIn(str(self.documents["open"].pk), bundle.visible.documents)
+
+    def test_a_group_change_builds_in_the_request(self):
+        corpus_bundle(self.editor, "en")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.editor.groups.add(Group.objects.get(name="Resource Reviewer"))
+
+        with self.builds() as build:
+            corpus_bundle(self.editor, "en")
+
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(self.pending, [])
+
+    def test_without_a_previous_bundle_the_request_builds(self):
+        with self.builds() as build:
+            corpus_bundle(self.anonymous, "en")
+
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(self.pending, [])
+
+    def test_a_failing_rebuild_is_logged_and_the_next_request_retries(self):
+        first = corpus_bundle(self.anonymous, "en")
+        self.rename_by_sql(self.analyses["open"], "X01 after a failure")
+
+        with (
+            self.builds(side_effect=RuntimeError("boom")),
+            self.assertLogs("manuspectrum.explorer", "ERROR") as logs,
+        ):
+            self.assertIs(corpus_bundle(self.anonymous, "en"), first)
+            self.pending[0]()
+        self.assertIs(corpus_bundle(self.anonymous, "en"), first)
+        self.pending[1]()
+
+        self.assertIn("rebuild failed", logs.output[0])
+        self.assertEqual(
+            self.name_of(corpus_bundle(self.anonymous, "en")), "X01 after a failure"
+        )
+
+    def test_the_etag_of_a_stale_answer_names_the_bundle_served(self):
+        before = self.client.get("/en/api/explorer/search")
+        self.rename_by_sql(self.analyses["open"], "X01 behind the etag")
+
+        stale = self.client.get("/en/api/explorer/search")
+        revalidated = self.client.get(
+            "/en/api/explorer/search", HTTP_IF_NONE_MATCH=before["ETag"]
+        )
+        self.pending[0]()
+        fresh = self.client.get("/en/api/explorer/search")
+
+        self.assertEqual(stale["ETag"], before["ETag"])
+        self.assertEqual(stale.content, before.content)
+        self.assertEqual(stale["Cache-Control"], before["Cache-Control"])
+        self.assertEqual(revalidated.status_code, 304)
+        self.assertNotEqual(fresh["ETag"], before["ETag"])
+        self.assertIn(b"X01 behind the etag", fresh.content)
+
+    def test_the_build_log_carries_its_fields_and_no_user_id(self):
+        self.embargo(self.documents["embargoed"])
+        with self.assertLogs("manuspectrum.explorer", "INFO") as logs:
+            corpus_bundle(self.editor, "en")
+
+        record = logs.records[0]
+        fields = {
+            name: getattr(record, name)
+            for name in (
+                "duration_s",
+                "rows",
+                "stored_bytes",
+                "language",
+                "scope_kind",
+                "reason",
+                "background",
+                "stale_served",
+            )
+        }
+        self.assertEqual(
+            {k: fields[k] for k in ("language", "scope_kind", "reason", "background")},
+            {
+                "language": "en",
+                "scope_kind": "reader",
+                "reason": "cold",
+                "background": False,
+            },
+        )
+        self.assertGreater(fields["rows"], 0)
+        self.assertGreater(fields["stored_bytes"], 0)
+        self.assertNotIn(str(self.editor.pk), record.getMessage())
+        self.assertNotIn(self.editor.pk, fields.values())
+
+    def test_a_background_build_logs_the_stale_answers_it_covered(self):
+        corpus_bundle(self.anonymous, "en")
+        self.rename_by_sql(self.analyses["open"], "X01 counted")
+        corpus_bundle(self.anonymous, "en")
+        corpus_bundle(self.anonymous, "en")
+
+        with self.assertLogs("manuspectrum.explorer", "INFO") as logs:
+            self.pending[0]()
+
+        record = logs.records[-1]
+        self.assertEqual(
+            (record.reason, record.background, record.stale_served, record.scope_kind),
+            ("data", True, 2, "public"),
+        )
+
+
+class TicketGatesTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+        explorer_memo.forget_local()
+        self.addCleanup(cache.clear)
+        self.addCleanup(explorer_memo.forget_local)
+        self.pending = []
+        self.state = {"version": "1.1", "gates": "g1", "epoch": "e1"}
+        for name, fake in (
+            ("spawn", self.pending.append),
+            ("data_version", lambda: self.state["version"]),
+            ("permission_epoch", lambda: self.state["epoch"]),
+            ("explorer_scope", lambda user: "public"),
+            (
+                "visible_set",
+                lambda user, version: VisibleSet(
+                    digest=f"{version}:{self.state['gates']}",
+                    gates=self.state["gates"],
+                ),
+            ),
+        ):
+            patcher = mock.patch.object(explorer_memo, name, fake)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.builds = []
+
+    def build(self, user, language, visible):
+        self.builds.append(visible.digest)
+        return {"digest": visible.digest}
+
+    def bundle(self):
+        return explorer_memo.corpus_bundle(None, "en", self.build)
+
+    def test_new_hidden_resources_with_the_same_data_build_in_the_request(self):
+        self.bundle()
+        self.state["gates"] = "g2"
+
+        self.assertEqual(self.bundle(), {"digest": "1.1:g2"})
+        self.assertEqual(self.pending, [])
+
+    def test_new_hidden_resources_and_new_data_build_in_the_request(self):
+        self.bundle()
+        self.state.update(version="1.2", gates="g2")
+
+        self.assertEqual(self.bundle(), {"digest": "1.2:g2"})
+        self.assertEqual(self.pending, [])
+
+    def test_new_data_under_the_same_gates_answers_from_the_previous_bundle(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+
+        self.assertEqual(self.bundle(), {"digest": "1.1:g1"})
+        self.assertEqual(len(self.pending), 1)
+
+    def test_a_previous_bundle_gone_from_the_cache_is_rebuilt_in_the_request(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+        held = explorer_memo.ticket(None, "en", self.build)
+        explorer_memo.forget_local()
+        cache.delete(held.key)
+
+        found = explorer_memo.corpus_bundle(None, "en", self.build, held=held)
+
+        self.assertEqual(found, {"digest": "1.2:g1"})
+
+    def test_a_synchronous_rebuild_answers_from_the_new_bundle(self):
+        self.bundle()
+        self.state["version"] = "1.2"
+
+        with mock.patch.object(explorer_memo, "spawn", lambda target: target()):
+            self.assertEqual(self.bundle(), {"digest": "1.2:g1"})
+        self.assertEqual(self.builds, ["1.1:g1", "1.2:g1"])
+
+    def test_one_caller_holding_the_build_lock_leaves_the_others_on_the_previous_bundle(
+        self,
+    ):
+        self.bundle()
+        self.state["version"] = "1.2"
+        current = explorer_memo.ticket(None, "en", self.build).current
+        self.pending.clear()
+        explorer_memo.ticket(None, "en", self.build)
+
+        self.assertTrue(cache.get(f"{current}:lock"))
+        self.assertEqual(self.pending, [])
+
+
+class SpawnTests(SimpleTestCase):
+    @override_settings(EXPLORER_BACKGROUND_REBUILD=True)
+    def test_a_background_rebuild_runs_in_a_daemon_thread_that_closes_its_connections(
+        self,
+    ):
+        ran = []
+        with mock.patch.object(explorer_memo, "connections") as connections:
+            thread = explorer_memo.spawn(lambda: ran.append(threading.current_thread()))
+            thread.join(5)
+
+        self.assertIs(ran[0], thread)
+        self.assertTrue(thread.daemon)
+        connections.close_all.assert_called_once_with()
+
+    @override_settings(EXPLORER_BACKGROUND_REBUILD=False)
+    def test_without_background_rebuilds_the_target_runs_in_the_caller(self):
+        ran = []
+
+        self.assertIsNone(explorer_memo.spawn(lambda: ran.append(1)))
+        self.assertEqual(ran, [1])
