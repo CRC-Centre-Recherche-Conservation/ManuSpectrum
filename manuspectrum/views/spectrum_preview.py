@@ -48,7 +48,9 @@ from django.http import (
     HttpResponseNotModified,
 )
 from django.utils.cache import patch_cache_control
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.gzip import gzip_page
 
 from arches.app.models.models import File
 
@@ -189,6 +191,7 @@ def _not_found():
     return response
 
 
+@method_decorator(gzip_page, name="dispatch")
 class SpectrumPreviewView(View):
     """``GET /api/spectrum-preview/<file_id>``, at most one file read per day.
 

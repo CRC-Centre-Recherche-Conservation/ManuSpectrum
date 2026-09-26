@@ -1,9 +1,7 @@
 import type { Feature, Point, Polygon } from "geojson";
 
-import type {
-    Annotation,
-    Shape,
-} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Shape } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 
 /**
  * Canvas pixels per Leaflet unit in the Arches annotation space: the zoom 5 of

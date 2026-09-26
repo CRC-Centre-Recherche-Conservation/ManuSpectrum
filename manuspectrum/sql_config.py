@@ -24,6 +24,7 @@ from manuspectrum.constants.xy_presets import (
     TECHNIQUE_NODE_ID,
     TECHNIQUE_NODEGROUP_ID,
 )
+from manuspectrum.utils.data_version import DATA_CHANGE_TABLES
 
 SQL_DIR = Path(__file__).resolve().parent / "sql" / "triggers"
 
@@ -45,6 +46,22 @@ def read_sql(filename, **tokens):
 
 def drop_trigger_sql(name):
     return f"DROP TRIGGER IF EXISTS {name} ON tiles; DROP FUNCTION IF EXISTS {name}();"
+
+
+def _table_array(tables):
+    return ", ".join(f"'{table}'" for table in tables)
+
+
+def drop_data_change_sql(tables):
+    return (
+        "DO $do$ DECLARE watched text; BEGIN "
+        f"FOREACH watched IN ARRAY ARRAY[{_table_array(tables)}] LOOP "
+        "IF to_regclass(watched) IS NOT NULL THEN "
+        "EXECUTE format('DROP TRIGGER IF EXISTS ms_data_change ON %I', watched); "
+        "END IF; END LOOP; END $do$; "
+        "DROP FUNCTION IF EXISTS ms_data_change(); "
+        "DROP TABLE IF EXISTS ms_data_change;"
+    )
 
 
 sql_items = [
@@ -75,6 +92,12 @@ sql_items = [
             TECHNIQUE_NODEGROUP=TECHNIQUE_NODEGROUP_ID,
         ),
         reverse_sql=drop_trigger_sql("ms_xy_reapply_on_technique"),
+        replace=True,
+    ),
+    SQLItem(
+        "ms_data_change",
+        read_sql("ms_data_change.sql", TABLES=_table_array(DATA_CHANGE_TABLES)),
+        reverse_sql=drop_data_change_sql(DATA_CHANGE_TABLES),
         replace=True,
     ),
 ]

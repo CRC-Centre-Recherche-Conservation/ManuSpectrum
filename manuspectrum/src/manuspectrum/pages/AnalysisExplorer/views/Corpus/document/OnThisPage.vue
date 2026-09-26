@@ -5,11 +5,13 @@ import { useGettext } from "vue3-gettext";
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 
 import type {
-    Annotation,
     CharacterizationSummary,
     SampleSummary,
-    UnlocatedAnalysis,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    Annotation,
+    UnlocatedAnalysis,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type {
     Focus,

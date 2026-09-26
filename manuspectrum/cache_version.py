@@ -32,6 +32,8 @@ CACHE_SHAPE_MODULES = (
     # The homepage technique memo (the Explorer search it reads, and its build).
     "views/explorer_service.py",
     "views/explorer_home.py",
+    # The Explorer's corpus bundle: its keys and what each layer keeps.
+    "views/explorer_memo.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

@@ -54,3 +54,11 @@ def index_resources_async(transaction_id=None, resource_ids=None):
                 logger.exception(
                     "index_resources_async: failed to index resource %s", resource_id
                 )
+
+
+@shared_task(name="manuspectrum.prune_data_changes")
+def prune_data_changes_task():
+    """Delete the data-version ledger rows older than ``PRUNE_AFTER_DAYS``."""
+    from manuspectrum.utils.data_version import prune_data_changes
+
+    return prune_data_changes()

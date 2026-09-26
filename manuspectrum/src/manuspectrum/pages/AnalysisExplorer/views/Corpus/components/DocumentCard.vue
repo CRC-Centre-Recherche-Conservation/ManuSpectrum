@@ -2,6 +2,10 @@
 import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import {
+    hasImageFailed,
+    markImageFailed,
+} from "@/manuspectrum/pages/AnalysisExplorer/failed-images.ts";
 import { formatDateRange } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
 import type {
@@ -12,14 +16,16 @@ import type {
 /**
  * A document of the results: title, shelfmark, holding, dates, type, a short
  * description and its number of analyses. A thumbnail the server refuses
- * leaves the neutral placeholder.
+ * leaves the neutral placeholder, and is not asked for again in this tab.
  */
 const props = defineProps<{ hit: DocumentHit; href: string }>();
 const emit = defineEmits<{ open: [id: string] }>();
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 
-const thumbnailFailed = ref(false);
+const thumbnailFailed = ref(
+    props.hit.thumbnail !== null && hasImageFailed(props.hit.thumbnail),
+);
 
 const countText = computed(() =>
     interpolate(
@@ -42,6 +48,7 @@ const facts = computed(() =>
 const hasFacts = computed(() => facts.value.length > 0 || dates.value !== "");
 
 function onThumbnailError(): void {
+    if (props.hit.thumbnail) markImageFailed(props.hit.thumbnail);
     thumbnailFailed.value = true;
 }
 

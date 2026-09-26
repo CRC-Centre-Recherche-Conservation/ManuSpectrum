@@ -1,4 +1,8 @@
-import { getJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import {
+    getJson,
+    peekJson,
+    prefetchJson,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useRequest } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import {
     LIST_FILTER_KEYS,
@@ -9,9 +13,9 @@ import type { SearchResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/t
 import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import type { Filters } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
+export const SEARCH_ROUTE = "manuspectrum:explorer-search";
+
 export interface SearchScope {
-    /** Limits the search to the analyses of one document. */
-    document?: string;
     /** A page size of its own, instead of `filters.size`. */
     size?: number;
 }
@@ -41,23 +45,78 @@ export function searchQuery(
     for (const year of [...filters.year].sort((a, b) => a - b)) {
         query.append("year", String(year));
     }
-    if (scope.document) query.set("document", scope.document);
     if (page > 1) query.set("page", String(page));
     return query;
 }
 
-/** The search for `source`; `cached` may answer a query string without a request. */
+const DISPLAY_KEYS = ["grain", "size", "empty", "page", "facets"];
+
+/** The filters of a search query string alone: no grain, page size, page nor `facets`. */
+export function filtersOf(query: string): string {
+    const filters = new URLSearchParams(query);
+    for (const key of DISPLAY_KEYS) filters.delete(key);
+    return filters.toString();
+}
+
+/** The filters of `filters` alone, as the document match reads them: no grain, page size nor page. */
+export function filterQuery(filters: Filters): URLSearchParams {
+    return new URLSearchParams(filtersOf(searchQuery(filters, 1).toString()));
+}
+
+export interface SearchOptions {
+    /** Whether the client holds the facets of these filters (`filtersOf`): the search then asks for none (`facets=0`). */
+    holdsFacets?: (filters: string) => boolean;
+    /** A change of filters waits for them to settle (`DEBOUNCE_MS`); a page, grain or size change asks at once. */
+    debounceFilters?: boolean;
+}
+
+export interface SearchHandle extends RequestHandle<SearchResponse> {
+    /** Starts loading the search of `query` ahead, as this handle would ask for it. */
+    prefetch: (query: URLSearchParams) => void;
+}
+
+/** The search for `source`, answered from the tab memo when it holds it. */
 export function useSearch(
     source: () => URLSearchParams | null,
-    cached?: (query: string) => SearchResponse | null,
-): RequestHandle<SearchResponse> {
-    return useRequest(
-        () => source()?.toString() ?? null,
-        (query, signal) =>
-            getJson<SearchResponse>("manuspectrum:explorer-search", {
+    { holdsFacets, debounceFilters = false }: SearchOptions = {},
+): SearchHandle {
+    function sent(query: string): URLSearchParams {
+        const params = new URLSearchParams(query);
+        if (holdsFacets?.(filtersOf(query))) params.set("facets", "0");
+        return params;
+    }
+
+    function held(query: string): SearchResponse | null {
+        return (
+            peekJson<SearchResponse>(SEARCH_ROUTE, {
                 query: new URLSearchParams(query),
+            }) ??
+            peekJson<SearchResponse>(SEARCH_ROUTE, {
+                query: sent(query),
+            })
+        );
+    }
+
+    const handle = useRequest(
+        () => source()?.toString() ?? null,
+        (query, signal, reload) =>
+            getJson<SearchResponse>(SEARCH_ROUTE, {
+                query: sent(query),
                 signal,
+                reload,
             }),
-        cached,
+        {
+            cached: held,
+            debounce: debounceFilters
+                ? (next, previous) => filtersOf(next) !== filtersOf(previous)
+                : undefined,
+        },
     );
+    return {
+        ...handle,
+        prefetch: (query) =>
+            prefetchJson(SEARCH_ROUTE, {
+                query: sent(query.toString()),
+            }),
+    };
 }

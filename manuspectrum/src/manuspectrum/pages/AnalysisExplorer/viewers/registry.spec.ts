@@ -4,7 +4,13 @@ import {
     folioLayerOf,
     registerExternalViewer,
     viewerFor,
+    warmViewer,
 } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
+import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
+
+vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", () => ({
+    loadPlotly: vi.fn(async () => ({})),
+}));
 
 describe("viewer registry", () => {
     it("draws spectra as points and imaging as frames", () => {
@@ -42,5 +48,12 @@ describe("viewer registry", () => {
     it("loads each built-in preview lazily", async () => {
         const component = await viewerFor("file").preview();
         expect(component).toBeTruthy();
+    });
+
+    it("starts loading Plotly with the spectrum preview, and nothing more for the other kinds", () => {
+        warmViewer("file");
+        expect(loadPlotly).not.toHaveBeenCalled();
+        warmViewer("xy");
+        expect(loadPlotly).toHaveBeenCalledTimes(1);
     });
 });

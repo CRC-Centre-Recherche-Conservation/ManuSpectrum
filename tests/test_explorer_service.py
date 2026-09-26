@@ -16,8 +16,10 @@ from manuspectrum.views.explorer_service import (
     TECHNIQUE_PALETTE,
     ancestor_terms,
     corpus_rows,
+    document_payload,
     family_colours,
     fold,
+    match_payload,
     row_filter,
     search_payload,
 )
@@ -115,7 +117,6 @@ class FacetTests(ServiceCase):
         )
         techniques = self.facet(payload, "technique")
         self.assertEqual((techniques[XRF]["count"], techniques[FORS]["count"]), (1, 1))
-        self.assertTrue(techniques[XRF]["selected"])
 
     def test_filters_of_two_facets_combine_with_and(self):
         payload = search_payload(
@@ -213,7 +214,7 @@ class RowFilterTests(SimpleTestCase):
         self.assertEqual([keep(r) for r in self.rows()], [False, True])
 
 
-class ScopedSearchTests(ServiceCase):
+class DocumentMatchTests(ServiceCase):
     facet = FacetTests.facet
 
     @classmethod
@@ -225,13 +226,11 @@ class ScopedSearchTests(ServiceCase):
             cls.reference_value(XRF, "Portable XRF"),
         )
 
-    def scoped(self, resource, extra=""):
-        return search_payload(
-            self.query(f"document={resource}{extra}"), self.anonymous, "en"
-        )
+    def match(self, resource, extra=""):
+        return match_payload(resource, self.query(extra), self.anonymous, "en")
 
-    def test_scoped_facets_count_only_the_rows_of_the_document(self):
-        payload = self.scoped(self.documents["embargoed"].pk)
+    def test_facets_count_only_the_analyses_of_the_document(self):
+        payload = self.match(self.documents["embargoed"].pk)
 
         techniques = self.facet(payload, "technique")
         self.assertEqual({k: v["count"] for k, v in techniques.items()}, {XRF: 1})
@@ -239,23 +238,60 @@ class ScopedSearchTests(ServiceCase):
         self.assertEqual(payload["total"], 1)
 
     def test_a_selected_value_absent_from_the_document_stays_listed_at_zero(self):
-        payload = self.scoped(self.documents["embargoed"].pk, f"&technique={FORS}")
+        payload = self.match(self.documents["embargoed"].pk, f"technique={FORS}")
 
         techniques = self.facet(payload, "technique")
         self.assertEqual(techniques[FORS]["count"], 0)
-        self.assertTrue(techniques[FORS]["selected"])
-        self.assertEqual(payload["results"], [])
+        self.assertEqual(payload["kept"]["analyses"], [])
+        self.assertEqual(payload["total"], 0)
 
-    def test_scoped_results_are_the_analyses_of_the_document_in_any_grain(self):
-        payload = self.scoped(self.documents["open"].pk, "&grain=documents")
+    def test_without_an_active_filter_every_analysis_is_kept_as_null(self):
+        for text in (
+            "",
+            "grain=documents&page=3",
+            "q=",
+            "technique=http://vocab/nowhere",
+        ):
+            payload = self.match(self.documents["open"].pk, text)
 
-        self.assertEqual({r["type"] for r in payload["results"]}, {"analysis"})
-        self.assertEqual(
-            {r["id"] for r in payload["results"]},
-            {str(self.analyses[k].pk) for k in ("open", "on_document", "draft")},
-        )
+            self.assertIsNone(payload["kept"]["analyses"], text or "none")
+            self.assertEqual(payload["total"], 3, text or "none")
 
-    def test_an_invisible_unknown_or_malformed_document_gives_an_empty_scope(self):
+    def test_an_active_filter_lists_the_analyses_it_keeps(self):
+        payload = self.match(self.documents["open"].pk, f"technique={XRF}")
+
+        self.assertEqual(payload["kept"]["analyses"], [str(self.analyses["open"].pk)])
+        self.assertEqual(payload["total"], 1)
+
+    def test_the_match_and_the_search_keep_the_same_analyses(self):
+        for text in (f"technique={XRF}", "q=azurite", f"material={AZURITE}"):
+            found = {
+                r["id"]
+                for r in search_payload(
+                    self.query(f"{text}&size=50"), self.anonymous, "en"
+                )["results"]
+                if r["document"]["id"] == str(self.documents["open"].pk)
+            }
+            kept = self.match(self.documents["open"].pk, text)["kept"]["analyses"]
+            self.assertEqual(set(kept), found, text)
+
+    def test_an_identified_material_is_kept_by_its_own_values_only(self):
+        mine = str(self.characterization.pk)
+
+        for text, kept in (
+            ("", True),
+            (f"material={AZURITE}", True),
+            ("material=http://vocab/nowhere", True),
+            (f"colour={BLUE}&material={AZURITE}", True),
+            (f"technique={FORS}", True),
+            ("q=nothing-carries-this", True),
+        ):
+            payload = self.match(self.documents["open"].pk, text)
+            self.assertIs(
+                mine in payload["kept"]["characterizations"], kept, text or "none"
+            )
+
+    def test_an_invisible_unknown_or_malformed_document_has_no_match(self):
         self.embargo(self.documents["embargoed"])
 
         for resource in (
@@ -263,13 +299,7 @@ class ScopedSearchTests(ServiceCase):
             "00000000-0000-4000-8000-00000000000a",
             "not-a-uuid",
         ):
-            payload = self.scoped(resource)
-            self.assertEqual(
-                (payload["total"], payload["facets"], payload["results"]),
-                (0, [], []),
-                resource,
-            )
-            self.assertNotIn("Ms 211", str(payload))
+            self.assertIsNone(self.match(resource), resource)
 
 
 class PageSizeTests(ServiceCase):
@@ -533,6 +563,23 @@ class CharacterizationLevelTests(LevelCase):
         )
         self.assertTrue(keep(rows[str(self.analyses["open"].pk)]))
 
+    def test_the_document_keeps_the_identified_materials_that_carry_the_selection(
+        self,
+    ):
+        azurite, lead_white = str(self.characterization.pk), str(self.second.pk)
+
+        def kept(text):
+            return set(
+                match_payload(
+                    self.documents["open"].pk, self.query(text), self.anonymous, "en"
+                )["kept"]["characterizations"]
+            )
+
+        self.assertEqual(kept(""), {azurite, lead_white})
+        self.assertEqual(kept(f"material={LEAD_WHITE}"), {lead_white})
+        self.assertEqual(kept(f"material={AZURITE}&colour={RED}"), set())
+        self.assertEqual(kept(f"colour={BLUE}&colour={RED}"), {azurite, lead_white})
+
     def test_free_text_matches_any_characterization(self):
         payload = self.search("q=lead+white")
 
@@ -707,18 +754,11 @@ class TechniqueMarkTests(ServiceCase):
         self.assertEqual(self.marks("en"), self.marks("fr"))
 
     def test_marks_are_the_same_in_two_documents(self):
-        def scoped(document):
-            payload = search_payload(
-                self.query(f"document={document.pk}"), self.anonymous, "en"
-            )
-            return {
-                r["technique"]["uri"]: r["technique"]
-                for r in payload["results"]
-                if r["technique"]
-            }
+        def techniques(document):
+            return document_payload(document.pk, self.anonymous, "en")["techniques"]
 
-        first = scoped(self.documents["open"])
-        second = scoped(self.documents["embargoed"])
+        first = techniques(self.documents["open"])
+        second = techniques(self.documents["embargoed"])
         self.assertEqual(first[RAMAN], second[RAMAN])
 
     def test_families_take_distinct_colours_keyed_by_their_uri(self):
