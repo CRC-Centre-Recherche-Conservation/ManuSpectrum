@@ -15,9 +15,12 @@ from arches.app.models.models import IIIFManifest
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
+from manuspectrum.utils.public_visibility import visible_set
+from manuspectrum.views.explorer import service as explorer_service
 from manuspectrum.views.explorer.service import (
     TECHNIQUE_PALETTE,
     ancestor_terms,
+    build_bundle,
     corpus_rows,
     document_payload,
     family_colours,
@@ -99,6 +102,22 @@ class RowsTests(ServiceCase):
             rows[str(self.analyses["on_document"].pk)]["document"],
             str(self.documents["open"].pk),
         )
+
+    def test_a_document_deleted_while_the_bundle_builds_is_left_out(self):
+        gone = str(self.documents["open"].pk)
+        real = explorer_service.names
+
+        def names_without_the_deleted(ids, language, user):
+            return {k: v for k, v in real(ids, language, user).items() if k != gone}
+
+        visible = visible_set(self.anonymous)
+        with patch.object(explorer_service, "names", names_without_the_deleted):
+            bundle = build_bundle(self.anonymous, "en", visible)
+
+        self.assertIn(gone, visible.documents)
+        self.assertNotIn(gone, bundle.documents)
+        self.assertNotIn(gone, bundle.by_document)
+        self.assertFalse([r for r in bundle.rows if r["document"] == gone])
 
     def test_fold_removes_accents_and_case(self):
         self.assertEqual(fold("Enluminée ÉTÉ"), "enluminee ete")

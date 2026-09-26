@@ -7,7 +7,7 @@ Usage:
 import csv
 import io
 import uuid
-from unittest import mock
+from unittest import mock, skipUnless
 
 from django.conf import settings
 from django.http import QueryDict
@@ -16,7 +16,13 @@ from arches.app.models.models import TileModel
 
 from manuspectrum.models import RendererConfig
 from manuspectrum.views.explorer.scopes import resolve_scope
+from manuspectrum.views.explorer.series import HEADER
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
+
+try:
+    import pandas
+except ImportError:
+    pandas = None
 
 FORS = {
     "presetKey": "fors",
@@ -32,6 +38,7 @@ FORS = {
 }
 ND = {"id": "CC-BY-ND-4.0", "url": "https://creativecommons.org/licenses/by-nd/4.0/"}
 BY = {"id": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/"}
+FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
 
 
 class SeriesCsvTests(CorpusCase):
@@ -59,9 +66,7 @@ class SeriesCsvTests(CorpusCase):
         lines = text.splitlines()
         comments = [line for line in lines if line.startswith("#")]
         rows = list(
-            csv.reader(
-                io.StringIO("\n".join(l for l in lines if not l.startswith("#")))
-            )
+            csv.reader(io.StringIO("\n".join(l for l in lines if l not in comments)))
         )
         return comments, rows
 
@@ -122,7 +127,7 @@ class SeriesCsvTests(CorpusCase):
             self.pk("draft"): self.spectrum(key="draft", name="B.csv"),
         }
         query = self.selection("on_document", "draft")
-        order = resolve_scope(QueryDict(query), self.anonymous, "en").analyses
+        order = resolve_scope(QueryDict(query), "en").analyses
 
         _, rows = self.split(self.text(query))
 
@@ -176,15 +181,70 @@ class SeriesCsvTests(CorpusCase):
                     entry["attribution"] = {"en": {"value": text, "direction": "ltr"}}
             TileModel.objects.filter(pk=tile.pk).update(data=tile.data)
 
+    def comment_lines(self, *keys):
+        lines = self.text(self.selection(*keys)).splitlines()
+        return lines[: next(i for i, l in enumerate(lines) if l.startswith("curve"))]
+
+    def assert_no_cell_opens_a_formula(self, comments):
+        for line in comments:
+            self.assertTrue(line.startswith("#"), line)
+            self.assertNotIn('"', line)
+            self.assertNotIn("\r", line)
+            for delimiter in (",", ";"):
+                for cell in next(csv.reader([line], delimiter=delimiter)):
+                    with self.subTest(line=line, delimiter=delimiter, cell=cell):
+                        self.assertNotIn(cell.lstrip(" ")[:1], FORMULA_STARTS)
+
     def test_curator_text_cannot_start_a_formula_in_a_comment(self):
         self.spectrum(name="=HYPERLINK(1),@x.csv")
 
-        comments, _ = self.split(self.text(self.selection("on_document")))
+        self.assert_no_cell_opens_a_formula(self.comment_lines("on_document"))
 
-        for line in comments:
-            for cell in next(csv.reader([line]))[1:]:
-                self.assertFalse(cell[:1] in ("=", "+", "-", "@"), line)
-            self.assertNotIn("\r", line)
+    def test_a_quoted_or_semicolon_formula_is_neutralised_in_its_comment_line(self):
+        self.spectrum(name='x,"=HYPERLINK(""https://evil"",""Open"")",y.csv')
+        self.spectrum(key="open", name="a;=cmd|' /C calc'!A0.csv")
+
+        comments = self.comment_lines("on_document", "open")
+
+        self.assert_no_cell_opens_a_formula(comments)
+        self.assertTrue([c for c in comments if "'=HYPERLINK(''https://evil''" in c])
+        self.assertTrue([c for c in comments if "a;'=cmd|' /C calc'!A0.csv" in c])
+
+    def test_a_separator_before_plus_at_or_minus_gets_a_leading_quote(self):
+        readable = self.spectrum(name="p,+1,@x, -2.csv", licence=BY)
+        self.set_attribution(readable, "CRC; =SUM(1)\t,\t@y")
+
+        comments = self.comment_lines("on_document")
+
+        self.assert_no_cell_opens_a_formula(comments)
+        (curve,) = [c for c in comments if c.startswith("# c1:")]
+        self.assertIn("p,'+1,'@x,' -2.csv", curve)
+        self.assertIn("CRC;' =SUM(1) ,' @y", curve)
+
+    def test_every_metadata_line_starts_with_a_hash_before_the_data_rows(self):
+        self.spectrum()
+        self.spectrum(key="open", name='a,"=1";@b.csv')
+
+        text = self.text(self.selection("on_document", "open"))
+        lines = text.splitlines()
+        data = [l for l in lines if not l.startswith("#")]
+
+        self.assertEqual(data[0], ",".join(HEADER))
+        self.assertEqual(len(data), 5)
+        for row in csv.reader(data[1:]):
+            self.assertEqual(len(row), len(HEADER))
+            float(row[3]), float(row[4])
+
+    @skipUnless(pandas, "pandas is not installed")
+    def test_pandas_skips_the_metadata_lines_as_comments(self):
+        self.spectrum()
+        self.spectrum(key="open", name='a,"=1";@b.csv')
+
+        text = self.text(self.selection("on_document", "open"))
+
+        frame = pandas.read_csv(io.StringIO(text), comment="#")
+        self.assertEqual(list(frame.columns), list(HEADER))
+        self.assertEqual(len(frame), 4)
 
     def test_a_raw_instrument_file_is_never_read(self):
         self.stored_file(self.analyses["on_document"], "Z.mca", b"1,2\n3,4\n")

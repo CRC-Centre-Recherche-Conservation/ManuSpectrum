@@ -126,10 +126,11 @@ class ManifestRouteTests(CorpusCase):
             self.document_query(),
             f"{self.document_query()}&canvases=all",
             f"project={self.projects['main'].pk}",
-            f"ids=an:{self.pk('embargoed')}:-",
         ):
             with self.subTest(query=query):
-                assert_valid_manifest(self, self.manifest(query))
+                manifest = self.manifest(query)
+                assert_valid_manifest(self, manifest)
+                self.assertTrue(manifest["items"])
 
     def test_only_canvases_carrying_an_element_by_default(self):
         manifest = self.manifest(self.document_query())
@@ -198,13 +199,7 @@ class ManifestRouteTests(CorpusCase):
         node = self.nodes[("document", "facsimiles")]
         TileModel.objects.filter(
             resourceinstance=self.documents["open"], nodegroup_id=node.nodegroup_id
-        ).update(
-            data={
-                str(
-                    node.nodeid
-                ): f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{stored.globalid}"
-            }
-        )
+        ).update(data={str(node.nodeid): f"/manifest/{stored.globalid}"})
 
         with mock.patch(FETCH, side_effect=fetched) as fetch:
             response = self.client.get(
@@ -212,7 +207,15 @@ class ManifestRouteTests(CorpusCase):
             )
 
         fetch.assert_not_called()
-        self.assertEqual([c["id"] for c in response.json()["items"]], [CANVAS])
+        manifest = response.json()
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
+        assert_valid_manifest(self, manifest)
+        absolute = f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{stored.globalid}"
+        self.assertEqual(manifest["items"][0]["partOf"][0]["id"], absolute)
+        for annotation in self.annotations(manifest):
+            self.assertEqual(
+                annotation["target"]["source"]["partOf"][0]["id"], absolute
+            )
 
     def test_an_unlocated_analysis_is_in_metadata_without_annotation(self):
         manifest = self.manifest(
@@ -229,6 +232,12 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(
             [a["label"]["en"][0] for a in self.annotations(manifest)], ["X01 — f. 1v"]
         )
+
+    def test_a_scope_placing_no_canvas_answers_a_bodyless_404(self):
+        response = self.get(f"ids=an:{self.pk('embargoed')}:-")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"")
 
     def test_imaging_layers_are_canvases_with_one_range_per_analysis(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
@@ -377,21 +386,15 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertNotIn("ETag", response)
 
-    def test_drafts_and_restricted_inclusion_are_marked_in_the_summary(self):
+    def test_drafts_are_marked_in_the_summary(self):
         self.embargo(self.analyses["open"])
         self.client.force_login(self.editor)
 
         default = self.manifest(self.document_query())
-        restricted = self.manifest(f"{self.document_query()}&restricted=1")
         open_only = self.manifest(f"ids=an:{self.pk('on_document')}:-")
 
         self.assertEqual(default["summary"], {"en": ["Contains drafts"]})
-        self.assertEqual(
-            restricted["summary"],
-            {"en": ["Contains drafts", "Contains restricted-access data"]},
-        )
-        self.assertIn("X01 — f. 1v", json.dumps(restricted, ensure_ascii=False))
-        self.assertTrue(restricted["id"].endswith("&restricted=1&lang=en"))
+        self.assertNotIn("X01 — f. 1v", json.dumps(default, ensure_ascii=False))
         self.assertNotIn("summary", open_only)
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)

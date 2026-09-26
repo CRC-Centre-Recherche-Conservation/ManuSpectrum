@@ -23,7 +23,7 @@ Canvases and annotations resolve in this order:
    its permalink.
 4. An identified material is placed by its own zone, else by the zone of
    the first object it observes that has one; it becomes a ``describing``
-   annotation. A zone whose nodegroup the reader or the viewer cannot read
+   annotation. A zone whose nodegroup the reader cannot read
    counts as absent, for analyses and materials alike.
 5. The canvases kept are those carrying an annotation, or every canvas of
    the document with ``canvases=all``. The layers of an imaging entry
@@ -67,7 +67,7 @@ from manuspectrum.views.explorer.service import (
     renderer_configs,
 )
 from manuspectrum.views.explorer.scopes import kept_files
-from manuspectrum.views.explorer.values import rewrite_legacy_url
+from manuspectrum.views.explorer.values import dataset_url, rewrite_legacy_url
 from manuspectrum.views.summary_service import _date
 
 PRESENTATION_3 = "http://iiif.io/api/presentation/3/context.json"
@@ -279,13 +279,6 @@ def absolute_url(url):
     return None
 
 
-def _dataset_url(dataset):
-    url = (dataset or {}).get("url") or ""
-    if url.startswith("10."):
-        return f"https://doi.org/{url}"
-    return url if url.startswith(("http://", "https://")) else None
-
-
 def _body(entry, language):
     """Annotation body of one ``FileEntry``: a ``Dataset``, or the ``Manifest`` of an imaging entry; None without a URL."""
     url = absolute_url(entry.get("downloadUrl"))
@@ -345,9 +338,9 @@ def data_annotation(annotation_id, analysis, files, target, language):
             }
         ]
         dataset = analysis.get("dataset")
-        dataset_url = _dataset_url(dataset)
-        if dataset_url:
-            link = {"id": dataset_url, "type": "Dataset", "format": "text/html"}
+        address = dataset_url(dataset)
+        if address:
+            link = {"id": address, "type": "Dataset", "format": "text/html"}
             if dataset.get("label"):
                 link["label"] = {language: [dataset["label"]]}
             see_also.append(link)
@@ -517,7 +510,12 @@ def _homepage(scope):
 
 @dataclass(frozen=True)
 class _Placement:
-    """Where the elements of a scope fall on one document's manifest (``_placements``)."""
+    """Where the elements of a scope fall on one document's manifest (``_placements``).
+
+    ``url`` is the source manifest's absolute URL (a site path is prefixed
+    with ``PUBLIC_SERVER_ADDRESS``): canvases and annotation targets name it
+    in ``partOf``.
+    """
 
     document: str
     url: str
@@ -532,7 +530,7 @@ class _Placement:
 
 
 def _placements(scope):
-    """One ``_Placement`` per document of *scope*, in order: its source manifest, zones, material zones and kept canvases.
+    """One ``_Placement`` per document of *scope*, in order, each built when it is reached: its source manifest, zones, material zones and kept canvases.
 
     Zones are read from ``scope.nodegroups``. The kept canvases are those
     carrying a zone of a kept analysis or of a kept identified material, or
@@ -550,10 +548,10 @@ def _placements(scope):
     }
     chosen_characterizations = set(scope.characterizations)
     limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
-    plans, planned = [], set()
+    planned = set()
     for document in scope.documents:
         url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
-        source = manifest_json(url) if url else None
+        source = scope.read_manifest(url) if url else None
         listed = canvases_of(source)
         position = {c["id"]: c for c in listed}
         dims = canvas_index(listed)
@@ -597,10 +595,10 @@ def _placements(scope):
         planned.update(c for c in kept if c in raw)
         if len(planned) > limit:
             raise ManifestTooLarge()
-        plans.append(
+        yield (
             _Placement(
                 document=document,
-                url=url,
+                url=_absolute_or_self(url),
                 source=source,
                 raw=raw,
                 position=position,
@@ -611,13 +609,89 @@ def _placements(scope):
                 kept=kept,
             )
         )
-    return plans
 
 
 def _layer_ids(entry, read=manifest_json):
     """The canvas ids ``_layers`` gives one kept imaging entry; *read* reads its manifest."""
     imaging = read(entry.get("downloadUrl") or "") or {}
     return list(_source_canvases(imaging))[: len(canvases_of(imaging))]
+
+
+@dataclass(frozen=True, eq=False)
+class CanvasPlan:
+    """The canvases a scope's manifest holds, decided before anything else is built (``canvas_plan``).
+
+    ``placements`` are the ``_placements`` of the scope, ``values`` the
+    ``ANALYSIS_KEYS`` of its analyses, ``imaging`` the kept imaging entries
+    of each analysis, ``read_imaging`` the memoised reader of their
+    manifests and ``canvases`` the ids of every folio and layer canvas.
+    """
+
+    placements: list
+    values: object
+    imaging: dict
+    read_imaging: object
+    canvases: frozenset
+
+
+def canvas_plan(scope):
+    """``CanvasPlan`` of *scope*; ``ManifestTooLarge`` over ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases.
+
+    The folios are counted while the zones are placed (``_placements``),
+    then the folios and layers once the imaging entries are read. Every
+    manifest is read through ``scope.read_manifest``, once per scope.
+    """
+    plans = list(_placements(scope))
+    planned = {c for plan in plans for c in plan.kept if c in plan.raw}
+    values, imaging = _imaging(scope)
+    read_imaging = scope.read_manifest
+    layer_ids = {
+        c
+        for entries in imaging.values()
+        for e in entries
+        for c in _layer_ids(e, read_imaging)
+    }
+    if len(planned | layer_ids) > settings.EXPLORER_MANIFEST_MAX_CANVASES:
+        raise ManifestTooLarge()
+    return CanvasPlan(
+        plans, values, imaging, read_imaging, frozenset(planned | layer_ids)
+    )
+
+
+def _imaging(scope):
+    """``(values, imaging)``: the ``ANALYSIS_KEYS`` of the analyses of *scope* and the imaging entries it keeps of each."""
+    values = Values(list(scope.analyses), ANALYSIS_KEYS, scope.reader)
+    imaging = {
+        a: kept_files(
+            scope,
+            a,
+            imaging_entries(
+                a, values.get(a, "imaging"), scope.language, scope.read_manifest
+            ),
+        )
+        for a in scope.analyses
+    }
+    return values, imaging
+
+
+def has_canvases(scope):
+    """Whether the manifest of *scope* holds a canvas; a scope over the canvas bound holds some.
+
+    Documents are placed in order until one keeps a folio; the imaging
+    layers are read only when none does.
+    """
+    try:
+        for plan in _placements(scope):
+            if any(c in plan.raw for c in plan.kept):
+                return True
+        _, imaging = _imaging(scope)
+    except ManifestTooLarge:
+        return True
+    return any(
+        _layer_ids(e, scope.read_manifest)
+        for entries in imaging.values()
+        for e in entries
+    )
 
 
 def build_manifest(scope):
@@ -627,7 +701,7 @@ def build_manifest(scope):
     Explorer page of the scope. The label names the project of a project
     scope, else the Selection (« Selection of n pages of <document> » or
     « … of k documents »). The manifest carries no ``rights``; ``summary``
-    says when the scope holds drafts or restricted-access data.
+    says when the scope holds drafts.
 
     Per document, in ``scope.documents`` order, its manifest (the
     ``doc_manifest`` role, read by ``manifest_json``) gives the canvases:
@@ -636,9 +710,8 @@ def build_manifest(scope):
     ``v3_canvas``. A canvas's ``annotations`` hold one ``data_annotation``
     per analysis zone and one ``describing`` annotation per material zone
     (a plain-text ``TextualBody`` naming the materials and their certainty).
-    Zones are read from the nodegroups both the reader and the viewer may
-    read. The layers of each kept imaging entry follow the canvas of the
-    analysis's first zone, labelled « <folio> — <layer> »; the layers of an
+    Zones are read from the nodegroups the reader may read. The layers of
+    each kept imaging entry follow the canvas of the analysis's first zone, labelled « <folio> — <layer> »; the layers of an
     analysis without a zone follow the canvases of its document (or come
     last). ``structures`` holds one Range per document and one per analysis
     with imaging layers.
@@ -647,38 +720,27 @@ def build_manifest(scope):
     unreadable, or a zone on an unknown canvas) has no annotation and is
     listed in the manifest's ``metadata`` with its permalink.
 
-    More than ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases (folios and
-    layers) raises ``ManifestTooLarge``, counted before anything is built:
-    the folios while the zones are placed (``_placements``), before any file
-    or fact is read, then the folios and layers once the imaging entries are
-    read, before the other files, the facts and any canvas.
+    A scope that places no canvas has no manifest: None. More than
+    ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases (folios and layers) raises
+    ``ManifestTooLarge``; both are decided by ``canvas_plan`` before any
+    other file, fact or canvas is read.
     """
+    plan = canvas_plan(scope)
+    if not plan.canvases:
+        return None
     bundle, language, reader = scope.bundle, scope.language, scope.reader
     mint_id = functools.partial(mint, scope.digest)
-    limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
-    plans = _placements(scope)
-    planned = {c for plan in plans for c in plan.kept if c in plan.raw}
-    values = Values(list(scope.analyses), ANALYSIS_KEYS, reader)
-    read_imaging = functools.cache(manifest_json)
-    imaging = {
-        a: kept_files(scope, a, imaging_entries(a, values.get(a, "imaging"), language))
-        for a in scope.analyses
-    }
-    layer_ids = {
-        c
-        for entries in imaging.values()
-        for e in entries
-        for c in _layer_ids(e, read_imaging)
-    }
-    if len(planned | layer_ids) > limit:
-        raise ManifestTooLarge()
+    plans, values, imaging = plan.placements, plan.values, plan.imaging
+    read_imaging = plan.read_imaging
     rows = {a: bundle.by_id[a] for a in scope.analyses}
     configs = renderer_configs(values, scope.analyses)
     files = {
         a: kept_files(
             scope,
             a,
-            analysis_files(a, reader, language, values=values, configs=configs),
+            analysis_files(
+                a, reader, language, values=values, configs=configs, read=read_imaging
+            ),
         )
         for a in scope.analyses
     }
@@ -788,8 +850,6 @@ def build_manifest(scope):
     summary = []
     if scope.drafts:
         summary.append(_("Contains drafts"))
-    if scope.restricted:
-        summary.append(_("Contains restricted-access data"))
     if summary:
         manifest["summary"] = {language: summary}
     if unlocated:

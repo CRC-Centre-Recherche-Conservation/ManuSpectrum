@@ -6,6 +6,7 @@ import {
     forgetPayloads,
     getJson,
     getSeries,
+    PREFETCHES_IN_FLIGHT,
     peekJson,
     prefetchJson,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
@@ -198,6 +199,64 @@ describe("the tab memo", () => {
         pending.resolve({ total: 7 });
         expect(await getJson(SEARCH)).toEqual({ total: 7 });
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("never evicts a request still running for a caller", async () => {
+        const pending = pendingFetch();
+        const first = getJson(SEARCH, {
+            query: new URLSearchParams("page=0"),
+        });
+        for (let page = 1; page <= 25; page += 1) {
+            void getJson(SEARCH, {
+                query: new URLSearchParams([["page", String(page)]]),
+            });
+        }
+        const again = getJson(SEARCH, {
+            query: new URLSearchParams("page=0"),
+        });
+        const asked = fetchMock.mock.calls.filter(
+            (call) => call[0] === "/en/manuspectrum:explorer-search?page=0",
+        );
+        expect(asked).toHaveLength(1);
+        pending.resolve({ total: 1 });
+        expect(await first).toEqual({ total: 1 });
+        expect(await again).toEqual({ total: 1 });
+    });
+});
+
+describe("prefetchJson", () => {
+    it("aborts a prefetch nobody waits for when its signal aborts", () => {
+        const pending = pendingFetch();
+        const intent = new AbortController();
+        prefetchJson(SEARCH, { signal: intent.signal });
+        intent.abort();
+        expect(pending.signals[0].aborted).toBe(true);
+        void getJson(SEARCH);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps an aborted prefetch running for a caller that waits", async () => {
+        const pending = pendingFetch();
+        const intent = new AbortController();
+        prefetchJson(SEARCH, { signal: intent.signal });
+        const waiting = getJson(SEARCH);
+        intent.abort();
+        expect(pending.signals[0].aborted).toBe(false);
+        pending.resolve({ total: 2 });
+        expect(await waiting).toEqual({ total: 2 });
+    });
+
+    it("runs a bounded number of prefetches, dropping the oldest", () => {
+        const pending = pendingFetch();
+        for (let page = 1; page <= PREFETCHES_IN_FLIGHT + 2; page += 1) {
+            prefetchJson(SEARCH, {
+                query: new URLSearchParams([["page", String(page)]]),
+            });
+        }
+        const running = pending.signals.filter((signal) => !signal.aborted);
+        expect(running).toHaveLength(PREFETCHES_IN_FLIGHT);
+        expect(pending.signals[0].aborted).toBe(true);
+        expect(pending.signals[1].aborted).toBe(true);
     });
 });
 

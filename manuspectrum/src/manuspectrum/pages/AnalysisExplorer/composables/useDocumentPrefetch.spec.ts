@@ -30,14 +30,14 @@ describe("useDocumentPrefetch", () => {
         vi.advanceTimersByTime(1);
         expect(prefetchJson).toHaveBeenCalledWith(
             "manuspectrum:explorer-document",
-            { urlParameters: { resourceid: "doc-1" } },
+            expect.objectContaining({ urlParameters: { resourceid: "doc-1" } }),
         );
         expect(prefetchJson).toHaveBeenCalledWith(
             "manuspectrum:explorer-document-match",
-            {
+            expect.objectContaining({
                 urlParameters: { resourceid: "doc-1" },
                 query: new URLSearchParams("technique=t1"),
-            },
+            }),
         );
         scope.stop();
     });
@@ -54,5 +54,22 @@ describe("useDocumentPrefetch", () => {
         scope.stop();
         vi.advanceTimersByTime(INTENT_MS);
         expect(prefetchJson).not.toHaveBeenCalled();
+    });
+
+    it("aborts the loads of a card the reader leaves", () => {
+        const scope = effectScope();
+        const prefetch = scope.run(() =>
+            useDocumentPrefetch(() => new URLSearchParams()),
+        )!;
+        prefetch.intend("doc-1");
+        vi.advanceTimersByTime(INTENT_MS);
+        const signals = vi
+            .mocked(prefetchJson)
+            .mock.calls.map((call) => call[1]?.signal);
+        expect(signals).toHaveLength(2);
+        expect(signals.every((signal) => signal && !signal.aborted)).toBe(true);
+        prefetch.drop();
+        expect(signals.every((signal) => signal?.aborted)).toBe(true);
+        scope.stop();
     });
 });

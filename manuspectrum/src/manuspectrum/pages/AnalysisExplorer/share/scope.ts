@@ -52,17 +52,9 @@ export function offeredScopes(state: ScopeState): OfferedScope[] {
     return scopes;
 }
 
-/** The query of the share route and of the products for `scope`: keys sorted, `restricted=1` only when asked. */
-export function shareQuery(
-    scope: OfferedScope,
-    restricted = false,
-): URLSearchParams {
-    const query =
-        scope.kind === "ids"
-            ? new URLSearchParams(
-                  [...scope.keys].sort().map((key) => ["ids", key]),
-              )
-            : new URLSearchParams([[scope.kind, scope.id]]);
-    if (restricted) query.set("restricted", "1");
-    return query;
+/** The query of the share route and of the products for `scope`, keys sorted. */
+export function shareQuery(scope: OfferedScope): URLSearchParams {
+    return scope.kind === "ids"
+        ? new URLSearchParams([...scope.keys].sort().map((key) => ["ids", key]))
+        : new URLSearchParams([[scope.kind, scope.id]]);
 }

@@ -37,7 +37,7 @@
     </p>
     <div id="ms-explorer-intro-bar" class="ms-explorer-intro__bar"></div>
 </section>
-<div id="ms-explorer-app" class="ms-explorer" aria-busy="true" data-connected="{{ explorer_connected|yesno:'true,false' }}"{% if explorer_mirador_url %} data-mirador-url="{{ explorer_mirador_url }}"{% endif %}>
+<div id="ms-explorer-app" class="ms-explorer" aria-busy="true"{% if explorer_mirador_url %} data-mirador-url="{{ explorer_mirador_url }}"{% endif %}>
     <p class="ms-explorer__loading">{% trans "Loading the explorer…" %}</p>
 </div>
 <div id="ms-explorer-fallback" class="ms-explorer-fallback" role="alert" hidden>

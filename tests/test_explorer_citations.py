@@ -294,9 +294,25 @@ class EntryTests(SimpleTestCase):
         self.assertIn(f"XRF 1 ({one.permalink})", note)
         self.assertIn(f"XRF 2 ({two.permalink})", note)
         self.assertIn(one.permalink, entry["ris"])
-        self.assertIn(
-            two.permalink, bibtexparser.parse_string(entry["bibtex"]).entries[0]["note"]
+        self.assertIn(two.permalink, entry["ris"])
+
+    def test_a_label_less_dataset_is_titled_by_its_url_however_many_cite_it(self):
+        dataset = {"url": DOI_URL, "isDoi": True, "label": None}
+
+        alone = self.entry(dataset, [analysis(1)])
+        shared = self.entry(dataset, [analysis(1), analysis(2)])
+
+        self.assertEqual(alone["csl"]["title"], DOI_URL)
+        self.assertEqual(shared["csl"]["title"], DOI_URL)
+
+    def test_a_dx_doi_address_is_cited_by_its_doi_org_url(self):
+        entry = self.entry(
+            {"url": "https://dx.doi.org/10.1234/ABC/XYZ", "label": None},
+            [analysis(1)],
         )
+
+        self.assertEqual(entry["csl"]["URL"], DOI_URL)
+        self.assertIn(f"url = {{{DOI_URL}}}", entry["bibtex"])
 
 
 class EntriesTests(SimpleTestCase):
@@ -313,6 +329,7 @@ class EntriesTests(SimpleTestCase):
             ],
             language="en",
             accessed=ACCESSED,
+            link=BASE,
         )
         self.assertEqual(len(entries), 1)
         self.assertIn(analysis(1).permalink, entries[0]["csl"]["note"])
@@ -334,6 +351,7 @@ class EntriesTests(SimpleTestCase):
             ],
             language="en",
             accessed=ACCESSED,
+            link=BASE,
         )
 
         self.assertEqual(
@@ -359,6 +377,7 @@ class EntriesTests(SimpleTestCase):
             [(None, [one], [], PROJECT), (None, [two], [], PROJECT)],
             language="en",
             accessed=ACCESSED,
+            link=BASE,
         )[0]
 
         note = bibtexparser.parse_string(entry["bibtex"]).entries[0]["note"]
@@ -371,11 +390,36 @@ class EntriesTests(SimpleTestCase):
             self.assertIn(cited.permalink, entry["csl"]["note"])
             self.assertIn(cited.permalink, entry["ris"])
 
+    def test_a_dataset_cited_by_several_analyses_shows_the_count_and_the_link(self):
+        link = f"{BASE}en/discover?sel=an:1,an:2"
+        one, two = analysis(1), analysis(2)
+        for dataset in (
+            dataverse_dataset(),
+            {"url": DOI_URL, "isDoi": True, "label": "Parchment spectra"},
+        ):
+            with self.subTest(label=dataset["label"]):
+                (entry,) = citation_entries(
+                    [(dataset, [one], [], PROJECT), (dataset, [two], [], DOCUMENT)],
+                    language="en",
+                    accessed=ACCESSED,
+                    link=link,
+                )
+
+                note = bibtexparser.parse_string(entry["bibtex"]).entries[0]["note"]
+                self.assertIn(f"2 analyses: {link}", note)
+                for cited in (one, two):
+                    self.assertNotIn(cited.permalink, entry["bibtex"])
+                    self.assertNotIn(cited.permalink, entry["recommended"])
+                    self.assertIn(cited.permalink, entry["csl"]["note"])
+                    self.assertIn(cited.permalink, entry["ris"])
+        self.assertIn(f"2 analyses: {link}", entry["recommended"])
+
     def test_one_analysis_without_a_dataset_is_cited_as_itself(self):
         entries = citation_entries(
             [(None, [analysis(1)], [], PROJECT), (None, [analysis(2)], [], None)],
             language="en",
             accessed=ACCESSED,
+            link=BASE,
         )
 
         self.assertEqual(
@@ -399,7 +443,10 @@ class LatexTests(SimpleTestCase):
             wraps=unicode_to_latex,
         ) as encoder:
             citation_entries(
-                [(None, parts, [], PROJECT)], language="en", accessed=ACCESSED
+                [(None, parts, [], PROJECT)],
+                language="en",
+                accessed=ACCESSED,
+                link=BASE,
             )
 
         self.assertLess(max(len(call.args[0]) for call in encoder.call_args_list), 200)
@@ -412,12 +459,12 @@ class AvailabilityTests(SimpleTestCase):
         expected = {
             "en": (
                 f"The data are available in ManuSpectrum ({self.permalink}) and in "
-                f"Parchment spectra - test corpus (https://doi.org/10.1234/abc/xyz), "
+                f"Parchment spectra - test corpus (https://doi.org/10.1234/ABC/XYZ), "
                 f"under CC BY 4.0."
             ),
             "fr": (
                 f"Les données sont disponibles dans ManuSpectrum ({self.permalink}) et dans "
-                f"Parchment spectra - test corpus (https://doi.org/10.1234/abc/xyz), "
+                f"Parchment spectra - test corpus (https://doi.org/10.1234/ABC/XYZ), "
                 f"sous licence CC BY 4.0."
             ),
         }
@@ -465,6 +512,7 @@ class AvailabilityTests(SimpleTestCase):
             licences=["CC BY 4.0"],
             language="en",
             accessed=ACCESSED,
+            link=BASE,
         )
         self.assertEqual(
             entry["availability"],

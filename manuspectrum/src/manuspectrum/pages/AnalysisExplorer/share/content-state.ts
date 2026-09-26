@@ -95,3 +95,21 @@ export function miradorLink(
     }
     return url.href;
 }
+
+/**
+ * The IIIF link of the content state `state` of `manifest`, a URL to copy
+ * (IIIF Content State 1.0 §3.1, `iiif-content` request parameter): the
+ * link that opens it in the viewer at `viewer` when one is set, else the
+ * manifest URL carrying it as `iiif-content`.
+ */
+export function contentStateLink(
+    viewer: string,
+    manifest: string,
+    state: string,
+): string {
+    const opened = miradorLink(viewer, { contentState: state });
+    if (opened) return opened;
+    const url = new URL(manifest);
+    url.searchParams.set("iiif-content", state);
+    return url.href;
+}

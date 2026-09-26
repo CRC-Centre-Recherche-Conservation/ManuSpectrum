@@ -73,7 +73,6 @@ export async function startAnalysisExplorer(): Promise<void> {
         component: AnalysisExplorer,
         mountPoint,
         initialProps: {
-            connected: mountPoint.dataset.connected === "true",
             miradorUrl: mountPoint.dataset.miradorUrl ?? "",
         },
     });

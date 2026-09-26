@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { effectScope, nextTick, ref } from "vue";
+import { effectScope } from "vue";
 import { flushPromises } from "@vue/test-utils";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
@@ -35,8 +35,7 @@ function askedUrls(): string[] {
 describe("useShare", () => {
     it("asks the share route with the scope query", async () => {
         const scope = effectScope();
-        const restricted = ref(false);
-        const handle = scope.run(() => useShare(() => DOCUMENT, restricted));
+        const handle = scope.run(() => useShare(() => DOCUMENT));
         await flushPromises();
 
         expect(askedUrls()).toEqual([
@@ -44,19 +43,12 @@ describe("useShare", () => {
         ]);
         expect(handle?.status.value).toBe("ready");
         expect(handle?.data.value?.scope.kind).toBe("document");
-
-        restricted.value = true;
-        await nextTick();
-        await flushPromises();
-        expect(askedUrls()[1]).toBe(
-            `/en/manuspectrum:explorer-share?document=${uuid(1)}&restricted=1`,
-        );
         scope.stop();
     });
 
     it("does not ask without a scope", async () => {
         const scope = effectScope();
-        const handle = scope.run(() => useShare(() => null, false));
+        const handle = scope.run(() => useShare(() => null));
         await flushPromises();
 
         expect(fetchMock).not.toHaveBeenCalled();
@@ -67,8 +59,8 @@ describe("useShare", () => {
     it("shares one request between two callers", async () => {
         const scope = effectScope();
         const [first, second] = scope.run(() => [
-            useShare(() => DOCUMENT, false),
-            useShare(() => DOCUMENT, false),
+            useShare(() => DOCUMENT),
+            useShare(() => DOCUMENT),
         ]) ?? [null, null];
         await flushPromises();
 

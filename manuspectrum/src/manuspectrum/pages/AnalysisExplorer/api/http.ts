@@ -17,6 +17,11 @@ export interface JsonRequestOptions {
     query?: URLSearchParams;
 }
 
+export interface PrefetchOptions extends JsonRequestOptions {
+    /** Aborts the prefetch when nobody waits for it yet. */
+    signal?: AbortSignal;
+}
+
 export interface GetJsonOptions extends JsonRequestOptions {
     signal?: AbortSignal;
     /** Ask the server again even when this tab holds the payload. */
@@ -27,6 +32,8 @@ const NOT_FOUND = 404;
 const NO_CONTENT = 204;
 const MEMO_ENTRIES = 20;
 const MEMO_TTL_MS = 5 * 60 * 1000;
+/** Prefetches nobody waits for yet that run at once; a new one drops the oldest. */
+export const PREFETCHES_IN_FLIGHT = 4;
 
 /** The API answered 404: unknown and refused look the same (spec §4). */
 export class UnavailableError extends Error {
@@ -132,10 +139,43 @@ function start(url: string, pinned: boolean): MemoEntry {
     );
     entry.promise.catch(() => undefined);
     memo.set(url, entry);
-    while (memo.size > MEMO_ENTRIES) {
-        memo.delete(memo.keys().next().value as string);
-    }
+    evict();
     return entry;
+}
+
+function running(entry: MemoEntry): boolean {
+    return entry.arrivedAt === null && entry.waiting > 0;
+}
+
+/** Drops the least recently used entries over `MEMO_ENTRIES`, never a request a caller still waits for. */
+function evict(): void {
+    for (const [url, entry] of memo) {
+        if (memo.size <= MEMO_ENTRIES) return;
+        if (!running(entry)) memo.delete(url);
+    }
+}
+
+/** Aborts `entry` unless a caller waits for it or its answer arrived. */
+function abandon(url: string, entry: MemoEntry): void {
+    entry.pinned = false;
+    if (entry.waiting === 0 && entry.arrivedAt === null) {
+        forget(url, entry);
+        entry.controller.abort();
+    }
+}
+
+/** Aborts the oldest prefetches nobody waits for beyond `PREFETCHES_IN_FLIGHT`. */
+function capPrefetches(): void {
+    const idle = [...memo].filter(
+        ([, entry]) =>
+            entry.pinned && entry.arrivedAt === null && entry.waiting === 0,
+    );
+    for (const [url, entry] of idle.slice(
+        0,
+        Math.max(0, idle.length - PREFETCHES_IN_FLIGHT),
+    )) {
+        abandon(url, entry);
+    }
 }
 
 function wait<T>(
@@ -182,7 +222,8 @@ function wait<T>(
  * GET a localized explorer payload through the tab's memo.
  *
  * The memo holds the last `MEMO_ENTRIES` URLs for `MEMO_TTL_MS` from their
- * answer, in memory only. Callers of one URL share one request: a caller that
+ * answer, in memory only; a request still running for a caller is never
+ * evicted. Callers of one URL share one request: a caller that
  * aborts leaves it, and it is aborted when nobody waits any more. A failed
  * request (404 included) is forgotten; `reload` replaces the entry. An aborted
  * call rejects with the browser's AbortError.
@@ -206,13 +247,23 @@ export function peekJson<T>(
     return entry?.arrivedAt != null ? (entry.value as T) : null;
 }
 
-/** Starts loading a payload a screen will probably ask for; a failure is forgotten silently. */
+/**
+ * Starts loading a payload a screen will probably ask for; a failure is
+ * forgotten silently. At most `PREFETCHES_IN_FLIGHT` prefetches nobody waits
+ * for run at once, the oldest aborted first; `signal` aborts this one unless
+ * a caller already waits for it.
+ */
 export function prefetchJson(
     route: ExplorerRoute,
-    request: JsonRequestOptions = {},
+    { signal, ...request }: PrefetchOptions = {},
 ): void {
     const url = explorerUrl(route, request);
-    if (!lookup(url)) start(url, true);
+    if (signal?.aborted || lookup(url)) return;
+    const entry = start(url, true);
+    capPrefetches();
+    signal?.addEventListener("abort", () => abandon(url, entry), {
+        once: true,
+    });
 }
 
 /** Empties the tab's memo. */

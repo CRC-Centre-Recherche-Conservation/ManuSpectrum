@@ -118,11 +118,4 @@ describe("shareQuery", () => {
             `project=${PROJECT}`,
         );
     });
-
-    it("asks restricted only when told", () => {
-        const scope = { kind: "document" as const, id: DOCUMENT };
-        expect(shareQuery(scope).has("restricted")).toBe(false);
-        expect(shareQuery(scope, false).has("restricted")).toBe(false);
-        expect(shareQuery(scope, true).get("restricted")).toBe("1");
-    });
 });

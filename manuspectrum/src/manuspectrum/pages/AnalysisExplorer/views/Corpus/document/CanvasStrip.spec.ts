@@ -49,6 +49,17 @@ describe("CanvasStrip", () => {
         expect(wrapper.find("img").exists()).toBe(false);
     });
 
+    it("draws no thumbnail from a service outside http(s)", () => {
+        const canvases = documentPayload().canvases.map((canvas) => ({
+            ...canvas,
+            image: { ...canvas.image, service: "javascript:alert(1)//" },
+        }));
+        const wrapper = mount(CanvasStrip, {
+            props: { canvases, current: null },
+        });
+        expect(wrapper.find("img").exists()).toBe(false);
+    });
+
     describe("with filters", () => {
         const canvases = ["f. 1r", "f. 1v", "f. 2r", "f. 2v"].map(
             (label, index) => ({

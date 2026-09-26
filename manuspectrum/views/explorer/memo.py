@@ -1,16 +1,18 @@
-"""Memo of the Explorer's corpus bundle: one per reader scope, language and data version.
+"""Memo of the Explorer's corpus bundle: one per language, data version and visible set.
 
 A bundle holds everything a request derives from the whole visible corpus
 (rows, facet universe and labels, names, link maps); ``explorer.service``
-builds it, this module keeps it. The key carries the ``explorer_scope`` of
-the reader, the language, ``data_version()``, the permission epoch and the
-digest of the reader's ``visible_set``; the data version and the visible set
-are read once per request, before any memo is looked up.
+builds it, this module keeps it. The Explorer answers every reader with
+the visitor's view (spec D59), so one bundle per language serves everyone.
+The key carries the language, ``data_version()``, the permission epoch and
+the digest of the ``visible_set`` it was built from, which names every
+permission-relevant input of the build; the data version and the visible
+set are read once per request, before any memo is looked up.
 
 Two layers. The default cache holds the bundle pickled and compressed with
 zlib level 1 (``pack``): a miss is built by one caller across processes while
 the others wait for it (``BUILD_WAIT``), and only the last ``LIVE_ENTRIES``
-keys per scope and language stay stored. That retirement works within one
+keys per language stay stored. That retirement works within one
 cache key prefix: the entries of a previous ``CACHE_CODE_VERSION`` are never
 read again and expire by ``settings.EXPLORER_BUNDLE_TTL``.
 Each process keeps the last ``LOCAL_ENTRIES`` bundles it used, unpickled,
@@ -23,24 +25,28 @@ trigger cost about a third of a build. The cycles a build leaves behind
 collected after it.
 
 Stale while rebuilding. When the current key holds no bundle but a live
-bundle of the same scope and language was built under the same permission
-gates (epoch, hidden resources, readable nodegroups and models: everything
-but the data) and shows no resource the reader can no longer see, ``ticket``
+bundle of the same language was built under the same permission gates
+(epoch, hidden resources, readable nodegroups and models: everything but
+the data) and shows no resource the reader can no longer see, ``ticket``
 names that bundle and the reader is answered from it at once, while one
 rebuild runs in the background: one at a time in a process, whatever its
-scope and language, and one per scope and language across processes,
-started through ``spawn`` by the caller that takes the scope and language's
-rebuild lock. The others keep reading the
-previous bundle until the new one is stored; a data change during a
-rebuild is rebuilt by the first request after it ends. A change of permission gates, a
-resource the previous bundle shows that the current visible set leaves out
-(a link to a hidden Project, a deletion), or no previous bundle, builds in
-the request.
+language, and one per language across processes, started through
+``spawn`` by the caller that takes the language's rebuild lock. The others
+keep reading the previous bundle until the new one is stored; a data
+change during a rebuild is rebuilt by the first request after it ends.
+Meanwhile a resource made visible by the new data is still absent from the
+bundle served: its document or analysis answers 404, and the new analyses
+of a document read as not matching the filters, until the rebuild is
+stored. Since background rebuilds of a language start at most once per
+``EXPLORER_REBUILD_MIN_INTERVAL`` seconds, that window lasts up to the
+interval plus one build. A
+change of permission gates, a resource the previous bundle shows that the
+current visible set leaves out (a link to a hidden Project, a deletion), or
+no previous bundle, builds in the request.
 
 One ``INFO`` line per build on the ``manuspectrum.explorer`` logger, its
 fields in ``extra``: ``duration_s``, ``rows``, ``stored_bytes``,
-``language``, ``scope_kind`` (``public`` for the shared scope, else
-``reader``), ``reason`` (``data``, ``permissions``, ``visibility``,
+``language``, ``reason`` (``data``, ``permissions``, ``visibility``,
 ``cold``), ``background`` and ``stale_served`` (answers given from the
 previous bundle while it ran).
 
@@ -68,7 +74,6 @@ from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.data_version import data_version
 from manuspectrum.utils.public_visibility import (
     VisibleSet,
-    explorer_scope,
     permission_epoch,
     visible_set,
 )
@@ -79,6 +84,7 @@ BUILD_WAIT = 45
 LOCK_TIMEOUT = 90
 LIVE_ENTRIES = 2
 LOCAL_ENTRIES = 2
+POINTER_LOCK_WAIT = 5
 
 _local = OrderedDict()
 _local_lock = threading.Lock()
@@ -90,8 +96,13 @@ _collector_pauses = 0
 _collector_was_enabled = False
 
 
-def bundle_key(scope, language, version, epoch, digest):
-    return stable_cache_key("explorer-bundle", scope, language, version, epoch, digest)
+def _clock():
+    """Wall-clock seconds, shared by every process: when a background rebuild ended."""
+    return time.time()
+
+
+def bundle_key(language, version, epoch, digest):
+    return stable_cache_key("explorer-bundle", language, version, epoch, digest)
 
 
 @dataclass(frozen=True)
@@ -108,7 +119,6 @@ class Ticket:
     """
 
     key: str
-    scope: str
     language: str
     visible: VisibleSet
     current: str = ""
@@ -130,12 +140,10 @@ def ticket(user, language, build=None):
     """
     version = data_version()
     visible = visible_set(user, version=version)
-    scope = explorer_scope(user)
     epoch = permission_epoch()
-    key = bundle_key(scope, language, version, epoch, visible.digest)
+    key = bundle_key(language, version, epoch, visible.digest)
     held = Ticket(
         key=key,
-        scope=scope,
         language=language,
         visible=visible,
         current=key,
@@ -174,7 +182,6 @@ def corpus_bundle(user, language, build, held=None):
         held = replace(held, key=held.current)
     return remember(
         held.key,
-        held.scope,
         language,
         lambda: build(user, language, held.visible),
         permissions=held.permissions,
@@ -183,7 +190,7 @@ def corpus_bundle(user, language, build, held=None):
     )
 
 
-def remember(key, scope, language, build, permissions="", reason="cold", version=""):
+def remember(key, language, build, permissions="", reason="cold", version=""):
     """The bundle stored under *key*, from this process, else the cache, else ``build()``."""
     found = _local_get(key)
     if found is not None:
@@ -201,7 +208,7 @@ def remember(key, scope, language, build, permissions="", reason="cold", version
             if built[0] is None:
                 return None
             packed = pack(built[0])
-            _log_build(key, scope, language, reason, started, built[0], packed, False)
+            _log_build(key, language, reason, started, built[0], packed, False)
             return packed
 
         stored = get_or_build(
@@ -210,7 +217,7 @@ def remember(key, scope, language, build, permissions="", reason="cold", version
             settings.EXPLORER_BUNDLE_TTL,
             lock_timeout=LOCK_TIMEOUT,
             wait=BUILD_WAIT,
-            kept=lambda _: _retire_previous(scope, language, key, permissions, version),
+            kept=lambda _: _retire_previous(language, key, permissions, version),
         )
         found = built[0] if built else unpack(stored)
         _local_put(key, found)
@@ -308,10 +315,10 @@ def _shows_hidden(bundle, visible):
 def _previous(held):
     """The live key with the newest data stored under *held*'s gates, and why *held* is missing.
 
-    ``data`` when there is one; else ``permissions`` when the scope and
-    language have live keys built under other gates, ``cold`` when not.
+    ``data`` when there is one; else ``permissions`` when the language has
+    live keys built under other gates, ``cold`` when not.
     """
-    live = _live(held.scope, held.language)
+    live = _live(held.language)
     same = [e for e in live if e[1] == held.permissions]
     for key, _, _ in sorted(same, key=lambda e: _order(e[2]), reverse=True):
         if _stored(key):
@@ -334,39 +341,63 @@ def _order(version):
         return -1, -1
 
 
-def _rebuild_lock(scope, language):
-    return f"{stable_cache_key('explorer-rebuild', scope, language)}:lock"
+def _rebuild_lock(language):
+    return f"{stable_cache_key('explorer-rebuild', language)}:lock"
 
 
-def _rebuild_failed(scope, language):
-    return f"{stable_cache_key('explorer-rebuild', scope, language)}:failed"
+def _rebuild_failed(language):
+    return f"{stable_cache_key('explorer-rebuild', language)}:failed"
+
+
+def _rebuild_ended(language):
+    return f"{stable_cache_key('explorer-rebuild', language)}:ended"
+
+
+def _deferred(language):
+    """Whether the last background rebuild of *language* ended less than ``EXPLORER_REBUILD_MIN_INTERVAL`` seconds ago."""
+    interval = getattr(settings, "EXPLORER_REBUILD_MIN_INTERVAL", 0)
+    if interval <= 0:
+        return False
+    ended = cache.get(_rebuild_ended(language))
+    return ended is not None and _clock() - ended < interval
 
 
 def _rebuild_in_background(held, user, build):
-    """Start the rebuild of ``held.current`` unless this process or its scope and language runs one.
+    """Start the rebuild of ``held.current`` unless this process or its language runs one.
 
-    One background rebuild at a time in this process, whatever its scope
-    and language (a guard set), and one per scope and language across
-    processes (a cache lock). A caller that finds either taken starts
+    One background rebuild at a time in this process, whatever its
+    language (a guard set), and one per language across processes (a cache
+    lock). A caller that finds either taken starts
     nothing and is answered from the previous bundle. The lock holds its owner's token and only that
     owner deletes it: a rebuild that outlived ``LOCK_TIMEOUT`` leaves the
     lock a later one took. The next request after the running one ends
     starts the rebuild of the data current then. A rebuild that raised or
     returned nothing starts none for ``settings.EXPLORER_REBUILD_RETRY_AFTER``
-    seconds, readers answered from the previous bundle meanwhile. A cache
-    error while taking or releasing the lock or recording a failure is
-    logged and never leaves the guard set.
+    seconds, readers answered from the previous bundle meanwhile. Once a
+    rebuild ends with a bundle (stored, or superseded by newer data), none
+    starts for its language during
+    ``settings.EXPLORER_REBUILD_MIN_INTERVAL`` seconds (0: no floor): readers
+    of newer data are answered from the previous bundle and the first
+    request after the interval starts the rebuild; a ``DEBUG`` line with
+    ``deferred`` says so. A cache error while taking or releasing the lock
+    or recording a failure is logged and never leaves the guard set.
     """
-    failed = _rebuild_failed(held.scope, held.language)
+    failed = _rebuild_failed(held.language)
     if cache.get(failed):
         return
-    slot = (held.scope, held.language)
+    if _deferred(held.language):
+        logger.debug(
+            "explorer bundle rebuild deferred",
+            extra={"language": held.language, "deferred": True},
+        )
+        return
+    slot = held.language
     with _rebuilding_lock:
         if _rebuilding:
             return
         _rebuilding.add(slot)
-    lock, token = _rebuild_lock(held.scope, held.language), uuid.uuid4().hex
-    extra = {"language": held.language, "scope_kind": _kind(held.scope)}
+    lock, token = _rebuild_lock(held.language), uuid.uuid4().hex
+    extra = {"language": held.language}
 
     def release():
         try:
@@ -393,6 +424,12 @@ def _rebuild_in_background(held, user, build):
                         failed,
                         1,
                         getattr(settings, "EXPLORER_REBUILD_RETRY_AFTER", 60),
+                    )
+                elif getattr(settings, "EXPLORER_REBUILD_MIN_INTERVAL", 0) > 0:
+                    cache.set(
+                        _rebuild_ended(held.language),
+                        _clock(),
+                        settings.EXPLORER_REBUILD_MIN_INTERVAL,
                     )
             except Exception:
                 logger.exception(
@@ -423,24 +460,21 @@ def _build_and_keep(held, build):
     if bundle is None:
         logger.warning(
             "explorer bundle rebuild returned nothing",
-            extra={"language": held.language, "scope_kind": _kind(held.scope)},
+            extra={"language": held.language},
         )
         return False
     if _superseded(held):
         logger.info(
             "explorer bundle rebuild superseded by newer data",
-            extra={"language": held.language, "scope_kind": _kind(held.scope)},
+            extra={"language": held.language},
         )
         return True
     packed = pack(bundle)
     cache.set(held.current, packed, settings.EXPLORER_BUNDLE_TTL)
-    _retire_previous(
-        held.scope, held.language, held.current, held.permissions, held.version
-    )
+    _retire_previous(held.language, held.current, held.permissions, held.version)
     _local_put(held.current, bundle)
     _log_build(
         held.current,
-        held.scope,
         held.language,
         held.reason,
         started,
@@ -461,17 +495,10 @@ def _count_stale(held):
         cache.incr(counter)
     except ValueError:
         cache.add(counter, 1, LOCK_TIMEOUT)
-    logger.debug(
-        "explorer bundle served stale",
-        extra={"language": held.language, "scope_kind": _kind(held.scope)},
-    )
+    logger.debug("explorer bundle served stale", extra={"language": held.language})
 
 
-def _kind(scope):
-    return "public" if scope == "public" else "reader"
-
-
-def _log_build(key, scope, language, reason, started, bundle, packed, background):
+def _log_build(key, language, reason, started, bundle, packed, background):
     stale_served = cache.get(_stale_key(key)) or 0
     cache.delete(_stale_key(key))
     fields = {
@@ -479,14 +506,13 @@ def _log_build(key, scope, language, reason, started, bundle, packed, background
         "rows": len(getattr(bundle, "rows", ())),
         "stored_bytes": len(packed),
         "language": language,
-        "scope_kind": _kind(scope),
         "reason": reason,
         "background": background,
         "stale_served": stale_served,
     }
     logger.info(
         "explorer bundle built: %(duration_s)ss, %(rows)s rows, %(stored_bytes)s bytes, "
-        "language=%(language)s scope=%(scope_kind)s reason=%(reason)s "
+        "language=%(language)s reason=%(reason)s "
         "background=%(background)s stale_served=%(stale_served)s",
         fields,
         extra=fields,
@@ -509,34 +535,53 @@ def _local_put(key, value):
             _local.popitem(last=False)
 
 
-def _live_pointer(scope, language):
-    return stable_cache_key("explorer-bundle-live", scope, language)
+def _live_pointer(language):
+    return stable_cache_key("explorer-bundle-live", language)
 
 
-def _live(scope, language):
-    """The live ``(key, permissions, version)`` of a scope and language, oldest data first."""
-    return [tuple(e) for e in cache.get(_live_pointer(scope, language)) or []]
+def _live(language):
+    """The live ``(key, permissions, version)`` of a language, oldest data first."""
+    return [tuple(e) for e in cache.get(_live_pointer(language)) or []]
 
 
 def _superseded(held):
     """Whether a live bundle of *held*'s gates holds newer data than ``held.current``."""
     return any(
         permissions == held.permissions and _order(version) > _order(held.version)
-        for _, permissions, version in _live(held.scope, held.language)
+        for _, permissions, version in _live(held.language)
     )
 
 
-def _retire_previous(scope, language, key, permissions="", version=""):
-    """Keep the ``LIVE_ENTRIES`` bundles of a scope and language with the newest data."""
-    live = sorted(
-        [e for e in _live(scope, language) if e[0] != key]
-        + [(key, permissions, version)],
-        key=lambda e: _order(e[2]),
-    )
-    for old, _, _ in live[:-LIVE_ENTRIES]:
-        cache.delete(old)
-    cache.set(
-        _live_pointer(scope, language),
-        live[-LIVE_ENTRIES:],
-        settings.EXPLORER_BUNDLE_TTL,
-    )
+def _retire_previous(language, key, permissions="", version=""):
+    """Keep the ``LIVE_ENTRIES`` bundles of a language with the newest data.
+
+    The live pointer is read, changed and written under a cache lock held by
+    one caller across processes, so two builds ending together both land in
+    it. A caller that waits ``POINTER_LOCK_WAIT`` seconds without the lock
+    updates the pointer anyway and logs it.
+    """
+    lock, token = f"{_live_pointer(language)}:lock", uuid.uuid4().hex
+    deadline = time.monotonic() + POINTER_LOCK_WAIT
+    while not cache.add(lock, token, POINTER_LOCK_WAIT):
+        if time.monotonic() > deadline:
+            logger.warning(
+                "explorer bundle live pointer updated without its lock",
+                extra={"language": language},
+            )
+            break
+        time.sleep(0.01)
+    try:
+        live = sorted(
+            [e for e in _live(language) if e[0] != key] + [(key, permissions, version)],
+            key=lambda e: _order(e[2]),
+        )
+        for old, _, _ in live[:-LIVE_ENTRIES]:
+            cache.delete(old)
+        cache.set(
+            _live_pointer(language),
+            live[-LIVE_ENTRIES:],
+            settings.EXPLORER_BUNDLE_TTL,
+        )
+    finally:
+        if cache.get(lock) == token:
+            cache.delete(lock)

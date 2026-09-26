@@ -153,7 +153,7 @@ SHAPES = {
         "bibliography": list,
         "citation": "Citation",
         "availability": str,
-        "manifest": str,
+        "manifest": (str, type(None)),
         "permalink": str,
         "reportUrl": str,
         "certaintyScale": dict,
@@ -190,18 +190,15 @@ SHAPES = {
         "characterizations": int,
         "spectra": int,
         "drafts": int,
-        "restricted": bool,
-        "restrictedAvailable": int,
         "missing": list,
     },
     "ShareExport": {"files": int, "bytes": int, "overLimit": bool, "documents": list},
     "ShareDocument": {"id": str, "name": "Label", "url": str, "path": str},
     "ProductLink": {"url": str, "path": str},
     "ShareLinks": {
-        "manifest": "ProductLink",
+        "manifest": ("ProductLink", type(None)),
         "seriesCsv": ("ProductLink", type(None)),
         "export": "ProductLink",
-        "exportRestricted": ("ProductLink", type(None)),
     },
 }
 

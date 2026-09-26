@@ -27,6 +27,7 @@ import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import {
     analysisContentState,
+    contentStateLink,
     miradorLink,
 } from "@/manuspectrum/pages/AnalysisExplorer/share/content-state.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -56,7 +57,8 @@ const COPYRIGHT = "©";
  * `analysisId`, and its heading (one element from loading to loaded) says it
  * is loading meanwhile. `zone` (a source canvas id and a shape in its pixels)
  * gives the IIIF link of the analysis: a Content State on the analysis
- * manifest, copied or opened in Mirador; an unlocated analysis has none.
+ * manifest, copied as a URL (`contentStateLink`) or opened in Mirador; an
+ * unlocated analysis has none.
  */
 const props = withDefaults(
     defineProps<{
@@ -177,6 +179,16 @@ const miradorHref = computed(() =>
     contentState.value
         ? miradorLink(miradorUrl, { contentState: contentState.value })
         : null,
+);
+/** The IIIF link of the zone to copy: a URL carrying its content state (`contentStateLink`). */
+const iiifLink = computed(() =>
+    contentState.value && analysis.value?.manifest
+        ? contentStateLink(
+              miradorUrl,
+              analysis.value.manifest,
+              contentState.value,
+          )
+        : "",
 );
 
 watch(
@@ -552,7 +564,7 @@ function focusHeading(): void {
                     class="iiif"
                 >
                     <CopyButton
-                        :text="contentState"
+                        :text="iiifLink"
                         :label="$gettext('Copy the IIIF link')"
                     />
                     <a

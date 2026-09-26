@@ -145,9 +145,39 @@ def dataset_of(value):
     text = (value.get("url_label") or "").strip() or None
     return {
         "url": url,
-        "isDoi": "doi.org/10." in url or url.startswith("10."),
+        "isDoi": doi_of(url) is not None,
         "label": text,
     }
+
+
+DOI = re.compile(
+    r"(?:doi:\s*|https?://(?:dx\.)?doi\.org/)?(10\.\d{4,9}/[^\s?&#]+)", re.IGNORECASE
+)
+
+
+def doi_of(url):
+    """The DOI (``10.…``, as written) of *url* when it is a DOI; None otherwise.
+
+    A DOI is a bare ``10.…``, ``doi:10.…`` or a ``doi.org``/``dx.doi.org``
+    URL; it ends at whitespace, ``?``, ``&`` or ``#``, trailing punctuation
+    removed. Any other address, a landing page carrying a DOI in its query
+    included, names none.
+    """
+    match = DOI.match((url or "").strip())
+    return match[1].rstrip(".,;:") if match else None
+
+
+def dataset_url(dataset):
+    """The one web address of *dataset* (a ``dataset_of`` value): ``https://doi.org/<doi>`` when it is a DOI (``doi_of``), else its http(s) URL as written; None otherwise.
+
+    Citations, the IIIF manifest and the data package read a dataset's
+    address through this function alone.
+    """
+    url = (dataset or {}).get("url") or ""
+    doi = doi_of(url)
+    if doi:
+        return f"https://doi.org/{doi}"
+    return url if url.startswith(("http://", "https://")) else None
 
 
 def rewrite_legacy_url(url):

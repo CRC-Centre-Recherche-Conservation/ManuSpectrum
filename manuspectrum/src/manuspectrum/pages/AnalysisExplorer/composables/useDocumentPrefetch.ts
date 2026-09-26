@@ -22,27 +22,42 @@ export interface DocumentPrefetch {
 
 /**
  * Loads the document screen of a card ahead (its payload and its match under
- * `filters`, `filterQuery`) once the reader has rested on it for `INTENT_MS`.
+ * `filters`, `filterQuery`) once the reader has rested on it for `INTENT_MS`;
+ * leaving the card aborts those loads unless the screen already waits for
+ * them. When the scope ends (the reader clicked a card and the results
+ * unmount), only a pending intent is cancelled: running loads stay in the
+ * tab's memo for the screen that asks for them next.
  */
 export function useDocumentPrefetch(
     filters: () => URLSearchParams,
 ): DocumentPrefetch {
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let loads: AbortController | null = null;
 
     function drop(): void {
         if (timer !== null) clearTimeout(timer);
         timer = null;
+        loads?.abort();
+        loads = null;
     }
 
     function intend(id: string): void {
         drop();
         timer = setTimeout(() => {
             timer = null;
-            prefetchJson(DOCUMENT_ROUTE, documentRequest(id));
-            prefetchJson(MATCH_ROUTE, matchRequest(id, filters()));
+            loads = new AbortController();
+            const { signal } = loads;
+            prefetchJson(DOCUMENT_ROUTE, { ...documentRequest(id), signal });
+            prefetchJson(MATCH_ROUTE, {
+                ...matchRequest(id, filters()),
+                signal,
+            });
         }, INTENT_MS);
     }
 
-    onScopeDispose(drop);
+    onScopeDispose(() => {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+    });
     return { intend, drop };
 }

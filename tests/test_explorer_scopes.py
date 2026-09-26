@@ -8,7 +8,6 @@ import uuid
 from unittest import mock
 
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.http import QueryDict
 
 from arches.app.models.models import ResourceInstance
@@ -33,8 +32,8 @@ MANIFEST_JSON = "manuspectrum.views.explorer.service.manifest_json"
 
 
 class ScopeTests(ReadRightsCase):
-    def resolve(self, text, user=None, language="en"):
-        return resolve_scope(QueryDict(text), user or self.anonymous, language)
+    def resolve(self, text, language="en"):
+        return resolve_scope(QueryDict(text), language)
 
     def pk(self, key):
         return str(self.analyses[key].pk)
@@ -67,8 +66,22 @@ class ScopeTests(ReadRightsCase):
                 self.resolve(f"ids={key}")
         with self.assertRaises(ScopeError):
             self.resolve("document=not-a-uuid")
+
+    def test_a_project_narrowed_to_a_document_keeps_its_items_there(self):
+        main, opened = self.projects["main"].pk, self.documents["open"].pk
+
+        scope = self.resolve(f"project={main}&document={opened}")
+        elsewhere = self.resolve(
+            f"project={main}&document={self.documents['embargoed'].pk}"
+        )
+
+        self.assertEqual(scope.analyses, (self.pk("open"),))
+        self.assertEqual(scope.subject, str(main))
+        self.assertEqual(elsewhere.analyses, ())
         with self.assertRaises(ScopeError):
-            self.resolve(f"document={self.documents['open'].pk}&restricted=yes")
+            self.resolve(f"project={main}&document={opened}&ids=an:{self.pk('open')}:-")
+        with self.assertRaises(ScopeError):
+            self.resolve(f"project={main}&document={opened}&canvases=all")
 
     def test_canvases_all_outside_a_document_scope_is_a_bad_request(self):
         with self.assertRaises(ScopeError):
@@ -163,47 +176,15 @@ class ScopeTests(ReadRightsCase):
             self.resolve(f"ids=an:{self.pk('open')}:-,an:{UNKNOWN}:-,ch:{UNKNOWN}:-")
         )
 
-    def test_a_connected_reader_gets_the_visitors_part_by_default(self):
-        self.embargo(self.analyses["open"])
-
-        scope = self.resolve(f"document={self.documents['open'].pk}", self.editor)
-
-        self.assertNotIn(self.pk("open"), scope.analyses)
-        self.assertIn(self.pk("on_document"), scope.analyses)
-        self.assertEqual(scope.restricted_available, 1)
-        self.assertFalse(scope.restricted)
-        self.assertEqual(scope.reader.pk, self.anonymous.pk)
-        self.assertEqual(scope.viewer.pk, self.editor.pk)
-
-    def test_restricted_includes_the_readers_items_and_says_so(self):
-        self.embargo(self.analyses["open"])
-
-        scope = self.resolve(
-            f"document={self.documents['open'].pk}&restricted=1", self.editor
-        )
-
-        self.assertIn(self.pk("open"), scope.analyses)
-        self.assertTrue(scope.restricted)
-        self.assertEqual(scope.restricted_available, 0)
-        self.assertEqual(scope.reader.pk, self.editor.pk)
-        self.assertTrue(scope.key.endswith("&restricted=1"))
-
-    def test_restricted_without_restricted_items_is_not_marked(self):
-        scope = self.resolve(
-            f"document={self.documents['open'].pk}&restricted=1", self.editor
-        )
-
-        self.assertFalse(scope.restricted)
-        self.assertEqual(scope.key, f"document={self.documents['open'].pk}")
-
-    def test_a_visitor_never_learns_of_restricted_items(self):
+    def test_the_scope_is_built_with_the_visitors_rights(self):
         self.embargo(self.analyses["open"])
 
         scope = self.resolve(f"document={self.documents['open'].pk}&restricted=1")
 
         self.assertNotIn(self.pk("open"), scope.analyses)
-        self.assertFalse(scope.restricted)
-        self.assertEqual(scope.restricted_available, 0)
+        self.assertIn(self.pk("on_document"), scope.analyses)
+        self.assertEqual(scope.reader.pk, self.anonymous.pk)
+        self.assertEqual(scope.key, f"document={self.documents['open'].pk}")
 
     def test_drafts_are_counted(self):
         document = f"document={self.documents['open'].pk}"
@@ -298,21 +279,17 @@ class ScopeTests(ReadRightsCase):
         ]
 
         self.deny(("analysis", "measurement_point_data"))
-        scope = self.resolve(query, User.objects.get(pk=self.anonymous.pk))
+        scope = self.resolve(query)
 
         self.assertIsNone(scope_file(scope, self.pk("open"), stored))
         self.assertEqual(
             [f["id"] for f in kept_files(scope, self.pk("open"), files)], ["m"]
         )
 
-    def test_names_visible_keeps_what_both_the_reader_and_the_viewer_may_name(self):
+    def test_names_visible_keeps_what_the_visitor_may_name(self):
         self.embargo(self.operator)
         ids = [str(self.operator.pk), str(self.projects["main"].pk)]
 
-        by_default = self.resolve(f"document={self.documents['open'].pk}", self.editor)
-        restricted = self.resolve(
-            f"document={self.documents['open'].pk}&restricted=1", self.editor
-        )
+        scope = self.resolve(f"document={self.documents['open'].pk}")
 
-        self.assertEqual(by_default.names_visible(ids), [str(self.projects["main"].pk)])
-        self.assertEqual(restricted.names_visible(ids), sorted(ids))
+        self.assertEqual(scope.names_visible(ids), [str(self.projects["main"].pk)])

@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 import { imageUrl } from "utils/iiif-image";
 
 import { nextId } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
+import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
 import type { DocumentCanvas } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { PageCount } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
@@ -107,10 +108,10 @@ watch(
 
 onMounted(() => reveal(props.current));
 
-/** A small image of the page from its IIIF service; none once the server refused it (some hosts refuse hotlinks). */
+/** A small image of the page from its IIIF service, an http(s) address only (`safeHref`); none once the server refused it (some hosts refuse hotlinks). */
 function thumbnailOf(canvas: DocumentCanvas): string | null {
     return canvas.image.service && !failed.value.has(canvas.id)
-        ? imageUrl(canvas.image.service, { size: THUMBNAIL_SIZE })
+        ? safeHref(imageUrl(canvas.image.service, { size: THUMBNAIL_SIZE }))
         : null;
 }
 

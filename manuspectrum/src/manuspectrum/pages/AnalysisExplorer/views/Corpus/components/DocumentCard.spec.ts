@@ -49,7 +49,7 @@ describe("DocumentCard", () => {
         expect(wrapper.find(".thumbnail").exists()).toBe(true);
     });
 
-    it("does not ask again in this tab for a thumbnail that failed", async () => {
+    it("does not ask again for a while for a thumbnail that failed", async () => {
         const first = mount(DocumentCard, {
             props: { hit: documentHit(2), href: "?doc=x" },
         });
@@ -62,5 +62,15 @@ describe("DocumentCard", () => {
             props: { hit: documentHit(4), href: "?doc=y" },
         });
         expect(other.find("img").exists()).toBe(true);
+    });
+
+    it("draws no thumbnail from an address outside http(s)", () => {
+        const wrapper = mount(DocumentCard, {
+            props: {
+                hit: { ...documentHit(5), thumbnail: "javascript:alert(1)" },
+                href: "?doc=x",
+            },
+        });
+        expect(wrapper.find("img").exists()).toBe(false);
     });
 });

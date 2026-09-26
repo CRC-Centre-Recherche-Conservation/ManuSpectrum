@@ -17,6 +17,7 @@ import os
 import posixpath
 import re
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import orjson
 from defusedcsv import csv
@@ -43,6 +44,7 @@ from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifes
 from manuspectrum.views.explorer.scopes import (
     ScopeError,
     export_language,
+    export_size,
     resolve_scope,
     scope_content,
     share_link,
@@ -56,18 +58,17 @@ from manuspectrum.views.explorer.service import (
     canvases_of,
     characterization_summaries,
     dataset_of,
-    manifest_json,
     names,
     permalink,
     plain_text,
 )
-from manuspectrum.views.explorer.values import rewrite_legacy_url
+from manuspectrum.views.explorer.values import dataset_url, rewrite_legacy_url
 from manuspectrum.views.summary_service import _date
 
 CRATE_NAME = "ro-crate-metadata.json"
 CHUNK_SIZE = 1024 * 1024
-RO_CRATE_CONTEXT = "https://w3id.org/ro/crate/1.1/context"
-RO_CRATE_PROFILE = "https://w3id.org/ro/crate/1.1"
+RO_CRATE_CONTEXT = "https://w3id.org/ro/crate/1.2/context"
+RO_CRATE_PROFILE = "https://w3id.org/ro/crate/1.2"
 SHA256_SLOT = "0" * 64
 LICENCES_PER_FILE = "#licences-per-file"
 OCTET_STREAM = "application/octet-stream"
@@ -157,16 +158,10 @@ def _json_bytes(value):
     return orjson.dumps(value, option=orjson.OPT_INDENT_2)
 
 
-def _dataset_url(dataset):
-    url = (dataset or {}).get("url") or ""
-    return f"https://doi.org/{url}" if url.startswith("10.") else url or None
-
-
 def analysis_zones(scope):
     """``{analysis id: {"canvas", "label", "shape"}}``: the first zone of each analysis on a canvas of its document's manifest.
 
-    Zones are read from the nodegroup both the reader and the viewer may
-    read; the canvas is resolved as ``build_manifest`` resolves it.
+    Zones are read from the nodegroup the reader may read; the canvas is resolved as ``build_manifest`` resolves it.
     """
     bundle = scope.bundle
     readable = scope.nodegroups
@@ -175,7 +170,7 @@ def analysis_zones(scope):
     zones = {}
     for document in scope.documents:
         url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
-        listed = canvases_of(manifest_json(url)) if url else []
+        listed = canvases_of(scope.read_manifest(url)) if url else []
         labels = {c["id"]: c["label"] for c in listed}
         analyses = [
             a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
@@ -221,8 +216,7 @@ def analyses_table(scope, content, zones):
     instrument roles), *zones* its ``analysis_zones``. Measurement conditions
     take one column per statement type label (``conditions: <label>``),
     untyped statements the column ``conditions``, as plain text. Operators,
-    projects and instruments are named only when both the reader and the
-    viewer may name them.
+    projects and instruments are named only when the reader may name them.
     """
     bundle, language = scope.bundle, scope.language
     values = content.values
@@ -299,7 +293,7 @@ def analyses_table(scope, content, zones):
                 "attributions": _unique(
                     (f.get("license") or {}).get("attribution") for f in files
                 ),
-                "dataset": _dataset_url(
+                "dataset": dataset_url(
                     dataset_of(values.first(analysis_id, "dataset"))
                 ),
                 "permalink": permalink(analysis_id),
@@ -390,8 +384,6 @@ def _marks(scope):
     marks = []
     if scope.drafts:
         marks.append(_("Contains drafts"))
-    if scope.restricted:
-        marks.append(_("Contains restricted-access data"))
     return marks
 
 
@@ -441,7 +433,7 @@ def readme(
 def _readme_datasets(datasets):
     found = {}
     for dataset in datasets:
-        url = _dataset_url(dataset)
+        url = dataset_url(dataset)
         if url and url not in found:
             parsed = parse_dataverse(dataset.get("label"))
             title = parsed.title if parsed else dataset.get("label")
@@ -449,9 +441,14 @@ def _readme_datasets(datasets):
     return list(found.values())
 
 
+def crate_id(arcname):
+    """The RO-Crate ``@id`` of the member *arcname*: its path, URI-escaped (``/`` kept)."""
+    return quote(arcname, safe="/")
+
+
 def _file_entity(member, licence_id):
     entity = {
-        "@id": member.arcname,
+        "@id": crate_id(member.arcname),
         "@type": "File",
         "name": posixpath.basename(member.arcname),
         "contentSize": str(member.size),
@@ -468,18 +465,24 @@ def _licence_id(licence):
 
 
 def ro_crate(scope, members, exported_at, content=None):
-    """The RO-Crate 1.1 metadata of the package, as a dict; every ``sha256`` is a 64-character placeholder.
+    """The RO-Crate 1.2 metadata of the package, as a dict; every ``sha256`` is a 64-character placeholder.
 
-    The descriptor ``ro-crate-metadata.json`` is about the root ``Dataset``
+    The ``@context`` is the RO-Crate 1.2 context by reference, which defines
+    ``sha256``. The descriptor ``ro-crate-metadata.json`` conforms to
+    ``https://w3id.org/ro/crate/1.2`` and is about the root ``Dataset``
     ``./``, which has every member as ``hasPart``, the export day as
-    ``datePublished``, the licence common to all licensed members (else a
-    ``CreativeWork`` « Licences per file ») and the datasets the data come
-    from as ``isBasedOn``. Each member is a ``File`` with its size, media
-    type and licence. Each analysis is a ``CreateAction`` identified by its
-    permalink: operators as ``Person`` agents, dates, the document and
+    ``datePublished``, the site as an ``Organization`` ``publisher``, the
+    licence common to all licensed members (a ``CreativeWork`` « Licences
+    per file » when they differ, no licence when none is licensed), the
+    datasets the data come from as ``isBasedOn`` and every analysis as
+    ``mentions``. Each member is a ``File`` whose ``@id`` is its URI-escaped
+    path (``crate_id``), with its name, size, media type and licence. Each
+    analysis is a ``CreateAction`` identified by its permalink: operators as ``Person`` agents, dates, the document and
     component as ``object``, its files as ``result``, its technique as a
-    ``DefinedTerm`` in ``additionalType``. No instrument and no place are
-    described.
+    ``DefinedTerm`` in ``additionalType``. A licence is a ``CreativeWork``
+    identified by its URL, with its name, SPDX ``identifier`` and a
+    ``description``. Every entity has a name and is reachable from the root.
+    No instrument and no place are described.
     """
     content = content or scope_content(scope)
     bundle, language = scope.bundle, scope.language
@@ -494,9 +497,10 @@ def ro_crate(scope, members, exported_at, content=None):
             licence_id = _licence_id(member.licence)
             licences[licence_id] = member.licence
     with translation.override(language):
+        root_licence = None
         if len(licences) == 1:
             root_licence = next(iter(licences))
-        else:
+        elif licences:
             root_licence = LICENCES_PER_FILE
             describe(
                 {
@@ -508,6 +512,7 @@ def ro_crate(scope, members, exported_at, content=None):
                     ),
                 }
             )
+        licence_summary = _("Licence of the files of this package that name it.")
         title = _title(scope)
         description = " ".join(
             [
@@ -525,13 +530,15 @@ def ro_crate(scope, members, exported_at, content=None):
             "@id": licence_id,
             "@type": "CreativeWork",
             "name": licence["label"]["value"],
+            "identifier": licence["id"],
+            "description": licence_summary,
         }
         if licence.get("url"):
             entity["url"] = licence["url"]
         describe(entity)
     based_on = []
     for dataset in content.datasets:
-        url = _dataset_url(dataset)
+        url = dataset_url(dataset)
         if url and url not in based_on:
             based_on.append(url)
             describe(
@@ -549,10 +556,19 @@ def ro_crate(scope, members, exported_at, content=None):
         "description": description,
         # An ISO 8601 date without time: the package records its export day only.
         "datePublished": exported_at.isoformat(),
-        "publisher": settings.APP_TITLE,
-        "license": {"@id": root_licence},
-        "hasPart": [{"@id": m.arcname} for m in members],
+        "publisher": {"@id": settings.PUBLIC_SERVER_ADDRESS},
+        "hasPart": [{"@id": crate_id(m.arcname)} for m in members],
     }
+    if root_licence:
+        root["license"] = {"@id": root_licence}
+    describe(
+        {
+            "@id": settings.PUBLIC_SERVER_ADDRESS,
+            "@type": "Organization",
+            "name": settings.APP_TITLE,
+            "url": settings.PUBLIC_SERVER_ADDRESS,
+        }
+    )
     if based_on:
         root["isBasedOn"] = [{"@id": url} for url in based_on]
     graph.append(
@@ -605,7 +621,7 @@ def ro_crate(scope, members, exported_at, content=None):
                         "name": label_of[r]["value"],
                     }
                 )
-        results = [m.arcname for m in members if m.analysis == analysis_id]
+        results = [crate_id(m.arcname) for m in members if m.analysis == analysis_id]
         if results:
             action["result"] = [{"@id": name} for name in results]
         technique = row["technique"]
@@ -620,6 +636,8 @@ def ro_crate(scope, members, exported_at, content=None):
                 }
             )
         graph.append(action)
+    if content.rows:
+        root["mentions"] = [{"@id": permalink(row["id"])} for row in content.rows]
     graph += list(contextual.values())
     return {"@context": RO_CRATE_CONTEXT, "@graph": graph}
 
@@ -664,7 +682,7 @@ def _data_members(scope, content, zones, stored):
         imaging = 0
         for entry in content.files[analysis_id]:
             if entry.get("dataKind") == "chemical-imaging":
-                manifest = manifest_json(entry.get("downloadUrl"))
+                manifest = scope.read_manifest(entry.get("downloadUrl"))
                 if not isinstance(manifest, dict):
                     unfetched.append((row["name"]["value"], entry.get("downloadUrl")))
                     continue
@@ -730,21 +748,15 @@ def _assemble(scope, exported_at):
     language = scope.language
     content = scope_content(scope, ("statement_type", "statement_content"))
     stored = stored_sizes(scope, content)
-    sizes = [
-        stored[(analysis_id, entry.get("id"))][1]
-        for analysis_id, entries in content.files.items()
-        for entry in entries
-        if (analysis_id, entry.get("id")) in stored
-    ]
-    if (
-        len(sizes) > settings.EXPLORER_EXPORT_MAX_FILES
-        or sum(sizes) > settings.EXPLORER_EXPORT_MAX_BYTES
-    ):
+    if export_size(stored)[2]:
         raise ExportTooLarge()
     zones = analysis_zones(scope)
     data, unfetched = _data_members(scope, content, zones, stored)
     citations = citation_entries(
-        content.groups, language=language, accessed=exported_at
+        content.groups,
+        language=language,
+        accessed=exported_at,
+        link=share_link(scope),
     )
     availability_text = availability(
         content.datasets,
@@ -772,13 +784,13 @@ def _assemble(scope, exported_at):
     notes = []
     with translation.override(language):
         try:
-            built.append(
-                _built(
-                    "manifest.json",
-                    _json_bytes(build_manifest(scope)),
-                    "application/ld+json",
+            manifest = build_manifest(scope)
+            if manifest is not None:
+                built.append(
+                    _built(
+                        "manifest.json", _json_bytes(manifest), "application/ld+json"
+                    )
                 )
-            )
         except ManifestTooLarge:
             notes.append(
                 _(
@@ -858,9 +870,10 @@ def _filled(crate, members, digests):
     for member in members:
         if member.source is None:
             digests[member.arcname] = hashlib.sha256(member.data).hexdigest()
+    arcname_of = {crate_id(m.arcname): m.arcname for m in members}
     graph = [
         (
-            {**entity, "sha256": digests[entity["@id"]]}
+            {**entity, "sha256": digests[arcname_of[entity["@id"]]]}
             if entity.get("@type") == "File"
             else entity
         )
@@ -905,7 +918,7 @@ def _too_large():
 
 
 class ExplorerExportView(View):
-    """``GET /api/explorer/export?ids=|document=|project=[&canvases=all][&restricted=1][&lang=]``: the data package, a private download.
+    """``GET /api/explorer/export?ids=|document=|project=[&canvases=all][&lang=]``: the data package, a private download.
 
     ``lang`` absent is ``LANGUAGE_CODE``; an unknown language or malformed
     scope parameters answer a bodyless 400, a scope with nothing visible the
@@ -921,7 +934,7 @@ class ExplorerExportView(View):
             return HttpResponseBadRequest()
         with translation.override(language):
             try:
-                scope = resolve_scope(request.GET, request.user, language)
+                scope = resolve_scope(request.GET, language)
             except ScopeError:
                 return HttpResponseBadRequest()
             if scope is None:

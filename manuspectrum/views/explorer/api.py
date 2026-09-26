@@ -1,9 +1,11 @@
 """GET APIs of the Explorer's Corpus view (spec §5), above the language boundary.
 
-Every answer goes through ``_answer``: the guard has already decided by
-building the payload from ``visible_set``; a payload the visitor may read is
-the same for every visitor, so it is sent ``public, no-cache`` with a strong
-ETag; a signed-in reader's is ``private, no-store``. Unknown and refused
+Every reader, signed in or not, is answered with the visitor's view (spec
+D59): each payload is built from the ``visible_set`` of ``anonymous_user()``,
+so an embargoed resource or a restricted nodegroup shows to nobody until it
+is opened. Every answer goes through ``_answer``: the visitor's is sent
+``public, no-cache`` with a strong ETag; a signed-in reader's, same content,
+``private, no-store`` (its response may renew the CSRF cookie). Unknown and refused
 alike answer a bodyless 404. Answers are gzipped; the compression turns the
 ETag weak, which ``etag_already_held`` accepts.
 
@@ -32,7 +34,7 @@ from django.views import View
 from django.views.decorators.gzip import gzip_page
 
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
-from manuspectrum.utils.public_visibility import is_connected
+from manuspectrum.utils.public_visibility import anonymous_user, is_connected
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifest
 from manuspectrum.views.explorer.scopes import (
@@ -124,8 +126,8 @@ def _filters(query):
     return {key: filters[key] for key in (*FACET_KEYS, "q")}
 
 
-def _ticket(request):
-    return explorer_memo.ticket(request.user, translation.get_language())
+def _ticket(reader):
+    return explorer_memo.ticket(reader, translation.get_language())
 
 
 @method_decorator(gzip_page, name="dispatch")
@@ -136,12 +138,13 @@ class ExplorerSearchView(View):
     """
 
     def get(self, request):
-        ticket, language = _ticket(request), translation.get_language()
+        reader = anonymous_user()
+        ticket, language = _ticket(reader), translation.get_language()
         filters, page = parse_filters(request.GET)
         token = _token("search", ticket, filters, page, wants_facets(request.GET))
         return _answer(
             request,
-            lambda: search_payload(request.GET, request.user, language, ticket),
+            lambda: search_payload(request.GET, reader, language, ticket),
             token,
         )
 
@@ -158,7 +161,8 @@ class ExplorerFacetView(View):
         document_id = document_scope(request.GET)
         if key not in FACET_KEYS or document_id is None:
             return _not_found()
-        ticket, language = _ticket(request), translation.get_language()
+        reader = anonymous_user()
+        ticket, language = _ticket(reader), translation.get_language()
         token = _token(
             "facet",
             ticket,
@@ -169,7 +173,7 @@ class ExplorerFacetView(View):
         )
         return _answer(
             request,
-            lambda: facet_payload(key, request.GET, request.user, language, ticket),
+            lambda: facet_payload(key, request.GET, reader, language, ticket),
             token,
         )
 
@@ -194,10 +198,11 @@ class ExplorerHomeView(View):
             abs(date - datetime.date.today()) > HOME_DAY_MARGIN
         ):
             return HttpResponseBadRequest()
-        ticket, language = _ticket(request), translation.get_language()
+        reader = anonymous_user()
+        ticket, language = _ticket(reader), translation.get_language()
         return _answer(
             request,
-            lambda: home_payload(day, request.user, language, ticket),
+            lambda: home_payload(day, reader, language, ticket),
             _token("home", ticket, day),
         )
 
@@ -210,10 +215,10 @@ class ExplorerDocumentView(View):
     """
 
     def get(self, request, resourceid):
-        language = translation.get_language()
+        reader, language = anonymous_user(), translation.get_language()
         return _answer(
             request,
-            lambda: document_payload(resourceid, request.user, language),
+            lambda: document_payload(resourceid, reader, language),
         )
 
 
@@ -225,13 +230,12 @@ class ExplorerDocumentMatchView(View):
     """
 
     def get(self, request, resourceid):
-        ticket, language = _ticket(request), translation.get_language()
+        reader = anonymous_user()
+        ticket, language = _ticket(reader), translation.get_language()
         token = _token("match", ticket, str(resourceid), _filters(request.GET))
         return _answer(
             request,
-            lambda: match_payload(
-                resourceid, request.GET, request.user, language, ticket
-            ),
+            lambda: match_payload(resourceid, request.GET, reader, language, ticket),
             token,
         )
 
@@ -244,10 +248,10 @@ class ExplorerAnalysisView(View):
     """
 
     def get(self, request, resourceid):
-        language = translation.get_language()
+        reader, language = anonymous_user(), translation.get_language()
         return _answer(
             request,
-            lambda: analysis_payload(resourceid, request.user, language),
+            lambda: analysis_payload(resourceid, reader, language),
         )
 
 
@@ -262,16 +266,16 @@ class ExplorerItemsView(View):
         keys = parse_keys(request.GET)
         if len(keys) > settings.EXPLORER_ITEMS_MAX:
             return HttpResponseBadRequest()
-        language = translation.get_language()
+        reader, language = anonymous_user(), translation.get_language()
         return _answer(
             request,
-            lambda: items_payload(keys, request.user, language),
+            lambda: items_payload(keys, reader, language),
         )
 
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerShareView(View):
-    """``GET /{lang}/api/explorer/share?ids=|document=|project=[&restricted=1]``: citations and export estimate of a scope.
+    """``GET /{lang}/api/explorer/share?ids=|document=|project=``: citations and export estimate of a scope.
 
     Malformed scope parameters answer a bodyless 400; a scope with nothing
     visible the bodyless 404. The visitor's ETag is the digest of the body:
@@ -282,7 +286,7 @@ class ExplorerShareView(View):
     def get(self, request):
         language = translation.get_language()
         try:
-            scope = resolve_scope(request.GET, request.user, language)
+            scope = resolve_scope(request.GET, language)
         except ScopeError:
             return HttpResponseBadRequest()
         if scope is None:
@@ -292,11 +296,11 @@ class ExplorerShareView(View):
 
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerManifestView(View):
-    """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all][&restricted=1][&lang=]``: the IIIF v3 manifest of a scope.
+    """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all][&lang=]``: the IIIF v3 manifest of a scope.
 
     ``lang`` absent is ``LANGUAGE_CODE``; an unknown language or malformed
-    scope parameters answer a bodyless 400, a scope with nothing visible the
-    bodyless 404, a manifest over ``EXPLORER_MANIFEST_MAX_CANVASES``
+    scope parameters answer a bodyless 400, a scope with nothing visible or
+    placing no canvas the bodyless 404, a manifest over ``EXPLORER_MANIFEST_MAX_CANVASES``
     canvases a bodyless 413. The visitor's ETag is the digest of the body:
     the manifest embeds source manifests the data version does not follow.
     """
@@ -308,7 +312,7 @@ class ExplorerManifestView(View):
             return HttpResponseBadRequest()
         with translation.override(language):
             try:
-                scope = resolve_scope(request.GET, request.user, language)
+                scope = resolve_scope(request.GET, language)
             except ScopeError:
                 return HttpResponseBadRequest()
             if scope is None:
@@ -319,4 +323,6 @@ class ExplorerManifestView(View):
                 response = HttpResponse(status=413)
                 response["Cache-Control"] = "private, no-store"
                 return response
+        if manifest is None:
+            return _not_found()
         return _answer(request, lambda: manifest, content_type=IIIF_MEDIA_TYPE)

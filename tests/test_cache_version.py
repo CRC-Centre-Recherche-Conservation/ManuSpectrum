@@ -1,3 +1,4 @@
+import ast
 import tempfile
 from pathlib import Path
 
@@ -58,3 +59,54 @@ class CacheCodeVersionTests(SimpleTestCase):
             settings.CACHES["default"].get("KEY_PREFIX"),
             f"ms:{settings.CACHE_CODE_VERSION}",
         )
+
+
+BUNDLE_BUILDERS = (
+    "views/explorer/service.py",
+    "views/explorer/home.py",
+    "views/explorer/memo.py",
+    "views/explorer/values.py",
+    "utils/role_links.py",
+)
+NOT_SHAPING = {
+    "models.py": "database models: the data, not the code, of a payload",
+    "utils/cache.py": "cache helpers: they name and lock entries, never fill them",
+    "utils/data_version.py": "the ledger version: part of the bundle key",
+    "utils/iiif_tools.py": "reads upstream manifests and draws zones of per-request payloads",
+    "constants/licenses.py": "file licences of per-request payloads (document, analysis, items)",
+    "constants/xy_presets.py": "renderer presets of file entries in per-request payloads",
+    "views/explorer/citations.py": "citations of the analysis payload, never memoised",
+    "views/explorer/conditions.py": "conditions and notes of per-request payloads",
+    "views/explorer/scopes.py": "the analysis payload's manifest link, never memoised",
+    "views/explorer/manifest.py": "the analysis payload's manifest link, never memoised",
+}
+
+
+def manuspectrum_imports(relative):
+    """The files under the app root that the module *relative* imports from ``manuspectrum``."""
+    tree = ast.parse(Path(settings.APP_ROOT, relative).read_text())
+    found = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or not node.module:
+            continue
+        if node.module == "manuspectrum.views.explorer":
+            found.update(f"views/explorer/{a.name}.py" for a in node.names)
+        elif node.module.startswith("manuspectrum."):
+            path = node.module.removeprefix("manuspectrum.").replace(".", "/")
+            found.add(f"{path}.py")
+    return found
+
+
+class ShapeModulesTests(SimpleTestCase):
+    def test_every_module_the_bundle_build_imports_is_listed_or_known_not_to_shape_it(
+        self,
+    ):
+        for builder in BUNDLE_BUILDERS:
+            self.assertIn(builder, CACHE_SHAPE_MODULES)
+            for imported in manuspectrum_imports(builder):
+                with self.subTest(builder=builder, imported=imported):
+                    self.assertTrue(
+                        imported in CACHE_SHAPE_MODULES or imported in NOT_SHAPING,
+                        f"{imported} (imported by {builder}) is neither in "
+                        "CACHE_SHAPE_MODULES nor known not to shape the bundle",
+                    )

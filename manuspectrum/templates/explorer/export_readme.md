@@ -12,7 +12,7 @@
 - metadata/characterizations.csv, metadata/characterizations.json: {% trans "one row per identified material: materials and certainty, colours, layers, elements by level, analyses cited in evidence, note." %}
 - citations.bib, citations.ris, citations.json: {% trans "the citations in BibTeX, RIS and CSL-JSON." %}
 {% if has_manifest %}- manifest.json: {% trans "the IIIF Presentation 3 manifest of the same scope." %}
-{% endif %}- ro-crate-metadata.json: {% trans "the RO-Crate 1.1 description of the package, with the SHA-256 checksum of every file." %}
+{% endif %}- ro-crate-metadata.json: {% trans "the RO-Crate 1.2 description of the package, with the SHA-256 checksum of every file." %}
 {% for note in notes %}
 {{ note }}
 {% endfor %}

@@ -66,6 +66,7 @@ LOGGING["loggers"]["manuspectrum.explorer"]["level"] = "WARNING"
 
 # A test runs in one transaction another thread's connection cannot see.
 EXPLORER_BACKGROUND_REBUILD = False
+EXPLORER_REBUILD_MIN_INTERVAL = 0
 
 ELASTICSEARCH_PREFIX = "test"
 

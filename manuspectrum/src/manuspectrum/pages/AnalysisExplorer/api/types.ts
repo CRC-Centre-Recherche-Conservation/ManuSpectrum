@@ -274,16 +274,12 @@ export type ShareScopeKind = "ids" | "document" | "project";
 
 export interface ShareScope {
     kind: ShareScopeKind;
-    /** Canonical query of the scope (`ids=…`, `document=…`, `project=…`, then its flags). */
+    /** Canonical query of the scope (`ids=…`, `document=…`, `project=…`, then `canvases=all` when asked). */
     key: string;
     analyses: number;
     characterizations: number;
     spectra: number;
     drafts: number;
-    /** The products hold restricted-access items (built with the signed-in reader's rights). */
-    restricted: boolean;
-    /** Items the default build leaves out for a signed-in reader; 0 for a visitor. */
-    restrictedAvailable: number;
     missing: string[];
 }
 
@@ -311,12 +307,11 @@ export interface ShareExport {
 
 /** The scope's products. */
 export interface ShareLinks {
-    manifest: ProductLink;
+    /** Only when the scope's manifest holds a canvas. */
+    manifest: ProductLink | null;
     /** Only for a Selection holding spectra. */
     seriesCsv: ProductLink | null;
     export: ProductLink;
-    /** Only when a signed-in reader's default build left restricted items out. */
-    exportRestricted: ProductLink | null;
 }
 
 /** `GET /{lang}/api/explorer/share`: what « Share and export » offers for one scope. */
@@ -349,8 +344,8 @@ export interface AnalysisPayload {
     citation: Citation;
     /** The data availability statement of this analysis. */
     availability: string;
-    /** Absolute URL of the IIIF manifest of this analysis. */
-    manifest: string;
+    /** Absolute URL of the IIIF manifest of this analysis; null when it places no canvas. */
+    manifest: string | null;
     permalink: string;
     /** Path of the Arches report on this site, in the request language. */
     reportUrl: string;
@@ -609,8 +604,6 @@ export const SHAPE_KEYS = {
         characterizations: true,
         spectra: true,
         drafts: true,
-        restricted: true,
-        restrictedAvailable: true,
         missing: true,
     } satisfies Record<keyof ShareScope, true>,
     ShareExport: {
@@ -633,6 +626,5 @@ export const SHAPE_KEYS = {
         manifest: true,
         seriesCsv: true,
         export: true,
-        exportRestricted: true,
     } satisfies Record<keyof ShareLinks, true>,
 } as const;

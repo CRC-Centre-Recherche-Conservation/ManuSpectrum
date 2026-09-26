@@ -1,7 +1,7 @@
 """``GET /api/explorer/series.csv``: the Selection's spectra in long format (spec §11.2).
 
-One row per point, ``curve,analysis,file,x,y``, after ``#`` comment lines
-that name the Selection, its drafts and restricted data, each analysis's
+One row per point, ``curve,analysis,file,x,y``, after lines opening with ``#``
+that name the Selection, its drafts, each analysis's
 permalink and, per curve, its licence, attribution, renderer configuration
 and raw file. The curve is the one the XY reader draws: the file's renderer
 configuration decides its columns and normalisation; it is never decimated.
@@ -39,7 +39,7 @@ from manuspectrum.views.explorer.service import (
 HEADER = ("curve", "analysis", "file", "x", "y")
 ROWS_PER_CHUNK = 2000
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
-_FORMULA_CELL = re.compile(r",(?=[=+\-@])")
+_FORMULA_CELL = re.compile(r"([,;])([ ]*[=+\-@\t\r])")
 
 
 class _Line:
@@ -55,8 +55,16 @@ def _clean(text):
 
 
 def _comment(text):
-    """One ``#`` comment line; a comma never opens a spreadsheet cell with a formula character."""
-    return _FORMULA_CELL.sub(", ", f"# {_clean(text)}") + "\r\n"
+    """One comment line opening with ``#``, safe to open in a spreadsheet.
+
+    Double quotes become single quotes, and a cell that a spreadsheet
+    splitting on ``,`` or ``;`` would read as opening a formula (``=``,
+    ``+``, ``-``, ``@``, tab or carriage return, after optional spaces)
+    gets a leading ``'`` (OWASP CSV injection). ``pandas.read_csv(comment="#")``
+    and R's ``read.csv(comment.char="#")`` skip the line.
+    """
+    line = f"# {_clean(text)}".replace('"', "'")
+    return _FORMULA_CELL.sub(r"\1'\2", line) + "\r\n"
 
 
 def _file_url(entry, entries):
@@ -99,8 +107,6 @@ def _plan(scope):
     ]
     if scope.drafts:
         comments.append(_("Contains drafts"))
-    if scope.restricted:
-        comments.append(_("Contains restricted-access data"))
     curves, per_analysis, per_curve = [], [], []
     entries_of = {
         analysis_id: kept_files(
@@ -112,6 +118,7 @@ def _plan(scope):
                 scope.language,
                 values=values,
                 configs=configs,
+                read=scope.read_manifest,
             ),
         )
         for analysis_id in scope.analyses
@@ -216,7 +223,7 @@ def series_lines(scope):
 
 
 class ExplorerSeriesView(View):
-    """``GET /api/explorer/series.csv?ids=…[&restricted=1][&lang=]``: the Selection's spectra, a private download.
+    """``GET /api/explorer/series.csv?ids=…[&lang=]``: the Selection's spectra, a private download.
 
     Only an ``ids`` scope; any other scope, malformed parameters or an
     unknown language answer a bodyless 400, a Selection with nothing visible
@@ -228,7 +235,7 @@ class ExplorerSeriesView(View):
             return HttpResponseBadRequest()
         try:
             language = export_language(request.GET)
-            scope = resolve_scope(request.GET, request.user, language)
+            scope = resolve_scope(request.GET, language)
         except ScopeError:
             return HttpResponseBadRequest()
         if scope is None:

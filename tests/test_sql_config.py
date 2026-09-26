@@ -19,7 +19,8 @@ from pathlib import Path
 from unittest import mock
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.db import connection
+from django.test import SimpleTestCase, TestCase
 
 from manuspectrum import sql_config
 from manuspectrum.sql_config import drop_trigger_sql, read_sql, sql_items
@@ -195,3 +196,16 @@ class ReapplyBodyTests(SimpleTestCase):
         touches = re.search(r"WHERE nodegroupid = '([^']+)'::uuid", self.sql)
 
         self.assertNotEqual(fires_on.group(1), touches.group(1))
+
+
+class InstalledLedgerTests(TestCase):
+    def test_the_migrated_database_has_a_ledger_trigger_on_every_watched_table(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT c.relname FROM pg_trigger t "
+                "JOIN pg_class c ON c.oid = t.tgrelid "
+                "WHERE t.tgname = 'ms_data_change' AND NOT t.tgisinternal"
+            )
+            installed = {name for (name,) in cursor.fetchall()}
+
+        self.assertEqual(installed, set(DATA_CHANGE_TABLES))

@@ -12,6 +12,8 @@ from manuspectrum.views.explorer.values import (
     acronym,
     axis_key,
     dataset_of,
+    dataset_url,
+    doi_of,
     file_entries,
     label,
     name_of,
@@ -132,6 +134,45 @@ class DatasetAndUrlTests(SimpleTestCase):
             rewrite_legacy_url("http://192.168.122.250:8000/manifest/abc"),
             "http://192.168.122.250:8000/manifest/abc",
         )
+
+
+class DatasetUrlTests(SimpleTestCase):
+    def test_every_spelling_of_a_doi_gives_one_doi_org_url(self):
+        for url in (
+            "https://doi.org/10.48579/PRO/ZEEJTH",
+            "https://dx.doi.org/10.48579/PRO/ZEEJTH",
+            "http://doi.org/10.48579/PRO/ZEEJTH.",
+            "doi:10.48579/PRO/ZEEJTH,",
+            "10.48579/PRO/ZEEJTH;",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(
+                    dataset_url({"url": url}), "https://doi.org/10.48579/PRO/ZEEJTH"
+                )
+
+    def test_a_landing_page_naming_a_doi_is_kept_as_written(self):
+        for url in (
+            "https://entrepot.recherche.data.gouv.fr/dataset.xhtml"
+            "?persistentId=doi:10.57745/ABCDEF&version=2.0",
+            "https://zenodo.org/records/1?doi=10.5281/zenodo.1#files",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(dataset_url({"url": url}), url)
+                self.assertIsNone(doi_of(url))
+
+    def test_a_doi_stops_at_a_query_or_a_fragment(self):
+        self.assertEqual(
+            dataset_url({"url": "https://doi.org/10.5281/zenodo.1?download=1#x"}),
+            "https://doi.org/10.5281/zenodo.1",
+        )
+
+    def test_a_web_address_is_kept_and_anything_else_is_none(self):
+        self.assertEqual(
+            dataset_url({"url": "https://data.example/set/1"}),
+            "https://data.example/set/1",
+        )
+        self.assertIsNone(dataset_url({"url": "www.example.org"}))
+        self.assertIsNone(dataset_url(None))
 
 
 class AxisAndShapeTests(SimpleTestCase):

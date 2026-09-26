@@ -18,8 +18,6 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
-import type { SharePayload } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     generateArchesURL: () => "/en/api/explorer/share",
 }));
@@ -46,20 +44,17 @@ afterEach(() => {
 interface Setup {
     document?: boolean;
     basket?: string[];
-    connected?: boolean;
     mirador?: string;
 }
 
 function mountPanel({
     document: withDocument = true,
     basket = [],
-    connected = false,
     mirador = "",
 }: Setup = {}) {
     const pinia = createPinia();
     setActivePinia(pinia);
     const store = useExplorerStore();
-    store.session.connected = connected;
     if (withDocument) store.openDocument(DOCUMENT);
     for (const key of basket) store.addToBasket(key);
     const wrapper = mount(ShareExportPanel, {
@@ -265,73 +260,6 @@ describe("ShareExportPanel", () => {
         wrapper.unmount();
     });
 
-    it("shows the restricted checkbox only to a signed-in reader with restricted data", async () => {
-        const restricted = sharePayload();
-        restricted.scope = { ...restricted.scope, restrictedAvailable: 2 };
-        answer = () => jsonResponse(restricted);
-
-        const visitor = await openPanel({ connected: false });
-        expect(drawer().querySelector("input[type=checkbox]")).toBeNull();
-        visitor.wrapper.unmount();
-
-        forgetPayloads();
-        const reader = await openPanel({ connected: true });
-        const box = drawer().querySelector("label.restricted");
-        expect(box?.textContent).toContain(
-            "Include restricted-access data (2)",
-        );
-        reader.wrapper.unmount();
-
-        forgetPayloads();
-        answer = () => jsonResponse(sharePayload());
-        const nothing = await openPanel({ connected: true });
-        expect(drawer().querySelector("input[type=checkbox]")).toBeNull();
-        nothing.wrapper.unmount();
-    });
-
-    it("switches the links when restricted is checked", async () => {
-        const plain = sharePayload();
-        plain.scope = { ...plain.scope, restrictedAvailable: 1 };
-        const withRestricted: SharePayload = {
-            ...sharePayload(),
-            scope: {
-                ...sharePayload().scope,
-                restricted: true,
-                restrictedAvailable: 0,
-            },
-            links: {
-                ...sharePayload().links,
-                export: {
-                    url: `${sharePayload().links.export.url}&restricted=1`,
-                    path: `${sharePayload().links.export.path}&restricted=1`,
-                },
-            },
-        };
-        answer = (url) =>
-            jsonResponse(url.includes("restricted=1") ? withRestricted : plain);
-        const { wrapper } = await openPanel({ connected: true });
-
-        drawer()
-            .querySelector<HTMLInputElement>("input[type=checkbox]")
-            ?.click();
-        await flushPromises();
-
-        expect(askedUrls().at(-1)).toBe(
-            `/en/api/explorer/share?document=${DOCUMENT}&restricted=1`,
-        );
-        expect(drawer().querySelector("a.package")?.getAttribute("href")).toBe(
-            withRestricted.links.export.path,
-        );
-        expect(drawer().textContent).toContain(
-            "Contains restricted-access data",
-        );
-        expect(
-            drawer().querySelector<HTMLInputElement>("input[type=checkbox]")
-                ?.checked,
-        ).toBe(true);
-        wrapper.unmount();
-    });
-
     it("says the scope holds drafts", async () => {
         const drafts = sharePayload();
         drafts.scope = { ...drafts.scope, drafts: 2 };
@@ -365,10 +293,10 @@ describe("ShareExportPanel", () => {
             .find(
                 (button) => button.props("label") === "Copy the manifest URL",
             );
-        expect(copy?.props("text")).toBe(sharePayload().links.manifest.url);
+        expect(copy?.props("text")).toBe(sharePayload().links.manifest?.url);
         const opened = drawer().querySelector("a.manifest");
         expect(opened?.getAttribute("href")).toBe(
-            sharePayload().links.manifest.path,
+            sharePayload().links.manifest?.path,
         );
         expect(opened?.getAttribute("target")).toBe("_blank");
         wrapper.unmount();
@@ -393,8 +321,21 @@ describe("ShareExportPanel", () => {
         const { wrapper } = await openPanel({ mirador: MIRADOR });
         const href = drawer().querySelector("a.mirador")?.getAttribute("href");
         expect(new URL(href as string).searchParams.get("manifest")).toBe(
-            sharePayload().links.manifest.url,
+            sharePayload().links.manifest?.url,
         );
+        wrapper.unmount();
+    });
+
+    it("offers no IIIF product when the scope places no canvas", async () => {
+        const unplaced = sharePayload();
+        unplaced.links = { ...unplaced.links, manifest: null };
+        answer = () => jsonResponse(unplaced);
+
+        const { wrapper } = await openPanel({ mirador: MIRADOR });
+
+        expect(drawer().querySelector("#share-iiif")).toBeNull();
+        expect(drawer().querySelector("a.mirador")).toBeNull();
+        expect(drawer().querySelector("a.manifest")).toBeNull();
         wrapper.unmount();
     });
 });

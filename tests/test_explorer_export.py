@@ -109,9 +109,7 @@ class ArchiveTests(ExportCase):
         with self.archive(self.document_query()) as archive:
             names = archive.namelist()
         with mock.patch(FETCH, side_effect=fetch):
-            scope = resolve_scope(
-                QueryDict(self.document_query()), self.anonymous, "en"
-            )
+            scope = resolve_scope(QueryDict(self.document_query()), "en")
             members = package(scope, EXPORTED)
 
         self.assertEqual(
@@ -211,7 +209,7 @@ class ConstantWorkTests(ExportCase):
     def work(self, query):
         """``(SQL queries, cache calls)`` of a warm ``package`` of *query*."""
         with mock.patch(FETCH, side_effect=fetch):
-            scope = resolve_scope(QueryDict(query), self.anonymous, "en")
+            scope = resolve_scope(QueryDict(query), "en")
             package(scope, EXPORTED)
         backend = type(caches["default"])
         calls = []
@@ -266,24 +264,16 @@ class VisibilityTests(ExportCase):
         self.assertNotIn(b"X02", everything)
         self.assertTrue(any(n.endswith("/X01.csv") for n in found))
 
-    def test_restricted_inclusion_is_explicit_and_marked(self):
+    def test_a_signed_in_reader_downloads_the_visitors_package(self):
         self.embargo(self.analyses["embargoed"])
         query = f"ids=an:{self.pk('open')}:-,an:{self.pk('embargoed')}:-"
         visitor = self.contents(query)
         self.client.force_login(self.editor)
 
-        default = self.contents(query)
-        restricted = self.contents(f"{query}&restricted=1")
+        reader = self.contents(query)
 
-        self.assertEqual(default, visitor)
-        self.assertIn(MARKER, b"".join(restricted.values()))
-        self.assertIn(
-            "Contains restricted-access data", restricted["README.md"].decode()
-        )
-        crate = json.loads(restricted["ro-crate-metadata.json"])
-        (root,) = [e for e in crate["@graph"] if e["@id"] == "./"]
-        self.assertIn("Contains restricted-access data", root["description"])
-        self.assertNotIn(b"restricted", default["README.md"].lower())
+        self.assertEqual(reader, visitor)
+        self.assertNotIn(MARKER, b"".join(reader.values()))
 
     def test_unknown_and_embargoed_scopes_answer_the_same_404(self):
         self.embargo(self.documents["embargoed"])

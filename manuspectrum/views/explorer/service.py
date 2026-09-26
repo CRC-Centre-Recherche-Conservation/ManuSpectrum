@@ -660,6 +660,8 @@ def _corpus_rows(user, language, visible, chains, projects_of):
     rows = []
     for a in analyses:
         document, component = chains[a]
+        if document not in label_of or (component and component not in label_of):
+            continue
         technique_value = values.first(a, "technique")
         techniques = memo.refs(technique_value)
         technique = None
@@ -812,7 +814,12 @@ LINK_ROLES = {
 
 
 def build_bundle(user, language, visible):
-    """The ``CorpusBundle`` of *user* in *language* over *visible*."""
+    """The ``CorpusBundle`` of *user* in *language* over *visible*.
+
+    A resource deleted while the bundle builds (``names`` no longer finds
+    it) is left out with the rows that run through it; the next data
+    version leaves it out of *visible* as well.
+    """
     readable = readable_nodegroup_ids(user)
     links = {
         name: {
@@ -825,9 +832,6 @@ def build_bundle(user, language, visible):
     rows, characterization_values = _corpus_rows(
         user, language, visible, chains, links["projects"]
     )
-    by_document = defaultdict(list)
-    for row in rows:
-        by_document[row["document"]].append(row)
     label_of = names(
         {r["document"] for r in rows}
         | {r["component"] for r in rows if r["component"]}
@@ -835,6 +839,16 @@ def build_bundle(user, language, visible):
         language,
         user,
     )
+    rows = [
+        r
+        for r in rows
+        if r["document"] in label_of
+        and (not r["component"] or r["component"] in label_of)
+    ]
+    documents = [d for d in visible.documents if d in label_of]
+    by_document = defaultdict(list)
+    for row in rows:
+        by_document[row["document"]].append(row)
     folds = {}
 
     def folded(text):
@@ -842,7 +856,7 @@ def build_bundle(user, language, visible):
             folds[text] = fold(text)
         return folds[text]
 
-    names_folded = {d: folded(label_of[d]["value"]) for d in visible.documents}
+    names_folded = {d: folded(label_of[d]["value"]) for d in documents}
     return CorpusBundle(
         visible=visible,
         chains=chains,
@@ -867,7 +881,7 @@ def build_bundle(user, language, visible):
         },
         label_of=label_of,
         folded=names_folded,
-        documents=sorted(visible.documents, key=lambda d: (names_folded[d], d)),
+        documents=sorted(documents, key=lambda d: (names_folded[d], d)),
         order={
             row["id"]: (
                 folded(label_of[row["document"]]["value"]),
@@ -2023,8 +2037,12 @@ def layer_of(index, text, image):
     }
 
 
-def imaging_entries(analysis_id, manifest_values, language):
-    """``FileEntry`` of each imaging manifest of an analysis (maXRF, hyperspectral, other); its canvases are the layers, numbered across manifests."""
+def imaging_entries(analysis_id, manifest_values, language, read=None):
+    """``FileEntry`` of each imaging manifest of an analysis (maXRF, hyperspectral, other); its canvases are the layers, numbered across manifests.
+
+    *read* reads a manifest by URL: a caller's memoised reader, else ``manifest_json``.
+    """
+    read = read or manifest_json
     entries, index = [], 0
     for position, value in enumerate(manifest_values):
         url = rewrite_legacy_url(
@@ -2032,7 +2050,7 @@ def imaging_entries(analysis_id, manifest_values, language):
         )
         if not url:
             continue
-        manifest = manifest_json(url) or {}
+        manifest = read(url) or {}
         layers = []
         for canvas in canvases_of(manifest):
             layers.append(layer_of(index, canvas["label"], canvas["image"]))
@@ -2089,12 +2107,13 @@ def renderer_configs(values, analysis_ids):
     }
 
 
-def analysis_files(analysis_id, user, language, values=None, configs=None):
+def analysis_files(analysis_id, user, language, values=None, configs=None, read=None):
     """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging.
 
     *values* and *configs* (``renderer_configs``) let a caller with several
     analyses share one batched tile lookup and one configuration lookup
-    instead of one of each per analysis.
+    instead of one of each per analysis; *read* reads the imaging manifests
+    (``imaging_entries``).
     """
     if values is None:
         values = Values([analysis_id], ["files", "micro", "imaging"], user)
@@ -2113,7 +2132,9 @@ def analysis_files(analysis_id, user, language, values=None, configs=None):
             configs={},
             kind="micro-imaging",
         )
-        + imaging_entries(analysis_id, values.get(analysis_id, "imaging"), language)
+        + imaging_entries(
+            analysis_id, values.get(analysis_id, "imaging"), language, read
+        )
     )
 
 
@@ -2168,10 +2189,23 @@ def licence_labels(files):
     return [f["license"]["label"]["value"] for f in files if f.get("license")]
 
 
+def _analysis_manifest(analysis_id, language):
+    """The URL of the Explorer manifest of one analysis, or None when that manifest holds no canvas (``has_canvases``)."""
+    from manuspectrum.views.explorer.manifest import has_canvases
+    from manuspectrum.views.explorer.scopes import resolve_scope
+
+    query = f"ids=an:{analysis_id}:-"
+    scope = resolve_scope(QueryDict(query), language)
+    if scope is None or not has_canvases(scope):
+        return None
+    return product_url("iiif-v3-explorer-manifest", query, language)
+
+
 def analysis_payload(analysis_id, user, language):
     """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible.
 
     A linked resource that no longer exists is left out of the references.
+    ``manifest`` is None when the analysis places no canvas.
     """
     bundle = corpus_bundle(user, language)
     visible = bundle.visible
@@ -2278,9 +2312,7 @@ def analysis_payload(analysis_id, user, language):
         ],
         "citation": shown_citation(citation),
         "availability": citation["availability"],
-        "manifest": product_url(
-            "iiif-v3-explorer-manifest", f"ids=an:{analysis_id}:-", language
-        ),
+        "manifest": _analysis_manifest(analysis_id, language),
         "permalink": permalink(analysis_id),
         "reportUrl": report_url(analysis_id, language),
         "certaintyScale": certainty_scale(language),

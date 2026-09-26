@@ -9,6 +9,7 @@ import datetime
 import io
 import json
 import re
+import zipfile
 from unittest import mock
 
 from django.http import QueryDict
@@ -17,10 +18,12 @@ from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 from tests.test_explorer_service import XRF
 
 from manuspectrum.views.explorer.export import (
+    _assemble,
     arcname,
     csv_bytes,
     package,
     ro_crate,
+    stream,
 )
 from manuspectrum.views.explorer.scopes import resolve_scope
 from manuspectrum.views.explorer.service import permalink
@@ -57,20 +60,20 @@ class PackageCase(CorpusCase):
     def pk(self, key):
         return str(self.analyses[key].pk)
 
-    def scope(self, query, user=None, language="en"):
+    def scope(self, query, language="en"):
         with mock.patch(FETCH, side_effect=fetch):
-            return resolve_scope(QueryDict(query), user or self.anonymous, language)
+            return resolve_scope(QueryDict(query), language)
 
-    def package(self, query, user=None, language="en"):
-        scope = self.scope(query, user, language)
+    def package(self, query, language="en"):
+        scope = self.scope(query, language)
         with mock.patch(FETCH, side_effect=fetch):
             return scope, package(scope, EXPORTED)
 
-    def members(self, query, user=None, language="en"):
-        return {m.arcname: m for m in self.package(query, user, language)[1]}
+    def members(self, query, language="en"):
+        return {m.arcname: m for m in self.package(query, language)[1]}
 
-    def crate(self, query, user=None):
-        scope, members = self.package(query, user)
+    def crate(self, query):
+        scope, members = self.package(query)
         with mock.patch(FETCH, side_effect=fetch):
             graph = ro_crate(scope, members, EXPORTED)["@graph"]
         return {e["@id"]: e for e in graph}
@@ -213,6 +216,12 @@ class LayoutTests(PackageCase):
         self.assertIn(f"document={self.documents['open'].pk}", manifest["id"])
         self.assertEqual(members["manifest.json"].media_type, "application/ld+json")
 
+    def test_a_scope_placing_no_canvas_ships_no_manifest(self):
+        members = self.members(f"ids=an:{self.pk('embargoed')}:-")
+
+        self.assertNotIn("manifest.json", members)
+        self.assertNotIn("manifest.json", self.text(members["README.md"]))
+
 
 class TablesTests(PackageCase):
     def test_analyses_table_has_one_column_per_condition_type(self):
@@ -307,6 +316,18 @@ class TablesTests(PackageCase):
         self.assertEqual(member.size, len(member.data))
         self.assertIn("IIIF", self.text(members["README.md"]))
 
+    def test_each_manifest_is_read_once_per_package(self):
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
+        scope = self.scope(self.document_query())
+
+        with mock.patch(FETCH, side_effect=fetch) as fetched:
+            members, _ = _assemble(scope, EXPORTED)
+
+        self.assertIn("manifest.json", {m.arcname for m in members})
+        urls = [call.args[0] for call in fetched.call_args_list]
+        self.assertIn(IMAGING, urls)
+        self.assertEqual(len(urls), len(set(urls)), urls)
+
     def test_an_imaging_manifest_that_cannot_be_fetched_is_named_in_the_readme(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
         scope = self.scope(f"ids=an:{self.pk('open')}:-")
@@ -358,12 +379,12 @@ class RoCrateTests(PackageCase):
 
         crate = ro_crate(scope, members, EXPORTED)
 
-        self.assertEqual(crate["@context"], "https://w3id.org/ro/crate/1.1/context")
+        self.assertEqual(crate["@context"], "https://w3id.org/ro/crate/1.2/context")
         graph = {e["@id"]: e for e in crate["@graph"]}
         descriptor = graph["ro-crate-metadata.json"]
         self.assertEqual(descriptor["@type"], "CreativeWork")
         self.assertEqual(
-            descriptor["conformsTo"], {"@id": "https://w3id.org/ro/crate/1.1"}
+            descriptor["conformsTo"], {"@id": "https://w3id.org/ro/crate/1.2"}
         )
         self.assertEqual(descriptor["about"], {"@id": "./"})
         root = graph["./"]
@@ -438,6 +459,97 @@ class RoCrateTests(PackageCase):
         self.assertEqual(mixed[per_file]["@type"], "CreativeWork")
         self.assertEqual(mixed[per_file]["name"], "Licences per file")
 
+    def test_two_spellings_of_one_doi_are_one_dataset(self):
+        self.tile(
+            self.analyses["on_document"],
+            "dataset_url",
+            {"url": "https://dx.doi.org/10.48579/PRO/ZEEJTH", "url_label": ""},
+        )
+
+        graph = self.crate(self.document_query())
+
+        self.assertEqual(graph["./"]["isBasedOn"], [{"@id": DOI}])
+        datasets = [
+            e for e in graph.values() if e["@type"] == "Dataset" and e["@id"] != "./"
+        ]
+        self.assertEqual([d["@id"] for d in datasets], [DOI])
+
+    def test_a_file_name_with_a_space_or_a_hash_gets_an_escaped_id(self):
+        self.stored_file(self.analyses["open"], "bleu clair #2.csv", b"1,2\n")
+        scope, members = self.package(f"ids=an:{self.pk('open')}:-")
+        with mock.patch(FETCH, side_effect=fetch):
+            crate = ro_crate(scope, members, EXPORTED)
+        (member,) = [m for m in members if m.arcname.endswith("bleu clair #2.csv")]
+
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(stream(members, crate)[1])))
+        graph = {
+            e["@id"]: e
+            for e in json.loads(archive.read("ro-crate-metadata.json"))["@graph"]
+        }
+        escaped = member.arcname.replace(" ", "%20").replace("#", "%23")
+        self.assertIn(member.arcname, archive.namelist())
+        self.assertEqual(graph[escaped]["name"], "bleu clair #2.csv")
+        self.assertNotEqual(graph[escaped]["sha256"], SHA_SLOT)
+        self.assertIn({"@id": escaped}, graph["./"]["hasPart"])
+        self.assertIn({"@id": escaped}, graph[permalink(self.pk("open"))]["result"])
+
+    def test_the_publisher_is_an_organization_and_actions_hang_from_the_root(self):
+        graph = self.crate(self.document_query())
+
+        publisher = graph[graph["./"]["publisher"]["@id"]]
+        self.assertEqual(publisher["@type"], "Organization")
+        self.assertTrue(publisher["name"])
+        actions = {e["@id"] for e in graph.values() if e["@type"] == "CreateAction"}
+        self.assertEqual({m["@id"] for m in graph["./"]["mentions"]}, actions)
+
+    def test_every_entity_is_typed_named_and_reachable_from_the_root(self):
+        self.stored_file(self.analyses["open"], "X01.csv", b"1,2\n", licence=BY)
+        self.stored_file(self.analyses["open"], "X01c.csv", b"1,2\n", licence=ND)
+
+        graph = self.crate(self.document_query())
+
+        def references(value):
+            if isinstance(value, list):
+                for item in value:
+                    yield from references(item)
+            elif isinstance(value, dict):
+                self.assertEqual(set(value), {"@id"}, value)
+                yield value["@id"]
+
+        reached, pending = set(), ["./"]
+        while pending:
+            entity = graph[pending.pop()]
+            if entity["@id"] in reached:
+                continue
+            reached.add(entity["@id"])
+            for key, value in entity.items():
+                if not key.startswith("@"):
+                    pending += [i for i in references(value) if i in graph]
+        for entity in graph.values():
+            self.assertTrue(entity["@type"], entity)
+            if entity["@id"] != "ro-crate-metadata.json":
+                self.assertTrue(entity.get("name"), entity)
+                self.assertIn(entity["@id"], reached)
+
+    def test_a_licence_is_described_with_its_name_identifier_and_summary(self):
+        self.stored_file(self.analyses["open"], "X01.csv", b"1,2\n", licence=BY)
+
+        graph = self.crate(f"ids=an:{self.pk('open')}:-")
+
+        licence = graph[BY["url"]]
+        self.assertEqual(licence["@type"], "CreativeWork")
+        self.assertEqual(licence["name"], "CC BY 4.0")
+        self.assertEqual(licence["identifier"], "CC-BY-4.0")
+        self.assertTrue(licence["description"])
+
+    def test_a_package_without_licensed_file_states_no_licence(self):
+        graph = self.crate(f"ids=ch:{self.characterization.pk}:-")
+
+        self.assertNotIn("license", graph["./"])
+        self.assertFalse(
+            [e for e in graph.values() if e.get("name") == "Licences per file"]
+        )
+
     def test_the_dataset_is_referenced_not_deposited_again(self):
         members = self.members(self.document_query())
         graph = self.crate(self.document_query())
@@ -474,23 +586,15 @@ class ReadmeTests(PackageCase):
                     self.assertIn(name, readme)
                 self.assertIn("metadata/analyses.csv", readme)
                 self.assertIn("ro-crate-metadata.json", readme)
+                self.assertIn("RO-Crate 1.2", readme)
                 self.assertIn("CC BY 4.0", readme)
                 self.assertIn(citations[0]["title"], readme)
 
-    def test_drafts_and_restricted_inclusion_are_marked_in_the_readme(self):
+    def test_drafts_are_marked_in_the_readme(self):
         drafts = self.members(f"ids=an:{self.pk('draft')}:-")
         plain = self.members(f"ids=an:{self.pk('open')}:-")
-        self.embargo(self.analyses["open"])
-        restricted = self.members(
-            f"ids=an:{self.pk('open')}:-&restricted=1", user=self.editor
-        )
         french = self.members(f"ids=an:{self.pk('draft')}:-", language="fr")
 
         self.assertIn("Contains drafts", self.text(drafts["README.md"]))
         self.assertIn("Contient des brouillons", self.text(french["README.md"]))
         self.assertNotIn("Contains drafts", self.text(plain["README.md"]))
-        self.assertNotIn("restricted", self.text(plain["README.md"]).lower())
-        self.assertIn(
-            "Contains restricted-access data", self.text(restricted["README.md"])
-        )
-        self.assertIn(self.pk("open"), self.text(restricted["metadata/analyses.csv"]))

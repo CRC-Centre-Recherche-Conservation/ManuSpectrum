@@ -243,7 +243,8 @@ class ReadRightsCase(CorpusCase):
             return self.client.get(f"/en/api/explorer/document/{resource}").json()
 
     def analysis(self, resource):
-        return self.client.get(f"/en/api/explorer/analysis/{resource}")
+        with mock.patch(FETCH, return_value=MANIFEST_JSON):
+            return self.client.get(f"/en/api/explorer/analysis/{resource}")
 
 
 class ReadRightsTests(ReadRightsCase):
@@ -629,6 +630,12 @@ class DocumentMatchRouteTests(CorpusCase):
 
 
 class AnalysisRouteTests(CorpusCase):
+    def setUp(self):
+        super().setUp()
+        fetch = mock.patch(FETCH, return_value=MANIFEST_JSON)
+        fetch.start()
+        self.addCleanup(fetch.stop)
+
     def get(self, resource):
         return self.client.get(f"/en/api/explorer/analysis/{resource}")
 
@@ -685,7 +692,7 @@ class AnalysisRouteTests(CorpusCase):
         for text in ("Robinet, L.", "HEU, S. 2024", "EMMA", "doi.org/10.48579"):
             self.assertIn(text, citation["text"])
         self.assertIn(permalink, payload["availability"])
-        self.assertIn("https://doi.org/10.48579/pro/zeejth", payload["availability"])
+        self.assertIn("https://doi.org/10.48579/PRO/ZEEJTH", payload["availability"])
 
     def test_an_analysis_without_dataset_is_cited_as_its_record(self):
         analysis = str(self.analyses["on_document"].pk)
@@ -713,6 +720,12 @@ class AnalysisRouteTests(CorpusCase):
             f"?ids=an:{analysis}:-&lang=en",
         )
         self.assertTrue(french["manifest"].endswith("&lang=fr"))
+
+    def test_an_analysis_placing_no_canvas_names_no_manifest(self):
+        payload = self.get(self.analyses["embargoed"].pk).json()
+
+        assert_shape(self, payload, "AnalysisPayload")
+        self.assertIsNone(payload["manifest"])
 
     def test_the_report_link_is_a_path_in_the_language_of_the_request(self):
         analysis = self.analyses["open"].pk
