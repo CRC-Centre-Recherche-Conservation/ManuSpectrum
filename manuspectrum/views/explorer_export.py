@@ -1,10 +1,12 @@
-"""The data package of a scope (spec §11.4): data files, metadata tables, citations, README, RO-Crate.
+"""``GET /api/explorer/export``: the data package of a scope (spec §11.4) as a stored ZIP.
 
 ``package`` lists every member of the archive but ``ro-crate-metadata.json``,
 whose checksums are only known once the files have streamed. Data files are
 read through ``scope_file`` (the ``File`` row joined to the analysis's tile),
 never from a path found in tile data. Everything else is built in memory in
-``scope.language``. Nothing is memoised.
+``scope.language``. ``stream`` sends the members as a stored ZIP whose length
+is announced before the first byte, ``ro-crate-metadata.json`` last. Nothing
+is memoised.
 """
 
 import datetime
@@ -19,14 +21,19 @@ from dataclasses import dataclass
 import orjson
 from defusedcsv import csv
 from django.conf import settings
+from django.http import HttpResponse, HttpResponseBadRequest, StreamingHttpResponse
 from django.template.loader import render_to_string
 from django.utils import translation
+from django.utils.http import content_disposition_header
 from django.utils.text import slugify
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
+from django.views import View
+from zipstream import ZIP_STORED, ZipStream
 
 from manuspectrum.utils.public_visibility import readable_nodegroup_ids
 from manuspectrum.utils.role_links import role_node
+from manuspectrum.views.explorer_api import _not_found
 from manuspectrum.views.explorer_citations import (
     availability,
     citation_entries,
@@ -34,7 +41,14 @@ from manuspectrum.views.explorer_citations import (
 )
 from manuspectrum.views.explorer_conditions import conditions_of
 from manuspectrum.views.explorer_manifest import ManifestTooLarge, build_manifest
-from manuspectrum.views.explorer_scopes import scope_content, scope_file, share_link
+from manuspectrum.views.explorer_scopes import (
+    ScopeError,
+    export_language,
+    resolve_scope,
+    scope_content,
+    scope_file,
+    share_link,
+)
 from manuspectrum.views.explorer_service import (
     ROLES,
     Values,
@@ -52,6 +66,7 @@ from manuspectrum.views.explorer_values import rewrite_legacy_url
 from manuspectrum.views.summary_service import _date
 
 CRATE_NAME = "ro-crate-metadata.json"
+CHUNK_SIZE = 1024 * 1024
 RO_CRATE_CONTEXT = "https://w3id.org/ro/crate/1.1/context"
 RO_CRATE_PROFILE = "https://w3id.org/ro/crate/1.1"
 SHA256_SLOT = "0" * 64
@@ -690,6 +705,10 @@ def _data_members(scope, content, zones):
     return members
 
 
+class ExportTooLarge(Exception):
+    """The data files of the scope exceed ``EXPLORER_EXPORT_MAX_FILES`` or ``EXPLORER_EXPORT_MAX_BYTES``."""
+
+
 def package(scope, exported_at=None):
     """Every member of the data package of *scope* but ``ro-crate-metadata.json``, README first.
 
@@ -697,15 +716,26 @@ def package(scope, exported_at=None):
     the day of consultation of the citations. A manifest over
     ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases is left out and the README
     says why; imaging manifests go in as JSON, the README saying their images
-    are served by IIIF.
+    are served by IIIF. More data files than ``EXPLORER_EXPORT_MAX_FILES``,
+    or more of their bytes than ``EXPLORER_EXPORT_MAX_BYTES``, raise
+    ``ExportTooLarge`` before anything else is built and before any file is
+    opened.
     """
-    exported_at = exported_at or datetime.date.today()
+    return _assemble(scope, exported_at or datetime.date.today())[0]
+
+
+def _assemble(scope, exported_at):
+    """``(members, content)`` of ``package``; *content* is the ``ScopeContent`` the RO-Crate reads."""
     language = scope.language
-    content = scope_content(
-        scope, ("statement_type", "statement_content", "instrument")
-    )
+    content = scope_content(scope, ("statement_type", "statement_content"))
     zones = analysis_zones(scope)
     data = _data_members(scope, content, zones)
+    files = [m for m in data if m.source is not None]
+    if (
+        len(files) > settings.EXPLORER_EXPORT_MAX_FILES
+        or sum(m.size for m in files) > settings.EXPLORER_EXPORT_MAX_BYTES
+    ):
+        raise ExportTooLarge()
     citations = citation_entries(
         content.groups, language=language, accessed=exported_at
     )
@@ -772,19 +802,126 @@ def package(scope, exported_at=None):
         ),
     ]
     members = built + data
-    return [
-        _built(
-            "README.md",
-            readme(
-                scope,
-                members,
-                citations,
-                availability_text,
-                exported_at=exported_at,
-                datasets=content.datasets,
-                notes=notes,
-            ),
-            "text/markdown",
-        ),
-        *members,
+    text = readme(
+        scope,
+        members,
+        citations,
+        availability_text,
+        exported_at=exported_at,
+        datasets=content.datasets,
+        notes=notes,
+    )
+    return [_built("README.md", text, "text/markdown"), *members], content
+
+
+def _crate_bytes(crate):
+    return orjson.dumps(crate, option=orjson.OPT_SORT_KEYS | orjson.OPT_INDENT_2)
+
+
+def _file_chunks(member, digests):
+    """The bytes of a stored data file in ``CHUNK_SIZE`` chunks; its sha256 goes to *digests*.
+
+    A file whose length on disk differs from ``member.size`` raises
+    ``RuntimeError`` as soon as the difference shows, so a stream never ends
+    with a complete-looking archive.
+    """
+    sha, read = hashlib.sha256(), 0
+    with open(member.source, "rb") as handle:
+        while chunk := handle.read(CHUNK_SIZE):
+            read += len(chunk)
+            if read > member.size:
+                raise RuntimeError(f"{member.arcname} grew while it was exported")
+            sha.update(chunk)
+            yield chunk
+    if read != member.size:
+        raise RuntimeError(f"{member.arcname} shrank while it was exported")
+    digests[member.arcname] = sha.hexdigest()
+
+
+def _filled(crate, members, digests):
+    """*crate* with the sha256 of every member in place of its placeholder."""
+    for member in members:
+        if member.source is None:
+            digests[member.arcname] = hashlib.sha256(member.data).hexdigest()
+    graph = [
+        (
+            {**entity, "sha256": digests[entity["@id"]]}
+            if entity.get("@type") == "File"
+            else entity
+        )
+        for entity in crate["@graph"]
     ]
+    return {**crate, "@graph": graph}
+
+
+def stream(members, crate):
+    """``(length, iterator)`` of the stored ZIP of *members* followed by ``ro-crate-metadata.json``.
+
+    Every entry is ``ZIP_STORED`` and the stream is sized, so its length is
+    known before the first byte. Data files are read while they stream;
+    ``ro-crate-metadata.json`` comes last, serialised with the checksums
+    collected on the way in the length of its placeholder (64 hexadecimal
+    characters per checksum, sorted keys). A size that does not match raises
+    ``RuntimeError`` inside the iterator.
+    """
+    archive = ZipStream(compress_type=ZIP_STORED, sized=True)
+    digests = {}
+    for member in members:
+        if member.source is None:
+            archive.add(member.data, member.arcname)
+        else:
+            archive.add(_file_chunks(member, digests), member.arcname, size=member.size)
+    placeholder = _crate_bytes(crate)
+
+    def crate_chunks():
+        data = _crate_bytes(_filled(crate, members, digests))
+        if len(data) != len(placeholder):
+            raise RuntimeError("the RO-Crate metadata changed length")
+        yield data
+
+    archive.add(crate_chunks(), CRATE_NAME, size=len(placeholder))
+    return len(archive), iter(archive)
+
+
+def _too_large():
+    response = HttpResponse(status=413)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+class ExplorerExportView(View):
+    """``GET /api/explorer/export?ids=|document=|project=[&canvases=all][&restricted=1][&lang=]``: the data package, a private download.
+
+    ``lang`` absent is ``LANGUAGE_CODE``; an unknown language or malformed
+    scope parameters answer a bodyless 400, a scope with nothing visible the
+    bodyless 404, a package over ``EXPLORER_EXPORT_MAX_FILES`` or
+    ``EXPLORER_EXPORT_MAX_BYTES`` a bodyless 413. The archive streams
+    uncompressed with its ``Content-Length``.
+    """
+
+    def get(self, request):
+        try:
+            language = export_language(request.GET)
+        except ScopeError:
+            return HttpResponseBadRequest()
+        with translation.override(language):
+            try:
+                scope = resolve_scope(request.GET, request.user, language)
+            except ScopeError:
+                return HttpResponseBadRequest()
+            if scope is None:
+                return _not_found()
+            exported_at = datetime.date.today()
+            try:
+                members, content = _assemble(scope, exported_at)
+            except ExportTooLarge:
+                return _too_large()
+            crate = ro_crate(scope, members, exported_at, content)
+        length, body = stream(members, crate)
+        response = StreamingHttpResponse(body, content_type="application/zip")
+        response["Content-Length"] = str(length)
+        response["Content-Disposition"] = content_disposition_header(
+            True, f"manuspectrum-{scope.kind}-{scope.digest}.zip"
+        )
+        response["Cache-Control"] = "private, no-store"
+        return response

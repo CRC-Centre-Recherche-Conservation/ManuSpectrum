@@ -41,8 +41,8 @@ from manuspectrum.views.explorer_api import (
     ExplorerManifestView,
     ExplorerSearchView,
     ExplorerShareView,
-    UnservedProductView,
 )
+from manuspectrum.views.explorer_export import ExplorerExportView
 from manuspectrum.views.explorer_series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.knockout_templates import knockout_template
@@ -415,7 +415,7 @@ urlpatterns.append(
     )
 )
 urlpatterns.append(
-    path("api/explorer/export", UnservedProductView.as_view(), name="explorer-export")
+    path("api/explorer/export", ExplorerExportView.as_view(), name="explorer-export")
 )
 
 ### Manuspectrum URL - IIIF Annotations

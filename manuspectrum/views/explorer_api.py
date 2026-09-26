@@ -320,10 +320,3 @@ class ExplorerManifestView(View):
                 response["Cache-Control"] = "private, no-store"
                 return response
         return _answer(request, lambda: manifest, content_type=IIIF_MEDIA_TYPE)
-
-
-class UnservedProductView(View):
-    """A language-neutral product route whose builder is not registered yet: the bodyless 404."""
-
-    def get(self, request):
-        return _not_found()
