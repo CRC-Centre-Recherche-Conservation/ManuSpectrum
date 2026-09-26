@@ -10,6 +10,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     analysisHit,
     analysisPayload,
+    documentMatch,
     documentPayload,
     searchResponse,
     uuid,
@@ -125,9 +126,11 @@ describe("AnalysisExplorer", () => {
         vi.stubGlobal(
             "fetch",
             vi.fn(async (url: string) =>
-                url.includes("explorer-document")
-                    ? jsonResponse(documentPayload())
-                    : jsonResponse(searchResponse()),
+                url.includes("explorer-document-match")
+                    ? jsonResponse(documentMatch())
+                    : url.includes("explorer-document")
+                      ? jsonResponse(documentPayload())
+                      : jsonResponse(searchResponse()),
             ),
         );
         window.history.replaceState(null, "", "/en/discover");
@@ -157,9 +160,11 @@ describe("AnalysisExplorer", () => {
         vi.stubGlobal(
             "fetch",
             vi.fn(async (url: string) =>
-                url.includes("explorer-document")
-                    ? jsonResponse(documentPayload())
-                    : jsonResponse(searchResponse()),
+                url.includes("explorer-document-match")
+                    ? jsonResponse(documentMatch())
+                    : url.includes("explorer-document")
+                      ? jsonResponse(documentPayload())
+                      : jsonResponse(searchResponse()),
             ),
         );
         window.history.replaceState(null, "", "/en/discover");
@@ -212,6 +217,9 @@ describe("AnalysisExplorer", () => {
                             ],
                         }),
                     );
+                }
+                if (url.includes("explorer-document-match")) {
+                    return jsonResponse(documentMatch());
                 }
                 if (url.includes("explorer-document")) {
                     return jsonResponse(documentPayload());
