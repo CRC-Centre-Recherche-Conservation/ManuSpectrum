@@ -103,6 +103,35 @@ describe("AnalysisExplorer", () => {
         bar.remove();
     });
 
+    it("mounts the share button next to the Selection button", async () => {
+        const bar = document.createElement("div");
+        bar.id = "ms-explorer-intro-bar";
+        document.body.append(bar);
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            props: { connected: false, miradorUrl: "https://viewer.example/" },
+            global: { plugins: [pinia, PrimeVue] },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        expect(bar.querySelector(".share-export")).toBeNull();
+
+        useExplorerStore().openDocument(uuid(1));
+        await flushPromises();
+
+        const owners = [...bar.querySelectorAll("button.opener")].map(
+            (button) =>
+                button.closest(".share-export")
+                    ? "share"
+                    : button.closest(".selection-drawer")
+                      ? "selection"
+                      : null,
+        );
+        expect(owners).toEqual(["selection", "share"]);
+        wrapper.unmount();
+        bar.remove();
+    });
+
     it("prompts for a shared Selection and removes sel from the URL", async () => {
         window.history.replaceState(null, "", `/en/discover?sel=${KEY}`);
         const wrapper = mount(AnalysisExplorer, {

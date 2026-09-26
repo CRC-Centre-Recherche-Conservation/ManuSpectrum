@@ -53,3 +53,6 @@ export interface SelectionHint {
 export const SELECTION_HINTS_KEY: InjectionKey<
     Ref<Map<string, SelectionHint>>
 > = Symbol("selection-hints");
+
+/** Address of the Mirador viewer the IIIF products open in (`EXPLORER_MIRADOR_URL`); empty: no viewer. */
+export const MIRADOR_URL_KEY: InjectionKey<string> = Symbol("mirador-url");
