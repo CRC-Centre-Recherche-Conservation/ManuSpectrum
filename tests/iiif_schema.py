@@ -8,7 +8,8 @@ only:
 - commit: fb5bd9039494701dc7472cdcaffe83fb5a212463
 - sha256: 14dd7ee8aee25d959be4b12feddb4179c726909fc85b925f6707f4ab3bfe2ad6
 - licence: the repository declares none (no LICENSE file, nothing in its
-  ``pyproject.toml`` or README).
+  ``pyproject.toml`` or README); licence requested upstream in
+  https://github.com/IIIF/presentation-validator/issues/222
 
 The schema holds no remote ``$ref``: validation never touches the network.
 """
