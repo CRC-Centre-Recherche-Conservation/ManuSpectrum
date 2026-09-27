@@ -730,7 +730,8 @@ def package(scope, exported_at=None):
     """Every member of the data package of *scope* but ``ro-crate-metadata.json``, README first.
 
     *exported_at* (``datetime.date``, default today) is the export day and
-    the day of consultation of the citations. A manifest over
+    the day of consultation of the citations. The manifest embeds the
+    visitor's annotation pages its canvases reference; a manifest over
     ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases is left out and the README
     says why; imaging manifests go in as JSON, the README saying their images
     are served by IIIF, and naming each one that could not be fetched. More
@@ -783,7 +784,7 @@ def _assemble(scope, exported_at):
     notes = []
     with translation.override(language):
         try:
-            manifest = build_manifest(scope)
+            manifest = build_manifest(scope, embed=True)
             if manifest is not None:
                 built.append(
                     _built(

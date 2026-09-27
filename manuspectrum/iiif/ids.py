@@ -5,6 +5,8 @@ the routes of ``manuspectrum/urls.py`` (below the LANGUAGE BOUNDARY);
 ``tests/test_iiif_routes.py`` resolves each one to its route name.
 """
 
+from urllib.parse import quote
+
 from django.conf import settings
 
 KINDS = {
@@ -40,8 +42,28 @@ def page(resource_id, n, kind="analysis", version=3, only=None):
     return url
 
 
-def content_state(analysis_id, feature_id):
-    return _url(f"iiif/v3/content-state/{analysis_id}/{feature_id}")
+def content_state(resource_id, feature_id, download=False):
+    """The published Content State of one zone; *download* asks for it as an attachment."""
+    url = _url(f"iiif/v3/content-state/{resource_id}/{feature_id}")
+    return f"{url}?download=1" if download else url
+
+
+def explorer_manifest(query=""):
+    """The Explorer manifest of the scope *query* (``ids=…``, ``document=…``, ``project=…``), language-free."""
+    url = _url("iiif/v3/explorer-manifest")
+    return f"{url}?{query}" if query else url
+
+
+def explorer_part(scope_digest, *parts):
+    """A resource the Explorer manifest of *scope_digest* creates (canvas pages, ranges); it need not dereference."""
+    tail = "".join(f"/{quote(str(part), safe='')}" for part in parts)
+    return _url(f"iiif/v3/explorer-manifest/{scope_digest}{tail}")
+
+
+def selection_manifest(kind, resource_id):
+    """The Explorer manifest of the Selection holding the whole analysis or identified material *resource_id*."""
+    prefix = "ch" if kind == "characterization" else "an"
+    return explorer_manifest(f"ids={prefix}:{resource_id}:-")
 
 
 def data_raw(file_id):

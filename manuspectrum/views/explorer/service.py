@@ -39,6 +39,7 @@ from arches.app.models.models import (
 from arches_controlled_lists.models import ListItem, ListItemValue
 
 from manuspectrum.constants.licenses import effective_license
+from manuspectrum.iiif.ids import content_state as content_state_url
 from manuspectrum.iiif.sources import (
     canvas_index,
     canvas_label,
@@ -71,6 +72,7 @@ from manuspectrum.views.explorer.values import (
     file_entries,
     label,
     name_of,
+    plots,
     reference_terms,
     rewrite_legacy_url,
     string_texts,
@@ -650,11 +652,7 @@ def _corpus_rows(user, language, visible, chains, projects_of):
         start = values.first(a, "start")
         date = _date(start) if isinstance(start, str) else None
         kinds = []
-        if any(
-            e.get("rendererConfig")
-            for e in values.get(a, "files")
-            if isinstance(e, dict)
-        ):
+        if any(plots(e) for e in values.get(a, "files") if isinstance(e, dict)):
             kinds.append("xy")
         if values.get(a, "imaging"):
             kinds.append("chemical-imaging")
@@ -1734,9 +1732,9 @@ def document_payload(document_id, user, language, ticket=None):
 
     ``techniques`` holds each technique of its analyses by uri; each analysis
     names its technique by that uri and lists its zones, each on a canvas
-    given by its position in ``canvases``. A zone on a canvas the manifest
-    does not list is left out; an analysis without zones is not located on
-    a page. ``document_match`` says what the filters keep. ``history`` (the
+    given by its position in ``canvases`` and named by its ``feature`` id.
+    A zone on a canvas the manifest does not list is left out; an analysis
+    without zones is not located on a page. ``document_match`` says what the filters keep. ``history`` (the
     document's dated and placed events, spec §5) is empty until the map and
     timeline API fills it.
     """
@@ -1755,11 +1753,13 @@ def document_payload(document_id, user, language, ticket=None):
     dims = canvas_index(canvases)
     position = {canvas["id"]: index for index, canvas in enumerate(canvases)}
     zones = defaultdict(list)
-    for analysis, _, canvas, shape in annotation_features(
+    for analysis, feature, canvas, shape in annotation_features(
         role_node(*ROLES["zone"]), [row["id"] for row in rows], dims, readable
     ):
         if canvas in position:
-            zones[analysis].append({"canvas": position[canvas], "shape": shape})
+            zones[analysis].append(
+                {"canvas": position[canvas], "shape": shape, "feature": feature}
+            )
     techniques = {}
     analyses = []
     for row in rows:
@@ -1982,12 +1982,18 @@ def permalink(resource_id):
     return f"{settings.PUBLIC_SERVER_ADDRESS}report/{resource_id}"
 
 
+MULTILINGUAL_PRODUCTS = frozenset({"iiif-v3-explorer-manifest"})
+
+
 def product_path(route, query, language):
     """Path on this site of the language-neutral product *route* for the scope *query* in *language*.
 
     *query* is an URL-encoded ``ExportScope.query`` (``ids=…``,
-    ``document=…``, ``project=…`` and their flags); ``lang`` is appended.
+    ``document=…``, ``project=…`` and their flags); ``lang`` is appended,
+    except to a product carrying every language (``MULTILINGUAL_PRODUCTS``).
     """
+    if route in MULTILINGUAL_PRODUCTS:
+        return f"{reverse(route)}?{query}"
     return f"{reverse(route)}?{query}&{urlencode({'lang': language})}"
 
 
@@ -2034,11 +2040,45 @@ def _analysis_manifest(analysis_id, language):
     return product_url("iiif-v3-explorer-manifest", query, language)
 
 
+def content_states(analysis_id, document_id, user):
+    """``ContentStateLink`` of each zone of *analysis_id* on a canvas of its document's manifest, in feature order.
+
+    Zones are read from the nodegroups *user* may read; a zone on a canvas
+    the manifest does not list has none.
+    """
+    values = Values([document_id], ["doc_manifest"], user)
+    url = rewrite_legacy_url(values.first(document_id, "doc_manifest") or "")
+    canvases = canvases_of(manifest_json(url)) if url else []
+    listed = {canvas["id"] for canvas in canvases}
+    features = sorted(
+        {
+            feature
+            for _, feature, canvas, _ in annotation_features(
+                role_node(*ROLES["zone"]),
+                [analysis_id],
+                canvas_index(canvases),
+                readable_nodegroup_ids(user),
+            )
+            if canvas in listed and feature
+        }
+    )
+    return [
+        {
+            "feature": feature,
+            "url": content_state_url(analysis_id, feature),
+            "download": content_state_url(analysis_id, feature, download=True),
+        }
+        for feature in features
+    ]
+
+
 def analysis_payload(analysis_id, user, language):
     """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible.
 
     A linked resource that no longer exists is left out of the references.
-    ``manifest`` is None when the analysis places no canvas.
+    ``manifest`` is None when the analysis places no canvas;
+    ``contentStates`` lists the published Content State of each of its
+    located zones (``content_states``), none without a manifest.
     """
     bundle = corpus_bundle(user, language)
     visible = bundle.visible
@@ -2107,6 +2147,7 @@ def analysis_payload(analysis_id, user, language):
     end = values.first(analysis_id, "end")
     end = _date(end) if isinstance(end, str) else None
     files = analysis_files(analysis_id, user, language)
+    manifest = _analysis_manifest(analysis_id, language)
     dataset = dataset_of(values.first(analysis_id, "dataset"))
     citation = citation_entry(
         dataset,
@@ -2145,7 +2186,10 @@ def analysis_payload(analysis_id, user, language):
         ],
         "citation": shown_citation(citation),
         "availability": citation["availability"],
-        "manifest": _analysis_manifest(analysis_id, language),
+        "manifest": manifest,
+        "contentStates": (
+            content_states(analysis_id, document, user) if manifest else []
+        ),
         "permalink": permalink(analysis_id),
         "reportUrl": report_url(analysis_id, language),
         "certaintyScale": certainty_scale(language),

@@ -11,7 +11,8 @@ none.
 
 *kind* ``analysis`` pages hold the analyses (``supplementing``),
 ``characterization`` pages the identified materials (``classifying``); each
-kind is its own collection.
+kind is its own collection. ``page_reference`` names a page without its
+items, as a manifest's canvas lists it.
 """
 
 from manuspectrum.iiif import ids
@@ -60,7 +61,33 @@ def _name(doc):
 
 
 def collection_label(doc, kind="analysis"):
-    return lang.gettext_map(LABELS[kind][0], name=_name(doc))
+    return named_collection_label(_name(doc), kind)
+
+
+def named_collection_label(name, kind="analysis"):
+    """« Analyses of <name> » (or « Identified materials of <name> ») in every language."""
+    return lang.gettext_map(LABELS[kind][0], name=name)
+
+
+def page_label(name, canvas_label, kind="analysis"):
+    """« Analyses of <name>, <canvas> » (or « Identified materials of … ») in every language."""
+    return lang.gettext_map(LABELS[kind][1], name=name, canvas=canvas_label)
+
+
+def page_reference(document_id, name, n, canvas_label, kind="analysis", only=None):
+    """Page *n* of the collection of *kind* of *document_id* (named *name*), by reference: id, label and ``partOf``."""
+    return {
+        "id": ids.page(document_id, n, kind, only=only),
+        "type": "AnnotationPage",
+        "label": page_label(name or lang.none(document_id), canvas_label, kind),
+        "partOf": [
+            {
+                "id": ids.collection(document_id, kind),
+                "type": "AnnotationCollection",
+                "label": named_collection_label(name or lang.none(document_id), kind),
+            }
+        ],
+    }
 
 
 def annotations_by_page(doc, kind="analysis"):
@@ -85,11 +112,7 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
     page.update(
         id=ids.page(doc.document_id, n, kind, only=only),
         type="AnnotationPage",
-        label=lang.gettext_map(
-            LABELS[kind][1],
-            name=_name(doc),
-            canvas=doc.canvas_labels[n - 1] or str(n),
-        ),
+        label=page_label(_name(doc), doc.canvas_labels[n - 1] or str(n), kind),
         partOf=[
             {
                 "id": ids.collection(doc.document_id, kind),

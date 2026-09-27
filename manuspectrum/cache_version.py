@@ -56,6 +56,8 @@ CACHE_SHAPE_MODULES = (
     "iiif/v2.py",
     "iiif/memo.py",
     "views/iiif/annotations.py",
+    # The memoised Content State of one zone.
+    "iiif/content_state.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

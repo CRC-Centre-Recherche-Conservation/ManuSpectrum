@@ -16,7 +16,7 @@ from django.contrib.auth.models import Group, User
 from django.http import QueryDict
 from django.test import SimpleTestCase
 
-from arches.app.models.models import NodeGroup
+from arches.app.models.models import NodeGroup, TileModel
 from arches.app.utils.permission_backend import assign_perm
 
 from tests.explorer_contract import assert_shape
@@ -180,6 +180,17 @@ MANIFEST_JSON = {
     ],
 }
 FETCH = "manuspectrum.utils.iiif_tools.CanvasIIIF.fetch_manifest"
+
+
+def feature_of(analysis):
+    """The feature id of the one zone the fixture stored for *analysis*."""
+    for data in TileModel.objects.filter(resourceinstance=analysis).values_list(
+        "data", flat=True
+    ):
+        for value in (data or {}).values():
+            if isinstance(value, dict) and value.get("type") == "FeatureCollection":
+                return value["features"][0]["id"]
+    return None
 
 
 class CorpusCase(ServiceCase):
@@ -387,6 +398,15 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual(payload["techniques"][XRF]["label"]["value"], "Portable XRF")
         self.assertEqual([z["canvas"] for z in mine["zones"]], [0])
         self.assertEqual(mine["zones"][0]["shape"]["type"], "point")
+
+    def test_zones_carry_their_feature(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        mine = self.by_id(payload)[str(self.analyses["open"].pk)]
+        self.assertEqual(
+            [z["feature"] for z in mine["zones"]],
+            [feature_of(self.analyses["open"])],
+        )
 
     def test_the_payload_is_the_same_whatever_the_filters(self):
         plain = self.get(self.documents["open"].pk)
@@ -717,9 +737,71 @@ class AnalysisRouteTests(CorpusCase):
         self.assertEqual(
             english,
             f"{settings.PUBLIC_SERVER_ADDRESS}iiif/v3/explorer-manifest"
-            f"?ids=an:{analysis}:-&lang=en",
+            f"?ids=an:{analysis}:-",
         )
-        self.assertTrue(french["manifest"].endswith("&lang=fr"))
+        self.assertEqual(french["manifest"], english)
+
+    def test_the_analysis_lists_one_content_state_per_located_zone(self):
+        analysis = str(self.analyses["open"].pk)
+
+        payload = self.get(analysis).json()
+
+        state = (
+            f"{settings.PUBLIC_SERVER_ADDRESS}iiif/v3/content-state/"
+            f"{analysis}/{feature_of(self.analyses['open'])}"
+        )
+        self.assertEqual(
+            payload["contentStates"],
+            [
+                {
+                    "feature": feature_of(self.analyses["open"]),
+                    "url": state,
+                    "download": f"{state}?download=1",
+                }
+            ],
+        )
+        for entry in payload["contentStates"]:
+            assert_shape(self, entry, "ContentStateLink")
+
+    def test_a_native_instrument_file_without_configuration_plots(self):
+        self.tile(
+            self.analyses["on_document"],
+            "measurement_point_data",
+            [
+                {
+                    "file_id": "33333333-3333-4333-8333-333333333333",
+                    "name": "FORS_009.asd",
+                    "size": 900,
+                    "type": "",
+                    "url": "/files/33333333-3333-4333-8333-333333333333",
+                },
+                {
+                    "file_id": "44444444-4444-4444-8444-444444444444",
+                    "name": "FORS_009.spa",
+                    "size": 900,
+                    "type": "",
+                    "url": "/files/44444444-4444-4444-8444-444444444444",
+                },
+            ],
+        )
+
+        payload = self.get(self.analyses["on_document"].pk).json()
+
+        files = {f["name"]: f for f in payload["files"]}
+        self.assertEqual(
+            (files["FORS_009.asd"]["role"], files["FORS_009.asd"]["dataKind"]),
+            ("readable", "xy"),
+        )
+        self.assertTrue(files["FORS_009.asd"]["previewUrl"])
+        self.assertEqual(
+            (files["FORS_009.spa"]["role"], files["FORS_009.spa"]["dataKind"]),
+            ("raw", "file"),
+        )
+
+    def test_an_analysis_without_a_located_zone_lists_no_content_state(self):
+        payload = self.get(self.analyses["embargoed"].pk).json()
+
+        self.assertEqual(payload["contentStates"], [])
 
     def test_an_analysis_placing_no_canvas_names_no_manifest(self):
         payload = self.get(self.analyses["embargoed"].pk).json()

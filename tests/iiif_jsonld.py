@@ -8,13 +8,19 @@ Vendored contexts (``tests/fixtures/iiif/``), fetched on 2026-09-27:
   sha256 eddeaea362c44fe7ae4a2eed8446214e4e228d3eea48ec509a8a9b1b824027cd
 - ``auth-1-context.json`` — http://iiif.io/api/auth/1/context.json,
   sha256 961b3cda21b5c425a708ee9a3169727d9df9da993d65e255d9302f14fbf2bc7d
+- ``anno-context.json`` — http://www.w3.org/ns/anno.jsonld (the Web Annotation
+  context Presentation 3 scopes on ``Annotation``), fetched on 2026-09-27,
+  sha256 c10fd886c5c726fbfd51747b8677eb8f7d02c039357269622de7382e5c20d410
 
 The processor is PyLD 1.0.5, the version Arches pins. It resolves every
 nested context URL before expanding and refuses the Presentation 3 context
 (which reaches the Image 3 context, which reaches Presentation 3 again), so
 documents are expanded here under our extension context alone; that
 Presentation 3 terms are left untouched is checked on the vendored context's
-terms instead.
+terms instead. ``expand_presentation`` expands a Presentation 3 document under
+the vendored Presentation 3 and Web Annotation contexts, every other context
+it names (Image, Search, Auth, selector registry) read as empty: the terms
+those define do not expand.
 """
 
 import json
@@ -52,3 +58,21 @@ def loader(url, options=None):
 
 def expand(document):
     return jsonld.expand(document, {"documentLoader": loader})
+
+
+PRESENTATION_3 = "http://iiif.io/api/presentation/3/context.json"
+ANNOTATION = "http://www.w3.org/ns/anno.jsonld"
+
+
+def presentation_loader(url, options=None):
+    """PyLD document loader serving the vendored Presentation 3 and Web Annotation contexts; any other is empty."""
+    documents = {
+        PRESENTATION_3: "presentation-3-context.json",
+        ANNOTATION: "anno-context.json",
+    }
+    document = vendored(documents[url]) if url in documents else {"@context": {}}
+    return {"contextUrl": None, "documentUrl": url, "document": document}
+
+
+def expand_presentation(document):
+    return jsonld.expand(document, {"documentLoader": presentation_loader})

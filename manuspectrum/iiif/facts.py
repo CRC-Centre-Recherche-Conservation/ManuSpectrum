@@ -443,11 +443,13 @@ def _characterization_ids(slug, subject, document, visible, readable):
     )
 
 
-def document_facts(resource_id, reader, only=None, kind="analysis"):
+def document_facts(resource_id, reader, only=None, kind="analysis", read=None):
     """``DocumentFacts`` of a Document or Component for *reader*; None when unknown or unreadable.
 
     *kind* ``analysis`` fills ``analyses``, ``characterization`` fills
     ``characterizations``; *only*, a set of resource ids, keeps those alone.
+    *read* reads the source manifest by URL (a caller's memoised reader),
+    else ``manifest_json``.
     """
     visible = visible_set(reader)
     subject = _subject(resource_id, reader, visible)
@@ -475,6 +477,7 @@ def document_facts(resource_id, reader, only=None, kind="analysis"):
         visible,
         readable,
         characterization_ids,
+        read=read,
     )
 
 
@@ -662,6 +665,7 @@ def _build(
     visible,
     readable,
     characterization_ids=(),
+    read=None,
 ):
     doc_tiles = _tiles([document], ["doc_manifest"], readable)[document]
     url = next(
@@ -671,7 +675,7 @@ def _build(
         ),
         "",
     )
-    listed = canvases_of(manifest_json(url)) if url else []
+    listed = canvases_of((read or manifest_json)(url)) if url else []
     position = {c["id"]: n for n, c in enumerate(listed, start=1)}
     dims = canvas_index(listed)
 

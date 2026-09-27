@@ -9,7 +9,7 @@ list of ``{"@value", "@language"}`` objects.
 
 from django.conf import settings
 from django.utils import translation
-from django.utils.translation import gettext
+from django.utils.translation import gettext, ngettext
 
 LanguageMap = dict[str, list[str]]
 NONE = "none"
@@ -87,6 +87,23 @@ def gettext_map(msgid, **params):
         if params:
             text = text % {key: text_in(value, lang) for key, value in params.items()}
         rendered[lang] = [text]
+    return rendered
+
+
+def _filled(text, params, lang):
+    return text % {
+        key: value if isinstance(value, int) else text_in(value, lang)
+        for key, value in params.items()
+    }
+
+
+def ngettext_map(singular, plural, number, **params):
+    """``ngettext`` of *number* rendered in every configured language, filled per language as ``gettext_map`` fills it; integers stay as they are."""
+    rendered = {}
+    for lang in languages():
+        with translation.override(lang):
+            text = ngettext(singular, plural, number)
+        rendered[lang] = [_filled(text, params, lang)]
     return rendered
 
 

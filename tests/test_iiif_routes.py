@@ -39,6 +39,7 @@ ROUTE_NAMES = (
     "iiif-xy-reading-context",
     "iiif-xy-reading-doc",
     "iiif-xy-reading-schema",
+    "iiif-v3-content-state",
 )
 
 
@@ -109,9 +110,11 @@ class LegacyUrlTests(RouteCase):
             (ids.xy_context(), "iiif-xy-reading-context"),
             (ids.xy_doc(), "iiif-xy-reading-doc"),
             (ids.xy_schema(), "iiif-xy-reading-schema"),
+            (ids.content_state(analysis, feature), "iiif-v3-content-state"),
+            (ids.content_state(analysis, feature, True), "iiif-v3-content-state"),
         ):
             with self.subTest(url=url):
-                self.assertEqual(resolve(path_of(url)).url_name, name)
+                self.assertEqual(resolve(path_of(url.split("?")[0])).url_name, name)
 
     def test_the_routes_are_language_neutral(self):
         for name in ROUTE_NAMES:
@@ -127,7 +130,7 @@ class LegacyUrlTests(RouteCase):
             return (FEATURES["open"],)
         if name.endswith("page"):
             return (self.doc(), 1)
-        if name.endswith("zone"):
+        if name.endswith("zone") or name.endswith("content-state"):
             return (self.doc(), FEATURES["open"])
         return (self.doc(),)
 

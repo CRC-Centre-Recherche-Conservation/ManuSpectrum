@@ -79,6 +79,7 @@ NOT_SHAPING = {
     "views/explorer/conditions.py": "conditions and notes of per-request payloads",
     "views/explorer/scopes.py": "the analysis payload's manifest link, never memoised",
     "views/explorer/manifest.py": "the analysis payload's manifest link, never memoised",
+    "iiif/manifest.py": "the Explorer manifest, built per request, never memoised",
 }
 
 

@@ -208,7 +208,7 @@ class ShareRouteTests(CorpusCase):
             whole["export"],
             {"files": 2, "bytes": 40 + 9, "overLimit": False, "documents": []},
         )
-        self.assertEqual(whole["scope"]["spectra"], 1)
+        self.assertEqual(whole["scope"]["spectra"], 2)
         self.assertEqual(
             (narrowed["export"]["files"], narrowed["export"]["bytes"]), (1, 40)
         )
@@ -389,7 +389,7 @@ class ShareRouteTests(CorpusCase):
 
         for name, path in (
             ("seriesCsv", f"/api/explorer/series.csv{query}"),
-            ("manifest", f"/iiif/v3/explorer-manifest{query}"),
+            ("manifest", f"/iiif/v3/explorer-manifest?ids=an:{self.pk('open')}:-"),
             ("export", f"/api/explorer/export{query}"),
         ):
             with self.subTest(link=name):
@@ -455,9 +455,10 @@ class ShareRouteTests(CorpusCase):
                 with self.subTest(link=name, form=form):
                     parts = urlsplit(payload["links"][name][form])
                     self.assertEqual(parts.fragment, "")
-                    self.assertEqual(
-                        parse_qs(parts.query), {"ids": [key], "lang": ["en"]}
-                    )
+                    expected = {"ids": [key]}
+                    if name != "manifest":
+                        expected["lang"] = ["en"]
+                    self.assertEqual(parse_qs(parts.query), expected)
 
     def test_the_payload_is_in_the_request_language(self):
         query = f"ids=an:{self.pk('on_document')}:-"
@@ -467,8 +468,9 @@ class ShareRouteTests(CorpusCase):
         self.assertTrue(
             french["availability"].startswith("Les données sont disponibles")
         )
-        self.assertTrue(french["links"]["manifest"]["url"].endswith("&lang=fr"))
-        self.assertTrue(french["links"]["manifest"]["path"].endswith("&lang=fr"))
+        self.assertNotIn("lang=", french["links"]["manifest"]["url"])
+        self.assertTrue(french["links"]["export"]["url"].endswith("&lang=fr"))
+        self.assertTrue(french["links"]["export"]["path"].endswith("&lang=fr"))
 
 
 class ShareCostTests(CorpusCase):

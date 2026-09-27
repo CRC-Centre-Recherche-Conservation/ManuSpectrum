@@ -27,6 +27,7 @@ from manuspectrum.views.iiif.context import (
     XYReadingDocView,
     XYReadingSchemaView,
 )
+from manuspectrum.views.iiif.content_state import ContentStateView
 from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
 from manuspectrum.views.iiif.annotations import (
     AnnotationView,
@@ -485,6 +486,15 @@ for version, collection, page, annotation, materials, materials_page in (
             name=f"iiif-v{version}-characterization-page",
         ),
     ]
+
+### IIIF Content State 1.0 of one analysis or identified-material zone.
+urlpatterns.append(
+    path(
+        "iiif/v3/content-state/<uuid:resource_id>/<uuid:feature_id>",
+        ContentStateView.as_view(),
+        name="iiif-v3-content-state",
+    )
+)
 
 ### IIIF data and the xyReading extension.
 ###

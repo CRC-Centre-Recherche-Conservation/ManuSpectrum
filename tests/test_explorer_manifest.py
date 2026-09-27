@@ -10,10 +10,13 @@ from unittest import mock
 from urllib.parse import parse_qs, quote, urlsplit
 
 from django.conf import settings
+from django.http import QueryDict
 from django.test import override_settings
 
 from arches.app.models.models import IIIFManifest, TileModel
 
+from manuspectrum.views.explorer.manifest import build_manifest
+from manuspectrum.views.explorer.scopes import resolve_scope
 from tests.explorer_fixtures import CANVAS, MANIFEST
 from tests.iiif_schema import assert_valid_manifest
 from tests.test_explorer_api import FETCH, CorpusCase
@@ -107,13 +110,31 @@ class ManifestRouteTests(CorpusCase):
     def document_query(self):
         return f"document={self.documents['open'].pk}"
 
-    def annotations(self, manifest):
+    def references(self, manifest):
         return [
-            item
+            page
             for canvas in manifest["items"]
             for page in canvas.get("annotations", ())
-            for item in page["items"]
         ]
+
+    def annotations(self, manifest):
+        """The annotations of every page the canvases reference, dereferenced as the visitor."""
+        found = []
+        for page in self.references(manifest):
+            self.assertNotIn("items", page)
+            path = page["id"][len(settings.PUBLIC_SERVER_ADDRESS) - 1 :]
+            with mock.patch(FETCH, side_effect=fetched):
+                response = self.client.get(path)
+            self.assertEqual(response.status_code, 200, path)
+            found.extend(response.json()["items"])
+        return found
+
+    def page_url(self, n, only=(), kind="annotation-collection"):
+        url = (
+            f"{settings.PUBLIC_SERVER_ADDRESS}iiif/v3/{kind}/"
+            f"{self.documents['open'].pk}/page-{n}"
+        )
+        return f"{url}?only={','.join(sorted(only))}" if only else url
 
     def test_the_manifest_of_each_scope_is_valid_iiif(self):
         self.tile(
@@ -161,16 +182,52 @@ class ManifestRouteTests(CorpusCase):
         opened = next(a for a in annotations if a["label"]["en"] == ["X01 — f. 1v"])
         self.assertEqual(opened["motivation"], "supplementing")
         self.assertEqual(opened["target"]["source"]["id"], CANVAS)
-        self.assertEqual(opened["target"]["selector"]["type"], "PointSelector")
         self.assertEqual(
-            [b["id"] for b in opened["body"]],
-            [
-                f"{settings.PUBLIC_SERVER_ADDRESS}files/11111111-1111-4111-8111-111111111111",
-                f"{settings.PUBLIC_SERVER_ADDRESS}files/22222222-2222-4222-8222-222222222222",
-            ],
+            [s["type"] for s in opened["target"]["selector"]],
+            ["PointSelector", "SvgSelector"],
         )
 
-    def test_a_material_zone_is_a_describing_annotation(self):
+    def test_canvases_reference_the_pages_of_their_document(self):
+        manifest = self.manifest(self.document_query())
+
+        (canvas,) = manifest["items"]
+        (reference,) = canvas["annotations"]
+        self.assertEqual(reference["id"], self.page_url(1))
+        self.assertEqual(reference["type"], "AnnotationPage")
+        self.assertEqual(reference["label"]["en"], ["Analyses of Ms 59, f. 1v"])
+        self.assertEqual(
+            reference["partOf"],
+            [
+                {
+                    "id": self.page_url(1).rsplit("/", 1)[0],
+                    "type": "AnnotationCollection",
+                    "label": reference["partOf"][0]["label"],
+                }
+            ],
+        )
+        self.assertNotIn("items", reference)
+
+    def test_a_selection_references_filtered_pages(self):
+        manifest = self.manifest(f"ids=an:{self.pk('open')}:-")
+
+        (reference,) = manifest["items"][0]["annotations"]
+        self.assertEqual(reference["id"], self.page_url(1, [self.pk("open")]))
+        (annotation,) = self.annotations(manifest)
+        self.assertEqual(annotation["label"]["en"], ["X01 — f. 1v"])
+
+    @override_settings(IIIF_PAGE_FILTER_MAX=0)
+    def test_a_scope_over_the_filter_limit_references_the_canonical_page(self):
+        for query in (
+            f"ids=an:{self.pk('open')}:-",
+            f"project={self.projects['main'].pk}",
+        ):
+            with self.subTest(query=query):
+                manifest = self.manifest(query)
+
+                (reference,) = manifest["items"][0]["annotations"]
+                self.assertEqual(reference["id"], self.page_url(1))
+
+    def test_a_material_zone_references_the_identified_materials_page(self):
         self.tile(
             self.characterization,
             "location_of_characterization",
@@ -180,16 +237,26 @@ class ManifestRouteTests(CorpusCase):
         manifest = self.manifest(f"ids=ch:{self.characterization.pk}:-")
 
         self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
-        (describing,) = self.annotations(manifest)
-        self.assertEqual(describing["motivation"], "describing")
+        (reference,) = manifest["items"][0]["annotations"]
         self.assertEqual(
-            describing["body"],
-            {
-                "type": "TextualBody",
-                "value": "Azurite",
-                "format": "text/plain",
-                "language": "en",
-            },
+            reference["id"].split("?")[0],
+            self.page_url(1, kind="characterization-collection"),
+        )
+        (classifying,) = self.annotations(manifest)
+        self.assertEqual(classifying["motivation"], "classifying")
+
+    def test_the_zip_manifest_embeds_the_visitor_pages_and_is_valid(self):
+        with mock.patch(FETCH, side_effect=fetched):
+            scope = resolve_scope(QueryDict(self.document_query()), "en")
+            manifest = build_manifest(scope, embed=True)
+
+        assert_valid_manifest(self, manifest)
+        (page,) = manifest["items"][0]["annotations"]
+        self.assertEqual(page["id"], self.page_url(1))
+        self.assertNotIn("@context", page)
+        self.assertEqual(
+            sorted(a["label"]["en"][0] for a in page["items"]),
+            sorted(["X01 — f. 1v", "FORS_009 — f. 1v", "X03 — draft"]),
         )
 
     def test_a_local_manifest_is_read_from_the_database_not_over_http(self):
@@ -205,14 +272,16 @@ class ManifestRouteTests(CorpusCase):
             response = self.client.get(
                 f"/iiif/v3/explorer-manifest?{self.document_query()}"
             )
+            manifest = response.json()
+            annotations = self.annotations(manifest)
 
         fetch.assert_not_called()
-        manifest = response.json()
         self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
         assert_valid_manifest(self, manifest)
         absolute = f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{stored.globalid}"
         self.assertEqual(manifest["items"][0]["partOf"][0]["id"], absolute)
-        for annotation in self.annotations(manifest):
+        self.assertTrue(annotations)
+        for annotation in annotations:
             self.assertEqual(
                 annotation["target"]["source"]["partOf"][0]["id"], absolute
             )
@@ -223,6 +292,7 @@ class ManifestRouteTests(CorpusCase):
         )
 
         (unlocated,) = manifest["metadata"]
+        self.assertEqual(unlocated["label"]["fr"], ["Sans position sur l'image"])
         self.assertEqual(
             unlocated["value"]["en"],
             [
@@ -252,6 +322,7 @@ class ManifestRouteTests(CorpusCase):
         for layer in manifest["items"][1:]:
             self.assertEqual(layer["partOf"], [{"id": IMAGING, "type": "Manifest"}])
         ranges = {r["label"]["en"][0]: r for r in manifest["structures"]}
+        self.assertEqual(ranges["X01 — f. 1v"]["label"], {"en": ["X01 — f. 1v"]})
         self.assertEqual(
             [i["id"] for i in ranges["X01 — f. 1v"]["items"]], list(LAYERS)
         )
@@ -266,11 +337,12 @@ class ManifestRouteTests(CorpusCase):
                 {
                     "id": manifest["structures"][0]["id"],
                     "type": "Range",
-                    "label": {"en": ["Ms 59"]},
+                    "label": manifest["structures"][0]["label"],
                     "items": [{"id": CANVAS, "type": "Canvas"}],
                 }
             ],
         )
+        self.assertEqual(manifest["structures"][0]["label"]["en"], ["Ms 59"])
         self.assertTrue(
             manifest["structures"][0]["id"].startswith(
                 f"{settings.PUBLIC_SERVER_ADDRESS}iiif/v3/explorer-manifest/"
@@ -283,11 +355,15 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(
             manifest["id"],
             f"{settings.PUBLIC_SERVER_ADDRESS}iiif/v3/explorer-manifest"
-            f"?{self.document_query()}&lang=en",
+            f"?{self.document_query()}",
         )
+        doc = self.documents["open"].pk
         self.assertEqual(
-            manifest["homepage"][0]["id"],
-            f"{settings.PUBLIC_SERVER_ADDRESS}en/discover?doc={self.documents['open'].pk}",
+            [(h["id"], h["language"]) for h in manifest["homepage"]],
+            [
+                (f"{settings.PUBLIC_SERVER_ADDRESS}en/discover?doc={doc}", ["en"]),
+                (f"{settings.PUBLIC_SERVER_ADDRESS}fr/discover?doc={doc}", ["fr"]),
+            ],
         )
 
     def test_the_id_and_homepage_encode_a_key_carrying_url_delimiters(self):
@@ -298,26 +374,37 @@ class ManifestRouteTests(CorpusCase):
         manifest_id = urlsplit(manifest["id"])
         homepage = urlsplit(manifest["homepage"][0]["id"])
         self.assertEqual(manifest_id.fragment, "")
-        self.assertEqual(parse_qs(manifest_id.query), {"ids": [key], "lang": ["en"]})
+        self.assertEqual(parse_qs(manifest_id.query), {"ids": [key]})
         self.assertEqual(homepage.fragment, "")
         self.assertEqual(parse_qs(homepage.query), {"sel": [key]})
 
-    def test_labels_follow_lang(self):
-        query = f"ids=an:{self.pk('open')}:-"
+    def test_the_manifest_carries_every_language_in_one_response(self):
+        manifest = self.manifest(f"ids=an:{self.pk('open')}:-")
 
-        english = self.manifest(query)
-        french = self.manifest(f"{query}&lang=fr")
+        self.assertEqual(
+            manifest["label"],
+            {
+                "en": ["Selection of 1 page of Ms 59"],
+                "fr": ["Sélection de 1 folio de Ms 59"],
+            },
+        )
+        (reference,) = manifest["items"][0]["annotations"]
+        self.assertEqual(set(reference["label"]), {"en", "fr"})
 
-        self.assertEqual(english["label"], {"en": ["Selection of 1 page of Ms 59"]})
-        self.assertEqual(french["label"], {"fr": ["Sélection de 1 folio de Ms 59"]})
-        self.assertTrue(french["id"].endswith("&lang=fr"))
-        (annotation,) = self.annotations(french)
-        self.assertIn(
-            "Technique", [m["label"]["fr"][0] for m in annotation["metadata"]]
-        )
-        self.assertIn(
-            "Opérateurs", [m["label"]["fr"][0] for m in annotation["metadata"]]
-        )
+    def test_lang_redirects_to_the_canonical_url(self):
+        doc = self.documents["open"].pk
+        for query, canonical in (
+            (f"document={doc}&lang=fr", f"document={doc}"),
+            (f"lang=en&canvases=all&document={doc}", f"document={doc}&canvases=all"),
+            (f"lang=xx&ids=an:{self.pk('open')}:-", f"ids=an:{self.pk('open')}:-"),
+        ):
+            with self.subTest(query=query):
+                response = self.get(query)
+
+                self.assertEqual(response.status_code, 301)
+                self.assertEqual(
+                    response["Location"], f"/iiif/v3/explorer-manifest?{canonical}"
+                )
 
     def test_several_documents_are_named_by_their_count(self):
         manifest = self.manifest(
@@ -325,16 +412,16 @@ class ManifestRouteTests(CorpusCase):
         )
 
         self.assertEqual(
-            manifest["label"], {"en": ["Selection of 1 page of 2 documents"]}
+            manifest["label"]["en"], ["Selection of 1 page of 2 documents"]
         )
 
     def test_a_project_manifest_is_named_by_its_project(self):
         manifest = self.manifest(f"project={self.projects['main'].pk}")
 
-        self.assertEqual(manifest["label"], {"en": ["EMMA"]})
+        self.assertEqual(manifest["label"]["en"], ["EMMA"])
 
-    def test_an_unknown_lang_is_a_bad_request_without_body(self):
-        for query in (f"{self.document_query()}&lang=xx", "lang=en", "ids="):
+    def test_malformed_scopes_are_a_bad_request_without_body(self):
+        for query in ("lang=en", "ids=", f"{self.document_query()}&canvases=some"):
             with self.subTest(query=query):
                 response = self.get(query)
 
@@ -393,7 +480,8 @@ class ManifestRouteTests(CorpusCase):
         default = self.manifest(self.document_query())
         open_only = self.manifest(f"ids=an:{self.pk('on_document')}:-")
 
-        self.assertEqual(default["summary"], {"en": ["Contains drafts"]})
+        self.assertEqual(default["summary"]["en"], ["Contains drafts"])
+        self.assertEqual(default["summary"]["fr"], ["Contient des brouillons"])
         self.assertNotIn("X01 — f. 1v", json.dumps(default, ensure_ascii=False))
         self.assertNotIn("summary", open_only)
 
@@ -423,13 +511,12 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(response.content, b"")
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)
-    def test_too_many_folios_are_refused_before_files_and_facts_are_read(self):
+    def test_too_many_folios_are_refused_before_names_and_pages_are_built(self):
         self.refused_early(
             self.document_query(),
-            "analysis_files",
-            "_facts",
+            "names_of",
             "v3_canvas",
-            "data_annotation",
+            "canvas_annotations",
         )
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=2)
@@ -438,10 +525,9 @@ class ManifestRouteTests(CorpusCase):
 
         self.refused_early(
             self.document_query(),
-            "analysis_files",
-            "_facts",
+            "names_of",
             "v3_canvas",
-            "data_annotation",
+            "canvas_annotations",
         )
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=3)

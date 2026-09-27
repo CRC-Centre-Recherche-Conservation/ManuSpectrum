@@ -246,13 +246,30 @@ class SeriesCsvTests(CorpusCase):
         self.assertEqual(list(frame.columns), list(HEADER))
         self.assertEqual(len(frame), 4)
 
-    def test_a_raw_instrument_file_is_never_read(self):
+    def test_the_raw_twin_of_a_readable_spectrum_is_never_read(self):
+        self.spectrum(name="Z.csv")
         self.stored_file(self.analyses["on_document"], "Z.mca", b"1,2\n3,4\n")
 
-        with mock.patch("manuspectrum.views.explorer.series.read_series") as read:
+        with mock.patch(
+            "manuspectrum.views.explorer.series.read_series", return_value=None
+        ) as read:
             self.text(self.selection("on_document"))
 
-        read.assert_not_called()
+        self.assertEqual(
+            [c.args[0].rsplit("/", 1)[-1] for c in read.call_args_list], ["Z.csv"]
+        )
+
+    def test_a_native_instrument_file_without_twin_is_read(self):
+        self.stored_file(self.analyses["on_document"], "Z.mca", b"1,2\n3,4\n")
+
+        with mock.patch(
+            "manuspectrum.views.explorer.series.read_series", return_value=None
+        ) as read:
+            self.text(self.selection("on_document"))
+
+        self.assertEqual(
+            [c.args[0].rsplit("/", 1)[-1] for c in read.call_args_list], ["Z.mca"]
+        )
 
     def test_a_file_over_the_preview_ceiling_is_named_not_read(self):
         file_id = self.spectrum(name="Big.csv")
