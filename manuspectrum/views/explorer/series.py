@@ -178,7 +178,8 @@ def _plan(scope):
                 )
                 continue
             config_id = (entry.get("viewer") or {}).get("rendererConfigId")
-            config = configs.get(config_id) or {}
+            stored = configs.get(config_id)
+            config = stored.config if stored else {}
             number = len(curves) + 1
             per_curve.append(
                 _curve_line(number, name, entry, entries, config, config_id)

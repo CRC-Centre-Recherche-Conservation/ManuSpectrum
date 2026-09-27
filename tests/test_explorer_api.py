@@ -671,6 +671,11 @@ class AnalysisRouteTests(CorpusCase):
             ("readable", "22222222-2222-4222-8222-222222222222"),
         )
         self.assertEqual(roles["X01_f1v.mca"][0], "raw")
+        viewers = {f["name"]: f["viewer"] for f in payload["files"]}
+        self.assertEqual(viewers["X01_f1v.csv"]["presetKey"], "xrf")
+        self.assertEqual(viewers["X01_f1v.csv"]["configName"], "XRF — energy / counts")
+        self.assertIsNone(viewers["X01_f1v.mca"]["presetKey"])
+        self.assertIsNone(viewers["X01_f1v.mca"]["configName"])
         self.assertEqual(
             payload["conditions"],
             [{"type": None, "html": "<p>260 µm / 100 ms</p>", "lang": "en"}],
@@ -910,6 +915,11 @@ class ItemsRouteTests(CorpusCase):
         self.assertEqual([f["id"] for f in item["files"]], [self.CSV])
         for entry in item["files"]:
             assert_shape(self, entry, "FileEntry")
+        viewer = item["files"][0]["viewer"]
+        self.assertEqual(
+            (viewer["presetKey"], viewer["configName"]),
+            ("xrf", "XRF — energy / counts"),
+        )
 
     def test_an_analysis_with_nothing_to_show_is_still_an_item(self):
         key = f"an:{self.analyses['on_document'].pk}:-"
