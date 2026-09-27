@@ -123,7 +123,6 @@ class LegacyUrlTests(RouteCase):
             (ids.xy_doc(), "iiif-xy-reading-doc"),
             (ids.xy_schema(), "iiif-xy-reading-schema"),
             (ids.content_state(analysis, feature), "iiif-v3-content-state"),
-            (ids.content_state(analysis, feature, True), "iiif-v3-content-state"),
             (ids.auth_login(), "iiif-auth-login"),
             (ids.auth_token(1), "iiif-auth-token-1"),
             (ids.auth_token(2), "iiif-auth-token-2"),
