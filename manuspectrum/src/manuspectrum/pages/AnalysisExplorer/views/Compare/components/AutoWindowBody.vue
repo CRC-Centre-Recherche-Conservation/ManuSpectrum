@@ -2,7 +2,7 @@
 import MaterialsTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue";
 import MicroImageGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MicroImageGrid.vue";
 import NotInChartList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue";
-import XyCurveList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue";
+import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue";
 
 import type { AutoWindow } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
@@ -11,7 +11,7 @@ const props = defineProps<{ window: AutoWindow }>();
 </script>
 
 <template>
-    <XyCurveList
+    <XyWorkshop
         v-if="props.window.kind === 'xy'"
         :curves="props.window.curves"
     />

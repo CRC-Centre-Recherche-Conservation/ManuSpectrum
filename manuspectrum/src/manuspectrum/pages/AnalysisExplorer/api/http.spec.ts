@@ -300,4 +300,53 @@ describe("getSeries", () => {
         await expect(refused).rejects.toBeInstanceOf(ServiceError);
         await expect(refused).rejects.toMatchObject({ status: 413 });
     });
+
+    it("keeps the full series in the tab: a second window reads it without a request", async () => {
+        const series = {
+            x: [1],
+            y: [2],
+            n_source: 1,
+            decimated: false,
+            x_reversed: false,
+        };
+        fetchMock.mockResolvedValue(respond(200, series));
+        const url = "http://testserver/api/spectrum-preview/abc";
+
+        await getSeries(url, "full");
+        const again = await getSeries(url, "full");
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(again).toEqual(series);
+    });
+
+    it("asks for the full series again on reload", async () => {
+        fetchMock.mockResolvedValue(respond(200, { x: [], y: [] }));
+        const url = "http://testserver/api/spectrum-preview/abc";
+
+        await getSeries(url, "full");
+        await getSeries(url, "full", undefined, true);
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("reads a full series with nothing to draw as null", async () => {
+        fetchMock.mockResolvedValueOnce(respond(204));
+
+        expect(
+            await getSeries(
+                "http://testserver/api/spectrum-preview/abc",
+                "full",
+            ),
+        ).toBeNull();
+    });
+
+    it("asks the quick-view tiers each time", async () => {
+        fetchMock.mockResolvedValue(respond(200, { x: [], y: [] }));
+        const url = "http://testserver/api/spectrum-preview/abc";
+
+        await getSeries(url, 4096);
+        await getSeries(url, 4096);
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
 });

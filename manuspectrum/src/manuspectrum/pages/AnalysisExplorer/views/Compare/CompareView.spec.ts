@@ -14,6 +14,10 @@ import {
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { resetFakeGrids } from "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts";
+import {
+    plotly,
+    resetPlotly,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/plotly.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 import { LAYOUT_STORAGE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 
@@ -32,6 +36,12 @@ vi.mock("gridstack", async () =>
     ).gridstackModule(),
 );
 
+vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", async () =>
+    (
+        await import("@/manuspectrum/pages/AnalysisExplorer/testing/plotly.ts")
+    ).plotlyModule(),
+);
+
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     generateArchesURL: () => "/en/api/explorer/items",
 }));
@@ -41,11 +51,14 @@ const RAMAN = "intensity|raman shift|asc";
 const FORS = "reflectance|wavelength|asc";
 const FTIR = "reflectance|wavenumber|desc";
 
+const SERIES_PATH = "/api/spectrum-preview/";
+
 function spectrum(n: number, axisKey: string, extra = {}): FileEntry {
     const base = fileEntry();
     return fileEntry({
         id: uuid(700 + n),
         name: `S${n}.csv`,
+        previewUrl: `http://testserver${SERIES_PATH}${uuid(700 + n)}`,
         viewer: { ...base.viewer, axisKey, ...extra },
     });
 }
@@ -106,7 +119,17 @@ beforeEach(() => {
     forgetPayloads();
     window.localStorage.clear();
     announce = vi.fn();
+    resetPlotly();
     fetchMock = vi.fn(async (url: string) => {
+        if (url.startsWith(SERIES_PATH)) {
+            return jsonResponse({
+                x: [1, 2],
+                y: [3, 4],
+                n_source: 2,
+                decimated: false,
+                x_reversed: false,
+            });
+        }
         const keys = new URLSearchParams(url.split("?")[1]).getAll("ids");
         return jsonResponse({
             items: keys.flatMap((key) => ITEMS.get(key) ?? []),
@@ -126,6 +149,19 @@ afterEach(() => {
 
 function select(...items: Item[]): void {
     useExplorerStore().addManyToBasket(items.map((item) => item.key));
+}
+
+/** The requests of the items API, the spectra left out. */
+function itemCalls(): string[] {
+    return fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((url) => !url.startsWith(SERIES_PATH));
+}
+
+function seriesCalls(): string[] {
+    return fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((url) => url.startsWith(SERIES_PATH));
 }
 
 async function mountView(): Promise<VueWrapper> {
@@ -212,9 +248,11 @@ describe("CompareView", () => {
             "Identified materials",
             "Not in a chart",
         ]);
-        expect(windowOf(view, `auto:xy:${XRF}`).find(".curve").text()).toBe(
-            "A3 · S1.csv",
-        );
+        expect(
+            plotly.react.mock.calls.flatMap(([, traces]) =>
+                (traces as { name: string }[]).map((trace) => trace.name),
+            ),
+        ).toContain("A3 · S1.csv");
         expect(
             windowOf(view, "auto:micro").find("figcaption").text(),
         ).toContain("A4");
@@ -233,12 +271,25 @@ describe("CompareView", () => {
         expect(
             folded.find('[data-action="fold"]').attributes("aria-expanded"),
         ).toBe("false");
-        expect(folded.find(".xy-curve-list").exists()).toBe(false);
+        expect(folded.find(".xy-workshop").exists()).toBe(false);
         expect(
             windowOf(view, `auto:xy:${FORS}`)
                 .find('[data-action="fold"]')
                 .attributes("aria-expanded"),
         ).toBe("true");
+    });
+
+    it("reads the spectra of a folded XY window only once it is unfolded", async () => {
+        select(XRF_ITEM, RAMAN_ITEM, FORS_ITEM, FTIR_ITEM);
+        const view = await mountView();
+        const ftir = `${SERIES_PATH}${uuid(706)}?n=full`;
+        expect(seriesCalls()).toHaveLength(3);
+        expect(seriesCalls()).not.toContain(ftir);
+        await windowOf(view, `auto:xy:${FTIR}`)
+            .find('[data-action="fold"]')
+            .trigger("click");
+        await flushPromises();
+        expect(seriesCalls()).toContain(ftir);
     });
 
     it("hides a closed window without changing the Selection, and lists it to show it again", async () => {
@@ -367,13 +418,9 @@ describe("CompareView", () => {
             `auto:xy:${XRF}`,
             "auto:characterizations",
         ]);
-        expect(fetchMock).toHaveBeenCalledTimes(2);
-        expect(String(fetchMock.mock.calls[1][0])).toContain(
-            encodeURIComponent(MATERIAL.key),
-        );
-        expect(String(fetchMock.mock.calls[1][0])).not.toContain(
-            encodeURIComponent(XRF_ITEM.key),
-        );
+        expect(itemCalls()).toHaveLength(2);
+        expect(itemCalls()[1]).toContain(encodeURIComponent(MATERIAL.key));
+        expect(itemCalls()[1]).not.toContain(encodeURIComponent(XRF_ITEM.key));
     });
 
     it("arranges the windows at once from items the Selection panel already read", async () => {
@@ -383,6 +430,6 @@ describe("CompareView", () => {
         wrapper = null;
         const view = await mountView();
         expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(itemCalls()).toHaveLength(1);
     });
 });

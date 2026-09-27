@@ -86,7 +86,7 @@ function abortError(signal: AbortSignal): unknown {
     );
 }
 
-async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
+async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
     const response = await fetch(url, {
         credentials: "same-origin",
         headers: { Accept: "application/json" },
@@ -97,6 +97,9 @@ async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
     }
     if (!response.ok) {
         throw new ServiceError(response.status);
+    }
+    if (response.status === NO_CONTENT) {
+        return null;
     }
     return await response.json();
 }
@@ -277,26 +280,21 @@ export function forgetPayloads(): void {
  * rejects with a 413 `ServiceError`).
  * The preview URL of the payload is absolute on `PUBLIC_SERVER_ADDRESS`; only
  * its path is fetched, on the page's own origin. `null` means nothing to draw.
+ * The full series goes through the tab's memo like the Explorer payloads
+ * (`reload` replaces the entry); the tiers are asked each time.
  */
 export async function getSeries(
     previewUrl: string,
     n: 200 | 4096 | "full",
     signal?: AbortSignal,
+    reload = false,
 ): Promise<Series | null> {
     const path = new URL(previewUrl, window.location.origin).pathname;
-    const response = await fetch(`${path}?n=${n}`, {
-        credentials: "same-origin",
-        headers: { Accept: "application/json" },
-        signal,
-    });
-    if (response.status === NOT_FOUND) {
-        throw new UnavailableError();
+    const url = `${path}?n=${n}`;
+    if (n === "full") {
+        if (reload) memo.delete(url);
+        const entry = lookup(url) ?? start(url, false);
+        return wait<Series | null>(url, entry, signal);
     }
-    if (!response.ok) {
-        throw new ServiceError(response.status);
-    }
-    if (response.status === NO_CONTENT) {
-        return null;
-    }
-    return (await response.json()) as Series;
+    return (await fetchJson(url, signal)) as Series | null;
 }

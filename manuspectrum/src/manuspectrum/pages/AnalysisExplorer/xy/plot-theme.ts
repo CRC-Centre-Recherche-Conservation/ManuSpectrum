@@ -120,16 +120,23 @@ export const PLOT_CONFIG: Partial<Config> = {
     responsive: true,
 };
 
-/** Puts both axes back to their full range; a reversed x stays reversed. */
+/**
+ * Puts the axes of every panel back to their full range (`xaxis`, `yaxis`,
+ * then `xaxis2`, `yaxis2`… for small multiples); a reversed x stays reversed.
+ */
 export async function resetAxes(
     plotly: PlotlyLike,
     element: HTMLElement,
     xReversed: boolean,
+    panels = 1,
 ): Promise<void> {
-    await plotly.relayout(element, {
-        "xaxis.autorange": xReversed ? "reversed" : true,
-        "yaxis.autorange": true,
-    });
+    const update: Record<string, unknown> = {};
+    for (let panel = 1; panel <= panels; panel += 1) {
+        const suffix = panel === 1 ? "" : String(panel);
+        update[`xaxis${suffix}.autorange`] = xReversed ? "reversed" : true;
+        update[`yaxis${suffix}.autorange`] = true;
+    }
+    await plotly.relayout(element, update);
 }
 
 /** Resolves once the web fonts are loaded, so the first drawing measures Sora and JetBrains Mono. */

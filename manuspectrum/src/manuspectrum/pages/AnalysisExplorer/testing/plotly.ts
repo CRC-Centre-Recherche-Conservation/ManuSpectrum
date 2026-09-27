@@ -19,6 +19,10 @@ export const plotly = {
             undefined,
     ),
     purge: vi.fn((_element: HTMLElement) => undefined),
+    toImage: vi.fn(
+        async (_figure: unknown, _options: unknown) =>
+            "data:image/png;base64,AAAA",
+    ),
     Plots: {
         resize: vi.fn(async (_element: HTMLElement) => undefined),
     },
@@ -28,6 +32,7 @@ export function resetPlotly(): void {
     plotly.react.mockClear();
     plotly.relayout.mockClear();
     plotly.purge.mockClear();
+    plotly.toImage.mockClear();
     plotly.Plots.resize.mockClear();
 }
 
