@@ -554,7 +554,7 @@ function close(id: string): void {
 /**
  * Empties the saved layout, lets the parent bring hidden windows back, then
  * lays every window out again in its order, at its first size, and saves
- * that layout (on 12 columns).
+ * that layout (on 12 columns); the windows are told their new size.
  */
 async function rearrange(): Promise<void> {
     if (!grid) return;
@@ -581,6 +581,7 @@ async function rearrange(): Promise<void> {
     );
     saving = true;
     if (grid.getColumn() === GRID_COLUMNS) saveGrid();
+    scheduleResize();
     announce($gettext("Windows rearranged."));
 }
 </script>

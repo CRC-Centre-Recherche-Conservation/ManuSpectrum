@@ -1,10 +1,11 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
-import { nextTick } from "vue";
+import { nextTick, ref } from "vue";
 
 import NotInChartList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue";
 
+import { SCREEN_FOCUS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
@@ -169,5 +170,18 @@ describe("NotInChartList", () => {
             line(wrapper, 3).find(".action").element,
         );
         wrapper.unmount();
+    });
+
+    it("hands the focus to the Compare heading once the last item is taken out", async () => {
+        const headingFocus = ref(false);
+        const wrapper = mount(NotInChartList, {
+            props: { entries: ENTRIES.slice(4) },
+            global: {
+                plugins: [pinia],
+                provide: { [SCREEN_FOCUS_KEY as symbol]: headingFocus },
+            },
+        });
+        await line(wrapper, 0).find("button.action").trigger("click");
+        expect(headingFocus.value).toBe(true);
     });
 });

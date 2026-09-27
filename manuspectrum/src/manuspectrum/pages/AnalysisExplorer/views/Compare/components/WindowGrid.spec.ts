@@ -253,6 +253,22 @@ describe("WindowGrid", () => {
         expect(announce).toHaveBeenCalledWith("Windows rearranged.");
     });
 
+    it("tells the windows their new size once it has rearranged them", async () => {
+        vi.useFakeTimers();
+        wrapper = mount(WindowGrid, {
+            props: { windows: [XRF, MICRO] },
+            attachTo: document.body,
+            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
+            slots: { default: () => h(ResizeReader) },
+        });
+        await wrapper.find("button.rearrange").trigger("click");
+        await vi.advanceTimersByTimeAsync(300);
+        expect(wrapper.findAll(".tick").map((tick) => tick.text())).toEqual([
+            "1",
+            "1",
+        ]);
+    });
+
     it("keeps the order it rearranged in: no window floats up past another", async () => {
         const second: CompareWindowSpec = { ...XRF, id: "auto:xy:raman" };
         const fourth: CompareWindowSpec = { ...MICRO, id: "auto:not-in-chart" };

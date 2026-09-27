@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { nextTick, useTemplateRef } from "vue";
+import { inject, nextTick, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
+import { SCREEN_FOCUS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
@@ -17,13 +18,14 @@ import type {
  * the reader can do: download a file, open the analysis in its document, or
  * take an item no longer available out of the Selection. Once an item is
  * taken out, the focus goes to the action of the next item, else of the one
- * before.
+ * before; after the last one, to the Compare heading.
  */
 const props = defineProps<{ entries: readonly NotInChartEntry[] }>();
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const list = useTemplateRef<HTMLUListElement>("list");
+const screenFocus = inject(SCREEN_FOCUS_KEY, null);
 
 function reasonText(reason: NotInChartReason): string {
     switch (reason) {
@@ -80,6 +82,7 @@ async function remove(key: string): Promise<void> {
     const index = props.entries.findIndex((entry) => entry.key === key);
     const neighbour =
         props.entries[index + 1]?.key ?? props.entries[index - 1]?.key ?? null;
+    if (neighbour === null && screenFocus) screenFocus.value = true;
     store.removeFromBasket(key);
     await nextTick();
     if (neighbour === null) return;
