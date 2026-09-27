@@ -140,6 +140,22 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
+    it("leaves the axes untitled when no spectrum drawn stores a title", async () => {
+        const untitled = { ...fileEntry().viewer, xLabel: null, yLabel: null };
+        const { wrapper } = mountPreview(
+            [
+                readable(1, { viewer: untitled }),
+                readable(2, { viewer: untitled }),
+            ],
+            () => jsonResponse(SERIES),
+        );
+        await flushPromises();
+        const { layout } = lastDrawing();
+        expect(layout.xaxis.title.text).toBe("");
+        expect(layout.yaxis.title.text).toBe("");
+        wrapper.unmount();
+    });
+
     it("draws a lone file without a legend", async () => {
         const { wrapper } = mountPreview([readable(1)], () =>
             jsonResponse(SERIES),

@@ -284,6 +284,7 @@ def file_entries(entries, *, language, configs, kind):
         else:
             data_kind = "xy" if role == "readable" else "file"
         file_id = str(entry["file_id"])
+        x_label, y_label = axes(config)
         items.append(
             {
                 "id": file_id,
@@ -297,8 +298,8 @@ def file_entries(entries, *, language, configs, kind):
                 "dataKind": data_kind,
                 "viewer": {
                     "rendererConfigId": config_id,
-                    "xLabel": (axes(config)[0] or None) if config else None,
-                    "yLabel": (axes(config)[1] or None) if config else None,
+                    "xLabel": x_label or None,
+                    "yLabel": y_label or None,
                     "axisKey": axis_key(config) if config else None,
                     "points": None,
                     "decimated": False,
