@@ -20,6 +20,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from manuspectrum.iiif.sources import absolute_url
+from manuspectrum.iiif.xy_reading import axes
 from manuspectrum.utils.spectrum_preview import is_readable, read_series
 from manuspectrum.views.explorer.api import _not_found
 from manuspectrum.views.explorer.scopes import (
@@ -87,11 +88,11 @@ def _curve_line(number, name, entry, entries, config, config_id):
         _("configuration %(name)s")
         % {"name": (config or {}).get("presetKey") or config_id or "-"}
     )
-    viewer = entry.get("viewer") or {}
-    if viewer.get("xLabel"):
-        parts.append(_("x axis %(label)s") % {"label": viewer["xLabel"]})
-    if viewer.get("yLabel"):
-        parts.append(_("y axis %(label)s") % {"label": viewer["yLabel"]})
+    x_label, y_label = axes(config)
+    if x_label:
+        parts.append(_("x axis %(label)s") % {"label": x_label})
+    if y_label:
+        parts.append(_("y axis %(label)s") % {"label": y_label})
     parts.append(_("raw file %(url)s") % {"url": _file_url(entry, entries)})
     return "; ".join(parts)
 

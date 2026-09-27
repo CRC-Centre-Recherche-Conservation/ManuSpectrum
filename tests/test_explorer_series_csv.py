@@ -169,6 +169,25 @@ class SeriesCsvTests(CorpusCase):
             "\n".join(comments),
         )
 
+    def test_a_curve_names_the_axes_its_stored_configuration_states(self):
+        stored = {
+            **FORS,
+            "display": {
+                **FORS["display"],
+                "xAxisLabel": "Wavelength (Å)",
+                "yAxisLabel": "Reflectance (%)",
+            },
+        }
+        RendererConfig.objects.filter(configid=self.config).update(config=stored)
+        self.spectrum(name="Y.csv", rows=[(350.0, 8.0, 80.0), (351.0, 9.0, 90.0)])
+
+        comments, _ = self.split(self.text(self.selection("on_document")))
+
+        (curve,) = [c for c in comments if c.startswith("# c1:")]
+        self.assertIn("x axis Wavelength (Å)", curve)
+        self.assertIn("y axis Reflectance (%)", curve)
+        self.assertNotIn("Wavelength (nm)", curve)
+
     def set_attribution(self, file_id, text):
         node = str(self.nodes[("analysis", "measurement_point_data")].nodeid)
         for tile in TileModel.objects.filter(
