@@ -12,6 +12,7 @@ import {
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
+    loadPlotly,
     plotly,
     resetPlotly,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/plotly.ts";
@@ -191,6 +192,16 @@ describe("XyWorkshop", () => {
         await mountWorkshop([
             curve(0, 1, { xLabel: null, yLabel: null }),
             curve(1, 2, { xLabel: "Energy (eV)", yLabel: "Net counts" }),
+        ]);
+        const { layout } = lastDrawing();
+        expect(layout.xaxis.title.text).toBe("Energy (eV)");
+        expect(layout.yaxis.title.text).toBe("Net counts");
+    });
+
+    it("skips a stored title that holds only spaces", async () => {
+        await mountWorkshop([
+            curve(0, 1, { xLabel: " ", yLabel: "  " }),
+            curve(1, 2, { xLabel: "Energy (eV) ", yLabel: "Net counts" }),
         ]);
         const { layout } = lastDrawing();
         expect(layout.xaxis.title.text).toBe("Energy (eV)");
@@ -439,5 +450,71 @@ describe("XyWorkshop", () => {
         view.unmount();
         wrapper = null;
         expect(signals[0].aborted).toBe(true);
+    });
+
+    it("draws nothing once its window is gone before Plotly arrives", async () => {
+        const waiting: ((module: typeof plotly) => void)[] = [];
+        loadPlotly.mockImplementation(
+            () => new Promise((resolve) => waiting.push(resolve)),
+        );
+        const view = await mountWorkshop([curve(0, 1)]);
+        expect(waiting.length).toBeGreaterThan(0);
+        view.unmount();
+        wrapper = null;
+        waiting.forEach((resolve) => resolve(plotly));
+        await flushPromises();
+        expect(plotly.react).not.toHaveBeenCalled();
+    });
+
+    it("purges a chart whose drawing ends after its window is gone", async () => {
+        let drawn: () => void = () => undefined;
+        plotly.react.mockImplementationOnce(
+            () =>
+                new Promise<undefined>(
+                    (resolve) => (drawn = () => resolve(undefined)),
+                ),
+        );
+        const view = await mountWorkshop([curve(0, 1)]);
+        const element = view.find(".chart").element;
+        view.unmount();
+        wrapper = null;
+        plotly.purge.mockClear();
+        drawn();
+        await flushPromises();
+        expect(plotly.purge).toHaveBeenCalledWith(element);
+    });
+
+    it("says so in the window when the chart cannot be drawn", async () => {
+        vi.spyOn(console, "error").mockImplementation(() => undefined);
+        loadPlotly.mockImplementation(async () => {
+            throw new Error("offline");
+        });
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        expect(view.find(".draw-failed").text()).toBe(
+            "The chart could not be drawn.",
+        );
+    });
+
+    it("names one spectrum in the chart's label", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        expect(view.find(".chart").attributes("aria-label")).toBe(
+            "Chart of 1 spectrum; the Table layout lists its range.",
+        );
+    });
+
+    it("frees the CSV once the browser has taken it", async () => {
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+            () => undefined,
+        );
+        const revoke = vi.fn();
+        Object.assign(URL, {
+            createObjectURL: () => "blob:csv",
+            revokeObjectURL: revoke,
+        });
+        const view = await mountWorkshop([curve(0, 1)]);
+        await view.find('[data-action="csv"]').trigger("click");
+        expect(revoke).not.toHaveBeenCalled();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(revoke).toHaveBeenCalledWith("blob:csv");
     });
 });

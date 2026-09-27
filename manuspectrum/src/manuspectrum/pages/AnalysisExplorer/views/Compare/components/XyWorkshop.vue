@@ -34,6 +34,7 @@ import {
     treat,
     workshopCsv,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
+import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
 import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
 import {
     PLOT_CONFIG,
@@ -91,12 +92,14 @@ const DEFAULT_PNG_HEIGHT = 540;
  * the default above eight curves) or as a table. A treatment of
  * `utils/xy-views.js` runs on every curve and names itself in the Y title.
  * A file over the server's ceiling, missing or empty is named and left out.
+ * A chart Plotly cannot draw says so in the window. Once the window is
+ * unmounted, a drawing still waiting stops and one that ends late is purged.
  */
 const props = defineProps<{ curves: readonly FileLine[] }>();
 
 const resizeTick = inject(WINDOW_RESIZE_KEY, null);
 
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 const readable = computed(() =>
     props.curves.filter((curve) => curve.file.previewUrl !== null),
 );
@@ -112,10 +115,14 @@ const lang = document.documentElement.lang || "en";
 let plotly: PlotlyModule | null = null;
 let drawnOn: HTMLElement | null = null;
 let lastFigure: Figure | null = null;
+/** Set on unmount: a drawing still waiting stops, and one that ends late is purged. */
+let disposed = false;
 
 /** The layout the reader picked; null follows the number of curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
 const viewKey = ref<string>(BASE_VIEW);
+/** Plotly could not be loaded or could not draw the last figure. */
+const drawFailed = ref(false);
 
 /** Each readable file's answer, by preview URL, once the answer is for the files shown. */
 const answers = computed(() => {
@@ -176,8 +183,8 @@ const xReversed = computed(() => drawn.value[0]?.xReversed ?? false);
 /** The first stored title among the spectra drawn; a treatment qualifies the Y title. */
 const titles = computed(() => {
     const viewers = drawn.value.map((curve) => curve.line.file.viewer);
-    const x = viewers.map((viewer) => viewer.xLabel).find(Boolean) ?? "";
-    const y = viewers.map((viewer) => viewer.yLabel).find(Boolean) ?? "";
+    const x = firstStoredTitle(viewers.map((viewer) => viewer.xLabel)) ?? "";
+    const y = firstStoredTitle(viewers.map((viewer) => viewer.yLabel)) ?? "";
     return {
         x,
         y: deriveAxisLabel(
@@ -257,7 +264,11 @@ const loading = computed(
 );
 const chartLabel = computed(() =>
     interpolate(
-        $gettext("Chart of %{n} spectra; the Table layout lists their ranges."),
+        $ngettext(
+            "Chart of %{n} spectrum; the Table layout lists its range.",
+            "Chart of %{n} spectra; the Table layout lists their ranges.",
+            drawn.value.length,
+        ),
         { n: drawn.value.length },
         true,
     ),
@@ -274,6 +285,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+    disposed = true;
     if (plotly && drawnOn) plotly.purge(drawnOn);
 });
 
@@ -437,7 +449,9 @@ async function draw(): Promise<void> {
     }
     try {
         plotly ??= await loadPlotly();
+        if (disposed) return;
         await whenFontsReady();
+        if (disposed) return;
         if (drawnOn && drawnOn !== element) plotly.purge(drawnOn);
         const theme = readPlotTheme();
         const figure =
@@ -447,7 +461,14 @@ async function draw(): Promise<void> {
         lastFigure = figure;
         drawnOn = element;
         await plotly.react(element, figure.data, figure.layout, PLOT_CONFIG);
+        if (disposed) {
+            plotly.purge(element);
+            return;
+        }
+        drawFailed.value = false;
     } catch (error: unknown) {
+        if (disposed) return;
+        drawFailed.value = true;
         console.error("Spectra comparison could not be drawn", error);
     }
 }
@@ -512,7 +533,7 @@ function downloadCsv(): void {
         new Blob([text], { type: "text/csv;charset=utf-8" }),
     );
     save(url, CSV_FILE);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function chooseLayout(name: WorkshopLayout): void {
@@ -617,10 +638,18 @@ function chooseView(event: Event): void {
                 :x-title="titles.x"
                 :y-title="titles.y"
             />
+            <p
+                v-if="drawFailed && layout !== 'table'"
+                class="state draw-failed"
+                role="status"
+            >
+                <span>{{ $gettext("The chart could not be drawn.") }}</span>
+            </p>
             <div
-                v-else
+                v-if="layout !== 'table'"
                 ref="chart"
                 class="chart"
+                :class="{ failed: drawFailed }"
                 role="img"
                 :aria-label="chartLabel"
             ></div>
@@ -722,6 +751,10 @@ function chooseView(event: Event): void {
 
 .xy-workshop .chart {
     min-block-size: 18rem;
+}
+
+.xy-workshop .chart.failed {
+    min-block-size: 0;
 }
 
 .xy-workshop .note,

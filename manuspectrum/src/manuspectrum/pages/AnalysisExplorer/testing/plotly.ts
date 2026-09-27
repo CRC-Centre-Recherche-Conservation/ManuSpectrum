@@ -28,7 +28,12 @@ export const plotly = {
     },
 };
 
+/** The loader the mocked module answers with; a spec may delay or fail it. */
+export const loadPlotly = vi.fn(async () => plotly);
+
 export function resetPlotly(): void {
+    loadPlotly.mockReset();
+    loadPlotly.mockImplementation(async () => plotly);
     plotly.react.mockClear();
     plotly.relayout.mockClear();
     plotly.purge.mockClear();
@@ -36,6 +41,6 @@ export function resetPlotly(): void {
     plotly.Plots.resize.mockClear();
 }
 
-export function plotlyModule(): { loadPlotly: () => Promise<typeof plotly> } {
-    return { loadPlotly: async () => plotly };
+export function plotlyModule(): { loadPlotly: typeof loadPlotly } {
+    return { loadPlotly };
 }
