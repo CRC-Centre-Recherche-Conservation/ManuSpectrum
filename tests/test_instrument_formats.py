@@ -92,6 +92,22 @@ class McaTests(FormatCase):
                 path = self.written("x.mca", content)
                 self.assertIsNone(read_series(path))
 
+    def test_a_header_in_a_single_byte_encoding_still_reads(self):
+        path = self.written(
+            "x.mca",
+            "# Opérateur: é\n# Calibration1: 0 0\n# Calibration2: 100 1\n"
+            "# Calibration3: 200 2\n#\n1\n2\n".encode("cp1252"),
+        )
+
+        self.assertEqual(instrument_formats.native_axes(path)[0].quantity, "energy")
+        self.assertEqual(instrument_formats.read_native(path).x.quantity, "energy")
+
+    def test_the_name_decides_the_format_of_a_stored_path(self):
+        path = self.written("stored.dat", MCA.read_bytes())
+
+        self.assertIsNone(read_series(path))
+        self.assertEqual(len(read_series(path, name="X.mca")["x"]), 4096)
+
     def test_the_preview_reads_an_mca(self):
         preview = build_preview(str(MCA), 200)
 

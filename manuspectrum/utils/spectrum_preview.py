@@ -17,10 +17,11 @@ default drawing.
 The canonical export reaches 2.8 MB and 136 805 points, so the preview never
 holds the file in memory: the parser yields one row at a time and the decimator
 keeps the extremes of a bounded number of spans. Peak memory is the same for a
-ten-line file and for the largest one. ``read_series`` is the exception: it
-returns every point, for the exports that must not decimate.
+ten-line file and for the largest one. ``series_points`` streams every point,
+for the exports that must not decimate; ``read_series`` holds them in memory.
 """
 
+import itertools
 import math
 import os
 import re
@@ -173,43 +174,56 @@ def _regroup(spans, budget):
 
 
 @contextmanager
-def _points(path, config):
+def _points(path, config, name=None):
     """The configured points of one file, streamed from a single open.
 
-    Decoding errors are replaced rather than raised: a text export with one
-    stray byte still has a spectrum in it, and the offending row reads as NaN
-    and is dropped on its own. A native format is read whole by
-    ``read_native`` under its own configuration; *config* is not consulted.
+    The extension of *name* (else of *path*) names the format. Decoding
+    errors are replaced rather than raised: a text export with one stray
+    byte still has a spectrum in it, and the offending row reads as NaN and
+    is dropped on its own. A native format is read whole by ``read_native``
+    under its own configuration; *config* is not consulted.
     """
-    if is_native(path):
-        native = read_native(path)
+    if is_native(name or path):
+        native = read_native(path, name)
         yield apply_config(native.rows, native.config) if native else iter(())
         return
     with open(path, encoding="utf-8", errors="replace") as handle:
         yield apply_config(parse_rows(handle), config)
 
 
-def read_series(path, config=None):
-    """Every point of one file as the reader draws it, or ``None`` when it draws nothing.
+def series_points(path, config=None, name=None):
+    """Every ``(x, y)`` of one file as the reader draws it, streamed; nothing when it holds fewer than two.
 
     `config` is the stored renderer configuration of the file entry, which
-    decides the columns, the normalisation and the direction of x of a text
-    format; a native format reads under its own. Returns
-    ``{"x", "y", "x_reversed"}``; the series is never decimated and is held
-    in memory whole.
+    decides the columns and the normalisation of a text format; a native
+    format reads under its own. The extension of *name* (else of *path*)
+    names the format. A text file is read one row at a time, never decimated.
+    """
+    with _points(path, config, name) as points:
+        first = list(itertools.islice(points, 2))
+        if len(first) < 2:
+            return
+        yield from first
+        yield from points
+
+
+def x_reversed(path, config=None, name=None):
+    """Whether the reader draws x reversed: a text format's configuration says so; a native one never."""
+    return not is_native(name or path) and is_x_reversed(config)
+
+
+def read_series(path, config=None, name=None):
+    """Every point of one file (``series_points``) held in memory, or ``None`` when it draws nothing.
+
+    Returns ``{"x", "y", "x_reversed"}``.
     """
     xs, ys = [], []
-    with _points(path, config) as points:
-        for x, y in points:
-            xs.append(x)
-            ys.append(y)
-    if len(xs) < 2:
+    for x, y in series_points(path, config, name):
+        xs.append(x)
+        ys.append(y)
+    if not xs:
         return None
-    return {
-        "x": xs,
-        "y": ys,
-        "x_reversed": not is_native(path) and is_x_reversed(config),
-    }
+    return {"x": xs, "y": ys, "x_reversed": x_reversed(path, config, name)}
 
 
 def build_preview(path, n, config=None):
@@ -221,5 +235,5 @@ def build_preview(path, n, config=None):
     with _points(path, config) as points:
         series = decimate(points, n)
     if series is not None:
-        series["x_reversed"] = not is_native(path) and is_x_reversed(config)
+        series["x_reversed"] = x_reversed(path, config)
     return series

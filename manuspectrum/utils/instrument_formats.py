@@ -6,8 +6,8 @@ shape ``xy_transforms.apply_config`` takes), the renderer configuration that
 reads them, and what its two axes hold (``Axis``: English label, quantity,
 UCUM unit). A file that does not have the expected shape gives None.
 
-ELIO ``.mca`` (XGLab/Bruker ELIO text export): ``# key: value`` header lines,
-then one count per line, in channel order. ``# CalibrationN: <channel>
+ELIO ``.mca`` (XGLab/Bruker ELIO text export, UTF-8, else read as Latin-1):
+``# key: value`` header lines, then one count per line, in channel order. ``# CalibrationN: <channel>
 <energy in keV>`` lines (decimal comma or point; ``0 0`` is an empty slot)
 give the energy axis: a least-squares line through two or more points of
 distinct channels. Without it, x is the channel index.
@@ -18,8 +18,10 @@ at 191 and 195, data format at 199, channel count as uint16 at 204), the
 spectrum, then from ``as2`` on a reference block (a 20-byte header whose
 bytes 18-19 give the length of a description that follows) and the white
 reference spectrum. A raw spectrum (type 0) with its reference reads as the
-reflectance ``target / reference``; a reflectance spectrum (type 1) as
-stored; other types are not read.
+reflectance ``target / reference``, relative to the white reference: no
+panel calibration factor and no splice correction at the detector joins
+(about 1000 and 1800 nm), as ViewSpec Pro reads it by default. A reflectance
+spectrum (type 1) reads as stored; other types are not read.
 """
 
 import math
@@ -116,9 +118,21 @@ def native_axes(path, name=None):
     return None
 
 
+def _decoded(read, path):
+    """*read* (path, encoding) in UTF-8, else in Latin-1 when the file is not UTF-8."""
+    try:
+        return read(path, "utf-8")
+    except UnicodeDecodeError:
+        return read(path, "latin-1")
+
+
 def _mca_axes(path):
+    return _decoded(_mca_axes_in, path)
+
+
+def _mca_axes_in(path, encoding):
     points, header = [], False
-    with open(path, encoding="utf-8", errors="strict", newline=None) as handle:
+    with open(path, encoding=encoding, errors="strict", newline=None) as handle:
         for line in handle:
             stripped = line.strip()
             if not stripped:
@@ -153,8 +167,12 @@ def _calibration(points):
 
 
 def _read_mca(path):
+    return _decoded(_read_mca_in, path)
+
+
+def _read_mca_in(path, encoding):
     points, counts, header = [], [], False
-    with open(path, encoding="utf-8", errors="strict", newline=None) as handle:
+    with open(path, encoding=encoding, errors="strict", newline=None) as handle:
         for line in handle:
             stripped = line.strip()
             if not stripped:

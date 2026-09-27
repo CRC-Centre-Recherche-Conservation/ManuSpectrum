@@ -12,12 +12,15 @@ A file has a clean CSV when ``read_series`` reads its format
 (``is_readable``; for a native instrument format, its header states its
 axes), it is no larger than ``SPECTRUM_PREVIEW_MAX_BYTES`` and its licence
 allows derivatives; the route answers 404 besides when the file holds fewer
-than two points.
+than two points. The clean CSV is never decimated, whatever its size:
+mirador-xyviewer refuses a body over 5 MB, so such a file plots in the
+Explorer and not there.
 """
 
 import os
 import re
 from dataclasses import dataclass, field
+from functools import cached_property
 
 from django.conf import settings
 
@@ -37,8 +40,18 @@ class Refused(Exception):
     """The file exists; the reader may not read it."""
 
 
+class StatedAxes:
+    """``stated_axes``: the ``(x, y)`` a native file's header states, read once per instance; None otherwise."""
+
+    @cached_property
+    def stated_axes(self):
+        if not is_native(self.name):
+            return None
+        return native_axes(self.path, self.name)
+
+
 @dataclass(frozen=True)
-class FileRecord:
+class FileRecord(StatedAxes):
     """One stored file as its ``File`` row and tile give it.
 
     ``name`` is the name its tile's file-list entry gives it, else the stored
@@ -139,11 +152,11 @@ def no_derivatives(entry):
 
 
 def clean_series_available(file):
-    """Whether *file* (a ``FileRecord`` or ``facts.FileFact``) has a clean CSV; reads at most a native header."""
+    """Whether *file* (a ``FileRecord`` or ``facts.FileFact``) has a clean CSV; reads at most a native header, once."""
     return (
         is_readable(file.name)
         and file.size is not None
         and file.size <= settings.SPECTRUM_PREVIEW_MAX_BYTES
         and not no_derivatives(file.entry)
-        and (not is_native(file.name) or native_axes(file.path, file.name) is not None)
+        and (not is_native(file.name) or file.stated_axes is not None)
     )

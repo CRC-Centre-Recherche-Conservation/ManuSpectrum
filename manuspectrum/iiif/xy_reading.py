@@ -24,6 +24,7 @@ the documentation page. Inside ``xyReading`` it defines ``id``, ``type``,
 same under the Presentation 2 context.
 """
 
+import itertools
 import re
 from collections import namedtuple
 
@@ -40,7 +41,7 @@ from manuspectrum.utils.instrument_formats import (
     is_native,
     native_axes,
 )
-from manuspectrum.utils.spectrum_preview import is_supported, read_series
+from manuspectrum.utils.spectrum_preview import is_supported, series_points
 from manuspectrum.utils.xy_transforms import (
     EPSILON,
     multi_y_handling,
@@ -98,8 +99,11 @@ def raw_label(file):
 
 
 def _native(file):
+    """The axes a native *file*'s header states: its ``stated_axes`` when it keeps them, else read."""
     if file is None or not is_native(file.name):
         return None
+    if hasattr(file, "stated_axes"):
+        return file.stated_axes
     return native_axes(file.path, file.name)
 
 
@@ -204,24 +208,29 @@ def xy_reading(file, config):
 def csv_lines(file, config):
     """The clean CSV of *file* as an iterator of text chunks; None when it holds fewer than two points.
 
-    The series is read whole first (``read_series``), then written in file
-    order with ``repr(float)``, never decimated.
+    The points are streamed from the file (``series_points``, the format named
+    by the file's name) and written in file order with ``repr(float)``,
+    never decimated.
     """
-    series = read_series(file.path, config)
-    if series is None:
+    points = series_points(file.path, config, file.name)
+    first = next(points, None)
+    if first is None:
         return None
     header = ",".join(csv_header(config, file)) + "\r\n"
 
     def lines():
-        yield header
-        chunk = []
-        for x, y in zip(series["x"], series["y"]):
-            chunk.append(f"{x!r},{y!r}\r\n")
-            if len(chunk) == ROWS_PER_CHUNK:
+        try:
+            yield header
+            chunk = []
+            for x, y in itertools.chain([first], points):
+                chunk.append(f"{x!r},{y!r}\r\n")
+                if len(chunk) == ROWS_PER_CHUNK:
+                    yield "".join(chunk)
+                    chunk = []
+            if chunk:
                 yield "".join(chunk)
-                chunk = []
-        if chunk:
-            yield "".join(chunk)
+        finally:
+            points.close()
 
     return lines()
 

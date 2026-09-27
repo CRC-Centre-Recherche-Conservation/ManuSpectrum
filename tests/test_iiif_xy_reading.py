@@ -5,8 +5,11 @@ Usage:
 """
 
 import json
+import shutil
+import tempfile
 import uuid
 from pathlib import Path
+from unittest import mock
 
 from django.test import Client, SimpleTestCase
 from jsonschema import Draft7Validator
@@ -14,6 +17,7 @@ from jsonschema import Draft7Validator
 from manuspectrum.constants.xy_presets import TECHNIQUE_PRESETS, XY_PRESETS
 from manuspectrum.iiif import ids, xy_reading
 from manuspectrum.models import RendererConfig
+from manuspectrum.utils import spectrum_preview
 from tests.explorer_fixtures import FEATURES, IIIFCase
 
 SCHEMA = Path(xy_reading.__file__).parent / "schemas" / "xy-reading-1.schema.json"
@@ -184,6 +188,45 @@ class ReadingTests(SimpleTestCase):
         self.assertEqual(xy_reading.csv_header({}, mca), ("Energy (keV)", "Counts"))
         self.assertNotIn("xyReading", reading["derivedFrom"])
         self.assertEqual(list(validator().iter_errors(reading)), [])
+
+
+class CleanCsvTests(SimpleTestCase):
+    def test_the_clean_csv_is_streamed_from_the_file(self):
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        path = directory / "big.csv"
+        path.write_text("".join(f"{350 + i},{i}\n" for i in range(10000)))
+        parsed = []
+        parse_rows = spectrum_preview.parse_rows
+
+        def counted(lines):
+            for row in parse_rows(lines):
+                parsed.append(row)
+                yield row
+
+        with mock.patch.object(spectrum_preview, "parse_rows", counted):
+            chunks = xy_reading.csv_lines(
+                xy_reading.RawFile("f", "big.csv", "text/csv", str(path)), {}
+            )
+            header, first = next(chunks), next(chunks)
+            parsed_early = len(parsed)
+            rest = "".join(chunks)
+
+        self.assertEqual(header, "x,y\r\n")
+        self.assertLess(parsed_early, 10000)
+        self.assertEqual(len((first + rest).splitlines()), 10000)
+
+    def test_a_file_of_one_point_has_no_clean_csv(self):
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        path = directory / "one.csv"
+        path.write_text("1,2\n")
+
+        self.assertIsNone(
+            xy_reading.csv_lines(
+                xy_reading.RawFile("f", "one.csv", "text/csv", str(path)), {}
+            )
+        )
 
 
 class BodyTests(IIIFCase):
