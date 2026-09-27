@@ -39,11 +39,14 @@ import hashlib
 import logging
 import uuid
 from dataclasses import dataclass, field
+from functools import cached_property
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import TextField
+from django.db.models.functions import Cast
 from guardian.models import GroupObjectPermission, UserObjectPermission
 
 from arches.app.models.models import Node, ResourceInstance
@@ -240,6 +243,16 @@ EXPLORER_MODELS = (
 )
 
 
+_VISIBLE_KINDS = (
+    "documents",
+    "components",
+    "analyses",
+    "projects",
+    "samples",
+    "characterizations",
+)
+
+
 @dataclass(frozen=True)
 class VisibleSet:
     """What one reader may see through the Explorer and the project IIIF collection."""
@@ -255,16 +268,19 @@ class VisibleSet:
     digest: str = ""
     gates: str = ""
 
-    @property
+    def __contains__(self, resource_id):
+        """Whether the id *resource_id* (a string) is visible, without building ``ids``."""
+        return any(resource_id in getattr(self, kind) for kind in _VISIBLE_KINDS)
+
+    @cached_property
     def ids(self):
-        return (
-            self.documents
-            | self.components
-            | self.analyses
-            | self.projects
-            | self.samples
-            | self.characterizations
-        )
+        """Every visible id, computed once per instance and never pickled."""
+        return frozenset().union(*(getattr(self, kind) for kind in _VISIBLE_KINDS))
+
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        state.pop("ids", None)
+        return state
 
 
 def visible_set(user, version=None):
@@ -316,13 +332,20 @@ def _visible_for(user):
     for rid, graph_id, state in ResourceInstance.objects.filter(
         graph_id__in=list(slug_of)
     ).values_list(
-        "resourceinstanceid", "graph_id", "resource_instance_lifecycle_state_id"
+        *(
+            Cast(name, TextField())
+            for name in (
+                "resourceinstanceid",
+                "graph_id",
+                "resource_instance_lifecycle_state_id",
+            )
+        )
     ):
-        rid, slug = str(rid), slug_of[str(graph_id)]
+        slug = slug_of[graph_id]
         existing[slug].add(rid)
-        if rid in hidden or str(graph_id) not in graphs:
+        if rid in hidden or graph_id not in graphs:
             continue
-        if state is not None and str(state) in drafts:
+        if state is not None and state in drafts:
             unpublished.add(rid)
         candidates[slug].add(rid)
 

@@ -4,6 +4,8 @@ Usage:
     python manage.py test tests.test_explorer_visibility --settings="tests.test_settings"
 """
 
+import pickle
+
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.cache import cache
 from django.test import TestCase
@@ -68,6 +70,23 @@ class VisibleSetTests(ExplorerCase):
         )
         self.assertIn(str(self.samples["s1"].pk), vs.samples)
         self.assertIn(str(self.characterization.pk), vs.characterizations)
+
+    def test_ids_is_built_once_and_left_out_of_the_pickle(self):
+        vs = visible_set(self.anonymous)
+        size = len(pickle.dumps(vs))
+
+        self.assertIs(vs.ids, vs.ids)
+        self.assertEqual(len(pickle.dumps(vs)), size)
+        self.assertEqual(pickle.loads(pickle.dumps(vs)), vs)
+        self.assertEqual(pickle.loads(pickle.dumps(vs)).ids, vs.ids)
+
+    def test_membership_is_the_union_of_every_kind(self):
+        self.embargo(self.documents["embargoed"])
+
+        vs = visible_set(self.anonymous)
+
+        self.assertEqual({rid for rid in vs.ids if rid in vs}, vs.ids)
+        self.assertNotIn(str(self.documents["embargoed"].pk), vs)
 
     def test_an_embargoed_document_hides_its_component_and_analyses(self):
         self.embargo(self.documents["embargoed"])

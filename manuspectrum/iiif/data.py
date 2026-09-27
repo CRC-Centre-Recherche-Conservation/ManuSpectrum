@@ -83,7 +83,7 @@ def file_allowed(resource_id, nodegroup_id, reader, version=None):
 
     *version* is the ``data_version()`` the request read, else read here.
     """
-    if str(resource_id) not in visible_set(reader, version).ids:
+    if str(resource_id) not in visible_set(reader, version):
         return False
     nodegroups = readable_nodegroups(reader)
     return nodegroups is None or str(nodegroup_id) in nodegroups
