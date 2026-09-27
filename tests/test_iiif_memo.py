@@ -145,3 +145,38 @@ class MemoTests(IIIFCase):
 
         self.assertEqual(filtered["ETag"], canonical["ETag"])
         self.assertEqual(len(memo_keys()), 1)
+
+    def test_if_none_match_star_on_a_missing_page_is_a_404(self):
+        doc = self.documents["open"].pk
+        response = self.visitor.get(
+            f"/iiif/v3/annotation-collection/{doc}/page-9999", HTTP_IF_NONE_MATCH="*"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_if_none_match_star_on_a_missing_zone_is_a_404(self):
+        response = self.visitor.get(
+            f"/iiif/v3/annotation/{self.analyses['open'].pk}/{uuid.uuid4()}",
+            HTTP_IF_NONE_MATCH="*",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_if_none_match_star_on_an_existing_page_is_a_304(self):
+        response = self.visitor.get(self.url, HTTP_IF_NONE_MATCH="*")
+
+        self.assertEqual(response.status_code, 304)
+
+    def test_a_missing_zone_is_built_once(self):
+        url = f"/iiif/v3/annotation/{self.analyses['open'].pk}/{uuid.uuid4()}"
+        first = self.visitor.get(url)
+
+        with mock.patch(
+            "manuspectrum.iiif.facts.annotated_fact",
+            side_effect=AssertionError("built"),
+        ):
+            again = self.visitor.get(url)
+
+        self.assertEqual(first.status_code, 404)
+        self.assertEqual(again.status_code, 404)
+        self.assertEqual(again.content, b"")

@@ -823,8 +823,10 @@ IIIF_POINT_RADIUS = 12
 # Most analysis ids a page restricted by ?only= may name; above it, 400.
 IIIF_PAGE_FILTER_MAX = 100
 # Seconds a memoised IIIF document (visitor view) is kept; its key moves with
-# the data version and the permission epoch.
+# the data version, the permission epoch, the translations and the code version.
 IIIF_MEMO_TTL = 24 * 60 * 60
+# Seconds the visitor's 404 for a missing page or zone is kept under its key.
+IIIF_ABSENT_TTL = 5 * 60
 
 # IIIF Auth 1.0 / 2.0 (manuspectrum/iiif/tokens.py). A IIIF token is a
 # read-only credential for the /iiif/ read routes, bound to the Arches session

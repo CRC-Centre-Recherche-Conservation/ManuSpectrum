@@ -38,8 +38,7 @@ from manuspectrum.views.iiif.cors import iiif_cors
 logger = logging.getLogger(__name__)
 
 
-class Missing(Exception):
-    """The document asked for does not exist for this reader."""
+Missing = memo.Absent
 
 
 class BadFilter(ValueError):

@@ -7,7 +7,10 @@ when the reader's ``visible_set`` digest equals the visitor's (same visible
 resources, hidden resources, readable nodegroups and models) and the
 response renews no CSRF cookie. That answer is ``public, no-cache`` with a
 strong ETag derived from the key, and an ``If-None-Match`` naming it gets a
-304 before anything is built. Any other reader, and any reader identified by a IIIF
+304 before anything is built; ``If-None-Match: *`` gets a 304 only once the
+document is known to exist (RFC 9110 §13.1.2). A build raising ``Absent``
+stores a marker for ``IIIF_ABSENT_TTL`` seconds: the same missing document
+is answered from it, not rebuilt. Any other reader, and any reader identified by a IIIF
 token, gets a document built for them, ``private, no-store``, never stored.
 
 The caller runs its read guard before ``answer``: no memo is read for a
@@ -19,6 +22,7 @@ from dataclasses import dataclass
 
 import orjson
 from django.conf import settings
+from django.core.cache import cache
 from django.http import HttpResponse, HttpResponseNotModified
 
 from manuspectrum.utils.cache import (
@@ -37,6 +41,11 @@ from manuspectrum.utils.stamps import locale_stamp
 
 PUBLIC = "public, no-cache"
 PRIVATE = "private, no-store"
+ABSENT = b""
+
+
+class Absent(Exception):
+    """The document asked for does not exist for this reader."""
 
 
 @dataclass(frozen=True)
@@ -79,16 +88,37 @@ def _response(body, content_type, cache_control, etag=None):
 def answer(request, reader_gate, kind, parts, build, *, content_type):
     """The response of a memoised IIIF document; *build* returns its JSON-able dict.
 
-    An exception raised by *build* propagates and nothing is stored.
+    ``Absent`` raised by *build*, or read from its marker, propagates; any
+    other exception propagates and nothing is stored.
     """
     if not reader_gate.shared or renews_csrf_cookie(request):
         return _response(orjson.dumps(build()), content_type, PRIVATE)
     key = stable_cache_key("iiif", kind, *parts, *reader_gate.parts)
     etag = '"' + hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest() + '"'
-    if etag_already_held(request, etag):
-        response = HttpResponseNotModified()
-        response["ETag"] = etag
-        response["Cache-Control"] = PUBLIC
-        return response
-    body = get_or_build(key, lambda: orjson.dumps(build()), settings.IIIF_MEMO_TTL)
+    any_tag = request.headers.get("If-None-Match", "").strip() == "*"
+    if not any_tag and etag_already_held(request, etag):
+        return _not_modified(etag)
+
+    def stored():
+        try:
+            return orjson.dumps(build())
+        except Absent:
+            return ABSENT
+
+    def expire_absent(value):
+        if value == ABSENT:
+            cache.set(key, value, settings.IIIF_ABSENT_TTL)
+
+    body = get_or_build(key, stored, settings.IIIF_MEMO_TTL, kept=expire_absent)
+    if body == ABSENT:
+        raise Absent()
+    if any_tag:
+        return _not_modified(etag)
     return _response(body, content_type, PUBLIC, etag)
+
+
+def _not_modified(etag):
+    response = HttpResponseNotModified()
+    response["ETag"] = etag
+    response["Cache-Control"] = PUBLIC
+    return response
