@@ -8,7 +8,8 @@ const SIZE_NAMES: readonly WindowSize[] = ["S", "M", "L"];
 
 /**
  * The frame of one Compare window: its title, a drag handle, and the
- * keyboard equivalents of dragging (move before or after, sizes, close).
+ * keyboard equivalents of dragging (move before or after, sizes, close),
+ * and a disclosure button for a window that folds to its header.
  * `position` is 1-based in reading order; `size` is null for a size set by
  * hand.
  */
@@ -17,17 +18,21 @@ const props = defineProps<{
     position: number;
     total: number;
     size: WindowSize | null;
+    /** Folded to its header; null: this window does not fold. */
+    folded: boolean | null;
 }>();
 
 const emit = defineEmits<{
     (event: "move", payload: { step: -1 | 1 }): void;
     (event: "size-chosen", payload: { size: WindowSize }): void;
+    (event: "fold-toggled"): void;
     (event: "close"): void;
 }>();
 
 const { $gettext, interpolate } = useGettext();
 
 const headingId = useId();
+const bodyId = useId();
 
 const isFirst = computed(() => props.position <= 1);
 const isLast = computed(() => props.position >= props.total);
@@ -60,6 +65,18 @@ function onMove(step: -1 | 1): void {
             >
                 <span>{{ title }}</span>
             </h3>
+            <button
+                v-if="folded !== null"
+                type="button"
+                class="fold"
+                data-action="fold"
+                :aria-label="$gettext('Show the content')"
+                :aria-expanded="folded ? 'false' : 'true'"
+                :aria-controls="bodyId"
+                @click="emit('fold-toggled')"
+            >
+                <span aria-hidden="true">{{ folded ? "▸" : "▾" }}</span>
+            </button>
             <div
                 class="controls"
                 role="group"
@@ -104,8 +121,12 @@ function onMove(step: -1 | 1): void {
                 </button>
             </div>
         </header>
-        <div class="body">
-            <slot />
+        <div
+            :id="bodyId"
+            class="body"
+            :hidden="folded === true"
+        >
+            <slot v-if="!folded" />
         </div>
     </section>
 </template>
@@ -155,6 +176,7 @@ function onMove(step: -1 | 1): void {
     gap: 0.25rem;
 }
 
+.compare-window .fold,
 .compare-window .controls button {
     display: inline-grid;
     place-items: center;
@@ -180,6 +202,7 @@ function onMove(step: -1 | 1): void {
     cursor: default;
 }
 
+.compare-window .fold:focus-visible,
 .compare-window .controls button:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;

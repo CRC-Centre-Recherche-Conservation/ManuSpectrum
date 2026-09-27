@@ -43,6 +43,8 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
 const RESIZE_DEBOUNCE_MS = 150;
+/** Rows of a window folded to its header (its controls may wrap on two lines). */
+const FOLDED_ROWS = 2;
 const ONE_COLUMN_MAX_WIDTH = 768;
 const CELL_HEIGHT = "4rem";
 const GAP = "0.5rem";
@@ -51,16 +53,27 @@ const GAP = "0.5rem";
  * The Compare windows on a gridstack grid. gridstack owns every window's
  * x, y, w, h: its `change` event writes the layout (`ms-explorer-layout-v1`,
  * 12 columns only), nothing here binds a position. The saved layout is read
- * once, when the grid mounts, and trimmed to the windows shown then; a window
- * that leaves and comes back while the grid is up gets its place again. With
- * nothing saved, gridstack places the windows (`autoPosition`); a window that
- * appears later goes under the others, without the focus, and is announced.
- * gridstack keeps the DOM in reading order, which the keyboard follows.
+ * once, when the grid mounts, and trimmed to the windows shown then and the
+ * windows `retained` names (hidden, kept with their place); a window that
+ * leaves the grid loses its place unless `retained` names it. With nothing
+ * saved, gridstack places the windows (`autoPosition`); a window that
+ * appears later goes back to its place, else under the others, without the
+ * focus, and is announced. « Rearrange » emits `rearrange` first, so the
+ * parent can bring hidden windows back, then lays every window out. A folded
+ * window keeps its header only. gridstack keeps the DOM in reading order,
+ * which the keyboard follows.
  */
-const props = defineProps<{ windows: readonly CompareWindowSpec[] }>();
+const props = withDefaults(
+    defineProps<{
+        windows: readonly CompareWindowSpec[];
+        retained?: readonly string[];
+    }>(),
+    { retained: () => [] },
+);
 
 const emit = defineEmits<{
     (event: "close", payload: { id: string }): void;
+    (event: "rearrange"): void;
 }>();
 
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
@@ -75,6 +88,8 @@ const sizes = ref<Record<string, WindowSize | null>>(
     Object.fromEntries(props.windows.map((window) => [window.id, window.size])),
 );
 const resizeTick = ref(0);
+/** Whether each window that folds is folded: as its spec says when it is placed, then as the reader sets it. */
+const foldState = ref<Record<string, boolean>>({});
 
 let grid: GridStack | null = null;
 let saved: WindowLayout = {};
@@ -82,6 +97,7 @@ let saving = true;
 let observer: ResizeObserver | null = null;
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
 let closing: { id: string; index: number } | null = null;
+let rearranging = false;
 
 provide(WINDOW_RESIZE_KEY, readonly(resizeTick));
 
@@ -93,7 +109,10 @@ watch(
             const element = itemElement(id);
             if (grid && element) grid.removeWidget(element, false, true);
         }
-        if (gone.length > 0) syncFromGrid();
+        if (gone.length > 0) {
+            syncFromGrid();
+            forgetGone(gone);
+        }
         if (closing && gone.includes(closing.id)) {
             const index = closing.index;
             closing = null;
@@ -104,25 +123,55 @@ watch(
 );
 
 watch(
+    () => props.retained,
+    (retained, previous) => {
+        const shown = props.windows.map((window) => window.id);
+        forgetGone(
+            previous.filter(
+                (id) => !retained.includes(id) && !shown.includes(id),
+            ),
+        );
+    },
+);
+
+watch(
     () => props.windows.map((window) => window.id),
     (ids, previous) => {
         const added = props.windows.filter(
             (window) => !previous.includes(window.id),
         );
         if (!grid || added.length === 0) return;
+        const back = added.filter((window) => saved[window.id]);
+        const fresh = added.filter((window) => !saved[window.id]);
         for (const window of added) placeWindow(window, false);
         syncFromGrid();
-        announce(
-            interpolate(
-                $ngettext(
-                    "New window at the end: %{titles}",
-                    "New windows at the end: %{titles}",
-                    added.length,
+        if (rearranging) return;
+        if (back.length > 0) {
+            announce(
+                interpolate(
+                    $ngettext(
+                        "Window back in its place: %{titles}",
+                        "Windows back in their places: %{titles}",
+                        back.length,
+                    ),
+                    { titles: titlesOf(back) },
+                    true,
                 ),
-                { titles: added.map((window) => window.title).join(", ") },
-                true,
-            ),
-        );
+            );
+        }
+        if (fresh.length > 0) {
+            announce(
+                interpolate(
+                    $ngettext(
+                        "New window at the end: %{titles}",
+                        "New windows at the end: %{titles}",
+                        fresh.length,
+                    ),
+                    { titles: titlesOf(fresh) },
+                    true,
+                ),
+            );
+        }
     },
     { flush: "post" },
 );
@@ -133,10 +182,10 @@ onMounted(() => {
     if (!element || !created) return;
     grid = created;
     const stored = readLayout();
-    saved = keepWindows(
-        stored,
-        props.windows.map((window) => window.id),
-    );
+    saved = keepWindows(stored, [
+        ...props.windows.map((window) => window.id),
+        ...props.retained,
+    ]);
     if (Object.keys(saved).length !== Object.keys(stored).length) {
         writeLayout(saved);
     }
@@ -183,19 +232,62 @@ function itemElement(id: string): HTMLElement | null {
     return null;
 }
 
+function specOf(id: string): CompareWindowSpec | undefined {
+    return props.windows.find((window) => window.id === id);
+}
+
 function titleOf(id: string): string {
-    return props.windows.find((window) => window.id === id)?.title ?? "";
+    return specOf(id)?.title ?? "";
+}
+
+function titlesOf(windows: readonly CompareWindowSpec[]): string {
+    return windows.map((window) => window.title).join(", ");
+}
+
+/** Whether a window is folded to its header; null for a window that does not fold. */
+function foldedOf(window: CompareWindowSpec): boolean | null {
+    if (window.folded === undefined) return null;
+    return foldState.value[window.id] ?? window.folded;
+}
+
+/** Its first size, as tall as its header when folded. */
+function firstBox(window: CompareWindowSpec): Pick<WindowBox, "w" | "h"> {
+    const preset = WINDOW_SIZES[window.size];
+    return foldedOf(window) ? { w: preset.w, h: FOLDED_ROWS } : preset;
+}
+
+/** Forgets the places of the windows gone that `retained` does not name. */
+function forgetGone(gone: readonly string[]): void {
+    const forgotten = gone.filter(
+        (id) => saved[id] && !props.retained.includes(id),
+    );
+    if (forgotten.length === 0) return;
+    saved = keepWindows(
+        saved,
+        Object.keys(saved).filter((id) => !forgotten.includes(id)),
+    );
+    writeLayout(saved);
 }
 
 /** Its saved place; else gridstack's choice when the grid opens, the end of the grid afterwards. */
 function placeWindow(window: CompareWindowSpec, opening: boolean): void {
     const element = itemElement(window.id);
     if (!grid || !element) return;
+    if (
+        window.folded !== undefined &&
+        foldState.value[window.id] === undefined
+    ) {
+        foldState.value = { ...foldState.value, [window.id]: window.folded };
+    }
     const box = saved[window.id];
-    const preset = WINDOW_SIZES[window.size];
+    const preset = firstBox(window);
     let options: GridStackWidget;
     if (box) {
-        options = { id: window.id, ...box };
+        options = {
+            id: window.id,
+            ...box,
+            ...(foldedOf(window) ? { h: FOLDED_ROWS } : {}),
+        };
     } else if (opening) {
         options = { id: window.id, autoPosition: true, ...preset };
     } else {
@@ -307,6 +399,9 @@ function resize(id: string, size: WindowSize): void {
     const element = itemElement(id);
     if (!grid || !element) return;
     const preset = WINDOW_SIZES[size];
+    if (foldState.value[id]) {
+        foldState.value = { ...foldState.value, [id]: false };
+    }
     grid.update(element, {
         w: Math.min(preset.w, grid.getColumn()),
         h: preset.h,
@@ -321,25 +416,56 @@ function resize(id: string, size: WindowSize): void {
     scheduleResize();
 }
 
+/** Folds a window to its header, or unfolds it to the height of its first size. */
+function toggleFold(id: string): void {
+    const window = specOf(id);
+    const element = itemElement(id);
+    if (!grid || !window || !element || foldedOf(window) === null) return;
+    const folded = !foldedOf(window);
+    foldState.value = { ...foldState.value, [id]: folded };
+    grid.update(element, {
+        h: folded ? FOLDED_ROWS : WINDOW_SIZES[window.size].h,
+    });
+    announce(
+        interpolate(
+            folded
+                ? $gettext("%{title}: folded")
+                : $gettext("%{title}: unfolded"),
+            { title: window.title },
+            true,
+        ),
+    );
+    scheduleResize();
+}
+
+/** The parent answers the request: hides the window, or closes the tool, and says so. */
 function close(id: string): void {
     closing = { id, index: order.value.indexOf(id) };
-    announce(
-        interpolate($gettext("%{title} closed."), { title: titleOf(id) }, true),
-    );
     emit("close", { id });
 }
 
-/** Empties the saved layout and lays the windows out again in their order, at their first size. */
-function rearrange(): void {
+/**
+ * Empties the saved layout, lets the parent bring hidden windows back, then
+ * lays every window out again in its order, at its first size.
+ */
+async function rearrange(): Promise<void> {
     if (!grid) return;
+    rearranging = true;
+    saving = false;
     clearLayout();
     saved = {};
-    saving = false;
+    emit("rearrange");
+    await nextTick();
+    rearranging = false;
+    if (!grid) {
+        saving = true;
+        return;
+    }
     applyLayout(
         flowLayout(
             props.windows.map((window) => ({
                 id: window.id,
-                ...WINDOW_SIZES[window.size],
+                ...firstBox(window),
             })),
             grid.getColumn(),
         ),
@@ -376,8 +502,10 @@ function rearrange(): void {
                         :position="positionOf(window.id)"
                         :total="windows.length"
                         :size="sizes[window.id] ?? null"
+                        :folded="foldedOf(window)"
                         @move="move(window.id, $event.step)"
                         @size-chosen="resize(window.id, $event.size)"
+                        @fold-toggled="toggleFold(window.id)"
                         @close="close(window.id)"
                     >
                         <slot :window="window" />

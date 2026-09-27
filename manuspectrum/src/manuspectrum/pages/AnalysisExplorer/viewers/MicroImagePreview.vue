@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import {
+    computed,
+    inject,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    useTemplateRef,
+    watch,
+} from "vue";
 import L from "leaflet";
 import { useGettext } from "vue3-gettext";
 
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
+import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 import type {
+    AnalysisHit,
     AnalysisPayload,
     FileEntry,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -13,7 +23,17 @@ import type {
 const MIN_ZOOM = -5;
 const ZOOM_SNAP = 0.25;
 
-const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
+/**
+ * One micro-image, zoomable. It reads the file only: the analysis card passes
+ * its record as every preview gets it, Compare shows a Selection file without
+ * one. Inside a Compare window it follows the window's size.
+ */
+const props = defineProps<{
+    file: FileEntry;
+    analysis?: AnalysisPayload | AnalysisHit;
+}>();
+
+const windowResize = inject(WINDOW_RESIZE_KEY, null);
 
 const { $gettext } = useGettext();
 const surface = useTemplateRef<HTMLDivElement>("surface");
@@ -24,6 +44,11 @@ const href = computed(() => safeHref(props.file.downloadUrl));
 // The Leaflet map lives outside Vue reactivity.
 let map: L.Map | null = null;
 let probe: HTMLImageElement | null = null;
+
+watch(
+    () => windowResize?.value,
+    () => map?.invalidateSize(),
+);
 
 onMounted(() => {
     if (!href.value) {

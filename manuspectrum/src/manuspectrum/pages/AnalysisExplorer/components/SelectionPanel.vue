@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
 
-import { useItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useItems.ts";
+import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import { SELECTION_HINTS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { holdingsOf } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
@@ -24,9 +24,8 @@ import type {
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 /**
- * The Selection, kept on this browser. Items read once are kept, so an
- * addition asks the items API for the new keys only; until an item is read,
- * its row shows what the card that added it knew (`SELECTION_HINTS_KEY`).
+ * The Selection, kept on this browser. Until an item is read, its row shows
+ * what the card that added it knew (`SELECTION_HINTS_KEY`).
  */
 const hints = inject(
     SELECTION_HINTS_KEY,
@@ -38,27 +37,9 @@ const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
 
-const byKey = ref(new Map<string, Item>());
-const missing = ref(new Set<string>());
-
-const items = useItems(() =>
-    store.basket
-        .map((item) => item.key)
-        .filter((key) => !byKey.value.has(key) && !missing.value.has(key)),
-);
+const { byKey, missing } = useSelectionItems();
 
 const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
-
-watch(
-    () => items.data.value,
-    (answer) => {
-        if (!answer) return;
-        const read = new Map(byKey.value);
-        for (const item of answer.items) read.set(item.key, item);
-        byKey.value = read;
-        missing.value = new Set([...missing.value, ...answer.missing]);
-    },
-);
 const canCompare = computed(() => isViewAvailable("compare"));
 
 /** What a whole analysis holds, « 2 spectra · 1 map », or that it holds nothing to show. */

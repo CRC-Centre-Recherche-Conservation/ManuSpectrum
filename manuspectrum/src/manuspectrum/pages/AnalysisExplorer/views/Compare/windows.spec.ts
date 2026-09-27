@@ -1,44 +1,318 @@
 import { describe, expect, it } from "vitest";
 
-import { placeholderWindows } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
+import {
+    analysisHit,
+    characterization,
+    fileEntry,
+    imagingEntry,
+    uuid,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    autoWindows,
+    windowIdsOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
+import type {
+    AnalysisHit,
+    FileEntry,
+    Item,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { BasketItem } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type {
+    AutoWindow,
+    XyWindow,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
-const ANALYSIS = "00000000-0000-4000-8000-000000000001";
-const FILE = "00000000-0000-4000-8000-000000000002";
+const XRF = "counts|energy (kev)|asc";
+const RAMAN = "intensity|raman shift|asc";
+const FORS = "reflectance|wavelength|asc";
+const FTIR = "reflectance|wavenumber|desc";
 
-function item(key: string, kind: BasketItem["kind"], slot: number): BasketItem {
-    return { key, kind, slot };
+function spectrum(n: number, axisKey: string | null, extra = {}): FileEntry {
+    const base = fileEntry();
+    return fileEntry({
+        id: uuid(700 + n),
+        name: `S${n}.csv`,
+        viewer: { ...base.viewer, axisKey, ...extra },
+    });
 }
 
-describe("placeholderWindows", () => {
+function micro(n: number): FileEntry {
+    return fileEntry({
+        id: uuid(750 + n),
+        name: `M${n}.jpg`,
+        dataKind: "micro-imaging",
+        role: "other",
+        previewUrl: null,
+    });
+}
+
+function whole(n: number, files: FileEntry[], hit?: AnalysisHit): Item {
+    const analysis = hit ?? analysisHit(n);
+    return {
+        key: `an:${analysis.id}:-`,
+        kind: "analysis",
+        analysis,
+        files,
+    };
+}
+
+function held(items: Item[], slots?: number[]) {
+    const basket: BasketItem[] = items.map((item, index) => ({
+        key: item.key,
+        kind: item.kind,
+        slot: slots?.[index] ?? index,
+    }));
+    return {
+        basket,
+        byKey: new Map(items.map((item) => [item.key, item])),
+    };
+}
+
+function derive(items: Item[], slots?: number[], missing: string[] = []) {
+    const { basket, byKey } = held(items, slots);
+    const gone: BasketItem[] = missing.map((key, index) => ({
+        key,
+        kind: "analysis",
+        slot: 20 + index,
+    }));
+    return autoWindows([...basket, ...gone], byKey, new Set(missing));
+}
+
+function xy(windows: AutoWindow[]): XyWindow[] {
+    return windows.filter((window): window is XyWindow => window.kind === "xy");
+}
+
+describe("autoWindows", () => {
     it("is empty for an empty Selection", () => {
-        expect(placeholderWindows([])).toEqual([]);
+        expect(autoWindows([], new Map(), new Set())).toEqual([]);
     });
 
-    it("gives one window per kind of item, with stable ids and the items in slot order", () => {
-        const spectrum = `af:${ANALYSIS}:${FILE}`;
-        const material = `ch:${ANALYSIS}:-`;
-        const layer = `im:${ANALYSIS}:1`;
-        const whole = `an:${ANALYSIS}:-`;
-        const other = `af:${FILE}:${ANALYSIS}`;
-        expect(
-            placeholderWindows([
-                item(layer, "imaging", 4),
-                item(other, "analysis-file", 3),
-                item(material, "characterization", 2),
-                item(whole, "analysis", 1),
-                item(spectrum, "analysis-file", 0),
-            ]),
-        ).toEqual([
-            { id: "auto:xy:all", kind: "xy", keys: [spectrum, other] },
-            { id: "auto:micro", kind: "micro", keys: [whole] },
-            {
-                id: "auto:characterizations",
-                kind: "characterizations",
-                keys: [material],
-            },
-            { id: "auto:not-in-chart", kind: "not-in-chart", keys: [layer] },
+    it("opens one XY window per axis group, in the order of the first slot showing it", () => {
+        const first = whole(1, [spectrum(1, RAMAN), spectrum(2, XRF)]);
+        const second = whole(2, [spectrum(3, XRF)]);
+        const windows = derive([first, second], [4, 1]);
+        expect(windowIdsOf(windows)).toEqual([
+            `auto:xy:${XRF}`,
+            `auto:xy:${RAMAN}`,
         ]);
+        const [xrf, raman] = xy(windows);
+        expect(
+            xrf.curves.map((curve) => [curve.slot, curve.file.name]),
+        ).toEqual([
+            [1, "S3.csv"],
+            [4, "S2.csv"],
+        ]);
+        expect(xrf.keys).toEqual([second.key, first.key]);
+        expect(raman.curves.map((curve) => curve.file.name)).toEqual([
+            "S1.csv",
+        ]);
+    });
+
+    it("keeps every readable file of an analysis in its slot, in file order", () => {
+        const item = whole(1, [spectrum(1, XRF), spectrum(2, XRF)]);
+        const [window] = xy(derive([item], [7]));
+        expect(
+            window.curves.map((curve) => [curve.slot, curve.file.name]),
+        ).toEqual([
+            [7, "S1.csv"],
+            [7, "S2.csv"],
+        ]);
+        expect(window.keys).toEqual([item.key]);
+    });
+
+    it("names an XY window by the first stored configuration name and axis titles in slot order", () => {
+        const unnamed = whole(1, [
+            spectrum(1, XRF, { configName: null, xLabel: null, yLabel: "" }),
+        ]);
+        const named = whole(2, [
+            spectrum(2, XRF, {
+                configName: "XRF spectrum",
+                xLabel: "Energy (keV)",
+                yLabel: "Counts",
+            }),
+        ]);
+        const other = whole(3, [
+            spectrum(3, XRF, {
+                configName: "Other",
+                xLabel: "E",
+                yLabel: "N",
+            }),
+        ]);
+        const [window] = xy(derive([unnamed, named, other]));
+        expect(window.configName).toBe("XRF spectrum");
+        expect(window.xLabel).toBe("Energy (keV)");
+        expect(window.yLabel).toBe("Counts");
+        expect(window.axisKey).toBe(XRF);
+    });
+
+    it("groups readable spectra without axis titles in their own window", () => {
+        const item = whole(1, [
+            spectrum(1, null, { configName: null, xLabel: null, yLabel: null }),
+        ]);
+        const [window] = xy(derive([item]));
+        expect(window.id).toBe("auto:xy:-");
+        expect(window.axisKey).toBeNull();
+        expect(window.configName).toBeNull();
+    });
+
+    it("folds the XY windows after the third", () => {
+        const items = [XRF, RAMAN, FORS, FTIR].map((axisKey, n) =>
+            whole(n + 1, [spectrum(n + 1, axisKey)]),
+        );
+        expect(xy(derive(items)).map((window) => window.folded)).toEqual([
+            false,
+            false,
+            false,
+            true,
+        ]);
+    });
+
+    it("puts micro-images side by side, materials in one table, in slot order", () => {
+        const images = whole(1, [micro(1), micro(2)]);
+        const material = {
+            key: `ch:${uuid(501)}:-`,
+            kind: "characterization" as const,
+            characterization: characterization(1),
+        };
+        const windows = derive([material, images], [3, 0]);
+        expect(windowIdsOf(windows)).toEqual([
+            "auto:micro",
+            "auto:characterizations",
+        ]);
+        const [microWindow, materials] = windows;
+        expect(microWindow.kind === "micro" && microWindow.images).toEqual([
+            {
+                key: images.key,
+                slot: 0,
+                analysis: (images as { analysis: AnalysisHit }).analysis,
+                file: micro(1),
+            },
+            {
+                key: images.key,
+                slot: 0,
+                analysis: (images as { analysis: AnalysisHit }).analysis,
+                file: micro(2),
+            },
+        ]);
+        expect(
+            materials.kind === "characterizations" && materials.rows,
+        ).toEqual([
+            {
+                key: material.key,
+                slot: 3,
+                characterization: material.characterization,
+            },
+        ]);
+    });
+
+    it("lists what no window draws, with the reason, once per item", () => {
+        const layers = whole(1, [imagingEntry()]);
+        const empty = whole(2, []);
+        const gone = `an:${uuid(199)}:-`;
+        const windows = derive([layers, empty], undefined, [gone]);
+        expect(windowIdsOf(windows)).toEqual(["auto:not-in-chart"]);
+        const [window] = windows;
+        expect(
+            window.kind === "not-in-chart" &&
+                window.entries.map((entry) => [entry.key, entry.reason]),
+        ).toEqual([
+            [layers.key, "imaging"],
+            [empty.key, "no-data"],
+            [gone, "missing"],
+        ]);
+        expect(window.keys).toEqual([layers.key, empty.key, gone]);
+    });
+
+    it("reads the older one-file and one-layer keys into the same windows", () => {
+        const hit = analysisHit(1);
+        const readable: Item = {
+            key: `af:${hit.id}:${uuid(701)}`,
+            kind: "analysis-file",
+            analysis: hit,
+            file: spectrum(1, XRF),
+        };
+        const image: Item = {
+            key: `af:${hit.id}:${uuid(751)}`,
+            kind: "analysis-file",
+            analysis: hit,
+            file: micro(1),
+        };
+        const raw: Item = {
+            key: `af:${hit.id}:${uuid(702)}`,
+            kind: "analysis-file",
+            analysis: hit,
+            file: fileEntry({
+                id: uuid(702),
+                name: "S1.mca",
+                role: "raw",
+                dataKind: "file",
+                previewUrl: null,
+            }),
+        };
+        const other: Item = {
+            key: `af:${hit.id}:${uuid(703)}`,
+            kind: "analysis-file",
+            analysis: hit,
+            file: fileEntry({
+                id: uuid(703),
+                name: "notes.pdf",
+                role: "other",
+                dataKind: "file",
+                previewUrl: null,
+            }),
+        };
+        const layer: Item = {
+            key: `im:${hit.id}:1`,
+            kind: "imaging",
+            analysis: hit,
+            file: imagingEntry(),
+        };
+        const windows = derive([readable, image, raw, other, layer]);
+        expect(windowIdsOf(windows)).toEqual([
+            `auto:xy:${XRF}`,
+            "auto:micro",
+            "auto:not-in-chart",
+        ]);
+        const notInChart = windows[2];
+        expect(
+            notInChart.kind === "not-in-chart" &&
+                notInChart.entries.map((entry) => [
+                    entry.key,
+                    entry.reason,
+                    entry.file?.name,
+                ]),
+        ).toEqual([
+            [raw.key, "raw-file", "S1.mca"],
+            [other.key, "file", "notes.pdf"],
+            [layer.key, "imaging", "maXRF f. 1v"],
+        ]);
+    });
+
+    it("waits for an item not read yet, and keeps the windows of the others", () => {
+        const item = whole(1, [spectrum(1, XRF)]);
+        const { basket, byKey } = held([item]);
+        const windows = autoWindows(
+            [
+                ...basket,
+                { key: `ch:${uuid(501)}:-`, kind: "characterization", slot: 1 },
+            ],
+            byKey,
+            new Set(),
+        );
+        expect(windowIdsOf(windows)).toEqual([`auto:xy:${XRF}`]);
+    });
+
+    it("drops a window once its items have left the Selection", () => {
+        const first = whole(1, [spectrum(1, XRF)]);
+        const second = whole(2, [micro(1)]);
+        const { basket, byKey } = held([first, second]);
+        expect(windowIdsOf(autoWindows(basket, byKey, new Set()))).toEqual([
+            `auto:xy:${XRF}`,
+            "auto:micro",
+        ]);
+        expect(
+            windowIdsOf(autoWindows(basket.slice(1), byKey, new Set())),
+        ).toEqual(["auto:micro"]);
     });
 });

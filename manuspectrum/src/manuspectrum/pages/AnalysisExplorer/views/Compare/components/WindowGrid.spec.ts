@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, inject, nextTick } from "vue";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 
 import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
 
@@ -47,9 +47,12 @@ const ResizeReader = defineComponent({
 let announce: ReturnType<typeof vi.fn>;
 let wrapper: VueWrapper | null = null;
 
-function mountGrid(windows: CompareWindowSpec[] = [XRF, MICRO]): VueWrapper {
+function mountGrid(
+    windows: CompareWindowSpec[] = [XRF, MICRO],
+    retained: string[] = [],
+): VueWrapper {
     wrapper = mount(WindowGrid, {
-        props: { windows },
+        props: { windows, retained },
         attachTo: document.body,
         global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
         slots: {
@@ -73,7 +76,9 @@ function control(id: string, action: string): HTMLButtonElement {
 
 function stored(): unknown {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
-    return raw === null ? null : JSON.parse(raw);
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw);
+    return parsed.version === 2 ? parsed.boxes : parsed;
 }
 
 beforeEach(() => {
@@ -253,7 +258,6 @@ describe("WindowGrid", () => {
         control(XRF.id, "close").click();
         await nextTick();
         expect(view.emitted("close")).toEqual([[{ id: XRF.id }]]);
-        expect(announce).toHaveBeenLastCalledWith("XRF closed.");
         await view.setProps({ windows: [MICRO] });
         await nextTick();
         expect(lastGrid().removeWidget).toHaveBeenCalledWith(
@@ -263,6 +267,124 @@ describe("WindowGrid", () => {
         );
         expect(document.activeElement).toBe(
             item(MICRO.id).querySelector(".compare-window"),
+        );
+    });
+
+    it("keeps the places of hidden windows and forgets those of windows gone", async () => {
+        const box = { x: 6, y: 0, w: 6, h: 5 };
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                [MICRO.id]: box,
+                [MATERIALS.id]: box,
+            }),
+        );
+        const view = mountGrid([XRF], [MICRO.id, MATERIALS.id]);
+        expect(stored()).toEqual({
+            [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+            [MICRO.id]: box,
+            [MATERIALS.id]: box,
+        });
+        await view.setProps({ windows: [XRF], retained: [MICRO.id] });
+        await view.setProps({ windows: [], retained: [MICRO.id] });
+        await nextTick();
+        expect(stored()).toEqual({ [MICRO.id]: box });
+    });
+
+    it("brings a window back to its place and says it is shown again", async () => {
+        const box = { x: 6, y: 0, w: 6, h: 5 };
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ [MICRO.id]: box }),
+        );
+        const view = mountGrid([XRF], [MICRO.id]);
+        await view.setProps({ windows: [XRF, MICRO], retained: [] });
+        expect(lastGrid().makeWidget).toHaveBeenLastCalledWith(item(MICRO.id), {
+            id: MICRO.id,
+            ...box,
+        });
+        expect(announce).toHaveBeenLastCalledWith(
+            "Window back in its place: Micro-images",
+        );
+    });
+
+    it("lets its parent bring hidden windows back before it lays every window out", async () => {
+        const grid: VueWrapper = mount(WindowGrid, {
+            props: {
+                windows: [MICRO],
+                retained: [XRF.id],
+                onRearrange: () => grid.setProps({ windows: [XRF, MICRO] }),
+            },
+            attachTo: document.body,
+            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
+        });
+        wrapper = grid;
+        await wrapper.find("button.rearrange").trigger("click");
+        await flushPromises();
+        expect(lastGrid().update).toHaveBeenCalledWith(item(XRF.id), {
+            x: 0,
+            y: 0,
+            w: 6,
+            h: 5,
+        });
+        expect(lastGrid().update).toHaveBeenCalledWith(item(MICRO.id), {
+            x: 6,
+            y: 0,
+            w: 4,
+            h: 4,
+        });
+        expect(announce).toHaveBeenCalledTimes(1);
+        expect(announce).toHaveBeenLastCalledWith("Windows rearranged.");
+        expect(stored()).toBeNull();
+    });
+
+    it("opens a folded window to its header only, and unfolds it on demand", async () => {
+        const folded: CompareWindowSpec = { ...XRF, folded: true };
+        const view = mountGrid([MICRO, folded]);
+        const grid = lastGrid();
+        expect(grid.makeWidget).toHaveBeenCalledWith(item(XRF.id), {
+            id: XRF.id,
+            autoPosition: true,
+            w: 6,
+            h: 2,
+        });
+        expect(item(XRF.id).querySelector(".content")).toBeNull();
+        expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
+            "false",
+        );
+        expect(control(MICRO.id, "fold")).toBeNull();
+        control(XRF.id, "fold").click();
+        await nextTick();
+        expect(grid.update).toHaveBeenLastCalledWith(item(XRF.id), { h: 5 });
+        expect(item(XRF.id).querySelector(".content")?.textContent).toBe(
+            XRF.id,
+        );
+        expect(announce).toHaveBeenLastCalledWith("XRF: unfolded");
+        control(XRF.id, "fold").click();
+        await nextTick();
+        expect(grid.update).toHaveBeenLastCalledWith(item(XRF.id), { h: 2 });
+        expect(announce).toHaveBeenLastCalledWith("XRF: folded");
+        control(XRF.id, "size-L").click();
+        await nextTick();
+        expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
+            "true",
+        );
+        await view.find("button.rearrange").trigger("click");
+        await flushPromises();
+        expect(grid.update).toHaveBeenLastCalledWith(item(XRF.id), {
+            x: 4,
+            y: 0,
+            w: 6,
+            h: 5,
+        });
+    });
+
+    it("keeps a window folded as it opened when its place among the windows changes", async () => {
+        const view = mountGrid([MICRO, { ...XRF, folded: true }]);
+        await view.setProps({ windows: [{ ...XRF, folded: false }] });
+        expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
+            "false",
         );
     });
 

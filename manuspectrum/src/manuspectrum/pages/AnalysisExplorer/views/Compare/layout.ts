@@ -10,7 +10,7 @@ import type {
     WindowSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
-/** Places of the Compare windows on this browser; not synced between tabs. */
+/** Places of the Compare windows and the windows hidden, on this browser; not synced between tabs. */
 export const LAYOUT_STORAGE_KEY = "ms-explorer-layout-v1";
 
 export const GRID_COLUMNS = 12;
@@ -45,37 +45,116 @@ function isBox(value: unknown): value is WindowBox {
     );
 }
 
-/** The boxes of a stored layout; anything else is dropped. */
-export function parseLayout(raw: string | null): WindowLayout {
-    if (raw === null) return {};
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(raw);
-    } catch {
-        return {};
-    }
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
-        return {};
+/** The stored shape: the places of the windows and the windows hidden. */
+const LAYOUT_VERSION = 2;
+
+interface StoredLayout {
+    boxes: WindowLayout;
+    hidden: string[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function boxesOf(value: unknown): WindowLayout {
     const layout: WindowLayout = {};
-    for (const [id, value] of Object.entries(parsed)) {
-        if (isBox(value)) {
-            const { x, y, w, h } = value;
+    if (!isRecord(value)) return layout;
+    for (const [id, entry] of Object.entries(value)) {
+        if (isBox(entry)) {
+            const { x, y, w, h } = entry;
             layout[id] = { x, y, w, h };
         }
     }
     return layout;
 }
 
+function hiddenOf(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return [
+        ...new Set(
+            value.filter(
+                (id): id is string => typeof id === "string" && id !== "",
+            ),
+        ),
+    ];
+}
+
+/**
+ * A stored layout, anything unreadable dropped. A layout saved before hidden
+ * windows existed is a bare `Record<windowId, box>`: its boxes are read, with
+ * no window hidden.
+ */
+function parseStored(raw: string | null): StoredLayout {
+    if (raw === null) return { boxes: {}, hidden: [] };
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        return { boxes: {}, hidden: [] };
+    }
+    if (!isRecord(parsed)) return { boxes: {}, hidden: [] };
+    if (parsed.version === LAYOUT_VERSION) {
+        return {
+            boxes: boxesOf(parsed.boxes),
+            hidden: hiddenOf(parsed.hidden),
+        };
+    }
+    return { boxes: boxesOf(parsed), hidden: [] };
+}
+
+function readStored(): StoredLayout {
+    return parseStored(readStorage(LAYOUT_STORAGE_KEY));
+}
+
+function writeStored({ boxes, hidden }: StoredLayout): void {
+    writeStorage(
+        LAYOUT_STORAGE_KEY,
+        JSON.stringify({ version: LAYOUT_VERSION, boxes, hidden }),
+    );
+}
+
+/** The boxes of a stored layout; anything else is dropped. */
+export function parseLayout(raw: string | null): WindowLayout {
+    return parseStored(raw).boxes;
+}
+
 export function readLayout(): WindowLayout {
-    return parseLayout(readStorage(LAYOUT_STORAGE_KEY));
+    return readStored().boxes;
 }
 
+/** Saves the places of the windows; the hidden windows stay as stored. */
 export function writeLayout(layout: WindowLayout): void {
-    writeStorage(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+    writeStored({ ...readStored(), boxes: layout });
 }
 
+/** The windows arranged from the Selection that the reader hid, in the order hidden. */
+export function readHidden(): string[] {
+    return readStored().hidden;
+}
+
+/** Saves the hidden windows; the places stay as stored. */
+export function writeHidden(ids: readonly string[]): void {
+    writeStored({ ...readStored(), hidden: [...ids] });
+}
+
+/** Forgets the places and the hidden windows. */
 export function clearLayout(): void {
     removeStorage(LAYOUT_STORAGE_KEY);
+}
+
+/** Forgets the place and the hidden state of every window `ids` does not name; writes nothing when none is gone. */
+export function forgetWindows(ids: readonly string[]): void {
+    const stored = readStored();
+    const boxes = keepWindows(stored.boxes, ids);
+    const hidden = stored.hidden.filter((id) => ids.includes(id));
+    if (
+        Object.keys(boxes).length === Object.keys(stored.boxes).length &&
+        hidden.length === stored.hidden.length
+    ) {
+        return;
+    }
+    writeStored({ boxes, hidden });
 }
 
 /** The places of the windows `ids` names. */

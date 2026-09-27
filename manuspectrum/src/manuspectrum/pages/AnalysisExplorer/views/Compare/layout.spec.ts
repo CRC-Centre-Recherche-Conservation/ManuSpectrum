@@ -4,11 +4,14 @@ import {
     LAYOUT_STORAGE_KEY,
     clearLayout,
     flowLayout,
+    forgetWindows,
     keepWindows,
     parseLayout,
+    readHidden,
     readLayout,
     readingOrder,
     sizeOf,
+    writeHidden,
     writeLayout,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 
@@ -19,7 +22,11 @@ describe("Compare window layout", () => {
         writeLayout({ "auto:micro": { x: 0, y: 0, w: 6, h: 5 } });
         expect(
             JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY)!),
-        ).toEqual({ "auto:micro": { x: 0, y: 0, w: 6, h: 5 } });
+        ).toEqual({
+            version: 2,
+            boxes: { "auto:micro": { x: 0, y: 0, w: 6, h: 5 } },
+            hidden: [],
+        });
         expect(readLayout()).toEqual({
             "auto:micro": { x: 0, y: 0, w: 6, h: 5 },
         });
@@ -46,6 +53,63 @@ describe("Compare window layout", () => {
                 }),
             ),
         ).toEqual({ good: { x: 6, y: 2, w: 6, h: 5 } });
+    });
+
+    it("reads a layout saved before hidden windows existed", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ "auto:micro": { x: 0, y: 0, w: 6, h: 5 } }),
+        );
+        expect(readLayout()).toEqual({
+            "auto:micro": { x: 0, y: 0, w: 6, h: 5 },
+        });
+        expect(readHidden()).toEqual([]);
+    });
+
+    it("keeps the hidden windows next to the places, each written without losing the other", () => {
+        const box = { x: 0, y: 0, w: 6, h: 5 };
+        writeLayout({ "auto:micro": box });
+        writeHidden(["auto:xy:-", "auto:micro"]);
+        writeLayout({ "auto:micro": box, "auto:xy:-": box });
+        expect(readHidden()).toEqual(["auto:xy:-", "auto:micro"]);
+        expect(readLayout()).toEqual({ "auto:micro": box, "auto:xy:-": box });
+        writeHidden([]);
+        expect(readLayout()).toEqual({ "auto:micro": box, "auto:xy:-": box });
+        clearLayout();
+        expect(readHidden()).toEqual([]);
+    });
+
+    it("drops what is not a window id from the hidden windows", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                boxes: { bad: { x: -1 } },
+                hidden: ["auto:micro", 3, null, "auto:micro", ""],
+            }),
+        );
+        expect(readHidden()).toEqual(["auto:micro"]);
+        expect(readLayout()).toEqual({});
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ version: 2, boxes: [], hidden: "auto:micro" }),
+        );
+        expect(readHidden()).toEqual([]);
+        expect(readLayout()).toEqual({});
+    });
+
+    it("forgets the places and the hidden state of windows that are gone", () => {
+        const box = { x: 0, y: 0, w: 6, h: 5 };
+        writeLayout({ "auto:micro": box, "auto:xy:-": box });
+        writeHidden(["auto:xy:-", "auto:characterizations"]);
+        forgetWindows(["auto:micro"]);
+        expect(readLayout()).toEqual({ "auto:micro": box });
+        expect(readHidden()).toEqual([]);
+    });
+
+    it("writes nothing when no window is gone", () => {
+        forgetWindows(["auto:micro"]);
+        expect(window.localStorage.getItem(LAYOUT_STORAGE_KEY)).toBeNull();
     });
 
     it("keeps only the windows shown", () => {
