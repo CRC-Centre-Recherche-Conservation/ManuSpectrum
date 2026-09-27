@@ -80,6 +80,32 @@ describe("AnalysisCard", () => {
         expect(row.find("a.raw").attributes("href")).toBe(raw.downloadUrl);
     });
 
+    it("writes a file and its raw pair with an unsafe address as plain text", () => {
+        const readable = fileEntry({
+            id: uuid(8),
+            name: "X01_f1v.csv",
+            pairedWith: uuid(9),
+            downloadUrl: "javascript:alert(1)",
+        });
+        const raw = fileEntry({
+            id: uuid(9),
+            name: "X01_f1v",
+            role: "raw",
+            dataKind: "file",
+            format: "mca",
+            pairedWith: uuid(8),
+            downloadUrl: "javascript:alert(2)",
+            previewUrl: null,
+        });
+        const { wrapper } = mountCard(
+            analysisPayload({ files: [readable, raw] }),
+        );
+        const row = wrapper.find(`[data-file="${uuid(8)}"]`);
+        expect(row.find("a").exists()).toBe(false);
+        expect(row.find("span.file-name").text()).toBe("X01_f1v.csv");
+        expect(row.find("span.raw").text()).toContain("raw instrument · mca");
+    });
+
     it("puts a raw file without a readable version under « not in a chart »", () => {
         const raw = fileEntry({
             id: uuid(9),
@@ -123,6 +149,27 @@ describe("AnalysisCard", () => {
         expect(wrapper.find(".licence").text()).toContain(
             "Project licence (not stated for this file)",
         );
+    });
+
+    it("credits the rights holder and writes a licence without a safe address as plain text", () => {
+        const file = fileEntry();
+        file.license = {
+            ...file.license,
+            url: "javascript:alert(1)",
+            attribution: "CRC",
+        };
+        const credited = fileEntry();
+        credited.license = { ...credited.license, attribution: "© BnF" };
+
+        const unsafe = mountCard(analysisPayload({ files: [file] })).wrapper;
+        expect(unsafe.find(".licence a").exists()).toBe(false);
+        expect(unsafe.find(".licence").text()).toContain(
+            file.license.label.value,
+        );
+        expect(unsafe.find(".attribution").text()).toBe("© CRC");
+
+        const kept = mountCard(analysisPayload({ files: [credited] })).wrapper;
+        expect(kept.find(".attribution").text()).toBe("© BnF");
     });
 
     it("leaves out a condition title that repeats the section's", () => {
