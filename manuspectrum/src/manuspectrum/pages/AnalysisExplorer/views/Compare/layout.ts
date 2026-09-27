@@ -10,7 +10,7 @@ import type {
     WindowSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
-/** Places of the Compare windows and the windows hidden, on this browser; not synced between tabs. */
+/** Places of the Compare windows, the windows hidden and those folded or unfolded by the reader, on this browser; not synced between tabs. */
 export const LAYOUT_STORAGE_KEY = "ms-explorer-layout-v1";
 
 export const GRID_COLUMNS = 12;
@@ -45,12 +45,22 @@ function isBox(value: unknown): value is WindowBox {
     );
 }
 
-/** The stored shape: the places of the windows and the windows hidden. */
+/**
+ * The stored shape: the places of the windows (a folded window's box keeps
+ * its unfolded height), the windows hidden, and the windows the reader
+ * folded (`true`) or unfolded (`false`). `folded` came after `hidden` in the
+ * same version and may be absent.
+ */
 const LAYOUT_VERSION = 2;
 
 interface StoredLayout {
     boxes: WindowLayout;
     hidden: string[];
+    folded: Record<string, boolean>;
+}
+
+function emptyLayout(): StoredLayout {
+    return { boxes: {}, hidden: [], folded: {} };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,37 +90,47 @@ function hiddenOf(value: unknown): string[] {
     ];
 }
 
+function foldedOf(value: unknown): Record<string, boolean> {
+    const folded: Record<string, boolean> = {};
+    if (!isRecord(value)) return folded;
+    for (const [id, state] of Object.entries(value)) {
+        if (id !== "" && typeof state === "boolean") folded[id] = state;
+    }
+    return folded;
+}
+
 /**
  * A stored layout, anything unreadable dropped. A layout saved before hidden
  * windows existed is a bare `Record<windowId, box>`: its boxes are read, with
  * no window hidden.
  */
 function parseStored(raw: string | null): StoredLayout {
-    if (raw === null) return { boxes: {}, hidden: [] };
+    if (raw === null) return emptyLayout();
     let parsed: unknown;
     try {
         parsed = JSON.parse(raw);
     } catch {
-        return { boxes: {}, hidden: [] };
+        return emptyLayout();
     }
-    if (!isRecord(parsed)) return { boxes: {}, hidden: [] };
+    if (!isRecord(parsed)) return emptyLayout();
     if (parsed.version === LAYOUT_VERSION) {
         return {
             boxes: boxesOf(parsed.boxes),
             hidden: hiddenOf(parsed.hidden),
+            folded: foldedOf(parsed.folded),
         };
     }
-    return { boxes: boxesOf(parsed), hidden: [] };
+    return { ...emptyLayout(), boxes: boxesOf(parsed) };
 }
 
 function readStored(): StoredLayout {
     return parseStored(readStorage(LAYOUT_STORAGE_KEY));
 }
 
-function writeStored({ boxes, hidden }: StoredLayout): void {
+function writeStored({ boxes, hidden, folded }: StoredLayout): void {
     writeStorage(
         LAYOUT_STORAGE_KEY,
-        JSON.stringify({ version: LAYOUT_VERSION, boxes, hidden }),
+        JSON.stringify({ version: LAYOUT_VERSION, boxes, hidden, folded }),
     );
 }
 
@@ -123,7 +143,7 @@ export function readLayout(): WindowLayout {
     return readStored().boxes;
 }
 
-/** Saves the places of the windows; the hidden windows stay as stored. */
+/** Saves the places of the windows; the rest stays as stored. */
 export function writeLayout(layout: WindowLayout): void {
     writeStored({ ...readStored(), boxes: layout });
 }
@@ -133,38 +153,52 @@ export function readHidden(): string[] {
     return readStored().hidden;
 }
 
-/** Saves the hidden windows; the places stay as stored. */
+/** Saves the hidden windows; the rest stays as stored. */
 export function writeHidden(ids: readonly string[]): void {
     writeStored({ ...readStored(), hidden: [...ids] });
 }
 
-/** Forgets the places and the hidden windows. */
+/** The windows the reader folded (`true`) or unfolded (`false`), by id. */
+export function readFolded(): Record<string, boolean> {
+    return readStored().folded;
+}
+
+/** Saves the windows the reader folded or unfolded; the rest stays as stored. */
+export function writeFolded(folded: Readonly<Record<string, boolean>>): void {
+    writeStored({ ...readStored(), folded: { ...folded } });
+}
+
+/** Forgets the places, the hidden windows and the folded ones. */
 export function clearLayout(): void {
     removeStorage(LAYOUT_STORAGE_KEY);
 }
 
-/** Forgets the place and the hidden state of every window `ids` does not name; writes nothing when none is gone. */
+/** Forgets the place, the hidden and the folded state of every window `ids` does not name; writes nothing when none is gone. */
 export function forgetWindows(ids: readonly string[]): void {
     const stored = readStored();
     const boxes = keepWindows(stored.boxes, ids);
     const hidden = stored.hidden.filter((id) => ids.includes(id));
+    const folded = keepWindows(stored.folded, ids);
     if (
         Object.keys(boxes).length === Object.keys(stored.boxes).length &&
-        hidden.length === stored.hidden.length
+        hidden.length === stored.hidden.length &&
+        Object.keys(folded).length === Object.keys(stored.folded).length
     ) {
         return;
     }
-    writeStored({ boxes, hidden });
+    writeStored({ boxes, hidden, folded });
 }
 
-/** The places of the windows `ids` names. */
-export function keepWindows(
-    layout: WindowLayout,
+/** The entries of the windows `ids` names. */
+export function keepWindows<T>(
+    layout: Readonly<Record<string, T>>,
     ids: readonly string[],
-): WindowLayout {
-    const kept: WindowLayout = {};
+): Record<string, T> {
+    const kept: Record<string, T> = {};
     for (const id of ids) {
-        if (layout[id]) kept[id] = layout[id];
+        if (Object.prototype.hasOwnProperty.call(layout, id)) {
+            kept[id] = layout[id];
+        }
     }
     return kept;
 }

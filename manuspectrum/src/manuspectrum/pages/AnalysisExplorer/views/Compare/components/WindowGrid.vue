@@ -24,9 +24,11 @@ import {
     clearLayout,
     flowLayout,
     keepWindows,
+    readFolded,
     readLayout,
     readingOrder,
     sizeOf,
+    writeFolded,
     writeLayout,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 
@@ -60,7 +62,9 @@ const GAP = "0.5rem";
  * appears later goes back to its place, else under the others, without the
  * focus, and is announced. « Rearrange » emits `rearrange` first, so the
  * parent can bring hidden windows back, then lays every window out. A folded
- * window keeps its header only. gridstack keeps the DOM in reading order,
+ * window keeps its header only; the reader's fold or unfold is saved with
+ * the layout and wins over the window's spec, and a folded window's saved
+ * box keeps its unfolded height. gridstack keeps the DOM in reading order,
  * which the keyboard follows.
  */
 const props = withDefaults(
@@ -88,8 +92,18 @@ const sizes = ref<Record<string, WindowSize | null>>(
     Object.fromEntries(props.windows.map((window) => [window.id, window.size])),
 );
 const resizeTick = ref(0);
-/** Whether each window that folds is folded: as its spec says when it is placed, then as the reader sets it. */
-const foldState = ref<Record<string, boolean>>({});
+/** The windows the reader folded or unfolded, as saved; read before the first render, so that a window opens as saved. */
+let savedFolds: Record<string, boolean> = readFolded();
+/** Whether each window that folds is folded: as the reader saved it, else as its spec says when it is placed; then as the reader sets it. */
+const foldState = ref<Record<string, boolean>>(
+    Object.fromEntries(
+        props.windows.flatMap((window) =>
+            window.folded === undefined
+                ? []
+                : [[window.id, savedFolds[window.id] ?? window.folded]],
+        ),
+    ),
+);
 
 let grid: GridStack | null = null;
 let saved: WindowLayout = {};
@@ -181,13 +195,19 @@ onMounted(() => {
     const created = element && GridStack.init(gridOptions(), element);
     if (!element || !created) return;
     grid = created;
-    const stored = readLayout();
-    saved = keepWindows(stored, [
+    const ids = [
         ...props.windows.map((window) => window.id),
         ...props.retained,
-    ]);
+    ];
+    const stored = readLayout();
+    saved = keepWindows(stored, ids);
     if (Object.keys(saved).length !== Object.keys(stored).length) {
         writeLayout(saved);
+    }
+    const storedFolds = savedFolds;
+    savedFolds = keepWindows(storedFolds, ids);
+    if (Object.keys(savedFolds).length !== Object.keys(storedFolds).length) {
+        writeFolded(savedFolds);
     }
     created.batchUpdate();
     for (const window of props.windows) placeWindow(window, true);
@@ -250,6 +270,17 @@ function foldedOf(window: CompareWindowSpec): boolean | null {
     return foldState.value[window.id] ?? window.folded;
 }
 
+/** Its height unfolded: its saved box's, else its first size's. */
+function unfoldedRows(window: CompareWindowSpec): number {
+    return saved[window.id]?.h ?? WINDOW_SIZES[window.size].h;
+}
+
+/** Saves a fold or an unfold the reader asked for. */
+function rememberFold(id: string, folded: boolean): void {
+    savedFolds = { ...savedFolds, [id]: folded };
+    writeFolded(savedFolds);
+}
+
 /** Its first size, as tall as its header when folded. */
 function firstBox(window: CompareWindowSpec): Pick<WindowBox, "w" | "h"> {
     const preset = WINDOW_SIZES[window.size];
@@ -259,7 +290,9 @@ function firstBox(window: CompareWindowSpec): Pick<WindowBox, "w" | "h"> {
 /** Forgets the places of the windows gone that `retained` does not name. */
 function forgetGone(gone: readonly string[]): void {
     const forgotten = gone.filter(
-        (id) => saved[id] && !props.retained.includes(id),
+        (id) =>
+            (saved[id] || savedFolds[id] !== undefined) &&
+            !props.retained.includes(id),
     );
     if (forgotten.length === 0) return;
     saved = keepWindows(
@@ -267,6 +300,11 @@ function forgetGone(gone: readonly string[]): void {
         Object.keys(saved).filter((id) => !forgotten.includes(id)),
     );
     writeLayout(saved);
+    savedFolds = keepWindows(
+        savedFolds,
+        Object.keys(savedFolds).filter((id) => !forgotten.includes(id)),
+    );
+    writeFolded(savedFolds);
 }
 
 /** Its saved place; else gridstack's choice when the grid opens, the end of the grid afterwards. */
@@ -277,7 +315,10 @@ function placeWindow(window: CompareWindowSpec, opening: boolean): void {
         window.folded !== undefined &&
         foldState.value[window.id] === undefined
     ) {
-        foldState.value = { ...foldState.value, [window.id]: window.folded };
+        foldState.value = {
+            ...foldState.value,
+            [window.id]: savedFolds[window.id] ?? window.folded,
+        };
     }
     const box = saved[window.id];
     const preset = firstBox(window);
@@ -319,11 +360,22 @@ function syncFromGrid(): void {
     );
 }
 
+/** What a window's box is saved as: a folded window keeps its unfolded height. */
+function savedBoxOf(node: GridStackNode): WindowBox {
+    const box = boxOf(node);
+    const window = specOf(node.id as string);
+    return window && foldedOf(window)
+        ? { ...box, h: unfoldedRows(window) }
+        : box;
+}
+
 function onGridChange(): void {
     syncFromGrid();
     if (!saving || grid?.getColumn() !== GRID_COLUMNS) return;
     const current: WindowLayout = {};
-    for (const node of gridNodes()) current[node.id as string] = boxOf(node);
+    for (const node of gridNodes()) {
+        current[node.id as string] = savedBoxOf(node);
+    }
     saved = { ...saved, ...current };
     writeLayout(saved);
 }
@@ -401,6 +453,7 @@ function resize(id: string, size: WindowSize): void {
     const preset = WINDOW_SIZES[size];
     if (foldState.value[id]) {
         foldState.value = { ...foldState.value, [id]: false };
+        rememberFold(id, false);
     }
     grid.update(element, {
         w: Math.min(preset.w, grid.getColumn()),
@@ -416,15 +469,16 @@ function resize(id: string, size: WindowSize): void {
     scheduleResize();
 }
 
-/** Folds a window to its header, or unfolds it to the height of its first size. */
+/** Folds a window to its header, or unfolds it to its saved height. */
 function toggleFold(id: string): void {
     const window = specOf(id);
     const element = itemElement(id);
     if (!grid || !window || !element || foldedOf(window) === null) return;
     const folded = !foldedOf(window);
     foldState.value = { ...foldState.value, [id]: folded };
+    rememberFold(id, folded);
     grid.update(element, {
-        h: folded ? FOLDED_ROWS : WINDOW_SIZES[window.size].h,
+        h: folded ? FOLDED_ROWS : unfoldedRows(window),
     });
     announce(
         interpolate(
@@ -454,6 +508,7 @@ async function rearrange(): Promise<void> {
     saving = false;
     clearLayout();
     saved = {};
+    if (Object.keys(savedFolds).length > 0) writeFolded(savedFolds);
     emit("rearrange");
     await nextTick();
     rearranging = false;

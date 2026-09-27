@@ -380,6 +380,66 @@ describe("WindowGrid", () => {
         });
     });
 
+    it("keeps a folded window folded after a reload, and its unfolded size saved", async () => {
+        const foldable: CompareWindowSpec = { ...XRF, folded: false };
+        const first = mountGrid([foldable, MICRO]);
+        control(XRF.id, "fold").click();
+        await nextTick();
+        expect(lastGrid().update).toHaveBeenLastCalledWith(item(XRF.id), {
+            h: 2,
+        });
+        expect((stored() as Record<string, { h: number }>)[XRF.id].h).toBe(5);
+        first.unmount();
+        wrapper = null;
+        mountGrid([foldable, MICRO]);
+        const grid = lastGrid();
+        expect(grid.makeWidget).toHaveBeenCalledWith(
+            item(XRF.id),
+            expect.objectContaining({ id: XRF.id, h: 2 }),
+        );
+        expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
+            "false",
+        );
+        expect(item(XRF.id).querySelector(".content")).toBeNull();
+        control(XRF.id, "fold").click();
+        await nextTick();
+        expect(grid.update).toHaveBeenLastCalledWith(item(XRF.id), { h: 5 });
+    });
+
+    it("keeps a window the reader unfolded unfolded after a reload, at its size", async () => {
+        const folded: CompareWindowSpec = { ...XRF, folded: true };
+        const first = mountGrid([MICRO, folded]);
+        control(XRF.id, "fold").click();
+        await nextTick();
+        first.unmount();
+        wrapper = null;
+        mountGrid([MICRO, folded]);
+        expect(lastGrid().makeWidget).toHaveBeenCalledWith(
+            item(XRF.id),
+            expect.objectContaining({ id: XRF.id, h: 5 }),
+        );
+        expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
+            "true",
+        );
+    });
+
+    it("names each window's controls by its title, and its fold button by the title alone", async () => {
+        mountGrid([{ ...XRF, folded: true }, MICRO]);
+        expect(
+            item(XRF.id).querySelector(".controls")?.getAttribute("aria-label"),
+        ).toBe("Arrange « XRF »");
+        expect(control(XRF.id, "fold").getAttribute("aria-label")).toBe("XRF");
+        expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
+            "false",
+        );
+        control(XRF.id, "fold").click();
+        await nextTick();
+        expect(control(XRF.id, "fold").getAttribute("aria-label")).toBe("XRF");
+        expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
+            "true",
+        );
+    });
+
     it("keeps a window folded as it opened when its place among the windows changes", async () => {
         const view = mountGrid([MICRO, { ...XRF, folded: true }]);
         await view.setProps({ windows: [{ ...XRF, folded: false }] });

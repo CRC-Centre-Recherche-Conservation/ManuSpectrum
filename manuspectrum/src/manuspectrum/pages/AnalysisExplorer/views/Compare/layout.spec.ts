@@ -7,10 +7,12 @@ import {
     forgetWindows,
     keepWindows,
     parseLayout,
+    readFolded,
     readHidden,
     readLayout,
     readingOrder,
     sizeOf,
+    writeFolded,
     writeHidden,
     writeLayout,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
@@ -26,6 +28,7 @@ describe("Compare window layout", () => {
             version: 2,
             boxes: { "auto:micro": { x: 0, y: 0, w: 6, h: 5 } },
             hidden: [],
+            folded: {},
         });
         expect(readLayout()).toEqual({
             "auto:micro": { x: 0, y: 0, w: 6, h: 5 },
@@ -98,13 +101,48 @@ describe("Compare window layout", () => {
         expect(readLayout()).toEqual({});
     });
 
+    it("keeps the windows the reader folded or unfolded next to the places", () => {
+        const box = { x: 0, y: 0, w: 6, h: 5 };
+        writeLayout({ "auto:xy:-": box });
+        writeFolded({ "auto:xy:-": true, "auto:xy:b": false });
+        writeHidden(["auto:micro"]);
+        expect(readFolded()).toEqual({ "auto:xy:-": true, "auto:xy:b": false });
+        expect(readLayout()).toEqual({ "auto:xy:-": box });
+        expect(readHidden()).toEqual(["auto:micro"]);
+    });
+
+    it("reads a layout saved before folded windows were kept, and drops what is not a fold state", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ version: 2, boxes: {}, hidden: [] }),
+        );
+        expect(readFolded()).toEqual({});
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                boxes: {},
+                hidden: [],
+                folded: { good: true, text: "true", number: 1, "": true },
+            }),
+        );
+        expect(readFolded()).toEqual({ good: true });
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ version: 2, folded: [true] }),
+        );
+        expect(readFolded()).toEqual({});
+    });
+
     it("forgets the places and the hidden state of windows that are gone", () => {
         const box = { x: 0, y: 0, w: 6, h: 5 };
         writeLayout({ "auto:micro": box, "auto:xy:-": box });
         writeHidden(["auto:xy:-", "auto:characterizations"]);
+        writeFolded({ "auto:xy:-": true, "auto:micro": false });
         forgetWindows(["auto:micro"]);
         expect(readLayout()).toEqual({ "auto:micro": box });
         expect(readHidden()).toEqual([]);
+        expect(readFolded()).toEqual({ "auto:micro": false });
     });
 
     it("writes nothing when no window is gone", () => {

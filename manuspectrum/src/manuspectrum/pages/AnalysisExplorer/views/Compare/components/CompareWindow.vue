@@ -9,7 +9,9 @@ const SIZE_NAMES: readonly WindowSize[] = ["S", "M", "L"];
 /**
  * The frame of one Compare window: its title, a drag handle, and the
  * keyboard equivalents of dragging (move before or after, sizes, close),
- * and a disclosure button for a window that folds to its header.
+ * and a disclosure button for a window that folds to its header, named by
+ * the title, its state in `aria-expanded`. The group of controls is named
+ * after the title too.
  * `position` is 1-based in reading order; `size` is null for a size set by
  * hand.
  */
@@ -36,6 +38,9 @@ const bodyId = useId();
 
 const isFirst = computed(() => props.position <= 1);
 const isLast = computed(() => props.position >= props.total);
+const controlsLabel = computed(() =>
+    interpolate($gettext("Arrange « %{title} »"), { title: props.title }, true),
+);
 
 function sizeLabel(size: WindowSize): string {
     return interpolate($gettext("Size %{size}"), { size }, true);
@@ -70,7 +75,7 @@ function onMove(step: -1 | 1): void {
                 type="button"
                 class="fold"
                 data-action="fold"
-                :aria-label="$gettext('Show the content')"
+                :aria-label="title"
                 :aria-expanded="folded ? 'false' : 'true'"
                 :aria-controls="bodyId"
                 @click="emit('fold-toggled')"
@@ -80,7 +85,7 @@ function onMove(step: -1 | 1): void {
             <div
                 class="controls"
                 role="group"
-                :aria-label="$gettext('Arrange this window')"
+                :aria-label="controlsLabel"
             >
                 <button
                     type="button"
