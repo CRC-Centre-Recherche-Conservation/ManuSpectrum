@@ -274,6 +274,21 @@ describe("Compare state", () => {
         expect(store.compare.tools).toEqual([]);
     });
 
+    it("names a tool by its kind and parameters and opens it once", () => {
+        const store = useExplorerStore();
+        const id = store.openTool("periodic", { scope: "basket", cell: "a b" });
+        expect(id).toBe("tool:periodic:cell=a%20b&scope=basket");
+        expect(
+            store.openTool("periodic", { cell: "a b", scope: "basket" }),
+        ).toBe(id);
+        expect(store.compare.tools).toHaveLength(1);
+        expect(store.openTool("coverage")).toBe("tool:coverage:-");
+        expect(store.compare.tools.map((tool) => tool.id)).toEqual([
+            id,
+            "tool:coverage:-",
+        ]);
+    });
+
     it("sets and removes an overlay", () => {
         const store = useExplorerStore();
         store.setOverlay("im:x:1", { element: "Pb", opacity: 0.6, on: true });
