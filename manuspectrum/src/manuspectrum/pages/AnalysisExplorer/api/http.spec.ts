@@ -344,6 +344,22 @@ describe("getSeries", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it("never drops a full series in flight, however many start together", async () => {
+        const pending = pendingFetch();
+        const urls = Array.from(
+            { length: 8 },
+            (_, file) => `http://testserver/api/spectrum-preview/f${file + 1}`,
+        );
+        const first = urls.map((url) => getSeries(url, "full"));
+        const second = urls.map((url) => getSeries(url, "full"));
+        expect(fetchMock).toHaveBeenCalledTimes(8);
+        pending.resolve({ x: [1], y: [2] });
+        expect(await Promise.all([...first, ...second])).toHaveLength(16);
+        fetchMock.mockClear();
+        await getSeries(urls[7], "full");
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it("asks for the full series again on reload", async () => {
         fetchMock.mockResolvedValue(respond(200, { x: [], y: [] }));
         const url = "http://testserver/api/spectrum-preview/abc";

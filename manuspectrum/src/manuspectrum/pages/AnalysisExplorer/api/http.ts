@@ -156,15 +156,15 @@ function start(memo: Memo, url: string, pinned: boolean): MemoEntry {
     return entry;
 }
 
-function running(entry: MemoEntry): boolean {
-    return entry.arrivedAt === null && entry.waiting > 0;
-}
-
-/** Drops the least recently used entries over the memo's limit, never a request a caller still waits for. */
+/**
+ * Drops the least recently used answers over the memo's limit. A request
+ * still running is never dropped: it counts towards the limit and leaves
+ * the memo only when it fails or its last caller aborts it.
+ */
 function evict(memo: Memo): void {
     for (const [url, entry] of memo.entries) {
         if (memo.entries.size <= memo.limit) return;
-        if (!running(entry)) memo.entries.delete(url);
+        if (entry.arrivedAt !== null) memo.entries.delete(url);
     }
 }
 
@@ -235,9 +235,8 @@ function wait<T>(
 /**
  * GET a localized explorer payload through the tab's memo.
  *
- * The memo holds the last `MEMO_ENTRIES` URLs for `MEMO_TTL_MS` from their
- * answer, in memory only; a request still running for a caller is never
- * evicted. Callers of one URL share one request: a caller that
+ * The memo holds the last `MEMO_ENTRIES` answers for `MEMO_TTL_MS` from
+ * their arrival, in memory only; a request still running is never evicted. Callers of one URL share one request: a caller that
  * aborts leaves it, and it is aborted when nobody waits any more. A failed
  * request (404 included) is forgotten; `reload` replaces the entry. An aborted
  * call rejects with the browser's AbortError.
