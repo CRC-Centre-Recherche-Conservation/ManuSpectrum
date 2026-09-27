@@ -528,12 +528,6 @@ msgid "xyReading, a IIIF extension for XY spectra (version 1)"
 msgstr "xyReading, a IIIF extension for XY spectra (version 1)"
 
 #: templates/iiif/xy_reading_1.htm:11
-#, fuzzy
-#| msgid ""
-#| "<code>xyReading</code> tells a client how to read an XY curve (a "
-#| "spectrum) out of a <code>Dataset</code> content resource of a IIIF "
-#| "Presentation 3 document: which columns hold x and y, what they measure, "
-#| "in which unit, and which correction turns the raw file into the curve."
 msgid ""
 "<code>xyReading</code> tells a client how to read an XY curve (a spectrum) "
 "out of a <code>Dataset</code> content resource of a IIIF Presentation 3 "
@@ -542,8 +536,8 @@ msgid ""
 msgstr ""
 "<code>xyReading</code> tells a client how to read an XY curve (a spectrum) "
 "out of a <code>Dataset</code> content resource of a IIIF Presentation 3 "
-"document: which columns hold x and y, what they measure, in which unit, and "
-"which correction turns the raw file into the curve."
+"document: which columns hold x and y, how their axes are titled, and which "
+"correction turns the raw file into the curve."
 
 #: templates/iiif/xy_reading_1.htm:13
 msgid "Where it appears"
@@ -634,34 +628,22 @@ msgstr ""
 "current), <code id=\"ignore\">ignore</code>."
 
 #: templates/iiif/xy_reading_1.htm:36
-#, fuzzy
-#| msgid ""
-#| "The x axis: <code>label</code> (a IIIF language map), <code>quantity</"
-#| "code>, <code>unit</code> (a UCUM code) and <code>reversed</code> (true "
-#| "when the axis is drawn from right to left; the rows keep the file's "
-#| "order)."
 msgid ""
 "The x axis: <code>label</code> (a IIIF language map) and <code>reversed</"
 "code> (true when the axis is drawn from right to left; the rows keep the "
 "file's order)."
 msgstr ""
-"The x axis: <code>label</code> (a IIIF language map), <code>quantity</code>, "
-"<code>unit</code> (a UCUM code) and <code>reversed</code> (true when the "
-"axis is drawn from right to left; the rows keep the file's order)."
+"The x axis: <code>label</code> (a IIIF language map) and <code>reversed</"
+"code> (true when the axis is drawn from right to left; the rows keep the "
+"file's order)."
 
 #: templates/iiif/xy_reading_1.htm:38
-#, fuzzy
-#| msgid ""
-#| "The y axes, in order: <code id=\"axisSide\">axis</code> (<code>left</"
-#| "code> or <code>right</code>), <code>label</code>, <code>quantity</code>, "
-#| "<code>unit</code>."
 msgid ""
 "The y axes, in order: <code id=\"axisSide\">axis</code> (<code>left</code> "
 "or <code>right</code>) and <code>label</code>."
 msgstr ""
 "The y axes, in order: <code id=\"axisSide\">axis</code> (<code>left</code> "
-"or <code>right</code>), <code>label</code>, <code>quantity</code>, "
-"<code>unit</code>."
+"or <code>right</code>) and <code>label</code>."
 
 #: templates/iiif/xy_reading_1.htm:40
 msgid "Whether the x axis is drawn from right to left."
