@@ -11,10 +11,13 @@ from unittest import mock
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileModel
 
 from manuspectrum.iiif import facts
+from manuspectrum.iiif.zones import annotation_features
 from tests.explorer_fixtures import (
     CANVAS,
     FEATURES,
@@ -175,6 +178,33 @@ class ZoneTests(FactsCase):
 
         self.assertEqual(self.analysis(self.facts(), "open").zones, ())
         self.assertTrue(self.analysis(self.facts(reader=self.editor), "open").zones)
+
+    def test_zones_are_read_off_the_tiles_in_one_query_by_feature_id(self):
+        node = self.nodes[("analysis", "literal_location_of_analysis")]
+        TileModel.objects.filter(
+            resourceinstance=self.analyses["open"], nodegroup_id=node.nodegroup_id
+        ).delete()
+        ids = sorted(uuid.uuid4() for _ in range(4))
+        self.zone(self.analyses["open"], [(str(ids[3]), CANVAS, POINT)])
+        self.zone(
+            self.analyses["open"],
+            [(str(ids[1]), CANVAS, POINT), (str(ids[0]), CANVAS, POINT)],
+        )
+        self.zone(self.analyses["open"], [(str(ids[2]), CANVAS, POINT)])
+
+        with CaptureQueriesContext(connection) as queries:
+            found = list(
+                annotation_features(
+                    node, [str(self.analyses["open"].pk)], {}, {node.nodegroup_id}
+                )
+            )
+
+        self.assertEqual([feature for _, feature, _, _ in found], ids)
+        self.assertEqual(
+            {rid for rid, _, _, _ in found}, {str(self.analyses["open"].pk)}
+        )
+        self.assertEqual(len(queries), 1)
+        self.assertNotIn("vw_annotations", queries[0]["sql"])
 
 
 class SubjectTests(FactsCase):

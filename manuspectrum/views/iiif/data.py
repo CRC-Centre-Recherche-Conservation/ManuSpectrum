@@ -38,6 +38,7 @@ from django.views import View
 from manuspectrum.iiif import data, memo, tokens, xy_reading
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.data_version import data_version
+from manuspectrum.utils.public_visibility import request_memo
 from manuspectrum.views.iiif.annotations import (
     gate_of,
     not_found,
@@ -79,7 +80,8 @@ class DataView(View):
 
     def get(self, request, file_id):
         try:
-            return _nosniff(self.answer(request, file_id))
+            with request_memo(getattr(request, "user", None)):
+                return _nosniff(self.answer(request, file_id))
         except Exception:
             logger.exception("IIIF data failed: %s", request.path)
             response = HttpResponse(status=500)

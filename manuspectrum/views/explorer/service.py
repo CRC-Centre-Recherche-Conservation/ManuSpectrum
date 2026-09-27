@@ -39,6 +39,7 @@ from arches.app.models.models import (
 from arches_controlled_lists.models import ListItem, ListItemValue
 
 from manuspectrum.constants.licenses import effective_license
+from manuspectrum.iiif.facts import CharacterizationZones, listed_source
 from manuspectrum.iiif.ids import content_state as content_state_url
 from manuspectrum.iiif.sources import (
     canvas_index,
@@ -1528,10 +1529,13 @@ def certainty_scale(language):
 
 
 def characterization_summaries(
-    ids, visible, user, language, dims, objects_of=None, analysis_rows=None
+    ids, visible, user, language, source=None, objects_of=None, analysis_rows=None
 ):
     """``CharacterizationSummary`` of the visible identified materials among *ids*.
 
+    ``zone`` is the first zone placing the material on the canvases of
+    *source* (``iiif.facts.listed_source`` of its document's manifest) by
+    ``iiif.facts.CharacterizationZones``; without *source* it is None.
     ``evidence`` names each visible analysis cited, in id order. *objects_of*
     is the characterization → objects observed map the caller already holds,
     *analysis_rows* the corpus rows by analysis id, whose names it reuses.
@@ -1582,12 +1586,10 @@ def characterization_summaries(
         {o for v in objects.values() for o in v}
         | {a for v in authors.values() for a in v}
     )
-    own_zone = first_zone(role_node(*ROLES["ch_zone"]), ids, dims, readable)
-    component_zone = first_zone(
-        role_node(*ROLES["comp_zone"]),
-        {o for v in objects.values() for o in v},
-        dims,
-        readable,
+    placed = (
+        CharacterizationZones(ids, visible, readable).sourced(ids, source)
+        if source is not None
+        else {}
     )
     material_node, confidence_node = values.node("material"), values.node("confidence")
     element_node, level_node = values.node("elements"), values.node("element_level")
@@ -1632,11 +1634,12 @@ def characterization_summaries(
                     else []
                 )
                 elements.append({"level": ranked(level), "values": found})
-        if c in own_zone:
-            zone = {**own_zone[c], "source": "own"}
-        else:
-            first = next((o for o in objects[c] if o in component_zone), None)
-            zone = {**component_zone[first], "source": "component"} if first else None
+        origin, zones = placed.get(c, (None, None))
+        zone = (
+            {"canvas": zones[0].canvas, "shape": zones[0].shape, "source": origin}
+            if zones
+            else None
+        )
         note_value = values.first(c, "ch_note")
         note_text = label(string_texts(note_value), language) if note_value else None
         start, end = values.first(c, "ch_start"), values.first(c, "ch_end")
@@ -1781,7 +1784,7 @@ def document_payload(document_id, user, language, ticket=None):
         visible,
         user,
         language,
-        dims,
+        listed_source(manifest_url or "", canvases),
         objects_of=bundle.links["objects"],
         analysis_rows=bundle.by_id,
     )
@@ -2223,7 +2226,8 @@ def items_payload(keys, user, language):
     ``an:<analysis>:-`` is a whole analysis with the files a viewer shows
     (possibly none); ``af:<analysis>:<file>`` one of its files and
     ``im:<analysis>:<layer>`` the imaging manifest holding that layer;
-    ``ch:<characterization>:-`` an identified material.
+    ``ch:<characterization>:-`` an identified material, its ``zone`` None:
+    a Selection names no document to place it on.
     """
     bundle = corpus_bundle(user, language)
     visible, rows, label_of = bundle.visible, bundle.by_id, bundle.label_of
@@ -2242,7 +2246,6 @@ def items_payload(keys, user, language):
             visible,
             user,
             language,
-            {},
             objects_of=bundle.links["objects"],
             analysis_rows=rows,
         )

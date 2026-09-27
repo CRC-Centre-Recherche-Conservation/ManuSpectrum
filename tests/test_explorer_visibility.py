@@ -4,6 +4,8 @@ Usage:
     python manage.py test tests.test_explorer_visibility --settings="tests.test_settings"
 """
 
+import pickle
+
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.cache import cache
 from django.test import TestCase
@@ -12,9 +14,11 @@ from arches.app.models.models import NodeGroup, ResourceInstance
 from arches.app.utils.permission_backend import assign_perm
 
 from manuspectrum.utils.public_visibility import (
+    anonymous_user,
     draft_state_id_set,
     is_connected,
     reader_scope,
+    request_memo,
     visible_set,
 )
 from tests.explorer_fixtures import ACTIVE, ExplorerCase
@@ -46,6 +50,36 @@ class ReaderTests(TestCase):
         self.assertTrue(is_connected(editor))
         self.assertEqual(reader_scope(editor), str(editor.pk))
 
+    def test_a_request_memo_reads_the_visitor_once(self):
+        with request_memo(), self.assertNumQueries(1):
+            first = anonymous_user()
+            again = anonymous_user()
+
+        self.assertIs(again, first)
+        self.assertEqual(first.username, "anonymous")
+
+    def test_the_visitor_is_read_again_after_the_request_memo(self):
+        with request_memo():
+            anonymous_user()
+
+        with self.assertNumQueries(1):
+            anonymous_user()
+
+    def test_the_request_s_anonymous_row_stands_for_the_visitor(self):
+        anonymous = User.objects.get(username="anonymous")
+
+        with request_memo(anonymous), self.assertNumQueries(0):
+            self.assertIs(anonymous_user(), anonymous)
+
+    def test_a_signed_in_request_user_never_stands_for_the_visitor(self):
+        editor = User.objects.create_user("explorer_editor", password="pw")
+
+        with request_memo(editor):
+            visitor = anonymous_user()
+
+        self.assertEqual(visitor.username, "anonymous")
+        self.assertNotEqual(visitor.pk, editor.pk)
+
     def test_the_initial_state_of_the_default_lifecycle_is_a_draft(self):
         drafts = draft_state_id_set()
 
@@ -68,6 +102,23 @@ class VisibleSetTests(ExplorerCase):
         )
         self.assertIn(str(self.samples["s1"].pk), vs.samples)
         self.assertIn(str(self.characterization.pk), vs.characterizations)
+
+    def test_ids_is_built_once_and_left_out_of_the_pickle(self):
+        vs = visible_set(self.anonymous)
+        size = len(pickle.dumps(vs))
+
+        self.assertIs(vs.ids, vs.ids)
+        self.assertEqual(len(pickle.dumps(vs)), size)
+        self.assertEqual(pickle.loads(pickle.dumps(vs)), vs)
+        self.assertEqual(pickle.loads(pickle.dumps(vs)).ids, vs.ids)
+
+    def test_membership_is_the_union_of_every_kind(self):
+        self.embargo(self.documents["embargoed"])
+
+        vs = visible_set(self.anonymous)
+
+        self.assertEqual({rid for rid in vs.ids if rid in vs}, vs.ids)
+        self.assertNotIn(str(self.documents["embargoed"].pk), vs)
 
     def test_an_embargoed_document_hides_its_component_and_analyses(self):
         self.embargo(self.documents["embargoed"])

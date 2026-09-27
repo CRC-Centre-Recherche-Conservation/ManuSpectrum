@@ -978,7 +978,7 @@ class ItemsRouteTests(CorpusCase):
 
 
 class ZoneCoordinatesTests(ReadRightsCase):
-    def test_a_zone_has_the_same_coordinates_on_every_route(self):
+    def test_a_material_zone_is_scaled_on_its_document_and_absent_from_items(self):
         self.tile(
             self.components["open"],
             "location_in_document",
@@ -991,12 +991,9 @@ class ZoneCoordinatesTests(ReadRightsCase):
         document = self.document(self.documents["open"].pk)
         items = self.client.get("/en/api/explorer/items", {"ids": f"ch:{mine}:-"})
 
-        zones = [
-            next(s["zone"] for s in document["characterizations"] if s["id"] == mine),
-            items.json()["items"][0]["characterization"]["zone"],
-        ]
-        self.assertEqual(zones[0]["shape"], {"type": "point", "x": 2500, "y": 3200})
-        self.assertEqual(zones[1], zones[0])
+        zone = next(s["zone"] for s in document["characterizations"] if s["id"] == mine)
+        self.assertEqual(zone["shape"], {"type": "point", "x": 2500, "y": 3200})
+        self.assertIsNone(items.json()["items"][0]["characterization"]["zone"])
 
 
 class FacetRouteTests(CorpusCase):

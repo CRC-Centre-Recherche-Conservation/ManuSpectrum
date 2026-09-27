@@ -16,7 +16,7 @@ from django.core.cache import cache
 from django.test import Client, override_settings
 from django.urls import resolve, reverse
 
-from manuspectrum.iiif import ids
+from manuspectrum.iiif import facts, ids
 from tests.explorer_fixtures import (
     CANVAS,
     FEATURES,
@@ -200,6 +200,38 @@ class LegacyUrlTests(RouteCase):
         self.assertEqual(response.status_code, 500)
         self.assertNotIn(secret, response.content.decode())
         self.assertTrue(any(secret in line for line in logs.output))
+
+
+class RestrictedReadTests(RouteCase):
+    def built(self, url):
+        """The response to *url* and the analyses whose tiles its build decoded."""
+        decoded, tiles = [], facts._tiles
+
+        def spy(resource_ids, keys, readable):
+            if tuple(keys) == facts.ANALYSIS_KEYS:
+                decoded.extend(resource_ids)
+            return tiles(resource_ids, keys, readable)
+
+        with mock.patch.object(facts, "_tiles", side_effect=spy):
+            response = self.get(url)
+        self.assertEqual(response.status_code, 200)
+        return response.json(), sorted(decoded)
+
+    def test_a_page_decodes_only_the_analyses_placed_on_its_canvas(self):
+        page, decoded = self.built(
+            f"/iiif/v3/annotation-collection/{self.doc()}/page-3"
+        )
+
+        self.assertEqual(decoded, [str(self.analyses["on_document"].pk)])
+        self.assertEqual(page["prev"]["id"], ids.page(self.doc(), 1))
+        self.assertNotIn("next", page)
+
+    def test_a_collection_decodes_no_analysis(self):
+        collection, decoded = self.built(f"/iiif/v3/annotation-collection/{self.doc()}")
+
+        self.assertEqual(decoded, [])
+        self.assertEqual(collection["total"], 4)
+        self.assertEqual(collection["last"]["id"], ids.page(self.doc(), 3))
 
 
 class PageNumberTests(RouteCase):

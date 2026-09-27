@@ -47,14 +47,10 @@ class ContentStateView(IIIFView):
             return refused(request)
 
         def build():
-            found = facts.annotated_fact(resource_id, reader, feature_id, version)
-            if not isinstance(found, tuple):
-                raise Missing()
-            kind, _, fact = found
-            zone = next((z for z in fact.zones if z.feature == str(feature_id)), None)
+            zone = facts.annotated_zone(access, feature_id)
             if zone is None:
                 raise Missing()
-            return content_state(kind, fact.id, zone)
+            return content_state(access.kind, access.id, zone)
 
         response = memo.answer(
             request,

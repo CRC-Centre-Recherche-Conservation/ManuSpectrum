@@ -35,15 +35,20 @@ twice ``PERM_SCOPE_TTL`` for ``visible_set``, whose memo is built from the
 other memos.
 """
 
+import contextlib
+import contextvars
 import hashlib
 import logging
 import uuid
 from dataclasses import dataclass, field
+from functools import cached_property
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import TextField
+from django.db.models.functions import Cast
 from guardian.models import GroupObjectPermission, UserObjectPermission
 
 from arches.app.models.models import Node, ResourceInstance
@@ -58,6 +63,7 @@ PERM_SCOPE_TTL = 60
 RESTRICTED_CACHE_KEY = "summary-restricted-resources"
 RESTRICTED_NODEGROUPS_CACHE_KEY = "summary-restricted-nodegroups"
 EPOCH_CACHE_KEY = "public-visibility-epoch"
+ANONYMOUS_USERNAME = "anonymous"
 
 _ON_RESOURCE = {
     "content_type__app_label": "models",
@@ -65,13 +71,44 @@ _ON_RESOURCE = {
 }
 
 
+_request_memo = contextvars.ContextVar("public_visibility_request", default=None)
+
+
+@contextlib.contextmanager
+def request_memo(user=None):
+    """Inside the block, ``anonymous_user()`` and each ``visible_set`` key are read once.
+
+    The block is one request: nothing read in it outlives it. *user* is the
+    request's ``request.user``; when it is the ``anonymous`` row
+    ``SetAnonymousUser`` installed, it stands for ``anonymous_user()``.
+    """
+    found = {}
+    if (
+        isinstance(user, User)
+        and user.pk is not None
+        and user.username == ANONYMOUS_USERNAME
+    ):
+        found[ANONYMOUS_USERNAME] = user
+    token = _request_memo.set(found)
+    try:
+        yield
+    finally:
+        _request_memo.reset(token)
+
+
 def anonymous_user():
     """The ``anonymous`` row ``SetAnonymousUser`` installs on a visitor.
 
     Without that row the Django ``AnonymousUser`` stands in, which Arches
-    lets read nothing.
+    lets read nothing. Read once inside a ``request_memo`` block.
     """
-    return User.objects.filter(username="anonymous").first() or AnonymousUser()
+    found = _request_memo.get()
+    if found is not None and ANONYMOUS_USERNAME in found:
+        return found[ANONYMOUS_USERNAME]
+    user = User.objects.filter(username=ANONYMOUS_USERNAME).first() or AnonymousUser()
+    if found is not None:
+        found[ANONYMOUS_USERNAME] = user
+    return user
 
 
 def granted_resource_ids():
@@ -240,6 +277,16 @@ EXPLORER_MODELS = (
 )
 
 
+_VISIBLE_KINDS = (
+    "documents",
+    "components",
+    "analyses",
+    "projects",
+    "samples",
+    "characterizations",
+)
+
+
 @dataclass(frozen=True)
 class VisibleSet:
     """What one reader may see through the Explorer and the project IIIF collection."""
@@ -255,16 +302,19 @@ class VisibleSet:
     digest: str = ""
     gates: str = ""
 
-    @property
+    def __contains__(self, resource_id):
+        """Whether the id *resource_id* (a string) is visible, without building ``ids``."""
+        return any(resource_id in getattr(self, kind) for kind in _VISIBLE_KINDS)
+
+    @cached_property
     def ids(self):
-        return (
-            self.documents
-            | self.components
-            | self.analyses
-            | self.projects
-            | self.samples
-            | self.characterizations
-        )
+        """Every visible id, computed once per instance and never pickled."""
+        return frozenset().union(*(getattr(self, kind) for kind in _VISIBLE_KINDS))
+
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        state.pop("ids", None)
+        return state
 
 
 def visible_set(user, version=None):
@@ -285,7 +335,8 @@ def visible_set(user, version=None):
 
     Memoised per reader, permission epoch and data version (*version*, a
     ``data_version()`` the caller already read, else read here) for
-    ``PERM_SCOPE_TTL``: a lifecycle change or a new link shows at the next
+    ``PERM_SCOPE_TTL``, and read once per key inside a ``request_memo``
+    block: a lifecycle change or a new link shows at the next
     request; a grant written without a signal can take up to about twice
     that delay, the visible set being built from a ``hidden_resource_ids``
     memo that may be as old. ``digest``
@@ -297,7 +348,13 @@ def visible_set(user, version=None):
     """
     version = data_version() if version is None else version
     key = f"public-visibility:visible:{_epoch()}:{version}:{reader_scope(user)}"
-    return get_or_build(key, lambda: _visible_for(user), PERM_SCOPE_TTL)
+    found = _request_memo.get()
+    if found is not None and key in found:
+        return found[key]
+    visible = get_or_build(key, lambda: _visible_for(user), PERM_SCOPE_TTL)
+    if found is not None:
+        found[key] = visible
+    return visible
 
 
 def _visible_for(user):
@@ -316,13 +373,20 @@ def _visible_for(user):
     for rid, graph_id, state in ResourceInstance.objects.filter(
         graph_id__in=list(slug_of)
     ).values_list(
-        "resourceinstanceid", "graph_id", "resource_instance_lifecycle_state_id"
+        *(
+            Cast(name, TextField())
+            for name in (
+                "resourceinstanceid",
+                "graph_id",
+                "resource_instance_lifecycle_state_id",
+            )
+        )
     ):
-        rid, slug = str(rid), slug_of[str(graph_id)]
+        slug = slug_of[graph_id]
         existing[slug].add(rid)
-        if rid in hidden or str(graph_id) not in graphs:
+        if rid in hidden or graph_id not in graphs:
             continue
-        if state is not None and str(state) in drafts:
+        if state is not None and state in drafts:
             unpublished.add(rid)
         candidates[slug].add(rid)
 

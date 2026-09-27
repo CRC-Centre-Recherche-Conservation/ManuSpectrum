@@ -24,7 +24,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import translation
 
-from manuspectrum.iiif.sources import manifest_json
+from manuspectrum.iiif.sources import ManifestReader, manifest_json
 from manuspectrum.utils.public_visibility import anonymous_user, readable_nodegroup_ids
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.utils.roles import ROLES
@@ -109,8 +109,8 @@ class ExportScope:
 
     @functools.cached_property
     def read_manifest(self):
-        """``manifest_json`` memoised for the products of this scope: each manifest is read once."""
-        return functools.cache(manifest_json)
+        """``manifest_json`` memoised for the products of this scope: each manifest is read once (``ManifestReader``)."""
+        return ManifestReader(manifest_json)
 
     @functools.cached_property
     def file_nodegroups(self):

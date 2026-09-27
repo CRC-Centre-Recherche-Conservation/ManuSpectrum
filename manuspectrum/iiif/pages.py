@@ -3,7 +3,9 @@
 Page *n* is canvas position *n* (1-based) of the Document's source manifest;
 it exists for every canvas, empty or not, and an ``InvalidPage`` is raised out
 of range. ``prev`` and ``next`` name the adjacent pages holding an annotation;
-a page restricted by *only* carries neither. The collection has no ``items``:
+a page restricted by *only* carries neither. Pages and totals are counted
+off ``DocumentFacts.page_counts``, so a collection needs no built fact and a
+page only the facts placed on it. The collection has no ``items``:
 ``first`` and ``last`` reference its first and last non-empty pages and
 ``total`` counts its annotations (left out at zero). A top-level document
 carries ``@context`` (``with_context``); an embedded page (*embed*) carries
@@ -134,7 +136,6 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
     """
     if not 1 <= n <= len(doc.canvases):
         raise InvalidPage(n)
-    pages = zones_by_page(doc, kind)
     page = {}
     page.update(
         id=ids.page(doc.document_id, n, kind, only=only),
@@ -149,7 +150,7 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
         ],
     )
     if not only:
-        numbers = sorted(pages)
+        numbers = sorted(doc.page_counts(kind))
         before = [p for p in numbers if p < n]
         after = [p for p in numbers if p > n]
         if before:
@@ -163,7 +164,7 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
                 "type": "AnnotationPage",
             }
     page["service"] = [services.auth1_block()]
-    zones = pages.get(n, [])
+    zones = zones_by_page(doc, kind).get(n, [])
     if only is not None:
         zones = [(fact, zone) for fact, zone in zones if fact.id in only]
     page["items"] = _encoded(doc, zones, kind)
@@ -193,21 +194,21 @@ def filtered_page(page, only):
 
 def page_numbers(doc, kind="analysis"):
     """The numbers of the pages holding an annotation of *kind*, in order."""
-    return sorted(zones_by_page(doc, kind))
+    return sorted(doc.page_counts(kind))
 
 
 def annotation_collection(doc, kind="analysis"):
     """The AnnotationCollection of *doc*: label, ``total``, ``first`` and ``last``; no ``items``."""
-    pages = zones_by_page(doc, kind)
+    counts = doc.page_counts(kind)
     collection = {
         "id": ids.collection(doc.document_id, kind),
         "type": "AnnotationCollection",
         "label": collection_label(doc, kind),
     }
     collection["service"] = [services.auth1_block()]
-    total = sum(len(items) for items in pages.values())
+    total = sum(counts.values())
     if total:
-        numbers = sorted(pages)
+        numbers = sorted(counts)
         collection["total"] = total
         collection["first"] = {
             "id": ids.page(doc.document_id, numbers[0], kind),
