@@ -193,7 +193,10 @@ class DocumentFacts:
     """The subject (Document or Component), its Document's source manifest and its analyses.
 
     ``canvases`` and ``canvas_labels`` list the canvases of the source manifest
-    in order; page *n* is canvas ``n - 1``.
+    in order; page *n* is canvas ``n - 1``. ``placed`` maps a kind to
+    ``{page number: zone count}`` of the zones of that kind placed on the
+    Document, built as facts or not; a kind it does not name is counted off
+    the facts.
     """
 
     document_id: str
@@ -204,6 +207,14 @@ class DocumentFacts:
     analyses: tuple
     characterizations: tuple = ()
     names: dict = field(default_factory=dict)
+    placed: dict = field(default_factory=dict)
+
+    def page_counts(self, kind="analysis"):
+        """``{page number: zone count}`` of the zones of *kind* placed on the Document."""
+        if kind in self.placed:
+            return self.placed[kind]
+        built = self.characterizations if kind == "characterization" else self.analyses
+        return _counts({fact.id: fact.zones for fact in built})
 
 
 def _tiles(resource_ids, keys, readable):
@@ -439,14 +450,23 @@ def _characterization_ids(slug, subject, document, visible, readable):
 
 
 def document_facts(
-    resource_id, reader, only=None, kind="analysis", read=None, version=None
+    resource_id,
+    reader,
+    only=None,
+    kind="analysis",
+    read=None,
+    version=None,
+    positions=None,
 ):
     """``DocumentFacts`` of a Document or Component for *reader*; None when unknown or unreadable.
 
     *kind* ``analysis`` fills ``analyses``, ``characterization`` fills
-    ``characterizations``; *only*, a set of resource ids, keeps those alone.
-    *read* reads the source manifest by URL (a caller's memoised reader),
-    else ``manifest_json``.
+    ``characterizations``; *only*, a set of resource ids, keeps those alone;
+    *positions*, a set of page numbers, keeps those with a zone on one of
+    them (``frozenset()`` builds none). ``placed`` counts the zones of every
+    resource *only* keeps, whatever *positions* keeps. *read* reads the
+    source manifest by URL (a caller's memoised reader), else
+    ``manifest_json``.
     """
     visible = visible_set(reader, version)
     subject = _subject(resource_id, reader, visible)
@@ -454,18 +474,29 @@ def document_facts(
         return None
     slug, document = subject
     readable = readable_nodegroup_ids(reader)
-    analysis_ids, characterization_ids = [], []
+    source = _source(document, readable, read)
     if kind == "characterization":
-        characterization_ids = _characterization_ids(
+        found = _characterization_ids(
             slug, str(resource_id), document, visible, readable
         )
     else:
-        analysis_ids = _analysis_ids(
-            slug, str(resource_id), document, visible, readable
-        )
+        found = _analysis_ids(slug, str(resource_id), document, visible, readable)
     if only is not None:
-        analysis_ids = [a for a in analysis_ids if a in only]
-        characterization_ids = [c for c in characterization_ids if c in only]
+        found = [r for r in found if r in only]
+    if kind == "characterization":
+        zones = _characterization_zones(found, visible, readable, source)
+    else:
+        zones = _located(
+            role_node(*ROLES["zone"]), found, source.dims, source.position, readable
+        )
+    kept = [
+        r
+        for r in found
+        if positions is None or any(z.position in positions for z in zones.get(r, ()))
+    ]
+    analysis_ids, characterization_ids = (
+        ([], kept) if kind == "characterization" else (kept, [])
+    )
     return _build(
         str(resource_id),
         document,
@@ -474,7 +505,9 @@ def document_facts(
         visible,
         readable,
         characterization_ids,
-        read=read,
+        source=source,
+        zones={r: zones[r] for r in kept if r in zones},
+        placed={kind: _counts(zones)},
     )
 
 
@@ -594,6 +627,38 @@ def _qualified(values, key, qualifier_node):
     return tuple(pairs)
 
 
+@dataclass(frozen=True)
+class Source:
+    """The Document's source manifest: its URL (``""`` without one) and listed canvases, by id and position."""
+
+    url: str
+    listed: list
+    position: dict
+    dims: dict
+
+
+def _source(document, readable, read=None):
+    """``Source`` of *document*'s ``doc_manifest``; a named manifest that cannot be read marks the memo build degraded."""
+    doc_tiles = _tiles([document], ["doc_manifest"], readable)[document]
+    url = next(
+        (
+            rewrite_legacy_url(v if isinstance(v, str) else (v or {}).get("url", ""))
+            for _, v, _ in doc_tiles.get("doc_manifest", ())
+        ),
+        "",
+    )
+    manifest = (read or manifest_json)(url) if url else None
+    if url and manifest is None:
+        memo.mark_degraded()
+    listed = canvases_of(manifest)
+    return Source(
+        url=url,
+        listed=listed,
+        position={c["id"]: n for n, c in enumerate(listed, start=1)},
+        dims=canvas_index(listed),
+    )
+
+
 def _located(node, resource_ids, dims, position, readable):
     """``{resource id: [Zone, …]}`` of the features of *node* on a canvas listed in *position*."""
     zones = defaultdict(list)
@@ -605,11 +670,20 @@ def _located(node, resource_ids, dims, position, readable):
     return zones
 
 
-def _characterizations(ids, visible, readable, dims, position, name_of):
-    """``CharacterizationFact`` of the identified materials *ids*, in id order."""
+def _counts(zones):
+    """``{page number: zone count}`` of *zones* (``{resource id: [Zone, …]}``)."""
+    counts = {}
+    for found in zones.values():
+        for zone in found:
+            counts[zone.position] = counts.get(zone.position, 0) + 1
+    return counts
+
+
+def _characterization_zones(ids, visible, readable, source):
+    """``{identified material id: [Zone, …]}``: its own zones, else those of the visible Components it observes."""
     if not ids:
-        return ()
-    values = _tiles(ids, CHARACTERIZATION_KEYS, readable)
+        return {}
+    dims, position = source.dims, source.position
     own = _located(role_node(*ROLES["ch_zone"]), ids, dims, position, readable)
     observed = {
         c: {
@@ -627,16 +701,31 @@ def _characterizations(ids, visible, readable, dims, position, name_of):
         position,
         readable,
     )
+    placed = {}
+    for c in ids:
+        zones = own.get(c) or [
+            zone for o in sorted(observed.get(c, ())) for zone in components.get(o, ())
+        ]
+        if zones:
+            placed[c] = zones
+    return placed
+
+
+def _characterizations(ids, visible, readable, source, placed, name_of):
+    """``CharacterizationFact`` of the identified materials *ids*, in id order, located by *placed*."""
+    if not ids:
+        return ()
+    values = _tiles(ids, CHARACTERIZATION_KEYS, readable)
     cited = sorted({a for c in ids for a in visible.evidence.get(c, ())})
-    cited_zones = _located(role_node(*ROLES["zone"]), cited, dims, position, readable)
+    cited_zones = _located(
+        role_node(*ROLES["zone"]), cited, source.dims, source.position, readable
+    )
     confidence = role_node(*ROLES["confidence"])
     element_level = role_node(*ROLES["element_level"])
     facts = []
     for c in ids:
         v = values[c]
-        zones = own.get(c) or [
-            zone for o in sorted(observed.get(c, ())) for zone in components.get(o, ())
-        ]
+        zones = placed.get(c, ())
         facts.append(
             CharacterizationFact(
                 id=c,
@@ -690,23 +779,27 @@ def _build(
     readable,
     characterization_ids=(),
     read=None,
+    source=None,
+    zones=None,
+    placed=None,
 ):
-    doc_tiles = _tiles([document], ["doc_manifest"], readable)[document]
-    url = next(
-        (
-            rewrite_legacy_url(v if isinstance(v, str) else (v or {}).get("url", ""))
-            for _, v, _ in doc_tiles.get("doc_manifest", ())
-        ),
-        "",
-    )
-    source = (read or manifest_json)(url) if url else None
-    if url and source is None:
-        memo.mark_degraded()
-    listed = canvases_of(source)
-    position = {c["id"]: n for n, c in enumerate(listed, start=1)}
-    dims = canvas_index(listed)
+    """``DocumentFacts`` of *analysis_ids* and *characterization_ids* on *document*.
 
-    zones = _located(role_node(*ROLES["zone"]), analysis_ids, dims, position, readable)
+    *source* (``_source``) and *zones* (``{resource id: [Zone, …]}`` of every
+    resource built) are read here when not given; *placed* becomes
+    ``DocumentFacts.placed``.
+    """
+    if source is None:
+        source = _source(document, readable, read)
+    if zones is None:
+        zones = _located(
+            role_node(*ROLES["zone"]),
+            analysis_ids,
+            source.dims,
+            source.position,
+            readable,
+        ) | _characterization_zones(characterization_ids, visible, readable, source)
+    url, listed = source.url, source.listed
     materials = _materials(set(analysis_ids), visible, readable)
 
     values = _tiles(analysis_ids, ANALYSIS_KEYS, readable)
@@ -842,7 +935,8 @@ def _build(
         canvas_labels=tuple(c["label"] for c in listed),
         analyses=tuple(analyses),
         characterizations=_characterizations(
-            list(characterization_ids), visible, readable, dims, position, name_of
+            list(characterization_ids), visible, readable, source, zones, name_of
         ),
         names={a: name_of.get(a, {}) for a in cited},
+        placed=placed or {},
     )

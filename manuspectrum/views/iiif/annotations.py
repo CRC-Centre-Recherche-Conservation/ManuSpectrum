@@ -141,7 +141,11 @@ class CollectionView(IIIFView):
 
         def build():
             doc = facts.document_facts(
-                resource_id, reader, kind=self.kind, version=version
+                resource_id,
+                reader,
+                kind=self.kind,
+                version=version,
+                positions=frozenset(),
             )
             collection = pages.annotation_collection(doc, self.kind)
             if self.version == 3:
@@ -183,7 +187,11 @@ class PageView(IIIFView):
         def build(api):
             def built():
                 doc = facts.document_facts(
-                    resource_id, reader, kind=self.kind, version=version
+                    resource_id,
+                    reader,
+                    kind=self.kind,
+                    version=version,
+                    positions=frozenset({page_num}),
                 )
                 try:
                     page = pages.annotation_page(doc, page_num, self.kind)

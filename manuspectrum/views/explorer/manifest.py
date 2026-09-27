@@ -326,12 +326,12 @@ def _references(plan, canvas_id):
 
 
 def _embedded_pages(placements):
-    """``(document id, kind, only)`` of each page the canvases of *placements* reference."""
+    """``(document id, kind, only, page number)`` of each page the canvases of *placements* reference."""
     for placement in placements:
         for canvas_id in placement.kept:
             if canvas_id in placement.raw:
                 for kind, only in _references(placement, canvas_id):
-                    yield placement.document, kind, only
+                    yield placement.document, kind, only, placement.number[canvas_id]
 
 
 def build_manifest(scope, embed=False):

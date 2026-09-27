@@ -4,9 +4,11 @@ Usage:
     python manage.py test tests.test_iiif_characterizations --settings=tests.test_settings
 """
 
+from unittest import mock
+
 from django.test import Client
 
-from manuspectrum.iiif import ids
+from manuspectrum.iiif import facts, ids
 from tests.explorer_fixtures import (
     CANVAS_2,
     CANVAS_3,
@@ -316,6 +318,40 @@ class PageTests(CharacterizationCase):
         self.embargo(self.analyses["on_document"])
 
         self.assertEqual(self.page(2)["items"], [])
+
+
+class RestrictedReadTests(CharacterizationCase):
+    def decoded(self, url):
+        """The identified materials whose tiles the build of *url* decoded."""
+        decoded, tiles = [], facts._tiles
+
+        def spy(resource_ids, keys, readable):
+            if tuple(keys) == facts.CHARACTERIZATION_KEYS:
+                decoded.extend(resource_ids)
+            return tiles(resource_ids, keys, readable)
+
+        with mock.patch.object(facts, "_tiles", side_effect=spy):
+            self.get(url)
+        return sorted(decoded)
+
+    def test_a_page_decodes_the_materials_placed_there_by_a_component(self):
+        decoded = self.decoded(
+            f"/iiif/v3/characterization-collection/{self.doc}/page-3"
+        )
+
+        self.assertEqual(decoded, [str(self.lead_white.pk)])
+
+    def test_a_page_decodes_the_materials_placed_there_by_their_own_zone(self):
+        decoded = self.decoded(
+            f"/iiif/v3/characterization-collection/{self.doc}/page-2"
+        )
+
+        self.assertEqual(decoded, [str(self.characterization.pk)])
+
+    def test_a_collection_decodes_no_material(self):
+        self.assertEqual(
+            self.decoded(f"/iiif/v3/characterization-collection/{self.doc}"), []
+        )
 
 
 class V2Tests(CharacterizationCase):

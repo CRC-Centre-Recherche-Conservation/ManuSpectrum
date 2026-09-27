@@ -60,10 +60,11 @@ def page_filter(kept, whole=False):
 class EmbeddedPages:
     """The visitor's pages of the scope's documents, each document's facts read once per kind.
 
-    *wanted* lists the ``(document id, kind, only)`` of every page the
-    manifest embeds. A document is read restricted to the union of its
-    pages' *only*, whole when one of them is its canonical page (or when it
-    is not listed); each page keeps its own *only* at encoding
+    *wanted* lists the ``(document id, kind, only, page number)`` of every
+    page the manifest embeds. A document is read restricted to its pages'
+    numbers and to the union of their *only*, every resource of those pages
+    when one of them is its canonical page; a document not listed is read
+    whole. Each page keeps its own *only* at encoding
     (``pages.annotation_page``). *read* reads the source manifests by URL
     (the caller's memoised reader).
     """
@@ -72,10 +73,12 @@ class EmbeddedPages:
         self._facts = {}
         self._read = read
         self._reads = {}
-        for document_id, kind, only in wanted:
+        self._positions = {}
+        for document_id, kind, only, n in wanted:
             key = (document_id, kind)
             known = self._reads.get(key, frozenset())
             self._reads[key] = None if only is None or known is None else known | only
+            self._positions[key] = self._positions.get(key, frozenset()) | {n}
 
     def page(self, document_id, n, kind, only):
         key = (document_id, kind)
@@ -86,6 +89,7 @@ class EmbeddedPages:
                 only=self._reads.get(key),
                 kind=kind,
                 read=self._read,
+                positions=self._positions.get(key),
             )
         doc = self._facts[key]
         if doc is None:
