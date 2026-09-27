@@ -92,7 +92,7 @@ class V2RouteTests(IIIFCase):
         annotation = self.get(f"/iiif/v2/annotation/{self.analyses['open'].pk}")
 
         body = next(
-            r for r in annotation["resource"] if r["@id"] == ids.data_raw(file_id)
+            r for r in annotation["resource"] if r["@id"] == ids.data_series(file_id)
         )
         self.assertEqual(body["@type"], "dctypes:Dataset")
         self.assertEqual(body["format"], "text/csv")

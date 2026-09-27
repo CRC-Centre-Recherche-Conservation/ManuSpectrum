@@ -1,10 +1,14 @@
 """Annotation bodies and links of the files of an analysis.
 
-A measurement file is a ``Dataset`` body and a micro-imaging file an
-``Image`` body, both pointing at the file's ``/iiif/data/<file>/raw`` route
-with its true media type (``facts.media_type``); an imaging manifest is a
-``Manifest`` body. A licence in a rights registry is ``rights``; any other is
-a ``requiredStatement`` naming it (with its attribution); an attribution under
+A measurement file with a clean CSV (``data.clean_series_available``) is a
+``Dataset`` body at ``/iiif/data/<file>/series.csv``, ``text/csv``, carrying
+its ``xyReading``. Any other measurement file is a ``Dataset`` body at its
+``/iiif/data/<file>/raw`` route with its true media type
+(``data.media_type``), carrying the reading of its raw columns when it is a
+supported text format with a renderer configuration. A micro-imaging file is
+an ``Image`` body at its raw route; an imaging manifest is a ``Manifest``
+body. A licence in a rights registry is ``rights``; any other is a
+``requiredStatement`` naming it (with its attribution); an attribution under
 a registry licence is a ``requiredStatement`` too.
 """
 
@@ -15,10 +19,9 @@ from manuspectrum.constants.licenses import (
 )
 from manuspectrum.iiif import ids
 from manuspectrum.iiif import language as lang
-
-
-def raw_label(file):
-    return lang.gettext_map("%(file)s, raw file", file=file.name)
+from manuspectrum.iiif.data import clean_series_available
+from manuspectrum.iiif.xy_reading import raw_label, raw_reading, xy_reading
+from manuspectrum.utils.spectrum_preview import is_supported
 
 
 def licence_fields(entry):
@@ -52,6 +55,16 @@ def licence_fields(entry):
 
 def file_body(file):
     """The body of one ``FileFact``."""
+    if file.kind == "measurement" and clean_series_available(file):
+        body = {
+            "id": ids.data_series(file.id),
+            "type": "Dataset",
+            "format": "text/csv",
+            "label": lang.gettext_map("%(file)s, series", file=file.name),
+        }
+        body.update(licence_fields(file.entry))
+        body["xyReading"] = xy_reading(file, file.config)
+        return body
     body = {
         "id": ids.data_raw(file.id),
         "type": "Image" if file.kind == "micro-imaging" else "Dataset",
@@ -59,6 +72,8 @@ def file_body(file):
         "label": raw_label(file),
     }
     body.update(licence_fields(file.entry))
+    if file.kind == "measurement" and file.config and is_supported(file.name):
+        body["xyReading"] = raw_reading(file.config)
     return body
 
 

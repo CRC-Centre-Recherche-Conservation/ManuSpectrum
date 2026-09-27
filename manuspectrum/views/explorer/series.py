@@ -20,7 +20,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from manuspectrum.iiif.sources import absolute_url
-from manuspectrum.utils.spectrum_preview import is_supported, read_series
+from manuspectrum.utils.spectrum_preview import is_readable, read_series
 from manuspectrum.views.explorer.api import _not_found
 from manuspectrum.views.explorer.scopes import (
     ScopeError,
@@ -161,7 +161,7 @@ def _plan(scope):
                 too_large = os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES
             except OSError:
                 continue
-            if too_large or not is_supported(path):
+            if too_large or not is_readable(path):
                 per_curve.append(
                     _("not in the CSV: %(file)s; file: %(url)s")
                     % {

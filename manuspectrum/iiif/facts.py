@@ -39,14 +39,13 @@ from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 import nh3
-from django.conf import settings
 from django.db.models import Q
 
 from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileModel
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.iiif import language as lang
-from manuspectrum.iiif.constants import MEDIA_TYPE_BY_EXTENSION, OCTET_STREAM
+from manuspectrum.iiif.data import file_size, media_type
 from manuspectrum.iiif.sources import (
     absolute_url,
     canvas_index,
@@ -54,6 +53,7 @@ from manuspectrum.iiif.sources import (
     manifest_json,
 )
 from manuspectrum.iiif.zones import annotation_features
+from manuspectrum.models import RendererConfig
 from manuspectrum.utils.public_visibility import (
     hidden_resource_ids,
     readable_graph_ids,
@@ -81,7 +81,6 @@ ANALYSIS_KEYS = (
     "component_observed",
 )
 FILE_KINDS = (("files", "measurement"), ("micro", "micro-imaging"))
-_MEDIA_TYPE = re.compile(r"^[a-z]+/[a-z0-9.+-]+$")
 _EMPTY = (None, "", [], {})
 _SPACES = re.compile(r"\s+")
 
@@ -117,7 +116,10 @@ class Zone:
 class FileFact:
     """One file of a file-list tile; *kind* is ``measurement`` or ``micro-imaging``.
 
-    ``entry`` keeps the licence and attribution the tile stores for it.
+    ``entry`` keeps the licence and attribution the tile stores for it,
+    ``path`` and ``size`` are those of the stored file (``size`` None when it
+    cannot be read), ``config`` the renderer configuration it names (``{}``
+    without one).
     """
 
     id: str
@@ -127,6 +129,9 @@ class FileFact:
     kind: str
     config_id: str | None
     entry: dict = field(default_factory=dict)
+    path: str = ""
+    size: int | None = None
+    config: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -193,23 +198,6 @@ class DocumentFacts:
     analyses: tuple
     characterizations: tuple = ()
     names: dict = field(default_factory=dict)
-
-
-def media_type(name, stored):
-    """True media type of a file: by extension, else its stored type when it is a plain ``type/subtype``, else octet-stream.
-
-    Raw instrument formats (``RAW_INSTRUMENT_EXTENSIONS``) are octet-stream;
-    a ``text/x-*`` type is never trusted.
-    """
-    extension = os.path.splitext(name or "")[1].lower()
-    if extension in MEDIA_TYPE_BY_EXTENSION:
-        return MEDIA_TYPE_BY_EXTENSION[extension]
-    if extension in {e.lower() for e in settings.RAW_INSTRUMENT_EXTENSIONS}:
-        return OCTET_STREAM
-    stored = str(stored or "").strip().lower()
-    if _MEDIA_TYPE.match(stored) and not stored.startswith("text/x-"):
-        return stored
-    return OCTET_STREAM
 
 
 def _tiles(resource_ids, keys, readable):
@@ -694,12 +682,26 @@ def _build(
     candidates = {
         aid: _file_entries(values[aid]) for aid in analysis_ids if aid in values
     }
-    owners = dict(
-        File.objects.filter(
-            fileid__in=[e["file_id"] for c in candidates.values() for _, _, e in c]
-        ).values_list("fileid", "tile_id")
-    )
-    owners = {str(k): str(v) for k, v in owners.items() if v}
+    storage = File._meta.get_field("path").storage
+    owners, paths = {}, {}
+    for file_id, tile_id, name in File.objects.filter(
+        fileid__in=[e["file_id"] for c in candidates.values() for _, _, e in c]
+    ).values_list("fileid", "tile_id", "path"):
+        if tile_id:
+            owners[str(file_id)] = str(tile_id)
+            paths[str(file_id)] = storage.path(name) if name else ""
+    config_ids = {
+        str(e.get("rendererConfig"))
+        for c in candidates.values()
+        for _, _, e in c
+        if e.get("rendererConfig")
+    }
+    configs = {
+        str(config_id): config if isinstance(config, dict) else {}
+        for config_id, config in RendererConfig.objects.filter(
+            configid__in=list(config_ids)
+        ).values_list("configid", "config")
+    }
 
     hidden = hidden_resource_ids(reader)
     graphs = readable_graph_ids(reader)
@@ -734,6 +736,8 @@ def _build(
             if owners.get(file_id) != tile_id:
                 continue
             name = str(entry.get("name") or "")
+            config_id = entry.get("rendererConfig") or None
+            path = paths.get(file_id, "")
             files.append(
                 FileFact(
                     id=file_id,
@@ -741,10 +745,13 @@ def _build(
                     extension=os.path.splitext(name)[1].lower(),
                     media_type=media_type(name, entry.get("type")),
                     kind=kind,
-                    config_id=entry.get("rendererConfig") or None,
+                    config_id=config_id,
                     entry={
                         k: entry[k] for k in ("license", "attribution") if k in entry
                     },
+                    path=path,
+                    size=file_size(path) if path else None,
+                    config=configs.get(str(config_id), {}) if config_id else {},
                 )
             )
 

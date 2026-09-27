@@ -408,13 +408,13 @@ class SpectrumPreviewViewTests(SimpleTestCase):
                 "manuspectrum.views.spectrum_preview.file_record", return_value=record
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.visible_set",
+                "manuspectrum.iiif.data.visible_set",
                 return_value=VisibleSet(
                     analyses=frozenset({RESOURCE_ID} if readable else set())
                 ),
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=None,
             ),
             mock.patch(
@@ -510,6 +510,16 @@ class SpectrumPreviewViewTests(SimpleTestCase):
             response = self.get(self.written(suffix))
 
             self.assertEqual(response.status_code, 204, suffix)
+
+    def test_an_instrument_format_read_natively_is_served(self):
+        mca = os.path.join(os.path.dirname(__file__), "fixtures", "xy", "elio_xrf.mca")
+        with open(mca, encoding="utf-8", newline="") as handle:
+            path = self.written(".mca", handle.read())
+
+        response = self.get(path)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content)["n_source"], 4096)
 
     @override_settings(XY_TEXT_FILE_FORMATS=["csv", "txt"])
     def test_a_format_the_setting_adds_is_served(self):
@@ -690,14 +700,14 @@ class SpectrumPreviewGuardTests(SimpleTestCase):
                 return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
             ) as load,
             mock.patch(
-                "manuspectrum.views.spectrum_preview.visible_set",
+                "manuspectrum.iiif.data.visible_set",
                 side_effect=[
                     VisibleSet(analyses=frozenset({"r-1"})),
                     VisibleSet(analyses=frozenset()),
                 ],
             ) as guard,
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=None,
             ),
             mock.patch(
@@ -734,13 +744,13 @@ class SpectrumPreviewNodegroupGuardTests(SimpleTestCase):
                 return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.visible_set",
+                "manuspectrum.iiif.data.visible_set",
                 return_value=VisibleSet(
                     analyses=frozenset({"r-1"} if readable else set())
                 ),
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=nodegroups,
             ) as allowed,
             mock.patch(

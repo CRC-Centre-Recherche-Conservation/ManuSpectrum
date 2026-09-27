@@ -214,12 +214,13 @@ class LinkTests(ShapeCase):
     def test_every_file_is_a_body_with_its_true_format(self):
         bodies = {b["id"]: b for b in self.annotation_of("open")["body"]}
 
-        self.assertEqual(bodies[ids.data_raw(self.file_id)]["format"], "text/csv")
+        self.assertEqual(bodies[ids.data_series(self.file_id)]["format"], "text/csv")
         self.assertEqual(
             bodies[ids.data_raw(self.raw_id)]["format"], "application/octet-stream"
         )
         self.assertEqual(
-            bodies[ids.data_raw(self.file_id)]["label"]["en"], ["X01_f1v.csv, raw file"]
+            bodies[ids.data_series(self.file_id)]["label"]["en"],
+            ["X01_f1v.csv, series"],
         )
 
     def test_the_raw_files_are_in_see_also(self):
@@ -257,7 +258,7 @@ class LinkTests(ShapeCase):
         body = next(
             b
             for b in self.annotation_of("open")["body"]
-            if b["id"] == ids.data_raw(self.file_id)
+            if b["id"] == ids.data_series(self.file_id)
         )
 
         self.assertTrue(body["rights"].startswith("http://creativecommons.org/"))

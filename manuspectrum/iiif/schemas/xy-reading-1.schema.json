@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ManuSpectrum xyReading, version 1",
+  "description": "How a client reads an XY curve out of a IIIF Dataset body. Clients may use it, should fall back to their own reading, and must ignore keys they do not know; version 1 only ever gains optional keys.",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": {"const": "XYReading"},
+    "dialect": {
+      "type": "object",
+      "properties": {
+        "delimiter": {"type": "string", "minLength": 1},
+        "headerRowCount": {"type": "integer", "minimum": 0},
+        "encoding": {"type": "string", "minLength": 1}
+      }
+    },
+    "columns": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/column"}
+    },
+    "x": {"$ref": "#/definitions/xAxis"},
+    "y": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/yAxis"}
+    },
+    "multiY": {"enum": ["separate", "reference-normalize"]},
+    "corrections": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/correction"}
+    },
+    "derivedFrom": {"$ref": "#/definitions/dataset"}
+  },
+  "definitions": {
+    "languageMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string"}
+      }
+    },
+    "column": {
+      "type": "object",
+      "required": ["index", "role"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0},
+        "role": {"enum": ["x", "yLeft", "yRight", "reference", "dark", "ignore"]}
+      }
+    },
+    "axis": {
+      "type": "object",
+      "properties": {
+        "label": {"$ref": "#/definitions/languageMap"},
+        "quantity": {"type": "string", "minLength": 1},
+        "unit": {"type": "string", "minLength": 1}
+      }
+    },
+    "xAxis": {
+      "allOf": [
+        {"$ref": "#/definitions/axis"},
+        {"properties": {"reversed": {"type": "boolean"}}}
+      ]
+    },
+    "yAxis": {
+      "allOf": [
+        {"$ref": "#/definitions/axis"},
+        {"properties": {"axis": {"enum": ["left", "right"]}}}
+      ]
+    },
+    "correction": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"const": "reference-normalize"},
+        "expression": {"type": "string"},
+        "darkDefault": {"type": "number"},
+        "epsilon": {"type": "number", "minimum": 0},
+        "onInvalid": {"enum": ["drop-point"]}
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^https?://"},
+        "type": {"const": "Dataset"},
+        "format": {"type": "string"},
+        "label": {"$ref": "#/definitions/languageMap"},
+        "xyReading": {"$ref": "#"}
+      }
+    }
+  }
+}

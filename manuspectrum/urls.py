@@ -22,6 +22,12 @@ from manuspectrum.views.biblissima_proxy import (
     BiblissimaStatsView,
     BiblissimaSuggestView,
 )
+from manuspectrum.views.iiif.context import (
+    XYReadingContextView,
+    XYReadingDocView,
+    XYReadingSchemaView,
+)
+from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
 from manuspectrum.views.iiif.annotations import (
     AnnotationView,
     AnnotationViewV2,
@@ -479,6 +485,35 @@ for version, collection, page, annotation, materials, materials_page in (
             name=f"iiif-v{version}-characterization-page",
         ),
     ]
+
+### IIIF data and the xyReading extension.
+###
+### ``data/<file>/raw`` serves a stored file, ``data/<file>/series.csv`` its
+### clean CSV; ``context/xy-reading/1`` documents the extension, its JSON-LD
+### context and its JSON Schema.
+urlpatterns += [
+    path("iiif/data/<uuid:file_id>/raw", RawDataView.as_view(), name="iiif-data-raw"),
+    path(
+        "iiif/data/<uuid:file_id>/series.csv",
+        SeriesDataView.as_view(),
+        name="iiif-data-series",
+    ),
+    path(
+        "iiif/context/xy-reading/1.jsonld",
+        XYReadingContextView.as_view(),
+        name="iiif-xy-reading-context",
+    ),
+    path(
+        "iiif/context/xy-reading/1",
+        XYReadingDocView.as_view(),
+        name="iiif-xy-reading-doc",
+    ),
+    path(
+        "iiif/context/xy-reading/1/schema.json",
+        XYReadingSchemaView.as_view(),
+        name="iiif-xy-reading-schema",
+    ),
+]
 
 ### Renderer metadata and XY renderer configuration.
 ###

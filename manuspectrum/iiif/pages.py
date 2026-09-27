@@ -6,7 +6,8 @@ of range. ``prev`` and ``next`` name the adjacent pages holding an annotation;
 a page restricted by *only* carries neither. The collection has no ``items``:
 ``first`` and ``last`` reference its first and last non-empty pages and
 ``total`` counts its annotations (left out at zero). A top-level document
-carries ``@context``; an embedded page (*embed*) carries none.
+carries ``@context`` (``with_context``); an embedded page (*embed*) carries
+none.
 
 *kind* ``analysis`` pages hold the analyses (``supplementing``),
 ``characterization`` pages the identified materials (``classifying``); each
@@ -26,6 +27,28 @@ LABELS = {
         "Identified materials of %(name)s, %(canvas)s",
     ),
 }
+
+
+def _mentions(node, key):
+    if isinstance(node, dict):
+        return key in node or any(_mentions(v, key) for v in node.values())
+    if isinstance(node, list):
+        return any(_mentions(v, key) for v in node)
+    return False
+
+
+def with_context(document):
+    """*document* opened by its ``@context``: extension contexts first, Presentation 3 last (P3 §4.6).
+
+    The xy-reading context is listed when an ``xyReading`` appears in the
+    document; alone, Presentation 3 is a plain string.
+    """
+    contexts = [ids.xy_context()] if _mentions(document, "xyReading") else []
+    body = {k: v for k, v in document.items() if k != "@context"}
+    return {
+        "@context": [*contexts, PRESENTATION_3] if contexts else PRESENTATION_3,
+        **body,
+    }
 
 
 class InvalidPage(Exception):
@@ -58,7 +81,7 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
     if not 1 <= n <= len(doc.canvases):
         raise InvalidPage(n)
     pages = annotations_by_page(doc, kind)
-    page = {"@context": PRESENTATION_3} if not embed else {}
+    page = {}
     page.update(
         id=ids.page(doc.document_id, n, kind, only=only),
         type="AnnotationPage",
@@ -90,7 +113,7 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
                 "type": "AnnotationPage",
             }
     page["items"] = pages.get(n, [])
-    return page
+    return page if embed else with_context(page)
 
 
 def page_numbers(doc, kind="analysis"):
@@ -102,7 +125,6 @@ def annotation_collection(doc, kind="analysis"):
     """The AnnotationCollection of *doc*: label, ``total``, ``first`` and ``last``; no ``items``."""
     pages = annotations_by_page(doc, kind)
     collection = {
-        "@context": PRESENTATION_3,
         "id": ids.collection(doc.document_id, kind),
         "type": "AnnotationCollection",
         "label": collection_label(doc, kind),
@@ -119,4 +141,4 @@ def annotation_collection(doc, kind="analysis"):
             "id": ids.page(doc.document_id, numbers[-1], kind),
             "type": "AnnotationPage",
         }
-    return collection
+    return with_context(collection)

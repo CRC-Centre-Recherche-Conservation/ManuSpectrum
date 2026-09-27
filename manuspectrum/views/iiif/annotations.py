@@ -54,14 +54,14 @@ def not_found():
     return _private(HttpResponseNotFound())
 
 
-def refused(request):
-    """401 describing the requested annotation to the visitor, bodyless 403 to a signed-in reader."""
+def refused(request, kind="Annotation"):
+    """401 describing the requested resource (an *kind*) to the visitor, bodyless 403 to a signed-in reader."""
     if is_connected(request.user):
         return _private(HttpResponse(status=403))
     body = {
         "@context": PRESENTATION_3,
         "id": f"{settings.PUBLIC_SERVER_ADDRESS}{request.path.lstrip('/')}",
-        "type": "Annotation",
+        "type": kind,
     }
     response = HttpResponse(
         orjson.dumps(body), status=401, content_type=IIIF_MEDIA_TYPE
@@ -197,8 +197,7 @@ class AnnotationView(IIIFView):
             ]
             if not zones:
                 raise Missing()
-            annotation = {"@context": PRESENTATION_3}
-            annotation.update(encode(doc, fact, zones[0]))
+            annotation = pages.with_context(encode(doc, fact, zones[0]))
             return annotation if self.version == 3 else v2.annotation(annotation)
 
         return memo.answer(

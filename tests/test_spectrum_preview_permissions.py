@@ -93,7 +93,7 @@ class NodegroupGrantPreviewTests(XYTriggerTestCase):
         self.series = series.start()
         self.addCleanup(series.stop)
         visible = mock.patch(
-            "manuspectrum.views.spectrum_preview.visible_set",
+            "manuspectrum.iiif.data.visible_set",
             return_value=VisibleSet(analyses=frozenset({str(self.resource.pk)})),
         )
         visible.start()
@@ -147,7 +147,7 @@ class NodegroupGrantPreviewTests(XYTriggerTestCase):
             self.assertEqual(self.fetch().status_code, 200)
         with (
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=None,
             ),
             CaptureQueriesContext(connection) as unchecked,
@@ -177,11 +177,11 @@ class PreviewRulesTests(TestCase):
                 "manuspectrum.views.spectrum_preview.file_record", return_value=record
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=None,
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.visible_set",
+                "manuspectrum.iiif.data.visible_set",
                 return_value=VisibleSet(
                     analyses=frozenset({self.RESOURCE} if visible else set())
                 ),
@@ -243,7 +243,7 @@ class RealVisibleSetPreviewTests(ExplorerCase):
                 return_value=record,
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=None,
             ),
         ):
