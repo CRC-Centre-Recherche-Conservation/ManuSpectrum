@@ -33,6 +33,7 @@ from manuspectrum.views.explorer.service import (
     Values,
     analysis_files,
     permalink,
+    native_configs,
     renderer_configs,
 )
 
@@ -107,6 +108,7 @@ def _plan(scope):
     """
     values = Values(list(scope.analyses), ["files", "micro", "imaging"], scope.reader)
     configs = renderer_configs(values, scope.analyses)
+    native = native_configs(values, list(scope.analyses))
     comments = [
         _("%(site)s: spectra of a Selection") % {"site": settings.APP_TITLE},
         _("Generated on %(date)s") % {"date": datetime.date.today().isoformat()},
@@ -124,6 +126,7 @@ def _plan(scope):
                 scope.language,
                 values=values,
                 configs=configs,
+                native=native,
                 read=scope.read_manifest,
             ),
         )

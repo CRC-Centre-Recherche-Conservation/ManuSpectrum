@@ -11,14 +11,16 @@ from pathlib import Path
 from unittest import mock, skipUnless
 
 from django.conf import settings
+from django.db import connection
 from django.http import QueryDict
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import TileModel
 
 from manuspectrum.models import RendererConfig
 from manuspectrum.views.explorer.scopes import resolve_scope
 from manuspectrum.views.explorer.series import HEADER
-from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
+from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase, file_queries
 
 try:
     import pandas
@@ -281,6 +283,21 @@ class SeriesCsvTests(CorpusCase):
         (curve,) = [c for c in comments if c.startswith("# c1:")]
         self.assertIn("x axis Energy (keV)", curve)
         self.assertIn("y axis Counts", curve)
+
+    def test_the_native_axes_of_a_selection_are_read_in_one_query(self):
+        mca = (Path(__file__).parent / "fixtures" / "xy" / "elio_xrf.mca").read_bytes()
+        self.stored_file(self.analyses["open"], "A.mca", mca)
+        self.stored_file(self.analyses["on_document"], "B.mca", mca)
+
+        with CaptureQueriesContext(connection) as single:
+            self.text(self.selection("open"))
+        with CaptureQueriesContext(connection) as double:
+            comments, _ = self.split(self.text(self.selection("open", "on_document")))
+
+        self.assertEqual(file_queries(double), file_queries(single))
+        self.assertEqual(
+            len([c for c in comments if "x axis Energy (keV)" in c]), 2, comments
+        )
 
     def test_a_file_over_the_preview_ceiling_is_named_not_read(self):
         file_id = self.spectrum(name="Big.csv")

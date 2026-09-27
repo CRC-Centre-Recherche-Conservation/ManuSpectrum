@@ -13,8 +13,10 @@ import bibtexparser
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.db import connection
 from django.http import QueryDict
 from django.test import SimpleTestCase
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import NodeGroup, TileModel
 from arches.app.utils.permission_backend import assign_perm
@@ -32,6 +34,11 @@ from manuspectrum.views.explorer.service import (
 )
 
 DAY_VECTORS = Path(__file__).parent / "fixtures" / "explorer_day_index.json"
+
+
+def file_queries(context):
+    """The queries of *context* reading the ``files`` table."""
+    return len([q for q in context.captured_queries if 'FROM "files"' in q["sql"]])
 
 
 class SearchRouteTests(ServiceCase):
@@ -995,6 +1002,27 @@ class ItemsRouteTests(CorpusCase):
         assert_shape(
             self, payload["items"][0]["characterization"], "CharacterizationSummary"
         )
+
+    def test_the_native_axes_of_a_selection_are_read_in_one_query(self):
+        mca = (Path(__file__).parent / "fixtures" / "xy" / "elio_xrf.mca").read_bytes()
+        self.stored_file(self.analyses["open"], "A.mca", mca)
+        self.stored_file(self.analyses["on_document"], "B.mca", mca)
+        one = [f"an:{self.analyses['open'].pk}:-"]
+        two = [*one, f"an:{self.analyses['on_document'].pk}:-"]
+
+        with CaptureQueriesContext(connection) as single:
+            self.get(one)
+        with CaptureQueriesContext(connection) as double:
+            payload = self.get(two).json()
+
+        self.assertEqual(file_queries(double), file_queries(single))
+        labels = {
+            f["name"]: f["viewer"]["xLabel"]
+            for item in payload["items"]
+            for f in item["files"]
+            if f["name"].endswith(".mca")
+        }
+        self.assertEqual(labels, {"A.mca": "Energy (keV)", "B.mca": "Energy (keV)"})
 
     def test_items_rejects_more_than_thirty_keys(self):
         keys = [f"ch:{i:08d}-0000-4000-8000-000000000000:-" for i in range(31)]

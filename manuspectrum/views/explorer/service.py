@@ -2298,6 +2298,7 @@ def items_payload(keys, user, language):
     shared_configs = (
         renderer_configs(shared_values, file_ids) if shared_values else None
     )
+    shared_native = native_configs(shared_values, file_ids) if shared_values else None
     files_of, items, missing = {}, [], []
     for key, match in parsed:
         if not match:
@@ -2322,7 +2323,12 @@ def items_payload(keys, user, language):
             continue
         if rid not in files_of:
             files_of[rid] = analysis_files(
-                rid, user, language, values=shared_values, configs=shared_configs
+                rid,
+                user,
+                language,
+                values=shared_values,
+                configs=shared_configs,
+                native=shared_native,
             )
         if kind == "an":
             items.append(
