@@ -398,6 +398,52 @@ export interface ItemsResponse {
     missing: string[];
 }
 
+/** A row of the coverage matrix: the Selection's analyses on one canvas, by technique id. */
+export interface SynthesisCoverage {
+    canvas: string;
+    /** The canvas label, prefixed with its document's name when the rows span several documents. */
+    label: string;
+    counts: Record<string, number>;
+}
+
+/** An element of an identified material; `symbol` null when its labels give none. */
+export type SynthesisElementRef = ValueRef & { symbol: string | null };
+
+/** One colour × material value over the identified materials carrying both (colour null: none given). */
+export interface SynthesisPair {
+    colour: ValueRef | null;
+    material: ValueRef;
+    elements: SynthesisElementRef[];
+    /** Canvas ids, in document then page order. */
+    canvases: string[];
+    confidenceBest: RankedValue | null;
+    /** Number of identified materials. */
+    count: number;
+}
+
+/** An element with a symbol, counted once per identified material naming it, with its best level. */
+export interface SynthesisElement {
+    symbol: string;
+    level: RankedValue | null;
+    count: number;
+}
+
+/**
+ * Body of `GET synthesis?ids=`: the Compare tools' synthesis of the Selection
+ * (D60). The identified materials are those of its `ch:` keys and the
+ * visible ones citing one of its analyses.
+ */
+export interface SynthesisResponse {
+    coverage: SynthesisCoverage[];
+    /** The techniques `coverage` counts, by label. */
+    techniques: Technique[];
+    /** Most frequent first. */
+    pairs: SynthesisPair[];
+    /** Most frequent first. */
+    elements: SynthesisElement[];
+    unpublishedCount: number;
+}
+
 /** Body of `GET /api/spectrum-preview/<file_id>?n=` (already through its renderer configuration). */
 export interface Series {
     x: number[];
@@ -660,4 +706,35 @@ export const SHAPE_KEYS = {
         seriesCsv: true,
         export: true,
     } satisfies Record<keyof ShareLinks, true>,
+    SynthesisResponse: {
+        coverage: true,
+        techniques: true,
+        pairs: true,
+        elements: true,
+        unpublishedCount: true,
+    } satisfies Record<keyof SynthesisResponse, true>,
+    SynthesisCoverage: {
+        canvas: true,
+        label: true,
+        counts: true,
+    } satisfies Record<keyof SynthesisCoverage, true>,
+    SynthesisPair: {
+        colour: true,
+        material: true,
+        elements: true,
+        canvases: true,
+        confidenceBest: true,
+        count: true,
+    } satisfies Record<keyof SynthesisPair, true>,
+    SynthesisElementRef: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof SynthesisElementRef, true>,
+    SynthesisElement: {
+        symbol: true,
+        level: true,
+        count: true,
+    } satisfies Record<keyof SynthesisElement, true>,
 } as const;
