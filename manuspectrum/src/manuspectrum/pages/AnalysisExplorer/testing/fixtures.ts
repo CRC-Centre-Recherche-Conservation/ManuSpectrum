@@ -2,6 +2,7 @@ import type {
     AnalysisHit,
     AnalysisPayload,
     CharacterizationSummary,
+    ContentStateLink,
     DocumentAnalysis,
     DocumentHit,
     DocumentMatch,
@@ -245,7 +246,7 @@ export function documentResponses({
         if (canvas < 0) throw new Error(`no canvas ${entry.canvas}`);
         analyses
             .get(entry.analysis)!
-            .zones.push({ canvas, shape: entry.shape });
+            .zones.push({ canvas, shape: entry.shape, feature: entry.key });
     }
     return {
         payload: { ...payload, techniques, analyses: [...analyses.values()] },
@@ -423,6 +424,15 @@ export function imagingEntry(overrides: Partial<FileEntry> = {}): FileEntry {
     });
 }
 
+/** The content state of zone `feature` of `analysis`, as the server lists it. */
+export function contentStateLink(
+    analysis: string,
+    feature: string,
+): ContentStateLink {
+    const url = `http://testserver/iiif/v3/content-state/${analysis}/${feature}`;
+    return { feature, url, download: `${url}?download=1` };
+}
+
 export function analysisPayload(
     overrides: Partial<AnalysisPayload> = {},
 ): AnalysisPayload {
@@ -451,7 +461,8 @@ export function analysisPayload(
             bibtex: "@dataset{manuspectrumnd000000,\n\ttitle = {MS1_f12_XRF_03}\n}\n",
         },
         availability: `The data are available in ManuSpectrum (http://testserver/report/${uuid(101)}).`,
-        manifest: `http://testserver/iiif/v3/explorer-manifest?ids=an:${uuid(101)}:-&lang=en`,
+        manifest: `http://testserver/iiif/v3/explorer-manifest?ids=an:${uuid(101)}:-`,
+        contentStates: [contentStateLink(uuid(101), uuid(901))],
         permalink: `http://testserver/report/${uuid(101)}`,
         reportUrl: `/en/report/${uuid(101)}`,
         certaintyScale: { levels: [] },
@@ -465,8 +476,8 @@ export function sharePayload(
     overrides: Partial<SharePayload> = {},
 ): SharePayload {
     const query = `document=${uuid(1)}`;
-    const product = (route: string): ProductLink => {
-        const path = `/${route}?${query}&lang=en`;
+    const product = (route: string, lang = "&lang=en"): ProductLink => {
+        const path = `/${route}?${query}${lang}`;
         return { url: `http://testserver${path}`, path };
     };
     return {
@@ -483,7 +494,7 @@ export function sharePayload(
         availability: `The data are available in ManuSpectrum (http://testserver/report/${uuid(1)}).`,
         export: { files: 2, bytes: 2_400_000, overLimit: false, documents: [] },
         links: {
-            manifest: product("iiif/v3/explorer-manifest"),
+            manifest: product("iiif/v3/explorer-manifest", ""),
             seriesCsv: null,
             export: product("api/explorer/export"),
         },

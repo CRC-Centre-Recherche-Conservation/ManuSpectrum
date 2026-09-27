@@ -1,89 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { parseContentState } from "@iiif/helpers/content-state";
 
 import {
-    analysisContentState,
     contentStateLink,
     miradorLink,
 } from "@/manuspectrum/pages/AnalysisExplorer/share/content-state.ts";
 
-import type { Shape } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-
-const MANIFEST =
-    "http://testserver/iiif/v3/explorer-manifest?ids=an:x:-&lang=en";
-const CANVAS = "https://iiif.example/ms59/canvas/f1v";
+const MANIFEST = "http://testserver/iiif/v3/explorer-manifest?ids=an:x:-";
+const STATE =
+    "http://testserver/iiif/v3/content-state/00000000-0000-4000-8000-000000000101/00000000-0000-4000-8000-000000000901";
 const MIRADOR = "https://viewer.example/mirador/";
-
-interface Decoded {
-    type: string;
-    motivation: string[];
-    target:
-        | string
-        | {
-              type: string;
-              source: { id: string; type: string; partOf: { id: string }[] };
-              selector?: { type: string; value?: string; x?: number };
-          };
-}
-
-async function decoded(shape: Shape | null): Promise<Decoded> {
-    const state = await analysisContentState(MANIFEST, CANVAS, shape);
-    expect(state).toMatch(/^[A-Za-z0-9_-]+$/);
-    return parseContentState(state) as unknown as Decoded;
-}
-
-describe("analysisContentState", () => {
-    it("round-trips through decodeContentState", async () => {
-        const state = await decoded({ type: "point", x: 10, y: 20 });
-        expect(state.type).toBe("Annotation");
-        expect(state.motivation).toEqual(["contentState"]);
-        const target = state.target as Exclude<Decoded["target"], string>;
-        expect(target.source.id).toBe(CANVAS);
-        expect(target.source.type).toBe("Canvas");
-        expect(target.source.partOf).toEqual([
-            { id: MANIFEST, type: "Manifest" },
-        ]);
-        expect(target.selector).toEqual({
-            type: "PointSelector",
-            x: 10,
-            y: 20,
-        });
-    });
-
-    it("encodes a point, a rect and a polygon", async () => {
-        const rect = (
-            await decoded({ type: "rect", x: 1.6, y: 2, w: 30, h: 40 })
-        ).target as Exclude<Decoded["target"], string>;
-        expect(rect.selector).toEqual({
-            type: "FragmentSelector",
-            conformsTo: "http://www.w3.org/TR/media-frags/",
-            value: "xywh=1,2,30,40",
-        });
-        const polygon = (
-            await decoded({
-                type: "polygon",
-                points: [
-                    [0, 0],
-                    [10.2, 0],
-                    [10, 10],
-                ],
-            })
-        ).target as Exclude<Decoded["target"], string>;
-        expect(polygon.selector).toEqual({
-            type: "SvgSelector",
-            value: '<svg xmlns="http://www.w3.org/2000/svg"><polygon points="0,0 10,0 10,10"/></svg>',
-        });
-    });
-
-    it("targets the whole canvas without a shape", async () => {
-        const state = await decoded(null);
-        expect(state.target).toEqual({
-            id: CANVAS,
-            type: "Canvas",
-            partOf: [{ id: MANIFEST, type: "Manifest" }],
-        });
-    });
-});
 
 function params(link: string | null): URLSearchParams {
     expect(link).not.toBeNull();
@@ -98,9 +23,9 @@ describe("miradorLink", () => {
         expect(params(link).has("iiif-content")).toBe(false);
     });
 
-    it("opens a content state as iiif-content", () => {
-        const link = miradorLink(MIRADOR, { contentState: "abc_-" });
-        expect(params(link).get("iiif-content")).toBe("abc_-");
+    it("opens a content state by its URL as iiif-content", () => {
+        const link = miradorLink(MIRADOR, { contentState: STATE });
+        expect(params(link).get("iiif-content")).toBe(STATE);
         expect(params(link).has("manifest")).toBe(false);
     });
 
@@ -122,18 +47,19 @@ describe("miradorLink", () => {
 });
 
 describe("contentStateLink", () => {
-    const MANIFEST =
-        "https://site.example/iiif/v3/explorer-manifest?ids=an:x:-";
-
-    it("is the viewer's link when a viewer is set", () => {
-        expect(contentStateLink(MIRADOR, MANIFEST, "abc_-")).toBe(
-            miradorLink(MIRADOR, { contentState: "abc_-" }),
-        );
+    it("links the viewer with the state url unencoded", () => {
+        const link = contentStateLink(MIRADOR, STATE);
+        expect(link.startsWith(MIRADOR)).toBe(true);
+        expect(params(link).get("iiif-content")).toBe(STATE);
+        expect(link).toBe(miradorLink(MIRADOR, { contentState: STATE }));
     });
 
-    it("is the manifest URL carrying iiif-content without a viewer", () => {
-        const link = new URL(contentStateLink("", MANIFEST, "abc_-"));
-        expect(link.searchParams.get("ids")).toBe("an:x:-");
-        expect(link.searchParams.get("iiif-content")).toBe("abc_-");
+    it("copies the state url without a viewer", () => {
+        expect(contentStateLink("", STATE)).toBe(STATE);
+    });
+
+    it("refuses a viewer that is not http(s)", () => {
+        expect(contentStateLink("javascript:alert(1)", STATE)).toBe(STATE);
+        expect(contentStateLink("/relative", STATE)).toBe(STATE);
     });
 });
