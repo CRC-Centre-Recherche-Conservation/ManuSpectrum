@@ -19,6 +19,7 @@ from django.urls import reverse
 
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.constants.xy_presets import XY_PRESETS
+from manuspectrum.iiif.xy_reading import axes
 from manuspectrum.utils.iiif_tools import BBoxCalculator
 from manuspectrum.utils.spectrum_preview import is_readable
 
@@ -305,12 +306,8 @@ def file_entries(entries, *, language, configs, kind):
                 "dataKind": data_kind,
                 "viewer": {
                     "rendererConfigId": config_id,
-                    "xLabel": (
-                        _display(config).get("xAxisLabel") or None if config else None
-                    ),
-                    "yLabel": (
-                        _display(config).get("yAxisLabel") or None if config else None
-                    ),
+                    "xLabel": (axes(config)[0] or None) if config else None,
+                    "yLabel": (axes(config)[1] or None) if config else None,
                     "axisKey": axis_key(config) if config else None,
                     "axisTitle": axis_title(config) if config else None,
                     "points": None,
