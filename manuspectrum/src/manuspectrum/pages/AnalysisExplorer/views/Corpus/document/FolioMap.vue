@@ -10,7 +10,6 @@ import {
 import { usePreferredReducedMotion, useResizeObserver } from "@vueuse/core";
 import L from "leaflet";
 import "leaflet.markercluster";
-import "leaflet-side-by-side";
 import { useGettext } from "vue3-gettext";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
 
@@ -19,10 +18,7 @@ import {
     shapeCentre,
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
-import {
-    curtainable,
-    overlayPane,
-} from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import {
     fitPage,
     layPage,
@@ -44,6 +40,7 @@ import type {
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
+import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -117,8 +114,7 @@ let openedGroup: Set<string> | null = null;
 let fittedCanvas: string | null | undefined;
 const markers = new Map<string, L.Marker>();
 const targets = new Map<string, L.Marker>();
-const images = new Map<string, L.ImageOverlay>();
-let sideBySide: L.SideBySide | null = null;
+let laid: LaidLayers | null = null;
 
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 
@@ -162,6 +158,10 @@ onMounted(() => {
     map.createPane(PINNED_PANE).style.zIndex = PINNED_PANE_Z_INDEX;
     pinned = L.layerGroup().addTo(map);
     stackSmallestOnTop(map);
+    laid = laidLayers(map, {
+        curtainLabel: $gettext("Curtain position"),
+        failed: markOverlayFailed,
+    });
     map.on("zoomend moveend", computeTargets);
     drawPage();
     drawMarks();
@@ -173,9 +173,8 @@ useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 onBeforeUnmount(() => {
     page?.remove();
     page = null;
-    sideBySide?.remove();
-    sideBySide = null;
-    images.clear();
+    laid?.remove();
+    laid = null;
     map?.remove();
     map = null;
 });
@@ -557,59 +556,14 @@ function drawMarks(): void {
     computeTargets();
 }
 
-/**
- * Adds, updates and removes the laid layers by key. The curtain clips the one
- * named by `curtain`; one curtain control lives while a layer is curtained, so
- * its divider keeps its place when the opacity, the curtained layer or the
- * document payload changes.
- */
+/** Lays the layers switched on, the curtain over the one `curtain` names (`laidLayers`). */
 function drawOverlays(): void {
-    if (!map) return;
+    if (!laid) return;
     const wanted = new Set(props.overlays.map((overlay) => overlay.key));
-    for (const [key, layer] of images) {
-        if (!wanted.has(key)) {
-            layer.remove();
-            images.delete(key);
-        }
-    }
     failedOverlays.value = new Set(
         [...failedOverlays.value].filter((key) => wanted.has(key)),
     );
-    for (const overlay of props.overlays) {
-        const existing = images.get(overlay.key);
-        if (existing) {
-            existing.setOpacity(overlay.opacity);
-            existing.setBounds(L.latLngBounds(overlay.bounds));
-        } else {
-            const pane = overlayPane(map, overlay.key);
-            const layer = L.imageOverlay(overlay.url, overlay.bounds, {
-                opacity: overlay.opacity,
-                className: "folio-overlay",
-                alt: overlay.label,
-                pane,
-            });
-            layer.on("error", () => markOverlayFailed(overlay.key));
-            images.set(
-                overlay.key,
-                curtainable(layer.addTo(map), map.getPane(pane)!),
-            );
-        }
-    }
-    const under = props.curtain ? images.get(props.curtain) : undefined;
-    if (!under) {
-        sideBySide?.remove();
-        sideBySide = null;
-    } else if (sideBySide) {
-        sideBySide.setRightLayers(under);
-    } else {
-        sideBySide = L.control
-            .sideBySide([], under)
-            .addTo(map)
-            .on("rightlayerremove", unclip);
-        (
-            sideBySide as L.SideBySide & { _range?: HTMLElement }
-        )._range?.setAttribute("aria-label", $gettext("Curtain position"));
-    }
+    laid.draw(props.overlays, props.curtain);
 }
 
 function markOverlayFailed(key: string): void {
@@ -618,21 +572,9 @@ function markOverlayFailed(key: string): void {
 
 /** Lays the maps that did not load again, as new images. */
 function retryOverlays(): void {
-    for (const key of failedOverlays.value) {
-        images.get(key)?.remove();
-        images.delete(key);
-    }
+    laid?.forget(failedOverlays.value);
     failedOverlays.value = new Set();
     drawOverlays();
-}
-
-/** A layer that leaves the curtain keeps no clip: its pane may be laid again without it. */
-function unclip(event: L.LeafletEvent): void {
-    const { layer } = event as L.LeafletEvent & {
-        layer: { getContainer?: () => HTMLElement | undefined };
-    };
-    const container = layer.getContainer?.();
-    if (container) container.style.clip = "";
 }
 
 /** The id of the marker, or of the marker group, that shows an analysis or a sample (`sample:<id>`) now; null when neither is on the map. */

@@ -4,6 +4,8 @@ import { useGettext } from "vue3-gettext";
 
 import Slider from "primevue/slider";
 
+import LayerScroll from "@/manuspectrum/pages/AnalysisExplorer/viewers/LayerScroll.vue";
+
 import {
     layerImageUrl,
     overlayKey,
@@ -13,6 +15,7 @@ import {
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { layerKindLabel } from "@/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts";
 
 import type {
     AnalysisPayload,
@@ -32,7 +35,7 @@ const curtain = inject(CURTAIN_KEY, ref<string | null>(null));
 const zones = inject(FOLIO_ZONES_KEY, ref<ReadonlySet<string>>(new Set()));
 
 const store = useExplorerStore();
-const { $gettext, interpolate } = useGettext();
+const { $gettext } = useGettext();
 const percentFormat = new Intl.NumberFormat(
     document.documentElement.lang || "en",
     { style: "percent" },
@@ -72,31 +75,7 @@ const underCurtain = computed(
 const imageUrl = computed(() =>
     layer.value ? layerImageUrl(layer.value.image, PREVIEW_SIZE) : null,
 );
-/** Where the layer scale's handle is, in words: « 550 nm, layer 4 of 13 ». */
-const valueText = computed(() =>
-    layer.value
-        ? interpolate(
-              $gettext("%{label}, layer %{n} of %{total}"),
-              {
-                  label: layer.value.label,
-                  n: position.value + 1,
-                  total: props.file.layers.length,
-              },
-              true,
-          )
-        : "",
-);
-const firstLayer = computed(() => props.file.layers[0]?.label ?? "");
-const lastLayer = computed(() => props.file.layers.at(-1)?.label ?? "");
-const scrollLabel = computed(() =>
-    layer.value
-        ? interpolate(
-              $gettext("Layers, in order: %{label}"),
-              { label: layer.value.label },
-              true,
-          )
-        : $gettext("Layers, in order"),
-);
+const labels = computed(() => props.file.layers.map((entry) => entry.label));
 
 watch(imageUrl, () => {
     imageFailed.value = false;
@@ -109,17 +88,6 @@ function onImageError(): void {
 function retryImage(): void {
     attempt.value += 1;
     imageFailed.value = false;
-}
-
-function kindLabel(entry: FileLayer): string {
-    switch (entry.kind) {
-        case "element":
-            return $gettext("Element");
-        case "band":
-            return $gettext("Band");
-        default:
-            return $gettext("Layer");
-    }
 }
 
 function firstValue(value: number | number[]): number {
@@ -150,12 +118,12 @@ function setOpacity(value: number | number[]): void {
 }
 
 /** Moving the layer scroll carries the laid map, its opacity and the curtain to the new layer. */
-function moveTo(value: number | number[]): void {
+function moveTo(value: number): void {
     const wasLaid = laid.value;
     const wasUnderCurtain = underCurtain.value;
     const keptOpacity = opacity.value;
     if (wasLaid) lay(false);
-    position.value = firstValue(value);
+    position.value = value;
     if (wasLaid && layer.value) {
         store.setOverlay(key.value, {
             element: layer.value.label,
@@ -179,41 +147,15 @@ function onCurtainChange(event: Event): void {
             v-if="layer"
             class="current"
         >
-            <span>{{ kindLabel(layer) }}</span>
+            <span>{{ layerKindLabel($gettext, layer.kind) }}</span>
             <span class="value">{{ layer.label }}</span>
         </p>
-        <div
+        <LayerScroll
             v-if="props.file.layers.length > 1"
-            class="scroll"
-        >
-            <span aria-hidden="true">{{ $gettext("Layers, in order") }}</span>
-            <Slider
-                :model-value="position"
-                :min="0"
-                :max="props.file.layers.length - 1"
-                :step="1"
-                :aria-label="scrollLabel"
-                :pt="{ handle: { 'aria-valuetext': valueText } }"
-                @update:model-value="moveTo"
-            />
-            <span
-                class="ticks"
-                aria-hidden="true"
-            >
-                <span
-                    v-for="entry in props.file.layers"
-                    :key="entry.index"
-                    class="tick"
-                ></span>
-            </span>
-            <span
-                class="ends"
-                aria-hidden="true"
-            >
-                <span>{{ firstLayer }}</span>
-                <span>{{ lastLayer }}</span>
-            </span>
-        </div>
+            :labels="labels"
+            :position="position"
+            @update:position="moveTo"
+        />
         <p
             v-if="imageUrl && imageFailed"
             class="unavailable"
@@ -315,31 +257,10 @@ function onCurtainChange(event: Event): void {
     font-family: var(--font-mono);
 }
 
-.imaging-preview .scroll,
 .imaging-preview .opacity {
     display: grid;
     gap: 0.5rem;
     padding-inline: 0.625rem;
-}
-
-.imaging-preview .ticks {
-    display: flex;
-    justify-content: space-between;
-}
-
-.imaging-preview .tick {
-    inline-size: 0.0625rem;
-    block-size: 0.375rem;
-    background: var(--border-hover);
-}
-
-.imaging-preview .ends {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    color: var(--ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
 }
 
 .imaging-preview .layer-image {

@@ -22,15 +22,17 @@ export interface PageLayer {
  * GridLayer.onRemove throws on a layer whose tiles are not laid: an unread
  * page never reaches the map, and a page removed in the instant between its
  * addition and its tiles is dropped without calling GridLayer.onRemove.
- * `failed` is called when the info.json cannot be read.
+ * `failed` is called when the info.json cannot be read. The view fits the
+ * whole page once laid, unless `fitBounds` is false (the caller keeps it).
  */
 export function layPage(
     map: L.Map,
     service: string,
     failed: () => void,
+    { fitBounds = true }: { fitBounds?: boolean } = {},
 ): PageLayer {
     const layer = L.tileLayer.iiif(infoJsonUrl(service), {
-        fitBounds: true,
+        fitBounds,
         setMaxBounds: false,
     }) as IiifLayer;
     const onRemove = layer.onRemove;
