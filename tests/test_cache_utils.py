@@ -97,6 +97,35 @@ class GetOrBuildTests(SimpleTestCase):
         )
         self.assertLess(time.monotonic() - started, 2.0)
 
+    def test_one_waiter_takes_over_a_failed_holder(self):
+        cache.add(self.KEY + ":lock", 1, 60)
+        builds = []
+
+        def build():
+            builds.append(1)
+            time.sleep(0.2)
+            return "rebuilt"
+
+        results = []
+        waiters = [
+            threading.Thread(
+                target=lambda: results.append(
+                    get_or_build(self.KEY, build, 60, wait=5.0, poll=0.02)
+                ),
+                daemon=True,
+            )
+            for _ in range(3)
+        ]
+        for waiter in waiters:
+            waiter.start()
+        time.sleep(0.1)
+        cache.delete(self.KEY + ":lock")
+        for waiter in waiters:
+            waiter.join(10)
+
+        self.assertEqual(results, ["rebuilt"] * 3)
+        self.assertEqual(len(builds), 1)
+
     def test_builds_itself_when_the_holder_never_delivers(self):
         cache.add(self.KEY + ":lock", 1, 60)
         build = MagicMock(return_value="fallback")
