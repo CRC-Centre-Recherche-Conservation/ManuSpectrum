@@ -10,11 +10,13 @@ import {
     readFolded,
     readHidden,
     readLayout,
+    readTools,
     readingOrder,
     sizeOf,
     writeFolded,
     writeHidden,
     writeLayout,
+    writeTools,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 
 afterEach(() => window.localStorage.clear());
@@ -132,6 +134,49 @@ describe("Compare window layout", () => {
             JSON.stringify({ version: 2, folded: [true] }),
         );
         expect(readFolded()).toEqual({});
+    });
+
+    it("keeps the open tools next to the places, and drops what is not a tool", () => {
+        const box = { x: 0, y: 0, w: 6, h: 5 };
+        writeLayout({ "tool:coverage:-": box });
+        writeTools([
+            { kind: "coverage", params: {} },
+            { kind: "folio", params: { canvas: "c1" } },
+        ]);
+        expect(readTools()).toEqual([
+            { kind: "coverage", params: {} },
+            { kind: "folio", params: { canvas: "c1" } },
+        ]);
+        expect(readLayout()).toEqual({ "tool:coverage:-": box });
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                tools: [
+                    { kind: "periodic", params: {} },
+                    { kind: "unknown", params: {} },
+                    { kind: "coverage", params: { n: 1 } },
+                    { kind: "coverage" },
+                    "periodic",
+                ],
+            }),
+        );
+        expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
+    });
+
+    it("keeps the open tools when windows are forgotten or the layout is emptied", () => {
+        const box = { x: 0, y: 0, w: 6, h: 5 };
+        writeTools([{ kind: "periodic", params: {} }]);
+        writeLayout({ "auto:micro": box, "tool:periodic:-": box });
+        forgetWindows(["tool:periodic:-"]);
+        expect(readLayout()).toEqual({ "tool:periodic:-": box });
+        expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
+        clearLayout();
+        expect(readLayout()).toEqual({});
+        expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
+        writeTools([]);
+        clearLayout();
+        expect(window.localStorage.getItem(LAYOUT_STORAGE_KEY)).toBeNull();
     });
 
     it("forgets the places and the hidden state of windows that are gone", () => {
