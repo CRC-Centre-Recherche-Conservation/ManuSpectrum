@@ -10,8 +10,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:419
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:431
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:423
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:435
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:567
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:644
 msgid "(new tab)"
@@ -404,7 +404,7 @@ msgstr "Copy the data availability statement"
 msgid "Copy the IIIF link"
 msgstr "Copy the IIIF link"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:408
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:412
 msgid "Copy the manifest URL"
 msgstr "Copy the manifest URL"
 
@@ -895,12 +895,12 @@ msgstr "Opacity"
 msgid "Open a document to see where each analysis was made."
 msgstr "Open a document to see where each analysis was made."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:429
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:433
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:565
 msgid "Open in Mirador"
 msgstr "Open in Mirador"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:417
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:421
 msgid "Open the manifest"
 msgstr "Open the manifest"
 
@@ -1316,10 +1316,14 @@ msgstr "This package (%{size}) is over the export limit."
 msgid "This project"
 msgstr "This project"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:397
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:401
 msgid ""
 "Too many folios for one IIIF manifest: open a document, or your Selection, "
 "to get one."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:398
+msgid "Too many folios for one IIIF manifest."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:30

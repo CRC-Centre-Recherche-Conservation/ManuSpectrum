@@ -394,9 +394,13 @@ function shareLink(): string {
                             class="limit"
                         >
                             {{
-                                $gettext(
-                                    "Too many folios for one IIIF manifest: open a document, or your Selection, to get one.",
-                                )
+                                payload?.scope.kind === "document"
+                                    ? $gettext(
+                                          "Too many folios for one IIIF manifest.",
+                                      )
+                                    : $gettext(
+                                          "Too many folios for one IIIF manifest: open a document, or your Selection, to get one.",
+                                      )
                             }}
                         </p>
                         <div

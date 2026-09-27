@@ -341,6 +341,7 @@ describe("ShareExportPanel", () => {
 
     it("says why a scope over the canvas bound offers no manifest", async () => {
         const tooLarge = sharePayload();
+        tooLarge.scope = { ...tooLarge.scope, kind: "project" };
         tooLarge.links = {
             ...tooLarge.links,
             manifest: null,
@@ -353,9 +354,29 @@ describe("ShareExportPanel", () => {
         expect(
             drawer().querySelector('[aria-labelledby="share-iiif"] .limit')
                 ?.textContent,
-        ).toContain("Too many folios for one IIIF manifest");
+        ).toContain("open a document, or your Selection");
         expect(drawer().querySelector("a.mirador")).toBeNull();
         expect(drawer().querySelector("a.manifest")).toBeNull();
+        wrapper.unmount();
+    });
+
+    it("gives no advice to open a document when the scope is one", async () => {
+        const tooLarge = sharePayload();
+        tooLarge.scope = { ...tooLarge.scope, kind: "document" };
+        tooLarge.links = {
+            ...tooLarge.links,
+            manifest: null,
+            manifestTooLarge: true,
+        };
+        answer = () => jsonResponse(tooLarge);
+
+        const { wrapper } = await openPanel();
+
+        const note = drawer().querySelector(
+            '[aria-labelledby="share-iiif"] .limit',
+        )?.textContent;
+        expect(note).toContain("Too many folios for one IIIF manifest.");
+        expect(note).not.toContain("open a document");
         wrapper.unmount();
     });
 });
