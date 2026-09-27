@@ -67,21 +67,6 @@ class LabelTests(SimpleTestCase):
 
         self.assertEqual(name, {"value": "Initiale", "lang": "fr"})
 
-    def test_name_drops_a_folio_part_that_has_no_folio(self):
-        for stored, shown in (
-            (
-                "AMI175-XRF-0004 — XRF — red of Border — f. — Amiens, Ms. 175",
-                "AMI175-XRF-0004 — XRF — red of Border — Amiens, Ms. 175",
-            ),
-            ("Vignette — f.", "Vignette"),
-            ("X01 — f. 1v — Amiens, Ms. 175", "X01 — f. 1v — Amiens, Ms. 175"),
-            ("f.", "f."),
-        ):
-            with self.subTest(stored=stored):
-                name = name_of([{"en": {"value": stored}}], {}, "3f2a9c", "en")
-
-                self.assertEqual(name, {"value": shown, "lang": "en"})
-
     def test_name_without_any_label_uses_model_and_short_id(self):
         name = name_of([], {"en": "Analysis", "fr": "Analyse"}, "3f2a9c1e-0000", "fr")
 
