@@ -378,6 +378,9 @@ class FileEntryTests(SimpleTestCase):
         self.assertEqual(viewer(configs)["yLabel"], "Reflectance (%)")
         self.assertIsNone(viewer(bare)["xLabel"])
         self.assertIsNone(viewer(bare)["yLabel"])
+        blank = {config_id: {"display": {"xAxisLabel": "  ", "yAxisLabel": "\t"}}}
+        self.assertIsNone(viewer(blank)["xLabel"])
+        self.assertIsNone(viewer(blank)["yLabel"])
 
 
 def _labelled(*labels):
