@@ -97,3 +97,20 @@ class MemoTests(IIIFCase):
         self.assertEqual(english.content, french.content)
         self.assertEqual(len(memo_keys()), 1)
         self.assertNotIn("accept-language", english.get("Vary", "").lower())
+
+    def test_a_recompiled_catalogue_moves_the_key(self):
+        with mock.patch("manuspectrum.iiif.memo.locale_stamp", return_value="a"):
+            first = self.visitor.get(self.url)
+        with mock.patch("manuspectrum.iiif.memo.locale_stamp", return_value="b"):
+            again = self.visitor.get(self.url, HTTP_IF_NONE_MATCH=first["ETag"])
+
+        self.assertEqual(again.status_code, 200)
+        self.assertNotEqual(again["ETag"], first["ETag"])
+
+    def test_a_new_code_version_moves_the_key(self):
+        with self.settings(CACHE_CODE_VERSION="a"):
+            first = self.visitor.get(self.url)
+        with self.settings(CACHE_CODE_VERSION="b"):
+            again = self.visitor.get(self.url)
+
+        self.assertNotEqual(again["ETag"], first["ETag"])

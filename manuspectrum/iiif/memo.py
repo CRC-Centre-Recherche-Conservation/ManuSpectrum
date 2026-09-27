@@ -1,7 +1,8 @@
 """The memo and the HTTP answer of the memoised IIIF documents (pages, collections, annotations).
 
 A document is stored under ``stable_cache_key("iiif", kind, *parts,
-data_version, permission_epoch, visitor digest)``, language-free, and only
+data_version, permission_epoch, visitor digest, locale stamp, code
+version)``, language-free, and only
 when the reader's ``visible_set`` digest equals the visitor's (same visible
 resources, hidden resources, readable nodegroups and models) and the
 response renews no CSRF cookie. That answer is ``public, no-cache`` with a
@@ -32,6 +33,7 @@ from manuspectrum.utils.public_visibility import (
     permission_epoch,
     visible_set,
 )
+from manuspectrum.utils.stamps import locale_stamp
 
 PUBLIC = "public, no-cache"
 PRIVATE = "private, no-store"
@@ -46,7 +48,8 @@ class Gate:
 
 
 def gate(reader, token=False):
-    """The ``Gate`` of *reader*: data version, permission epoch and the visitor's visible digest.
+    """The ``Gate`` of *reader*: data version, permission epoch, the visitor's visible digest,
+    the translations' ``locale_stamp`` and ``CACHE_CODE_VERSION``.
 
     A reader identified by a IIIF token (*token*) never shares the visitor's view.
     """
@@ -55,7 +58,13 @@ def gate(reader, token=False):
     mine = visible_set(reader, version)
     return Gate(
         shared=not token and mine.digest == visitor.digest,
-        parts=(version, permission_epoch(), visitor.digest),
+        parts=(
+            version,
+            permission_epoch(),
+            visitor.digest,
+            locale_stamp(),
+            settings.CACHE_CODE_VERSION,
+        ),
     )
 
 
