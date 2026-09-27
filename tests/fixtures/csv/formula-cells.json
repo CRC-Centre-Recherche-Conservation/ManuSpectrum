@@ -1,0 +1,33 @@
+{
+  "_comment": "Curator text and what a CSV cell keeps of it: views/explorer/series.py neutralise() and views/Compare/workshop.ts neutraliseText() both read this file.",
+  "cases": [
+    {
+      "text": "A1 · plain.csv · Energy (keV)",
+      "safe": "A1 · plain.csv · Energy (keV)"
+    },
+    {
+      "text": "=HYPERLINK(1),@x.csv",
+      "safe": "'=HYPERLINK(1),'@x.csv"
+    },
+    {
+      "text": "x,\"=HYPERLINK(\"\"https://evil\"\",\"\"Open\"\")\",y.csv",
+      "safe": "x,'=HYPERLINK(''https://evil'',''Open'')',y.csv"
+    },
+    {
+      "text": "a;=cmd|' /C calc'!A0.csv",
+      "safe": "a;'=cmd|' /C calc'!A0.csv"
+    },
+    {
+      "text": "p,+1,@x, -2.csv",
+      "safe": "p,'+1,'@x,' -2.csv"
+    },
+    {
+      "text": "CRC; =SUM(1)\t,\t@y",
+      "safe": "CRC;' =SUM(1) ,' @y"
+    },
+    {
+      "text": "  -3 dB\r\nline",
+      "safe": "'-3 dB line"
+    }
+  ]
+}

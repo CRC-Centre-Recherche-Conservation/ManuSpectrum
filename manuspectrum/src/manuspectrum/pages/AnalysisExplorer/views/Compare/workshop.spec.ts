@@ -9,7 +9,8 @@ import { describe, expect, it } from "vitest";
 import {
     dashOf,
     extent,
-    offsetStep,
+    neutraliseText,
+    offsetLifts,
     outOfRange,
     panelGrid,
     ranksInSlot,
@@ -34,6 +35,23 @@ const CASES: ParityCase[] = JSON.parse(
         "utf-8",
     ),
 );
+
+interface FormulaCase {
+    text: string;
+    safe: string;
+}
+
+const FORMULA_CASES: FormulaCase[] = JSON.parse(
+    fs.readFileSync(
+        fileURLToPath(
+            new URL(
+                "../../../../../../../tests/fixtures/csv/formula-cells.json",
+                import.meta.url,
+            ),
+        ),
+        "utf-8",
+    ),
+).cases;
 
 function parity(presetKey: string): ParityCase["expected"] {
     const found = CASES.find((entry) => entry.config.presetKey === presetKey);
@@ -111,15 +129,21 @@ describe("workshop", () => {
         expect(treat(xrf.x, xrf.y, base)).toBe(xrf.y);
     });
 
-    it("steps offset curves by the widest span", () => {
+    it("lifts each offset curve above the one before it, a tenth of the widest span apart", () => {
         expect(
-            offsetStep([
-                { min: 0, max: 2, count: 2 },
+            offsetLifts([
                 { min: 10, max: 15, count: 2 },
+                { min: 0, max: 2, count: 2 },
                 null,
+                { min: -1, max: 1, count: 2 },
             ]),
-        ).toBe(5);
-        expect(offsetStep([{ min: 3, max: 3, count: 1 }])).toBe(1);
+        ).toEqual([0, 15.5, 15.5, 19]);
+        expect(
+            offsetLifts([
+                { min: 3, max: 3, count: 1 },
+                { min: 3, max: 3, count: 1 },
+            ]),
+        ).toEqual([0, 1]);
     });
 
     it("flags a curve whose X range meets no other", () => {
@@ -140,26 +164,34 @@ describe("workshop", () => {
         expect(panelGrid(30)).toEqual({ rows: 8, columns: 4 });
     });
 
-    it("writes one pair of columns per curve, neutralising curator text", () => {
+    it("neutralises curator text as the Explorer's series CSV does", () => {
+        expect(FORMULA_CASES.length).toBeGreaterThan(0);
+        for (const { text, safe } of FORMULA_CASES) {
+            expect(neutraliseText(text)).toBe(safe);
+        }
+    });
+
+    it("writes one pair of columns per curve after a byte order mark, neutralising curator text", () => {
         const csv = workshopCsv(
             [
-                { label: "A1 · =cmd.csv", x: [1, 2], y: [0.5, Number.NaN] },
-                { label: 'A2 · b "c".csv', x: [3], y: [-4] },
+                { label: "A1 · a;=cmd.csv", x: [1, 2], y: [0.5, Number.NaN] },
+                { label: 'A2 · b,"c".csv', x: [3], y: [-4] },
             ],
             "Energy (keV)",
-            "Counts [normalised to max]",
+            "Counts",
         );
-        expect(csv.split("\r\n")).toEqual([
-            "A1 · =cmd.csv · Energy (keV),A1 · =cmd.csv · Counts [normalised to max]," +
-                '"A2 · b ""c"".csv · Energy (keV)","A2 · b ""c"".csv · Counts [normalised to max]"',
+        expect(csv.startsWith("\ufeff")).toBe(true);
+        expect(csv.slice(1).split("\r\n")).toEqual([
+            "A1 · a;'=cmd.csv · Energy (keV),A1 · a;'=cmd.csv · Counts," +
+                `"A2 · b,'c'.csv · Energy (keV)","A2 · b,'c'.csv · Counts"`,
             "1,0.5,3,-4",
             "2,,,",
             "",
         ]);
         expect(
-            workshopCsv([{ label: "=A1", x: [], y: [] }], "x", "y").split(
-                "\r\n",
-            )[0],
+            workshopCsv([{ label: " =A1", x: [], y: [] }], "x", "y")
+                .slice(1)
+                .split("\r\n")[0],
         ).toBe("'=A1 · x,'=A1 · y");
     });
 });

@@ -126,6 +126,14 @@ function readBlob(blob: Blob): Promise<string> {
     });
 }
 
+function readBytes(blob: Blob): Promise<ArrayBuffer> {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.readAsArrayBuffer(blob);
+    });
+}
+
 function notes(view: VueWrapper): string[] {
     return view.findAll(".notes li").map((item) => item.text());
 }
@@ -246,12 +254,31 @@ describe("XyWorkshop", () => {
         await flushPromises();
         const { traces, layout } = lastDrawing();
         expect(traces[0].y).toEqual([10, 30, 20]);
-        expect(traces[1].y).toEqual([30, 50, 40]);
+        expect(traces[1].y).toEqual([32, 52, 42]);
         expect(traces[1].customdata).toEqual([10, 30, 20]);
         expect(layout.yaxis.title.text).toBe("Counts");
         expect(
             view.find('[data-layout="offset"]').attributes("aria-pressed"),
         ).toBe("true");
+    });
+
+    it("lifts an offset curve above the whole curve below it, whatever their ranges", async () => {
+        answer(1, jsonResponse(series([1, 2, 3], [100, 120, 110])));
+        answer(3, jsonResponse(series([1, 2, 3], [-5, 0, 5])));
+        const view = await mountWorkshop([
+            curve(0, 1),
+            curve(1, 2),
+            curve(2, 3),
+        ]);
+        await view.find('[data-layout="offset"]').trigger("click");
+        await flushPromises();
+        const { traces } = lastDrawing();
+        for (let index = 1; index < traces.length; index += 1) {
+            expect(Math.min(...traces[index].y)).toBeGreaterThan(
+                Math.max(...traces[index - 1].y),
+            );
+        }
+        expect(traces[2].customdata).toEqual([-5, 0, 5]);
     });
 
     it("opens on small multiples above eight curves, one panel per slot, and goes back to overlay", async () => {
@@ -310,7 +337,20 @@ describe("XyWorkshop", () => {
         const { traces, layout } = lastDrawing();
         expect(traces[0].y).toEqual([1 / 3, 1, 2 / 3]);
         expect(traces[1].y).toEqual([-1, 0.5, 0.25]);
-        expect(layout.yaxis.title.text).toBe("Counts [normalised to max]");
+        expect(layout.yaxis.title.text).toBe("Counts [normalised to maximum]");
+    });
+
+    it("names a treatment in the Y title with the words of its menu entry", async () => {
+        const view = await mountWorkshop([
+            curve(0, 1, { presetKey: "mass_spec" }),
+        ]);
+        const option = view.find('select option[value="normalize-area"]');
+        expect(option.text()).toBe("Normalised to total (TIC)");
+        await view.find("select").setValue("normalize-area");
+        await flushPromises();
+        expect(lastDrawing().layout.yaxis.title.text).toBe(
+            "Counts [normalised to total (TIC)]",
+        );
     });
 
     it("offers only the treatments shared by different presets, and says so", async () => {
@@ -387,7 +427,7 @@ describe("XyWorkshop", () => {
         expect(click).toHaveBeenCalledTimes(1);
     });
 
-    it("exports the treated values without the offset as CSV, one column pair per curve", async () => {
+    it("exports the treated values without the offset as CSV, one column pair per curve, marked UTF-8", async () => {
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
             () => undefined,
         );
@@ -399,16 +439,20 @@ describe("XyWorkshop", () => {
             },
             revokeObjectURL: () => undefined,
         });
+        answer(2, jsonResponse(series([4, 5, 6], [5, 10, 20])));
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
         await view.find('[data-layout="offset"]').trigger("click");
         await view.find("select").setValue("normalize-max");
         await view.find('[data-action="csv"]').trigger("click");
+        expect([
+            ...new Uint8Array(await readBytes(blobs[0])).slice(0, 3),
+        ]).toEqual([0xef, 0xbb, 0xbf]);
         expect((await readBlob(blobs[0])).split("\r\n")).toEqual([
-            "A1 · S1.csv · Energy (keV),A1 · S1.csv · Counts [normalised to max]," +
-                "A2 · S2.csv · Energy (keV),A2 · S2.csv · Counts [normalised to max]",
-            `1,${1 / 3},1,${1 / 3}`,
-            "2,1,2,1",
-            `3,${2 / 3},3,${2 / 3}`,
+            "A1 · S1.csv · Energy (keV),A1 · S1.csv · Counts [normalised to maximum]," +
+                "A2 · S2.csv · Energy (keV),A2 · S2.csv · Counts [normalised to maximum]",
+            `1,${1 / 3},4,0.25`,
+            "2,1,5,0.5",
+            `3,${2 / 3},6,1`,
             "",
         ]);
     });
@@ -426,13 +470,40 @@ describe("XyWorkshop", () => {
         expect(plotly.react).not.toHaveBeenCalled();
     });
 
-    it("resizes the chart when its window does, and purges it on unmount", async () => {
+    it("groups the chart tools, each reached with Tab", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const tools = view.find(".toolbar");
+        expect(tools.attributes("role")).toBe("group");
+        expect(tools.attributes("aria-label")).toBe("Chart tools");
+        expect(
+            tools
+                .findAll("button")
+                .every((button) => !button.attributes("tabindex")),
+        ).toBe(true);
+    });
+
+    it("purges the chart it leaves for the table layout", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const element = view.find(".chart").element;
+        await view.find('[data-layout="table"]').trigger("click");
+        await flushPromises();
+        expect(plotly.purge).toHaveBeenCalledWith(element);
+    });
+
+    it("resizes the chart only when its size changed, and purges it on unmount", async () => {
         const resize = ref(0);
         const view = await mountWorkshop([curve(0, 1)], resize);
         resize.value += 1;
         await flushPromises();
-        expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+        expect(plotly.Plots.resize).not.toHaveBeenCalled();
         const element = view.find(".chart").element;
+        Object.defineProperty(element, "clientWidth", { value: 640 });
+        resize.value += 1;
+        await flushPromises();
+        expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+        resize.value += 1;
+        await flushPromises();
+        expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
         view.unmount();
         wrapper = null;
         expect(plotly.purge).toHaveBeenCalledWith(element);

@@ -19,15 +19,23 @@ export function viewLabels($gettext: Gettext): Record<string, string> {
     };
 }
 
+/** A menu entry as it reads inside a sentence: its first letter in lower case. */
+function inSentence(label: string): string {
+    return label.charAt(0).toLocaleLowerCase() + label.slice(1);
+}
+
 /**
  * What a transform adds in brackets to the Y title, by transform key
- * (`deriveAxisLabel`). `log10(1/R)` and `Kubelka-Munk` are a formula and a
- * proper noun: the module's own wording stands.
+ * (`deriveAxisLabel`). A normalisation is named with the words of its menu
+ * entry (`viewLabels`), so the menu and the axis say the same thing.
+ * `log10(1/R)` and `Kubelka-Munk` are a formula and a proper noun: the
+ * module's own wording stands.
  */
 export function annotationLabels($gettext: Gettext): Record<string, string> {
+    const views = viewLabels($gettext);
     return {
-        "normalize-max": $gettext("normalised to max"),
-        "normalize-area": $gettext("normalised to area"),
+        "normalize-max": inSentence(views["normalize-max"]),
+        "normalize-area": inSentence(views["normalize-area"]),
         smooth: $gettext("smoothed"),
         derivative: $gettext("derivative"),
     };

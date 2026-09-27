@@ -26,7 +26,7 @@ import {
     OVERLAY_MAX_CURVES,
     dashOf,
     extent,
-    offsetStep,
+    offsetLifts,
     outOfRange,
     panelGrid,
     ranksInSlot,
@@ -87,13 +87,15 @@ const DEFAULT_PNG_HEIGHT = 540;
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
  * every readable spectrum of the window, each in the colour of its slot,
  * the 2nd, 3rd… file of a slot in a dashed variant, named « A1 · file ».
- * Overlaid, offset (each curve lifted by one step, the real values on
- * hover, the Y title unchanged), in small multiples (one panel per slot,
- * the default above eight curves) or as a table. A treatment of
+ * Overlaid, offset (each curve lifted above the one before it, the real
+ * values on hover, the Y title unchanged), in small multiples (one panel
+ * per slot, the default above eight curves) or as a table. A treatment of
  * `utils/xy-views.js` runs on every curve and names itself in the Y title.
  * A file over the server's ceiling, missing or empty is named and left out.
- * A chart Plotly cannot draw says so in the window. Once the window is
- * unmounted, a drawing still waiting stops and one that ends late is purged.
+ * A chart Plotly cannot draw says so in the window. The chart follows its
+ * window's size (`WINDOW_RESIZE_KEY`) only when its own size changed; the
+ * table layout and the unmount purge it, and a drawing that ends after the
+ * unmount is purged too.
  */
 const props = defineProps<{ curves: readonly FileLine[] }>();
 
@@ -115,6 +117,8 @@ const lang = document.documentElement.lang || "en";
 let plotly: PlotlyModule | null = null;
 let drawnOn: HTMLElement | null = null;
 let lastFigure: Figure | null = null;
+/** The chart's size when it was last drawn or resized, « width×height ». */
+let drawnSize = "";
 /** Set on unmount: a drawing still waiting stops, and one that ends late is purged. */
 let disposed = false;
 
@@ -275,19 +279,36 @@ const chartLabel = computed(() =>
 );
 
 watch([drawn, layout, chart], () => void draw());
+watch(layout, (name) => {
+    if (name === "table") purgeChart();
+});
 watch(
     () => resizeTick?.value,
     () => {
-        if (plotly && chart.value && layout.value !== "table") {
-            void plotly.Plots.resize(chart.value);
-        }
+        const element = chart.value;
+        if (!plotly || !element || layout.value === "table") return;
+        const size = sizeOf(element);
+        if (size === drawnSize) return;
+        drawnSize = size;
+        void plotly.Plots.resize(element);
     },
 );
 
 onBeforeUnmount(() => {
     disposed = true;
-    if (plotly && drawnOn) plotly.purge(drawnOn);
+    purgeChart();
 });
+
+function sizeOf(element: HTMLElement): string {
+    return `${element.clientWidth}×${element.clientHeight}`;
+}
+
+/** Frees the chart Plotly drew, and forgets it. */
+function purgeChart(): void {
+    if (plotly && drawnOn) plotly.purge(drawnOn);
+    drawnOn = null;
+    lastFigure = null;
+}
 
 function layoutName(name: WorkshopLayout): string {
     switch (name) {
@@ -358,14 +379,14 @@ function baseLayout(theme: PlotTheme): Partial<Layout> {
     });
 }
 
-/** Overlaid, or offset: curve i lifted by i steps, its real values kept for the hover. */
+/** Overlaid, or offset: each curve lifted above the one before it, its real values kept for the hover. */
 function stackedFigure(theme: PlotTheme, offset: boolean): Figure {
-    const step = offset
-        ? offsetStep(drawn.value.map((curve) => curve.yRange))
-        : 0;
+    const lifts = offset
+        ? offsetLifts(drawn.value.map((curve) => curve.yRange))
+        : [];
     const annotations: Partial<Layout["annotations"][number]>[] = [];
     const data = drawn.value.map((curve, index): Partial<PlotData> => {
-        const lift = index * step;
+        const lift = lifts[index] ?? 0;
         const y = offset ? curve.y.map((value) => value + lift) : curve.y;
         annotations.push(...inkLabel(theme, curve, y));
         return {
@@ -460,6 +481,7 @@ async function draw(): Promise<void> {
                 : stackedFigure(theme, layout.value === "offset");
         lastFigure = figure;
         drawnOn = element;
+        drawnSize = sizeOf(element);
         await plotly.react(element, figure.data, figure.layout, PLOT_CONFIG);
         if (disposed) {
             plotly.purge(element);
@@ -560,7 +582,7 @@ function chooseView(event: Event): void {
         <template v-if="drawn.length > 0">
             <div
                 class="toolbar"
-                role="toolbar"
+                role="group"
                 :aria-label="$gettext('Chart tools')"
             >
                 <div

@@ -40,7 +40,7 @@ from manuspectrum.views.explorer.service import (
 HEADER = ("curve", "analysis", "file", "x", "y")
 ROWS_PER_CHUNK = 2000
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
-_FORMULA_CELL = re.compile(r"([,;])([ ]*[=+\-@\t\r])")
+_FORMULA_CELL = re.compile(r"(^|[,;])([ ]*[=+\-@\t\r])")
 
 
 class _Line:
@@ -55,17 +55,27 @@ def _clean(text):
     return _CONTROL.sub(" ", str(text or "")).strip()
 
 
-def _comment(text):
-    """One comment line opening with ``#``, safe to open in a spreadsheet.
+def neutralise(text):
+    """Curator text made safe for a spreadsheet, on one line.
 
-    Double quotes become single quotes, and a cell that a spreadsheet
-    splitting on ``,`` or ``;`` would read as opening a formula (``=``,
-    ``+``, ``-``, ``@``, tab or carriage return, after optional spaces)
-    gets a leading ``'`` (OWASP CSV injection). ``pandas.read_csv(comment="#")``
-    and R's ``read.csv(comment.char="#")`` skip the line.
+    Control characters become spaces, double quotes single quotes, and a
+    part that a spreadsheet splitting on ``,`` or ``;`` would read as
+    opening a formula (``=``, ``+``, ``-``, ``@``, tab or carriage return,
+    after optional spaces), the start of the text included, gets a leading
+    ``'`` (OWASP CSV injection). The Compare workshop's CSV applies the same
+    rule (``neutraliseText`` in ``views/Compare/workshop.ts``); both are
+    pinned by ``tests/fixtures/csv/formula-cells.json``.
     """
-    line = f"# {_clean(text)}".replace('"', "'")
-    return _FORMULA_CELL.sub(r"\1'\2", line) + "\r\n"
+    return _FORMULA_CELL.sub(r"\1'\2", _clean(text).replace('"', "'"))
+
+
+def _comment(text):
+    """One comment line opening with ``#``, safe to open in a spreadsheet (``neutralise``).
+
+    ``pandas.read_csv(comment="#")`` and R's ``read.csv(comment.char="#")``
+    skip the line.
+    """
+    return f"# {neutralise(text)}\r\n"
 
 
 def _file_url(entry, entries):

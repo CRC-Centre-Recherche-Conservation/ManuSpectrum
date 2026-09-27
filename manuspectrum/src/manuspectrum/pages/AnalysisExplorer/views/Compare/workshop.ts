@@ -21,6 +21,14 @@ const DASHES = [
 ] as const;
 
 const MAX_COLUMNS = 4;
+/** The room between two offset curves, as a share of the widest curve's span. */
+const OFFSET_GAP = 0.1;
+/** A spreadsheet opens a CSV starting with the UTF-8 byte order mark as UTF-8. */
+const UTF8_BOM = "\ufeff";
+/** A cell a spreadsheet splitting on `,` or `;` would read as a formula, spaces first included (`views/explorer/series.py` `_FORMULA_CELL`). */
+const FORMULA_CELL = /(^|[,;])([ ]*[=+\-@\t\r])/g;
+const FIRST_PRINTABLE = 0x20;
+const DELETE = 0x7f;
 
 export type Dash = (typeof DASHES)[number];
 
@@ -107,15 +115,28 @@ export function treat(x: number[], y: number[], view: XyView | null): number[] {
 }
 
 /**
- * The step between two offset curves: the widest span of the curves, so a
- * lifted curve clears the one below it; 1 when no curve spans anything.
+ * How far each offset curve is lifted: every curve starts above the top of
+ * the curve before it, lifted, with a gap of a tenth of the widest span (1
+ * when no curve spans anything). A curve with no finite value sits at the
+ * level of the curve before it.
  */
-export function offsetStep(spans: readonly (Extent | null)[]): number {
+export function offsetLifts(spans: readonly (Extent | null)[]): number[] {
     let widest = 0;
     for (const span of spans) {
         if (span) widest = Math.max(widest, span.max - span.min);
     }
-    return widest > 0 ? widest : 1;
+    const gap = widest > 0 ? widest * OFFSET_GAP : 1;
+    const lifts: number[] = [];
+    let top: number | null = null;
+    let lift = 0;
+    for (const span of spans) {
+        if (span) {
+            lift = top === null ? 0 : top + gap - span.min;
+            top = span.max + lift;
+        }
+        lifts.push(lift);
+    }
+    return lifts;
 }
 
 /**
@@ -146,10 +167,39 @@ export function panelGrid(panels: number): { rows: number; columns: number } {
     return { rows: Math.max(1, Math.ceil(panels / columns)), columns };
 }
 
-/** A CSV cell: curator text is neutralised against formula injection (OWASP) and quoted when needed. */
+/** Each run of control characters as one space (`views/explorer/series.py` `_CONTROL`). */
+function spacedControls(text: string): string {
+    let spaced = "";
+    let inRun = false;
+    for (const character of text) {
+        const code = character.charCodeAt(0);
+        const control = code < FIRST_PRINTABLE || code === DELETE;
+        if (!control) spaced += character;
+        else if (!inRun) spaced += " ";
+        inRun = control;
+    }
+    return spaced;
+}
+
+/**
+ * Curator text made safe for a spreadsheet, by the rule of
+ * `views/explorer/series.py` (`neutralise`): control characters become one
+ * space, double quotes single quotes, and a leading `'` goes before any
+ * part a spreadsheet splitting on `,` or `;` would read as a formula (`=`,
+ * `+`, `-`, `@`, tab or carriage return, after optional spaces; OWASP CSV
+ * injection). Both sides are pinned by `tests/fixtures/csv/formula-cells.json`.
+ */
+export function neutraliseText(text: string): string {
+    return spacedControls(text)
+        .trim()
+        .replaceAll('"', "'")
+        .replace(FORMULA_CELL, "$1'$2");
+}
+
+/** A header cell: neutralised curator text, quoted when it holds a comma. */
 function csvCell(text: string): string {
-    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-    return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+    const safe = neutraliseText(text);
+    return safe.includes(",") ? `"${safe}"` : safe;
 }
 
 function csvNumber(value: number | undefined): string {
@@ -157,8 +207,9 @@ function csvNumber(value: number | undefined): string {
 }
 
 /**
- * The curves as CSV: one pair of columns per curve, headed « label · X
- * title » and « label · Y title »; a shorter curve leaves its cells empty.
+ * The curves as CSV, after the UTF-8 byte order mark: one pair of columns
+ * per curve, headed « label · X title » and « label · Y title »; a shorter
+ * curve leaves its cells empty.
  */
 export function workshopCsv(
     columns: readonly CsvColumn[],
@@ -182,5 +233,5 @@ export function workshopCsv(
                 .join(","),
         );
     }
-    return `${lines.join("\r\n")}\r\n`;
+    return `${UTF8_BOM}${lines.join("\r\n")}\r\n`;
 }
