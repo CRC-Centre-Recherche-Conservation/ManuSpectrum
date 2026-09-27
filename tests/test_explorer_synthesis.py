@@ -164,9 +164,15 @@ class CoverageTests(SynthesisCase):
                 {
                     "canvas": CANVAS,
                     "label": "f. 1v",
+                    "document": str(self.documents["open"].pk),
                     "counts": {item_id(XRF): 2, item_id(FORS): 1},
                 },
-                {"canvas": CANVAS_3, "label": "f. 3r", "counts": {item_id(FORS): 1}},
+                {
+                    "canvas": CANVAS_3,
+                    "label": "f. 3r",
+                    "document": str(self.documents["open"].pk),
+                    "counts": {item_id(FORS): 1},
+                },
             ],
         )
         self.assertEqual(
@@ -205,8 +211,11 @@ class CoverageTests(SynthesisCase):
             payload = self.payload([self.an("open"), self.an("embargoed")])
 
         self.assertEqual(
-            [(r["canvas"], r["label"]) for r in payload["coverage"]],
-            [(CANVAS_B, "Ms 211 — f. 1r"), (CANVAS, "Ms 59 — f. 1v")],
+            [(r["canvas"], r["label"], r["document"]) for r in payload["coverage"]],
+            [
+                (CANVAS_B, "Ms 211 — f. 1r", str(self.documents["embargoed"].pk)),
+                (CANVAS, "Ms 59 — f. 1v", str(self.documents["open"].pk)),
+            ],
         )
 
 
@@ -280,7 +289,14 @@ class SynthesisPermissionTests(SynthesisCase):
 
         self.assertEqual(
             payload["coverage"],
-            [{"canvas": CANVAS, "label": "f. 1v", "counts": {item_id(XRF): 1}}],
+            [
+                {
+                    "canvas": CANVAS,
+                    "label": "f. 1v",
+                    "document": str(self.documents["open"].pk),
+                    "counts": {item_id(XRF): 1},
+                }
+            ],
         )
         self.assertEqual(payload["pairs"][0]["count"], 1)
         self.assertEqual((alone.status_code, alone.content), (404, b""))

@@ -48,7 +48,8 @@ def _coverage(placements, bundle):
 
     A canvas is a row when an analysis with a technique is placed on it. A
     row's label is the canvas's label, prefixed with its document's name
-    when the rows span several documents.
+    when the rows span several documents; ``document`` is the id of the
+    document whose manifest lists the canvas.
     """
     rows, techniques = [], {}
     for placement in placements:
@@ -69,6 +70,7 @@ def _coverage(placements, bundle):
             "label": (
                 f"{bundle.label_of[document]['value']} — {label}" if several else label
             ),
+            "document": str(document),
             "counts": counts,
         }
         for document, canvas, label, counts in rows

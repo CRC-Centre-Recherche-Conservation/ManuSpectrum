@@ -212,7 +212,12 @@ SHAPES = {
         "elements": list,
         "unpublishedCount": int,
     },
-    "SynthesisCoverage": {"canvas": str, "label": str, "counts": dict},
+    "SynthesisCoverage": {
+        "canvas": str,
+        "label": str,
+        "document": str,
+        "counts": dict,
+    },
     "SynthesisPair": {
         "colour": ("ValueRef", None),
         "material": "ValueRef",

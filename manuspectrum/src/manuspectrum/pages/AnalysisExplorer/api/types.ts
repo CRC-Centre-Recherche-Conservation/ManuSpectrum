@@ -403,6 +403,8 @@ export interface SynthesisCoverage {
     canvas: string;
     /** The canvas label, prefixed with its document's name when the rows span several documents. */
     label: string;
+    /** Id of the document whose manifest lists the canvas. */
+    document: string;
     counts: Record<string, number>;
 }
 
@@ -716,6 +718,7 @@ export const SHAPE_KEYS = {
     SynthesisCoverage: {
         canvas: true,
         label: true,
+        document: true,
         counts: true,
     } satisfies Record<keyof SynthesisCoverage, true>,
     SynthesisPair: {
