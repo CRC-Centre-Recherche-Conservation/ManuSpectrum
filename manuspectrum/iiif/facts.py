@@ -195,9 +195,9 @@ class DocumentFacts:
 
     ``canvases`` and ``canvas_labels`` list the canvases of the source manifest
     in order; page *n* is canvas ``n - 1``. ``placed`` maps a kind to
-    ``{page number: zone count}`` of the zones of that kind placed on the
-    Document, built as facts or not; a kind it does not name is counted off
-    the facts.
+    ``{page number: zone count}`` of the zones placed on the Document by
+    every resource of that kind ``document_facts``' *only* keeps, built as
+    facts or not; a kind it does not name is counted off the facts.
     """
 
     document_id: str
@@ -794,6 +794,10 @@ class CharacterizationZones:
 
     def on(self, ids, source):
         """``{identified material id: [Zone, …]}`` of *ids* on *source*: its own zones, else those of the Components it observes."""
+        return {c: zones for c, (_, zones) in self.sourced(ids, source).items()}
+
+    def sourced(self, ids, source):
+        """``{identified material id: (origin, [Zone, …])}`` of ``on``; *origin* is ``"own"`` or ``"component"``."""
         if not ids:
             return {}
         dims, position = source.dims, source.position
@@ -802,13 +806,16 @@ class CharacterizationZones:
         components = _on_listed(self._components.features(observed, dims), position)
         placed = {}
         for c in ids:
-            zones = own.get(c) or [
+            if own.get(c):
+                placed[c] = ("own", own[c])
+                continue
+            zones = [
                 zone
                 for o in self._observed.get(c, ())
                 for zone in components.get(o, ())
             ]
             if zones:
-                placed[c] = zones
+                placed[c] = ("component", zones)
         return placed
 
 
@@ -886,27 +893,17 @@ def _build(
     visible,
     readable,
     characterization_ids=(),
-    read=None,
-    source=None,
-    zones=None,
+    *,
+    source,
+    zones,
     placed=None,
 ):
     """``DocumentFacts`` of *analysis_ids* and *characterization_ids* on *document*.
 
-    *source* (``_source``) and *zones* (``{resource id: [Zone, …]}`` of every
-    resource built) are read here when not given; *placed* becomes
+    *source* is the Document's ``Source``, *zones* the ``{resource id:
+    [Zone, …]}`` of every resource built; *placed* becomes
     ``DocumentFacts.placed``.
     """
-    if source is None:
-        source = _source(document, readable, read)
-    if zones is None:
-        zones = _located(
-            role_node(*ROLES["zone"]),
-            analysis_ids,
-            source.dims,
-            source.position,
-            readable,
-        ) | _characterization_zones(characterization_ids, visible, readable, source)
     url, listed = source.url, source.listed
     materials = _materials(set(analysis_ids), visible, readable)
 

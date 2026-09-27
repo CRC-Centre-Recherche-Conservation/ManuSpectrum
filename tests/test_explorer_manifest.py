@@ -29,6 +29,7 @@ from tests.iiif_schema import assert_valid_manifest
 from tests.test_explorer_api import FETCH, CorpusCase
 
 CANVAS_2 = "https://example.org/iiif/ms59/canvas/f2r"
+UNLISTED = "https://example.org/iiif/ms59/canvas/f9z"
 IMAGING = "https://example.org/iiif/maxrf/manifest"
 LAYERS = (
     "https://example.org/iiif/maxrf/canvas/pb",
@@ -324,6 +325,49 @@ class ManifestRouteTests(CorpusCase):
         )
         (classifying,) = self.annotations(manifest)
         self.assertEqual(classifying["motivation"], "classifying")
+
+    def test_a_material_is_placed_on_its_first_listed_zone_on_every_route(self):
+        point = {"type": "Point", "coordinates": [5, -5]}
+        self.tile(
+            self.characterization,
+            "location_of_characterization",
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "id": feature,
+                        "type": "Feature",
+                        "geometry": point,
+                        "properties": {"canvas": canvas, "manifest": MANIFEST},
+                    }
+                    for feature, canvas in (
+                        ("0b0b0b0b-0000-4000-8000-000000000001", UNLISTED),
+                        ("0b0b0b0b-0000-4000-8000-000000000002", CANVAS_2),
+                    )
+                ],
+            },
+        )
+        document = self.documents["open"].pk
+
+        manifest = self.manifest(f"ids=ch:{self.characterization.pk}:-")
+        with mock.patch(FETCH, side_effect=fetched):
+            pages = [
+                self.client.get(
+                    f"/iiif/v3/characterization-collection/{document}/page-{n}"
+                ).json()
+                for n in (1, 2)
+            ]
+            payload = self.client.get(f"/en/api/explorer/document/{document}").json()
+
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS_2])
+        self.assertEqual([len(p["items"]) for p in pages], [0, 1])
+        (summary,) = payload["characterizations"]
+        self.assertEqual(
+            (summary["zone"]["canvas"], summary["zone"]["source"]), (CANVAS_2, "own")
+        )
+        self.assertEqual(
+            [c["characterizationCount"] for c in payload["canvases"]], [0, 1]
+        )
 
     def test_the_zip_manifest_embeds_the_visitor_pages_and_is_valid(self):
         with mock.patch(FETCH, side_effect=fetched):

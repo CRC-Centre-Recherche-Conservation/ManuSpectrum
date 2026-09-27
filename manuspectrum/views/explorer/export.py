@@ -333,7 +333,6 @@ def characterizations_table(scope):
         bundle.visible,
         scope.reader,
         scope.language,
-        {},
         objects_of=bundle.links["objects"],
         analysis_rows=bundle.by_id,
     ):
