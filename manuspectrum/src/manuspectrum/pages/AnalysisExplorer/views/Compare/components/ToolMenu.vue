@@ -12,13 +12,13 @@ import { useGettext } from "vue3-gettext";
 import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
 
 import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
-import type { OfferedTool } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
+import type { ToolKind } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 interface MenuEntry {
     id: string;
     label: string;
     disabled: boolean;
-    kind: OfferedTool | null;
+    kind: ToolKind | null;
     retry: boolean;
 }
 
@@ -31,12 +31,12 @@ interface MenuEntry {
  * Tab or a click outside closes.
  */
 const props = defineProps<{
-    offered: readonly OfferedTool[] | null;
+    offered: readonly ToolKind[] | null;
     status: RequestStatus;
 }>();
 
 const emit = defineEmits<{
-    (event: "choose", payload: { kind: OfferedTool }): void;
+    (event: "choose", payload: { kind: ToolKind }): void;
     (event: "retry"): void;
 }>();
 

@@ -15,9 +15,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 /** The tools « + Tool » offers, in its order. */
-export type OfferedTool = Exclude<ToolKind, "analysis-list">;
-
-export const OFFERED_TOOLS: readonly OfferedTool[] = [
+export const OFFERED_TOOLS: readonly ToolKind[] = [
     "coverage",
     "colour-material",
     "periodic",
@@ -43,8 +41,8 @@ export interface ToolView {
 }
 
 /** The tools the synthesis has something for: the coverage matrix and the folio image need a canvas, the others a pair or an element. */
-export function offeredTools(synthesis: SynthesisResponse): OfferedTool[] {
-    const holds: Record<OfferedTool, boolean> = {
+export function offeredTools(synthesis: SynthesisResponse): ToolKind[] {
+    const holds: Record<ToolKind, boolean> = {
         coverage: synthesis.coverage.length > 0,
         "colour-material": synthesis.pairs.length > 0,
         periodic: synthesis.elements.length > 0,

@@ -345,14 +345,34 @@ export function keepUnchangedCurves(
     });
 }
 
-/** The XY windows of `next` holding a spectrum (file in a slot) their namesake in `previous` did not hold. */
-export function xyWindowsGaining(
+/**
+ * For each XY window of `next`, how many spectra (files in slots) it holds
+ * that its namesake in `previous` did not hold; windows that gained none are
+ * left out.
+ */
+export function xyCurvesGained(
     previous: readonly AutoWindow[],
     next: readonly AutoWindow[],
-): string[] {
+): Map<string, number> {
     const before = curvesOf(previous);
-    return [...curvesOf(next)].flatMap(([id, curves]) => {
+    const gained = new Map<string, number>();
+    for (const [id, curves] of curvesOf(next)) {
         const known = new Set((before.get(id) ?? []).map(curveId));
-        return curves.some((curve) => !known.has(curveId(curve))) ? [id] : [];
-    });
+        const count = curves.filter(
+            (curve) => !known.has(curveId(curve)),
+        ).length;
+        if (count > 0) gained.set(id, count);
+    }
+    return gained;
+}
+
+/** The spectra the XY windows draw together, a hidden window's included: every curve with a preview. */
+export function xySpectraCount(windows: readonly AutoWindow[]): number {
+    let count = 0;
+    for (const curves of curvesOf(windows).values()) {
+        count += curves.filter(
+            (curve) => curve.file.previewUrl !== null,
+        ).length;
+    }
+    return count;
 }

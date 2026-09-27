@@ -119,6 +119,11 @@ const EMPTY_ITEM = whole(4, []);
 const FORS_ITEM = whole(5, [spectrum(5, FORS)]);
 const FTIR_ITEM = whole(6, [spectrum(6, FTIR)]);
 const XRF_OTHER_ITEM = whole(7, [spectrum(7, XRF)]);
+const XRF_THIRD_ITEM = whole(9, [spectrum(9, XRF)]);
+const XRF_EIGHT_ITEM = whole(
+    10,
+    Array.from({ length: 8 }, (_, index) => spectrum(10 + index, XRF)),
+);
 const MAPS_ITEM = whole(8, [imagingEntry()]);
 
 const ITEMS = new Map(
@@ -132,6 +137,8 @@ const ITEMS = new Map(
         FTIR_ITEM,
         XRF_OTHER_ITEM,
         MAPS_ITEM,
+        XRF_THIRD_ITEM,
+        XRF_EIGHT_ITEM,
     ].map((item) => [item.key, item]),
 );
 
@@ -401,6 +408,11 @@ describe("CompareView", () => {
         expect(view.find(".hidden-windows button").text()).toBe(
             "Show XRF — energy / counts",
         );
+        select(XRF_OTHER_ITEM);
+        await flushPromises();
+        expect(view.find(".hidden-windows .badge").text()).toBe(
+            "1 new spectrum since hidden",
+        );
     });
 
     it("reads a layout saved before windows could be hidden", async () => {
@@ -515,7 +527,7 @@ describe("CompareView", () => {
         ]);
     });
 
-    it("announces new spectra in a hidden window, keeps it hidden and marks it", async () => {
+    it("counts the new spectra of a hidden window since it was hidden, announces them and keeps it hidden", async () => {
         select(XRF_ITEM, MATERIAL);
         const view = await mountView();
         await windowOf(view, `auto:xy:${XRF}`)
@@ -527,10 +539,27 @@ describe("CompareView", () => {
         await flushPromises();
         expect(windowIds(view)).toEqual(["auto:characterizations"]);
         expect(announce).toHaveBeenLastCalledWith(
-            "XRF — energy / counts: new spectra added to a hidden window",
+            "XRF — energy / counts: 1 new spectrum since the window was hidden.",
         );
+        expect(view.find(".hidden-windows .badge").text()).toBe(
+            "1 new spectrum since hidden",
+        );
+        select(XRF_THIRD_ITEM);
+        await flushPromises();
+        expect(announce).toHaveBeenLastCalledWith(
+            "XRF — energy / counts: 2 new spectra since the window was hidden.",
+        );
+        expect(view.find(".hidden-windows .badge").text()).toBe(
+            "2 new spectra since hidden",
+        );
+        useExplorerStore().removeFromBasket(XRF_OTHER_ITEM.key);
+        useExplorerStore().removeFromBasket(XRF_THIRD_ITEM.key);
+        await flushPromises();
+        expect(view.find(".hidden-windows .badge").exists()).toBe(false);
+        select(XRF_OTHER_ITEM);
+        await flushPromises();
         const show = view.find(".hidden-windows button");
-        expect(show.find(".badge").text()).toBe("new spectra");
+        expect(show.find(".badge").text()).toBe("1 new spectrum since hidden");
         await show.trigger("click");
         await flushPromises();
         await windowOf(view, `auto:xy:${XRF}`)
@@ -538,6 +567,27 @@ describe("CompareView", () => {
             .trigger("click");
         await flushPromises();
         expect(view.find(".hidden-windows .badge").exists()).toBe(false);
+    });
+
+    it("reads no series twice when an XY window of more than six spectra gains one or comes back", async () => {
+        select(XRF_EIGHT_ITEM);
+        const view = await mountView();
+        const seriesCalls = (): number =>
+            fetchMock.mock.calls.filter(([url]) =>
+                String(url).startsWith(SERIES_PATH),
+            ).length;
+        expect(seriesCalls()).toBe(8);
+        select(XRF_OTHER_ITEM);
+        await flushPromises();
+        expect(seriesCalls()).toBe(9);
+        await windowOf(view, `auto:xy:${XRF}`)
+            .find('[data-action="close"]')
+            .trigger("click");
+        await flushPromises();
+        await view.find(".hidden-windows button").trigger("click");
+        await flushPromises();
+        expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
+        expect(seriesCalls()).toBe(9);
     });
 
     it("does not redraw an XY window whose spectra did not change", async () => {

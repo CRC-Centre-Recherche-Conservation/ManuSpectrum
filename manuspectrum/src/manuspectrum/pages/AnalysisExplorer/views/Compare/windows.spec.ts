@@ -11,7 +11,8 @@ import {
     autoWindows,
     keepUnchangedCurves,
     windowIdsOf,
-    xyWindowsGaining,
+    xyCurvesGained,
+    xySpectraCount,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 import type {
@@ -384,18 +385,38 @@ describe("keepUnchangedCurves", () => {
     });
 });
 
-describe("xyWindowsGaining", () => {
-    it("names the XY windows that hold a spectrum they did not hold", () => {
+describe("xyCurvesGained", () => {
+    it("counts, per XY window, the spectra it holds that its namesake did not hold", () => {
         const first = whole(1, [spectrum(1, XRF)]);
         const second = whole(2, [spectrum(2, RAMAN)]);
-        const third = whole(3, [spectrum(3, XRF), micro(1)]);
+        const third = whole(3, [spectrum(3, XRF), spectrum(4, XRF), micro(1)]);
         const before = derive([first, second]);
-        expect(
-            xyWindowsGaining(before, derive([first, second, third])),
-        ).toEqual([`auto:xy:${XRF}`]);
-        expect(xyWindowsGaining(before, derive([first]))).toEqual([]);
-        expect(xyWindowsGaining([], derive([first]))).toEqual([
-            `auto:xy:${XRF}`,
+        expect(xyCurvesGained(before, derive([first, second, third]))).toEqual(
+            new Map([[`auto:xy:${XRF}`, 2]]),
+        );
+        expect(xyCurvesGained(before, derive([first])).size).toBe(0);
+        expect(xyCurvesGained(before, derive([second, third], [1, 2]))).toEqual(
+            new Map([[`auto:xy:${XRF}`, 2]]),
+        );
+        expect(xyCurvesGained([], derive([first]))).toEqual(
+            new Map([[`auto:xy:${XRF}`, 1]]),
+        );
+    });
+});
+
+describe("xySpectraCount", () => {
+    it("counts the spectra with a preview of every XY window", () => {
+        const unread = fileEntry({
+            id: uuid(790),
+            name: "S90.csv",
+            previewUrl: null,
+            viewer: { ...fileEntry().viewer, axisKey: XRF },
+        });
+        const windows = derive([
+            whole(1, [spectrum(1, XRF), spectrum(2, XRF), unread]),
+            whole(2, [spectrum(3, RAMAN), micro(1)]),
         ]);
+        expect(xySpectraCount(windows)).toBe(3);
+        expect(xySpectraCount([])).toBe(0);
     });
 });
