@@ -29,7 +29,11 @@ from contextlib import contextmanager
 
 from django.conf import settings
 
-from manuspectrum.utils.instrument_formats import is_native, read_native
+from manuspectrum.utils.instrument_formats import (
+    format_source,
+    is_native,
+    read_native,
+)
 from manuspectrum.utils.xy_transforms import apply_config
 
 # The separators a canonical export has been seen to use, alone or repeated:
@@ -45,9 +49,10 @@ def is_supported(path):
     }
 
 
-def is_readable(path):
-    """Whether ``read_series`` reads the format of *path*: a supported text format or a native one."""
-    return is_supported(path) or is_native(path)
+def is_readable(path, name=None):
+    """Whether ``read_series`` reads the format (``format_source``): a supported text format or a native one."""
+    source = format_source(path, name)
+    return is_supported(source) or is_native(source)
 
 
 def parse_rows(lines):
@@ -183,7 +188,7 @@ def _points(path, config, name=None):
     is dropped on its own. A native format is read whole by ``read_native``
     under its own configuration; *config* is not consulted.
     """
-    if is_native(name or path):
+    if is_native(format_source(path, name)):
         native = read_native(path, name)
         yield apply_config(native.rows, native.config) if native else iter(())
         return
@@ -209,7 +214,7 @@ def series_points(path, config=None, name=None):
 
 def x_reversed(path, config=None, name=None):
     """Whether the reader draws x reversed: a text format's configuration says so; a native one never."""
-    return not is_native(name or path) and is_x_reversed(config)
+    return not is_native(format_source(path, name)) and is_x_reversed(config)
 
 
 def read_series(path, config=None, name=None):
@@ -226,14 +231,15 @@ def read_series(path, config=None, name=None):
     return {"x": xs, "y": ys, "x_reversed": x_reversed(path, config, name)}
 
 
-def build_preview(path, n, config=None):
+def build_preview(path, n, config=None, name=None):
     """The decimated series of one file, or ``None`` when it draws nothing.
 
     The points are those ``read_series`` reads, streamed into ``decimate``
-    without holding the series in memory.
+    without holding the series in memory; the extension of *name* (else of
+    *path*) names the format.
     """
-    with _points(path, config) as points:
+    with _points(path, config, name) as points:
         series = decimate(points, n)
     if series is not None:
-        series["x_reversed"] = x_reversed(path, config)
+        series["x_reversed"] = x_reversed(path, config, name)
     return series

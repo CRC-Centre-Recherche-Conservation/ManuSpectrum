@@ -171,7 +171,7 @@ class PreviewRulesTests(TestCase):
         return SpectrumPreviewView.as_view()(request, file_id=self.FILE_ID)
 
     def patched(self, visible):
-        record = ("/tmp/x.csv", self.RESOURCE, None, "ng")
+        record = ("/tmp/x.csv", self.RESOURCE, None, "ng", None)
         return (
             mock.patch(
                 "manuspectrum.views.spectrum_preview.file_record", return_value=record
@@ -236,7 +236,7 @@ class RealVisibleSetPreviewTests(ExplorerCase):
     def get(self, analysis):
         request = RequestFactory().get(f"/api/spectrum-preview/{self.FILE_ID}")
         request.user = User.objects.get(pk=self.anonymous.pk)
-        record = ("/tmp/nowhere.csv", str(analysis.pk), None, "ng")
+        record = ("/tmp/nowhere.csv", str(analysis.pk), None, "ng", None)
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview.file_record",

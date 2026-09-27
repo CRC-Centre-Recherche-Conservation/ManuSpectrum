@@ -6,6 +6,7 @@ Usage:
 
 import csv
 import io
+import os
 import uuid
 from pathlib import Path
 from unittest import mock, skipUnless
@@ -15,7 +16,7 @@ from django.db import connection
 from django.http import QueryDict
 from django.test.utils import CaptureQueriesContext
 
-from arches.app.models.models import TileModel
+from arches.app.models.models import File, TileModel
 
 from manuspectrum.models import RendererConfig
 from manuspectrum.views.explorer.scopes import resolve_scope
@@ -273,6 +274,37 @@ class SeriesCsvTests(CorpusCase):
         self.assertEqual(
             [c.args[0].rsplit("/", 1)[-1] for c in read.call_args_list], ["Z.mca"]
         )
+
+    def stored_without_extension(self, key, name, content):
+        """A file listed as *name* whose stored path has no extension; its file id."""
+        file_id = self.stored_file(self.analyses[key], name, content)
+        row = File.objects.get(pk=file_id)
+        bare = os.path.splitext(row.path.name)[0]
+        os.rename(row.path.path, row.path.storage.path(bare))
+        File.objects.filter(pk=file_id).update(path=bare)
+        return file_id
+
+    def test_the_entry_name_decides_the_format_of_a_curve(self):
+        mca = Path(__file__).parent / "fixtures" / "xy" / "elio_xrf.mca"
+        file_id = self.stored_without_extension(
+            "on_document", "Z.mca", mca.read_bytes()
+        )
+
+        comments, rows = self.split(self.text(self.selection("on_document")))
+
+        self.assertIn(file_id, {row[2] for row in rows[1:]})
+        self.assertFalse([c for c in comments if "not in the CSV" in c])
+
+    def test_the_entry_name_decides_the_format_of_a_preview(self):
+        mca = Path(__file__).parent / "fixtures" / "xy" / "elio_xrf.mca"
+        file_id = self.stored_without_extension(
+            "on_document", "Z.mca", mca.read_bytes()
+        )
+
+        response = self.client.get(f"/api/spectrum-preview/{file_id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(len(response.json()["x"]), 1)
 
     def test_a_native_curve_names_the_axes_its_header_states(self):
         mca = Path(__file__).parent / "fixtures" / "xy" / "elio_xrf.mca"

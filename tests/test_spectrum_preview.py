@@ -402,7 +402,7 @@ class SpectrumPreviewViewTests(SimpleTestCase):
         return request
 
     def get(self, path, readable=True, config_id=None, config=None, **headers):
-        record = None if path is None else (path, RESOURCE_ID, config_id, "ng-1")
+        record = None if path is None else (path, RESOURCE_ID, config_id, "ng-1", None)
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview.file_record", return_value=record
@@ -621,6 +621,13 @@ class FileRecordTests(SimpleTestCase):
     def test_the_join_carries_the_nodegroup_of_the_tile(self):
         self.assertEqual(self.record(self.row())[3], NODEGROUP_ID)
 
+    def test_the_record_carries_the_entry_name(self):
+        row = self.row()
+        row.tile.data["node-files"][0]["name"] = "X.mca"
+
+        self.assertEqual(self.record(row)[4], "X.mca")
+        self.assertIsNone(self.record(self.row())[4])
+
     def test_a_file_no_tile_holds_has_no_resource_to_check(self):
         row = mock.Mock(tile=None)
         row.path.name = "spectrum.csv"
@@ -645,7 +652,7 @@ class FileRecordMemoTests(SimpleTestCase):
     def test_the_join_is_read_once_per_file(self):
         with mock.patch(
             "manuspectrum.views.spectrum_preview._load_file_record",
-            return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
+            return_value=("/tmp/a.csv", "r-1", None, "ng-1", None),
         ) as load:
             file_record(FILE_ID)
             file_record(FILE_ID)
@@ -697,7 +704,7 @@ class SpectrumPreviewGuardTests(SimpleTestCase):
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview._load_file_record",
-                return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
+                return_value=("/tmp/a.csv", "r-1", None, "ng-1", None),
             ) as load,
             mock.patch(
                 "manuspectrum.iiif.data.visible_set",
@@ -741,7 +748,7 @@ class SpectrumPreviewNodegroupGuardTests(SimpleTestCase):
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview.file_record",
-                return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
+                return_value=("/tmp/a.csv", "r-1", None, "ng-1", None),
             ),
             mock.patch(
                 "manuspectrum.iiif.data.visible_set",

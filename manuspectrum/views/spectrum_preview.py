@@ -77,10 +77,12 @@ def file_record_key(file_id):
 
 
 def file_record(file_id):
-    """``(path, resourceid, config_id, nodegroup_id)`` of a file, memoised.
+    """``(path, resourceid, config_id, nodegroup_id, name)`` of a file, memoised.
 
-    ``config_id`` is the renderer configuration the file entry carries, and
-    ``nodegroup_id`` the nodegroup of the tile holding the file, as a string.
+    ``config_id`` is the renderer configuration the file entry carries,
+    ``nodegroup_id`` the nodegroup of the tile holding the file, as a string,
+    and ``name`` the entry's file name (``None`` when unstated), which names
+    the format.
 
     ``None`` covers a row that is gone, a row whose file was never stored, and
     a file no tile holds: with no resource there is nothing to check a read
@@ -110,16 +112,18 @@ def _load_file_record(file_id):
     )
     if row is None or not row.path.name or row.tile is None:
         return None
+    entry = stamped_entry(row.tile.data, file_id)
     return (
         row.path.path,
         str(row.tile.resourceinstance_id),
-        stamped_config_id(row.tile.data, file_id),
+        entry.get("rendererConfig") or None,
         str(row.tile.nodegroup_id),
+        str(entry.get("name") or "") or None,
     )
 
 
-def stamped_config_id(data, file_id):
-    """The renderer configuration id the file entry carries, or ``None``.
+def stamped_entry(data, file_id):
+    """The file entry of *file_id* in tile *data*; ``{}`` when no file list holds it.
 
     The entry is looked up by file id across the file-list nodes of the tile:
     one tile may hold several of them, and their node ids are not known here.
@@ -132,8 +136,13 @@ def stamped_config_id(data, file_id):
             if not isinstance(entry, dict):
                 continue
             if str(entry.get("file_id", "")).lower() == wanted:
-                return entry.get("rendererConfig") or None
-    return None
+                return entry
+    return {}
+
+
+def stamped_config_id(data, file_id):
+    """The renderer configuration id the file entry carries, or ``None``."""
+    return stamped_entry(data, file_id).get("rendererConfig") or None
 
 
 def renderer_config(config_id):
@@ -165,8 +174,10 @@ def _load_config(config_id):
     return config if isinstance(config, dict) else {}
 
 
-def _series(path, n, config):
+def _series(path, n, config, name=None):
     """The series of a supported, small enough file; ``{}`` when there is none.
+
+    The extension of the entry *name* (else of *path*) names the format.
 
     An empty dict is memoised: a format outside ``XY_TEXT_FILE_FORMATS`` or a
     file over the ceiling is measured once and answers 204 from the memo
@@ -174,12 +185,12 @@ def _series(path, n, config):
     ``get_or_build`` keeps out of the cache — it may be there on the next
     request.
     """
-    if not is_readable(path):
+    if not is_readable(path, name):
         return {}
     try:
         if os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES:
             return {}
-        return build_preview(path, n, config) or {}
+        return build_preview(path, n, config, name) or {}
     except OSError:
         return None
 
@@ -220,13 +231,13 @@ class SpectrumPreviewView(View):
         record = file_record(file_id)
         if record is None:
             return _not_found()
-        path, resourceid, config_id, nodegroup_id = record
+        path, resourceid, config_id, nodegroup_id, name = record
         if not file_allowed(resourceid, nodegroup_id, request.user):
             return _not_found()
 
         payload = get_or_build(
             f"spectrum-preview:{file_id}:{n}:{config_id}",
-            lambda: _series(path, n, renderer_config(config_id)),
+            lambda: _series(path, n, renderer_config(config_id), name),
             CACHE_TTL,
             lock_timeout=LOCK_TIMEOUT,
             wait=LOCK_WAIT,

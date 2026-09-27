@@ -72,6 +72,11 @@ class Native:
     config: dict = field(default_factory=dict)
 
 
+def format_source(path, name=None):
+    """What names the format of a stored file: its entry *name* when known, else its *path*."""
+    return name or path
+
+
 def is_native(path):
     """Whether the extension of *path* is one of the formats read here."""
     return os.path.splitext(str(path))[1].lower() in NATIVE_EXTENSIONS
@@ -82,7 +87,7 @@ def read_native(path, name=None):
 
     The extension of *name* (else of *path*) names the format.
     """
-    extension = os.path.splitext(str(name or path))[1].lower()
+    extension = os.path.splitext(str(format_source(path, name)))[1].lower()
     try:
         if extension == MCA:
             return _read_mca(path)
@@ -100,7 +105,7 @@ def native_axes(path, name=None):
     not read: a file whose header is sound and whose data is not states axes
     that ``read_native`` then refuses.
     """
-    extension = os.path.splitext(str(name or path))[1].lower()
+    extension = os.path.splitext(str(format_source(path, name)))[1].lower()
     try:
         if extension == MCA:
             return _mca_axes(path)

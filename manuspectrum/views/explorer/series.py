@@ -98,7 +98,7 @@ def _curve_line(number, name, entry, entries, config, config_id):
 
 
 def _plan(scope):
-    """``(comment lines, curves)`` of *scope*; each curve is ``(label, analysis id, file id, path, config)``.
+    """``(comment lines, curves)`` of *scope*; each curve is ``(label, analysis id, file id, path, config, entry name)``.
 
     A readable XY entry ``scope_files`` refuses is left out without a line.
     One under a no-derivatives licence, one in a format ``read_series`` does
@@ -170,7 +170,7 @@ def _plan(scope):
                 too_large = os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES
             except OSError:
                 continue
-            if too_large or not is_readable(path):
+            if too_large or not is_readable(path, entry.get("name")):
                 per_curve.append(
                     _("not in the CSV: %(file)s; file: %(url)s")
                     % {
@@ -185,7 +185,16 @@ def _plan(scope):
             per_curve.append(
                 _curve_line(number, name, entry, entries, config, config_id)
             )
-            curves.append((f"c{number}", analysis_id, entry["id"], path, config))
+            curves.append(
+                (
+                    f"c{number}",
+                    analysis_id,
+                    entry["id"],
+                    path,
+                    config,
+                    entry.get("name"),
+                )
+            )
         if listed:
             per_analysis.append(f"{name}: {permalink(analysis_id)}")
     return comments + per_analysis + per_curve, curves
@@ -194,9 +203,9 @@ def _plan(scope):
 def _rows(curves):
     writer = csv.writer(_Line(), lineterminator="\r\n")
     yield writer.writerow(HEADER)
-    for label, analysis_id, file_id, path, config in curves:
+    for label, analysis_id, file_id, path, config, name in curves:
         try:
-            series = read_series(path, config)
+            series = read_series(path, config, name)
         except OSError:
             series = None
         if not series:
