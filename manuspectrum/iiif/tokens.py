@@ -3,8 +3,10 @@
 The login page (``/iiif/auth/login``) gives a signed-in Arches session the
 access cookie ``ms_iiif_access`` (``HttpOnly; Secure; SameSite=None;
 Path=/iiif/auth/``), signed, holding the user id, a keyed hash of the session
-key and a generation nonce. The cache entry ``iiif-auth:session:<hash>``
-maps that hash to the session key and the nonce; revoking deletes it.
+key and a generation nonce. The entry ``iiif-auth:session:<hash>`` of the
+``iiif_auth`` cache maps that hash to the session key and the nonce;
+revoking deletes it. That cache has a fixed key prefix: a new code version
+(``CACHE_CODE_VERSION``) leaves signed-in viewers signed in.
 
 A IIIF token is ``msiiif1.`` + a ``TimestampSigner`` signature of ``{u, s,
 n, o}``: user id, session hash, nonce and the viewer origin it was issued
@@ -31,7 +33,7 @@ from django.conf import settings
 from django.contrib.auth import HASH_SESSION_KEY, SESSION_KEY
 from django.contrib.auth.models import User
 from django.core import signing
-from django.core.cache import cache
+from django.core.cache import caches
 from django.utils.crypto import constant_time_compare, salted_hmac
 
 from manuspectrum.utils.public_visibility import anonymous_user, is_connected
@@ -62,6 +64,10 @@ def token_ttl():
 def session_hash(session_key):
     """A keyed hash of *session_key* (32 hex characters)."""
     return salted_hmac(SESSION_SALT, session_key, algorithm="sha256").hexdigest()[:32]
+
+
+def _sessions():
+    return caches[settings.IIIF_AUTH_CACHE]
 
 
 def _entry_key(hashed):
@@ -121,7 +127,7 @@ def _session_data(session_key):
 
 def _live_user(user_id, hashed, nonce):
     """The active account *user_id* when the session behind *hashed* still exists for it with *nonce*."""
-    entry = cache.get(_entry_key(hashed))
+    entry = _sessions().get(_entry_key(hashed))
     if not isinstance(entry, dict):
         return None
     key = entry.get("key")
@@ -150,7 +156,7 @@ def set_access_cookie(response, request, user):
     """Give the session of *request* (signed in as *user*) the access cookie; the session's entry keeps its nonce."""
     key = request.session.session_key
     hashed = session_hash(key)
-    entry = cache.get(_entry_key(hashed))
+    entry = _sessions().get(_entry_key(hashed))
     nonce = (
         entry["n"]
         if isinstance(entry, dict) and entry.get("key") == key and entry.get("n")
@@ -160,7 +166,7 @@ def set_access_cookie(response, request, user):
         1,
         min(int(request.session.get_expiry_age()), int(settings.IIIF_AUTH_COOKIE_TTL)),
     )
-    cache.set(_entry_key(hashed), {"key": key, "n": nonce}, age)
+    _sessions().set(_entry_key(hashed), {"key": key, "n": nonce}, age)
     response.set_cookie(
         COOKIE_NAME,
         signing.dumps({"u": user.pk, "s": hashed, "n": nonce}, salt=COOKIE_SALT),
@@ -200,14 +206,14 @@ def _cookie(request):
 def revoke(session_key):
     """End every IIIF token and access cookie of the session *session_key*."""
     if session_key:
-        cache.delete(_entry_key(session_hash(session_key)))
+        _sessions().delete(_entry_key(session_hash(session_key)))
 
 
 def revoke_cookie(request):
     """End every IIIF token of the session named by the request's access cookie."""
     found = _cookie(request)
     if found:
-        cache.delete(_entry_key(found[1]))
+        _sessions().delete(_entry_key(found[1]))
 
 
 def issue(request, origin):

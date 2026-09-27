@@ -9,6 +9,7 @@ import time
 import uuid
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.contrib.sessions.models import Session
 from django.core import signing
@@ -120,6 +121,12 @@ class VerifyTests(TokenCase):
         self.client.logout()
 
         self.assertIsNone(tokens.verify(self.token, DEMO))
+
+    def test_a_new_code_version_prefix_keeps_the_token(self):
+        default = dict(settings.CACHES["default"], KEY_PREFIX="ms:another-version")
+
+        with override_settings(CACHES={**settings.CACHES, "default": default}):
+            self.assertEqual(tokens.verify(self.token, DEMO), self.user)
 
     def test_the_token_carries_no_session_key(self):
         payload = signing.TimestampSigner(salt=tokens.TOKEN_SALT).unsign_object(

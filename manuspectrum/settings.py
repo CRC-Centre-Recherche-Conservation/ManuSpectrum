@@ -407,7 +407,15 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": "redis://localhost:6379/2",
     },
+    # IIIF sign-ins (manuspectrum/iiif/tokens.py): a fixed prefix, so a new
+    # code version does not sign every external viewer out.
+    "iiif_auth": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://localhost:6379/1",
+        "KEY_PREFIX": "ms-iiif-auth",
+    },
 }
+IIIF_AUTH_CACHE = "iiif_auth"
 
 # Hide nodes and cards in a report that have no data
 HIDE_EMPTY_NODES_IN_REPORT = False
