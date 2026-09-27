@@ -13,6 +13,8 @@
   <h2>{% trans "Where it appears" %}</h2>
   <p>{% blocktrans trimmed %}Only on a content resource of type <code>Dataset</code>, usually an annotation body. Any other resource MUST NOT carry it. A document that uses it lists this context first in its <code>@context</code> and the Presentation 3 context last:{% endblocktrans %}</p>
   <pre><code>"@context": ["{{ context_url }}", "http://iiif.io/api/presentation/3/context.json"]</code></pre>
+  <p>{% blocktrans trimmed %}A document that also declares IIIF Authorization 2.0 services lists the Authorization 2.0 context between the two:{% endblocktrans %}</p>
+  <pre><code>"@context": ["{{ context_url }}", "{{ auth2_context_url }}", "http://iiif.io/api/presentation/3/context.json"]</code></pre>
   <p>{% blocktrans trimmed %}The Presentation 2.1 routes carry the same object, with this context before the Presentation 2 context.{% endblocktrans %}</p>
 
   <h2>{% trans "Advisory" %}</h2>
@@ -47,6 +49,13 @@
     <dt id="derivedFrom"><code>derivedFrom</code></dt>
     <dd>{% blocktrans trimmed %}The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</code>): <code>id</code>, <code>type</code>, <code>format</code>, <code>label</code> and, for a raw text file, its own <code>xyReading</code> (columns and corrections). A raw file in an instrument format read from its own header (ELIO <code>.mca</code>, ASD <code>.asd</code>) carries none.{% endblocktrans %}</dd>
   </dl>
+
+  <h2 id="instrument-formats">{% trans "Instrument formats" %}</h2>
+  <ul>
+    <li>{% blocktrans trimmed %}ELIO <code>.mca</code>: the energy axis in keV comes from the calibration lines of the header (a least-squares line through two or more points); without them, x is the channel index and the axis says <code>channel</code>.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}ASD <code>.asd</code>: a raw spectrum saved with its white reference reads as the reflectance target / reference, relative to that reference: no panel calibration factor and no splice correction at the detector joins (about 1000 and 1800 nm), as ViewSpec Pro reads it by default.{% endblocktrans %}</li>
+  </ul>
+  <p>{% blocktrans trimmed %}The Dataset is never decimated, whatever its size. mirador-xyviewer does not plot a Dataset larger than 5 MB; such a file still plots in the ManuSpectrum Explorer.{% endblocktrans %}</p>
 
   <h2 id="auth">{% trans "Restricted data (IIIF Authorization)" %}</h2>
   <p>{% blocktrans trimmed %}Open data needs no credential. A restricted spectrum, annotation or content state answers <code>401</code> with a description that names the IIIF Authorization services; annotation pages and collections are never refused: they list what the reader may see and declare the same services.{% endblocktrans %}</p>

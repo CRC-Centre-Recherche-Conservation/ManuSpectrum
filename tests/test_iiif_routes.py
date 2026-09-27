@@ -564,3 +564,27 @@ class ContentTests(RouteCase):
             annotation["target"]["source"]["partOf"],
             [{"id": self.fetch_url(), "type": "Manifest"}],
         )
+
+
+class LanguageHeaderTests(RouteCase):
+    def assert_language_neutral(self, response):
+        self.assertNotIn("accept-language", response.get("Vary", "").lower())
+        self.assertNotIn("Content-Language", response)
+
+    def test_a_bodyless_404_is_language_neutral(self):
+        response = self.get(f"/iiif/v3/annotation-collection/{UNKNOWN}")
+
+        self.assertEqual(response.status_code, 404)
+        self.assert_language_neutral(response)
+
+    def test_the_lang_redirect_of_a_manifest_is_language_neutral(self):
+        response = self.get(f"/iiif/v3/explorer-manifest?document={self.doc()}&lang=fr")
+
+        self.assertEqual(response.status_code, 301)
+        self.assert_language_neutral(response)
+
+    def test_the_documentation_page_keeps_its_language_headers(self):
+        response = self.get("/iiif/context/xy-reading/1", HTTP_ACCEPT_LANGUAGE="fr")
+
+        self.assertIn("accept-language", response["Vary"].lower())
+        self.assertEqual(response["Content-Language"], "fr")

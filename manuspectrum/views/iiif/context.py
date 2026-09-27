@@ -2,7 +2,9 @@
 
 The context (``application/ld+json``) and the schema (served verbatim) carry
 the IIIF CORS headers; the documentation page is HTML in the language
-LocaleMiddleware negotiates. All three are ``public, max-age=86400``.
+LocaleMiddleware negotiates from the language cookie, then
+``Accept-Language``, and varies on both. All three are
+``public, max-age=86400``.
 """
 
 from pathlib import Path
@@ -11,11 +13,12 @@ import orjson
 from django.conf import settings
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.utils.cache import patch_vary_headers
 from django.utils.decorators import method_decorator
 from django.views import View
 
 from manuspectrum.constants.xy_presets import XY_PRESETS
-from manuspectrum.iiif import ids, xy_reading
+from manuspectrum.iiif import ids, services, xy_reading
 from manuspectrum.views.iiif.cors import iiif_cors
 
 LONG_CACHE = "public, max-age=86400"
@@ -68,22 +71,21 @@ class XYReadingDocView(View):
                 XY_PRESETS["fors"]["config"],
             ),
         }
-        return _long(
-            render(
-                request,
-                "iiif/xy_reading_1.htm",
-                {
-                    "context_url": ids.xy_context(),
-                    "schema_url": ids.xy_schema(),
-                    "login_url": ids.auth_login(),
-                    "token1_url": ids.auth_token(1),
-                    "token2_url": ids.auth_token(2),
-                    "logout_url": ids.auth_logout(),
-                    "token_minutes": settings.IIIF_AUTH_TOKEN_TTL // 60,
-                    "cookie_hours": settings.IIIF_AUTH_COOKIE_TTL // 3600,
-                    "example": orjson.dumps(
-                        example, option=orjson.OPT_INDENT_2
-                    ).decode(),
-                },
-            )
+        response = render(
+            request,
+            "iiif/xy_reading_1.htm",
+            {
+                "context_url": ids.xy_context(),
+                "auth2_context_url": services.AUTH2_CONTEXT,
+                "schema_url": ids.xy_schema(),
+                "login_url": ids.auth_login(),
+                "token1_url": ids.auth_token(1),
+                "token2_url": ids.auth_token(2),
+                "logout_url": ids.auth_logout(),
+                "token_minutes": settings.IIIF_AUTH_TOKEN_TTL // 60,
+                "cookie_hours": settings.IIIF_AUTH_COOKIE_TTL // 3600,
+                "example": orjson.dumps(example, option=orjson.OPT_INDENT_2).decode(),
+            },
         )
+        patch_vary_headers(response, ("Cookie", "Accept-Language"))
+        return _long(response)

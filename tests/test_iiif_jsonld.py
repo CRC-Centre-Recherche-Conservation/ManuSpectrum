@@ -6,11 +6,12 @@ Usage:
 
 import json
 
-from django.test import SimpleTestCase, TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 
 from manuspectrum.constants.xy_presets import XY_PRESETS
 from manuspectrum.iiif import ids, v2, xy_reading
 from manuspectrum.iiif.pages import with_context
+from manuspectrum.views.iiif.context import XYReadingDocView
 from tests import iiif_jsonld
 from tests.test_iiif_xy_reading import SCHEMA, raw_file
 
@@ -188,6 +189,7 @@ class RouteTests(TestCase):
                 self.assertTrue(response["Content-Type"].startswith("text/html"))
                 self.assertIn(f'<html lang="{language}"', response.content.decode())
                 self.assertIn("accept-language", response["Vary"].lower())
+                self.assertIn("cookie", response["Vary"].lower())
                 self.assertIn(ids.xy_schema(), response.content.decode())
         self.assertNotEqual(english.content, french.content)
 
@@ -209,6 +211,21 @@ class RouteTests(TestCase):
         self.assertIn('id="auth-limits"', english)
         self.assertIn("Limites connues", french)
         self.assertIn("Données restreintes", french)
+
+    def test_the_documentation_page_varies_on_the_language_cookie(self):
+        request = RequestFactory().get("/iiif/context/xy-reading/1")
+
+        response = XYReadingDocView.as_view()(request)
+
+        self.assertIn("cookie", response["Vary"].lower())
+        self.assertIn("accept-language", response["Vary"].lower())
+
+    def test_the_documentation_page_names_the_auth_2_context_position(self):
+        page = self.client.get(
+            "/iiif/context/xy-reading/1", HTTP_ACCEPT_LANGUAGE="en"
+        ).content.decode()
+
+        self.assertIn("http://iiif.io/api/auth/2/context.json", page)
 
     def test_the_namespace_names_the_documentation_page(self):
         self.assertEqual(NS, ids.xy_doc() + "#")
