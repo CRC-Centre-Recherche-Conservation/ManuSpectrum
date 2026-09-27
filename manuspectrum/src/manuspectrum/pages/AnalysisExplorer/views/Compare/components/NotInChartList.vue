@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
@@ -14,12 +15,15 @@ import type {
 /**
  * The Selection items no Compare window draws, each with the reason and what
  * the reader can do: download a file, open the analysis in its document, or
- * take an item no longer available out of the Selection.
+ * take an item no longer available out of the Selection. Once an item is
+ * taken out, the focus goes to the action of the next item, else of the one
+ * before.
  */
 const props = defineProps<{ entries: readonly NotInChartEntry[] }>();
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
+const list = useTemplateRef<HTMLUListElement>("list");
 
 function reasonText(reason: NotInChartReason): string {
     switch (reason) {
@@ -72,6 +76,20 @@ function opensAnalysis(entry: NotInChartEntry): boolean {
     );
 }
 
+async function remove(key: string): Promise<void> {
+    const index = props.entries.findIndex((entry) => entry.key === key);
+    const neighbour =
+        props.entries[index + 1]?.key ?? props.entries[index - 1]?.key ?? null;
+    store.removeFromBasket(key);
+    await nextTick();
+    if (neighbour === null) return;
+    for (const row of list.value?.children ?? []) {
+        if (row instanceof HTMLElement && row.dataset.key === neighbour) {
+            row.querySelector<HTMLElement>(".action")?.focus();
+        }
+    }
+}
+
 function openAnalysis(analysis: AnalysisHit): void {
     store.openDocument(analysis.document.id, analysis.canvas);
     store.focusOn({ kind: "analysis", id: analysis.id });
@@ -79,7 +97,10 @@ function openAnalysis(analysis: AnalysisHit): void {
 </script>
 
 <template>
-    <ul class="not-in-chart-list">
+    <ul
+        ref="list"
+        class="not-in-chart-list"
+    >
         <li
             v-for="entry in props.entries"
             :key="entry.key"
@@ -117,7 +138,7 @@ function openAnalysis(analysis: AnalysisHit): void {
                 v-else-if="entry.reason === 'missing'"
                 type="button"
                 class="action"
-                @click="store.removeFromBasket(entry.key)"
+                @click="remove(entry.key)"
             >
                 <span>{{ $gettext("Remove from the Selection") }}</span>
             </button>

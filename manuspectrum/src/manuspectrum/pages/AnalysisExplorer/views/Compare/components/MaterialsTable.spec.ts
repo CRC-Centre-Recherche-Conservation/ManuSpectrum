@@ -112,13 +112,16 @@ describe("MaterialsTable", () => {
         });
         const [, , colours, , layers, elements, evidence] = cells(wrapper, 0);
         expect([colours, layers, elements, evidence]).toEqual([
-            "—",
-            "—",
-            "—",
-            "—",
+            "— Not stated",
+            "— Not stated",
+            "— Not stated",
+            "— Not stated",
         ]);
-        expect(wrapper.findAll(".none")[0].attributes("aria-label")).toBe(
-            "Not stated",
+        const none = wrapper.findAll(".none")[0];
+        expect(none.attributes("aria-label")).toBeUndefined();
+        expect(none.attributes("aria-hidden")).toBe("true");
+        expect(none.element.nextElementSibling?.className).toBe(
+            "visually-hidden",
         );
     });
 });

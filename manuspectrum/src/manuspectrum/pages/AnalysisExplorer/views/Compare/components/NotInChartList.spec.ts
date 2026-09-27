@@ -1,6 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
+import { nextTick } from "vue";
 
 import NotInChartList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue";
 
@@ -136,5 +137,37 @@ describe("NotInChartList", () => {
         expect(button.text()).toBe("Remove from the Selection");
         await button.trigger("click");
         expect(store.basket).toEqual([]);
+    });
+
+    it("gives the focus to the next item's action once an item is taken out, else the one before", async () => {
+        const first = `an:${uuid(198)}:-`;
+        const entries: NotInChartEntry[] = [
+            {
+                key: first,
+                slot: 5,
+                reason: "missing",
+                analysis: null,
+                file: null,
+            },
+            ...ENTRIES,
+        ];
+        const wrapper = mount(NotInChartList, {
+            props: { entries },
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+        await line(wrapper, 0).find("button.action").trigger("click");
+        await wrapper.setProps({ entries: ENTRIES });
+        await nextTick();
+        expect(document.activeElement).toBe(
+            line(wrapper, 0).find(".action").element,
+        );
+        await line(wrapper, 4).find("button.action").trigger("click");
+        await wrapper.setProps({ entries: ENTRIES.slice(0, 4) });
+        await nextTick();
+        expect(document.activeElement).toBe(
+            line(wrapper, 3).find(".action").element,
+        );
+        wrapper.unmount();
     });
 });

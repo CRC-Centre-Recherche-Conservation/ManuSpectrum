@@ -91,12 +91,16 @@ function elementsText(group: Elements): string {
                         <span v-if="row.characterization.colours.length > 0">{{
                             labels(row.characterization.colours)
                         }}</span>
-                        <span
-                            v-else
-                            class="none"
-                            :aria-label="$gettext('Not stated')"
-                            >—</span
-                        >
+                        <template v-else>
+                            <span
+                                class="none"
+                                aria-hidden="true"
+                                >—</span
+                            >
+                            <span class="visually-hidden">{{
+                                $gettext("Not stated")
+                            }}</span>
+                        </template>
                     </td>
                     <td>
                         <ul v-if="row.characterization.materials.length > 0">
@@ -116,23 +120,31 @@ function elementsText(group: Elements): string {
                                 </span>
                             </li>
                         </ul>
-                        <span
-                            v-else
-                            class="none"
-                            :aria-label="$gettext('Not stated')"
-                            >—</span
-                        >
+                        <template v-else>
+                            <span
+                                class="none"
+                                aria-hidden="true"
+                                >—</span
+                            >
+                            <span class="visually-hidden">{{
+                                $gettext("Not stated")
+                            }}</span>
+                        </template>
                     </td>
                     <td>
                         <span v-if="row.characterization.layers.length > 0">{{
                             labels(row.characterization.layers)
                         }}</span>
-                        <span
-                            v-else
-                            class="none"
-                            :aria-label="$gettext('Not stated')"
-                            >—</span
-                        >
+                        <template v-else>
+                            <span
+                                class="none"
+                                aria-hidden="true"
+                                >—</span
+                            >
+                            <span class="visually-hidden">{{
+                                $gettext("Not stated")
+                            }}</span>
+                        </template>
                     </td>
                     <td>
                         <ul v-if="row.characterization.elements.length > 0">
@@ -144,12 +156,16 @@ function elementsText(group: Elements): string {
                                 <span>{{ elementsText(group) }}</span>
                             </li>
                         </ul>
-                        <span
-                            v-else
-                            class="none"
-                            :aria-label="$gettext('Not stated')"
-                            >—</span
-                        >
+                        <template v-else>
+                            <span
+                                class="none"
+                                aria-hidden="true"
+                                >—</span
+                            >
+                            <span class="visually-hidden">{{
+                                $gettext("Not stated")
+                            }}</span>
+                        </template>
                     </td>
                     <td>
                         <ul v-if="row.characterization.evidence.length > 0">
@@ -161,12 +177,16 @@ function elementsText(group: Elements): string {
                                 <span>{{ entry.name.value }}</span>
                             </li>
                         </ul>
-                        <span
-                            v-else
-                            class="none"
-                            :aria-label="$gettext('Not stated')"
-                            >—</span
-                        >
+                        <template v-else>
+                            <span
+                                class="none"
+                                aria-hidden="true"
+                                >—</span
+                            >
+                            <span class="visually-hidden">{{
+                                $gettext("Not stated")
+                            }}</span>
+                        </template>
                     </td>
                 </tr>
             </tbody>
@@ -231,5 +251,14 @@ function elementsText(group: Elements): string {
 
 .materials-table .none {
     color: var(--ink-muted);
+}
+
+.materials-table .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 </style>
