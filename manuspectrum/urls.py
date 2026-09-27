@@ -22,13 +22,13 @@ from manuspectrum.views.biblissima_proxy import (
     BiblissimaStatsView,
     BiblissimaSuggestView,
 )
-from manuspectrum.views.iiif_annotation import (
-    IIIFAnnotationCollectionView,
-    IIIFAnnotationPageView,
-    IIIFAnnotationView,
-    IIIFAnnotationCollectionViewV2,
-    IIIFAnnotationPageViewV2,
-    IIIFAnnotationViewV2,
+from manuspectrum.views.iiif.annotations import (
+    AnnotationView,
+    AnnotationViewV2,
+    CollectionView,
+    CollectionViewV2,
+    PageView,
+    PageViewV2,
 )
 from manuspectrum.views.analysis_explorer import AnalysisExplorerPageView
 from manuspectrum.views.explorer.api import (
@@ -419,56 +419,36 @@ urlpatterns.append(
 )
 
 ### Manuspectrum URL - IIIF Annotations
-
-# V3 endpoints (IIIF Presentation API 3.0 / Web Annotation)
-urlpatterns.append(
-    path(
-        "iiif/v3/annotation-collection/<uuid:resource_id>",
-        IIIFAnnotationCollectionView.as_view(),
-        name="iiif-v3-annotation-collection",
-    )
-)
-
-urlpatterns.append(
-    path(
-        "iiif/v3/annotation/<uuid:resource_id>",
-        IIIFAnnotationView.as_view(),
-        name="iiif-v3-annotation",
-    )
-)
-
-urlpatterns.append(
-    path(
-        "iiif/v3/annotation-collection/<uuid:resource_id>/page-<int:page_num>",
-        IIIFAnnotationPageView.as_view(),
-        name="iiif-v3-annotation-page",
-    )
-)
-
-# V2 endpoints (IIIF Presentation API 2.0 / Open Annotation)
-urlpatterns.append(
-    path(
-        "iiif/v2/annotation-collection/<uuid:resource_id>",
-        IIIFAnnotationCollectionViewV2.as_view(),
-        name="iiif-v2-annotation-collection",
-    )
-)
-
-urlpatterns.append(
-    path(
-        "iiif/v2/annotation/<uuid:resource_id>",
-        IIIFAnnotationViewV2.as_view(),
-        name="iiif-v2-annotation",
-    )
-)
-
-urlpatterns.append(
-    path(
-        "iiif/v2/annotation-collection/<uuid:resource_id>/page-<int:page_num>",
-        IIIFAnnotationPageViewV2.as_view(),
-        name="iiif-v2-annotation-page",
-    )
-)
+###
+### v3 = Presentation 3 / Web Annotation, v2 = Presentation 2.1 / Open
+### Annotation; ``page-<n>`` is the canvas position in the Document's manifest.
+for version, collection, page, annotation in (
+    (3, CollectionView, PageView, AnnotationView),
+    (2, CollectionViewV2, PageViewV2, AnnotationViewV2),
+):
+    urlpatterns += [
+        path(
+            f"iiif/v{version}/annotation-collection/<uuid:resource_id>",
+            collection.as_view(),
+            name=f"iiif-v{version}-annotation-collection",
+        ),
+        path(
+            f"iiif/v{version}/annotation/<uuid:resource_id>",
+            annotation.as_view(),
+            name=f"iiif-v{version}-annotation",
+        ),
+        path(
+            f"iiif/v{version}/annotation/<uuid:resource_id>/<uuid:feature_id>",
+            annotation.as_view(),
+            name=f"iiif-v{version}-annotation-zone",
+        ),
+        path(
+            f"iiif/v{version}/annotation-collection/<uuid:resource_id>"
+            "/page-<int:page_num>",
+            page.as_view(),
+            name=f"iiif-v{version}-annotation-page",
+        ),
+    ]
 
 ### Renderer metadata and XY renderer configuration.
 ###

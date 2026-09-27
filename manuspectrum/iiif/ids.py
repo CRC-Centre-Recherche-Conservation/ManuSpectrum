@@ -85,3 +85,11 @@ def auth_logout():
 def report(resource_id):
     """The Arches report of a resource, as citations and exports name it."""
     return _url(f"report/{resource_id}")
+
+
+def as_version(url, version):
+    """One of our ``iiif/v3/…`` ids as the same resource of API *version*; any other URL unchanged."""
+    prefix = _url("iiif/v3/")
+    if isinstance(url, str) and url.startswith(prefix):
+        return _url(f"iiif/v{version}/") + url[len(prefix) :]
+    return url

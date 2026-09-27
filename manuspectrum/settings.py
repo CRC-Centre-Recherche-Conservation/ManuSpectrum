@@ -242,6 +242,8 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     #'arches.app.utils.middleware.TokenMiddleware',
+    # Before LocaleMiddleware: drops the language headers it adds to /iiif/.
+    "manuspectrum.utils.iiif_middleware.IIIFLanguageNeutralMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -810,6 +812,11 @@ EXPLORER_MIRADOR_URL = ""
 # IIIF documents (manuspectrum/iiif/). Radius, in canvas pixels, of the circle
 # a point zone is drawn as (SvgSelector next to its PointSelector).
 IIIF_POINT_RADIUS = 12
+# Most analysis ids a page restricted by ?only= may name; above it, 400.
+IIIF_PAGE_FILTER_MAX = 100
+# Seconds a memoised IIIF document (visitor view) is kept; its key moves with
+# the data version and the permission epoch.
+IIIF_MEMO_TTL = 24 * 60 * 60
 
 try:
     from .package_settings import *

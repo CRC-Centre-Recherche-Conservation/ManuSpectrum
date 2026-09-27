@@ -16,13 +16,22 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 # Modules under manuspectrum.views the package may reach: the package roots,
-# the pure value helpers, and the graph index the roles resolve through.
+# the pure value helpers, the graph index the roles resolve through, and the
+# draft lifecycle states utils.public_visibility reads.
 ALLOWED_VIEW_MODULES = {
     "manuspectrum.views",
     "manuspectrum.views.explorer",
     "manuspectrum.views.explorer.values",
     "manuspectrum.views.summary_service",
     "manuspectrum.views.graph_nodes",
+    "manuspectrum.views.model_graph_service",
+}
+FORBIDDEN = {
+    "manuspectrum.views.explorer.service",
+    "manuspectrum.views.explorer.memo",
+    "manuspectrum.views.explorer.scopes",
+    "manuspectrum.views.explorer.api",
+    "manuspectrum.views.iiif",
 }
 ROOT = Path(settings.APP_ROOT)
 
@@ -87,6 +96,7 @@ class ImportTests(SimpleTestCase):
         views = {m for m in reached if m.startswith("manuspectrum.views")}
 
         self.assertEqual(views - ALLOWED_VIEW_MODULES, set())
+        self.assertFalse(views & FORBIDDEN)
 
     def test_the_walk_sees_a_view_import(self):
         reached = reached_from(["manuspectrum.views.explorer.manifest"])

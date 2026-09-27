@@ -73,7 +73,6 @@ from manuspectrum.views.explorer.values import (
     name_of,
     reference_terms,
     rewrite_legacy_url,
-    shape_of,
     string_texts,
     value_refs,
 )
