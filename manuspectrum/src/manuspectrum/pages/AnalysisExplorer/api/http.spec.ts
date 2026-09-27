@@ -319,6 +319,31 @@ describe("getSeries", () => {
         expect(again).toEqual(series);
     });
 
+    it("keeps the last six full series apart: they never evict an Explorer payload", async () => {
+        fetchMock.mockImplementation(async () =>
+            respond(200, { x: [], y: [] }),
+        );
+        for (let page = 1; page <= 20; page += 1) {
+            await getJson(SEARCH, {
+                query: new URLSearchParams([["page", String(page)]]),
+            });
+        }
+        for (let file = 1; file <= 7; file += 1) {
+            await getSeries(
+                `http://testserver/api/spectrum-preview/f${file}`,
+                "full",
+            );
+        }
+        expect(
+            peekJson(SEARCH, { query: new URLSearchParams("page=1") }),
+        ).toEqual({ x: [], y: [] });
+        fetchMock.mockClear();
+        await getSeries("http://testserver/api/spectrum-preview/f2", "full");
+        expect(fetchMock).not.toHaveBeenCalled();
+        await getSeries("http://testserver/api/spectrum-preview/f1", "full");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it("asks for the full series again on reload", async () => {
         fetchMock.mockResolvedValue(respond(200, { x: [], y: [] }));
         const url = "http://testserver/api/spectrum-preview/abc";
