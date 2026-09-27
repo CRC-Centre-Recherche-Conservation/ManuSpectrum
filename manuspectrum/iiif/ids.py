@@ -24,6 +24,17 @@ def annotation(resource_id, feature_id, version=3):
     return _url(f"iiif/v{version}/annotation/{resource_id}/{feature_id}")
 
 
+def annotated_resource(annotation_id):
+    """The resource id an ``annotation`` id (any version) names; None for any other value."""
+    head = _url("iiif/v")
+    if not isinstance(annotation_id, str) or not annotation_id.startswith(head):
+        return None
+    parts = annotation_id[len(head) :].split("/")
+    if len(parts) != 4 or parts[1] != "annotation":
+        return None
+    return parts[2]
+
+
 def annotation_first(resource_id, version=3):
     """The route answering the first zone of *resource_id*."""
     return _url(f"iiif/v{version}/annotation/{resource_id}")
@@ -36,10 +47,14 @@ def collection(resource_id, kind="analysis", version=3):
 
 def page(resource_id, n, kind="analysis", version=3, only=None):
     """Page *n* (canvas position, 1-based) of a collection; *only* restricts it to those resource ids."""
-    url = f"{collection(resource_id, kind, version)}/page-{n}"
-    if only:
-        url += "?only=" + ",".join(sorted(str(i) for i in only))
-    return url
+    return restricted(f"{collection(resource_id, kind, version)}/page-{n}", only)
+
+
+def restricted(page_id, only):
+    """*page_id* restricted by ``?only=`` to the resource ids *only*, sorted; unchanged without them."""
+    if not only:
+        return page_id
+    return page_id + "?only=" + ",".join(sorted(str(i) for i in only))
 
 
 def content_state(resource_id, feature_id, download=False):

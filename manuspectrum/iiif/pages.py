@@ -12,7 +12,8 @@ none. Every page and collection declares the Auth 1.0 service
 
 *kind* ``analysis`` pages hold the analyses (``supplementing``),
 ``characterization`` pages the identified materials (``classifying``); each
-kind is its own collection. ``page_reference`` names a page without its
+kind is its own collection. ``filtered_page`` restricts a built page to some
+of its resources, the same page ``annotation_page`` builds with *only*. ``page_reference`` names a page without its
 items, as a manifest's canvas lists it.
 """
 
@@ -155,6 +156,27 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
     page["service"] = [services.auth1_block()]
     page["items"] = pages.get(n, [])
     return page if embed else with_context(page)
+
+
+def filtered_page(page, only):
+    """``(page, kept)``: the top-level AnnotationPage *page* keeping the annotations of the resource ids *only*.
+
+    *kept* is the ids of *only* the page holds; the page's id names them
+    (``?only=``), it carries neither ``prev`` nor ``next`` and its
+    ``@context`` is that of what it keeps. ``InvalidPage`` when *kept* is empty.
+    """
+    items = [
+        a for a in page.get("items", []) if ids.annotated_resource(a.get("id")) in only
+    ]
+    kept = frozenset(ids.annotated_resource(a["id"]) for a in items)
+    if not kept:
+        raise InvalidPage(page.get("id"))
+    filtered = {
+        k: v for k, v in page.items() if k not in ("@context", "prev", "next", "items")
+    }
+    filtered["id"] = ids.restricted(page["id"], kept)
+    filtered["items"] = items
+    return with_context(filtered), kept
 
 
 def page_numbers(doc, kind="analysis"):

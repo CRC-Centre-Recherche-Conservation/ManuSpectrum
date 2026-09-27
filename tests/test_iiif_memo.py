@@ -8,15 +8,26 @@ import uuid
 from unittest import mock
 
 from django.core.cache import cache
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 
-from manuspectrum.iiif import facts
-from manuspectrum.utils.public_visibility import anonymous_user
 from tests.explorer_fixtures import IIIFCase
 
 
 def memo_keys():
     return [k for k in cache._cache if ":iiif:" in k and not k.endswith(":lock")]
+
+
+def app_queries(context):
+    """The queries of *context* the application ran (Silk's own left out)."""
+    return len(
+        [
+            q
+            for q in context.captured_queries
+            if "silk_" not in q["sql"] and "SAVEPOINT" not in q["sql"]
+        ]
+    )
 
 
 class MemoTests(IIIFCase):
@@ -118,33 +129,126 @@ class MemoTests(IIIFCase):
 
         self.assertNotEqual(again["ETag"], first["ETag"])
 
-    def test_only_is_keyed_on_the_analyses_of_the_document_it_names(self):
-        analysis = str(self.analyses["open"].pk)
+    def only(self, *names, n=1):
+        named = ",".join(
+            str(self.analyses[name].pk) if name in self.analyses else name
+            for name in names
+        )
+        return f"{self.url[: -len('page-1')]}page-{n}?only={named}"
 
-        first = self.visitor.get(f"{self.url}?only={analysis}")
-        again = self.visitor.get(f"{self.url}?only={analysis},{uuid.uuid4()}")
+    def test_a_filtered_page_stores_nothing_of_its_own(self):
+        self.visitor.get(self.url)
+
+        one = self.visitor.get(self.only("open"))
+        two = self.visitor.get(self.only("open", "on_document"))
+
+        self.assertEqual((one.status_code, two.status_code), (200, 200))
+        self.assertEqual(len(memo_keys()), 1)
+
+    def test_a_filtered_page_is_served_from_the_canonical_page(self):
+        self.visitor.get(self.url)
+
+        with mock.patch(
+            "manuspectrum.iiif.facts.document_facts",
+            side_effect=AssertionError("built"),
+        ):
+            filtered = self.visitor.get(self.only("open"))
+
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(
+            [a["id"].split("/")[-2] for a in filtered.json()["items"]],
+            [str(self.analyses["open"].pk)],
+        )
+
+    def test_a_warm_filtered_page_costs_the_queries_of_the_warm_canonical_page(self):
+        self.visitor.get(self.url)
+        self.visitor.get(self.only("open"))
+
+        with CaptureQueriesContext(connection) as canonical:
+            self.visitor.get(self.url)
+        with CaptureQueriesContext(connection) as filtered:
+            self.visitor.get(self.only("open"))
+
+        self.assertLessEqual(app_queries(filtered), app_queries(canonical))
+
+    def test_only_is_intersected_with_the_analyses_of_the_page(self):
+        first = self.visitor.get(self.only("open"))
+        again = self.visitor.get(self.only("open", "on_document", n=3))
+        elsewhere = self.visitor.get(self.only("open", n=3))
+
+        self.assertEqual(
+            again.json()["id"].split("?only=")[1], str(self.analyses["on_document"].pk)
+        )
+        self.assertNotEqual(again["ETag"], first["ETag"])
+        self.assertEqual(elsewhere.status_code, 404)
+        self.assertEqual(elsewhere.content, b"")
+
+    def test_ids_outside_the_page_share_the_etag_of_the_ids_on_it(self):
+        first = self.visitor.get(self.only("open"))
+        again = self.visitor.get(self.only("open", str(uuid.uuid4())))
+        other_page = self.visitor.get(self.only("open", "on_document"))
 
         self.assertEqual(again["ETag"], first["ETag"])
         self.assertEqual(again.content, first.content)
-        self.assertEqual(len(memo_keys()), 1)
+        self.assertNotEqual(other_page["ETag"], first["ETag"])
 
-    def test_only_naming_nothing_of_the_document_is_a_404_stored_nowhere(self):
-        response = self.visitor.get(f"{self.url}?only={uuid.uuid4()}")
+    def test_a_filtered_etag_differs_from_the_canonical_etag_and_answers_304(self):
+        canonical = self.visitor.get(self.url)
+        filtered = self.visitor.get(self.only("open"))
+        again = self.visitor.get(self.only("open"), HTTP_IF_NONE_MATCH=filtered["ETag"])
+        star = self.visitor.get(self.only("open"), HTTP_IF_NONE_MATCH="*")
+
+        self.assertNotEqual(filtered["ETag"], canonical["ETag"])
+        self.assertRegex(filtered["ETag"], r'^"[0-9a-f]{40}"$')
+        self.assertEqual((again.status_code, star.status_code), (304, 304))
+        self.assertEqual(again["ETag"], filtered["ETag"])
+
+    def test_only_naming_nothing_of_the_page_is_a_404_stored_nowhere(self):
+        response = self.visitor.get(self.only(str(uuid.uuid4())))
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.content, b"")
-        self.assertEqual(memo_keys(), [])
+        self.assertEqual(response["Cache-Control"], "private, no-store")
 
-    def test_only_naming_every_analysis_of_the_document_is_the_canonical_page(self):
-        every = facts.annotated_ids(
-            self.documents["open"].pk, anonymous_user(), "analysis"
+    def test_a_filtered_page_drops_an_analysis_hidden_from_the_reader(self):
+        self.embargo(self.analyses["open"])
+
+        both = self.visitor.get(self.only("open", "on_document"))
+        hidden = self.visitor.get(self.only("open"))
+
+        self.assertEqual(
+            [a["id"].split("/")[-2] for a in both.json()["items"]],
+            [str(self.analyses["on_document"].pk)],
+        )
+        self.assertEqual(hidden.status_code, 404)
+
+    def test_a_private_reader_gets_a_private_filtered_page_stored_nowhere(self):
+        file_id = self.stored_file(self.analyses["open"], "X01.csv", b"x,y\n1,2\n")
+        self.restrict_nodegroup(
+            self.nodes[("analysis", "measurement_point_data")].nodegroup_id, self.editor
         )
 
-        canonical = self.visitor.get(self.url)
-        filtered = self.visitor.get(f"{self.url}?only={','.join(every)}")
+        granted = self.reader.get(self.only("open"))
 
-        self.assertEqual(filtered["ETag"], canonical["ETag"])
-        self.assertEqual(len(memo_keys()), 1)
+        self.assertEqual(granted.status_code, 200)
+        self.assertIn(file_id, granted.content.decode())
+        self.assertEqual(granted["Cache-Control"], "private, no-store")
+        self.assertNotIn("ETag", granted)
+        self.assertEqual(memo_keys(), [])
+
+    def test_a_v2_filtered_page_lists_the_kept_analyses(self):
+        analysis = str(self.analyses["open"].pk)
+        url = self.only("open").replace("/iiif/v3/", "/iiif/v2/")
+        v3 = self.visitor.get(self.only("open"))
+
+        page = self.visitor.get(url)
+
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(
+            [a["@id"].split("/")[-2] for a in page.json()["resources"]], [analysis]
+        )
+        self.assertTrue(page.json()["@id"].endswith(f"page-1?only={analysis}"))
+        self.assertNotEqual(page["ETag"], v3["ETag"])
 
     def test_if_none_match_star_on_a_missing_page_is_a_404(self):
         doc = self.documents["open"].pk
