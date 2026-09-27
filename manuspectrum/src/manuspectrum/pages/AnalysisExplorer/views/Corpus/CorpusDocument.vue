@@ -78,6 +78,7 @@ import type {
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 import type { PageCount } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
+import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { LegendEntry } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 
@@ -271,6 +272,18 @@ const styles = computed(() =>
         { value: $gettext("Analysis"), lang: "" },
     ),
 );
+/** The technique style of each analysis of the document, by id. */
+const analysisStyles = computed(() => {
+    const byAnalysis = new Map<string, TechniqueStyle>();
+    for (const entry of [
+        ...(data.value?.annotations ?? []),
+        ...(data.value?.unlocated ?? []),
+    ]) {
+        const style = styles.value.get(techniqueKey(entry.technique));
+        if (style) byAnalysis.set(entry.analysis, style);
+    }
+    return byAnalysis;
+});
 /** The techniques drawn on this page (in the analyses view, or lit as evidence), with their number of analyses. */
 const pageLegend = computed<LegendEntry[]>(() => {
     const drawn =
@@ -853,6 +866,7 @@ function goHome(): void {
                         ref="card"
                         :summary="openCharacterization"
                         :scale="certaintyScale"
+                        :analysis-styles="analysisStyles"
                         :heading-id="CARD_HEADING_ID"
                         @close="closeCard"
                     />
@@ -903,6 +917,7 @@ function goHome(): void {
                     v-else-if="openCharacterization"
                     :summary="openCharacterization"
                     :scale="certaintyScale"
+                    :analysis-styles="analysisStyles"
                     :heading-id="CARD_HEADING_ID"
                     :closable="false"
                     @close="closeCard"

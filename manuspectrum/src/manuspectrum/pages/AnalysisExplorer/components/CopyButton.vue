@@ -9,7 +9,8 @@ import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-ke
  * A button that copies `text` to the clipboard (the Clipboard API, else the
  * browser's copy command), says « Copied » on itself for a moment and through
  * the shell's live region. Disabled while `text` is empty. With `iconOnly`
- * it shows a copy icon, a check once copied, and `label` names it.
+ * it shows a copy icon, a check once copied, and `label` names it; otherwise
+ * the `icon` slot (decorative) comes before `label`.
  */
 const props = withDefaults(
     defineProps<{ text: string; label: string; iconOnly?: boolean }>(),
@@ -71,6 +72,7 @@ async function copyText(): Promise<void> {
         :disabled="!props.text"
         @click="copyText"
     >
+        <slot name="icon" />
         <span>{{ props.label }}</span>
         <span
             v-if="copied"

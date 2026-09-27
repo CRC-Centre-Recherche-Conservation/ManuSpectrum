@@ -31,6 +31,18 @@ describe("DocumentCard", () => {
         expect(wrapper.find(".meta").text()).toContain("Draft");
     });
 
+    it("opens the document through one link named by its title", async () => {
+        const wrapper = mount(DocumentCard, {
+            props: { hit: documentHit(1), href: "?doc=x" },
+        });
+        const links = wrapper.findAll("a");
+        expect(links).toHaveLength(1);
+        expect(links[0].text()).toBe("Manuscript 1");
+        expect(links[0].attributes("href")).toBe("?doc=x");
+        await links[0].trigger("click", { button: 0 });
+        expect(wrapper.emitted("open")).toEqual([[documentHit(1).id]]);
+    });
+
     it("leaves out the fields a document does not have", () => {
         const wrapper = mount(DocumentCard, {
             props: { hit: documentHit(1), href: "?doc=x" },

@@ -761,7 +761,6 @@ class AnalysisRouteTests(CorpusCase):
                 {
                     "feature": feature_of(self.analyses["open"]),
                     "url": state,
-                    "download": f"{state}?download=1",
                 }
             ],
         )

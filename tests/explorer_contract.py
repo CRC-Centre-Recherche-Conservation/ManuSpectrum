@@ -110,7 +110,7 @@ SHAPES = {
         "zones": list,
     },
     "AnalysisZone": {"canvas": int, "shape": dict, "feature": str},
-    "ContentStateLink": {"feature": str, "url": str, "download": str},
+    "ContentStateLink": {"feature": str, "url": str},
     "DocumentMatch": {"facets": list, "kept": "MatchKept", "total": int},
     "MatchKept": {"analyses": (list, type(None)), "characterizations": list},
     "SampleSummary": {

@@ -1,7 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref, shallowRef } from "vue";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
@@ -27,17 +27,21 @@ import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/compos
 enableAutoUnmount(afterEach);
 
 const MIRADOR = "https://viewer.example/mirador/";
+const IIIF_HELP =
+    "IIIF link to this zone: paste it into a IIIF viewer (Mirador…) to open the folio centred on this zone.";
+const IIIF_HELP_DELAY_MS = 500;
 
 interface CardExtras {
     feature?: string | null;
     mirador?: string;
+    attach?: boolean;
 }
 
 function mountCard(
     payload: AnalysisPayload | null,
     status: RequestStatus = "ready",
     analysisId: string = payload?.id ?? uuid(101),
-    { feature = null, mirador = "" }: CardExtras = {},
+    { feature = null, mirador = "", attach = false }: CardExtras = {},
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -49,6 +53,7 @@ function mountCard(
     };
     const wrapper = mount(AnalysisCard, {
         props: { handle, analysisId, feature },
+        attachTo: attach ? document.body : undefined,
         global: {
             plugins: [pinia, PrimeVue],
             stubs: { SpectrumPreview: true },
@@ -118,6 +123,26 @@ describe("AnalysisCard", () => {
         expect(wrapper.find(".not-in-chart").text()).toContain("lone.asd");
         expect(wrapper.find(".not-in-chart").text()).toContain(
             "Download the raw file",
+        );
+        expect(wrapper.find(".not-in-chart .download-only").text()).toBe(
+            "Raw instrument files are offered for download only: the charts read their text exports, converted upstream.",
+        );
+    });
+
+    it("says nothing of instrument files when only other files are not in a chart", () => {
+        const other = fileEntry({
+            id: uuid(9),
+            name: "report.pdf",
+            role: "other",
+            dataKind: "file",
+            previewUrl: null,
+        });
+        const { wrapper } = mountCard(analysisPayload({ files: [other] }));
+        expect(wrapper.find(".not-in-chart").text()).toContain(
+            "Download the file",
+        );
+        expect(wrapper.find(".not-in-chart .download-only").exists()).toBe(
+            false,
         );
     });
 
@@ -270,6 +295,11 @@ describe("AnalysisCard", () => {
         expect(wrapper.emitted("close")).toHaveLength(1);
     });
 
+    it("puts Close right after the heading, whatever the header holds", () => {
+        const { wrapper } = mountCard(analysisPayload());
+        expect(wrapper.find(".card-head .name + .close").exists()).toBe(true);
+    });
+
     it("marks a draft analysis", () => {
         const { wrapper } = mountCard(analysisPayload({ unpublished: true }));
         expect(wrapper.find(".card-head").text()).toContain("Draft");
@@ -380,32 +410,124 @@ describe("AnalysisCard", () => {
         expect(iiifCopy(wrapper)?.props("text")).toBe(focused.url);
     });
 
-    it("offers the download of the view", async () => {
+    it("offers the IIIF link alone, marked with a link icon", async () => {
         const payload = analysisPayload();
         const { wrapper } = mountCard(payload, "ready", payload.id, {
             feature: uuid(901),
         });
         await flushPromises();
 
-        const download = wrapper.find("a.download-view");
-        expect(download.attributes("href")).toBe(
-            payload.contentStates[0].download,
-        );
-        expect(download.attributes("download")).toBeDefined();
-        expect(download.text()).toContain("Download the view");
+        const links = wrapper.find(".iiif");
+        expect(links.findAll("a")).toHaveLength(0);
+        expect(links.text()).not.toContain("Download");
+        const icon = iiifCopy(wrapper)?.find("svg.link-icon");
+        expect(icon?.exists()).toBe(true);
+        expect(icon?.attributes("aria-hidden")).toBe("true");
     });
 
-    it("offers no download of the view outside a web address", async () => {
-        const state = contentStateLink(uuid(101), uuid(901));
-        const payload = analysisPayload({
-            contentStates: [{ ...state, download: "javascript:alert(1)" }],
-        });
+    it("describes the IIIF link with its help, one hidden tooltip node", async () => {
+        const payload = analysisPayload();
         const { wrapper } = mountCard(payload, "ready", payload.id, {
             feature: uuid(901),
+            attach: true,
         });
         await flushPromises();
 
-        expect(wrapper.find("a.download-view").exists()).toBe(false);
+        const button = iiifCopy(wrapper)!;
+        const description = wrapper.find(
+            `#${button.attributes("aria-describedby")}`,
+        );
+        expect(description.text()).toBe(IIIF_HELP);
+        expect(description.attributes("hidden")).toBeDefined();
+        expect(description.attributes("role")).toBe("tooltip");
+        expect(document.body.querySelectorAll('[role="tooltip"]')).toHaveLength(
+            1,
+        );
+    });
+
+    describe("IIIF link help", () => {
+        const shown = () =>
+            document.body.querySelector('[role="tooltip"]:not([hidden])');
+        const pointer = (type: string) =>
+            Object.assign(new Event(type, { bubbles: true }), {
+                pointerType: "mouse",
+            });
+
+        async function mountLinked() {
+            const payload = analysisPayload();
+            const { wrapper } = mountCard(payload, "ready", payload.id, {
+                feature: uuid(901),
+                attach: true,
+            });
+            await flushPromises();
+            const button = iiifCopy(wrapper)!.element as HTMLElement;
+            return { wrapper, button, area: button.parentElement! };
+        }
+
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it("shows after the delay on keyboard focus, not a millisecond before", async () => {
+            const { wrapper, button } = await mountLinked();
+            button.focus();
+
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS - 1);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+            vi.advanceTimersByTime(1);
+            await wrapper.vm.$nextTick();
+            expect(shown()?.textContent).toBe(IIIF_HELP);
+        });
+
+        it("shows after the delay on hover and stays while the pointer moves onto it", async () => {
+            const { wrapper, area } = await mountLinked();
+            area.dispatchEvent(pointer("pointerenter"));
+
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS - 1);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+            vi.advanceTimersByTime(1);
+            await wrapper.vm.$nextTick();
+            const tip = shown()!;
+            expect(tip.textContent).toBe(IIIF_HELP);
+
+            expect(area.contains(tip)).toBe(true);
+            tip.dispatchEvent(pointer("pointerenter"));
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBe(tip);
+        });
+
+        it("shows nothing after a click", async () => {
+            const { wrapper, button, area } = await mountLinked();
+            area.dispatchEvent(pointer("pointerenter"));
+            button.dispatchEvent(pointer("pointerdown"));
+            button.focus();
+            button.click();
+
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS * 4);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+        });
+
+        it("hides on Escape pressed outside the link", async () => {
+            const { wrapper, area } = await mountLinked();
+            area.dispatchEvent(pointer("pointerenter"));
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS);
+            await wrapper.vm.$nextTick();
+            expect(shown()).not.toBeNull();
+
+            document.body.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+            );
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+        });
     });
 
     it("opens Mirador with the content state when a viewer is set", async () => {
@@ -443,7 +565,6 @@ describe("AnalysisCard", () => {
 
             expect(iiifCopy(wrapper)).toBeUndefined();
             expect(wrapper.find("a.mirador").exists()).toBe(false);
-            expect(wrapper.find("a.download-view").exists()).toBe(false);
         }
     });
 

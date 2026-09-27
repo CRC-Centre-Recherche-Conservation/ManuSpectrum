@@ -2,7 +2,8 @@
 import { useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import { techniqueClass } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
+
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -55,13 +56,11 @@ function toggle(): void {
                 v-for="entry in props.entries"
                 :key="entry.key"
             >
-                <span
-                    class="code"
-                    aria-hidden="true"
-                    :class="techniqueClass('code', entry.colour)"
-                >
-                    {{ entry.code }}
-                </span>
+                <TechniqueCode
+                    size="small"
+                    :code="entry.code"
+                    :colour="entry.colour"
+                />
                 <span
                     class="name"
                     :lang="entry.label.lang || undefined"
@@ -120,64 +119,6 @@ function toggle(): void {
     grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 0.5rem;
-}
-
-.folio-legend .code {
-    display: inline-grid;
-    place-items: center;
-    min-inline-size: 1.25rem;
-    block-size: 1.25rem;
-    padding-inline: 0.125rem;
-    border: 0.0625rem solid var(--surface);
-    border-radius: 999rem;
-    background: var(--ink);
-    color: var(--stage);
-    font: 600 0.5625rem var(--font-body);
-}
-
-.folio-legend .code--tech-1 {
-    background: var(--tech-1);
-}
-
-.folio-legend .code--tech-2 {
-    background: var(--tech-2);
-}
-
-.folio-legend .code--tech-3 {
-    background: var(--tech-3);
-}
-
-.folio-legend .code--tech-4 {
-    background: var(--tech-4);
-}
-
-.folio-legend .code--tech-5 {
-    background: var(--tech-5);
-}
-
-.folio-legend .code--tech-6 {
-    background: var(--tech-6);
-}
-
-.folio-legend .code--tech-7 {
-    background: var(--tech-7);
-}
-
-.folio-legend .code--tech-8 {
-    background: var(--tech-8);
-}
-
-.folio-legend .code--tech-9 {
-    background: var(--tech-9);
-}
-
-.folio-legend .code--tech-10 {
-    background: var(--tech-10);
-}
-
-.folio-legend .code--ink {
-    background: var(--surface);
-    color: var(--ink);
 }
 
 .folio-legend .count {

@@ -57,10 +57,9 @@ def restricted(page_id, only):
     return page_id + "?only=" + ",".join(sorted(str(i) for i in only))
 
 
-def content_state(resource_id, feature_id, download=False):
-    """The published Content State of one zone; *download* asks for it as an attachment."""
-    url = _url(f"iiif/v3/content-state/{resource_id}/{feature_id}")
-    return f"{url}?download=1" if download else url
+def content_state(resource_id, feature_id):
+    """The published Content State of one zone."""
+    return _url(f"iiif/v3/content-state/{resource_id}/{feature_id}")
 
 
 def explorer_manifest(query=""):

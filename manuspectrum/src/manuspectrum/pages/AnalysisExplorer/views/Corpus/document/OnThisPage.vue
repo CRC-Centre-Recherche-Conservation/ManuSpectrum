@@ -2,6 +2,8 @@
 import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
+
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 
 import type {
@@ -138,17 +140,10 @@ function select(focus: Focus): void {
                 class="technique"
             >
                 <h4>
-                    <span
-                        class="code"
-                        :class="
-                            group.style.colour
-                                ? `code--tech-${group.style.colour}`
-                                : 'code--ink'
-                        "
-                        aria-hidden="true"
-                    >
-                        {{ group.style.code }}
-                    </span>
+                    <TechniqueCode
+                        :code="group.style.code"
+                        :colour="group.style.colour"
+                    />
                     <span :lang="group.style.label.lang || undefined">
                         {{ group.style.label.value }}
                     </span>
@@ -335,68 +330,6 @@ function select(focus: Focus): void {
     gap: 0.5rem;
     font-size: 0.8125rem;
     font-weight: 600;
-}
-
-.on-this-page .code {
-    display: inline-grid;
-    flex: none;
-    place-items: center;
-    box-sizing: border-box;
-    min-inline-size: 1.5rem;
-    block-size: 1.5rem;
-    padding-inline: 0.25rem;
-    border: 0.125rem solid var(--surface);
-    border-radius: 999rem;
-    background: var(--ink);
-    color: var(--stage);
-    font: 600 0.625rem var(--font-body);
-    white-space: nowrap;
-}
-
-.on-this-page .code--tech-1 {
-    background: var(--tech-1);
-}
-
-.on-this-page .code--tech-2 {
-    background: var(--tech-2);
-}
-
-.on-this-page .code--tech-3 {
-    background: var(--tech-3);
-}
-
-.on-this-page .code--tech-4 {
-    background: var(--tech-4);
-}
-
-.on-this-page .code--tech-5 {
-    background: var(--tech-5);
-}
-
-.on-this-page .code--tech-6 {
-    background: var(--tech-6);
-}
-
-.on-this-page .code--tech-7 {
-    background: var(--tech-7);
-}
-
-.on-this-page .code--tech-8 {
-    background: var(--tech-8);
-}
-
-.on-this-page .code--tech-9 {
-    background: var(--tech-9);
-}
-
-.on-this-page .code--tech-10 {
-    background: var(--tech-10);
-}
-
-.on-this-page .code--ink {
-    border-color: var(--ink);
-    background: var(--surface);
-    color: var(--ink);
 }
 
 .on-this-page ul {

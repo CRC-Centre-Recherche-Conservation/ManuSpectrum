@@ -10,6 +10,7 @@ import { useGettext } from "vue3-gettext";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
+import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
@@ -53,9 +54,9 @@ const COPYRIGHT = "©";
  * `analysisId`, and its heading (one element from loading to loaded) says it
  * is loading meanwhile. `feature` (the id of the focused zone) picks the
  * published Content State of that zone among the analysis's
- * `contentStates`: its IIIF link is copied (`contentStateLink`), opened in
- * Mirador and downloaded as a file. An unlocated analysis, or a zone
- * without a published state, has none.
+ * `contentStates`: its IIIF link is copied (`contentStateLink`) and opened
+ * in Mirador. The copy button carries its help as a `HelpTip`. An unlocated analysis, or a zone without a published state,
+ * has none.
  */
 const props = withDefaults(
     defineProps<{
@@ -105,6 +106,9 @@ const notInChart = computed(() =>
             (file.role === "raw" && !file.pairedWith) ||
             (file.role === "other" && file.dataKind === "file"),
     ),
+);
+const rawNotInChart = computed(() =>
+    notInChart.value.some((file) => file.role === "raw"),
 );
 /** One preview per spectrum axis set (the first file stands for its set), then every other file a viewer shows. */
 const previewed = computed<FileEntry[]>(() => {
@@ -173,8 +177,8 @@ const attribution = computed(() => {
 const reportHref = computed(() => safeHref(analysis.value?.reportUrl));
 /**
  * The IIIF links of the focused zone's published Content State: the link to
- * copy (`contentStateLink`), its download and Mirador; null when the analysis
- * has no state for the zone.
+ * copy (`contentStateLink`, on the absolute id) and Mirador; null when the
+ * analysis has no state for the zone.
  */
 const zoneLinks = computed(() => {
     const state = props.feature
@@ -187,10 +191,15 @@ const zoneLinks = computed(() => {
     }
     return {
         iiif: contentStateLink(miradorUrl, state.url),
-        download: safeHref(state.download),
         mirador: miradorLink(miradorUrl, { contentState: state.url }),
     };
 });
+
+const iiifHelp = computed(() =>
+    $gettext(
+        "IIIF link to this zone: paste it into a IIIF viewer (Mirador…) to open the folio centred on this zone.",
+    ),
+);
 
 function previewOf(file: FileEntry): Component {
     const entry = viewerFor(file.dataKind);
@@ -263,6 +272,14 @@ function focusHeading(): void {
                     <span>{{ $gettext("Loading the analysis…") }}</span>
                 </span>
             </h3>
+            <button
+                v-if="props.closable"
+                type="button"
+                class="close"
+                @click="close"
+            >
+                <span>{{ $gettext("Close") }}</span>
+            </button>
             <template v-if="analysis">
                 <p class="meta">
                     <span
@@ -294,14 +311,6 @@ function focusHeading(): void {
                     :hints="entryHints"
                 />
             </template>
-            <button
-                v-if="props.closable"
-                type="button"
-                class="close"
-                @click="close"
-            >
-                <span>{{ $gettext("Close") }}</span>
-            </button>
         </header>
         <template v-if="!failed && analysis">
             <section
@@ -374,6 +383,16 @@ function focusHeading(): void {
                 <h4 :id="`${sectionId}-not-in-chart`">
                     <span>{{ $gettext("Not in a chart") }}</span>
                 </h4>
+                <p
+                    v-if="rawNotInChart"
+                    class="download-only"
+                >
+                    <span>{{
+                        $gettext(
+                            "Raw instrument files are offered for download only: the charts read their text exports, converted upstream.",
+                        )
+                    }}</span>
+                </p>
                 <ul>
                     <li
                         v-for="file in notInChart"
@@ -543,18 +562,31 @@ function focusHeading(): void {
                     v-if="zoneLinks"
                     class="iiif"
                 >
-                    <CopyButton
-                        :text="zoneLinks.iiif"
-                        :label="$gettext('Copy the IIIF link')"
-                    />
-                    <a
-                        v-if="zoneLinks.download"
-                        class="download-view"
-                        download
-                        :href="zoneLinks.download"
+                    <HelpTip
+                        v-slot="{ describedby }"
+                        :text="iiifHelp"
                     >
-                        <span>{{ $gettext("Download the view") }}</span>
-                    </a>
+                        <CopyButton
+                            :text="zoneLinks.iiif"
+                            :label="$gettext('Copy the IIIF link')"
+                            :aria-describedby="describedby"
+                        >
+                            <template #icon>
+                                <svg
+                                    class="link-icon"
+                                    viewBox="0 0 16 16"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="M6.5 9.5a2.5 2.5 0 0 0 3.5 0l2.5-2.5a2.5 2.5 0 0 0-3.5-3.5L8 4.5"
+                                    />
+                                    <path
+                                        d="M9.5 6.5a2.5 2.5 0 0 0-3.5 0L3.5 9a2.5 2.5 0 0 0 3.5 3.5L8 11.5"
+                                    />
+                                </svg>
+                            </template>
+                        </CopyButton>
+                    </HelpTip>
                     <a
                         v-if="zoneLinks.mirador"
                         class="mirador"
@@ -660,19 +692,24 @@ function focusHeading(): void {
 }
 
 .analysis-card .card-head {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.5rem 1rem;
     align-items: center;
 }
 
+.analysis-card .card-head > * {
+    grid-column: 1 / -1;
+}
+
 .analysis-card .card-head .name {
-    flex: 1 1 100%;
+    grid-column: 1;
     font-weight: 600;
 }
 
 .analysis-card .card-head .close {
-    margin-inline-start: auto;
+    grid-column: 2;
+    grid-row: 1;
 }
 
 .analysis-card .card-head .loading {
@@ -727,6 +764,17 @@ function focusHeading(): void {
     gap: 0.375rem 1rem;
 }
 
+.analysis-card .iiif .link-icon {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 1.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .analysis-card .mirador {
     gap: 0.25rem;
 }
@@ -770,6 +818,7 @@ function focusHeading(): void {
 }
 
 .analysis-card .raw,
+.analysis-card .download-only,
 .analysis-card .empty,
 .analysis-card .attribution {
     color: var(--ink-muted);

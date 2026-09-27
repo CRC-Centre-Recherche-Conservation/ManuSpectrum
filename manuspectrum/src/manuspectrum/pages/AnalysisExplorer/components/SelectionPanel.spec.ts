@@ -156,6 +156,33 @@ describe("SelectionPanel", () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it("offers Retry instead of placeholders when the Selection cannot be read", async () => {
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        useExplorerStore().addManyToBasket([KEY]);
+        const retry = vi.fn();
+        const shared: SelectionItems = {
+            byKey: ref(new Map<string, Item>()),
+            missing: ref(new Set<string>()),
+            settled: computed(() => false),
+            status: ref<RequestStatus>("error"),
+            retry,
+        };
+        const wrapper = mount(SelectionPanel, {
+            global: {
+                plugins: [pinia],
+                provide: { [SELECTION_ITEMS_KEY as symbol]: () => shared },
+            },
+        });
+
+        expect(wrapper.find(".pending").exists()).toBe(false);
+        expect(wrapper.find(".unavailable-state").text()).toContain(
+            "The service is not answering right now.",
+        );
+        await wrapper.find(".unavailable-state .retry").trigger("click");
+        expect(retry).toHaveBeenCalledTimes(1);
+    });
+
     it("lists the Selection with its A-labels and kinds", async () => {
         const { wrapper } = mountPanel();
         await flushPromises();

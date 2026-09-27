@@ -17,6 +17,7 @@ import type {
     CharacterizationSummary,
     NamedRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 
 const SCALE = {
     levels: [0, 1, 2, 3].map((rank) => ({
@@ -35,6 +36,7 @@ function evidenceOf(ids: string[]): NamedRef[] {
 function mountCard(
     evidence: string[],
     overrides: Partial<CharacterizationSummary> = {},
+    analysisStyles?: ReadonlyMap<string, TechniqueStyle>,
 ) {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -53,7 +55,7 @@ function mountCard(
         ...overrides,
     });
     const wrapper = mount(CharacterizationCard, {
-        props: { summary, scale: SCALE },
+        props: { summary, scale: SCALE, analysisStyles },
         global: { plugins: [pinia] },
     });
     return { wrapper, store: useExplorerStore(), summary, fetchMock };
@@ -75,6 +77,16 @@ describe("CharacterizationCard", () => {
         const current = wrapper.findAll(".scale li[aria-current='true']");
         expect(current).toHaveLength(1);
         expect(current[0].text()).toContain("Reliable");
+    });
+
+    it("says « this identification » on the scale to assistive technology only", () => {
+        const { wrapper } = mountCard([]);
+        const current = wrapper.find(".scale li[aria-current='true']");
+        expect(current.find(".visually-hidden").text()).toBe(
+            "this identification",
+        );
+        expect(current.classes()).toContain("is-current");
+        expect(wrapper.find(".scale .here").exists()).toBe(false);
     });
 
     it("names an element group as the elements of its level", () => {
@@ -126,9 +138,33 @@ describe("CharacterizationCard", () => {
         const { wrapper, fetchMock } = mountCard([uuid(101), uuid(102)]);
         await flushPromises();
         expect(
-            wrapper.findAll(".evidence button").map((item) => item.text()),
+            wrapper
+                .findAll(".evidence button .name")
+                .map((item) => item.text()),
         ).toEqual(["Analysis 101", "Analysis 102"]);
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("marks each evidence analysis with its technique code in its family colour", async () => {
+        const styles = new Map<string, TechniqueStyle>([
+            [
+                uuid(101),
+                {
+                    key: "t:xrf",
+                    label: label("X-ray fluorescence"),
+                    code: "XRF",
+                    colour: 3,
+                },
+            ],
+        ]);
+        const { wrapper } = mountCard([uuid(101), uuid(102)], {}, styles);
+        await flushPromises();
+        const [marked, unknown] = wrapper.findAll(".evidence button");
+        const code = marked.find(".code");
+        expect(code.text()).toBe("XRF");
+        expect(code.classes()).toContain("code--tech-3");
+        expect(code.attributes("aria-hidden")).toBe("true");
+        expect(unknown.find(".code").exists()).toBe(false);
     });
 
     it("links a web source and writes an unsafe one as plain text", () => {
@@ -152,6 +188,11 @@ describe("CharacterizationCard", () => {
         const { wrapper } = mountCard([]);
         await wrapper.find(".card-head .close").trigger("click");
         expect(wrapper.emitted("close")).toHaveLength(1);
+    });
+
+    it("puts Close right after the heading, whatever the header holds", () => {
+        const { wrapper } = mountCard([]);
+        expect(wrapper.find(".card-head .name + .close").exists()).toBe(true);
     });
 
     it("offers the evidence of the material it shows, not the previous one's", async () => {
