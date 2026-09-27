@@ -11,6 +11,10 @@ import {
     fileEntry,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    plotly,
+    resetPlotly,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/plotly.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
 import type { FileEntry } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -27,24 +31,11 @@ interface LayoutCall {
     yaxis: { title: { text: string } };
 }
 
-const plotly = vi.hoisted(() => ({
-    react: vi.fn(
-        async (
-            _element: HTMLElement,
-            _traces: TraceCall[],
-            _layout: LayoutCall,
-            _config?: unknown,
-        ) => undefined,
-    ),
-    relayout: vi.fn(
-        async (_element: HTMLElement, _update: Record<string, unknown>) =>
-            undefined,
-    ),
-    purge: vi.fn((_element: HTMLElement) => undefined),
-}));
-vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", () => ({
-    loadPlotly: async () => plotly,
-}));
+vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", async () =>
+    (
+        await import("@/manuspectrum/pages/AnalysisExplorer/testing/plotly.ts")
+    ).plotlyModule(),
+);
 
 const SERIES = {
     x: [1, 2, 3],
@@ -81,15 +72,13 @@ function mountPreview(files: FileEntry[], answers: (url: string) => Response) {
 function lastDrawing(): { traces: TraceCall[]; layout: LayoutCall } {
     const call = plotly.react.mock.calls.at(-1);
     if (!call) throw new Error("Plotly.react was not called");
-    return { traces: call[1], layout: call[2] };
+    return { traces: call[1] as TraceCall[], layout: call[2] as LayoutCall };
 }
 
 beforeEach(() => {
     document.documentElement.style.setProperty("--series-1", "#1d4ed8");
     document.documentElement.style.setProperty("--series-2", "#b45309");
-    plotly.react.mockClear();
-    plotly.relayout.mockClear();
-    plotly.purge.mockClear();
+    resetPlotly();
 });
 
 afterEach(() => {

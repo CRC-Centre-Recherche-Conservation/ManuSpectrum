@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
     computed,
+    defineAsyncComponent,
     nextTick,
     onBeforeUnmount,
     onMounted,
@@ -50,6 +51,13 @@ import type {
     SelectionHint,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { SharedSelection } from "@/manuspectrum/pages/AnalysisExplorer/store/selection-link.ts";
+
+const CompareView = defineAsyncComponent(
+    () =>
+        import(
+            /* webpackChunkName: "explorer-compare" */ "@/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue"
+        ),
+);
 
 // Read before useUrlState rewrites the URL without `sel`.
 const INITIAL_SELECTION = parseSelection(
@@ -179,6 +187,7 @@ function onSelectionResolved(message: string): void {
         />
         <ActiveFiltersBar />
         <CorpusView v-if="store.view === 'corpus'" />
+        <CompareView v-else-if="store.view === 'compare'" />
         <p
             class="announcer"
             aria-live="polite"

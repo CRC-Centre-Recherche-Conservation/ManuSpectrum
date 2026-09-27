@@ -19,6 +19,14 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 
 import type { Pinia } from "pinia";
 
+vi.mock("gridstack", async () =>
+    (
+        await import(
+            "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts"
+        )
+    ).gridstackModule(),
+);
+
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
 }));
@@ -44,6 +52,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("AnalysisExplorer", () => {
+    it("shows the Compare view when it is chosen", async () => {
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        useExplorerStore().setView("compare");
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(wrapper.find(".compare-view").exists()).toBe(true);
+        expect(wrapper.find(".corpus-home").exists()).toBe(false);
+        wrapper.unmount();
+    });
+
     it("says once, politely, that an old Selection was emptied", async () => {
         window.localStorage.setItem(
             "ms-explorer-basket-v1",

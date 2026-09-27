@@ -21,6 +21,15 @@ export function writeStorage(key: string, value: string): boolean {
     }
 }
 
+export function removeStorage(key: string): boolean {
+    try {
+        window.localStorage.removeItem(key);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export function createMemoryStorage(): Storage {
     const entries = new Map<string, string>();
     return {

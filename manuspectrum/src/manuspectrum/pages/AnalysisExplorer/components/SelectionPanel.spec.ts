@@ -209,10 +209,11 @@ describe("SelectionPanel", () => {
         expect(store.basket).toEqual([]);
     });
 
-    it("does not offer Compare while the view is not built", async () => {
-        const { wrapper } = mountPanel();
+    it("opens the Compare view", async () => {
+        const { wrapper, store } = mountPanel();
         await flushPromises();
-        expect(wrapper.find("button.compare").exists()).toBe(false);
+        await wrapper.find("button.compare").trigger("click");
+        expect(store.view).toBe("compare");
     });
 
     it("writes a map layer's label apart from the analysis name and its language", async () => {

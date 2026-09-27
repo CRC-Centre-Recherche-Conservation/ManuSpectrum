@@ -56,3 +56,7 @@ export const SELECTION_HINTS_KEY: InjectionKey<
 
 /** Address of the Mirador viewer the IIIF products open in (`EXPLORER_MIRADOR_URL`); empty: no viewer. */
 export const MIRADOR_URL_KEY: InjectionKey<string> = Symbol("mirador-url");
+
+/** Counts, debounced, the size changes of the Compare grid and its windows; a window redraws what depends on its size (Plotly resize) when it changes. */
+export const WINDOW_RESIZE_KEY: InjectionKey<Readonly<Ref<number>>> =
+    Symbol("window-resize");

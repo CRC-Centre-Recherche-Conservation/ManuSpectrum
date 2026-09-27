@@ -4,6 +4,7 @@ import {
     createMemoryStorage,
     guardLocalStorage,
     readStorage,
+    removeStorage,
     writeStorage,
 } from "@/manuspectrum/public/safe-storage.ts";
 
@@ -37,6 +38,14 @@ describe("safe storage", () => {
         blockLocalStorage();
         expect(readStorage("k")).toBeNull();
         expect(writeStorage("k", "v")).toBe(false);
+    });
+
+    it("removes a key, and answers false when access throws", () => {
+        writeStorage("k", "v");
+        expect(removeStorage("k")).toBe(true);
+        expect(readStorage("k")).toBeNull();
+        blockLocalStorage();
+        expect(removeStorage("k")).toBe(false);
     });
 
     it("installs a memory storage when reading localStorage throws", () => {

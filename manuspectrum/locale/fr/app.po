@@ -158,25 +158,37 @@ msgstr[1] "%{n} spectres"
 msgid "%{n} ticked"
 msgstr "%{n} coché(s)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:79
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:91
 msgid "%{name} could not be drawn."
 msgstr "%{name} n'a pas pu être tracé."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:120
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:132
 msgid "%{name}: %{n} points from %{from} to %{to}."
 msgstr "%{name} : %{n} points de %{from} à %{to}."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:88
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:100
 msgid "%{name}: nothing to draw."
 msgstr "%{name} : rien à tracer."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:97
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:109
 msgid ""
 "%{name}: quick view drawn from %{shown} of the file's %{total} points; the "
 "workshop works on every point."
 msgstr ""
 "%{name} : vue rapide tracée à partir de %{shown} des %{total} points du "
 "fichier ; l'atelier travaille sur tous les points."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:327
+msgid "%{title} closed."
+msgstr "Fenêtre fermée : %{title}"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:290
+msgid "%{title}: %{position} of %{total}"
+msgstr "%{title} : %{position} sur %{total}"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:316
+msgid "%{title}: size %{size}"
+msgstr "%{title} : taille %{size}"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:278
 msgid "%{values} (%{level})"
@@ -282,6 +294,10 @@ msgstr "Analyse %{n}"
 msgid "Area"
 msgstr "Zone"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:66
+msgid "Arrange this window"
+msgstr "Disposer cette fenêtre"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:236
 msgid "Authors of the identification"
 msgstr "Auteurs de l'identification"
@@ -336,7 +352,8 @@ msgstr "Effacer"
 msgid "Clear all"
 msgstr "Tout effacer"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:171
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:179
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:100
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:303
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:163
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue:92
@@ -371,6 +388,7 @@ msgstr "Couleurs décrites sur la partie étudiée, même sans analyse"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:247
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:121
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:77
 msgid "Compare"
 msgstr "Comparer"
 
@@ -638,6 +656,7 @@ msgstr "matériau identifié"
 msgid "Identified material"
 msgstr "Matériau identifié"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:52
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:179
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:20
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:198
@@ -735,7 +754,7 @@ msgstr "Chargement de l'analyse…"
 msgid "Loading the configuration…"
 msgstr "Chargement de la configuration…"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:215
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:227
 msgid "Loading the spectra…"
 msgstr "Chargement des spectres…"
 
@@ -790,6 +809,10 @@ msgstr "Fusionner avec ma Sélection"
 msgid "micro-image"
 msgstr "micro-image"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:50
+msgid "Micro-images"
+msgstr "Micro-images"
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:201
 msgid "Model"
 msgstr "Modèle"
@@ -797,6 +820,14 @@ msgstr "Modèle"
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:200
 msgid "Model carrying the relation"
 msgstr "Modèle qui porte la relation"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:80
+msgid "Move after"
+msgstr "Déplacer après"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:71
+msgid "Move before"
+msgstr "Déplacer avant"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:167
 msgid "Move down"
@@ -813,6 +844,12 @@ msgstr "Ma Sélection (%{n})"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:281
 msgid "Narrow the results by technique, material, project or year."
 msgstr "Affinez les résultats par technique, matériau, projet ou année."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:117
+msgid "New window at the end: %{titles}"
+msgid_plural "New windows at the end: %{titles}"
+msgstr[0] "Nouvelle fenêtre à la fin : %{titles}"
+msgstr[1] "Nouvelles fenêtres à la fin : %{titles}"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:492
 msgid "Next page"
@@ -859,6 +896,7 @@ msgstr "Aucun résultat."
 msgid "No sample on this page."
 msgstr "Aucun échantillon sur cette page."
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:54
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:375
 msgid "Not in a chart"
 msgstr "Pas dans un graphique"
@@ -1004,6 +1042,10 @@ msgstr "Projets"
 msgid "raw instrument"
 msgstr "brut instrument"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:360
+msgid "Rearrange"
+msgstr "Réorganiser"
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:152
 msgid "Related count"
 msgstr "Agrégat"
@@ -1068,8 +1110,8 @@ msgstr "Retirer : %{label}"
 msgid "Replace my Selection"
 msgstr "Remplacer ma Sélection"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:230
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:231
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:242
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:243
 msgid "Reset the zoom"
 msgstr "Réinitialiser le zoom"
 
@@ -1096,7 +1138,7 @@ msgstr "Résultats par page"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue:53
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue:227
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:259
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:271
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:921
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:935
 msgid "Retry"
@@ -1191,6 +1233,10 @@ msgid_plural "Show the %{n} other citations"
 msgstr[0] "Afficher l'autre citation"
 msgstr[1] "Afficher les %{n} autres citations"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:36
+msgid "Size %{size}"
+msgstr "Taille %{size}"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:663
 msgid "Skip links"
 msgstr "Liens d'évitement"
@@ -1211,6 +1257,10 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:278
 msgid "Sources"
 msgstr "Sources"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:48
+msgid "Spectra"
+msgstr "Spectres"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:308
 msgid "Spectra (CSV)"
@@ -1359,6 +1409,10 @@ msgstr "Que partager"
 msgid "Whole page"
 msgstr "Page entière"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:348
+msgid "Windows rearranged."
+msgstr "Fenêtres réorganisées."
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:82
 msgid "Without a position on the image (%{n})"
 msgstr "Sans position sur l'image (%{n})"
@@ -1368,6 +1422,7 @@ msgid "Year"
 msgstr "Année"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:154
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:84
 msgid ""
 "Your Selection is empty. Add analyses or identified materials with « + "
 "Selection »."
@@ -1381,8 +1436,8 @@ msgid_plural "Your Selection now holds the %{n} shared items."
 msgstr[0] "Votre Sélection contient maintenant l'élément partagé."
 msgstr[1] "Votre Sélection contient maintenant les %{n} éléments partagés."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:128
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:163
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:136
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:171
 msgid "Your Selection, unchanged for more than 90 days, has been emptied."
 msgstr "Votre Sélection, inchangée depuis plus de 90 jours, a été vidée."
 
