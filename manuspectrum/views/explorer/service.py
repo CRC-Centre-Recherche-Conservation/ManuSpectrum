@@ -2029,13 +2029,13 @@ def licence_labels(files):
 
 
 def _analysis_manifest(analysis_id, language):
-    """The URL of the Explorer manifest of one analysis, or None when that manifest holds no canvas (``has_canvases``)."""
-    from manuspectrum.views.explorer.manifest import has_canvases
+    """The URL of the Explorer manifest of one analysis, or None when that manifest holds no canvas or is over the canvas bound (``manifest_offer``)."""
+    from manuspectrum.views.explorer.manifest import manifest_offer
     from manuspectrum.views.explorer.scopes import resolve_scope
 
     query = f"ids=an:{analysis_id}:-"
     scope = resolve_scope(QueryDict(query), language)
-    if scope is None or not has_canvases(scope):
+    if scope is None or manifest_offer(scope) != "manifest":
         return None
     return product_url("iiif-v3-explorer-manifest", query, language)
 

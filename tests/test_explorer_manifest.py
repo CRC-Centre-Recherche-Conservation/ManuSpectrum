@@ -16,7 +16,7 @@ from django.test import Client, override_settings
 from arches.app.models.models import IIIFManifest, TileModel
 
 from manuspectrum.iiif import facts, ids
-from manuspectrum.views.explorer.manifest import build_manifest, has_canvases
+from manuspectrum.views.explorer.manifest import build_manifest, manifest_offer
 from manuspectrum.views.explorer.scopes import resolve_scope
 from tests.explorer_fixtures import CANVAS, MANIFEST
 from tests.iiif_schema import assert_valid_manifest
@@ -241,7 +241,7 @@ class ManifestRouteTests(CorpusCase):
             with mock.patch(
                 "manuspectrum.views.explorer.manifest.characterization_summaries"
             ) as summaries:
-                self.assertTrue(has_canvases(scope))
+                self.assertEqual(manifest_offer(scope), "manifest")
 
         summaries.assert_not_called()
 

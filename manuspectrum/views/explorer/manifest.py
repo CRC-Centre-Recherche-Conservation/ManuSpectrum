@@ -74,7 +74,6 @@ __all__ = [
     "ManifestTooLarge",
     "build_manifest",
     "canvas_plan",
-    "has_canvases",
     "manifest_offer",
 ]
 
@@ -296,26 +295,6 @@ def _imaging(scope):
         )
         for a in scope.analyses
     }
-
-
-def has_canvases(scope):
-    """Whether the manifest of *scope* holds a canvas; a scope over the canvas bound holds some.
-
-    Documents are placed in order until one keeps a folio; the imaging
-    layers are read only when none does.
-    """
-    try:
-        for plan in _placements(scope):
-            if any(c in plan.raw for c in plan.kept):
-                return True
-        imaging = _imaging(scope)
-    except ManifestTooLarge:
-        return True
-    return any(
-        _layer_ids(e, scope.read_manifest)
-        for entries in imaging.values()
-        for e in entries
-    )
 
 
 def _homepage_query(scope):
