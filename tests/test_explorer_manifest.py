@@ -15,6 +15,7 @@ from django.test import Client, override_settings
 
 from arches.app.models.models import IIIFManifest, TileModel
 
+from manuspectrum.iiif import facts, ids
 from manuspectrum.views.explorer.manifest import build_manifest, has_canvases
 from manuspectrum.views.explorer.scopes import resolve_scope
 from tests.explorer_fixtures import CANVAS, MANIFEST
@@ -286,6 +287,37 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(
             sorted(a["label"]["en"][0] for a in page["items"]),
             sorted(["X01 — f. 1v", "FORS_009 — f. 1v", "X03 — draft"]),
+        )
+
+    def test_the_zip_manifest_reads_each_document_once_per_kind(self):
+        self.tile(
+            self.analyses["on_document"],
+            "literal_location_of_analysis",
+            self.annotation_value(CANVAS_2, {"type": "Point", "coordinates": [5, -5]}),
+        )
+        kept = [self.pk("open"), self.pk("on_document")]
+        with mock.patch(FETCH, side_effect=fetched):
+            scope = resolve_scope(
+                QueryDict("ids=" + ",".join(f"an:{a}:-" for a in kept)), "en"
+            )
+            with mock.patch(
+                "manuspectrum.iiif.facts.document_facts",
+                wraps=facts.document_facts,
+            ) as read:
+                manifest = build_manifest(scope, embed=True)
+
+        self.assertEqual(read.call_count, 1)
+        pages = [c["annotations"] for c in manifest["items"]]
+        self.assertEqual(
+            [[p["id"] for p in canvas] for canvas in pages],
+            [[self.page_url(1, kept)], [self.page_url(2, [self.pk("on_document")])]],
+        )
+        self.assertEqual(
+            [
+                sorted(ids.annotated_resource(a["id"]) for a in canvas[0]["items"])
+                for canvas in pages
+            ],
+            [sorted(kept), [self.pk("on_document")]],
         )
 
     def test_a_local_manifest_is_read_from_the_database_not_over_http(self):

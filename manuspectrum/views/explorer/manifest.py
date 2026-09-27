@@ -327,6 +327,15 @@ def _references(plan, canvas_id):
     return references
 
 
+def _embedded_pages(placements):
+    """``(document id, kind, only)`` of each page the canvases of *placements* reference."""
+    for placement in placements:
+        for canvas_id in placement.kept:
+            if canvas_id in placement.raw:
+                for kind, only in _references(placement, canvas_id):
+                    yield placement.document, kind, only
+
+
 def build_manifest(scope, embed=False):
     """The IIIF Presentation 3 manifest of *scope*, every label in every language.
 
@@ -364,7 +373,11 @@ def build_manifest(scope, embed=False):
     if scope.kind == "project":
         named.add(scope.subject)
     name_of = names_of(named, scope.nodegroups)
-    embedded = EmbeddedPages(scope.read_manifest) if embed else None
+    embedded = (
+        EmbeddedPages(scope.read_manifest, _embedded_pages(plan.placements))
+        if embed
+        else None
+    )
     canvases, structures, unlocated, placed = Canvases(), [], [], set()
     layer_ranges = {}
 

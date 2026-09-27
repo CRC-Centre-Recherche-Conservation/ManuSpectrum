@@ -128,7 +128,10 @@ def _encoded(doc, zones, kind):
 
 
 def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
-    """AnnotationPage *n* of *doc*; *only* names the analysis ids it was restricted to."""
+    """AnnotationPage *n* of *doc*; *only*, a set of resource ids, keeps their annotations alone.
+
+    The page's id names *only* whether or not it holds each of them.
+    """
     if not 1 <= n <= len(doc.canvases):
         raise InvalidPage(n)
     pages = zones_by_page(doc, kind)
@@ -160,7 +163,10 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
                 "type": "AnnotationPage",
             }
     page["service"] = [services.auth1_block()]
-    page["items"] = _encoded(doc, pages.get(n, []), kind)
+    zones = pages.get(n, [])
+    if only is not None:
+        zones = [(fact, zone) for fact, zone in zones if fact.id in only]
+    page["items"] = _encoded(doc, zones, kind)
     return page if embed else with_context(page)
 
 
