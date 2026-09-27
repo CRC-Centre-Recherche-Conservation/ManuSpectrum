@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 00:50-0500\n"
+"POT-Creation-Date: 2026-09-27 01:42-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -230,26 +230,26 @@ msgid "Without a position on the image"
 msgstr ""
 
 #: iiif/manifest.py:160 views/explorer/export.py:385
-#: views/explorer/series.py:115
+#: views/explorer/series.py:117
 msgid "Contains drafts"
 msgstr ""
 
-#: iiif/pages.py:29
+#: iiif/pages.py:30
 #, python-format
 msgid "Analyses of %(name)s"
 msgstr "Analyses of %(name)s"
 
-#: iiif/pages.py:30
+#: iiif/pages.py:31
 #, python-format
 msgid "Analyses of %(name)s, %(canvas)s"
 msgstr "Analyses of %(name)s, %(canvas)s"
 
-#: iiif/pages.py:33
+#: iiif/pages.py:34
 #, python-format
 msgid "Identified materials of %(name)s"
 msgstr "Identified materials of %(name)s"
 
-#: iiif/pages.py:34
+#: iiif/pages.py:35
 #, python-format
 msgid "Identified materials of %(name)s, %(canvas)s"
 msgstr "Identified materials of %(name)s, %(canvas)s"
@@ -752,7 +752,8 @@ msgstr ""
 msgid ""
 "ELIO <code>.mca</code>: the energy axis in keV comes from the calibration "
 "lines of the header (a least-squares line through two or more points); "
-"without them, x is the channel index and the axis says <code>channel</code>."
+"without them, x is the channel index and its <code>quantity</code> is "
+"<code>channel</code>."
 msgstr ""
 
 #: templates/iiif/xy_reading_1.htm:56
@@ -4793,54 +4794,54 @@ msgid ""
 "fetched."
 msgstr ""
 
-#: views/explorer/series.py:83
+#: views/explorer/series.py:84
 #, python-format
 msgid "licence %(licence)s"
 msgstr ""
 
-#: views/explorer/series.py:85
+#: views/explorer/series.py:86
 #, python-format
 msgid "attribution %(text)s"
 msgstr ""
 
-#: views/explorer/series.py:87
+#: views/explorer/series.py:88
 #, python-format
 msgid "configuration %(name)s"
 msgstr ""
 
-#: views/explorer/series.py:92
+#: views/explorer/series.py:93
 #, python-format
 msgid "x axis %(label)s"
 msgstr ""
 
-#: views/explorer/series.py:94
+#: views/explorer/series.py:95
 #, python-format
 msgid "y axis %(label)s"
 msgstr ""
 
-#: views/explorer/series.py:95
+#: views/explorer/series.py:96
 #, python-format
 msgid "raw file %(url)s"
 msgstr ""
 
-#: views/explorer/series.py:111
+#: views/explorer/series.py:113
 #, python-format
 msgid "%(site)s: spectra of a Selection"
 msgstr ""
 
-#: views/explorer/series.py:112
+#: views/explorer/series.py:114
 #, python-format
 msgid "Generated on %(date)s"
 msgstr ""
 
-#: views/explorer/series.py:157
+#: views/explorer/series.py:160
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
 "%(url)s"
 msgstr ""
 
-#: views/explorer/series.py:172
+#: views/explorer/series.py:175
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr ""

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 00:50-0500\n"
+"POT-Creation-Date: 2026-09-27 01:42-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -228,26 +228,26 @@ msgid "Without a position on the image"
 msgstr "Sans position sur l'image"
 
 #: iiif/manifest.py:160 views/explorer/export.py:385
-#: views/explorer/series.py:115
+#: views/explorer/series.py:117
 msgid "Contains drafts"
 msgstr "Contient des brouillons"
 
-#: iiif/pages.py:29
+#: iiif/pages.py:30
 #, python-format
 msgid "Analyses of %(name)s"
 msgstr "Analyses de %(name)s"
 
-#: iiif/pages.py:30
+#: iiif/pages.py:31
 #, python-format
 msgid "Analyses of %(name)s, %(canvas)s"
 msgstr "Analyses de %(name)s, %(canvas)s"
 
-#: iiif/pages.py:33
+#: iiif/pages.py:34
 #, python-format
 msgid "Identified materials of %(name)s"
 msgstr "Matériaux identifiés de %(name)s"
 
-#: iiif/pages.py:34
+#: iiif/pages.py:35
 #, python-format
 msgid "Identified materials of %(name)s, %(canvas)s"
 msgstr "Matériaux identifiés de %(name)s, %(canvas)s"
@@ -771,18 +771,19 @@ msgstr ""
 
 #: templates/iiif/xy_reading_1.htm:53
 msgid "Instrument formats"
-msgstr "Formats d'instrument"
+msgstr "Formats des instruments"
 
 #: templates/iiif/xy_reading_1.htm:55
 msgid ""
 "ELIO <code>.mca</code>: the energy axis in keV comes from the calibration "
 "lines of the header (a least-squares line through two or more points); "
-"without them, x is the channel index and the axis says <code>channel</code>."
+"without them, x is the channel index and its <code>quantity</code> is "
+"<code>channel</code>."
 msgstr ""
 "ELIO <code>.mca</code> : l'axe d'énergie en keV vient des lignes de "
 "calibration de l'en-tête (une droite des moindres carrés par deux points ou "
-"plus) ; sans elles, x est l'indice du canal et l'axe l'indique par "
-"<code>channel</code>."
+"plus) ; sans elles, x est l'indice du canal et sa grandeur (<code>quantity</"
+"code>) est <code>channel</code>."
 
 #: templates/iiif/xy_reading_1.htm:56
 msgid ""
@@ -5004,47 +5005,47 @@ msgstr ""
 "Non inclus : le manifeste d'imagerie %(url)s de %(analysis)s n'a pas pu être "
 "récupéré."
 
-#: views/explorer/series.py:83
+#: views/explorer/series.py:84
 #, python-format
 msgid "licence %(licence)s"
 msgstr "licence %(licence)s"
 
-#: views/explorer/series.py:85
+#: views/explorer/series.py:86
 #, python-format
 msgid "attribution %(text)s"
 msgstr "attribution %(text)s"
 
-#: views/explorer/series.py:87
+#: views/explorer/series.py:88
 #, python-format
 msgid "configuration %(name)s"
 msgstr "configuration %(name)s"
 
-#: views/explorer/series.py:92
+#: views/explorer/series.py:93
 #, python-format
 msgid "x axis %(label)s"
 msgstr "axe x %(label)s"
 
-#: views/explorer/series.py:94
+#: views/explorer/series.py:95
 #, python-format
 msgid "y axis %(label)s"
 msgstr "axe y %(label)s"
 
-#: views/explorer/series.py:95
+#: views/explorer/series.py:96
 #, python-format
 msgid "raw file %(url)s"
 msgstr "fichier brut %(url)s"
 
-#: views/explorer/series.py:111
+#: views/explorer/series.py:113
 #, python-format
 msgid "%(site)s: spectra of a Selection"
 msgstr "%(site)s : spectres d'une Sélection"
 
-#: views/explorer/series.py:112
+#: views/explorer/series.py:114
 #, python-format
 msgid "Generated on %(date)s"
 msgstr "Produit le %(date)s"
 
-#: views/explorer/series.py:157
+#: views/explorer/series.py:160
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
@@ -5053,7 +5054,7 @@ msgstr ""
 "exclu : %(file)s — la licence %(licence)s interdit les œuvres dérivées ; "
 "fichier brut : %(url)s"
 
-#: views/explorer/series.py:172
+#: views/explorer/series.py:175
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
