@@ -254,11 +254,12 @@ describe("SelectionPanel", () => {
         expect(store.basket).toEqual([]);
     });
 
-    it("opens the Compare view", async () => {
+    it("opens the Compare view and says so, for a drawer holding it to close", async () => {
         const { wrapper, store } = mountPanel();
         await flushPromises();
         await wrapper.find("button.compare").trigger("click");
         expect(store.view).toBe("compare");
+        expect(wrapper.emitted("compare")).toHaveLength(1);
     });
 
     it("writes a map layer's label apart from the analysis name and its language", async () => {

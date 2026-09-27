@@ -7,6 +7,7 @@ import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/U
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
 import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
 
+import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import {
     ANNOUNCE_KEY,
@@ -53,6 +54,7 @@ const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
  * marked in « Hidden windows ». An XY window whose spectra did not change
  * keeps its curves, so its chart is not drawn again. A failure to read the
  * Selection offers a retry, before and after the windows are arranged.
+ * Its heading takes the focus when the shell asks (`SCREEN_FOCUS_KEY`).
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
@@ -61,6 +63,8 @@ const store = useExplorerStore();
 const selection = selectionItems();
 const { $gettext, interpolate } = useGettext();
 const root = useTemplateRef<HTMLElement>("root");
+const heading = useTemplateRef<HTMLElement>("heading");
+useScreenHeading(() => heading.value);
 
 const hidden = ref<string[]>(readHidden());
 /** Set once the Selection has been read: windows are arranged from then on. */
@@ -240,7 +244,9 @@ function showAll(): void {
     >
         <h2
             id="explorer-compare-title"
+            ref="heading"
             class="visually-hidden"
+            tabindex="-1"
         >
             <span>{{ $gettext("Compare") }}</span>
         </h2>

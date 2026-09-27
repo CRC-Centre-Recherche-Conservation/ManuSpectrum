@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 
@@ -7,6 +8,7 @@ import AnalysisExplorer from "@/manuspectrum/pages/AnalysisExplorer/AnalysisExpl
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { loadCompareView } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/load-compare-view.ts";
 import {
     analysisHit,
     analysisPayload,
@@ -25,6 +27,17 @@ vi.mock("gridstack", async () =>
             "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts"
         )
     ).gridstackModule(),
+);
+
+vi.mock(
+    "@/manuspectrum/pages/AnalysisExplorer/views/Compare/load-compare-view.ts",
+    async (importOriginal) => {
+        const actual =
+            await importOriginal<
+                typeof import("@/manuspectrum/pages/AnalysisExplorer/views/Compare/load-compare-view.ts")
+            >();
+        return { loadCompareView: vi.fn(actual.loadCompareView) };
+    },
 );
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
@@ -64,6 +77,110 @@ describe("AnalysisExplorer", () => {
         await flushPromises();
         expect(wrapper.find(".compare-view").exists()).toBe(true);
         expect(wrapper.find(".corpus-home").exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("says the Compare view could not be loaded, and loads it again on Retry", async () => {
+        const failure = vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.mocked(loadCompareView).mockRejectedValueOnce(
+            new Error("Loading chunk explorer-compare failed."),
+        );
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        useExplorerStore().setView("compare");
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(wrapper.find(".compare-view").exists()).toBe(false);
+        expect(wrapper.find(".unavailable-state").text()).toContain(
+            "The service is not answering right now.",
+        );
+        await wrapper.find(".unavailable-state .retry").trigger("click");
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(wrapper.find(".unavailable-state").exists()).toBe(false);
+        expect(wrapper.find(".compare-view").exists()).toBe(true);
+        failure.mockRestore();
+        wrapper.unmount();
+    });
+
+    it("shows that the Compare view is loading", async () => {
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        useExplorerStore().setView("compare");
+        await nextTick();
+        expect(wrapper.find(".compare-loading").attributes("role")).toBe(
+            "status",
+        );
+        expect(wrapper.find(".compare-loading").text()).toBe(
+            "Loading the Compare view…",
+        );
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(wrapper.find(".compare-loading").exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("reads the Selection once for every Compare view it opens", async () => {
+        const fetchMock = vi.fn(async (url: string) =>
+            url.includes("explorer-items")
+                ? jsonResponse({ items: [], missing: [KEY] })
+                : jsonResponse(searchResponse()),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        const store = useExplorerStore();
+        store.addToBasket(KEY);
+        for (const view of ["compare", "corpus", "compare"] as const) {
+            forgetPayloads();
+            store.setView(view);
+            await flushPromises();
+            await vi.dynamicImportSettled();
+            await flushPromises();
+        }
+        expect(wrapper.find(".compare-view .loading").exists()).toBe(false);
+        expect(
+            fetchMock.mock.calls.filter(([url]) =>
+                url.includes("explorer-items"),
+            ),
+        ).toHaveLength(1);
+        wrapper.unmount();
+    });
+
+    it("closes the Selection drawer on « Compare » and gives the focus to the Compare heading", async () => {
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia, PrimeVue] },
+            attachTo: document.body,
+        });
+        useExplorerStore().addToBasket(KEY);
+        await flushPromises();
+        await wrapper.find(".selection-drawer .opener").trigger("click");
+        await flushPromises();
+        document
+            .querySelector<HTMLButtonElement>(
+                ".explorer-selection-drawer button.compare",
+            )!
+            .click();
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(document.querySelector(".explorer-selection-drawer")).toBeNull();
+        expect(
+            wrapper
+                .find(".selection-drawer .opener")
+                .attributes("aria-expanded"),
+        ).toBe("false");
+        expect(document.activeElement?.id).toBe("explorer-compare-title");
         wrapper.unmount();
     });
 

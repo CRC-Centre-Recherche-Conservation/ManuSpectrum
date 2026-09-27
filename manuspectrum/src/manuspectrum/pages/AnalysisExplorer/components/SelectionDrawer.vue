@@ -15,7 +15,8 @@ const PHONE_QUERY = "(max-width: 30rem)";
  * The Selection's own entry, on every Corpus screen: a button with the
  * number of items that opens the Selection in a drawer on the right (from
  * the bottom on a phone). Closing it (Escape, its close button) gives the
- * focus back to the button.
+ * focus back to the button; « Compare » closes it and leaves the focus to
+ * the Compare view.
  */
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
@@ -23,6 +24,8 @@ const phone = useMediaQuery(PHONE_QUERY);
 const button = useTemplateRef<HTMLButtonElement>("button");
 
 const open = ref(false);
+/** Closed by « Compare »: the focus goes to the Compare view, not back to the button. */
+const leftForCompare = ref(false);
 
 const label = computed(() =>
     interpolate(
@@ -34,12 +37,21 @@ const label = computed(() =>
 
 watch(open, async (isOpen, wasOpen) => {
     if (isOpen || !wasOpen) return;
+    if (leftForCompare.value) {
+        leftForCompare.value = false;
+        return;
+    }
     await nextTick();
     button.value?.focus();
 });
 
 function show(): void {
     open.value = true;
+}
+
+function closeForCompare(): void {
+    leftForCompare.value = true;
+    open.value = false;
 }
 </script>
 
@@ -72,7 +84,7 @@ function show(): void {
                 },
             }"
         >
-            <SelectionPanel />
+            <SelectionPanel @compare="closeForCompare" />
         </Drawer>
     </div>
 </template>
