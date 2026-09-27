@@ -11,11 +11,11 @@ text format carries the reading ``read_series`` applies to it: the columns
 (``utils.instrument_formats``) reads from its own header and carries none.
 Nothing else is published: every key is one the Python reader honours.
 
-Axes: a native file states its own; a configuration with a ``presetKey``
-takes the row of ``QUANTITIES`` (labels rendered in every language); any
-other configuration gives its display labels under ``none`` and no
-quantity. The CSV header is the English label of each axis, made safe for
-xyviewer's header rules (``csv_header``).
+Axes: a native file states its own (label, quantity, unit); any other file
+takes the axis titles and the x direction of the configuration it is shown
+with, as stored (``display`` of its ``renderer_config`` row), under ``none``
+and without quantity. The CSV header is the label of each axis, made safe
+for xyviewer's header rules (``csv_header``).
 
 ``context_document`` is the JSON-LD 1.1 context of the extension, served at
 ``ids.xy_context()``; its terms live in the namespace ``ids.xy_doc() + "#"``,
@@ -28,15 +28,9 @@ import itertools
 import re
 from collections import namedtuple
 
-from django.utils.translation import gettext_noop
-
 from manuspectrum.iiif import ids
 from manuspectrum.iiif import language as lang
 from manuspectrum.utils.instrument_formats import (
-    COUNTS,
-    ENERGY,
-    REFLECTANCE,
-    WAVELENGTH,
     Axis,
     is_native,
     native_axes,
@@ -47,31 +41,8 @@ from manuspectrum.utils.xy_transforms import (
     multi_y_handling,
     resolve_columns,
 )
-from manuspectrum.views.explorer.values import _display
 
 RawFile = namedtuple("RawFile", "id name media_type path")
-
-WAVENUMBER = Axis(gettext_noop("Wavenumber (cm⁻¹)"), "wavenumber", "cm-1")
-ABSORBANCE = Axis(gettext_noop("Absorbance"), "absorbance", "1")
-ARBITRARY = Axis(gettext_noop("Intensity (a.u.)"), "intensity", "[arb'U]")
-INTENSITY_COUNTS = Axis(gettext_noop("Intensity (counts)"), "count", "{counts}")
-
-QUANTITIES = {
-    "xrf": (ENERGY, COUNTS),
-    "ftir": (WAVENUMBER, ABSORBANCE),
-    "ftir_reflection": (WAVENUMBER, REFLECTANCE),
-    "raman": (
-        Axis(gettext_noop("Raman shift (cm⁻¹)"), "ramanShift", "cm-1"),
-        ARBITRARY,
-    ),
-    "fors": (WAVELENGTH, REFLECTANCE),
-    "mass_spec": (Axis(gettext_noop("m/z"), "massToCharge", "1"), ARBITRARY),
-    "xrd": (Axis(gettext_noop("2θ (°)"), "twoTheta", "deg"), INTENSITY_COUNTS),
-    "uv_vis": (WAVELENGTH, ABSORBANCE),
-    "libs": (WAVELENGTH, INTENSITY_COUNTS),
-    "luminescence": (WAVELENGTH, ARBITRARY),
-    "colorimetry": (WAVELENGTH, REFLECTANCE),
-}
 
 DIALECT = {"delimiter": ",", "headerRowCount": 1, "encoding": "utf-8"}
 REFERENCE_NORMALIZE = {
@@ -107,28 +78,28 @@ def _native(file):
     return native_axes(file.path, file.name)
 
 
+def _stored_display(config):
+    """The ``display`` block of the configuration, as stored."""
+    display = (config or {}).get("display")
+    return display if isinstance(display, dict) else {}
+
+
 def axes(config, file=None):
-    """``(x, y, translated)``: the ``Axis`` of each side, and whether their labels are msgids."""
+    """``(x, y)``: the ``Axis`` of each side, the file's own when it is native, else the configuration's titles."""
     native = _native(file)
     if native:
-        return native[0], native[1], True
-    preset = QUANTITIES.get((config or {}).get("presetKey") or "")
-    if preset:
-        return preset[0], preset[1], True
-    display = _display(config)
+        return native[0], native[1]
+    display = _stored_display(config)
     return (
         Axis(str(display.get("xAxisLabel") or "").strip()),
         Axis(str(display.get("yAxisLabel") or "").strip()),
-        False,
     )
 
 
-def _axis(axis, translated):
+def _axis(axis):
     found = {}
     if axis.label:
-        found["label"] = (
-            lang.gettext_map(axis.label) if translated else lang.none(axis.label)
-        )
+        found["label"] = lang.none(axis.label)
     if axis.quantity:
         found["quantity"] = axis.quantity
     if axis.unit:
@@ -148,7 +119,7 @@ def _title(text, fallback, prefix):
 
 def csv_header(config, file=None):
     """``(x title, y title)`` of the clean CSV: English, no comma, never read as a number, y never taken for x."""
-    x_axis, y_axis, _ = axes(config, file)
+    x_axis, y_axis = axes(config, file)
     x = _title(x_axis.label, "x", "X")
     y = _title(y_axis.label, "y", "Y")
     if _X_PATTERN.match(y):
@@ -192,14 +163,16 @@ def derived_from(file, config):
 
 def xy_reading(file, config):
     """The ``xyReading`` of the clean CSV of *file* read under *config*."""
-    x_axis, y_axis, translated = axes(config, file)
-    reversed_x = False if _native(file) else bool(_display(config).get("xReversed"))
+    x_axis, y_axis = axes(config, file)
+    reversed_x = (
+        False if _native(file) else bool(_stored_display(config).get("xReversed"))
+    )
     return {
         "type": "XYReading",
         "dialect": dict(DIALECT),
         "columns": [{"index": 0, "role": "x"}, {"index": 1, "role": "yLeft"}],
-        "x": {**_axis(x_axis, translated), "reversed": reversed_x},
-        "y": [{"axis": "left", **_axis(y_axis, translated)}],
+        "x": {**_axis(x_axis), "reversed": reversed_x},
+        "y": [{"axis": "left", **_axis(y_axis)}],
         "corrections": [],
         "derivedFrom": derived_from(file, config),
     }

@@ -119,9 +119,7 @@ class DocumentExpansionTests(SimpleTestCase):
     def assert_reading_survives(self, extension):
         self.assertEqual(extension["@type"], [NS + "XYReading"])
         (axis,) = extension[NS + "xAxis"]
-        self.assertIn(
-            {"@value": "Wavelength (nm)", "@language": "en"}, axis[RDFS_LABEL]
-        )
+        self.assertIn({"@value": "Wavelength (nm)"}, axis[RDFS_LABEL])
         (derived,) = extension[PROV]
         self.assertEqual(derived["@id"], ids.data_raw(raw_file().id))
         self.assertEqual(derived["@type"], ["http://purl.org/dc/dcmitype/Dataset"])

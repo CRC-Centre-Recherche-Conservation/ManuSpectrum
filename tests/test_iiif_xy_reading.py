@@ -14,7 +14,7 @@ from unittest import mock
 from django.test import Client, SimpleTestCase
 from jsonschema import Draft7Validator
 
-from manuspectrum.constants.xy_presets import TECHNIQUE_PRESETS, XY_PRESETS
+from manuspectrum.constants.xy_presets import XY_PRESETS
 from manuspectrum.iiif import ids, xy_reading
 from manuspectrum.models import RendererConfig
 from manuspectrum.utils import spectrum_preview
@@ -40,21 +40,6 @@ def raw_file(name="S.csv"):
 def validator():
     with SCHEMA.open(encoding="utf-8") as handle:
         return Draft7Validator(json.load(handle))
-
-
-class QuantityTests(SimpleTestCase):
-    def test_every_preset_key_has_a_quantity_row(self):
-        keys = set(XY_PRESETS) | set(TECHNIQUE_PRESETS.values())
-
-        self.assertEqual(keys - set(xy_reading.QUANTITIES), set())
-
-    def test_the_quantity_labels_are_the_preset_axis_labels(self):
-        for key, preset in XY_PRESETS.items():
-            display = preset["config"]["display"]
-            x, y = xy_reading.QUANTITIES[key]
-            with self.subTest(key=key):
-                self.assertEqual(x.label, display["xAxisLabel"])
-                self.assertEqual(y.label, display["yAxisLabel"])
 
 
 class HeaderTests(SimpleTestCase):
@@ -102,11 +87,12 @@ class ReadingTests(SimpleTestCase):
             reading["columns"],
             [{"index": 0, "role": "x"}, {"index": 1, "role": "yLeft"}],
         )
-        self.assertEqual(reading["x"]["quantity"], "wavelength")
-        self.assertEqual(reading["x"]["unit"], "nm")
-        self.assertIs(reading["x"]["reversed"], False)
-        self.assertEqual(reading["y"][0]["axis"], "left")
-        self.assertEqual(reading["y"][0]["quantity"], "reflectance")
+        self.assertEqual(
+            reading["x"], {"label": {"none": ["Wavelength (nm)"]}, "reversed": False}
+        )
+        self.assertEqual(
+            reading["y"], [{"axis": "left", "label": {"none": ["Reflectance (0-1)"]}}]
+        )
         self.assertEqual(reading["corrections"], [])
 
     def test_the_raw_reading_names_what_apply_config_honours(self):
@@ -147,7 +133,7 @@ class ReadingTests(SimpleTestCase):
         self.assertNotIn("multiY", xrf)
         self.assertEqual(xrf["corrections"], [])
 
-    def test_a_curator_config_without_preset_gives_labels_without_quantity(self):
+    def test_a_curator_config_reads_like_a_preset(self):
         config = {"display": {"xAxisLabel": "Depth (µm)", "yAxisLabel": "Signal"}}
 
         reading = xy_reading.xy_reading(self.raw(), config)
@@ -156,11 +142,22 @@ class ReadingTests(SimpleTestCase):
         self.assertNotIn("quantity", reading["x"])
         self.assertNotIn("unit", reading["y"][0])
 
-    def test_labels_are_language_maps_rendered_per_language(self):
-        reading = xy_reading.xy_reading(self.raw(), FORS)
+    def test_a_preset_reads_the_titles_and_direction_stored_in_its_row(self):
+        stored = {
+            **XRF,
+            "display": {
+                "xAxisLabel": "Energy (eV)",
+                "yAxisLabel": "Net counts",
+                "xReversed": True,
+            },
+        }
 
-        self.assertEqual(set(reading["x"]["label"]), {"en", "fr"})
-        self.assertEqual(reading["x"]["label"]["en"], ["Wavelength (nm)"])
+        reading = xy_reading.xy_reading(self.raw(), stored)
+
+        self.assertEqual(reading["x"]["label"], {"none": ["Energy (eV)"]})
+        self.assertIs(reading["x"]["reversed"], True)
+        self.assertEqual(reading["y"][0]["label"], {"none": ["Net counts"]})
+        self.assertEqual(xy_reading.csv_header(stored), ("Energy (eV)", "Net counts"))
 
     def test_every_preset_serialises_to_a_schema_valid_xy_reading(self):
         check = validator()
