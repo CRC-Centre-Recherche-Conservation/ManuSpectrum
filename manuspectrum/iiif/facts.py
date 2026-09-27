@@ -546,8 +546,8 @@ def annotated_fact(resource_id, reader, feature_id=None):
     """``(kind, DocumentFacts, fact)`` of one analysis or identified material; None when unknown, ``REFUSED`` when unreadable.
 
     The document facts are those of the first observed object leading to a
-    visible Document; with *feature_id*, of the first such Document that
-    places that zone, else of the first.
+    visible Document that places a zone of the resource (with *feature_id*,
+    that zone), else of the first such Document.
     """
     found = _annotated(resource_id, reader)
     if found is None or found is REFUSED:
@@ -563,7 +563,7 @@ def annotated_fact(resource_id, reader, feature_id=None):
         else:
             doc = _build(target, document, [], reader, visible, readable, rid)
             fact = doc.characterizations[0]
-        if feature_id is None or any(z.feature == str(feature_id) for z in fact.zones):
+        if any(feature_id is None or z.feature == str(feature_id) for z in fact.zones):
             return kind, doc, fact
         first = first or (kind, doc, fact)
     return first or REFUSED

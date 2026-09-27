@@ -315,7 +315,8 @@ class AnnotationIdTests(RouteCase):
             annotation["id"], ids.annotation(analysis, FEATURES["on_document_1"])
         )
 
-    def test_a_zone_on_the_second_document_of_an_analysis_dereferences(self):
+    def analysis_zoned_on_its_second_document(self):
+        """``(analysis, feature, canvas)``: an analysis of two Documents with one zone, on the second."""
         other_manifest = "https://example.org/iiif/ms60/manifest"
         other_canvas = "https://example.org/iiif/ms60/canvas/f1r"
         other = self.new_resource("document", "Ms 60")
@@ -337,6 +338,10 @@ class AnnotationIdTests(RouteCase):
             },
         }
         self.fetch.side_effect = manifests.get
+        return analysis, feature, other_canvas
+
+    def test_a_zone_on_the_second_document_of_an_analysis_dereferences(self):
+        analysis, feature, other_canvas = self.analysis_zoned_on_its_second_document()
         url = ids.annotation(analysis.pk, feature)
 
         response = self.get(path_of(url))
@@ -346,6 +351,14 @@ class AnnotationIdTests(RouteCase):
         self.assertEqual(response.json()["target"]["source"]["id"], other_canvas)
         state = self.get(path_of(ids.content_state(analysis.pk, feature)))
         self.assertEqual(state.status_code, 200)
+
+    def test_the_first_zone_of_an_analysis_zoned_on_its_second_document(self):
+        analysis, feature, _ = self.analysis_zoned_on_its_second_document()
+
+        response = self.get(path_of(ids.annotation_first(analysis.pk)))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], ids.annotation(analysis.pk, feature))
 
     def test_a_feature_of_another_analysis_is_404(self):
         analysis = self.analyses["open"].pk
