@@ -108,24 +108,30 @@ def page_reference(document_id, name, n, canvas_label, kind="analysis", only=Non
     }
 
 
-def annotations_by_page(doc, kind="analysis"):
-    """``{page number: [annotation, …]}`` of the located zones of *kind*, in resource then zone order."""
-    if kind == "characterization":
-        facts, encode = doc.characterizations, characterization_annotation
-    else:
-        facts, encode = doc.analyses, analysis_annotation
+def zones_by_page(doc, kind="analysis"):
+    """``{page number: [(fact, zone), …]}`` of the located zones of *kind*, in resource then zone order."""
+    facts = doc.characterizations if kind == "characterization" else doc.analyses
     pages = {}
     for fact in facts:
         for zone in fact.zones:
-            pages.setdefault(zone.position, []).append(encode(doc, fact, zone))
+            pages.setdefault(zone.position, []).append((fact, zone))
     return pages
+
+
+def _encoded(doc, zones, kind):
+    """The annotations of *zones* (``(fact, zone)`` pairs), in order."""
+    if kind == "characterization":
+        encode = characterization_annotation
+    else:
+        encode = analysis_annotation
+    return [encode(doc, fact, zone) for fact, zone in zones]
 
 
 def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
     """AnnotationPage *n* of *doc*; *only* names the analysis ids it was restricted to."""
     if not 1 <= n <= len(doc.canvases):
         raise InvalidPage(n)
-    pages = annotations_by_page(doc, kind)
+    pages = zones_by_page(doc, kind)
     page = {}
     page.update(
         id=ids.page(doc.document_id, n, kind, only=only),
@@ -154,7 +160,7 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
                 "type": "AnnotationPage",
             }
     page["service"] = [services.auth1_block()]
-    page["items"] = pages.get(n, [])
+    page["items"] = _encoded(doc, pages.get(n, []), kind)
     return page if embed else with_context(page)
 
 
@@ -181,12 +187,12 @@ def filtered_page(page, only):
 
 def page_numbers(doc, kind="analysis"):
     """The numbers of the pages holding an annotation of *kind*, in order."""
-    return sorted(annotations_by_page(doc, kind))
+    return sorted(zones_by_page(doc, kind))
 
 
 def annotation_collection(doc, kind="analysis"):
     """The AnnotationCollection of *doc*: label, ``total``, ``first`` and ``last``; no ``items``."""
-    pages = annotations_by_page(doc, kind)
+    pages = zones_by_page(doc, kind)
     collection = {
         "id": ids.collection(doc.document_id, kind),
         "type": "AnnotationCollection",
