@@ -250,21 +250,24 @@ def _local_path(path):
 def plots(entry):
     """Whether the server draws a file-list *entry* as a spectrum.
 
-    It names a renderer configuration, or ``read_series`` reads its format
-    (``is_readable``: a text format of ``XY_TEXT_FILE_FORMATS`` or a format
-    read natively, such as ``.mca`` and ``.asd``).
+    ``read_series`` reads its format (``is_readable``: a text format of
+    ``XY_TEXT_FILE_FORMATS`` or a format read natively, such as ``.mca`` and
+    ``.asd``), the rule of the spectrum preview, of the summary popup and of
+    the IIIF clean CSV.
     """
-    return bool(entry.get("rendererConfig")) or is_readable(
-        str(entry.get("name") or "")
-    )
+    return is_readable(str(entry.get("name") or ""))
 
 
 def _raw_extensions():
     return {e.lower() for e in settings.RAW_INSTRUMENT_EXTENSIONS}
 
 
-def file_entries(entries, *, language, configs, kind):
+def file_entries(entries, *, language, configs, kind, native=None):
     """``FileEntry`` list of one file-list value (D39).
+
+    The axes of a file come from the renderer configuration it names
+    (*configs*), else from *native*: ``{file id: configuration}`` naming the
+    axes a native instrument file's header states (``native_configs``).
 
     A file the server draws (``plots``) is ``readable`` (a spectrum when
     *kind* is ``"measurement"``); another extension of
@@ -288,7 +291,11 @@ def file_entries(entries, *, language, configs, kind):
             if plots(entry)
             else "raw" if extension.lower() in raw_extensions else "other"
         )
-        config = configs.get(config_id) if config_id else None
+        config = (
+            configs.get(config_id)
+            if config_id
+            else (native or {}).get(str(entry["file_id"]))
+        )
         if kind == "micro-imaging":
             data_kind = "micro-imaging"
         else:

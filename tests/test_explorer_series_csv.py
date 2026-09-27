@@ -7,6 +7,7 @@ Usage:
 import csv
 import io
 import uuid
+from pathlib import Path
 from unittest import mock, skipUnless
 
 from django.conf import settings
@@ -270,6 +271,16 @@ class SeriesCsvTests(CorpusCase):
         self.assertEqual(
             [c.args[0].rsplit("/", 1)[-1] for c in read.call_args_list], ["Z.mca"]
         )
+
+    def test_a_native_curve_names_the_axes_its_header_states(self):
+        mca = Path(__file__).parent / "fixtures" / "xy" / "elio_xrf.mca"
+        self.stored_file(self.analyses["on_document"], "Z.mca", mca.read_bytes())
+
+        comments, _ = self.split(self.text(self.selection("on_document")))
+
+        (curve,) = [c for c in comments if c.startswith("# c1:")]
+        self.assertIn("x axis Energy (keV)", curve)
+        self.assertIn("y axis Counts", curve)
 
     def test_a_file_over_the_preview_ceiling_is_named_not_read(self):
         file_id = self.spectrum(name="Big.csv")

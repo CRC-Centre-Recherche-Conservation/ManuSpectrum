@@ -763,6 +763,33 @@ class AnalysisRouteTests(CorpusCase):
         for entry in payload["contentStates"]:
             assert_shape(self, entry, "ContentStateLink")
 
+    def test_a_native_instrument_file_names_the_axes_its_header_states(self):
+        fixtures = Path(__file__).parent / "fixtures" / "xy"
+        self.stored_file(
+            self.analyses["on_document"],
+            "X.mca",
+            (fixtures / "elio_xrf.mca").read_bytes(),
+        )
+        self.stored_file(
+            self.analyses["on_document"],
+            "F.asd",
+            (fixtures / "asd_fieldspec_as8.asd").read_bytes(),
+        )
+
+        payload = self.get(self.analyses["on_document"].pk).json()
+
+        files = {f["name"]: f["viewer"] for f in payload["files"]}
+        self.assertEqual(
+            (files["X.mca"]["xLabel"], files["X.mca"]["yLabel"]),
+            ("Energy (keV)", "Counts"),
+        )
+        self.assertEqual(
+            (files["F.asd"]["xLabel"], files["F.asd"]["yLabel"]),
+            ("Wavelength (nm)", "Reflectance (0-1)"),
+        )
+        self.assertTrue(files["X.mca"]["axisKey"])
+        self.assertNotEqual(files["X.mca"]["axisKey"], files["F.asd"]["axisKey"])
+
     def test_a_native_instrument_file_without_configuration_plots(self):
         self.tile(
             self.analyses["on_document"],

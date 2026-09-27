@@ -2,8 +2,8 @@
 
 One row per point, ``curve,analysis,file,x,y``, after lines opening with ``#``
 that name the Selection, its drafts, each analysis's
-permalink and, per curve, its licence, attribution, renderer configuration
-and raw file. The curve is the one the XY reader draws: the file's renderer
+permalink and, per curve, its licence, attribution, renderer configuration,
+axes and raw file. The curve is the one the XY reader draws: the file's renderer
 configuration decides its columns and normalisation; it is never decimated.
 """
 
@@ -87,6 +87,11 @@ def _curve_line(number, name, entry, entries, config, config_id):
         _("configuration %(name)s")
         % {"name": (config or {}).get("presetKey") or config_id or "-"}
     )
+    viewer = entry.get("viewer") or {}
+    if viewer.get("xLabel"):
+        parts.append(_("x axis %(label)s") % {"label": viewer["xLabel"]})
+    if viewer.get("yLabel"):
+        parts.append(_("y axis %(label)s") % {"label": viewer["yLabel"]})
     parts.append(_("raw file %(url)s") % {"url": _file_url(entry, entries)})
     return "; ".join(parts)
 
@@ -95,9 +100,10 @@ def _plan(scope):
     """``(comment lines, curves)`` of *scope*; each curve is ``(label, analysis id, file id, path, config)``.
 
     A readable XY entry ``scope_files`` refuses is left out without a line.
-    One under a no-derivatives licence, one outside ``XY_TEXT_FILE_FORMATS``
-    or over ``SPECTRUM_PREVIEW_MAX_BYTES`` gets a comment line naming its
-    file and is never read.
+    One under a no-derivatives licence, one in a format ``read_series`` does
+    not read (``is_readable``) or over ``SPECTRUM_PREVIEW_MAX_BYTES`` gets a
+    comment line naming its file and is never read. Each curve's line names
+    its axes when its configuration or its native header states them.
     """
     values = Values(list(scope.analyses), ["files", "micro", "imaging"], scope.reader)
     configs = renderer_configs(values, scope.analyses)
