@@ -5,10 +5,13 @@ import { useGettext } from "vue3-gettext";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
+import ToolMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue";
+import ToolWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue";
 import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
 
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
+import { useSynthesis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
 import {
     ANNOUNCE_KEY,
     SELECTION_ITEMS_KEY,
@@ -17,8 +20,16 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     forgetWindows,
     readHidden,
+    readTools,
     writeHidden,
+    writeTools,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
+import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
+import {
+    OFFERED_TOOLS,
+    offeredTools,
+    staleToolFilters,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 import {
     autoWindows,
     keepUnchangedCurves,
@@ -35,12 +46,21 @@ import type {
     AutoWindowKind,
     XyWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
+import type { ToolWindow } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { OfferedTool } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 
 const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
     xy: "M",
     micro: "M",
     characterizations: "L",
     "not-in-chart": "S",
+};
+
+const TOOL_SIZE: Record<OfferedTool, WindowSize> = {
+    coverage: "L",
+    "colour-material": "L",
+    periodic: "L",
+    folio: "M",
 };
 
 /**
@@ -55,16 +75,28 @@ const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
  * keeps its curves, so its chart is not drawn again. A failure to read the
  * Selection offers a retry, before and after the windows are arranged.
  * Its heading takes the focus when the shell asks (`SCREEN_FOCUS_KEY`).
+ *
+ * The tools (D60) are opened from « + Tool », which offers those the
+ * synthesis of the Selection (`useSynthesis`, read while the view is shown)
+ * has something for. A tool window follows the grid like the others,
+ * after them; « Close » closes the tool. The tools open are kept with the
+ * layout and opened again with the view; a tool filter naming a value the
+ * Selection no longer holds is dropped.
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
 
 const store = useExplorerStore();
 const selection = selectionItems();
+const synthesis = useSynthesis(() => store.basket.map((item) => item.key));
 const { $gettext, interpolate } = useGettext();
 const root = useTemplateRef<HTMLElement>("root");
 const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
+
+if (store.compare.tools.length === 0) {
+    for (const tool of readTools()) store.openTool(tool.kind, tool.params);
+}
 
 const hidden = ref<string[]>(readHidden());
 /** Set once the Selection has been read: windows are arranged from then on. */
@@ -96,8 +128,31 @@ const specs = computed<CompareWindowSpec[]>(() =>
         folded: window.kind === "xy" ? window.folded : undefined,
     })),
 );
-const shownSpecs = computed(() =>
-    specs.value.filter((spec) => !hidden.value.includes(spec.id)),
+const tools = computed(() =>
+    store.compare.tools.filter(
+        (tool): tool is ToolWindow & { kind: OfferedTool } =>
+            OFFERED_TOOLS.some((kind) => kind === tool.kind),
+    ),
+);
+const toolById = computed(
+    () => new Map(tools.value.map((tool) => [tool.id, tool])),
+);
+const toolSpecs = computed<CompareWindowSpec[]>(() => {
+    const titles = toolTitles($gettext);
+    return tools.value.map((tool) => ({
+        id: tool.id,
+        title: titles[tool.kind],
+        size: TOOL_SIZE[tool.kind],
+    }));
+});
+const gridSpecs = computed(() => [
+    ...specs.value.filter((spec) => !hidden.value.includes(spec.id)),
+    ...toolSpecs.value,
+]);
+const offered = computed(() =>
+    synthesis.status.value === "ready" && synthesis.data.value
+        ? offeredTools(synthesis.data.value)
+        : null,
 );
 const hiddenSpecs = computed(() =>
     specs.value.filter((spec) => hidden.value.includes(spec.id)),
@@ -118,10 +173,26 @@ watch(
         if (!opened.value) known = windows.value;
         opened.value = true;
         const ids = windowIdsOf(windows.value);
-        forgetWindows(ids);
+        forgetWindows([...ids, ...tools.value.map((tool) => tool.id)]);
         const kept = hidden.value.filter((id) => ids.includes(id));
         if (kept.length !== hidden.value.length) hidden.value = kept;
         refreshed.value = refreshed.value.filter((id) => kept.includes(id));
+    },
+    { immediate: true },
+);
+
+watch(
+    () => store.compare.tools,
+    (open) => writeTools(open),
+);
+
+watch(
+    () => (synthesis.status.value === "ready" ? synthesis.data.value : null),
+    (answer) => {
+        if (!answer) return;
+        for (const key of staleToolFilters(answer, store.compare.toolFilters)) {
+            store.setToolFilter(key, null);
+        }
     },
     { immediate: true },
 );
@@ -204,7 +275,13 @@ function setHidden(ids: string[]): void {
 async function closeWindow({ id }: { id: string }): Promise<void> {
     const spec = specs.value.find((entry) => entry.id === id);
     if (!windowById.value.has(id) || !spec) {
+        const title = toolSpecs.value.find((entry) => entry.id === id)?.title;
         store.closeTool(id);
+        if (title) {
+            announce(
+                interpolate($gettext("%{title} closed."), { title }, true),
+            );
+        }
         return;
     }
     setHidden([...hidden.value, id]);
@@ -215,7 +292,7 @@ async function closeWindow({ id }: { id: string }): Promise<void> {
             true,
         ),
     );
-    if (shownSpecs.value.length === 0) {
+    if (gridSpecs.value.length === 0) {
         await nextTick();
         root.value
             ?.querySelector<HTMLElement>(".hidden-windows button")
@@ -226,6 +303,15 @@ async function closeWindow({ id }: { id: string }): Promise<void> {
 async function showWindow(id: string): Promise<void> {
     setHidden(hidden.value.filter((entry) => entry !== id));
     refreshed.value = refreshed.value.filter((entry) => entry !== id);
+    await nextTick();
+    windowElement(id)?.focus();
+}
+
+/** Opens a tool once; a tool already open takes the focus. */
+async function chooseTool({ kind }: { kind: OfferedTool }): Promise<void> {
+    const known = store.compare.tools.map((tool) => tool.id);
+    const id = store.openTool(kind);
+    if (!known.includes(id)) return;
     await nextTick();
     windowElement(id)?.focus();
 }
@@ -310,16 +396,31 @@ function showAll(): void {
                 </ul>
             </section>
             <WindowGrid
-                v-if="specs.length > 0"
-                :windows="shownSpecs"
+                v-if="specs.length > 0 || toolSpecs.length > 0"
+                :windows="gridSpecs"
                 :retained="hidden"
                 @close="closeWindow"
                 @rearrange="showAll"
             >
+                <template #toolbar>
+                    <ToolMenu
+                        :offered="offered"
+                        :status="synthesis.status.value"
+                        @choose="chooseTool"
+                        @retry="synthesis.retry"
+                    />
+                </template>
                 <template #default="{ window: spec }">
                     <AutoWindowBody
                         v-if="windowById.get(spec.id)"
                         :window="windowById.get(spec.id)!"
+                    />
+                    <ToolWindowBody
+                        v-else-if="toolById.get(spec.id)"
+                        :kind="toolById.get(spec.id)!.kind"
+                        :status="synthesis.status.value"
+                        :synthesis="synthesis.data.value"
+                        @retry="synthesis.retry"
                     />
                 </template>
             </WindowGrid>

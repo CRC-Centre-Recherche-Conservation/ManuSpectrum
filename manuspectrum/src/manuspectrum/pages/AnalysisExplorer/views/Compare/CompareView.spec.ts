@@ -11,6 +11,7 @@ import {
     analysisHit,
     characterization,
     fileEntry,
+    technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { resetFakeGrids } from "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts";
@@ -26,6 +27,7 @@ import type { VueWrapper } from "@vue/test-utils";
 import type {
     FileEntry,
     Item,
+    SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 vi.mock("gridstack", async () =>
@@ -43,7 +45,10 @@ vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", async () =>
 );
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
-    generateArchesURL: () => "/en/api/explorer/items",
+    generateArchesURL: (name: string) =>
+        name.endsWith("synthesis")
+            ? "/en/api/explorer/synthesis"
+            : "/en/api/explorer/items",
 }));
 
 const XRF = "counts|energy (kev)|asc";
@@ -52,6 +57,22 @@ const FORS = "reflectance|wavelength|asc";
 const FTIR = "reflectance|wavenumber|desc";
 
 const SERIES_PATH = "/api/spectrum-preview/";
+const SYNTHESIS_PATH = "/en/api/explorer/synthesis";
+
+const SYNTHESIS: SynthesisResponse = {
+    coverage: [
+        {
+            canvas: "https://iiif.example/c1",
+            label: "f. 12r",
+            document: uuid(1),
+            counts: { xrf: 1 },
+        },
+    ],
+    techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
+    pairs: [],
+    elements: [{ symbol: "Cu", level: null, count: 1 }],
+    unpublishedCount: 0,
+};
 
 function spectrum(n: number, axisKey: string, extra = {}): FileEntry {
     const base = fileEntry();
@@ -114,6 +135,7 @@ const ITEMS = new Map(
 let pinia: Pinia;
 let announce: ReturnType<typeof vi.fn>;
 let fetchMock: ReturnType<typeof vi.fn>;
+let synthesis: SynthesisResponse;
 let wrapper: VueWrapper | null = null;
 
 beforeEach(() => {
@@ -122,7 +144,9 @@ beforeEach(() => {
     window.localStorage.clear();
     announce = vi.fn();
     resetPlotly();
+    synthesis = SYNTHESIS;
     fetchMock = vi.fn(async (url: string) => {
+        if (url.startsWith(SYNTHESIS_PATH)) return jsonResponse(synthesis);
         if (url.startsWith(SERIES_PATH)) {
             return jsonResponse({
                 x: [1, 2],
@@ -153,11 +177,23 @@ function select(...items: Item[]): void {
     useExplorerStore().addManyToBasket(items.map((item) => item.key));
 }
 
-/** The requests of the items API, the spectra left out. */
+/** The requests of the items API. */
 function itemCalls(): string[] {
     return fetchMock.mock.calls
         .map(([url]) => String(url))
-        .filter((url) => !url.startsWith(SERIES_PATH));
+        .filter((url) => url.startsWith("/en/api/explorer/items"));
+}
+
+function synthesisCalls(): string[] {
+    return fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((url) => url.startsWith(SYNTHESIS_PATH));
+}
+
+async function openTool(view: VueWrapper, kind: string): Promise<void> {
+    await view.find("button.tool-menu-button").trigger("click");
+    await view.find(`[role="menuitem"][data-tool="${kind}"]`).trigger("click");
+    await flushPromises();
 }
 
 function seriesCalls(): string[] {
@@ -190,7 +226,11 @@ function windowOf(view: VueWrapper, id: string) {
         .find((item) => item.attributes("data-window-id") === id)!;
 }
 
-function storedLayout(): { boxes: object; hidden: string[] } | null {
+function storedLayout(): {
+    boxes: Record<string, object>;
+    hidden: string[];
+    tools?: object[];
+} | null {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
     return raw === null ? null : JSON.parse(raw);
 }
@@ -492,5 +532,114 @@ describe("CompareView", () => {
         select(MICRO_ITEM);
         await flushPromises();
         expect(plotly.react).toHaveBeenCalledTimes(drawings);
+    });
+
+    describe("tools", () => {
+        it("reads the synthesis of the Selection once, and offers the tools it has something for", async () => {
+            select(XRF_ITEM, MATERIAL);
+            const view = await mountView();
+            expect(synthesisCalls()).toHaveLength(1);
+            await view.find("button.tool-menu-button").trigger("click");
+            expect(
+                view.findAll('[role="menuitem"]').map((item) => item.text()),
+            ).toEqual(["Coverage matrix", "Periodic table", "Folio image"]);
+        });
+
+        it("opens a tool in a window at the end, kept with the layout", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            expect(windowIds(view)).toEqual([
+                `auto:xy:${XRF}`,
+                "tool:periodic:-",
+            ]);
+            expect(windowOf(view, "tool:periodic:-").find("h3").text()).toBe(
+                "Periodic table",
+            );
+            expect(
+                windowOf(view, "tool:periodic:-")
+                    .find('.grid button[aria-label="Cu, 1"]')
+                    .exists(),
+            ).toBe(true);
+            expect(storedLayout()?.tools).toEqual([
+                { kind: "periodic", params: {} },
+            ]);
+            expect(announce).toHaveBeenCalledWith(
+                "New window at the end: Periodic table",
+            );
+        });
+
+        it("opens the tools of the last visit again, in their places", async () => {
+            select(XRF_ITEM);
+            const box = { x: 0, y: 5, w: 12, h: 6 };
+            window.localStorage.setItem(
+                LAYOUT_STORAGE_KEY,
+                JSON.stringify({
+                    version: 2,
+                    boxes: { "tool:coverage:-": box },
+                    hidden: [],
+                    tools: [{ kind: "coverage", params: {} }],
+                }),
+            );
+            const view = await mountView();
+            expect(windowIds(view)).toContain("tool:coverage:-");
+            expect(storedLayout()?.boxes["tool:coverage:-"]).toEqual(box);
+            expect(
+                useExplorerStore().compare.tools.map((tool) => tool.id),
+            ).toEqual(["tool:coverage:-"]);
+        });
+
+        it("keeps a tool and its place when the Selection changes", async () => {
+            select(XRF_ITEM, MATERIAL);
+            const view = await mountView();
+            await openTool(view, "coverage");
+            useExplorerStore().removeFromBasket(MATERIAL.key);
+            await flushPromises();
+            expect(windowIds(view)).toContain("tool:coverage:-");
+            expect(storedLayout()?.boxes).toHaveProperty("tool:coverage:-");
+            expect(synthesisCalls()).toHaveLength(2);
+        });
+
+        it("closes a tool on « Close », unlike a window arranged from the Selection", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "coverage");
+            await windowOf(view, "tool:coverage:-")
+                .find('[data-action="close"]')
+                .trigger("click");
+            await flushPromises();
+            expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
+            expect(view.find(".hidden-windows").exists()).toBe(false);
+            expect(useExplorerStore().compare.tools).toEqual([]);
+            expect(storedLayout()?.tools).toBeUndefined();
+            expect(storedLayout()?.boxes).not.toHaveProperty("tool:coverage:-");
+            expect(announce).toHaveBeenLastCalledWith(
+                "Coverage matrix closed.",
+            );
+        });
+
+        it("keeps the tools open when the windows are rearranged", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            await view.find("button.rearrange").trigger("click");
+            await flushPromises();
+            expect(windowIds(view)).toContain("tool:periodic:-");
+            expect(storedLayout()?.tools).toEqual([
+                { kind: "periodic", params: {} },
+            ]);
+        });
+
+        it("drops a tool filter whose value left with the Selection", async () => {
+            select(XRF_ITEM);
+            const store = useExplorerStore();
+            store.setToolFilter("element", "Cu");
+            await mountView();
+            expect(store.compare.toolFilters.element).toBe("Cu");
+            synthesis = { ...SYNTHESIS, elements: [] };
+            select(MATERIAL);
+            await flushPromises();
+            expect(store.compare.toolFilters.element).toBeNull();
+        });
     });
 });
