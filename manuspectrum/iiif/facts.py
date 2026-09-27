@@ -22,9 +22,10 @@ source manifest does not list leaves its analysis unlocated. A source
 manifest named but unreadable leaves the Document without canvases and marks
 the memo build degraded (``memo.mark_degraded``).
 
-``document_facts``, ``subject_of``, ``annotated_access`` and
-``annotated_fact`` take *version*, the ``data_version()`` the request read
-once, and read it themselves only without one.
+``document_facts``, ``subject_of`` and ``annotated_access`` take
+*version*, the ``data_version()`` the request read once, and read it
+themselves only without one. ``annotated_fact`` and ``annotated_zone``
+continue from what ``annotated_access`` read (``Annotated``).
 
 Identified materials (characterizations) are those of
 ``visible_set(reader).characterizations`` observing the subject (or, for a
@@ -313,13 +314,10 @@ def _subject(resource_id, reader, visible):
     """``(slug, document id)`` of a Document or Component *reader* may see; None otherwise.
 
     A Component leads to its first visible Document through a readable link.
+    The resource row is read once and handed to ``user_can_read_resource``.
     """
-    row = (
-        ResourceInstance.objects.filter(pk=resource_id)
-        .values_list("graph_id", flat=True)
-        .first()
-    )
-    slug = _slug_of(row) if row else None
+    row = ResourceInstance.objects.filter(pk=resource_id).first()
+    slug = _slug_of(row.graph_id) if row else None
     rid = str(resource_id)
     if slug == "document" and rid in visible.documents:
         document = rid
@@ -338,7 +336,7 @@ def _subject(resource_id, reader, visible):
         document = parents[0]
     else:
         return None
-    if not user_can_read_resource(reader, resourceid=rid):
+    if not user_can_read_resource(reader, resource=row):
         return None
     return slug, document
 
@@ -457,6 +455,7 @@ def document_facts(
     read=None,
     version=None,
     positions=None,
+    subject=None,
 ):
     """``DocumentFacts`` of a Document or Component for *reader*; None when unknown or unreadable.
 
@@ -466,10 +465,12 @@ def document_facts(
     them (``frozenset()`` builds none). ``placed`` counts the zones of every
     resource *only* keeps, whatever *positions* keeps. *read* reads the
     source manifest by URL (a caller's memoised reader), else
-    ``manifest_json``.
+    ``manifest_json``. *subject* is what ``subject_of`` returned for the
+    same resource, reader and version, else read here.
     """
     visible = visible_set(reader, version)
-    subject = _subject(resource_id, reader, visible)
+    if subject is None:
+        subject = _subject(resource_id, reader, visible)
     if subject is None:
         return None
     slug, document = subject
@@ -524,19 +525,15 @@ ANNOTATED = {
 
 def _annotated(resource_id, reader, version=None):
     """``(kind, visible)`` of an analysis or identified material *reader* may read, None or ``REFUSED`` as ``annotated_access``."""
-    graph_id = (
-        ResourceInstance.objects.filter(pk=resource_id)
-        .values_list("graph_id", flat=True)
-        .first()
-    )
-    kind = _slug_of(graph_id) if graph_id is not None else None
+    row = ResourceInstance.objects.filter(pk=resource_id).first()
+    kind = _slug_of(row.graph_id) if row is not None else None
     if kind not in ANNOTATED:
         return None
     attribute, _ = ANNOTATED[kind]
     visible = visible_set(reader, version)
     rid = str(resource_id)
     if rid not in getattr(visible, attribute) or not user_can_read_resource(
-        reader, resourceid=rid
+        reader, resource=row
     ):
         return REFUSED
     return kind, visible
@@ -555,57 +552,130 @@ def _observed_subjects(kind, resource_id, reader, visible):
                 yield target, subject
 
 
-def annotated_access(resource_id, reader, version=None):
-    """``(kind, observed object id, (slug, document id))`` of an analysis or identified material *reader* may read.
+class Annotated:
+    """An analysis or identified material *reader* may read, and the observed objects leading it to a visible Document.
 
-    *kind* is ``analysis`` or ``characterization``. None when *resource_id*
-    is neither; ``REFUSED`` when the reader may not read it (outside its
-    ``visible_set`` set, or refused by ``user_can_read_resource``), or when
-    none of its observed objects leads the reader to a visible Document.
+    ``subjects()`` yields ``(observed object id, (slug, document id))`` in
+    tile order; each is read once, when first reached, whoever iterates.
+    """
+
+    def __init__(self, kind, resource_id, reader, visible):
+        self.kind = kind
+        self.id = str(resource_id)
+        self.reader = reader
+        self.visible = visible
+        self._pending = _observed_subjects(kind, resource_id, reader, visible)
+        self._read = []
+
+    def subjects(self):
+        yield from self._read
+        for subject in self._pending:
+            self._read.append(subject)
+            yield subject
+
+    def placements(self):
+        """``(observed object id, document id, Source, zones)`` of each subject, *zones* the resource's ``[Zone, …]`` on that Document."""
+        readable = readable_nodegroup_ids(self.reader)
+        for target, (_, document) in self.subjects():
+            source = _source(document, readable)
+            if self.kind == "analysis":
+                zones = _located(
+                    role_node(*ROLES["zone"]),
+                    [self.id],
+                    source.dims,
+                    source.position,
+                    readable,
+                )
+            else:
+                zones = _characterization_zones(
+                    [self.id], self.visible, readable, source
+                )
+            yield target, document, source, zones.get(self.id, [])
+
+
+def annotated_access(resource_id, reader, version=None):
+    """The ``Annotated`` analysis or identified material *resource_id*, when *reader* may read it.
+
+    Its ``kind`` is ``analysis`` or ``characterization``. None when
+    *resource_id* is neither; ``REFUSED`` when the reader may not read it
+    (outside its ``visible_set`` set, or refused by
+    ``user_can_read_resource``), or when none of its observed objects leads
+    the reader to a visible Document.
     """
     found = _annotated(resource_id, reader, version)
     if found is None or found is REFUSED:
         return found
     kind, visible = found
-    for target, subject in _observed_subjects(kind, resource_id, reader, visible):
-        return kind, target, subject
+    access = Annotated(kind, resource_id, reader, visible)
+    for _ in access.subjects():
+        return access
     return REFUSED
 
 
-def annotated_fact(resource_id, reader, feature_id=None, version=None):
-    """``(kind, DocumentFacts, fact)`` of one analysis or identified material; None when unknown, ``REFUSED`` when unreadable.
+def annotated_fact(access, feature_id=None):
+    """``(kind, DocumentFacts, fact)`` of the ``Annotated`` *access*.
 
     The document facts are those of the first observed object leading to a
     visible Document that places a zone of the resource (with *feature_id*,
-    that zone), else of the first such Document.
+    that zone), else of the first such Document; None without any.
     """
-    found = _annotated(resource_id, reader, version)
-    if found is None or found is REFUSED:
-        return found
-    kind, visible = found
-    readable = readable_nodegroup_ids(reader)
-    rid = [str(resource_id)]
-    first = None
-    for target, (_, document) in _observed_subjects(kind, resource_id, reader, visible):
-        if kind == "analysis":
-            doc = _build(target, document, rid, reader, visible, readable)
-            fact = doc.analyses[0]
-        else:
-            doc = _build(target, document, [], reader, visible, readable, rid)
-            fact = doc.characterizations[0]
-        if any(feature_id is None or z.feature == str(feature_id) for z in fact.zones):
-            return kind, doc, fact
-        first = first or (kind, doc, fact)
-    return first or REFUSED
+    readable = readable_nodegroup_ids(access.reader)
+    chosen = None
+    for placement in access.placements():
+        zones = placement[3]
+        if any(feature_id is None or z.feature == str(feature_id) for z in zones):
+            chosen = placement
+            break
+        chosen = chosen or placement
+    if chosen is None:
+        return None
+    target, document, source, zones = chosen
+    rid = [access.id]
+    placed = {access.id: zones} if zones else {}
+    if access.kind == "analysis":
+        doc = _build(
+            target,
+            document,
+            rid,
+            access.reader,
+            access.visible,
+            readable,
+            source=source,
+            zones=placed,
+        )
+        return access.kind, doc, doc.analyses[0]
+    doc = _build(
+        target,
+        document,
+        [],
+        access.reader,
+        access.visible,
+        readable,
+        rid,
+        source=source,
+        zones=placed,
+    )
+    return access.kind, doc, doc.characterizations[0]
+
+
+def annotated_zone(access, feature_id):
+    """The ``Zone`` *feature_id* of the ``Annotated`` *access* on the first Document placing it; None without one."""
+    for _, _, _, zones in access.placements():
+        for zone in _in_order(access.kind, zones):
+            if zone.feature == str(feature_id):
+                return zone
+    return None
 
 
 def analysis_fact(analysis_id, reader):
     """``(DocumentFacts, AnalysisFact)`` of one analysis; None when unknown or not an analysis, ``REFUSED`` when unreadable."""
-    found = annotated_fact(analysis_id, reader)
-    if found is None or found is REFUSED:
-        return found
-    kind, doc, fact = found
-    return (doc, fact) if kind == "analysis" else None
+    access = annotated_access(analysis_id, reader)
+    if access is None or access is REFUSED:
+        return access
+    if access.kind != "analysis":
+        return None
+    _, doc, fact = annotated_fact(access)
+    return doc, fact
 
 
 def _concepts(value):
@@ -670,6 +740,13 @@ def _located(node, resource_ids, dims, position, readable):
     return zones
 
 
+def _in_order(kind, zones):
+    """*zones* of one resource of *kind* in the order its fact lists them: an analysis's by feature, an identified material's by page then feature."""
+    if kind == "analysis":
+        return tuple(sorted(zones, key=lambda z: z.feature))
+    return tuple(sorted(zones, key=lambda z: (z.position, z.feature)))
+
+
 def _counts(zones):
     """``{page number: zone count}`` of *zones* (``{resource id: [Zone, …]}``)."""
     counts = {}
@@ -730,7 +807,7 @@ def _characterizations(ids, visible, readable, source, placed, name_of):
             CharacterizationFact(
                 id=c,
                 name=name_of.get(c, {}),
-                zones=tuple(sorted(zones, key=lambda z: (z.position, z.feature))),
+                zones=_in_order("characterization", zones),
                 materials=_qualified(v, "material", confidence),
                 colours=tuple(
                     k for _, x, _ in v.get("colour", ()) for k in _concepts(x)
@@ -897,7 +974,7 @@ def _build(
             AnalysisFact(
                 id=aid,
                 name=name_of.get(aid, {}),
-                zones=tuple(sorted(zones.get(aid, ()), key=lambda z: z.feature)),
+                zones=_in_order("analysis", zones.get(aid, ())),
                 files=tuple(files),
                 imaging=_imaging(v),
                 technique=lang.joined(

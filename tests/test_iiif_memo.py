@@ -16,11 +16,24 @@ from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import TileModel
 
+from manuspectrum.utils import public_visibility
+
 from tests.explorer_fixtures import FEATURES, IIIFCase
 
 
 def memo_keys():
     return [k for k in cache._cache if ":iiif:" in k and not k.endswith(":lock")]
+
+
+def own_queries(context):
+    """The SQL of the queries of *context* the application ran (Silk's own and its ``EXPLAIN`` left out)."""
+    return [
+        q["sql"]
+        for q in context.captured_queries
+        if "silk_" not in q["sql"]
+        and "SAVEPOINT" not in q["sql"]
+        and not q["sql"].startswith("EXPLAIN")
+    ]
 
 
 def app_queries(context):
@@ -351,3 +364,100 @@ class MemoTests(IIIFCase):
                     sum("ms_data_change" in q["sql"] for q in context.captured_queries),
                     1,
                 )
+
+
+class GuardOnceTests(IIIFCase):
+    """What a IIIF request reads for its guard: the visitor, the visible set and each resource row, once."""
+
+    def setUp(self):
+        super().setUp()
+        self.visitor = Client()
+        file_id = self.stored_file(
+            self.analyses["open"], "X01.csv", b"x,y\n1,2\n3,4\n5,6\n"
+        )
+        document = self.documents["open"].pk
+        analysis = self.analyses["open"].pk
+        self.page = f"/iiif/v3/annotation-collection/{document}/page-1"
+        self.annotation = f"/iiif/v3/annotation/{analysis}/{FEATURES['open']}"
+        self.content_state = f"/iiif/v3/content-state/{analysis}/{FEATURES['open']}"
+        self.routes = {
+            "page": self.page,
+            "collection": f"/iiif/v3/annotation-collection/{document}",
+            "annotation": self.annotation,
+            "content state": self.content_state,
+            "raw": f"/iiif/data/{file_id}/raw",
+            "series.csv": f"/iiif/data/{file_id}/series.csv",
+        }
+
+    def warm(self, url):
+        first = self.visitor.get(url)
+        self.assertEqual(first.status_code, 200)
+        with CaptureQueriesContext(connection) as context:
+            response = self.visitor.get(url)
+        self.assertEqual(response.status_code, 200)
+        return own_queries(context)
+
+    def test_a_warm_request_reads_the_visitor_once(self):
+        for name, url in self.routes.items():
+            with self.subTest(route=name):
+                queries = self.warm(url)
+
+                self.assertEqual(sum('FROM "auth_user"' in q for q in queries), 1)
+
+    def test_a_warm_request_reads_the_visible_set_once(self):
+        for name, url in self.routes.items():
+            with self.subTest(route=name):
+                self.visitor.get(url)
+                with mock.patch(
+                    "manuspectrum.utils.public_visibility.get_or_build",
+                    wraps=public_visibility.get_or_build,
+                ) as read:
+                    response = self.visitor.get(url)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    sum(
+                        c.args[0].startswith("public-visibility:visible:")
+                        for c in read.call_args_list
+                    ),
+                    1,
+                )
+
+    def test_a_warm_request_reads_each_resource_row_once(self):
+        for name, url, rows in (
+            ("page", self.page, 1),
+            ("annotation", self.annotation, 2),
+            ("content state", self.content_state, 2),
+        ):
+            with self.subTest(route=name):
+                queries = self.warm(url)
+
+                self.assertEqual(
+                    sum('FROM "resource_instances"' in q for q in queries), rows
+                )
+
+    def test_an_annotation_build_reads_the_annotated_row_once(self):
+        analysis = str(self.analyses["open"].pk)
+        for url in (self.annotation, self.content_state):
+            with self.subTest(url=url):
+                cache.clear()
+                with CaptureQueriesContext(connection) as context:
+                    response = self.visitor.get(url)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    sum(
+                        'FROM "resource_instances"' in q
+                        and f"\"resourceinstanceid\" = '{analysis}'" in q
+                        for q in own_queries(context)
+                    ),
+                    1,
+                )
+
+    def test_a_content_state_build_reads_no_document_facts(self):
+        with mock.patch(
+            "manuspectrum.iiif.facts._build", side_effect=AssertionError("built")
+        ):
+            response = self.visitor.get(self.content_state)
+
+        self.assertEqual(response.status_code, 200)

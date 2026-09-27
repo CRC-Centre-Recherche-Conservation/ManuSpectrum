@@ -33,7 +33,7 @@ from manuspectrum.iiif.annotations import analysis_annotation
 from manuspectrum.iiif.characterizations import characterization_annotation
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE, IIIF_V2_MEDIA_TYPE
 from manuspectrum.utils.data_version import data_version
-from manuspectrum.utils.public_visibility import is_connected
+from manuspectrum.utils.public_visibility import is_connected, request_memo
 from manuspectrum.views.iiif.cors import iiif_cors
 
 logger = logging.getLogger(__name__)
@@ -112,9 +112,10 @@ class IIIFView(View):
 
     def get(self, request, **kwargs):
         try:
-            if tokens.bearer_state(request) == tokens.INVALID:
-                return unauthorized(request, self.described_as)
-            return self.answer(request, **kwargs)
+            with request_memo(getattr(request, "user", None)):
+                if tokens.bearer_state(request) == tokens.INVALID:
+                    return unauthorized(request, self.described_as)
+                return self.answer(request, **kwargs)
         except Missing:
             return not_found()
         except BadFilter:
@@ -136,7 +137,8 @@ class CollectionView(IIIFView):
     def answer(self, request, resource_id):
         reader = reader_of(request)
         version = data_version()
-        if facts.subject_of(resource_id, reader, version) is None:
+        subject = facts.subject_of(resource_id, reader, version)
+        if subject is None:
             raise Missing()
 
         def build():
@@ -145,6 +147,7 @@ class CollectionView(IIIFView):
                 reader,
                 kind=self.kind,
                 version=version,
+                subject=subject,
                 positions=frozenset(),
             )
             collection = pages.annotation_collection(doc, self.kind)
@@ -181,7 +184,8 @@ class PageView(IIIFView):
         only = parse_only(request)
         reader = reader_of(request)
         version = data_version()
-        if facts.subject_of(resource_id, reader, version) is None:
+        subject = facts.subject_of(resource_id, reader, version)
+        if subject is None:
             raise Missing()
 
         def build(api):
@@ -191,6 +195,7 @@ class PageView(IIIFView):
                     reader,
                     kind=self.kind,
                     version=version,
+                    subject=subject,
                     positions=frozenset({page_num}),
                 )
                 try:
@@ -243,8 +248,8 @@ class AnnotationView(IIIFView):
             return refused(request)
 
         def build():
-            found = facts.annotated_fact(resource_id, reader, feature_id, version)
-            if not isinstance(found, tuple):
+            found = facts.annotated_fact(access, feature_id)
+            if found is None:
                 raise Missing()
             kind, doc, fact = found
             encode = (
