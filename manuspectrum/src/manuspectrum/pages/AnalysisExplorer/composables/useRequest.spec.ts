@@ -112,6 +112,24 @@ describe("useRequest", () => {
         scope.stop();
     });
 
+    it("keeps a retry running when the source changes to what it reloads", async () => {
+        const argument = ref<string | null>(null);
+        const load = vi.fn(async (value: string) => value.toUpperCase());
+        const scope = effectScope();
+        const handle = scope.run(() =>
+            useRequest(() => argument.value, load, {
+                cached: () => "stale",
+            }),
+        )!;
+        argument.value = "a";
+        handle.retry();
+        await flushPromises();
+        expect(load).toHaveBeenCalledTimes(1);
+        expect(load).toHaveBeenCalledWith("a", expect.any(AbortSignal), true);
+        expect(handle.data.value).toBe("A");
+        scope.stop();
+    });
+
     it("records the source its data answers", async () => {
         const argument = ref("a");
         const scope = effectScope();

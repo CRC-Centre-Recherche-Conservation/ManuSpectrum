@@ -39,7 +39,9 @@ export const DEBOUNCE_MS = 300;
  * scope afterwards does not abort it again. A payload `cached` returns for the
  * source is taken at once. A change `debounce` accepts shows `loading` at once
  * and starts its request once the source has not changed for `DEBOUNCE_MS`;
- * the first load and a retry start at once.
+ * the first load and a retry start at once. A source that changes to the
+ * one a request is running for (a retry that changed the source first) keeps
+ * that request.
  */
 export function useRequest<T>(
     source: () => string | null,
@@ -54,6 +56,8 @@ export function useRequest<T>(
     const data = shallowRef<T | null>(null);
     const loaded = ref<string | null>(null);
     let controller: AbortController | null = null;
+    /** The source of the request running, until it settles or is stopped. */
+    let running: string | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     function stop(): void {
@@ -61,6 +65,7 @@ export function useRequest<T>(
         timer = null;
         controller?.abort();
         controller = null;
+        running = null;
     }
 
     function run(
@@ -96,6 +101,7 @@ export function useRequest<T>(
     async function fetchNow(argument: string, reload: boolean): Promise<void> {
         const current = new AbortController();
         controller = current;
+        running = argument;
         status.value = "loading";
         try {
             const result = await load(argument, current.signal, reload);
@@ -112,13 +118,20 @@ export function useRequest<T>(
         } finally {
             if (controller === current) {
                 controller = null;
+                running = null;
             }
         }
     }
 
-    watch(source, (argument, previous) => run(argument, previous), {
-        immediate: true,
-    });
+    watch(
+        source,
+        (argument, previous) => {
+            if (argument === null || argument !== running) {
+                run(argument, previous);
+            }
+        },
+        { immediate: true },
+    );
     onScopeDispose(stop);
 
     return {

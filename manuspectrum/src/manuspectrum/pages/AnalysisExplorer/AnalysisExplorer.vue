@@ -2,6 +2,7 @@
 import {
     computed,
     defineAsyncComponent,
+    effectScope,
     nextTick,
     onBeforeUnmount,
     onMounted,
@@ -19,6 +20,7 @@ import ViewTabs from "@/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.
 import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusView.vue";
 
 import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
+import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import {
     ANNOUNCE_KEY,
     FACET_LABELS_KEY,
@@ -26,6 +28,7 @@ import {
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
     SELECTION_HINTS_KEY,
+    SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     INTRO_BAR_ID,
@@ -46,6 +49,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import type {
     ResultsMemo,
     SelectionHint,
@@ -88,6 +92,9 @@ const facetLabels = ref(new Map<string, Label>());
 const screenFocusPending = ref(false);
 const resultsMemo = ref<ResultsMemo | null>(null);
 const selectionHints = ref(new Map<string, SelectionHint>());
+/** The shared reading of the Selection, started by its first reader (the Selection panel or the Compare view). */
+const selectionScope = effectScope();
+let selectionItems: SelectionItems | null = null;
 
 /** The screen shown, as CorpusView decides it: the page intro folds to one line off the home. */
 const screen = computed(() => {
@@ -102,6 +109,7 @@ provide(RESULTS_MEMO_KEY, resultsMemo);
 provide(SELECTION_HINTS_KEY, selectionHints);
 provide(ANNOUNCE_KEY, announce);
 provide(MIRADOR_URL_KEY, props.miradorUrl);
+provide(SELECTION_ITEMS_KEY, sharedSelectionItems);
 
 /** A new screen or another document; the same document named again by the address is neither. */
 watch(
@@ -122,6 +130,12 @@ watch(
 onBeforeUnmount(() => {
     delete window.document.body.dataset.explorerScreen;
 });
+
+function sharedSelectionItems(): SelectionItems {
+    selectionItems ??=
+        selectionScope.run(useSelectionItems) ?? useSelectionItems();
+    return selectionItems;
+}
 
 /** Clearing the region first makes a repeated message spoken again. */
 function announce(message: string): void {

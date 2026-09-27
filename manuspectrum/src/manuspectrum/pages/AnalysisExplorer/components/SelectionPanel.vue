@@ -5,7 +5,10 @@ import { useGettext } from "vue3-gettext";
 import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
 
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
-import { SELECTION_HINTS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    SELECTION_HINTS_KEY,
+    SELECTION_ITEMS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { holdingsOf } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import {
@@ -32,12 +35,13 @@ const hints = inject(
     () => ref(new Map<string, SelectionHint>()),
     true,
 );
+const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
 
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
 
-const { byKey, missing } = useSelectionItems();
+const { byKey, missing } = selectionItems();
 
 const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
 const canCompare = computed(() => isViewAvailable("compare"));
