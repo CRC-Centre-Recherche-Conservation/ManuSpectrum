@@ -706,6 +706,18 @@ class FullSeriesViewTests(SimpleTestCase):
         self.assertEqual(response["Cache-Control"], "private, no-store")
         read.assert_not_called()
 
+    def test_a_file_of_exactly_the_ceiling_is_served_and_one_byte_more_is_not(self):
+        path = self.written()
+        size = os.path.getsize(path)
+
+        with override_settings(SPECTRUM_PREVIEW_MAX_BYTES=size):
+            at_ceiling = self.get(path)
+        with override_settings(SPECTRUM_PREVIEW_MAX_BYTES=size - 1):
+            over = self.get(path)
+
+        self.assertEqual(at_ceiling.status_code, 200)
+        self.assertEqual((over.status_code, over.content), (413, b""))
+
     @override_settings(SPECTRUM_PREVIEW_MAX_BYTES=4)
     def test_a_refused_file_over_the_ceiling_is_still_a_404(self):
         response = self.get(self.written(), visible_to=())
