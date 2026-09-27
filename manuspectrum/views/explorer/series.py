@@ -51,8 +51,8 @@ class _Line:
 
 
 def _clean(text):
-    """Curator text on one line: control characters and line breaks become spaces."""
-    return _CONTROL.sub(" ", str(text or "")).strip()
+    """Curator text on one line: control characters and line breaks become spaces, outer spaces dropped."""
+    return _CONTROL.sub(" ", str(text or "")).strip(" ")
 
 
 def neutralise(text):

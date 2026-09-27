@@ -28,6 +28,18 @@
     {
       "text": "  -3 dB\r\nline",
       "safe": "'-3 dB line"
+    },
+    {
+      "text": "=cmd",
+      "safe": "=cmd"
+    },
+    {
+      "text": "﻿=cmd",
+      "safe": "﻿=cmd"
+    },
+    {
+      "text": " =cmd ",
+      "safe": " =cmd "
     }
   ]
 }

@@ -191,7 +191,7 @@ function spacedControls(text: string): string {
  */
 export function neutraliseText(text: string): string {
     return spacedControls(text)
-        .trim()
+        .replace(/^ +| +$/g, "")
         .replaceAll('"', "'")
         .replace(FORMULA_CELL, "$1'$2");
 }
