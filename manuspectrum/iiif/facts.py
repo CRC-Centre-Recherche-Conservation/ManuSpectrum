@@ -508,14 +508,8 @@ ANNOTATED = {
 }
 
 
-def annotated_access(resource_id, reader):
-    """``(kind, observed object id, (slug, document id))`` of an analysis or identified material *reader* may read.
-
-    *kind* is ``analysis`` or ``characterization``. None when *resource_id*
-    is neither; ``REFUSED`` when the reader may not read it (outside its
-    ``visible_set`` set, or refused by ``user_can_read_resource``), or when
-    none of its observed objects leads the reader to a visible Document.
-    """
+def _annotated(resource_id, reader):
+    """``(kind, visible)`` of an analysis or identified material *reader* may read, None or ``REFUSED`` as ``annotated_access``."""
     graph_id = (
         ResourceInstance.objects.filter(pk=resource_id)
         .values_list("graph_id", flat=True)
@@ -524,40 +518,71 @@ def annotated_access(resource_id, reader):
     kind = _slug_of(graph_id) if graph_id is not None else None
     if kind not in ANNOTATED:
         return None
-    attribute, link = ANNOTATED[kind]
+    attribute, _ = ANNOTATED[kind]
     visible = visible_set(reader)
     rid = str(resource_id)
     if rid not in getattr(visible, attribute) or not user_can_read_resource(
         reader, resourceid=rid
     ):
         return REFUSED
-    readable = readable_nodegroup_ids(reader)
-    for _, value, _ in _tiles([rid], [link], readable)[rid][link]:
+    return kind, visible
+
+
+def _observed_subjects(kind, resource_id, reader, visible):
+    """``(observed object id, (slug, document id))`` of each observed object leading to a new visible Document, in tile order."""
+    _, link = ANNOTATED[kind]
+    rid = str(resource_id)
+    documents = set()
+    for _, value, _ in _tiles([rid], [link], readable_nodegroup_ids(reader))[rid][link]:
         for target in _refs(value):
             subject = _subject(target, reader, visible)
-            if subject is not None:
-                return kind, target, subject
+            if subject is not None and subject[1] not in documents:
+                documents.add(subject[1])
+                yield target, subject
+
+
+def annotated_access(resource_id, reader):
+    """``(kind, observed object id, (slug, document id))`` of an analysis or identified material *reader* may read.
+
+    *kind* is ``analysis`` or ``characterization``. None when *resource_id*
+    is neither; ``REFUSED`` when the reader may not read it (outside its
+    ``visible_set`` set, or refused by ``user_can_read_resource``), or when
+    none of its observed objects leads the reader to a visible Document.
+    """
+    found = _annotated(resource_id, reader)
+    if found is None or found is REFUSED:
+        return found
+    kind, visible = found
+    for target, subject in _observed_subjects(kind, resource_id, reader, visible):
+        return kind, target, subject
     return REFUSED
 
 
-def annotated_fact(resource_id, reader):
+def annotated_fact(resource_id, reader, feature_id=None):
     """``(kind, DocumentFacts, fact)`` of one analysis or identified material; None when unknown, ``REFUSED`` when unreadable.
 
     The document facts are those of the first observed object leading to a
-    visible Document.
+    visible Document; with *feature_id*, of the first such Document that
+    places that zone, else of the first.
     """
-    access = annotated_access(resource_id, reader)
-    if access is None or access is REFUSED:
-        return access
-    kind, target, (_, document) = access
-    visible = visible_set(reader)
+    found = _annotated(resource_id, reader)
+    if found is None or found is REFUSED:
+        return found
+    kind, visible = found
     readable = readable_nodegroup_ids(reader)
     rid = [str(resource_id)]
-    if kind == "analysis":
-        doc = _build(target, document, rid, reader, visible, readable)
-        return kind, doc, doc.analyses[0]
-    doc = _build(target, document, [], reader, visible, readable, rid)
-    return kind, doc, doc.characterizations[0]
+    first = None
+    for target, (_, document) in _observed_subjects(kind, resource_id, reader, visible):
+        if kind == "analysis":
+            doc = _build(target, document, rid, reader, visible, readable)
+            fact = doc.analyses[0]
+        else:
+            doc = _build(target, document, [], reader, visible, readable, rid)
+            fact = doc.characterizations[0]
+        if feature_id is None or any(z.feature == str(feature_id) for z in fact.zones):
+            return kind, doc, fact
+        first = first or (kind, doc, fact)
+    return first or REFUSED
 
 
 def analysis_fact(analysis_id, reader):

@@ -17,7 +17,14 @@ from django.test import Client, override_settings
 from django.urls import resolve, reverse
 
 from manuspectrum.iiif import ids
-from tests.explorer_fixtures import CANVAS, FEATURES, IIIFCase
+from tests.explorer_fixtures import (
+    CANVAS,
+    FEATURES,
+    MANIFEST,
+    POINT,
+    SOURCE_MANIFEST,
+    IIIFCase,
+)
 
 UNKNOWN = "00000000-0000-4000-8000-00000000000b"
 BASE = settings.PUBLIC_SERVER_ADDRESS
@@ -307,6 +314,38 @@ class AnnotationIdTests(RouteCase):
         self.assertEqual(
             annotation["id"], ids.annotation(analysis, FEATURES["on_document_1"])
         )
+
+    def test_a_zone_on_the_second_document_of_an_analysis_dereferences(self):
+        other_manifest = "https://example.org/iiif/ms60/manifest"
+        other_canvas = "https://example.org/iiif/ms60/canvas/f1r"
+        other = self.new_resource("document", "Ms 60")
+        self.tile(other, "facsimiles", other_manifest)
+        analysis = self.new_resource("analysis", "X09 — two documents")
+        self.tile(
+            analysis,
+            "component_observed",
+            self.refs(self.documents["open"], other),
+        )
+        feature = str(uuid.uuid4())
+        self.zone(analysis, [(feature, other_canvas, POINT)])
+        manifests = {
+            MANIFEST: SOURCE_MANIFEST,
+            other_manifest: {
+                **SOURCE_MANIFEST,
+                "id": other_manifest,
+                "items": [{**SOURCE_MANIFEST["items"][0], "id": other_canvas}],
+            },
+        }
+        self.fetch.side_effect = manifests.get
+        url = ids.annotation(analysis.pk, feature)
+
+        response = self.get(path_of(url))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], url)
+        self.assertEqual(response.json()["target"]["source"]["id"], other_canvas)
+        state = self.get(path_of(ids.content_state(analysis.pk, feature)))
+        self.assertEqual(state.status_code, 200)
 
     def test_a_feature_of_another_analysis_is_404(self):
         analysis = self.analyses["open"].pk

@@ -223,7 +223,7 @@ class AnnotationView(IIIFView):
             return refused(request)
 
         def build():
-            found = facts.annotated_fact(resource_id, reader)
+            found = facts.annotated_fact(resource_id, reader, feature_id)
             if not isinstance(found, tuple):
                 raise Missing()
             kind, doc, fact = found
