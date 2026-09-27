@@ -797,7 +797,7 @@ class CharacterizationZones:
         return {c: zones for c, (_, zones) in self.sourced(ids, source).items()}
 
     def sourced(self, ids, source):
-        """``{identified material id: (origin, [Zone, …])}`` of ``on``; *origin* is ``"own"`` or ``"component"``."""
+        """``{identified material id: (origin, [Zone, …])}`` of ``on``, zones by page then feature (``_in_order``); *origin* is ``"own"`` or ``"component"``."""
         if not ids:
             return {}
         dims, position = source.dims, source.position
@@ -807,7 +807,7 @@ class CharacterizationZones:
         placed = {}
         for c in ids:
             if own.get(c):
-                placed[c] = ("own", own[c])
+                placed[c] = ("own", list(_in_order("characterization", own[c])))
                 continue
             zones = [
                 zone
@@ -815,7 +815,7 @@ class CharacterizationZones:
                 for zone in components.get(o, ())
             ]
             if zones:
-                placed[c] = ("component", zones)
+                placed[c] = ("component", list(_in_order("characterization", zones)))
         return placed
 
 

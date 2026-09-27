@@ -369,6 +369,40 @@ class ManifestRouteTests(CorpusCase):
             [c["characterizationCount"] for c in payload["canvases"]], [0, 1]
         )
 
+    def test_a_material_is_placed_on_its_zone_of_the_first_page(self):
+        point = {"type": "Point", "coordinates": [5, -5]}
+        self.tile(
+            self.characterization,
+            "location_of_characterization",
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "id": feature,
+                        "type": "Feature",
+                        "geometry": point,
+                        "properties": {"canvas": canvas, "manifest": MANIFEST},
+                    }
+                    for feature, canvas in (
+                        ("0b0b0b0b-0000-4000-8000-000000000001", CANVAS_2),
+                        ("0b0b0b0b-0000-4000-8000-000000000002", CANVAS),
+                    )
+                ],
+            },
+        )
+        document = self.documents["open"].pk
+
+        manifest = self.manifest(f"ids=ch:{self.characterization.pk}:-")
+        with mock.patch(FETCH, side_effect=fetched):
+            payload = self.client.get(f"/en/api/explorer/document/{document}").json()
+
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
+        (summary,) = payload["characterizations"]
+        self.assertEqual(summary["zone"]["canvas"], CANVAS)
+        self.assertEqual(
+            [c["characterizationCount"] for c in payload["canvases"]], [1, 0]
+        )
+
     def test_the_zip_manifest_embeds_the_visitor_pages_and_is_valid(self):
         with mock.patch(FETCH, side_effect=fetched):
             scope = resolve_scope(QueryDict(self.document_query()), "en")
