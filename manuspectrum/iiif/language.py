@@ -3,11 +3,16 @@
 A language map is ``{language: [text, …]}``. Keys are the BCP 47 codes the
 value was stored under; a value stored without a language goes under
 ``none``; a language is never guessed. Interface strings are rendered in every
-language of ``settings.LANGUAGES``. The v2 form (Presentation 2.1 §4.3) is a
-list of ``{"@value", "@language"}`` objects.
+language of ``settings.LANGUAGES``, each translation looked up once per
+process (``_translated``), as Django keeps its catalogs. The v2 form
+(Presentation 2.1 §4.3) is a list of ``{"@value", "@language"}`` objects.
 """
 
+from functools import lru_cache
+
 from django.conf import settings
+from django.core.signals import setting_changed
+from django.dispatch import receiver
 from django.utils import translation
 from django.utils.translation import gettext, ngettext
 
@@ -74,16 +79,35 @@ def first_text(value, sep=", "):
     return text_in(value, NONE, sep)
 
 
+@lru_cache(maxsize=2048)
+def _translated(codes, msgid, plural=None, number=None):
+    """``(text, …)`` of *msgid* (``ngettext`` of *number* with *plural*) in each language of *codes*."""
+    texts = []
+    for code in codes:
+        with translation.override(code):
+            if plural is None:
+                texts.append(gettext(msgid))
+            else:
+                texts.append(ngettext(msgid, plural, number))
+    return tuple(texts)
+
+
+@receiver(setting_changed)
+def _catalogs_changed(setting, **kwargs):
+    """Drop the translations when a setting Django resets its catalogs on changes (tests)."""
+    if setting in {"LANGUAGES", "LANGUAGE_CODE", "LOCALE_PATHS"}:
+        _translated.cache_clear()
+
+
 def gettext_map(msgid, **params):
     """*msgid* rendered in every configured language, ``%(name)s`` filled per language.
 
     A parameter is a string, the same in every language, or a language map,
     read in each language by ``text_in``.
     """
+    codes = tuple(languages())
     rendered = {}
-    for lang in languages():
-        with translation.override(lang):
-            text = gettext(msgid)
+    for lang, text in zip(codes, _translated(codes, msgid)):
         if params:
             text = text % {key: text_in(value, lang) for key, value in params.items()}
         rendered[lang] = [text]
@@ -99,12 +123,11 @@ def _filled(text, params, lang):
 
 def ngettext_map(singular, plural, number, **params):
     """``ngettext`` of *number* rendered in every configured language, filled per language as ``gettext_map`` fills it; integers stay as they are."""
-    rendered = {}
-    for lang in languages():
-        with translation.override(lang):
-            text = ngettext(singular, plural, number)
-        rendered[lang] = [_filled(text, params, lang)]
-    return rendered
+    codes = tuple(languages())
+    return {
+        lang: [_filled(text, params, lang)]
+        for lang, text in zip(codes, _translated(codes, singular, plural, number))
+    }
 
 
 def qualified(name, qualifier=None):

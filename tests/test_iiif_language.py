@@ -5,6 +5,7 @@ Usage:
 """
 
 from pathlib import Path
+from unittest import mock
 
 import polib
 from django.conf import settings
@@ -47,6 +48,21 @@ class LanguageMapTests(SimpleTestCase):
             language.gettext_map("Operators"),
             {"en": ["Operators"], "fr": ["Opérateurs"]},
         )
+
+    def test_a_msgid_is_translated_once_per_process(self):
+        with mock.patch.object(
+            language, "gettext", wraps=language.gettext
+        ) as translate:
+            renders = [language.gettext_map("Operators") for _ in range(3)]
+
+        self.assertEqual(renders[0], renders[2])
+        self.assertLessEqual(translate.call_count, len(language.languages()))
+        renders[0]["en"].append("changed")
+        self.assertEqual(language.gettext_map("Operators")["en"], ["Operators"])
+
+    @override_settings(LANGUAGES=[("fr", "French")])
+    def test_a_language_setting_change_renders_the_new_languages(self):
+        self.assertEqual(language.gettext_map("Operators"), {"fr": ["Opérateurs"]})
 
     def test_gettext_map_fills_placeholders_from_strings_and_maps(self):
         rendered = language.gettext_map(
