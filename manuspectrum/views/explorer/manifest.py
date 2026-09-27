@@ -108,8 +108,8 @@ class _Placement:
     ``url`` is the source manifest's absolute URL (a site path is prefixed
     with ``PUBLIC_SERVER_ADDRESS``). ``number`` gives each listed canvas its
     page number. ``analyses`` and ``materials`` map a canvas id to the kept
-    analysis and material ids placed on it, ``seen`` and ``seen_materials``
-    to every visible one placed on it.
+    analysis and material ids placed on it; ``whole`` says the scope keeps
+    the whole document.
     """
 
     document: str
@@ -120,11 +120,10 @@ class _Placement:
     number: dict
     scope_analyses: list
     analyses: dict
-    seen: dict
     first: dict
     materials: dict
-    seen_materials: dict
     kept: list
+    whole: bool
 
 
 def _placements(scope):
@@ -157,36 +156,45 @@ def _placements(scope):
             a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
         ]
         visible = {row["id"] for row in bundle.by_document.get(document, [])}
-        analyses, seen, first = defaultdict(list), defaultdict(set), {}
+        analyses, first = defaultdict(list), {}
         for rid, _, canvas, _ in annotation_features(
-            zone_node, sorted(visible | set(scope_analyses)), dims, readable
+            zone_node,
+            sorted(visible & chosen_analyses | set(scope_analyses)),
+            dims,
+            readable,
         ):
             if canvas not in position:
                 continue
-            seen[canvas].add(rid)
-            if rid in chosen_analyses:
-                if rid not in analyses[canvas]:
-                    analyses[canvas].append(rid)
-                first.setdefault(rid, canvas)
-        materials, seen_materials = defaultdict(list), defaultdict(set)
-        for summary in characterization_summaries(
-            document_characterizations(bundle, document),
-            bundle.visible,
-            reader,
-            language,
-            dims,
-            objects_of=bundle.links["objects"],
-            analysis_rows=bundle.by_id,
-        ):
+            if rid not in analyses[canvas]:
+                analyses[canvas].append(rid)
+            first.setdefault(rid, canvas)
+        materials = defaultdict(list)
+        chosen_materials = [
+            c
+            for c in document_characterizations(bundle, document)
+            if c in chosen_characterizations
+        ]
+        summaries = (
+            characterization_summaries(
+                chosen_materials,
+                bundle.visible,
+                reader,
+                language,
+                dims,
+                objects_of=bundle.links["objects"],
+                analysis_rows=bundle.by_id,
+            )
+            if chosen_materials
+            else ()
+        )
+        for summary in summaries:
             zone = summary["zone"]
             if (
                 zone
                 and zone["canvas"] in position
                 and material_nodegroups[zone["source"]] in readable
             ):
-                seen_materials[zone["canvas"]].add(summary["id"])
-                if summary["id"] in chosen_characterizations:
-                    materials[zone["canvas"]].append(summary["id"])
+                materials[zone["canvas"]].append(summary["id"])
         if scope.canvases_all:
             kept = [c["id"] for c in listed]
         else:
@@ -206,11 +214,10 @@ def _placements(scope):
             number=number,
             scope_analyses=scope_analyses,
             analyses=analyses,
-            seen=seen,
             first=first,
             materials=materials,
-            seen_materials=seen_materials,
             kept=kept,
+            whole=scope.kind == "document",
         )
 
 
@@ -307,14 +314,14 @@ def _references(plan, canvas_id):
         references.append(
             (
                 "analysis",
-                page_filter(plan.analyses[canvas_id], plan.seen[canvas_id]),
+                page_filter(plan.analyses[canvas_id], plan.whole),
             )
         )
     if plan.materials.get(canvas_id):
         references.append(
             (
                 "characterization",
-                page_filter(plan.materials[canvas_id], plan.seen_materials[canvas_id]),
+                page_filter(plan.materials[canvas_id], plan.whole),
             )
         )
     return references

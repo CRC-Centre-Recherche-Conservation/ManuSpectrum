@@ -6,7 +6,9 @@ collections the identified materials.
 Collections and pages: a Document or Component the reader may not see, or
 an unknown id, is a bodyless 404; otherwise the answer is 200, filtered for
 the reader. ``?only=<uuid,…>`` restricts a page to those analyses (at most
-``IIIF_PAGE_FILTER_MAX``; malformed or over it: 400). Single annotations: an
+``IIIF_PAGE_FILTER_MAX``; malformed or over it: 400); the page and its memo
+key read only the ids the unfiltered collection lists: a filter naming none
+of them is a bodyless 404, one naming all of them the canonical page. Single annotations: an
 unknown id, a resource that is not an analysis, an analysis without a
 located zone or a feature that is not one of its located zones is a 404; an
 analysis or identified material the reader may not read is a 401 to the
@@ -96,6 +98,21 @@ def parse_only(request):
         raise BadFilter(raw) from error
 
 
+def effective_filter(only, listed):
+    """The ids of *only* among *listed* (what the page lists unfiltered); None for no filter.
+
+    A filter keeping every listed id is no filter.
+    """
+    if only is None:
+        return None
+    kept = frozenset(only).intersection(listed)
+    return None if kept == frozenset(listed) and kept else kept
+
+
+def _filter_key(only):
+    return ",".join(sorted(only or ()))
+
+
 @method_decorator(iiif_cors, name="dispatch")
 class IIIFView(View):
     """GET, HEAD and OPTIONS of one IIIF document, in API ``version`` 3 or 2."""
@@ -166,8 +183,16 @@ class PageView(IIIFView):
     def answer(self, request, resource_id, page_num):
         only = parse_only(request)
         reader = reader_of(request)
-        if facts.subject_of(resource_id, reader) is None:
-            raise Missing()
+        if only is None:
+            if facts.subject_of(resource_id, reader) is None:
+                raise Missing()
+        else:
+            listed = facts.annotated_ids(resource_id, reader, self.kind)
+            if listed is None:
+                raise Missing()
+            only = effective_filter(only, listed)
+            if only is not None and not only:
+                raise Missing()
 
         def build():
             doc = facts.document_facts(resource_id, reader, only=only, kind=self.kind)
@@ -181,7 +206,7 @@ class PageView(IIIFView):
             request,
             gate_of(request),
             f"page-v{self.version}-{self.kind}",
-            (resource_id, page_num, ",".join(sorted(only or ()))),
+            (resource_id, page_num, _filter_key(only)),
             build,
             content_type=self.content_type,
         )

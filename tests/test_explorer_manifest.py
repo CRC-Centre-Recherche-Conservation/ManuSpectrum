@@ -15,7 +15,7 @@ from django.test import override_settings
 
 from arches.app.models.models import IIIFManifest, TileModel
 
-from manuspectrum.views.explorer.manifest import build_manifest
+from manuspectrum.views.explorer.manifest import build_manifest, has_canvases
 from manuspectrum.views.explorer.scopes import resolve_scope
 from tests.explorer_fixtures import CANVAS, MANIFEST
 from tests.iiif_schema import assert_valid_manifest
@@ -214,6 +214,35 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(reference["id"], self.page_url(1, [self.pk("open")]))
         (annotation,) = self.annotations(manifest)
         self.assertEqual(annotation["label"]["en"], ["X01 — f. 1v"])
+
+    def test_a_selection_of_every_analysis_of_a_canvas_references_a_filtered_page(self):
+        kept = [self.pk("open"), self.pk("on_document"), self.pk("draft")]
+
+        manifest = self.manifest("ids=" + ",".join(f"an:{a}:-" for a in kept))
+
+        (reference,) = manifest["items"][0]["annotations"]
+        self.assertEqual(reference["id"], self.page_url(1, kept))
+
+    def test_a_project_references_filtered_pages(self):
+        manifest = self.manifest(f"project={self.projects['main'].pk}")
+
+        (reference,) = manifest["items"][0]["annotations"]
+        self.assertIn("?only=", reference["id"])
+
+    def test_an_analysis_scope_summarises_no_identified_material(self):
+        self.tile(
+            self.characterization,
+            "location_of_characterization",
+            self.annotation_value(CANVAS, {"type": "Point", "coordinates": [5, -5]}),
+        )
+        with mock.patch(FETCH, side_effect=fetched):
+            scope = resolve_scope(QueryDict(f"ids=an:{self.pk('open')}:-"), "en")
+            with mock.patch(
+                "manuspectrum.views.explorer.manifest.characterization_summaries"
+            ) as summaries:
+                self.assertTrue(has_canvases(scope))
+
+        summaries.assert_not_called()
 
     @override_settings(IIIF_PAGE_FILTER_MAX=0)
     def test_a_scope_over_the_filter_limit_references_the_canonical_page(self):

@@ -4,11 +4,14 @@ Usage:
     python manage.py test tests.test_iiif_memo --settings=tests.test_settings
 """
 
+import uuid
 from unittest import mock
 
 from django.core.cache import cache
 from django.test import Client
 
+from manuspectrum.iiif import facts
+from manuspectrum.utils.public_visibility import anonymous_user
 from tests.explorer_fixtures import IIIFCase
 
 
@@ -114,3 +117,31 @@ class MemoTests(IIIFCase):
             again = self.visitor.get(self.url)
 
         self.assertNotEqual(again["ETag"], first["ETag"])
+
+    def test_only_is_keyed_on_the_analyses_of_the_document_it_names(self):
+        analysis = str(self.analyses["open"].pk)
+
+        first = self.visitor.get(f"{self.url}?only={analysis}")
+        again = self.visitor.get(f"{self.url}?only={analysis},{uuid.uuid4()}")
+
+        self.assertEqual(again["ETag"], first["ETag"])
+        self.assertEqual(again.content, first.content)
+        self.assertEqual(len(memo_keys()), 1)
+
+    def test_only_naming_nothing_of_the_document_is_a_404_stored_nowhere(self):
+        response = self.visitor.get(f"{self.url}?only={uuid.uuid4()}")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"")
+        self.assertEqual(memo_keys(), [])
+
+    def test_only_naming_every_analysis_of_the_document_is_the_canonical_page(self):
+        every = facts.annotated_ids(
+            self.documents["open"].pk, anonymous_user(), "analysis"
+        )
+
+        canonical = self.visitor.get(self.url)
+        filtered = self.visitor.get(f"{self.url}?only={','.join(every)}")
+
+        self.assertEqual(filtered["ETag"], canonical["ETag"])
+        self.assertEqual(len(memo_keys()), 1)

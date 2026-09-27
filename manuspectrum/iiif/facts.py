@@ -481,6 +481,22 @@ def document_facts(resource_id, reader, only=None, kind="analysis", read=None):
     )
 
 
+def annotated_ids(resource_id, reader, kind="analysis"):
+    """Ids of the analyses (*kind* ``characterization``: identified materials) a collection of *resource_id* lists for *reader*.
+
+    None when the Document or Component is unknown or unreadable.
+    """
+    visible = visible_set(reader)
+    subject = _subject(resource_id, reader, visible)
+    if subject is None:
+        return None
+    slug, document = subject
+    read = _characterization_ids if kind == "characterization" else _analysis_ids
+    return read(
+        slug, str(resource_id), document, visible, readable_nodegroup_ids(reader)
+    )
+
+
 def subject_of(resource_id, reader):
     """``(slug, document id)`` of a Document or Component *reader* may see; None otherwise."""
     return _subject(resource_id, reader, visible_set(reader))

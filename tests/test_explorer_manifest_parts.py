@@ -246,11 +246,9 @@ class ManifestPartsTests(SimpleTestCase):
             )
         self.assertEqual(len(v2_ids), 2)
 
-    def test_a_page_is_filtered_only_when_the_scope_keeps_fewer_than_seen(self):
-        seen = {"a", "b", "c"}
-
-        self.assertEqual(page_filter({"a"}, seen), frozenset({"a"}))
-        self.assertIsNone(page_filter(seen, seen))
-        self.assertIsNone(page_filter(set(), seen))
+    def test_a_page_is_filtered_unless_the_scope_keeps_the_whole_document(self):
+        self.assertEqual(page_filter({"a", "b"}), frozenset({"a", "b"}))
+        self.assertIsNone(page_filter({"a"}, whole=True))
+        self.assertIsNone(page_filter(set()))
         with override_settings(IIIF_PAGE_FILTER_MAX=1):
-            self.assertIsNone(page_filter({"a", "b"}, seen))
+            self.assertIsNone(page_filter({"a", "b"}))

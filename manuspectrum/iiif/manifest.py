@@ -4,9 +4,9 @@ A canvas of the manifest does not carry its annotations: it references the
 pages of its Document's collections (``pages.page_reference``), the analyses
 page and, when the scope keeps an identified material there, the identified
 materials page. A page keeps the analyses (or materials) the scope keeps on
-that canvas: when they are fewer than what the visitor sees there and at most
-``IIIF_PAGE_FILTER_MAX``, the reference is the page filtered by ``?only=``;
-otherwise it is the canonical page. Embedded (the data package), the same
+that canvas: a Document scope references the canonical page, any other scope
+the page filtered by ``?only=`` (the canonical page over
+``IIIF_PAGE_FILTER_MAX`` ids). Embedded (the data package), the same
 pages are built for the visitor (``anonymous_user()``) and inlined, without
 ``@context``.
 
@@ -45,10 +45,14 @@ class Canvases:
         self.ids.add(canvas["id"])
 
 
-def page_filter(kept, seen):
-    """The ``only`` of a page reference: *kept* when it is fewer than *seen* and at most ``IIIF_PAGE_FILTER_MAX``, else None."""
+def page_filter(kept, whole=False):
+    """The ``only`` of a page reference: *kept*, or None for the canonical page.
+
+    The canonical page when the scope keeps the *whole* document, when
+    nothing is kept, or over ``IIIF_PAGE_FILTER_MAX`` ids.
+    """
     kept = frozenset(kept)
-    if not kept or kept >= frozenset(seen) or len(kept) > settings.IIIF_PAGE_FILTER_MAX:
+    if whole or not kept or len(kept) > settings.IIIF_PAGE_FILTER_MAX:
         return None
     return kept
 
