@@ -18,10 +18,12 @@ import type {
 
 /**
  * A document of the results: title, shelfmark, holding, dates, type, a short
- * description and its number of analyses. The thumbnail is drawn only from
- * a site path or an http(s) address (`safeHref`); one the server refuses
- * leaves the neutral placeholder, and is not asked for again for a minute
- * (`IMAGE_RETRY_AFTER_MS`).
+ * description and its number of analyses. The title link is stretched over
+ * the whole card, so the card opens the document with one link named by the
+ * title; any other link or button in the card stays above it. The thumbnail
+ * is drawn only from a site path or an http(s) address (`safeHref`); one the
+ * server refuses leaves the neutral placeholder, and is not asked for again
+ * for a minute (`IMAGE_RETRY_AFTER_MS`).
  */
 const props = defineProps<{ hit: DocumentHit; href: string }>();
 const emit = defineEmits<{ open: [id: string] }>();
@@ -135,6 +137,7 @@ function open(event: MouseEvent): void {
 
 <style scoped>
 .document-card {
+    position: relative;
     display: grid;
     grid-template-columns: 4rem minmax(0, 1fr);
     gap: 0.875rem;
@@ -173,13 +176,33 @@ function open(event: MouseEvent): void {
     line-height: 1.25;
 }
 
+.document-card:hover {
+    border-color: var(--blue-text);
+}
+
 .document-card .link {
     color: var(--ink);
 }
 
+.document-card .link::after {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    content: "";
+}
+
 .document-card .link:focus-visible {
+    outline: none;
+}
+
+.document-card .link:focus-visible::after {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
+}
+
+.document-card :is(a, button):not(.link) {
+    position: relative;
+    z-index: 1;
 }
 
 .document-card .shelfmark {
