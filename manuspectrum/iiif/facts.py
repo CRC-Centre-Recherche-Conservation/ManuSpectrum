@@ -45,7 +45,6 @@ from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 import nh3
-from django.db.models import Q
 
 from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileModel
 from arches.app.utils.permission_backend import user_can_read_resource
@@ -67,7 +66,7 @@ from manuspectrum.utils.public_visibility import (
     readable_nodegroup_ids,
     visible_set,
 )
-from manuspectrum.utils.role_links import graph_id_of, role_node
+from manuspectrum.utils.role_links import graph_id_of, node_links, role_node
 from manuspectrum.utils.roles import ROLES
 from manuspectrum.views.explorer.values import dataset_of, rewrite_legacy_url
 from manuspectrum.views.summary_service import GraphIndex, _date, _resource_id
@@ -251,20 +250,7 @@ def _referencing(key, targets, readable):
     node = role_node(*ROLES[key])
     if node is None or node.nodegroup_id not in readable or not targets:
         return []
-    names = Q()
-    for target in targets:
-        names |= Q(**{f"data__{node.nodeid}__contains": [{"resourceId": target}]})
-        names |= Q(**{f"data__{node.nodeid}__contains": {"resourceId": target}})
-    found = []
-    for source, value in (
-        TileModel.objects.filter(nodegroup_id=node.nodegroup_id)
-        .filter(names)
-        .values_list("resourceinstance_id", f"data__{node.nodeid}")
-    ):
-        for target in _refs(value):
-            if target in targets:
-                found.append((str(source), target))
-    return found
+    return node_links(node, targets)
 
 
 def names_of(resource_ids, readable):
