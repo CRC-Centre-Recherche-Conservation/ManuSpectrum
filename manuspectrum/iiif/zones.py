@@ -6,6 +6,7 @@ drew; a ``canvas_index`` of the source manifest maps both to the canvas id.
 
 import sys
 import uuid
+from collections import defaultdict
 
 from django.db.models import JSONField
 from django.db.models.expressions import RawSQL
@@ -34,31 +35,55 @@ def canvas_and_shape(feature, dims):
     return canvas, shape
 
 
+class FeatureRows:
+    """The annotation features of *node* on *resource_ids*, read in one query and resolved per manifest.
+
+    Nothing is read when the node is unresolved or its nodegroup is not in
+    *readable*. ``features`` resolves a subset against one manifest's
+    ``canvas_index``, in the order ``annotation_features`` gives.
+    """
+
+    def __init__(self, node, resource_ids, readable):
+        self._by_resource = defaultdict(list)
+        if node is None or node.nodegroup_id not in readable:
+            return
+        rows = (
+            TileModel.objects.filter(
+                nodegroup_id=node.nodegroup_id,
+                resourceinstance_id__in=list(resource_ids),
+            )
+            .annotate(
+                feature=RawSQL(
+                    "jsonb_array_elements(tiles.tiledata -> %s -> 'features')",
+                    [str(node.nodeid)],
+                    JSONField(),
+                )
+            )
+            .values_list("resourceinstance_id", "feature")
+        )
+        for order, (rid, feature) in enumerate(sorted(rows, key=_by_feature_id)):
+            self._by_resource[str(rid)].append((order, str(rid), feature))
+
+    def features(self, resource_ids, dims):
+        """``(resource id, feature id, canvas, shape)`` of every resolved feature of *resource_ids*, by feature id."""
+        picked = sorted(
+            row
+            for rid in {str(r) for r in resource_ids}
+            for row in self._by_resource.get(rid, ())
+        )
+        for _, rid, feature in picked:
+            canvas, shape = canvas_and_shape(feature, dims)
+            if canvas and shape:
+                yield rid, _feature_id(feature), canvas, shape
+
+
 def annotation_features(node, resource_ids, dims, readable):
     """``(resource id, feature id, canvas, shape)`` of every resolved annotation feature of *node*, by feature id.
 
     Nothing when the node is unresolved or its nodegroup is not in *readable*.
     """
-    if node is None or node.nodegroup_id not in readable:
-        return
-    rows = (
-        TileModel.objects.filter(
-            nodegroup_id=node.nodegroup_id,
-            resourceinstance_id__in=list(resource_ids),
-        )
-        .annotate(
-            feature=RawSQL(
-                "jsonb_array_elements(tiles.tiledata -> %s -> 'features')",
-                [str(node.nodeid)],
-                JSONField(),
-            )
-        )
-        .values_list("resourceinstance_id", "feature")
-    )
-    for rid, feature in sorted(rows, key=_by_feature_id):
-        canvas, shape = canvas_and_shape(feature, dims)
-        if canvas and shape:
-            yield str(rid), _feature_id(feature), canvas, shape
+    resource_ids = [str(r) for r in resource_ids]
+    yield from FeatureRows(node, resource_ids, readable).features(resource_ids, dims)
 
 
 def _feature_id(feature):

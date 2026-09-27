@@ -11,12 +11,18 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 from django.conf import settings
 from django.http import QueryDict
+from django.db import connection
 from django.test import Client, override_settings
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import IIIFManifest, TileModel
 
 from manuspectrum.iiif import facts, ids
-from manuspectrum.views.explorer.manifest import build_manifest, manifest_offer
+from manuspectrum.views.explorer.manifest import (
+    build_manifest,
+    canvas_plan,
+    manifest_offer,
+)
 from manuspectrum.views.explorer.scopes import resolve_scope
 from tests.explorer_fixtures import CANVAS, MANIFEST
 from tests.iiif_schema import assert_valid_manifest
@@ -230,7 +236,7 @@ class ManifestRouteTests(CorpusCase):
         (reference,) = manifest["items"][0]["annotations"]
         self.assertIn("?only=", reference["id"])
 
-    def test_an_analysis_scope_summarises_no_identified_material(self):
+    def test_an_analysis_scope_reads_no_identified_material_zone(self):
         self.tile(
             self.characterization,
             "location_of_characterization",
@@ -239,11 +245,55 @@ class ManifestRouteTests(CorpusCase):
         with mock.patch(FETCH, side_effect=fetched):
             scope = resolve_scope(QueryDict(f"ids=an:{self.pk('open')}:-"), "en")
             with mock.patch(
-                "manuspectrum.views.explorer.manifest.characterization_summaries"
-            ) as summaries:
+                "manuspectrum.views.explorer.manifest.CharacterizationZones"
+            ) as zones:
                 self.assertEqual(manifest_offer(scope), "manifest")
 
-        summaries.assert_not_called()
+        zones.assert_not_called()
+
+    def add_documents(self, count):
+        """*count* documents on local manifests, each with one zoned analysis and one zoned identified material; their Selection keys."""
+        point = {"type": "Point", "coordinates": [5, -5]}
+        keys = []
+        for n in range(count):
+            document = self.new_resource("document", f"Ms 1{n}")
+            stored = IIIFManifest.objects.create(
+                label="Ms", url="", manifest=copy.deepcopy(SOURCE)
+            )
+            self.tile(document, "facsimiles", f"/manifest/{stored.globalid}")
+            analysis = self.new_resource("analysis", f"X1{n}")
+            self.tile(analysis, "component_observed", self.refs(document))
+            self.tile(
+                analysis,
+                "literal_location_of_analysis",
+                self.annotation_value(CANVAS, point),
+            )
+            material = self.new_resource("characterization", f"Ochre {n}")
+            self.tile(material, "object_observed", self.refs(document))
+            self.tile(material, "evidence_analyses", self.refs(analysis))
+            self.tile(
+                material,
+                "location_of_characterization",
+                self.annotation_value(CANVAS_2, point),
+            )
+            keys += [f"an:{analysis.pk}:-", f"ch:{material.pk}:-"]
+        return keys
+
+    def test_placing_a_scope_reads_the_same_queries_whatever_its_documents(self):
+        counts = []
+        for count in (1, 4):
+            keys = self.add_documents(count)
+            scope = resolve_scope(QueryDict("ids=" + ",".join(keys)), "en")
+            with CaptureQueriesContext(connection) as queries:
+                placements = list(canvas_plan(scope).placements)
+
+            self.assertEqual(len(placements), count)
+            self.assertEqual(
+                [(list(p.analyses), list(p.materials)) for p in placements],
+                [([CANVAS], [CANVAS_2])] * count,
+            )
+            counts.append(len(queries))
+        self.assertEqual(counts[0], counts[1])
 
     @override_settings(IIIF_PAGE_FILTER_MAX=0)
     def test_a_scope_over_the_filter_limit_references_the_canonical_page(self):

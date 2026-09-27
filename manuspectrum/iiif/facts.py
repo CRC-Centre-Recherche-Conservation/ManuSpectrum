@@ -59,7 +59,7 @@ from manuspectrum.iiif.sources import (
     canvases_of,
     manifest_json,
 )
-from manuspectrum.iiif.zones import annotation_features
+from manuspectrum.iiif.zones import FeatureRows, annotation_features
 from manuspectrum.models import RendererConfig
 from manuspectrum.utils.public_visibility import (
     hidden_resource_ids,
@@ -720,7 +720,11 @@ def _source(document, readable, read=None):
     manifest = (read or manifest_json)(url) if url else None
     if url and manifest is None:
         memo.mark_degraded()
-    listed = canvases_of(manifest)
+    return listed_source(url, canvases_of(manifest))
+
+
+def listed_source(url, listed):
+    """``Source`` of the manifest at *url* whose canvases are *listed* (``canvases_of``)."""
     return Source(
         url=url,
         listed=listed,
@@ -731,10 +735,13 @@ def _source(document, readable, read=None):
 
 def _located(node, resource_ids, dims, position, readable):
     """``{resource id: [Zone, …]}`` of the features of *node* on a canvas listed in *position*."""
+    return _on_listed(annotation_features(node, resource_ids, dims, readable), position)
+
+
+def _on_listed(features, position):
+    """``{resource id: [Zone, …]}`` of the resolved *features* on a canvas listed in *position*."""
     zones = defaultdict(list)
-    for rid, feature, canvas, shape in annotation_features(
-        node, resource_ids, dims, readable
-    ):
+    for rid, feature, canvas, shape in features:
         if canvas in position:
             zones[rid].append(Zone(str(feature), canvas, position[canvas], shape))
     return zones
@@ -756,36 +763,60 @@ def _counts(zones):
     return counts
 
 
+class CharacterizationZones:
+    """The zones placing the identified materials *ids*, read once and placed on each Document's canvases.
+
+    Its own zones read, the visible Components each observes through a
+    readable link and their zones: three queries, whatever the number of
+    Documents ``on`` is then asked for.
+    """
+
+    def __init__(self, ids, visible, readable):
+        self._own = FeatureRows(role_node(*ROLES["ch_zone"]), ids, readable)
+        self._observed = {
+            c: sorted(
+                {
+                    r
+                    for _, value, _ in links.get("object_observed", ())
+                    for r in _refs(value)
+                    if r in visible.components
+                }
+            )
+            for c, links in (
+                _tiles(ids, ["object_observed"], readable).items() if ids else ()
+            )
+        }
+        self._components = FeatureRows(
+            role_node(*ROLES["comp_zone"]),
+            sorted({o for v in self._observed.values() for o in v}),
+            readable,
+        )
+
+    def on(self, ids, source):
+        """``{identified material id: [Zone, …]}`` of *ids* on *source*: its own zones, else those of the Components it observes."""
+        if not ids:
+            return {}
+        dims, position = source.dims, source.position
+        own = _on_listed(self._own.features(ids, dims), position)
+        observed = {o for c in ids for o in self._observed.get(c, ())}
+        components = _on_listed(self._components.features(observed, dims), position)
+        placed = {}
+        for c in ids:
+            zones = own.get(c) or [
+                zone
+                for o in self._observed.get(c, ())
+                for zone in components.get(o, ())
+            ]
+            if zones:
+                placed[c] = zones
+        return placed
+
+
 def _characterization_zones(ids, visible, readable, source):
     """``{identified material id: [Zone, …]}``: its own zones, else those of the visible Components it observes."""
     if not ids:
         return {}
-    dims, position = source.dims, source.position
-    own = _located(role_node(*ROLES["ch_zone"]), ids, dims, position, readable)
-    observed = {
-        c: {
-            r
-            for _, value, _ in links.get("object_observed", ())
-            for r in _refs(value)
-            if r in visible.components
-        }
-        for c, links in _tiles(ids, ["object_observed"], readable).items()
-    }
-    components = _located(
-        role_node(*ROLES["comp_zone"]),
-        sorted({c for v in observed.values() for c in v}),
-        dims,
-        position,
-        readable,
-    )
-    placed = {}
-    for c in ids:
-        zones = own.get(c) or [
-            zone for o in sorted(observed.get(c, ())) for zone in components.get(o, ())
-        ]
-        if zones:
-            placed[c] = zones
-    return placed
+    return CharacterizationZones(ids, visible, readable).on(ids, source)
 
 
 def _characterizations(ids, visible, readable, source, placed, name_of):

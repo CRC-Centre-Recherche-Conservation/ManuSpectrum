@@ -16,9 +16,11 @@ Canvases resolve in this order:
 3. An analysis is placed by its zones on the canvases of its own document.
    An analysis with no placed zone is listed in ``metadata`` with its
    permalink.
-4. An identified material is placed by its own zone, else by the zone of
-   the first object it observes that has one. A zone whose nodegroup the
-   reader cannot read counts as absent, for analyses and materials alike.
+4. An identified material is placed on the canvas of its first zone by
+   the rule of its IIIF pages (``iiif.facts.CharacterizationZones``): its
+   own zones, else those of the visible Components it observes. A zone
+   whose nodegroup the reader cannot read counts as absent, for analyses
+   and materials alike.
 5. The canvases kept are those carrying a zone of a kept analysis or
    material, or every canvas of the document with ``canvases=all``. The
    layers of an imaging entry follow the canvas of its analysis's first
@@ -34,7 +36,7 @@ from django.conf import settings
 
 from manuspectrum.iiif import ids
 from manuspectrum.iiif import language as lang
-from manuspectrum.iiif.facts import names_of
+from manuspectrum.iiif.facts import CharacterizationZones, listed_source, names_of
 from manuspectrum.iiif.manifest import (
     Canvases,
     EmbeddedPages,
@@ -49,20 +51,18 @@ from manuspectrum.iiif.manifest import (
 from manuspectrum.iiif.pages import with_context
 from manuspectrum.iiif.sources import (
     absolute_url,
-    canvas_index,
     canvases_of,
     layer_canvas,
     manifest_json,
     v3_canvas,
 )
-from manuspectrum.iiif.zones import annotation_features
+from manuspectrum.iiif.zones import FeatureRows
 from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.utils.roles import ROLES
 from manuspectrum.views.explorer.scopes import kept_files
 from manuspectrum.views.explorer.service import (
     Values,
-    characterization_summaries,
     document_characterizations,
     imaging_entries,
     permalink,
@@ -134,72 +134,72 @@ class _Placement:
 def _placements(scope):
     """One ``_Placement`` per document of *scope*, in order, each built when it is reached.
 
-    Zones are read from ``scope.nodegroups``. ``ManifestTooLarge`` is raised
-    as soon as the kept canvases of the documents placed so far exceed
-    ``EXPLORER_MANIFEST_MAX_CANVASES``.
+    The local source manifests, the analysis zones and the material zones
+    of the whole scope are read before the first document is placed, a
+    fixed number of queries; a remote source manifest is read when its
+    document is reached. Zones are read from ``scope.nodegroups``.
+    ``ManifestTooLarge`` is raised as soon as the kept canvases of the
+    documents placed so far exceed ``EXPLORER_MANIFEST_MAX_CANVASES``.
     """
-    bundle, language, reader = scope.bundle, scope.language, scope.reader
+    bundle, reader = scope.bundle, scope.reader
     readable = scope.nodegroups
     doc_values = Values(list(scope.documents), ["doc_manifest"], reader)
-    zone_node = role_node(*ROLES["zone"])
-    material_nodegroups = {
-        "own": getattr(role_node(*ROLES["ch_zone"]), "nodegroup_id", None),
-        "component": getattr(role_node(*ROLES["comp_zone"]), "nodegroup_id", None),
+    urls = {
+        d: rewrite_legacy_url(doc_values.first(d, "doc_manifest") or "")
+        for d in scope.documents
     }
+    scope.read_manifest.prime(u for u in urls.values() if u)
     chosen_analyses = set(scope.analyses)
     chosen_characterizations = set(scope.characterizations)
-    limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
-    planned = set()
+    located, materials_of = {}, {}
     for document in scope.documents:
-        url = rewrite_legacy_url(doc_values.first(document, "doc_manifest") or "")
-        source = scope.read_manifest(url) if url else None
-        listed = canvases_of(source)
-        position = {c["id"]: c for c in listed}
-        number = {c["id"]: n for n, c in enumerate(listed, start=1)}
-        dims = canvas_index(listed)
         scope_analyses = [
             a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
         ]
         visible = {row["id"] for row in bundle.by_document.get(document, [])}
-        analyses, first = defaultdict(list), {}
-        for rid, _, canvas, _ in annotation_features(
-            zone_node,
+        located[document] = (
+            scope_analyses,
             sorted(visible & chosen_analyses | set(scope_analyses)),
-            dims,
-            readable,
-        ):
+        )
+        materials_of[document] = sorted(
+            c
+            for c in document_characterizations(bundle, document)
+            if c in chosen_characterizations and c in bundle.visible.characterizations
+        )
+    zones = FeatureRows(
+        role_node(*ROLES["zone"]),
+        sorted({a for _, ids in located.values() for a in ids}),
+        readable,
+    )
+    all_materials = sorted({c for ids in materials_of.values() for c in ids})
+    material_zones = (
+        CharacterizationZones(all_materials, bundle.visible, readable)
+        if all_materials
+        else None
+    )
+    limit = settings.EXPLORER_MANIFEST_MAX_CANVASES
+    planned = set()
+    for document in scope.documents:
+        url = urls[document]
+        source = scope.read_manifest(url) if url else None
+        listed = canvases_of(source)
+        position = {c["id"]: c for c in listed}
+        number = {c["id"]: n for n, c in enumerate(listed, start=1)}
+        placing = listed_source(url, listed)
+        scope_analyses, analysis_ids = located[document]
+        analyses, first = defaultdict(list), {}
+        for rid, _, canvas, _ in zones.features(analysis_ids, placing.dims):
             if canvas not in position:
                 continue
             if rid not in analyses[canvas]:
                 analyses[canvas].append(rid)
             first.setdefault(rid, canvas)
         materials = defaultdict(list)
-        chosen_materials = [
-            c
-            for c in document_characterizations(bundle, document)
-            if c in chosen_characterizations
-        ]
-        summaries = (
-            characterization_summaries(
-                chosen_materials,
-                bundle.visible,
-                reader,
-                language,
-                dims,
-                objects_of=bundle.links["objects"],
-                analysis_rows=bundle.by_id,
-            )
-            if chosen_materials
-            else ()
-        )
-        for summary in summaries:
-            zone = summary["zone"]
-            if (
-                zone
-                and zone["canvas"] in position
-                and material_nodegroups[zone["source"]] in readable
-            ):
-                materials[zone["canvas"]].append(summary["id"])
+        if materials_of[document]:
+            placed = material_zones.on(materials_of[document], placing)
+            for c in materials_of[document]:
+                if c in placed:
+                    materials[placed[c][0].canvas].append(c)
         if scope.canvases_all:
             kept = [c["id"] for c in listed]
         else:

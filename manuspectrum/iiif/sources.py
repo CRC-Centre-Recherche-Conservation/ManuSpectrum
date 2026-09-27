@@ -7,6 +7,7 @@ HTTP; any other is fetched through ``CanvasIIIF``. Legacy hosts
 
 import hashlib
 import re
+import uuid
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -24,6 +25,16 @@ _LEVEL = re.compile(r"level([0-2])")
 _LOCAL_MANIFEST = re.compile(r"/manifest/(?P<uuid>[0-9a-fA-F-]{36})/?$")
 
 
+def _local_uuid(url):
+    """The uuid a local ``/manifest/<uuid>`` URL (legacy host already rewritten) names, else None."""
+    match = _LOCAL_MANIFEST.search(urlsplit(url).path)
+    if match and (
+        url.startswith("/") or url.startswith(settings.PUBLIC_SERVER_ADDRESS)
+    ):
+        return match["uuid"]
+    return None
+
+
 def manifest_json(url):
     """Manifest JSON of *url*: a local ``/manifest/<uuid>`` is read from ``IIIFManifest`` in the database, never over HTTP.
 
@@ -32,17 +43,58 @@ def manifest_json(url):
     url = rewrite_legacy_url(url or "")
     if not url:
         return None
-    match = _LOCAL_MANIFEST.search(urlsplit(url).path)
-    if match and (
-        url.startswith("/") or url.startswith(settings.PUBLIC_SERVER_ADDRESS)
-    ):
+    local = _local_uuid(url)
+    if local:
         stored = (
-            IIIFManifest.objects.filter(globalid=match["uuid"])
+            IIIFManifest.objects.filter(globalid=local)
             .values_list("manifest", flat=True)
             .first()
         )
         return stored if isinstance(stored, dict) else None
     return CanvasIIIF.fetch_manifest(url)
+
+
+def local_manifests(urls):
+    """``{url: manifest JSON}`` of the local manifests among *urls*, read in one query, as ``manifest_json`` reads each.
+
+    A URL that is not local, or names no valid uuid, is left out.
+    """
+    wanted = {}
+    for url in urls:
+        local = _local_uuid(rewrite_legacy_url(url or "")) if url else None
+        try:
+            wanted[url] = uuid.UUID(local) if local else None
+        except ValueError:
+            wanted[url] = None
+    wanted = {url: key for url, key in wanted.items() if key}
+    if not wanted:
+        return {}
+    stored = dict(
+        IIIFManifest.objects.filter(globalid__in=set(wanted.values())).values_list(
+            "globalid", "manifest"
+        )
+    )
+    return {
+        url: stored[key] if isinstance(stored.get(key), dict) else None
+        for url, key in wanted.items()
+    }
+
+
+class ManifestReader:
+    """*read* (``manifest_json``) memoised: each URL is read once; ``prime`` reads the local ones of many URLs in one query."""
+
+    def __init__(self, read=manifest_json):
+        self._read = read
+        self._found = {}
+
+    def __call__(self, url):
+        if url not in self._found:
+            self._found[url] = self._read(url)
+        return self._found[url]
+
+    def prime(self, urls):
+        """Read the local manifests among *urls* not read yet, in one query."""
+        self._found.update(local_manifests({u for u in urls if u not in self._found}))
 
 
 def canvas_label(value):
