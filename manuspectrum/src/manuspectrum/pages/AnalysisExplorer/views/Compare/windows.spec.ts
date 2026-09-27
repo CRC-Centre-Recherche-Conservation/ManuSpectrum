@@ -9,7 +9,9 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
     autoWindows,
+    keepUnchangedCurves,
     windowIdsOf,
+    xyWindowsGaining,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 import type {
@@ -314,5 +316,44 @@ describe("autoWindows", () => {
         expect(
             windowIdsOf(autoWindows(basket.slice(1), byKey, new Set())),
         ).toEqual(["auto:micro"]);
+    });
+});
+
+describe("keepUnchangedCurves", () => {
+    it("keeps the curves of an XY window whose files did not change, and takes the new ones of another", () => {
+        const first = whole(1, [spectrum(1, XRF)]);
+        const second = whole(2, [spectrum(2, RAMAN)]);
+        const third = whole(3, [spectrum(3, RAMAN)]);
+        const before = derive([first, second]);
+        const after = keepUnchangedCurves(
+            before,
+            derive([first, second, third]),
+        );
+        expect(xy(after)[0].curves).toBe(xy(before)[0].curves);
+        expect(xy(after)[1].curves).not.toBe(xy(before)[1].curves);
+        expect(xy(after)[1].curves).toHaveLength(2);
+    });
+
+    it("takes new curves when a file moves to another slot", () => {
+        const first = whole(1, [spectrum(1, XRF)]);
+        const before = derive([first], [0]);
+        const after = keepUnchangedCurves(before, derive([first], [3]));
+        expect(xy(after)[0].curves[0].slot).toBe(3);
+    });
+});
+
+describe("xyWindowsGaining", () => {
+    it("names the XY windows that hold a spectrum they did not hold", () => {
+        const first = whole(1, [spectrum(1, XRF)]);
+        const second = whole(2, [spectrum(2, RAMAN)]);
+        const third = whole(3, [spectrum(3, XRF), micro(1)]);
+        const before = derive([first, second]);
+        expect(
+            xyWindowsGaining(before, derive([first, second, third])),
+        ).toEqual([`auto:xy:${XRF}`]);
+        expect(xyWindowsGaining(before, derive([first]))).toEqual([]);
+        expect(xyWindowsGaining([], derive([first]))).toEqual([
+            `auto:xy:${XRF}`,
+        ]);
     });
 });

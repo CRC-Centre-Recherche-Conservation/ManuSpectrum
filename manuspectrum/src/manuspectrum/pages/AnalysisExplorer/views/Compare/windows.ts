@@ -1,3 +1,5 @@
+import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
+
 import type {
     AnalysisHit,
     CharacterizationSummary,
@@ -108,10 +110,6 @@ export function windowIdsOf(windows: readonly AutoWindow[]): string[] {
     return windows.map((window) => window.id);
 }
 
-function firstText(values: (string | null)[]): string | null {
-    return values.find((value) => Boolean(value?.trim())) ?? null;
-}
-
 function isReadableSpectrum(file: FileEntry): boolean {
     return file.dataKind === "xy" && file.role === "readable";
 }
@@ -210,13 +208,13 @@ class Collector {
                     return keys;
                 }, []),
                 axisKey: curves[0].file.viewer.axisKey,
-                configName: firstText(
+                configName: firstStoredTitle(
                     curves.map((curve) => curve.file.viewer.configName),
                 ),
-                xLabel: firstText(
+                xLabel: firstStoredTitle(
                     curves.map((curve) => curve.file.viewer.xLabel),
                 ),
-                yLabel: firstText(
+                yLabel: firstStoredTitle(
                     curves.map((curve) => curve.file.viewer.yLabel),
                 ),
                 folded: index >= UNFOLDED_XY_WINDOWS,
@@ -277,4 +275,52 @@ export function autoWindows(
         }
     }
     return collector.windows();
+}
+
+function curveId(curve: FileLine): string {
+    return `${curve.key}|${curve.slot}|${curve.file.id}`;
+}
+
+function curvesOf(windows: readonly AutoWindow[]): Map<string, FileLine[]> {
+    return new Map(
+        windows.flatMap((window) =>
+            window.kind === "xy" ? [[window.id, window.curves]] : [],
+        ),
+    );
+}
+
+/**
+ * `next`, each XY window holding the curves array of `previous` when its
+ * curves are the same files in the same slots: a window whose spectra did
+ * not change keeps its curves' identity, and its chart is not drawn again.
+ */
+export function keepUnchangedCurves(
+    previous: readonly AutoWindow[],
+    next: AutoWindow[],
+): AutoWindow[] {
+    const kept = curvesOf(previous);
+    return next.map((window) => {
+        const curves = window.kind === "xy" ? kept.get(window.id) : undefined;
+        if (
+            window.kind !== "xy" ||
+            !curves ||
+            curves.map(curveId).join("\n") !==
+                window.curves.map(curveId).join("\n")
+        ) {
+            return window;
+        }
+        return { ...window, curves };
+    });
+}
+
+/** The XY windows of `next` holding a spectrum (file in a slot) their namesake in `previous` did not hold. */
+export function xyWindowsGaining(
+    previous: readonly AutoWindow[],
+    next: readonly AutoWindow[],
+): string[] {
+    const before = curvesOf(previous);
+    return [...curvesOf(next)].flatMap(([id, curves]) => {
+        const known = new Set((before.get(id) ?? []).map(curveId));
+        return curves.some((curve) => !known.has(curveId(curve))) ? [id] : [];
+    });
 }

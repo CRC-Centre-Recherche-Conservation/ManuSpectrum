@@ -8,7 +8,10 @@ import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/
 import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
 
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
-import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    ANNOUNCE_KEY,
+    SELECTION_ITEMS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     forgetWindows,
@@ -17,7 +20,9 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 import {
     autoWindows,
+    keepUnchangedCurves,
     windowIdsOf,
+    xyWindowsGaining,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 import type {
@@ -44,20 +49,37 @@ const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
  * a hidden window comes back from « Hidden windows » or with « Rearrange ».
  * The hidden windows are kept next to the layout (`ms-explorer-layout-v1`);
  * a window whose items all leave the Selection is gone, and forgotten there.
+ * A hidden XY window that gains spectra stays hidden: it is announced and
+ * marked in « Hidden windows ». An XY window whose spectra did not change
+ * keeps its curves, so its chart is not drawn again. A failure to read the
+ * Selection offers a retry, before and after the windows are arranged.
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
+const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
 
 const store = useExplorerStore();
-const selection = useSelectionItems();
+const selection = selectionItems();
 const { $gettext, interpolate } = useGettext();
 const root = useTemplateRef<HTMLElement>("root");
 
 const hidden = ref<string[]>(readHidden());
 /** Set once the Selection has been read: windows are arranged from then on. */
 const opened = ref(false);
+/** Hidden windows that gained spectra since they were hidden. */
+const refreshed = ref<string[]>([]);
 
-const windows = computed<AutoWindow[]>(() =>
-    autoWindows(store.basket, selection.byKey.value, selection.missing.value),
+// The windows last compared for new spectra, once the view is open.
+let known: AutoWindow[] = [];
+
+const windows = computed<AutoWindow[]>((previous) =>
+    keepUnchangedCurves(
+        previous ?? [],
+        autoWindows(
+            store.basket,
+            selection.byKey.value,
+            selection.missing.value,
+        ),
+    ),
 );
 const windowById = computed(
     () => new Map(windows.value.map((window) => [window.id, window])),
@@ -89,14 +111,37 @@ watch(
         selection.settled.value ? windowIdsOf(windows.value).join("\n") : null,
     (joined) => {
         if (joined === null) return;
+        if (!opened.value) known = windows.value;
         opened.value = true;
         const ids = windowIdsOf(windows.value);
         forgetWindows(ids);
         const kept = hidden.value.filter((id) => ids.includes(id));
         if (kept.length !== hidden.value.length) hidden.value = kept;
+        refreshed.value = refreshed.value.filter((id) => kept.includes(id));
     },
     { immediate: true },
 );
+
+watch(windows, (next) => {
+    if (!opened.value) return;
+    const gaining = xyWindowsGaining(known, next).filter(
+        (id) => hidden.value.includes(id) && !refreshed.value.includes(id),
+    );
+    known = next;
+    if (gaining.length === 0) return;
+    refreshed.value = [...refreshed.value, ...gaining];
+    announce(
+        gaining
+            .map((id) =>
+                interpolate(
+                    $gettext("%{title}: new spectra added to a hidden window"),
+                    { title: specTitle(id) },
+                    true,
+                ),
+            )
+            .join(" "),
+    );
+});
 
 function xyTitle(window: XyWindow): string {
     if (window.configName) return window.configName;
@@ -125,6 +170,10 @@ function titleOf(window: AutoWindow): string {
         case "not-in-chart":
             return $gettext("Not in a chart");
     }
+}
+
+function specTitle(id: string): string {
+    return specs.value.find((spec) => spec.id === id)?.title ?? "";
 }
 
 function showLabel(title: string): string {
@@ -172,12 +221,14 @@ async function closeWindow({ id }: { id: string }): Promise<void> {
 
 async function showWindow(id: string): Promise<void> {
     setHidden(hidden.value.filter((entry) => entry !== id));
+    refreshed.value = refreshed.value.filter((entry) => entry !== id);
     await nextTick();
     windowElement(id)?.focus();
 }
 
 function showAll(): void {
     if (hidden.value.length > 0) setHidden([]);
+    refreshed.value = [];
 }
 </script>
 
@@ -218,6 +269,12 @@ function showAll(): void {
             <span>{{ $gettext("Reading the Selection…") }}</span>
         </p>
         <template v-else>
+            <UnavailableState
+                v-if="selection.status.value === 'error'"
+                status="error"
+                :hide-home="true"
+                @retry="selection.retry"
+            />
             <section
                 v-if="hiddenSpecs.length > 0"
                 class="hidden-windows"
@@ -237,6 +294,11 @@ function showAll(): void {
                             @click="showWindow(spec.id)"
                         >
                             <span>{{ showLabel(spec.title) }}</span>
+                            <span
+                                v-if="refreshed.includes(spec.id)"
+                                class="badge"
+                                >{{ $gettext("new spectra") }}</span
+                            >
                         </button>
                     </li>
                 </ul>
@@ -307,6 +369,15 @@ function showAll(): void {
     color: var(--ink);
     font: inherit;
     cursor: pointer;
+}
+
+.compare-view .hidden-windows .badge {
+    margin-inline-start: 0.5rem;
+    padding-inline: 0.375rem;
+    border-radius: 999rem;
+    background: var(--ink);
+    color: var(--surface);
+    font-size: 0.75rem;
 }
 
 .compare-view .hidden-windows button:focus-visible {

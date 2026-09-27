@@ -96,6 +96,7 @@ const MATERIAL: Item = {
 const EMPTY_ITEM = whole(4, []);
 const FORS_ITEM = whole(5, [spectrum(5, FORS)]);
 const FTIR_ITEM = whole(6, [spectrum(6, FTIR)]);
+const XRF_OTHER_ITEM = whole(7, [spectrum(7, XRF)]);
 
 const ITEMS = new Map(
     [
@@ -106,6 +107,7 @@ const ITEMS = new Map(
         EMPTY_ITEM,
         FORS_ITEM,
         FTIR_ITEM,
+        XRF_OTHER_ITEM,
     ].map((item) => [item.key, item]),
 );
 
@@ -406,7 +408,12 @@ describe("CompareView", () => {
         await flushPromises();
         expect(view.find(".grid-stack").exists()).toBe(false);
         expect(view.find(".hidden-windows").exists()).toBe(false);
-        expect(storedLayout()).toEqual({ version: 2, boxes: {}, hidden: [] });
+        expect(storedLayout()).toEqual({
+            version: 2,
+            boxes: {},
+            hidden: [],
+            folded: {},
+        });
     });
 
     it("adds the windows of an item added later, reading only that item", async () => {
@@ -431,5 +438,59 @@ describe("CompareView", () => {
         const view = await mountView();
         expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
         expect(itemCalls()).toHaveLength(1);
+    });
+
+    it("shows a failure to read an item added later, with a retry, and keeps the windows", async () => {
+        select(XRF_ITEM);
+        const view = await mountView();
+        fetchMock.mockImplementationOnce(async () =>
+            jsonResponse({ error: "down" }, 500),
+        );
+        select(MATERIAL);
+        await flushPromises();
+        expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
+        expect(view.find(".unavailable-state").exists()).toBe(true);
+        await view.find(".unavailable-state .retry").trigger("click");
+        await flushPromises();
+        expect(view.find(".unavailable-state").exists()).toBe(false);
+        expect(windowIds(view)).toEqual([
+            `auto:xy:${XRF}`,
+            "auto:characterizations",
+        ]);
+    });
+
+    it("announces new spectra in a hidden window, keeps it hidden and marks it", async () => {
+        select(XRF_ITEM, MATERIAL);
+        const view = await mountView();
+        await windowOf(view, `auto:xy:${XRF}`)
+            .find('[data-action="close"]')
+            .trigger("click");
+        await flushPromises();
+        expect(view.find(".hidden-windows .badge").exists()).toBe(false);
+        select(XRF_OTHER_ITEM);
+        await flushPromises();
+        expect(windowIds(view)).toEqual(["auto:characterizations"]);
+        expect(announce).toHaveBeenLastCalledWith(
+            "XRF — energy / counts: new spectra added to a hidden window",
+        );
+        const show = view.find(".hidden-windows button");
+        expect(show.find(".badge").text()).toBe("new spectra");
+        await show.trigger("click");
+        await flushPromises();
+        await windowOf(view, `auto:xy:${XRF}`)
+            .find('[data-action="close"]')
+            .trigger("click");
+        await flushPromises();
+        expect(view.find(".hidden-windows .badge").exists()).toBe(false);
+    });
+
+    it("does not redraw an XY window whose spectra did not change", async () => {
+        select(XRF_ITEM);
+        await mountView();
+        const drawings = plotly.react.mock.calls.length;
+        expect(drawings).toBeGreaterThan(0);
+        select(MICRO_ITEM);
+        await flushPromises();
+        expect(plotly.react).toHaveBeenCalledTimes(drawings);
     });
 });
