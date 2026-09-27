@@ -830,6 +830,9 @@ IIIF_PAGE_FILTER_MAX = 100
 IIIF_MEMO_TTL = 24 * 60 * 60
 # Seconds the visitor's 404 for a missing page or zone is kept under its key.
 IIIF_ABSENT_TTL = 5 * 60
+# Seconds a request waits for another request building the same IIIF document
+# before building it itself (below the 60 s build lock).
+IIIF_BUILD_WAIT = 30
 
 # IIIF Auth 1.0 / 2.0 (manuspectrum/iiif/tokens.py). A IIIF token is a
 # read-only credential for the /iiif/ read routes, bound to the Arches session

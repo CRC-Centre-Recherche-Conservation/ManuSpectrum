@@ -81,6 +81,22 @@ class GetOrBuildTests(SimpleTestCase):
         )
         build.assert_not_called()
 
+    def test_stops_waiting_when_the_holder_releases_the_lock_without_a_value(self):
+        cache.add(self.KEY + ":lock", 1, 60)
+
+        def holder_fails():
+            time.sleep(0.2)
+            cache.delete(self.KEY + ":lock")
+
+        holder = threading.Thread(target=holder_fails, daemon=True)
+        self.addCleanup(holder.join)
+        holder.start()
+        started = time.monotonic()
+        self.assertEqual(
+            get_or_build(self.KEY, lambda: "mine", 60, wait=5.0, poll=0.05), "mine"
+        )
+        self.assertLess(time.monotonic() - started, 2.0)
+
     def test_builds_itself_when_the_holder_never_delivers(self):
         cache.add(self.KEY + ":lock", 1, 60)
         build = MagicMock(return_value="fallback")

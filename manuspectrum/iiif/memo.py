@@ -108,7 +108,13 @@ def _stored(key, build):
         if value == ABSENT:
             cache.set(key, value, settings.IIIF_ABSENT_TTL)
 
-    body = get_or_build(key, stored, settings.IIIF_MEMO_TTL, kept=expire_absent)
+    body = get_or_build(
+        key,
+        stored,
+        settings.IIIF_MEMO_TTL,
+        wait=settings.IIIF_BUILD_WAIT,
+        kept=expire_absent,
+    )
     if body == ABSENT:
         raise Absent()
     return body
