@@ -3,6 +3,7 @@ import { computed, inject, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
+import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import {
@@ -32,7 +33,8 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
  * what the card that added it knew (`SELECTION_HINTS_KEY`). « Compare »
  * opens the Compare view, asks for its heading to take the focus
  * (`SCREEN_FOCUS_KEY`) and emits `compare`, so a drawer holding the panel
- * closes.
+ * closes. When the reading of the Selection fails, the rows not read lose
+ * their placeholder and the panel offers Retry.
  */
 const emit = defineEmits<{ (event: "compare"): void }>();
 
@@ -48,9 +50,12 @@ const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
 
-const { byKey, missing } = selectionItems();
+const { byKey, missing, status, retry } = selectionItems();
 
 const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
+const failed = computed(
+    () => status.value === "error" || status.value === "unavailable",
+);
 const canCompare = computed(() => isViewAvailable("compare"));
 
 /** What a whole analysis holds, « 2 spectra · 1 map », or that it holds nothing to show. */
@@ -155,7 +160,13 @@ function removeLabel(slot: number): string {
                 }}
             </span>
         </p>
-        <ol v-else>
+        <UnavailableState
+            v-if="store.basket.length > 0 && failed"
+            status="error"
+            :hide-home="true"
+            @retry="retry"
+        />
+        <ol v-if="store.basket.length > 0">
             <li
                 v-for="row in rows"
                 :key="row.key"
@@ -209,7 +220,7 @@ function removeLabel(slot: number): string {
                         </span>
                     </template>
                     <span
-                        v-else
+                        v-else-if="!failed"
                         class="pending ms-skeleton"
                         role="img"
                         :aria-label="$gettext('Loading…')"
