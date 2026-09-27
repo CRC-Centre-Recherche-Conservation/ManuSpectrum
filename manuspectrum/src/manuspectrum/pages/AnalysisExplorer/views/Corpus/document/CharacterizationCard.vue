@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
 
+import { techniqueClass } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
     formatDateRange,
     safeHref,
@@ -20,20 +21,32 @@ import type {
     CharacterizationSummary,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 type Material = CharacterizationSummary["materials"][number];
 type Source = CharacterizationSummary["sources"][number];
 
-/** `headingId` names the heading (a drawer is labelled by it); `closable: false` hides « Close » where the container has its own. */
+/**
+ * `headingId` names the heading (a drawer is labelled by it); `closable:
+ * false` hides « Close » where the container has its own. `analysisStyles`
+ * holds the technique style of the document's analyses by id: an evidence
+ * analysis found there carries its technique code in its family colour, as
+ * on the folio.
+ */
 const props = withDefaults(
     defineProps<{
         summary: CharacterizationSummary;
         scale: CertaintyScale;
         headingId?: string;
         closable?: boolean;
+        analysisStyles?: ReadonlyMap<string, TechniqueStyle>;
     }>(),
-    { headingId: undefined, closable: true },
+    {
+        headingId: undefined,
+        closable: true,
+        analysisStyles: () => new Map<string, TechniqueStyle>(),
+    },
 );
 
 const emit = defineEmits<{ close: [] }>();
@@ -86,6 +99,13 @@ const withEvidenceHints = computed(() => {
     return hints;
 });
 const date = computed(() => formatDateRange(props.summary.date));
+/** Each evidence analysis with its technique style, null outside `analysisStyles`. */
+const evidence = computed(() =>
+    props.summary.evidence.map((entry) => ({
+        ...entry,
+        style: props.analysisStyles.get(entry.id) ?? null,
+    })),
+);
 const evidenceTitle = computed(() =>
     interpolate(
         $gettext("Analyses cited as evidence (%{n})"),
@@ -145,6 +165,14 @@ function focusHeading(): void {
             >
                 <span>{{ props.summary.name.value }}</span>
             </h3>
+            <button
+                v-if="props.closable"
+                type="button"
+                class="close"
+                @click="close"
+            >
+                <span>{{ $gettext("Close") }}</span>
+            </button>
             <p class="meta">
                 <span>{{ $gettext("Identified material") }}</span>
                 <span
@@ -154,14 +182,6 @@ function focusHeading(): void {
                     {{ $gettext("Draft") }}
                 </span>
             </p>
-            <button
-                v-if="props.closable"
-                type="button"
-                class="close"
-                @click="close"
-            >
-                <span>{{ $gettext("Close") }}</span>
-            </button>
         </header>
 
         <p
@@ -316,7 +336,7 @@ function focusHeading(): void {
                     <span>{{ level.label.value }}</span>
                     <span
                         v-if="currentLevels.has(level.uri)"
-                        class="here"
+                        class="visually-hidden"
                         >{{ $gettext("this identification") }}</span
                     >
                 </li>
@@ -333,15 +353,25 @@ function focusHeading(): void {
             </h4>
             <ul>
                 <li
-                    v-for="entry in props.summary.evidence"
+                    v-for="entry in evidence"
                     :key="entry.id"
                 >
                     <button
                         type="button"
-                        :lang="entry.name.lang"
                         @click="openAnalysis(entry.id)"
                     >
-                        <span>{{ entry.name.value }}</span>
+                        <span
+                            v-if="entry.style"
+                            class="code"
+                            aria-hidden="true"
+                            :class="techniqueClass('code', entry.style.colour)"
+                            >{{ entry.style.code }}</span
+                        >
+                        <span
+                            class="name"
+                            :lang="entry.name.lang"
+                            >{{ entry.name.value }}</span
+                        >
                     </button>
                 </li>
             </ul>
@@ -375,19 +405,24 @@ function focusHeading(): void {
 }
 
 .characterization-card .card-head {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.5rem 1rem;
     align-items: center;
 }
 
+.characterization-card .card-head > * {
+    grid-column: 1 / -1;
+}
+
 .characterization-card .card-head .name {
-    flex: 1 1 100%;
+    grid-column: 1;
     font-weight: 600;
 }
 
 .characterization-card .card-head .close {
-    margin-inline-start: auto;
+    grid-column: 2;
+    grid-row: 1;
 }
 
 .characterization-card .meta,
@@ -484,17 +519,107 @@ function focusHeading(): void {
     }
 }
 
+.characterization-card .scale ol {
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 0.125rem;
+    padding: 0;
+    list-style: none;
+}
+
+.characterization-card .scale li {
+    padding-block-start: 0.375rem;
+    border-block-start: 0.375rem solid var(--border-hover);
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+}
+
 .characterization-card .scale .is-current {
+    border-block-start-color: var(--ink);
+    color: var(--ink);
     font-weight: 600;
 }
 
-.characterization-card .scale .here {
-    margin-inline-start: 0.5rem;
-    padding-inline: 0.375rem;
-    border: 0.0625rem solid var(--ink);
+@container (max-width: 20rem) {
+    .characterization-card .scale ol {
+        grid-auto-flow: row;
+    }
+}
+
+.characterization-card .evidence button {
+    gap: 0.5rem;
+    text-align: start;
+}
+
+.characterization-card .evidence .code {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    box-sizing: border-box;
+    min-inline-size: 1.5rem;
+    block-size: 1.5rem;
+    padding-inline: 0.25rem;
+    border: 0.125rem solid var(--surface);
     border-radius: 999rem;
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    font-weight: 400;
+    background: var(--ink);
+    color: var(--stage);
+    font: 600 0.625rem var(--font-body);
+    white-space: nowrap;
+}
+
+.characterization-card .evidence .code--ink {
+    border-color: var(--ink);
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.characterization-card .evidence .code--tech-1 {
+    background: var(--tech-1);
+}
+
+.characterization-card .evidence .code--tech-2 {
+    background: var(--tech-2);
+}
+
+.characterization-card .evidence .code--tech-3 {
+    background: var(--tech-3);
+}
+
+.characterization-card .evidence .code--tech-4 {
+    background: var(--tech-4);
+}
+
+.characterization-card .evidence .code--tech-5 {
+    background: var(--tech-5);
+}
+
+.characterization-card .evidence .code--tech-6 {
+    background: var(--tech-6);
+}
+
+.characterization-card .evidence .code--tech-7 {
+    background: var(--tech-7);
+}
+
+.characterization-card .evidence .code--tech-8 {
+    background: var(--tech-8);
+}
+
+.characterization-card .evidence .code--tech-9 {
+    background: var(--tech-9);
+}
+
+.characterization-card .evidence .code--tech-10 {
+    background: var(--tech-10);
+}
+
+.characterization-card .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 </style>

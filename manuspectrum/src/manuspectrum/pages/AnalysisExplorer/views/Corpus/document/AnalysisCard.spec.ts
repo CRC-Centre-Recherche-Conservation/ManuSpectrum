@@ -119,6 +119,26 @@ describe("AnalysisCard", () => {
         expect(wrapper.find(".not-in-chart").text()).toContain(
             "Download the raw file",
         );
+        expect(wrapper.find(".not-in-chart .download-only").text()).toBe(
+            "Raw instrument files are offered for download only: the charts read their text exports, converted upstream.",
+        );
+    });
+
+    it("says nothing of instrument files when only other files are not in a chart", () => {
+        const other = fileEntry({
+            id: uuid(9),
+            name: "report.pdf",
+            role: "other",
+            dataKind: "file",
+            previewUrl: null,
+        });
+        const { wrapper } = mountCard(analysisPayload({ files: [other] }));
+        expect(wrapper.find(".not-in-chart").text()).toContain(
+            "Download the file",
+        );
+        expect(wrapper.find(".not-in-chart .download-only").exists()).toBe(
+            false,
+        );
     });
 
     it("groups the measurement conditions by type and puts untyped ones under Note", () => {
@@ -270,6 +290,11 @@ describe("AnalysisCard", () => {
         expect(wrapper.emitted("close")).toHaveLength(1);
     });
 
+    it("puts Close right after the heading, whatever the header holds", () => {
+        const { wrapper } = mountCard(analysisPayload());
+        expect(wrapper.find(".card-head .name + .close").exists()).toBe(true);
+    });
+
     it("marks a draft analysis", () => {
         const { wrapper } = mountCard(analysisPayload({ unpublished: true }));
         expect(wrapper.find(".card-head").text()).toContain("Draft");
@@ -380,7 +405,7 @@ describe("AnalysisCard", () => {
         expect(iiifCopy(wrapper)?.props("text")).toBe(focused.url);
     });
 
-    it("offers the download of the view", async () => {
+    it("offers the zone's Content State on its site path, in a new tab", async () => {
         const payload = analysisPayload();
         const { wrapper } = mountCard(payload, "ready", payload.id, {
             feature: uuid(901),
@@ -389,10 +414,19 @@ describe("AnalysisCard", () => {
 
         const download = wrapper.find("a.download-view");
         expect(download.attributes("href")).toBe(
-            payload.contentStates[0].download,
+            `/iiif/v3/content-state/${uuid(101)}/${uuid(901)}?download=1`,
         );
-        expect(download.attributes("download")).toBeDefined();
-        expect(download.text()).toContain("Download the view");
+        expect(download.attributes("target")).toBe("_blank");
+        expect(download.attributes("rel")).toBe("noopener");
+        expect(download.text()).toContain(
+            "Download the zone (IIIF Content State)",
+        );
+        const description = wrapper.find(
+            `#${download.attributes("aria-describedby")}`,
+        );
+        expect(description.text()).toBe(
+            "The zone on its folio, as a file to open in a IIIF viewer.",
+        );
     });
 
     it("offers no download of the view outside a web address", async () => {

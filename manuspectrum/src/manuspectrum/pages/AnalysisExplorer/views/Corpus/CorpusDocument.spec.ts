@@ -408,6 +408,11 @@ describe("CorpusDocument", () => {
             expect(wrapper.findComponent(FolioStub).props("view")).toBe(
                 "characterizations",
             );
+            const code = wrapper.find(
+                ".characterization-card .evidence button .code",
+            );
+            expect(code.text()).toBe("XRF");
+            expect(code.classes()).toContain("code--tech-1");
             await wrapper
                 .find(".characterization-card .evidence button")
                 .trigger("click");
