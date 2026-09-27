@@ -8,7 +8,7 @@
 <body>
 <main>
   <h1 id="xyReading">{% trans "xyReading, a IIIF extension for XY spectra (version 1)" %}</h1>
-  <p>{% blocktrans trimmed %}<code>xyReading</code> tells a client how to read an XY curve (a spectrum) out of a <code>Dataset</code> content resource of a IIIF Presentation 3 document: which columns hold x and y, what they measure, in which unit, and which correction turns the raw file into the curve.{% endblocktrans %}</p>
+  <p>{% blocktrans trimmed %}<code>xyReading</code> tells a client how to read an XY curve (a spectrum) out of a <code>Dataset</code> content resource of a IIIF Presentation 3 document: which columns hold x and y, how their axes are titled, and which correction turns the raw file into the curve.{% endblocktrans %}</p>
 
   <h2>{% trans "Where it appears" %}</h2>
   <p>{% blocktrans trimmed %}Only on a content resource of type <code>Dataset</code>, usually an annotation body. Any other resource MUST NOT carry it. A document that uses it lists this context first in its <code>@context</code> and the Presentation 3 context last:{% endblocktrans %}</p>
@@ -33,13 +33,9 @@
     <dt id="role"><code>role</code></dt>
     <dd>{% blocktrans trimmed %}What a column holds: <code id="x">x</code> (the x axis), <code id="yLeft">yLeft</code> and <code id="yRight">yRight</code> (a measurement on the left or right axis), <code id="reference">reference</code> (the white reference), <code id="dark">dark</code> (the dark current), <code id="ignore">ignore</code>.{% endblocktrans %}</dd>
     <dt id="xAxis"><code>x</code></dt>
-    <dd>{% blocktrans trimmed %}The x axis: <code>label</code> (a IIIF language map), <code>quantity</code>, <code>unit</code> (a UCUM code) and <code>reversed</code> (true when the axis is drawn from right to left; the rows keep the file's order).{% endblocktrans %}</dd>
+    <dd>{% blocktrans trimmed %}The x axis: <code>label</code> (a IIIF language map) and <code>reversed</code> (true when the axis is drawn from right to left; the rows keep the file's order).{% endblocktrans %}</dd>
     <dt id="yAxis"><code>y</code></dt>
-    <dd>{% blocktrans trimmed %}The y axes, in order: <code id="axisSide">axis</code> (<code>left</code> or <code>right</code>), <code>label</code>, <code>quantity</code>, <code>unit</code>.{% endblocktrans %}</dd>
-    <dt id="quantity"><code>quantity</code></dt>
-    <dd>{% blocktrans trimmed %}What an axis measures, for instance <code>wavelength</code>, <code>wavenumber</code>, <code>energy</code>, <code>channel</code>, <code>reflectance</code>, <code>absorbance</code>, <code>intensity</code>, <code>count</code>. Absent when unknown.{% endblocktrans %}</dd>
-    <dt id="ucumCode"><code>unit</code></dt>
-    <dd>{% blocktrans trimmed %}The UCUM code of the unit: <code>nm</code>, <code>cm-1</code>, <code>keV</code>, <code>deg</code>, <code>1</code> (a ratio or an index), <code>{counts}</code>, <code>[arb'U]</code> (arbitrary units).{% endblocktrans %}</dd>
+    <dd>{% blocktrans trimmed %}The y axes, in order: <code id="axisSide">axis</code> (<code>left</code> or <code>right</code>) and <code>label</code>.{% endblocktrans %}</dd>
     <dt id="reversed"><code>reversed</code></dt>
     <dd>{% trans "Whether the x axis is drawn from right to left." %}</dd>
     <dt id="multiYHandling"><code>multiY</code></dt>

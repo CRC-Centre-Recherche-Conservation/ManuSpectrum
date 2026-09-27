@@ -12,8 +12,8 @@ is one the Python reader honours.
 
 Axes: the axis titles and the x direction of the configuration the file is
 shown with, as stored (``display`` of its ``renderer_config`` row), under
-``none`` and without quantity. The CSV header is the label of each axis, made
-safe for xyviewer's header rules (``csv_header``).
+``none``. The CSV header is the label of each axis, made safe for
+xyviewer's header rules (``csv_header``).
 
 ``context_document`` is the JSON-LD 1.1 context of the extension, served at
 ``ids.xy_context()``; its terms live in the namespace ``ids.xy_doc() + "#"``,
@@ -228,8 +228,6 @@ def context_document():
                     "x": "ms_xy:xAxis",
                     "y": {"@id": "ms_xy:yAxis", "@container": "@list"},
                     "axis": "ms_xy:axisSide",
-                    "quantity": "ms_xy:quantity",
-                    "unit": "ms_xy:ucumCode",
                     "reversed": {"@id": "ms_xy:reversed", "@type": "xsd:boolean"},
                     "multiY": "ms_xy:multiYHandling",
                     "corrections": {"@id": "ms_xy:correction", "@container": "@list"},
