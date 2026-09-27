@@ -431,11 +431,9 @@ export function contentStateLink(
     analysis: string,
     feature: string,
 ): ContentStateLink {
-    const path = `/iiif/v3/content-state/${analysis}/${feature}`;
     return {
         feature,
-        url: `http://testserver${path}`,
-        download: `${path}?download=1`,
+        url: `http://testserver/iiif/v3/content-state/${analysis}/${feature}`,
     };
 }
 

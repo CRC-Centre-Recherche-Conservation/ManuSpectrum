@@ -133,11 +133,10 @@ export interface AnalysisZone {
     feature: string;
 }
 
-/** The published IIIF Content State of one zone of an analysis: `url` its absolute id, `download` the site path serving it as an attachment. */
+/** The published IIIF Content State of one zone of an analysis: `url` its absolute id. */
 export interface ContentStateLink {
     feature: string;
     url: string;
-    download: string;
 }
 
 /** An analysis of a document; `technique` is a key of `DocumentPayload.techniques`; no zone: not located on a page. */
@@ -531,7 +530,6 @@ export const SHAPE_KEYS = {
     ContentStateLink: {
         feature: true,
         url: true,
-        download: true,
     } satisfies Record<keyof ContentStateLink, true>,
     DocumentMatch: { facets: true, kept: true, total: true } satisfies Record<
         keyof DocumentMatch,

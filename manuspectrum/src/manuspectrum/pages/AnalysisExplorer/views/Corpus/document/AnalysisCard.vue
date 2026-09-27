@@ -6,6 +6,7 @@ import {
     useId,
     useTemplateRef,
 } from "vue";
+import Tooltip from "primevue/tooltip";
 import { useGettext } from "vue3-gettext";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
@@ -46,6 +47,7 @@ interface ConditionGroup {
 }
 
 const COPYRIGHT = "©";
+const HELP_DELAY_MS = 500;
 
 /**
  * The card of the analysis `analysisId`. `handle` may still hold the previous
@@ -53,9 +55,11 @@ const COPYRIGHT = "©";
  * `analysisId`, and its heading (one element from loading to loaded) says it
  * is loading meanwhile. `feature` (the id of the focused zone) picks the
  * published Content State of that zone among the analysis's
- * `contentStates`: its IIIF link is copied (`contentStateLink`), opened in
- * Mirador and downloaded as a file. An unlocated analysis, or a zone
- * without a published state, has none.
+ * `contentStates`: its IIIF link is copied (`contentStateLink`) and opened
+ * in Mirador. The copy button carries its help as a tooltip, shown after
+ * `HELP_DELAY_MS` on hover and on keyboard focus, and as its accessible
+ * description. An unlocated analysis, or a zone without a published state,
+ * has none.
  */
 const props = withDefaults(
     defineProps<{
@@ -73,6 +77,7 @@ const props = withDefaults(
 const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
+const vTooltip = Tooltip;
 const miradorUrl = inject(MIRADOR_URL_KEY, "");
 
 const store = useExplorerStore();
@@ -176,9 +181,8 @@ const attribution = computed(() => {
 const reportHref = computed(() => safeHref(analysis.value?.reportUrl));
 /**
  * The IIIF links of the focused zone's published Content State: the link to
- * copy (`contentStateLink`, on the absolute id), its download (a site path,
- * opened in a new tab) and Mirador; null when the analysis has no state for
- * the zone.
+ * copy (`contentStateLink`, on the absolute id) and Mirador; null when the
+ * analysis has no state for the zone.
  */
 const zoneLinks = computed(() => {
     const state = props.feature
@@ -191,10 +195,16 @@ const zoneLinks = computed(() => {
     }
     return {
         iiif: contentStateLink(miradorUrl, state.url),
-        download: safeHref(state.download),
         mirador: miradorLink(miradorUrl, { contentState: state.url }),
     };
 });
+
+const iiifHelp = computed(() => ({
+    value: $gettext(
+        "IIIF link to this zone: paste it into a IIIF viewer (Mirador…) to open the folio on it.",
+    ),
+    showDelay: HELP_DELAY_MS,
+}));
 
 function previewOf(file: FileEntry): Component {
     const entry = viewerFor(file.dataKind);
@@ -557,34 +567,36 @@ function focusHeading(): void {
                     v-if="zoneLinks"
                     class="iiif"
                 >
-                    <CopyButton
-                        :text="zoneLinks.iiif"
-                        :label="$gettext('Copy the IIIF link')"
-                    />
-                    <a
-                        v-if="zoneLinks.download"
-                        class="download-view"
-                        rel="noopener"
-                        target="_blank"
-                        :href="zoneLinks.download"
-                        :aria-describedby="`${sectionId}-download-view`"
-                    >
-                        <span>{{
-                            $gettext("Download the zone (IIIF Content State)")
-                        }}</span>
-                        <span class="visually-hidden">{{
-                            $gettext("(new tab)")
-                        }}</span>
-                    </a>
                     <span
-                        v-if="zoneLinks.download"
-                        :id="`${sectionId}-download-view`"
+                        v-tooltip.top="iiifHelp"
+                        class="iiif-copy"
+                    >
+                        <CopyButton
+                            v-tooltip.focus.top="iiifHelp"
+                            :text="zoneLinks.iiif"
+                            :label="$gettext('Copy the IIIF link')"
+                            :aria-describedby="`${sectionId}-iiif-help`"
+                        >
+                            <template #icon>
+                                <svg
+                                    class="link-icon"
+                                    viewBox="0 0 16 16"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="M6.5 9.5a2.5 2.5 0 0 0 3.5 0l2.5-2.5a2.5 2.5 0 0 0-3.5-3.5L8 4.5"
+                                    />
+                                    <path
+                                        d="M9.5 6.5a2.5 2.5 0 0 0-3.5 0L3.5 9a2.5 2.5 0 0 0 3.5 3.5L8 11.5"
+                                    />
+                                </svg>
+                            </template>
+                        </CopyButton>
+                    </span>
+                    <span
+                        :id="`${sectionId}-iiif-help`"
                         class="visually-hidden"
-                        >{{
-                            $gettext(
-                                "The zone on its folio, as a file to open in a IIIF viewer.",
-                            )
-                        }}</span
+                        >{{ iiifHelp.value }}</span
                     >
                     <a
                         v-if="zoneLinks.mirador"
@@ -761,6 +773,21 @@ function focusHeading(): void {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.375rem 1rem;
+}
+
+.analysis-card .iiif-copy {
+    display: inline-flex;
+}
+
+.analysis-card .iiif .link-icon {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 1.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .analysis-card .mirador {
