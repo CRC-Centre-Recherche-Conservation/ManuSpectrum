@@ -354,6 +354,8 @@ export function fileEntry(overrides: Partial<FileEntry> = {}): FileEntry {
         dataKind: "xy",
         viewer: {
             rendererConfigId: uuid(800),
+            presetKey: "xrf",
+            configName: "XRF — energy / counts",
             xLabel: "Energy (keV)",
             yLabel: "Counts",
             axisKey: "xrf:energy",
@@ -393,6 +395,8 @@ export function imagingEntry(overrides: Partial<FileEntry> = {}): FileEntry {
         dataKind: "chemical-imaging",
         viewer: {
             rendererConfigId: null,
+            presetKey: null,
+            configName: null,
             xLabel: null,
             yLabel: null,
             axisKey: null,

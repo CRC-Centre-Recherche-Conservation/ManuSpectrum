@@ -33,7 +33,7 @@
         "arches_vue_components": "archesproject/arches-vue-components#stable/2.0.2",
         "dompurify": "^3.4.16",
         "es-toolkit": "^1.44.0",
-        "gridstack": "^14.0.0",
+        "gridstack": "14.0.0",
         "leaflet": "1.6.0",
         "leaflet-iiif": "3.0.0",
         "leaflet.markercluster": "^1.5.3",

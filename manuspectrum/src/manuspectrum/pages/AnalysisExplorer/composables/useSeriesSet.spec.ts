@@ -64,9 +64,14 @@ describe("useSeriesSet", () => {
         await flushPromises();
         expect(handle.status.value).toBe("ready");
         expect(handle.data.value).toEqual([
-            { series: null, failed: true, retryable: true },
-            { series: null, failed: false, retryable: false },
-            { series: SERIES, failed: false, retryable: false },
+            { series: null, failed: true, retryable: true, tooLarge: false },
+            { series: null, failed: false, retryable: false, tooLarge: false },
+            {
+                series: SERIES,
+                failed: false,
+                retryable: false,
+                tooLarge: false,
+            },
         ]);
         stop();
     });
@@ -84,10 +89,76 @@ describe("useSeriesSet", () => {
         ]);
         await flushPromises();
         expect(handle.data.value).toEqual([
-            { series: null, failed: true, retryable: false },
-            { series: null, failed: true, retryable: true },
+            { series: null, failed: true, retryable: false, tooLarge: false },
+            { series: null, failed: true, retryable: true, tooLarge: false },
         ]);
         stop();
+    });
+
+    it("asks every point with full, marking a file over the ceiling too large", async () => {
+        const fetchMock = vi.fn(async (url: string) =>
+            url.includes("/a?") ? jsonResponse({}, 413) : jsonResponse(SERIES),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        const scope = effectScope();
+        const handle = scope.run(() =>
+            useSeriesSet(
+                () => ["/api/spectrum-preview/a", "/api/spectrum-preview/b"],
+                "full",
+            ),
+        )!;
+        await flushPromises();
+        expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+            "/api/spectrum-preview/a?n=full",
+            "/api/spectrum-preview/b?n=full",
+        ]);
+        expect(handle.data.value).toEqual([
+            { series: null, failed: true, retryable: false, tooLarge: true },
+            {
+                series: SERIES,
+                failed: false,
+                retryable: false,
+                tooLarge: false,
+            },
+        ]);
+        scope.stop();
+    });
+
+    it("asks again only for the files that failed on retry, keeping those read", async () => {
+        let down = true;
+        const fetchMock = vi.fn(async (url: string) =>
+            url.includes("/a-") && down
+                ? jsonResponse({}, 503)
+                : jsonResponse(SERIES),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        for (const points of [4096, "full"] as const) {
+            down = true;
+            fetchMock.mockClear();
+            const scope = effectScope();
+            const urls = [
+                `/api/spectrum-preview/a-${points}`,
+                `/api/spectrum-preview/b-${points}`,
+            ];
+            const handle = scope.run(() => useSeriesSet(() => urls, points))!;
+            await flushPromises();
+            expect(handle.data.value?.map((result) => result.failed)).toEqual([
+                true,
+                false,
+            ]);
+            down = false;
+            fetchMock.mockClear();
+            handle.retry();
+            await flushPromises();
+            expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+                `/api/spectrum-preview/a-${points}?n=${points}`,
+            ]);
+            expect(handle.data.value?.map((result) => result.series)).toEqual([
+                SERIES,
+                SERIES,
+            ]);
+            scope.stop();
+        }
     });
 
     it("stays idle without a file", async () => {

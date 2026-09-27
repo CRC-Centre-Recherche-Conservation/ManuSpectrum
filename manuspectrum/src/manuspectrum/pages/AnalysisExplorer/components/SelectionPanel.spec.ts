@@ -1,12 +1,15 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { nextTick, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 
 import SelectionPanel from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
-import { SELECTION_HINTS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    SELECTION_HINTS_KEY,
+    SELECTION_ITEMS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
@@ -17,6 +20,10 @@ import {
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
+
+import type { Item } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
+import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     generateArchesURL: () => "/en/api/explorer/items",
@@ -109,6 +116,44 @@ describe("SelectionPanel", () => {
             new URLSearchParams(String(url).split("?")[1]).getAll("ids"),
         );
         expect(asked).toEqual([[KEY], [GONE]]);
+    });
+
+    it("shows the items the shell's reading of the Selection holds, with no request of its own", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        useExplorerStore().addManyToBasket([KEY]);
+        const shared: SelectionItems = {
+            byKey: ref(
+                new Map<string, Item>([
+                    [
+                        KEY,
+                        {
+                            key: KEY,
+                            kind: "analysis-file",
+                            analysis: analysisHit(1),
+                            file: fileEntry(),
+                        },
+                    ],
+                ]),
+            ),
+            missing: ref(new Set<string>()),
+            settled: computed(() => true),
+            status: ref<RequestStatus>("ready"),
+            retry: () => undefined,
+        };
+        const wrapper = mount(SelectionPanel, {
+            global: {
+                plugins: [pinia],
+                provide: { [SELECTION_ITEMS_KEY as symbol]: () => shared },
+            },
+        });
+        await flushPromises();
+        expect(wrapper.find(`[data-key="${KEY}"]`).text()).toContain(
+            "Manuscript 1",
+        );
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("lists the Selection with its A-labels and kinds", async () => {
@@ -209,10 +254,12 @@ describe("SelectionPanel", () => {
         expect(store.basket).toEqual([]);
     });
 
-    it("does not offer Compare while the view is not built", async () => {
-        const { wrapper } = mountPanel();
+    it("opens the Compare view and says so, for a drawer holding it to close", async () => {
+        const { wrapper, store } = mountPanel();
         await flushPromises();
-        expect(wrapper.find("button.compare").exists()).toBe(false);
+        await wrapper.find("button.compare").trigger("click");
+        expect(store.view).toBe("compare");
+        expect(wrapper.emitted("compare")).toHaveLength(1);
     });
 
     it("writes a map layer's label apart from the analysis name and its language", async () => {

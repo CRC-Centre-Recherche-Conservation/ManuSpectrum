@@ -72,4 +72,15 @@ describe("plot theme", () => {
             "yaxis.autorange": true,
         });
     });
+
+    it("resets the axes of every small panel, each reversed x kept reversed", async () => {
+        const plotly = { relayout: vi.fn(async () => undefined) };
+        await resetAxes(plotly, document.createElement("div"), true, 2);
+        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
+            "xaxis.autorange": "reversed",
+            "yaxis.autorange": true,
+            "xaxis2.autorange": "reversed",
+            "yaxis2.autorange": true,
+        });
+    });
 });

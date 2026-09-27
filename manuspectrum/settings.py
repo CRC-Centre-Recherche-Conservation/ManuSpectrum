@@ -788,7 +788,8 @@ SUMMARY_MAX_LIMIT = 10
 SUMMARY_MAX_VALUES = 10
 SPECTRUM_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
 # Point budgets a spectrum preview may be asked for (?n=); the first is the
-# default. 4096 keeps a FORS spectrum (~2151 points) undecimated.
+# default. 4096 keeps a FORS spectrum (~2151 points) undecimated. ?n=full
+# serves every point of a file up to SPECTRUM_PREVIEW_MAX_BYTES (the workshop).
 SPECTRUM_PREVIEW_TIERS = (200, 4096)
 
 # Explorer (spec v3). Raw instrument formats are downloads only, never parsed.

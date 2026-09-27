@@ -25,6 +25,39 @@ declare module "utils/iiif-image" {
     ): string;
 }
 
+declare module "utils/xy-transforms" {
+    export interface TransformStep {
+        type: string;
+        order?: number;
+        window?: number;
+        polyOrder?: number;
+    }
+    export interface TransformChain {
+        transforms?: (TransformStep | string)[];
+    }
+    export function applyTransforms<T extends { x: number[]; y: number[] }>(
+        parsed: T,
+        config: TransformChain | null,
+    ): T;
+    export function deriveAxisLabel(
+        baseLabel: string | null,
+        config: TransformChain | null,
+        labels?: Record<string, string>,
+    ): string;
+}
+
+declare module "utils/xy-views" {
+    import type { TransformStep } from "utils/xy-transforms";
+    export interface XyView {
+        key: string;
+        transforms: TransformStep[];
+    }
+    export const BASE_VIEW: string;
+    export function viewsFor(
+        config: { presetKey?: string | null } | null,
+    ): XyView[];
+}
+
 // The generated `paths` entry "*" sends `leaflet` to its untyped JavaScript
 // build before `@types/leaflet` is looked up. `tsconfig.json` loads
 // `@types/leaflet` (global `L`) and `@types/leaflet.markercluster` through

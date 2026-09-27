@@ -91,6 +91,19 @@ export function selectedFacets(
     return selected;
 }
 
+/** `tool:<kind>:<params>`: the parameters sorted and URL-encoded, `-` when there are none. */
+export function toolWindowId(
+    kind: ToolKind,
+    params: Readonly<Record<string, string>>,
+): string {
+    const query = new URLSearchParams(
+        Object.entries(params).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    )
+        .toString()
+        .replaceAll("+", "%20");
+    return `tool:${kind}:${query || "-"}`;
+}
+
 function emptyToolFilters(): ToolFilters {
     return { element: null, cell: null, pair: null };
 }
@@ -157,7 +170,6 @@ export const useExplorerStore = defineStore("explorer", () => {
     const colourLevel = ref<ColourLevel>("colour");
     /** Whether the folio legend is unfolded; folded when the explorer opens. */
     const legendOpen = ref(false);
-    let toolCounter = 0;
 
     const basketFree = computed(() => BASKET_LIMIT - basket.value.length);
     const activeFilterCount = computed(
@@ -369,12 +381,13 @@ export const useExplorerStore = defineStore("explorer", () => {
         overlays.value = next;
     }
 
+    /** Opens a tool once: the same kind with the same parameters is the same window. */
     function openTool(
         kind: ToolKind,
         params: Record<string, string> = {},
     ): string {
-        toolCounter += 1;
-        const id = `${kind}-${toolCounter}`;
+        const id = toolWindowId(kind, params);
+        if (compare.value.tools.some((tool) => tool.id === id)) return id;
         compare.value = {
             ...compare.value,
             tools: [...compare.value.tools, { id, kind, params }],

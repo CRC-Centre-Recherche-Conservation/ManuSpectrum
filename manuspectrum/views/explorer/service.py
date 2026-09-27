@@ -68,6 +68,7 @@ from manuspectrum.views.explorer.citations import (
 from manuspectrum.views.explorer.conditions import clean_html, conditions_of
 from manuspectrum.views.explorer.values import (
     FALLBACK_LANGUAGE,
+    StoredConfig,
     acronym,
     dataset_of,
     file_entries,
@@ -1908,6 +1909,8 @@ def imaging_entries(analysis_id, manifest_values, language, read=None):
                 "dataKind": "chemical-imaging",
                 "viewer": {
                     "rendererConfigId": None,
+                    "presetKey": None,
+                    "configName": None,
                     "xLabel": None,
                     "yLabel": None,
                     "axisKey": None,
@@ -1925,7 +1928,7 @@ def imaging_entries(analysis_id, manifest_values, language, read=None):
 
 
 def renderer_configs(values, analysis_ids):
-    """``{config id: config}`` of the renderer configurations the measurement files of *analysis_ids* name, in one query."""
+    """``{config id: StoredConfig}`` of the renderer configurations the measurement files of *analysis_ids* name, in one query."""
     config_ids = {
         e.get("rendererConfig")
         for analysis_id in analysis_ids
@@ -1935,10 +1938,10 @@ def renderer_configs(values, analysis_ids):
     if not config_ids:
         return {}
     return {
-        str(config_id): config
-        for config_id, config in RendererConfig.objects.filter(
+        str(config_id): StoredConfig(config, name)
+        for config_id, config, name in RendererConfig.objects.filter(
             configid__in=list(config_ids)
-        ).values_list("configid", "config")
+        ).values_list("configid", "config", "name")
     }
 
 

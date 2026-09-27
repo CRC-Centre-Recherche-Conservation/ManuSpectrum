@@ -240,6 +240,20 @@ export interface FileLayer {
     image: ImageRef;
 }
 
+/** How a file is drawn: its stored renderer configuration, as the server read it. */
+export interface FileViewer {
+    rendererConfigId: string | null;
+    /** `presetKey` of the stored configuration: the key of the treatments in `utils/xy-views.js`. */
+    presetKey: string | null;
+    /** `renderer_config.name` of the stored configuration. */
+    configName: string | null;
+    xLabel: string | null;
+    yLabel: string | null;
+    axisKey: string | null;
+    points: number | null;
+    decimated: boolean;
+}
+
 export interface FileEntry {
     id: string;
     name: string;
@@ -248,14 +262,7 @@ export interface FileEntry {
     role: "readable" | "raw" | "other";
     pairedWith: string | null;
     dataKind: DataKind;
-    viewer: {
-        rendererConfigId: string | null;
-        xLabel: string | null;
-        yLabel: string | null;
-        axisKey: string | null;
-        points: number | null;
-        decimated: boolean;
-    };
+    viewer: FileViewer;
     layers: FileLayer[];
     license: {
         id: string;
@@ -597,6 +604,16 @@ export const SHAPE_KEYS = {
         previewUrl: true,
         zone: true,
     } satisfies Record<keyof FileEntry, true>,
+    FileViewer: {
+        rendererConfigId: true,
+        presetKey: true,
+        configName: true,
+        xLabel: true,
+        yLabel: true,
+        axisKey: true,
+        points: true,
+        decimated: true,
+    } satisfies Record<keyof FileViewer, true>,
     AnalysisItem: {
         key: true,
         kind: true,

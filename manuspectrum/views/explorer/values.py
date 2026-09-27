@@ -12,6 +12,7 @@ because the Explorer contract needs the language a name actually resolved to
 
 import os
 import re
+from typing import NamedTuple
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -249,6 +250,17 @@ def plots(entry):
     return is_readable(str(entry.get("name") or ""))
 
 
+class StoredConfig(NamedTuple):
+    """A ``renderer_config`` row as a file entry reads it: its ``config`` JSON and its ``name``."""
+
+    config: dict
+    name: str | None
+
+
+def _text_or_none(value):
+    return value.strip() or None if isinstance(value, str) else None
+
+
 def _raw_extensions():
     return {e.lower() for e in settings.RAW_INSTRUMENT_EXTENSIONS}
 
@@ -264,6 +276,10 @@ def file_entries(entries, *, language, configs, kind):
     file of that one: both point at each other, and it is never drawn, even
     when a setting lists its extension among the text formats. Micro-imaging
     files (*kind* ``"micro-imaging"``) carry that data kind.
+
+    *configs* maps a renderer configuration id to its ``StoredConfig``
+    (``renderer_configs``); the viewer carries the configuration's axis
+    titles, ``presetKey`` and ``name``, None where it states none.
     """
     raw_extensions = _raw_extensions()
     items = []
@@ -278,7 +294,8 @@ def file_entries(entries, *, language, configs, kind):
             if plots(entry)
             else "raw" if extension.lower() in raw_extensions else "other"
         )
-        config = configs.get(config_id) if config_id else None
+        stored = configs.get(config_id) if config_id else None
+        config = stored.config if stored else None
         if kind == "micro-imaging":
             data_kind = "micro-imaging"
         else:
@@ -298,6 +315,8 @@ def file_entries(entries, *, language, configs, kind):
                 "dataKind": data_kind,
                 "viewer": {
                     "rendererConfigId": config_id,
+                    "presetKey": _text_or_none((config or {}).get("presetKey")),
+                    "configName": _text_or_none(stored.name if stored else None),
                     "xLabel": x_label or None,
                     "yLabel": y_label or None,
                     "axisKey": axis_key(config) if config else None,

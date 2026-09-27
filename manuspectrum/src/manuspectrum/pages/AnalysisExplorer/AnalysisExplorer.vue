@@ -1,23 +1,28 @@
 <script setup lang="ts">
 import {
     computed,
+    effectScope,
     nextTick,
     onBeforeUnmount,
     onMounted,
     provide,
     ref,
+    shallowRef,
     watch,
 } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
+import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import SelectionDrawer from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue";
 import ShareExportPanel from "@/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue";
 import SharedSelectionPrompt from "@/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue";
+import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import ViewTabs from "@/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.vue";
 import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusView.vue";
 
 import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
+import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import {
     ANNOUNCE_KEY,
     FACET_LABELS_KEY,
@@ -25,12 +30,14 @@ import {
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
     SELECTION_HINTS_KEY,
+    SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     INTRO_BAR_ID,
     introBar,
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { loadCompareView } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/load-compare-view.ts";
 import { useBasketPersistence } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
 import {
     SELECTION_PARAM,
@@ -44,7 +51,10 @@ import {
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
+import type { Component } from "vue";
+
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import type {
     ResultsMemo,
     SelectionHint,
@@ -80,6 +90,13 @@ const facetLabels = ref(new Map<string, Label>());
 const screenFocusPending = ref(false);
 const resultsMemo = ref<ResultsMemo | null>(null);
 const selectionHints = ref(new Map<string, SelectionHint>());
+/** The Compare view once its chunk has arrived. */
+const compareView = shallowRef<Component>();
+/** Its chunk is on its way, or could not be fetched (Retry fetches it again). */
+const compareChunk = ref<"idle" | "loading" | "failed">("idle");
+/** The shared reading of the Selection, started by its first reader (the Selection panel or the Compare view). */
+const selectionScope = effectScope();
+let selectionItems: SelectionItems | null = null;
 
 /** The screen shown, as CorpusView decides it: the page intro folds to one line off the home. */
 const screen = computed(() => {
@@ -94,6 +111,7 @@ provide(RESULTS_MEMO_KEY, resultsMemo);
 provide(SELECTION_HINTS_KEY, selectionHints);
 provide(ANNOUNCE_KEY, announce);
 provide(MIRADOR_URL_KEY, props.miradorUrl);
+provide(SELECTION_ITEMS_KEY, sharedSelectionItems);
 
 /** A new screen or another document; the same document named again by the address is neither. */
 watch(
@@ -101,6 +119,14 @@ watch(
     () => {
         screenFocusPending.value = true;
     },
+);
+
+watch(
+    () => store.view,
+    (view) => {
+        if (view === "compare") void openCompare();
+    },
+    { immediate: true },
 );
 
 watch(
@@ -114,6 +140,12 @@ watch(
 onBeforeUnmount(() => {
     delete window.document.body.dataset.explorerScreen;
 });
+
+function sharedSelectionItems(): SelectionItems {
+    selectionItems ??=
+        selectionScope.run(useSelectionItems) ?? useSelectionItems();
+    return selectionItems;
+}
 
 /** Clearing the region first makes a repeated message spoken again. */
 function announce(message: string): void {
@@ -138,6 +170,19 @@ onMounted(() => {
 watch(selectionExpired, (expired) => {
     if (expired) announceExpiry();
 });
+
+/** Fetches the Compare view's chunk, once; a failure is shown with Retry. */
+async function openCompare(): Promise<void> {
+    if (compareView.value || compareChunk.value === "loading") return;
+    compareChunk.value = "loading";
+    try {
+        compareView.value = await loadCompareView();
+        compareChunk.value = "idle";
+    } catch (error: unknown) {
+        compareChunk.value = "failed";
+        console.error("The Compare view could not be loaded", error);
+    }
+}
 
 function onSelectionResolved(message: string): void {
     sharedSelection.value = null;
@@ -179,6 +224,26 @@ function onSelectionResolved(message: string): void {
         />
         <ActiveFiltersBar />
         <CorpusView v-if="store.view === 'corpus'" />
+        <template v-else-if="store.view === 'compare'">
+            <component
+                :is="compareView"
+                v-if="compareView"
+            />
+            <UnavailableState
+                v-else-if="compareChunk === 'failed'"
+                status="error"
+                :hide-home="true"
+                @retry="openCompare"
+            />
+            <p
+                v-else
+                class="compare-loading"
+                role="status"
+            >
+                <LoadingSpinner />
+                <span>{{ $gettext("Loading the Compare view…") }}</span>
+            </p>
+        </template>
         <p
             class="announcer"
             aria-live="polite"
@@ -213,6 +278,14 @@ function onSelectionResolved(message: string): void {
     color: inherit;
     text-decoration: underline;
     cursor: pointer;
+}
+
+.analysis-explorer .compare-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    color: var(--ink-muted);
 }
 
 .analysis-explorer .announcer {

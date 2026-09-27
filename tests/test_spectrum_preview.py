@@ -584,6 +584,171 @@ class SpectrumPreviewViewTests(SimpleTestCase):
         build_preview_mock.assert_not_called()
 
 
+class FullSeriesViewTests(SimpleTestCase):
+    """``?n=full``: every point, never memoised, in the anonymous visitor's view (D63)."""
+
+    VISITOR = mock.sentinel.visitor
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.view = SpectrumPreviewView.as_view()
+
+    def written(self, suffix=".csv", text="400.0,1.0\n401.0,2.0\n"):
+        with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False) as handle:
+            handle.write(text)
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def get(self, path, n="full", visible_to=(VISITOR,), config=None, **headers):
+        """The response to a signed-in reader; *visible_to* are the readers ``visible_set`` lets through."""
+        request = RequestFactory().get(
+            f"/api/spectrum-preview/{FILE_ID}", {"n": n}, **headers
+        )
+        request.user = mock.sentinel.signed_in
+        record = None if path is None else (path, RESOURCE_ID, None, "ng-1", None)
+
+        def visible(reader, version=None):
+            shown = {RESOURCE_ID} if reader in visible_to else set()
+            return VisibleSet(analyses=frozenset(shown))
+
+        with (
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.file_record", return_value=record
+            ),
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.anonymous_user",
+                return_value=self.VISITOR,
+            ),
+            mock.patch("manuspectrum.iiif.data.visible_set", side_effect=visible),
+            mock.patch("manuspectrum.iiif.data.readable_nodegroups", return_value=None),
+            mock.patch(
+                "manuspectrum.views.spectrum_preview.renderer_config",
+                return_value=config or {},
+            ),
+        ):
+            return self.view(request, file_id=FILE_ID)
+
+    def test_every_point_is_served_in_the_shape_of_the_tiers(self):
+        text = "".join(f"{n}.0,{n % 7}.5\n" for n in range(5000))
+
+        response = self.get(self.written(text=text))
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertEqual(
+            list(payload), ["x", "y", "n_source", "decimated", "x_reversed"]
+        )
+        self.assertEqual(len(payload["x"]), 5000)
+        self.assertEqual(payload["y"][:3], [0.5, 1.5, 2.5])
+        self.assertEqual(payload["n_source"], 5000)
+        self.assertFalse(payload["decimated"])
+        self.assertFalse(payload["x_reversed"])
+
+    def test_the_stored_configuration_shapes_the_full_series(self):
+        config = {
+            **FORS_CONFIG,
+            "display": {**FORS_CONFIG["display"], "xReversed": True},
+        }
+
+        payload = json.loads(
+            self.get(self.written(text=FORS_CSV), config=config).content
+        )
+
+        self.assertEqual(payload["x"], [350.0, 351.0, 353.0])
+        self.assertEqual(payload["y"], [0.1, 0.1, 0.05])
+        self.assertEqual(payload["n_source"], 3)
+        self.assertTrue(payload["x_reversed"])
+
+    def test_the_full_series_is_read_on_every_request(self):
+        path = self.written()
+
+        with mock.patch(
+            "manuspectrum.views.spectrum_preview.read_series", wraps=read_series
+        ) as read:
+            self.get(path)
+            self.get(path)
+
+        self.assertEqual(read.call_count, 2)
+
+    def test_the_full_series_follows_the_visitor_not_the_reader(self):
+        path = self.written()
+
+        signed_in_only = (mock.sentinel.signed_in,)
+        refused = self.get(path, visible_to=signed_in_only)
+        quick = self.get(path, n="4096", visible_to=signed_in_only)
+        served = self.get(path, visible_to=(self.VISITOR,))
+
+        self.assertEqual((refused.status_code, refused.content), (404, b""))
+        self.assertEqual(refused["Cache-Control"], "private, no-store")
+        self.assertEqual(quick.status_code, 200)
+        self.assertEqual(served.status_code, 200)
+
+    def test_a_refused_file_is_not_read(self):
+        with mock.patch("manuspectrum.views.spectrum_preview.read_series") as read:
+            response = self.get(self.written(), visible_to=())
+
+        self.assertEqual(response.status_code, 404)
+        read.assert_not_called()
+
+    def test_an_unknown_file_is_the_same_bodyless_404(self):
+        response = self.get(None)
+
+        self.assertEqual((response.status_code, response.content), (404, b""))
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    @override_settings(SPECTRUM_PREVIEW_MAX_BYTES=4)
+    def test_a_file_over_the_ceiling_is_a_bodyless_413_and_is_not_read(self):
+        with mock.patch("manuspectrum.views.spectrum_preview.read_series") as read:
+            response = self.get(self.written())
+
+        self.assertEqual((response.status_code, response.content), (413, b""))
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        read.assert_not_called()
+
+    def test_a_file_of_exactly_the_ceiling_is_served_and_one_byte_more_is_not(self):
+        path = self.written()
+        size = os.path.getsize(path)
+
+        with override_settings(SPECTRUM_PREVIEW_MAX_BYTES=size):
+            at_ceiling = self.get(path)
+        with override_settings(SPECTRUM_PREVIEW_MAX_BYTES=size - 1):
+            over = self.get(path)
+
+        self.assertEqual(at_ceiling.status_code, 200)
+        self.assertEqual((over.status_code, over.content), (413, b""))
+
+    @override_settings(SPECTRUM_PREVIEW_MAX_BYTES=4)
+    def test_a_refused_file_over_the_ceiling_is_still_a_404(self):
+        response = self.get(self.written(), visible_to=())
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_nothing_to_draw_is_a_204(self):
+        for path in (
+            self.written(".mca"),
+            self.written(text="400.0,1.0\n"),
+            "/nowhere/at/all.csv",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.get(path).status_code, 204)
+
+    def test_a_full_series_revalidates_with_its_etag(self):
+        path = self.written()
+        first = self.get(path)
+
+        again = self.get(path, HTTP_IF_NONE_MATCH=first["ETag"])
+
+        self.assertIn("private", first["Cache-Control"])
+        self.assertIn("max-age=86400", first["Cache-Control"])
+        self.assertEqual(again.status_code, 304)
+
+    def test_only_the_exact_word_names_the_full_series(self):
+        for n in ("FULL", "all", "full "):
+            with self.subTest(n=n):
+                self.assertEqual(self.get(self.written(), n=n).status_code, 400)
+
+
 class FileRecordTests(SimpleTestCase):
     """The one database read behind the memo, over a stubbed queryset."""
 
@@ -903,6 +1068,54 @@ class GoldenFixtureTests(SimpleTestCase):
         ]
 
         self.assertEqual(dropped, [352.0])
+
+
+class ConfigurationParityTests(SimpleTestCase):
+    """Every renderer configuration in use, over an excerpt of a real file of its technique.
+
+    ``tests/fixtures/xy/parity/cases.json`` holds, per case, a copy of the
+    stored configuration and the series the server draws with it;
+    ``media/js/utils/xy-transforms.parity.spec.js`` asserts that the XY
+    reader's parser and transforms draw the same series from the same file.
+    """
+
+    PARITY = os.path.join(FIXTURES, "parity")
+
+    def cases(self):
+        with open(os.path.join(self.PARITY, "cases.json"), encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def test_the_cases_cover_every_configuration_in_use(self):
+        self.assertEqual(
+            sorted(case["configId"][-4:] for case in self.cases()),
+            ["6a01", "6a03", "6a04", "6a06", "6a0c"],
+        )
+
+    def test_each_case_holds_the_configuration_its_preset_seeds(self):
+        for case in self.cases():
+            with self.subTest(case=case["file"]):
+                preset = XY_PRESETS[case["config"]["presetKey"]]
+                self.assertEqual(case["configId"], preset["config_id"])
+                self.assertEqual(case["name"], preset["name"])
+                self.assertEqual(case["config"], preset["config"])
+
+    def test_the_server_draws_the_recorded_series(self):
+        for case in self.cases():
+            with self.subTest(case=case["file"]):
+                series = read_series(
+                    os.path.join(self.PARITY, case["file"]), case["config"]
+                )
+
+                self.assertEqual(series, case["expected"])
+
+    def test_the_recorded_series_are_the_ones_the_configurations_describe(self):
+        by_file = {case["file"]: case["expected"] for case in self.cases()}
+
+        self.assertEqual(by_file["fors.csv"]["y"][0], 214 / 414)
+        self.assertEqual(by_file["xrf.csv"]["y"][:2], [52.0, 68.0])
+        self.assertTrue(by_file["ftir_reflection.csv"]["x_reversed"])
+        self.assertEqual(by_file["ftir_reflection.csv"]["x"][0], 4000.0)
+        self.assertEqual(len(by_file["mass_spec.csv"]["x"]), 13)
 
 
 class PresetCoverageTests(SimpleTestCase):

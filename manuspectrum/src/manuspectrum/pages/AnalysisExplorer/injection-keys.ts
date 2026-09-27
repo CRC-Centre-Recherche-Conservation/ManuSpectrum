@@ -1,6 +1,7 @@
 import type { InjectionKey, Ref } from "vue";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 
 /** The last results shown (S1) and where the reader left them, to come back to them as they were. */
 export interface ResultsMemo {
@@ -56,3 +57,11 @@ export const SELECTION_HINTS_KEY: InjectionKey<
 
 /** Address of the Mirador viewer the IIIF products open in (`EXPLORER_MIRADOR_URL`); empty: no viewer. */
 export const MIRADOR_URL_KEY: InjectionKey<string> = Symbol("mirador-url");
+
+/** Counts, debounced, the size changes of the Compare grid and its windows; a window redraws what depends on its size (Plotly resize) when it changes. */
+export const WINDOW_RESIZE_KEY: InjectionKey<Readonly<Ref<number>>> =
+    Symbol("window-resize");
+
+/** The one reading of the Selection's items, shared by the Selection panel and the Compare view; created on first call. Provided by the shell. */
+export const SELECTION_ITEMS_KEY: InjectionKey<() => SelectionItems> =
+    Symbol("selection-items");

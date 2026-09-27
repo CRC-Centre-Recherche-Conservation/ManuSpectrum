@@ -28,6 +28,12 @@ while the delete was committing can put the entry back, for at most
 ``SUMMARY_CACHE_TTL``; during that time the guard still runs, but Arches
 permits reading a resource that no longer exists.
 
+``?n=full`` is the workshop's series (spec D61, D63): every point
+``read_series`` reads, read on every request and never memoised, guarded for
+the anonymous visitor whoever asks, as the whole Explorer is (D59). A file over
+``SPECTRUM_PREVIEW_MAX_BYTES`` answers a bodyless 413 there, after the guard,
+so a refused file stays indistinguishable from an unknown one.
+
 ``None`` (no row, no stored file, no tile) is not memoised, and no caller waits
 on the join's lock: an unknown id costs one query per request, never a 2 s
 poll for a value that will never be stored, and a file created later is found
@@ -58,11 +64,15 @@ from arches.app.models.models import File
 from manuspectrum.iiif.data import file_allowed
 from manuspectrum.models import RendererConfig
 from manuspectrum.utils.cache import etag_already_held, get_or_build
-from manuspectrum.utils.spectrum_preview import build_preview, is_readable
+from manuspectrum.utils.public_visibility import anonymous_user
+from manuspectrum.utils.spectrum_preview import build_preview, is_readable, read_series
 
 logger = logging.getLogger(__name__)
 
 CACHE_TTL = 86400
+
+# The ``n`` of the whole series, besides the point budgets of SPECTRUM_PREVIEW_TIERS.
+FULL = "full"
 
 # Presets change by migration only, so an hour is short for what it saves.
 CONFIG_TTL = 3600
@@ -195,6 +205,30 @@ def _series(path, n, config, name=None):
         return None
 
 
+def _full_series(path, config, name=None):
+    """Every point of a supported file in the shape of the tiers; ``{}`` when there is none, None when it is too large.
+
+    A file that cannot be opened draws nothing, as in ``_series``.
+    """
+    if not is_readable(path, name):
+        return {}
+    try:
+        if os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES:
+            return None
+        series = read_series(path, config)
+    except OSError:
+        return {}
+    if not series:
+        return {}
+    return {
+        "x": series["x"],
+        "y": series["y"],
+        "n_source": len(series["x"]),
+        "decimated": False,
+        "x_reversed": series["x_reversed"],
+    }
+
+
 def _not_found():
     """The answer for an unknown file and for one the reader may not see alike."""
     response = HttpResponseNotFound()
@@ -202,46 +236,63 @@ def _not_found():
     return response
 
 
+def _too_large():
+    response = HttpResponse(status=413)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
 @method_decorator(gzip_page, name="dispatch")
 class SpectrumPreviewView(View):
-    """``GET /api/spectrum-preview/<file_id>``, at most one file read per day.
+    """``GET /api/spectrum-preview/<file_id>``, at most one file read per day and tier; ``full`` reads it every time.
 
     204 means there is nothing to draw — a format ``read_series`` does not
-    read (``is_readable``), a file over ``SPECTRUM_PREVIEW_MAX_BYTES``, or
-    fewer than two points — and carries the same lifetime as a series, because
-    the answer for a given file id cannot change either.
+    read (``is_readable``), a file over ``SPECTRUM_PREVIEW_MAX_BYTES`` on a
+    tier, or fewer than two points — and carries the same lifetime as a
+    series, because the answer for a given file id cannot change either. The
+    full series of a file over the ceiling is a bodyless 413 the browser does
+    not keep: the ceiling is a setting.
     """
 
     def get(self, request, file_id):
         """Serve the series of one file to a reader who may see its analysis.
 
         ``n`` picks a point budget among ``SPECTRUM_PREVIEW_TIERS`` (default the
-        first). A file whose resource is outside ``visible_set`` (embargo,
-        hidden chain or Project) or whose nodegroup is unreadable
+        first), or ``full`` for every point, guarded for the anonymous visitor
+        whoever asks. A file whose resource is outside ``visible_set``
+        (embargo, hidden chain or Project) or whose nodegroup is unreadable
         answers the same bodyless 404 as an unknown file.
         """
         raw_n = request.GET.get("n")
-        tiers = settings.SPECTRUM_PREVIEW_TIERS
-        try:
-            n = int(raw_n) if raw_n is not None else tiers[0]
-        except ValueError:
-            return HttpResponseBadRequest()
-        if n not in tiers:
-            return HttpResponseBadRequest()
+        full = raw_n == FULL
+        if not full:
+            tiers = settings.SPECTRUM_PREVIEW_TIERS
+            try:
+                n = int(raw_n) if raw_n is not None else tiers[0]
+            except ValueError:
+                return HttpResponseBadRequest()
+            if n not in tiers:
+                return HttpResponseBadRequest()
         record = file_record(file_id)
         if record is None:
             return _not_found()
         path, resourceid, config_id, nodegroup_id, name = record
-        if not file_allowed(resourceid, nodegroup_id, request.user):
+        reader = anonymous_user() if full else request.user
+        if not file_allowed(resourceid, nodegroup_id, reader):
             return _not_found()
 
-        payload = get_or_build(
-            f"spectrum-preview:{file_id}:{n}:{config_id}",
-            lambda: _series(path, n, renderer_config(config_id), name),
-            CACHE_TTL,
-            lock_timeout=LOCK_TIMEOUT,
-            wait=LOCK_WAIT,
-        )
+        if full:
+            payload = _full_series(path, renderer_config(config_id), name)
+            if payload is None:
+                return _too_large()
+        else:
+            payload = get_or_build(
+                f"spectrum-preview:{file_id}:{n}:{config_id}",
+                lambda: _series(path, n, renderer_config(config_id), name),
+                CACHE_TTL,
+                lock_timeout=LOCK_TIMEOUT,
+                wait=LOCK_WAIT,
+            )
         if not payload:
             return self._with_lifetime(HttpResponse(status=204))
 

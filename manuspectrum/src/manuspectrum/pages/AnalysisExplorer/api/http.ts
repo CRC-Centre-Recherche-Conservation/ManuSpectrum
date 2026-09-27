@@ -31,6 +31,8 @@ export interface GetJsonOptions extends JsonRequestOptions {
 const NOT_FOUND = 404;
 const NO_CONTENT = 204;
 const MEMO_ENTRIES = 20;
+/** Full series (every point, up to the server's ceiling) kept apart: a Compare view never evicts the Explorer payloads. */
+const FULL_SERIES_ENTRIES = 6;
 const MEMO_TTL_MS = 5 * 60 * 1000;
 /** Prefetches nobody waits for yet that run at once; a new one drops the oldest. */
 export const PREFETCHES_IN_FLIGHT = 4;
@@ -66,8 +68,16 @@ interface MemoEntry {
     value: unknown;
 }
 
-/** The payloads of this tab by URL, least recently used first. */
-const memo = new Map<string, MemoEntry>();
+/** Entries by URL, least recently used first, at most `limit`. */
+interface Memo {
+    entries: Map<string, MemoEntry>;
+    limit: number;
+}
+
+/** The payloads of this tab. */
+const payloads: Memo = { entries: new Map(), limit: MEMO_ENTRIES };
+/** The full series of this tab. */
+const fullSeries: Memo = { entries: new Map(), limit: FULL_SERIES_ENTRIES };
 
 /** The URL of a localized explorer route. */
 export function explorerUrl(
@@ -86,7 +96,7 @@ function abortError(signal: AbortSignal): unknown {
     );
 }
 
-async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
+async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
     const response = await fetch(url, {
         credentials: "same-origin",
         headers: { Accept: "application/json" },
@@ -98,25 +108,28 @@ async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
     if (!response.ok) {
         throw new ServiceError(response.status);
     }
+    if (response.status === NO_CONTENT) {
+        return null;
+    }
     return await response.json();
 }
 
-function forget(url: string, entry: MemoEntry): void {
-    if (memo.get(url) === entry) memo.delete(url);
+function forget(memo: Memo, url: string, entry: MemoEntry): void {
+    if (memo.entries.get(url) === entry) memo.entries.delete(url);
 }
 
 /** The live entry of `url`, moved to the most recent end; an expired one is dropped. */
-function lookup(url: string): MemoEntry | null {
-    const entry = memo.get(url);
+function lookup(memo: Memo, url: string): MemoEntry | null {
+    const entry = memo.entries.get(url);
     if (!entry) return null;
-    memo.delete(url);
+    memo.entries.delete(url);
     if (entry.arrivedAt !== null && Date.now() - entry.arrivedAt >= MEMO_TTL_MS)
         return null;
-    memo.set(url, entry);
+    memo.entries.set(url, entry);
     return entry;
 }
 
-function start(url: string, pinned: boolean): MemoEntry {
+function start(memo: Memo, url: string, pinned: boolean): MemoEntry {
     const controller = new AbortController();
     const entry: MemoEntry = {
         promise: Promise.resolve(),
@@ -133,25 +146,25 @@ function start(url: string, pinned: boolean): MemoEntry {
             return value;
         },
         (error: unknown) => {
-            forget(url, entry);
+            forget(memo, url, entry);
             throw error;
         },
     );
     entry.promise.catch(() => undefined);
-    memo.set(url, entry);
-    evict();
+    memo.entries.set(url, entry);
+    evict(memo);
     return entry;
 }
 
-function running(entry: MemoEntry): boolean {
-    return entry.arrivedAt === null && entry.waiting > 0;
-}
-
-/** Drops the least recently used entries over `MEMO_ENTRIES`, never a request a caller still waits for. */
-function evict(): void {
-    for (const [url, entry] of memo) {
-        if (memo.size <= MEMO_ENTRIES) return;
-        if (!running(entry)) memo.delete(url);
+/**
+ * Drops the least recently used answers over the memo's limit. A request
+ * still running is never dropped: it counts towards the limit and leaves
+ * the memo only when it fails or its last caller aborts it.
+ */
+function evict(memo: Memo): void {
+    for (const [url, entry] of memo.entries) {
+        if (memo.entries.size <= memo.limit) return;
+        if (entry.arrivedAt !== null) memo.entries.delete(url);
     }
 }
 
@@ -159,14 +172,14 @@ function evict(): void {
 function abandon(url: string, entry: MemoEntry): void {
     entry.pinned = false;
     if (entry.waiting === 0 && entry.arrivedAt === null) {
-        forget(url, entry);
+        forget(payloads, url, entry);
         entry.controller.abort();
     }
 }
 
 /** Aborts the oldest prefetches nobody waits for beyond `PREFETCHES_IN_FLIGHT`. */
 function capPrefetches(): void {
-    const idle = [...memo].filter(
+    const idle = [...payloads.entries].filter(
         ([, entry]) =>
             entry.pinned && entry.arrivedAt === null && entry.waiting === 0,
     );
@@ -179,6 +192,7 @@ function capPrefetches(): void {
 }
 
 function wait<T>(
+    memo: Memo,
     url: string,
     entry: MemoEntry,
     signal: AbortSignal | undefined,
@@ -201,7 +215,7 @@ function wait<T>(
                 !entry.pinned &&
                 entry.arrivedAt === null
             ) {
-                forget(url, entry);
+                forget(memo, url, entry);
                 entry.controller.abort();
             }
             reject(abortError(signal as AbortSignal));
@@ -221,10 +235,10 @@ function wait<T>(
 /**
  * GET a localized explorer payload through the tab's memo.
  *
- * The memo holds the last `MEMO_ENTRIES` URLs for `MEMO_TTL_MS` from their
- * answer, in memory only; a request still running for a caller is never
- * evicted. Callers of one URL share one request: a caller that
- * aborts leaves it, and it is aborted when nobody waits any more. A failed
+ * The memo holds the last `MEMO_ENTRIES` answers for `MEMO_TTL_MS` from
+ * their arrival, in memory only; a request still running is never evicted.
+ * Callers of one URL share one request: a caller that aborts leaves it, and
+ * it is aborted when nobody waits any more. A failed
  * request (404 included) is forgotten; `reload` replaces the entry. An aborted
  * call rejects with the browser's AbortError.
  */
@@ -233,9 +247,9 @@ export function getJson<T>(
     { signal, reload = false, ...request }: GetJsonOptions = {},
 ): Promise<T> {
     const url = explorerUrl(route, request);
-    if (reload) memo.delete(url);
-    const entry = lookup(url) ?? start(url, false);
-    return wait<T>(url, entry, signal);
+    if (reload) payloads.entries.delete(url);
+    const entry = lookup(payloads, url) ?? start(payloads, url, false);
+    return wait<T>(payloads, url, entry, signal);
 }
 
 /** The payload of this route if the tab holds its answer, else null; no request. */
@@ -243,7 +257,7 @@ export function peekJson<T>(
     route: ExplorerRoute,
     request: JsonRequestOptions = {},
 ): T | null {
-    const entry = lookup(explorerUrl(route, request));
+    const entry = lookup(payloads, explorerUrl(route, request));
     return entry?.arrivedAt != null ? (entry.value as T) : null;
 }
 
@@ -258,43 +272,43 @@ export function prefetchJson(
     { signal, ...request }: PrefetchOptions = {},
 ): void {
     const url = explorerUrl(route, request);
-    if (signal?.aborted || lookup(url)) return;
-    const entry = start(url, true);
+    if (signal?.aborted || lookup(payloads, url)) return;
+    const entry = start(payloads, url, true);
     capPrefetches();
     signal?.addEventListener("abort", () => abandon(url, entry), {
         once: true,
     });
 }
 
-/** Empties the tab's memo. */
+/** Empties the tab's memo, full series included. */
 export function forgetPayloads(): void {
-    memo.clear();
+    payloads.entries.clear();
+    fullSeries.entries.clear();
 }
 
 /**
- * The series of one readable file at a point budget of the server's tiers.
+ * The series of one readable file at a point budget of the server's tiers, or
+ * every point with `"full"` (the workshop; a file over the server's ceiling
+ * rejects with a 413 `ServiceError`).
  * The preview URL of the payload is absolute on `PUBLIC_SERVER_ADDRESS`; only
  * its path is fetched, on the page's own origin. `null` means nothing to draw.
+ * The full series goes through a memo of its own, the last
+ * `FULL_SERIES_ENTRIES` files, with the rules of the payloads' memo (TTL,
+ * shared requests, `reload` replaces the entry): a Compare view drawing many
+ * spectra never evicts an Explorer payload. The tiers are asked each time.
  */
 export async function getSeries(
     previewUrl: string,
-    n: 200 | 4096,
+    n: 200 | 4096 | "full",
     signal?: AbortSignal,
+    reload = false,
 ): Promise<Series | null> {
     const path = new URL(previewUrl, window.location.origin).pathname;
-    const response = await fetch(`${path}?n=${n}`, {
-        credentials: "same-origin",
-        headers: { Accept: "application/json" },
-        signal,
-    });
-    if (response.status === NOT_FOUND) {
-        throw new UnavailableError();
+    const url = `${path}?n=${n}`;
+    if (n === "full") {
+        if (reload) fullSeries.entries.delete(url);
+        const entry = lookup(fullSeries, url) ?? start(fullSeries, url, false);
+        return wait<Series | null>(fullSeries, url, entry, signal);
     }
-    if (!response.ok) {
-        throw new ServiceError(response.status);
-    }
-    if (response.status === NO_CONTENT) {
-        return null;
-    }
-    return (await response.json()) as Series;
+    return (await fetchJson(url, signal)) as Series | null;
 }

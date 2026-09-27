@@ -21,6 +21,7 @@ from manuspectrum.views.explorer.values import (
     rewrite_legacy_url,
     shape_of,
     site_path,
+    StoredConfig,
     value_refs,
 )
 
@@ -346,7 +347,7 @@ class FileEntryTests(SimpleTestCase):
                 "rendererConfig": config_id,
             }
         ]
-        configs = {config_id: {"presetKey": "fors", "display": {}}}
+        configs = {config_id: StoredConfig({"presetKey": "fors", "display": {}}, None)}
 
         (entry,) = file_entries(
             entries, language="en", configs=configs, kind="measurement"
@@ -366,8 +367,10 @@ class FileEntryTests(SimpleTestCase):
             }
         ]
         stored = {"xAxisLabel": "Wavelength (Å)", "yAxisLabel": "Reflectance (%)"}
-        configs = {config_id: {"presetKey": "fors", "display": stored}}
-        bare = {config_id: {"presetKey": "fors", "display": {}}}
+        configs = {
+            config_id: StoredConfig({"presetKey": "fors", "display": stored}, None)
+        }
+        bare = {config_id: StoredConfig({"presetKey": "fors", "display": {}}, None)}
 
         def viewer(given):
             return file_entries(
@@ -378,9 +381,74 @@ class FileEntryTests(SimpleTestCase):
         self.assertEqual(viewer(configs)["yLabel"], "Reflectance (%)")
         self.assertIsNone(viewer(bare)["xLabel"])
         self.assertIsNone(viewer(bare)["yLabel"])
-        blank = {config_id: {"display": {"xAxisLabel": "  ", "yAxisLabel": "\t"}}}
+        blank = {
+            config_id: StoredConfig(
+                {"display": {"xAxisLabel": "  ", "yAxisLabel": "\t"}}, None
+            )
+        }
         self.assertIsNone(viewer(blank)["xLabel"])
         self.assertIsNone(viewer(blank)["yLabel"])
+
+    def test_a_readable_file_carries_the_preset_and_the_name_of_its_configuration(
+        self,
+    ):
+        config_id = "c0000000-0000-4000-8000-000000000001"
+        entries = [
+            {
+                "file_id": "11111111-1111-4111-8111-111111111111",
+                "name": "a.csv",
+                "url": "/files/a",
+                "rendererConfig": config_id,
+            },
+            {
+                "file_id": "22222222-2222-4222-8222-222222222222",
+                "name": "b.csv",
+                "url": "/files/b",
+            },
+        ]
+        configs = {
+            config_id: StoredConfig(
+                {"presetKey": "fors", "display": {}}, "FORS — wavelength / reflectance"
+            )
+        }
+
+        configured, bare = (
+            e["viewer"]
+            for e in file_entries(
+                entries, language="en", configs=configs, kind="measurement"
+            )
+        )
+
+        self.assertEqual(configured["presetKey"], "fors")
+        self.assertEqual(configured["configName"], "FORS — wavelength / reflectance")
+        self.assertIsNone(bare["presetKey"])
+        self.assertIsNone(bare["configName"])
+
+    def test_a_configuration_without_a_preset_or_a_name_gives_none(self):
+        config_id = "c0000000-0000-4000-8000-000000000001"
+        entries = [
+            {
+                "file_id": "11111111-1111-4111-8111-111111111111",
+                "name": "a.csv",
+                "url": "/files/a",
+                "rendererConfig": config_id,
+            }
+        ]
+        for config, name in (
+            ({}, ""),
+            ({"presetKey": ""}, "  "),
+            ({"presetKey": 3}, None),
+        ):
+            with self.subTest(config=config, name=name):
+                (entry,) = file_entries(
+                    entries,
+                    language="en",
+                    configs={config_id: StoredConfig(config, name)},
+                    kind="measurement",
+                )
+
+                self.assertIsNone(entry["viewer"]["presetKey"])
+                self.assertIsNone(entry["viewer"]["configName"])
 
 
 def _labelled(*labels):

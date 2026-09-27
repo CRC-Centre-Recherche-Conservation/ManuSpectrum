@@ -6,18 +6,20 @@ Usage:
 
 import csv
 import io
+import json
 import os
 import uuid
 from unittest import mock, skipUnless
 
 from django.conf import settings
 from django.http import QueryDict
+from django.test import SimpleTestCase
 
 from arches.app.models.models import File, TileModel
 
 from manuspectrum.models import RendererConfig
 from manuspectrum.views.explorer.scopes import resolve_scope
-from manuspectrum.views.explorer.series import HEADER
+from manuspectrum.views.explorer.series import HEADER, _comment
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 
 try:
@@ -40,6 +42,21 @@ FORS = {
 ND = {"id": "CC-BY-ND-4.0", "url": "https://creativecommons.org/licenses/by-nd/4.0/"}
 BY = {"id": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/"}
 FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
+FORMULA_CELLS = os.path.join(
+    os.path.dirname(__file__), "fixtures", "csv", "formula-cells.json"
+)
+
+
+class CommentLineTests(SimpleTestCase):
+    """The comment rule, pinned with the cases the Compare workshop's CSV reads (`workshop.spec.ts`)."""
+
+    def test_curator_text_is_neutralised_as_the_workshop_csv_does(self):
+        with open(FORMULA_CELLS, encoding="utf-8") as handle:
+            cases = json.load(handle)["cases"]
+
+        for case in cases:
+            with self.subTest(text=case["text"]):
+                self.assertEqual(_comment(case["text"]), f"# {case['safe']}\r\n")
 
 
 class SeriesCsvTests(CorpusCase):

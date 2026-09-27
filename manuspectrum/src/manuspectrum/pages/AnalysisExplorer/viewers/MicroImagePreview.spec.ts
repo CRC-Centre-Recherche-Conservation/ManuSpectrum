@@ -1,8 +1,11 @@
 import { flushPromises, mount } from "@vue/test-utils";
+import L from "leaflet";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { nextTick, ref } from "vue";
 
 import MicroImagePreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/MicroImagePreview.vue";
 
+import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     analysisPayload,
     fileEntry,
@@ -25,6 +28,7 @@ function recordImages(): HTMLImageElement[] {
 
 afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
 
 describe("MicroImagePreview", () => {
@@ -82,6 +86,35 @@ describe("MicroImagePreview", () => {
             },
         });
         expect(wrapper.find("a.download").exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("shows a file of the Selection without the analysis record, and follows the size of its Compare window", async () => {
+        const file = fileEntry({
+            dataKind: "micro-imaging",
+            role: "other",
+            downloadUrl: "/files/micro.jpg",
+            previewUrl: null,
+        });
+        const invalidate = vi.spyOn(L.Map.prototype, "invalidateSize");
+        const images = recordImages();
+        const tick = ref(0);
+        const wrapper = mount(MicroImagePreview, {
+            attachTo: sizedContainer(),
+            props: { file },
+            global: { provide: { [WINDOW_RESIZE_KEY as symbol]: tick } },
+        });
+        Object.defineProperty(images[0], "naturalWidth", { value: 1200 });
+        Object.defineProperty(images[0], "naturalHeight", { value: 800 });
+        images[0].dispatchEvent(new Event("load"));
+        await flushPromises();
+        expect(wrapper.find("img.micro-image").attributes("src")).toBe(
+            file.downloadUrl,
+        );
+        invalidate.mockClear();
+        tick.value += 1;
+        await nextTick();
+        expect(invalidate).toHaveBeenCalledTimes(1);
         wrapper.unmount();
     });
 });

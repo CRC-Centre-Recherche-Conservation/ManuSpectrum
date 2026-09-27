@@ -40,7 +40,7 @@ from manuspectrum.views.explorer.service import (
 HEADER = ("curve", "analysis", "file", "x", "y")
 ROWS_PER_CHUNK = 2000
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
-_FORMULA_CELL = re.compile(r"([,;])([ ]*[=+\-@\t\r])")
+_FORMULA_CELL = re.compile(r"(^|[,;])([ ]*[=+\-@\t\r])")
 
 
 class _Line:
@@ -51,21 +51,31 @@ class _Line:
 
 
 def _clean(text):
-    """Curator text on one line: control characters and line breaks become spaces."""
-    return _CONTROL.sub(" ", str(text or "")).strip()
+    """Curator text on one line: control characters and line breaks become spaces, outer spaces dropped."""
+    return _CONTROL.sub(" ", str(text or "")).strip(" ")
+
+
+def neutralise(text):
+    """Curator text made safe for a spreadsheet, on one line.
+
+    Control characters become spaces, double quotes single quotes, and a
+    part that a spreadsheet splitting on ``,`` or ``;`` would read as
+    opening a formula (``=``, ``+``, ``-``, ``@``, tab or carriage return,
+    after optional spaces), the start of the text included, gets a leading
+    ``'`` (OWASP CSV injection). The Compare workshop's CSV applies the same
+    rule (``neutraliseText`` in ``views/Compare/workshop.ts``); both are
+    pinned by ``tests/fixtures/csv/formula-cells.json``.
+    """
+    return _FORMULA_CELL.sub(r"\1'\2", _clean(text).replace('"', "'"))
 
 
 def _comment(text):
-    """One comment line opening with ``#``, safe to open in a spreadsheet.
+    """One comment line opening with ``#``, safe to open in a spreadsheet (``neutralise``).
 
-    Double quotes become single quotes, and a cell that a spreadsheet
-    splitting on ``,`` or ``;`` would read as opening a formula (``=``,
-    ``+``, ``-``, ``@``, tab or carriage return, after optional spaces)
-    gets a leading ``'`` (OWASP CSV injection). ``pandas.read_csv(comment="#")``
-    and R's ``read.csv(comment.char="#")`` skip the line.
+    ``pandas.read_csv(comment="#")`` and R's ``read.csv(comment.char="#")``
+    skip the line.
     """
-    line = f"# {_clean(text)}".replace('"', "'")
-    return _FORMULA_CELL.sub(r"\1'\2", line) + "\r\n"
+    return f"# {neutralise(text)}\r\n"
 
 
 def _file_url(entry, entries):
@@ -178,7 +188,8 @@ def _plan(scope):
                 )
                 continue
             config_id = (entry.get("viewer") or {}).get("rendererConfigId")
-            config = configs.get(config_id) or {}
+            stored = configs.get(config_id)
+            config = stored.config if stored else {}
             number = len(curves) + 1
             per_curve.append(
                 _curve_line(number, name, entry, entries, config, config_id)
