@@ -9,7 +9,7 @@ deployment where nothing is restricted keys it publicly.
 The ETag is the digest of the payload, which makes a reopened popup a 304 as
 long as the memo holds. A payload a shared cache may keep says so; anything
 that depends on the reader is marked ``private, no-store``, as in
-``iiif_annotation``.
+``iiif.memo``.
 """
 
 import hashlib

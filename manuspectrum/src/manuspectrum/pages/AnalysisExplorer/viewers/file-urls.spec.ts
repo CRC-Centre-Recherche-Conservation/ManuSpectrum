@@ -181,7 +181,7 @@ describe("file URLs", () => {
                     retry: () => undefined,
                 },
                 analysisId: payload.id,
-                zone: null,
+                feature: null,
             },
             global: {
                 plugins: [pinia, PrimeVue],

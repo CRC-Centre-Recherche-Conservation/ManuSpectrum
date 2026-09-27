@@ -218,12 +218,14 @@ class CollectionTests(EmbargoCase):
     """The project IIIF collection of a Document, read off the tiles."""
 
     def readable(self, user, side="open"):
-        from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
+        """``(analysis ids of the document's IIIF facts, whether the reader's view is the visitor's)``."""
+        from django.contrib.auth.models import User
 
-        analyses, public = IIIFAnnotationCollectionView()._readable_analyses(
-            user, self.documents[side]["document"]
-        )
-        return {str(a.pk) for a in analyses}, public
+        from manuspectrum.iiif import facts, memo
+
+        user = User.objects.get(pk=user.pk)
+        found = facts.document_facts(str(self.documents[side]["document"].pk), user)
+        return {a.id for a in found.analyses}, memo.gate(user).shared
 
     def test_without_embargo_the_collection_is_public(self):
         self.assertEqual(
@@ -233,7 +235,7 @@ class CollectionTests(EmbargoCase):
     def test_an_analysis_of_an_embargoed_component_is_hidden_with_it(self):
         self.embargo("component")
 
-        self.assertEqual(self.readable(self.anonymous, "embargoed"), (set(), False))
+        self.assertEqual(self.readable(self.anonymous, "embargoed"), (set(), True))
         self.assertEqual(
             self.readable(self.editor, "embargoed"),
             ({str(self.embargoed("analysis").pk)}, False),
@@ -242,10 +244,14 @@ class CollectionTests(EmbargoCase):
             self.readable(self.anonymous), ({str(self.open("analysis").pk)}, True)
         )
 
-    def test_an_embargoed_analysis_makes_its_collection_private(self):
+    def test_an_embargoed_analysis_leaves_its_collection(self):
         self.embargo("analysis")
 
-        self.assertEqual(self.readable(self.anonymous, "embargoed"), (set(), False))
+        self.assertEqual(self.readable(self.anonymous, "embargoed"), (set(), True))
+        self.assertEqual(
+            self.readable(self.editor, "embargoed"),
+            ({str(self.embargoed("analysis").pk)}, False),
+        )
 
     def test_an_unreadable_resource_answers_like_an_unknown_one(self):
         self.embargo("document")

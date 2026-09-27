@@ -59,6 +59,11 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "user_permission_cache",
     },
+    "iiif_auth": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "iiif-auth-cache",
+        "KEY_PREFIX": "ms-iiif-auth",
+    },
 }
 
 LOGGING["loggers"]["arches"]["level"] = "ERROR"

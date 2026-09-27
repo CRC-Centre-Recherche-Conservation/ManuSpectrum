@@ -126,10 +126,18 @@ export interface HomeResponse {
     unpublishedCount: number;
 }
 
-/** One zone of an analysis on a page: `canvas` is the position of the page in `DocumentPayload.canvases`. */
+/** One zone of an analysis on a page: `canvas` is the position of the page in `DocumentPayload.canvases`, `feature` the id of the zone. */
 export interface AnalysisZone {
     canvas: number;
     shape: Shape;
+    feature: string;
+}
+
+/** The published IIIF Content State of one zone of an analysis: absolute URLs, `download` serving it as an attachment. */
+export interface ContentStateLink {
+    feature: string;
+    url: string;
+    download: string;
 }
 
 /** An analysis of a document; `technique` is a key of `DocumentPayload.techniques`; no zone: not located on a page. */
@@ -307,8 +315,10 @@ export interface ShareExport {
 
 /** The scope's products. */
 export interface ShareLinks {
-    /** Only when the scope's manifest holds a canvas. */
+    /** Only when the scope's manifest holds a canvas within the canvas bound. */
     manifest: ProductLink | null;
+    /** The scope's manifest is over the canvas bound: its route answers 413. */
+    manifestTooLarge: boolean;
     /** Only for a Selection holding spectra. */
     seriesCsv: ProductLink | null;
     export: ProductLink;
@@ -344,8 +354,10 @@ export interface AnalysisPayload {
     citation: Citation;
     /** The data availability statement of this analysis. */
     availability: string;
-    /** Absolute URL of the IIIF manifest of this analysis; null when it places no canvas. */
+    /** Absolute URL of the IIIF manifest of this analysis (every language); null when it places no canvas. */
     manifest: string | null;
+    /** The content state of each located zone of this analysis, by feature id. */
+    contentStates: ContentStateLink[];
     permalink: string;
     /** Path of the Arches report on this site, in the request language. */
     reportUrl: string;
@@ -506,10 +518,15 @@ export const SHAPE_KEYS = {
         unpublished: true,
         zones: true,
     } satisfies Record<keyof DocumentAnalysis, true>,
-    AnalysisZone: { canvas: true, shape: true } satisfies Record<
+    AnalysisZone: { canvas: true, shape: true, feature: true } satisfies Record<
         keyof AnalysisZone,
         true
     >,
+    ContentStateLink: {
+        feature: true,
+        url: true,
+        download: true,
+    } satisfies Record<keyof ContentStateLink, true>,
     DocumentMatch: { facets: true, kept: true, total: true } satisfies Record<
         keyof DocumentMatch,
         true
@@ -560,6 +577,7 @@ export const SHAPE_KEYS = {
         citation: true,
         availability: true,
         manifest: true,
+        contentStates: true,
         permalink: true,
         reportUrl: true,
         certaintyScale: true,
@@ -624,6 +642,7 @@ export const SHAPE_KEYS = {
     >,
     ShareLinks: {
         manifest: true,
+        manifestTooLarge: true,
         seriesCsv: true,
         export: true,
     } satisfies Record<keyof ShareLinks, true>,

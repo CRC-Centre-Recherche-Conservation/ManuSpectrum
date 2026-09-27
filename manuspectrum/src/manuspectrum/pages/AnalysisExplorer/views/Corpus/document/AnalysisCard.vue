@@ -3,10 +3,8 @@ import {
     computed,
     defineAsyncComponent,
     inject,
-    ref,
     useId,
     useTemplateRef,
-    watch,
 } from "vue";
 import { useGettext } from "vue3-gettext";
 
@@ -26,7 +24,6 @@ import {
 import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import {
-    analysisContentState,
     contentStateLink,
     miradorLink,
 } from "@/manuspectrum/pages/AnalysisExplorer/share/content-state.ts";
@@ -39,7 +36,6 @@ import type {
     AnalysisPayload,
     FileEntry,
     Label,
-    Shape,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -55,10 +51,11 @@ const COPYRIGHT = "©";
  * The card of the analysis `analysisId`. `handle` may still hold the previous
  * analysis while this one loads: the card shows only a payload of
  * `analysisId`, and its heading (one element from loading to loaded) says it
- * is loading meanwhile. `zone` (a source canvas id and a shape in its pixels)
- * gives the IIIF link of the analysis: a Content State on the analysis
- * manifest, copied as a URL (`contentStateLink`) or opened in Mirador; an
- * unlocated analysis has none.
+ * is loading meanwhile. `feature` (the id of the focused zone) picks the
+ * published Content State of that zone among the analysis's
+ * `contentStates`: its IIIF link is copied (`contentStateLink`), opened in
+ * Mirador and downloaded as a file. An unlocated analysis, or a zone
+ * without a published state, has none.
  */
 const props = withDefaults(
     defineProps<{
@@ -68,9 +65,9 @@ const props = withDefaults(
         headingId?: string;
         /** False hides « Close » where the container has its own. */
         closable?: boolean;
-        zone?: { canvas: string; shape: Shape } | null;
+        feature?: string | null;
     }>(),
-    { headingId: undefined, closable: true, zone: null },
+    { headingId: undefined, closable: true, feature: null },
 );
 
 const emit = defineEmits<{ close: [] }>();
@@ -85,7 +82,6 @@ const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
 
 const previews = new Map<string, Component>();
-const contentState = ref("");
 
 const analysis = computed(() =>
     props.handle.data.value?.id === props.analysisId
@@ -175,42 +171,26 @@ const attribution = computed(() => {
 });
 /** The Arches report of the analysis on this site, opened in a new tab. */
 const reportHref = computed(() => safeHref(analysis.value?.reportUrl));
-const miradorHref = computed(() =>
-    contentState.value
-        ? miradorLink(miradorUrl, { contentState: contentState.value })
-        : null,
-);
-/** The IIIF link of the zone to copy: a URL carrying its content state (`contentStateLink`). */
-const iiifLink = computed(() =>
-    contentState.value && analysis.value?.manifest
-        ? contentStateLink(
-              miradorUrl,
-              analysis.value.manifest,
-              contentState.value,
+/**
+ * The IIIF links of the focused zone's published Content State: the link to
+ * copy (`contentStateLink`), its download and Mirador; null when the analysis
+ * has no state for the zone.
+ */
+const zoneLinks = computed(() => {
+    const state = props.feature
+        ? analysis.value?.contentStates.find(
+              (entry) => entry.feature === props.feature,
           )
-        : "",
-);
-
-watch(
-    () => [analysis.value?.manifest ?? null, props.zone] as const,
-    async ([manifest, zone]) => {
-        contentState.value = "";
-        if (!manifest || !zone) return;
-        try {
-            const state = await analysisContentState(
-                manifest,
-                zone.canvas,
-                zone.shape,
-            );
-            if (analysis.value?.manifest === manifest && props.zone === zone) {
-                contentState.value = state;
-            }
-        } catch {
-            contentState.value = "";
-        }
-    },
-    { immediate: true },
-);
+        : undefined;
+    if (!state) {
+        return null;
+    }
+    return {
+        iiif: contentStateLink(miradorUrl, state.url),
+        download: safeHref(state.download),
+        mirador: miradorLink(miradorUrl, { contentState: state.url }),
+    };
+});
 
 function previewOf(file: FileEntry): Component {
     const entry = viewerFor(file.dataKind);
@@ -560,19 +540,27 @@ function focusHeading(): void {
                     :label="$gettext('Copy the data availability statement')"
                 />
                 <div
-                    v-if="props.zone"
+                    v-if="zoneLinks"
                     class="iiif"
                 >
                     <CopyButton
-                        :text="iiifLink"
+                        :text="zoneLinks.iiif"
                         :label="$gettext('Copy the IIIF link')"
                     />
                     <a
-                        v-if="miradorHref"
+                        v-if="zoneLinks.download"
+                        class="download-view"
+                        download
+                        :href="zoneLinks.download"
+                    >
+                        <span>{{ $gettext("Download the view") }}</span>
+                    </a>
+                    <a
+                        v-if="zoneLinks.mirador"
                         class="mirador"
                         rel="noopener"
                         target="_blank"
-                        :href="miradorHref"
+                        :href="zoneLinks.mirador"
                     >
                         <span>{{ $gettext("Open in Mirador") }}</span>
                         <span class="visually-hidden">{{

@@ -19,7 +19,9 @@ from django.urls import reverse
 
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.constants.xy_presets import XY_PRESETS
+from manuspectrum.iiif.xy_reading import axes
 from manuspectrum.utils.iiif_tools import BBoxCalculator
+from manuspectrum.utils.spectrum_preview import is_readable
 
 FALLBACK_LANGUAGE = "en"
 
@@ -246,16 +248,33 @@ def _local_path(path):
     return None if path.startswith("/\\") else path
 
 
+def plots(entry):
+    """Whether the server draws a file-list *entry* as a spectrum.
+
+    ``read_series`` reads its format (``is_readable``: a text format of
+    ``XY_TEXT_FILE_FORMATS``), the rule of the spectrum preview, of the
+    summary popup and of the IIIF clean CSV.
+    """
+    return is_readable(str(entry.get("name") or ""))
+
+
+def _raw_extensions():
+    return {e.lower() for e in settings.RAW_INSTRUMENT_EXTENSIONS}
+
+
 def file_entries(entries, *, language, configs, kind):
     """``FileEntry`` list of one file-list value (D39).
 
-    A file with a renderer configuration is ``readable`` (a spectrum when
-    *kind* is ``"measurement"``); an extension of ``RAW_INSTRUMENT_EXTENSIONS``
-    is ``raw`` and is never parsed; anything else is ``other``. A raw file and
-    a readable one sharing a base name (case ignored) point at each other.
-    Micro-imaging files (*kind* ``"micro-imaging"``) carry that data kind.
+    A file the server draws (``plots``) is ``readable`` (a spectrum when
+    *kind* is ``"measurement"``); another extension of
+    ``RAW_INSTRUMENT_EXTENSIONS`` is ``raw`` and is never parsed; anything
+    else is ``other``. A file of ``RAW_INSTRUMENT_EXTENSIONS`` sharing a base
+    name (case ignored) with a readable file of another extension is the raw
+    file of that one: both point at each other, and it is never drawn, even
+    when a setting lists its extension among the text formats. Micro-imaging
+    files (*kind* ``"micro-imaging"``) carry that data kind.
     """
-    raw_extensions = {e.lower() for e in settings.RAW_INSTRUMENT_EXTENSIONS}
+    raw_extensions = _raw_extensions()
     items = []
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, dict) or not entry.get("file_id"):
@@ -265,7 +284,7 @@ def file_entries(entries, *, language, configs, kind):
         config_id = entry.get("rendererConfig") or None
         role = (
             "readable"
-            if config_id
+            if plots(entry)
             else "raw" if extension.lower() in raw_extensions else "other"
         )
         config = configs.get(config_id) if config_id else None
@@ -287,12 +306,8 @@ def file_entries(entries, *, language, configs, kind):
                 "dataKind": data_kind,
                 "viewer": {
                     "rendererConfigId": config_id,
-                    "xLabel": (
-                        _display(config).get("xAxisLabel") or None if config else None
-                    ),
-                    "yLabel": (
-                        _display(config).get("yAxisLabel") or None if config else None
-                    ),
+                    "xLabel": (axes(config)[0] or None) if config else None,
+                    "yLabel": (axes(config)[1] or None) if config else None,
                     "axisKey": axis_key(config) if config else None,
                     "axisTitle": axis_title(config) if config else None,
                     "points": None,
@@ -308,15 +323,21 @@ def file_entries(entries, *, language, configs, kind):
                 ),
                 "zone": None,
                 "_base": base.casefold(),
+                "_raw": extension.lower() in raw_extensions,
             }
         )
-    readable = {i["_base"]: i for i in items if i["role"] == "readable"}
-    raw = {i["_base"]: i for i in items if i["role"] == "raw"}
+    readable = {
+        i["_base"]: i for i in items if i["role"] == "readable" and not i["_raw"]
+    }
+    raw = {i["_base"]: i for i in items if i["_raw"]}
     for base in readable.keys() & raw.keys():
-        readable[base]["pairedWith"] = raw[base]["id"]
-        raw[base]["pairedWith"] = readable[base]["id"]
+        twin = raw[base]
+        if twin["dataKind"] == "xy":
+            twin.update(role="raw", dataKind="file", previewUrl=None)
+        readable[base]["pairedWith"] = twin["id"]
+        twin["pairedWith"] = readable[base]["id"]
     for item in items:
-        del item["_base"]
+        del item["_base"], item["_raw"]
     return items
 
 

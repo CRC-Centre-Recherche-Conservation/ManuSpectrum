@@ -213,6 +213,22 @@ class PublicViewForEveryoneTests(ProductsCase):
         self.assertEqual(reader, visitor)
         self.assertEqual(response["Cache-Control"], "private, no-store")
 
+    def test_a_valid_iiif_token_changes_nothing_in_discover(self):
+        from django.test import Client
+
+        from manuspectrum.iiif import tokens
+        from tests.iiif_auth import DEMO, bearer, token_for
+
+        self.embargo(self.analyses["open"])
+        visitor = self.seen()
+        token = token_for(self.editor)
+        self.assertEqual(tokens.verify(token, DEMO), self.editor)
+        self.client = Client(**bearer(token))
+        with_token = self.seen()
+
+        self.assertEqual(with_token, visitor)
+        self.assertNotIn(str(self.analyses["open"].pk), "".join(with_token.values()))
+
     def test_an_embargoed_resource_appears_for_no_reader(self):
         hidden = str(self.analyses["open"].pk)
         self.embargo(self.analyses["open"])

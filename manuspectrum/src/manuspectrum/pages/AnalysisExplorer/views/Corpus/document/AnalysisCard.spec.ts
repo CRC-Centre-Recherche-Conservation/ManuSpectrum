@@ -1,5 +1,4 @@
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
-import { parseContentState } from "@iiif/helpers/content-state";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 import { afterEach, describe, expect, it } from "vitest";
@@ -15,25 +14,22 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     analysisPayload,
     characterization,
+    contentStateLink,
     fileEntry,
     label,
     uuid,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
-import type {
-    AnalysisPayload,
-    Shape,
-} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { AnalysisPayload } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 
 enableAutoUnmount(afterEach);
 
-const CANVAS = "https://iiif.example/ms1/canvas/f12";
 const MIRADOR = "https://viewer.example/mirador/";
 
 interface CardExtras {
-    zone?: { canvas: string; shape: Shape } | null;
+    feature?: string | null;
     mirador?: string;
 }
 
@@ -41,7 +37,7 @@ function mountCard(
     payload: AnalysisPayload | null,
     status: RequestStatus = "ready",
     analysisId: string = payload?.id ?? uuid(101),
-    { zone = null, mirador = "" }: CardExtras = {},
+    { feature = null, mirador = "" }: CardExtras = {},
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -52,7 +48,7 @@ function mountCard(
         retry: () => undefined,
     };
     const wrapper = mount(AnalysisCard, {
-        props: { handle, analysisId, zone },
+        props: { handle, analysisId, feature },
         global: {
             plugins: [pinia, PrimeVue],
             stubs: { SpectrumPreview: true },
@@ -82,6 +78,32 @@ describe("AnalysisCard", () => {
         expect(row.text()).toContain("raw instrument");
         expect(row.text()).toContain(".mca");
         expect(row.find("a.raw").attributes("href")).toBe(raw.downloadUrl);
+    });
+
+    it("writes a file and its raw pair with an unsafe address as plain text", () => {
+        const readable = fileEntry({
+            id: uuid(8),
+            name: "X01_f1v.csv",
+            pairedWith: uuid(9),
+            downloadUrl: "javascript:alert(1)",
+        });
+        const raw = fileEntry({
+            id: uuid(9),
+            name: "X01_f1v",
+            role: "raw",
+            dataKind: "file",
+            format: "mca",
+            pairedWith: uuid(8),
+            downloadUrl: "javascript:alert(2)",
+            previewUrl: null,
+        });
+        const { wrapper } = mountCard(
+            analysisPayload({ files: [readable, raw] }),
+        );
+        const row = wrapper.find(`[data-file="${uuid(8)}"]`);
+        expect(row.find("a").exists()).toBe(false);
+        expect(row.find("span.file-name").text()).toBe("X01_f1v.csv");
+        expect(row.find("span.raw").text()).toContain("raw instrument · mca");
     });
 
     it("puts a raw file without a readable version under « not in a chart »", () => {
@@ -127,6 +149,27 @@ describe("AnalysisCard", () => {
         expect(wrapper.find(".licence").text()).toContain(
             "Project licence (not stated for this file)",
         );
+    });
+
+    it("credits the rights holder and writes a licence without a safe address as plain text", () => {
+        const file = fileEntry();
+        file.license = {
+            ...file.license,
+            url: "javascript:alert(1)",
+            attribution: "CRC",
+        };
+        const credited = fileEntry();
+        credited.license = { ...credited.license, attribution: "© BnF" };
+
+        const unsafe = mountCard(analysisPayload({ files: [file] })).wrapper;
+        expect(unsafe.find(".licence a").exists()).toBe(false);
+        expect(unsafe.find(".licence").text()).toContain(
+            file.license.label.value,
+        );
+        expect(unsafe.find(".attribution").text()).toBe("© CRC");
+
+        const kept = mountCard(analysisPayload({ files: [credited] })).wrapper;
+        expect(kept.find(".attribution").text()).toBe("© BnF");
     });
 
     it("leaves out a condition title that repeats the section's", () => {
@@ -318,69 +361,90 @@ describe("AnalysisCard", () => {
         expect(copy?.props("text")).toBe(payload.availability);
     });
 
-    it("copies the IIIF link of the analysis zone", async () => {
-        const payload = analysisPayload();
-        const shape: Shape = { type: "rect", x: 10, y: 20, w: 30, h: 40 };
+    function iiifCopy(wrapper: ReturnType<typeof mountCard>["wrapper"]) {
+        return wrapper
+            .findAllComponents(CopyButton)
+            .find((button) => button.props("label") === "Copy the IIIF link");
+    }
+
+    it("copies the IIIF link of the focused zone", async () => {
+        const focused = contentStateLink(uuid(101), uuid(902));
+        const payload = analysisPayload({
+            contentStates: [contentStateLink(uuid(101), uuid(901)), focused],
+        });
         const { wrapper } = mountCard(payload, "ready", payload.id, {
-            zone: { canvas: CANVAS, shape },
+            feature: uuid(902),
         });
         await flushPromises();
 
-        const copy = wrapper
-            .findAllComponents(CopyButton)
-            .find((button) => button.props("label") === "Copy the IIIF link");
-        const link = new URL(copy?.props("text") as string);
-        expect(`${link.origin}${link.pathname}`).toBe(
-            payload.manifest?.split("?")[0],
-        );
-        const state = parseContentState(
-            link.searchParams.get("iiif-content") as string,
-        ) as {
-            target: {
-                source: { id: string; partOf: { id: string }[] };
-                selector: { value: string };
-            };
-        };
-        expect(state.target.source.id).toBe(CANVAS);
-        expect(state.target.source.partOf[0].id).toBe(payload.manifest);
-        expect(state.target.selector.value).toBe("xywh=10,20,30,40");
+        expect(iiifCopy(wrapper)?.props("text")).toBe(focused.url);
     });
 
-    it("opens the analysis zone in Mirador when a viewer is set", async () => {
+    it("offers the download of the view", async () => {
         const payload = analysisPayload();
-        const zone = {
-            canvas: CANVAS,
-            shape: { type: "point", x: 1, y: 2 } as Shape,
-        };
         const { wrapper } = mountCard(payload, "ready", payload.id, {
-            zone,
+            feature: uuid(901),
+        });
+        await flushPromises();
+
+        const download = wrapper.find("a.download-view");
+        expect(download.attributes("href")).toBe(
+            payload.contentStates[0].download,
+        );
+        expect(download.attributes("download")).toBeDefined();
+        expect(download.text()).toContain("Download the view");
+    });
+
+    it("offers no download of the view outside a web address", async () => {
+        const state = contentStateLink(uuid(101), uuid(901));
+        const payload = analysisPayload({
+            contentStates: [{ ...state, download: "javascript:alert(1)" }],
+        });
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            feature: uuid(901),
+        });
+        await flushPromises();
+
+        expect(wrapper.find("a.download-view").exists()).toBe(false);
+    });
+
+    it("opens Mirador with the content state when a viewer is set", async () => {
+        const payload = analysisPayload();
+        const state = payload.contentStates[0];
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            feature: state.feature,
             mirador: MIRADOR,
         });
         await flushPromises();
 
         const href = wrapper.find("a.mirador").attributes("href") as string;
-        const copy = wrapper
-            .findAllComponents(CopyButton)
-            .find((button) => button.props("label") === "Copy the IIIF link");
-        expect(copy?.props("text")).toBe(href);
-        expect(new URL(href).searchParams.get("iiif-content")).toBeTruthy();
+        expect(href.startsWith(MIRADOR)).toBe(true);
+        expect(new URL(href).searchParams.get("iiif-content")).toBe(state.url);
+        expect(iiifCopy(wrapper)?.props("text")).toBe(href);
 
-        const without = mountCard(payload, "ready", payload.id, { zone });
+        const without = mountCard(payload, "ready", payload.id, {
+            feature: state.feature,
+        });
         await flushPromises();
         expect(without.wrapper.find("a.mirador").exists()).toBe(false);
     });
 
     it("offers no IIIF link for an unlocated analysis", async () => {
-        const { wrapper } = mountCard(analysisPayload(), "ready", undefined, {
-            mirador: MIRADOR,
-        });
-        await flushPromises();
+        const unlocated = analysisPayload({ contentStates: [] });
+        for (const [payload, feature] of [
+            [analysisPayload(), null],
+            [unlocated, uuid(901)],
+        ] as const) {
+            const { wrapper } = mountCard(payload, "ready", undefined, {
+                feature,
+                mirador: MIRADOR,
+            });
+            await flushPromises();
 
-        const labels = wrapper
-            .findAllComponents(CopyButton)
-            .map((button) => button.props("label"));
-        expect(labels).not.toContain("Copy the IIIF link");
-        expect(wrapper.find("a.mirador").exists()).toBe(false);
+            expect(iiifCopy(wrapper)).toBeUndefined();
+            expect(wrapper.find("a.mirador").exists()).toBe(false);
+            expect(wrapper.find("a.download-view").exists()).toBe(false);
+        }
     });
 
     it("keeps the dataset link next to the citation", () => {

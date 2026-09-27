@@ -94,7 +94,7 @@ function cardStub(name: string): Component {
             analysisNames: { type: Map, default: null },
             headingId: { type: String, default: undefined },
             closable: { type: Boolean, default: true },
-            zone: { type: Object, default: null },
+            feature: { type: String, default: null },
         },
         emits: ["close"],
         setup(props, { expose }) {
@@ -465,11 +465,12 @@ describe("CorpusDocument", () => {
         expect(wrapper.find(".on-this-page").exists()).toBe(false);
     });
 
-    it("hands the card the page and zone of the analysis, the page shown first", async () => {
+    it("hands the card the zone of the analysis on the page shown first", async () => {
         stubFetch({
             annotations: [
                 annotation(1),
                 annotation(1, {
+                    key: uuid(902),
                     canvas: "https://iiif.example/c2",
                     shape: { type: "point", x: 7, y: 8 },
                 }),
@@ -484,11 +485,8 @@ describe("CorpusDocument", () => {
         await flushPromises();
 
         expect(
-            wrapper.findComponent({ name: "AnalysisCard" }).props("zone"),
-        ).toEqual({
-            canvas: "https://iiif.example/c2",
-            shape: { type: "point", x: 7, y: 8 },
-        });
+            wrapper.findComponent({ name: "AnalysisCard" }).props("feature"),
+        ).toBe(uuid(902));
     });
 
     it("hands the card no zone for an unlocated analysis", async () => {
@@ -511,7 +509,7 @@ describe("CorpusDocument", () => {
         await flushPromises();
 
         expect(
-            wrapper.findComponent({ name: "AnalysisCard" }).props("zone"),
+            wrapper.findComponent({ name: "AnalysisCard" }).props("feature"),
         ).toBeNull();
     });
 

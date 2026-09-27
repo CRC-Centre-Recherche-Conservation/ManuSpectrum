@@ -402,19 +402,19 @@ class SpectrumPreviewViewTests(SimpleTestCase):
         return request
 
     def get(self, path, readable=True, config_id=None, config=None, **headers):
-        record = None if path is None else (path, RESOURCE_ID, config_id, "ng-1")
+        record = None if path is None else (path, RESOURCE_ID, config_id, "ng-1", None)
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview.file_record", return_value=record
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.visible_set",
+                "manuspectrum.iiif.data.visible_set",
                 return_value=VisibleSet(
                     analyses=frozenset({RESOURCE_ID} if readable else set())
                 ),
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=None,
             ),
             mock.patch(
@@ -510,6 +510,14 @@ class SpectrumPreviewViewTests(SimpleTestCase):
             response = self.get(self.written(suffix))
 
             self.assertEqual(response.status_code, 204, suffix)
+
+    def test_an_instrument_file_is_not_previewed(self):
+        with open(os.path.join(FIXTURES, "elio_xrf.mca"), encoding="utf-8") as handle:
+            path = self.written(".mca", handle.read())
+
+        response = self.get(path)
+
+        self.assertEqual(response.status_code, 204)
 
     @override_settings(XY_TEXT_FILE_FORMATS=["csv", "txt"])
     def test_a_format_the_setting_adds_is_served(self):
@@ -611,6 +619,13 @@ class FileRecordTests(SimpleTestCase):
     def test_the_join_carries_the_nodegroup_of_the_tile(self):
         self.assertEqual(self.record(self.row())[3], NODEGROUP_ID)
 
+    def test_the_record_carries_the_entry_name(self):
+        row = self.row()
+        row.tile.data["node-files"][0]["name"] = "X.mca"
+
+        self.assertEqual(self.record(row)[4], "X.mca")
+        self.assertIsNone(self.record(self.row())[4])
+
     def test_a_file_no_tile_holds_has_no_resource_to_check(self):
         row = mock.Mock(tile=None)
         row.path.name = "spectrum.csv"
@@ -635,7 +650,7 @@ class FileRecordMemoTests(SimpleTestCase):
     def test_the_join_is_read_once_per_file(self):
         with mock.patch(
             "manuspectrum.views.spectrum_preview._load_file_record",
-            return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
+            return_value=("/tmp/a.csv", "r-1", None, "ng-1", None),
         ) as load:
             file_record(FILE_ID)
             file_record(FILE_ID)
@@ -687,17 +702,17 @@ class SpectrumPreviewGuardTests(SimpleTestCase):
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview._load_file_record",
-                return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
+                return_value=("/tmp/a.csv", "r-1", None, "ng-1", None),
             ) as load,
             mock.patch(
-                "manuspectrum.views.spectrum_preview.visible_set",
+                "manuspectrum.iiif.data.visible_set",
                 side_effect=[
                     VisibleSet(analyses=frozenset({"r-1"})),
                     VisibleSet(analyses=frozenset()),
                 ],
             ) as guard,
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=None,
             ),
             mock.patch(
@@ -731,16 +746,16 @@ class SpectrumPreviewNodegroupGuardTests(SimpleTestCase):
         with (
             mock.patch(
                 "manuspectrum.views.spectrum_preview.file_record",
-                return_value=("/tmp/a.csv", "r-1", None, "ng-1"),
+                return_value=("/tmp/a.csv", "r-1", None, "ng-1", None),
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.visible_set",
+                "manuspectrum.iiif.data.visible_set",
                 return_value=VisibleSet(
                     analyses=frozenset({"r-1"} if readable else set())
                 ),
             ),
             mock.patch(
-                "manuspectrum.views.spectrum_preview.readable_nodegroups",
+                "manuspectrum.iiif.data.readable_nodegroups",
                 return_value=nodegroups,
             ) as allowed,
             mock.patch(

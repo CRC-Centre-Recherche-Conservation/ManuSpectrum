@@ -27,19 +27,21 @@ from django.http import (
     HttpResponseBadRequest,
     HttpResponseNotFound,
     HttpResponseNotModified,
+    HttpResponsePermanentRedirect,
 )
 from django.utils import translation
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.gzip import gzip_page
 
+from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import anonymous_user, is_connected
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifest
 from manuspectrum.views.explorer.scopes import (
     ScopeError,
-    export_language,
+    canonical_query,
     resolve_scope,
     share_payload,
 )
@@ -54,14 +56,13 @@ from manuspectrum.views.explorer.service import (
     match_payload,
     parse_filters,
     parse_keys,
+    product_path,
     search_payload,
     wants_facets,
 )
+from manuspectrum.views.iiif.cors import iiif_cors
 
 HOME_DAY_MARGIN = datetime.timedelta(days=1)
-IIIF_MEDIA_TYPE = (
-    'application/ld+json;profile="http://iiif.io/api/presentation/3/context.json"'
-)
 
 
 def _shared(request):
@@ -294,35 +295,42 @@ class ExplorerShareView(View):
         return _answer(request, lambda: share_payload(scope, datetime.date.today()))
 
 
+@method_decorator(iiif_cors, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerManifestView(View):
-    """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all][&lang=]``: the IIIF v3 manifest of a scope.
+    """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all]``: the IIIF v3 manifest of a scope, in every language.
 
-    ``lang`` absent is ``LANGUAGE_CODE``; an unknown language or malformed
-    scope parameters answer a bodyless 400, a scope with nothing visible or
-    placing no canvas the bodyless 404, a manifest over ``EXPLORER_MANIFEST_MAX_CANVASES``
-    canvases a bodyless 413. The visitor's ETag is the digest of the body:
-    the manifest embeds source manifests the data version does not follow.
+    A ``lang`` parameter answers a 301 to the canonical URL of the scope
+    (``canonical_query``, without it) before anything is resolved: the
+    target then answers for the scope. Malformed scope parameters answer a
+    bodyless 400, a scope with nothing visible or placing no canvas the
+    bodyless 404, a manifest over ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases
+    a bodyless 413. The visitor's ETag is the digest of the body: the
+    manifest embeds source manifests the data version does not follow.
     """
 
     def get(self, request):
+        language = settings.LANGUAGE_CODE
         try:
-            language = export_language(request.GET)
+            if "lang" in request.GET:
+                return HttpResponsePermanentRedirect(
+                    product_path(
+                        "iiif-v3-explorer-manifest",
+                        canonical_query(request.GET),
+                        language,
+                    )
+                )
+            scope = resolve_scope(request.GET, language)
         except ScopeError:
             return HttpResponseBadRequest()
-        with translation.override(language):
-            try:
-                scope = resolve_scope(request.GET, language)
-            except ScopeError:
-                return HttpResponseBadRequest()
-            if scope is None:
-                return _not_found()
-            try:
-                manifest = build_manifest(scope)
-            except ManifestTooLarge:
-                response = HttpResponse(status=413)
-                response["Cache-Control"] = "private, no-store"
-                return response
+        if scope is None:
+            return _not_found()
+        try:
+            manifest = build_manifest(scope)
+        except ManifestTooLarge:
+            response = HttpResponse(status=413)
+            response["Cache-Control"] = "private, no-store"
+            return response
         if manifest is None:
             return _not_found()
         return _answer(request, lambda: manifest, content_type=IIIF_MEDIA_TYPE)

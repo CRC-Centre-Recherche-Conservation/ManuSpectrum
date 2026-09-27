@@ -17,7 +17,6 @@ from manuspectrum.utils.public_visibility import (
     reader_scope,
     visible_set,
 )
-from manuspectrum.views.iiif_annotation import IIIFAnnotationCollectionView
 from tests.explorer_fixtures import ACTIVE, ExplorerCase
 
 DEFAULT_LIFECYCLE_DRAFT = "9375c9a7-dad2-4f14-a5c1-d7e329fdde4f"
@@ -196,22 +195,32 @@ class VisibleSetTests(ExplorerCase):
 
 class CollectionUnderVisibleSetTests(ExplorerCase):
     def readable(self, user, document):
-        analyses, public = IIIFAnnotationCollectionView()._readable_analyses(
-            user, document
-        )
-        return {str(a.pk) for a in analyses}, public
+        """``(analysis ids of the document's IIIF facts, whether the reader's view is the visitor's)``."""
+        from manuspectrum.iiif import facts, memo
+
+        user = User.objects.get(pk=user.pk)
+        found = facts.document_facts(str(document.pk), user)
+        return {a.id for a in found.analyses}, memo.gate(user).shared
 
     def test_a_hidden_project_takes_its_analysis_out_of_the_collection(self):
         self.embargo(self.projects["side"])
 
-        reached, public = self.readable(self.anonymous, self.documents["open"])
+        reached, shared = self.readable(self.anonymous, self.documents["open"])
 
         self.assertNotIn(str(self.analyses["on_document"].pk), reached)
         self.assertIn(str(self.analyses["open"].pk), reached)
-        self.assertFalse(public)
+        self.assertTrue(shared)
 
     def test_a_draft_analysis_is_served_to_the_visitor_in_a_public_collection(self):
-        reached, public = self.readable(self.anonymous, self.documents["open"])
+        reached, shared = self.readable(self.anonymous, self.documents["open"])
 
         self.assertIn(str(self.analyses["draft"].pk), reached)
-        self.assertTrue(public)
+        self.assertTrue(shared)
+
+    def test_a_reader_who_sees_a_hidden_project_does_not_share_the_visitor_view(self):
+        self.embargo(self.projects["side"])
+
+        reached, shared = self.readable(self.editor, self.documents["open"])
+
+        self.assertIn(str(self.analyses["on_document"].pk), reached)
+        self.assertFalse(shared)

@@ -109,7 +109,8 @@ SHAPES = {
         "unpublished": bool,
         "zones": list,
     },
-    "AnalysisZone": {"canvas": int, "shape": dict},
+    "AnalysisZone": {"canvas": int, "shape": dict, "feature": str},
+    "ContentStateLink": {"feature": str, "url": str, "download": str},
     "DocumentMatch": {"facets": list, "kept": "MatchKept", "total": int},
     "MatchKept": {"analyses": (list, type(None)), "characterizations": list},
     "SampleSummary": {
@@ -154,6 +155,7 @@ SHAPES = {
         "citation": "Citation",
         "availability": str,
         "manifest": (str, type(None)),
+        "contentStates": list,
         "permalink": str,
         "reportUrl": str,
         "certaintyScale": dict,
@@ -198,6 +200,7 @@ SHAPES = {
     "ShareLinks": {
         "manifest": ("ProductLink", type(None)),
         "seriesCsv": ("ProductLink", type(None)),
+        "manifestTooLarge": bool,
         "export": "ProductLink",
     },
 }

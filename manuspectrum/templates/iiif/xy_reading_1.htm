@@ -1,0 +1,75 @@
+{% load i18n %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}<html lang="{{ LANGUAGE_CODE }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% trans "xyReading, a IIIF extension for XY spectra (version 1)" %}</title>
+</head>
+<body>
+<main>
+  <h1 id="xyReading">{% trans "xyReading, a IIIF extension for XY spectra (version 1)" %}</h1>
+  <p>{% blocktrans trimmed %}<code>xyReading</code> tells a client how to read an XY curve (a spectrum) out of a <code>Dataset</code> content resource of a IIIF Presentation 3 document: which columns hold x and y, how their axes are titled, and which correction turns the raw file into the curve.{% endblocktrans %}</p>
+
+  <h2>{% trans "Where it appears" %}</h2>
+  <p>{% blocktrans trimmed %}Only on a content resource of type <code>Dataset</code>, usually an annotation body. Any other resource MUST NOT carry it. A document that uses it lists this context first in its <code>@context</code> and the Presentation 3 context last:{% endblocktrans %}</p>
+  <pre><code>"@context": ["{{ context_url }}", "http://iiif.io/api/presentation/3/context.json"]</code></pre>
+  <p>{% blocktrans trimmed %}A document that also declares IIIF Authorization 2.0 services lists the Authorization 2.0 context between the two:{% endblocktrans %}</p>
+  <pre><code>"@context": ["{{ context_url }}", "{{ auth2_context_url }}", "http://iiif.io/api/presentation/3/context.json"]</code></pre>
+  <p>{% blocktrans trimmed %}The Presentation 2.1 routes carry the same object, with this context before the Presentation 2 context.{% endblocktrans %}</p>
+
+  <h2>{% trans "Advisory" %}</h2>
+  <p>{% blocktrans trimmed %}Clients MAY use <code>xyReading</code> to draw the curve; they SHOULD fall back to their own reading of the file when they do not, and MUST ignore keys they do not know. Every key published is one the ManuSpectrum reader applies.{% endblocktrans %}</p>
+
+  <h2>{% trans "Keys" %}</h2>
+  <dl>
+    <dt id="XYReading"><code>type</code>: <code>XYReading</code></dt>
+    <dd>{% trans "The type of the object. Required." %}</dd>
+    <dt id="dialect"><code>dialect</code></dt>
+    <dd>{% blocktrans trimmed %}CSV dialect of the file (CSV on the Web terms): <code>delimiter</code>, <code>headerRowCount</code>, <code>encoding</code>. Given for the files ManuSpectrum writes.{% endblocktrans %}</dd>
+    <dt id="column"><code>columns</code></dt>
+    <dd>{% blocktrans trimmed %}The columns read, in order: <code>index</code> (from 0) and <code>role</code>.{% endblocktrans %}</dd>
+    <dt id="columnIndex"><code>index</code></dt>
+    <dd>{% trans "Zero-based index of a column." %}</dd>
+    <dt id="role"><code>role</code></dt>
+    <dd>{% blocktrans trimmed %}What a column holds: <code id="x">x</code> (the x axis), <code id="yLeft">yLeft</code> and <code id="yRight">yRight</code> (a measurement on the left or right axis), <code id="reference">reference</code> (the white reference), <code id="dark">dark</code> (the dark current), <code id="ignore">ignore</code>.{% endblocktrans %}</dd>
+    <dt id="xAxis"><code>x</code></dt>
+    <dd>{% blocktrans trimmed %}The x axis: <code>label</code> (a IIIF language map) and <code>reversed</code> (true when the axis is drawn from right to left; the rows keep the file's order).{% endblocktrans %}</dd>
+    <dt id="yAxis"><code>y</code></dt>
+    <dd>{% blocktrans trimmed %}The y axes, in order: <code id="axisSide">axis</code> (<code>left</code> or <code>right</code>) and <code>label</code>.{% endblocktrans %}</dd>
+    <dt id="reversed"><code>reversed</code></dt>
+    <dd>{% trans "Whether the x axis is drawn from right to left." %}</dd>
+    <dt id="multiYHandling"><code>multiY</code></dt>
+    <dd>{% blocktrans trimmed %}How several measurement columns combine: <code>reference-normalize</code> divides the measurement by the reference (see corrections).{% endblocktrans %}</dd>
+    <dt id="correction"><code>corrections</code></dt>
+    <dd>{% blocktrans trimmed %}The corrections applied, in order. Version 1 knows <code>reference-normalize</code>: <code id="expression">expression</code> <code>(y - dark) / (reference - dark)</code>, <code id="darkDefault">darkDefault</code> the dark value without a dark column (0), <code id="epsilon">epsilon</code> the smallest denominator divided by, and <code id="onInvalid">onInvalid</code> <code>drop-point</code>: a row with a missing value, a non-finite value or a denominator below epsilon is left out of the curve. An empty list says the file already holds the curve.{% endblocktrans %}</dd>
+    <dt id="derivedFrom"><code>derivedFrom</code></dt>
+    <dd>{% blocktrans trimmed %}The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</code>): <code>id</code>, <code>type</code>, <code>format</code>, <code>label</code> and, for a raw text file, its own <code>xyReading</code> (columns and corrections).{% endblocktrans %}</dd>
+  </dl>
+
+  <p>{% blocktrans trimmed %}The Dataset is never decimated, whatever its size. mirador-xyviewer does not plot a Dataset larger than 5 MB; such a file still plots in the ManuSpectrum Explorer.{% endblocktrans %}</p>
+
+  <h2 id="auth">{% trans "Restricted data (IIIF Authorization)" %}</h2>
+  <p>{% blocktrans trimmed %}Open data needs no credential. A restricted spectrum, annotation or content state answers <code>401</code> with a description that names the IIIF Authorization services; annotation pages and collections are never refused: they list what the reader may see and declare the same services.{% endblocktrans %}</p>
+  <ol>
+    <li>{% blocktrans trimmed %}Login: the viewer opens <a href="{{ login_url }}">{{ login_url }}</a> in a new window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</code> profile). The reader signs in to ManuSpectrum there; the window then says so and can be closed.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}Token: the viewer loads <code>{{ token1_url }}</code> (Auth 1.0) or <code>{{ token2_url }}</code> (Auth 2.0) in a hidden frame with its <code>messageId</code> and <code>origin</code>, and receives an access token valid {{ token_minutes }} minutes for that origin only. It sends it as <code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> read routes; the Auth 2.0 probe service of a spectrum says whether that token opens it.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}Logout: opening <a href="{{ logout_url }}">{{ logout_url }}</a> in a tab (an HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; signing out of ManuSpectrum does too. The ManuSpectrum session itself stays open.{% endblocktrans %}</li>
+  </ol>
+  <p>{% blocktrans trimmed %}The token only reads: it opens the <code>/iiif/</code> routes and nothing else, and it is not an API credential. Tokens go only to this site and to the viewers its administrators trust; any other origin receives <code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this site is refused.{% endblocktrans %}</p>
+  <h3 id="auth-limits">{% trans "Known limits" %}</h3>
+  <ul>
+    <li>{% blocktrans trimmed %}HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, and a browser does not keep it on a plain HTTP site.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}Third-party cookies: the token frame belongs to this site inside the viewer's page. Chrome sends the cookie; Safari (Intelligent Tracking Prevention) and Firefox (Total Cookie Protection) may block it, and the viewer then keeps asking to sign in. Use Chrome, a viewer served from this site, or allow this site's cookies in the browser.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login window opened from another site may ask to sign in again even when another tab is already signed in.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}The viewer renews its token silently while the access cookie lives: at most {{ cookie_hours }} hours, and never longer than the ManuSpectrum session.{% endblocktrans %}</li>
+  </ul>
+
+  <h2>{% trans "Versions" %}</h2>
+  <p>{% blocktrans trimmed %}The major version is in the path of the context (<code>/1</code>). Version 1 only gains optional keys; a change of meaning would be version 2, at a new path.{% endblocktrans %}</p>
+  <p>{% blocktrans trimmed %}JSON Schema (Draft 7): <a href="{{ schema_url }}">{{ schema_url }}</a>. JSON-LD context: <a href="{{ context_url }}">{{ context_url }}</a>.{% endblocktrans %}</p>
+
+  <h2>{% trans "Example" %}</h2>
+  <pre><code>{{ example }}</code></pre>
+</main>
+</body>
+</html>

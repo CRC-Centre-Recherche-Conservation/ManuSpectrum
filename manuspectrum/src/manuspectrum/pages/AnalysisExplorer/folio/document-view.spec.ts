@@ -25,8 +25,16 @@ function payload() {
                 dataKind: "xy",
                 unpublished: false,
                 zones: [
-                    { canvas: 0, shape: { type: "point", x: 1, y: 2 } },
-                    { canvas: 1, shape: { type: "point", x: 3, y: 4 } },
+                    {
+                        canvas: 0,
+                        shape: { type: "point", x: 1, y: 2 },
+                        feature: uuid(901),
+                    },
+                    {
+                        canvas: 1,
+                        shape: { type: "point", x: 3, y: 4 },
+                        feature: uuid(902),
+                    },
                 ],
             },
             {

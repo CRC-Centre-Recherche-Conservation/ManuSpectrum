@@ -334,7 +334,28 @@ class FileEntryTests(SimpleTestCase):
 
         self.assertIsNone(effective_license(entry, "fr")["attribution"])
 
-    def test_a_readable_file_carries_its_axis_labels(self):
+    def test_a_configured_file_of_a_format_the_server_does_not_read_is_not_readable(
+        self,
+    ):
+        config_id = "c0000000-0000-4000-8000-000000000001"
+        entries = [
+            {
+                "file_id": "11111111-1111-4111-8111-111111111111",
+                "name": "a.spc",
+                "url": "/files/a",
+                "rendererConfig": config_id,
+            }
+        ]
+        configs = {config_id: {"presetKey": "fors", "display": {}}}
+
+        (entry,) = file_entries(
+            entries, language="en", configs=configs, kind="measurement"
+        )
+
+        self.assertNotEqual(entry["role"], "readable")
+        self.assertIsNone(entry["previewUrl"])
+
+    def test_a_readable_file_carries_the_axis_labels_its_configuration_stores(self):
         config_id = "c0000000-0000-4000-8000-000000000001"
         entries = [
             {
@@ -344,14 +365,19 @@ class FileEntryTests(SimpleTestCase):
                 "rendererConfig": config_id,
             }
         ]
-        configs = {config_id: {"presetKey": "fors", "display": {}}}
+        stored = {"xAxisLabel": "Wavelength (Å)", "yAxisLabel": "Reflectance (%)"}
+        configs = {config_id: {"presetKey": "fors", "display": stored}}
+        bare = {config_id: {"presetKey": "fors", "display": {}}}
 
-        viewer = file_entries(
-            entries, language="en", configs=configs, kind="measurement"
-        )[0]["viewer"]
+        def viewer(given):
+            return file_entries(
+                entries, language="en", configs=given, kind="measurement"
+            )[0]["viewer"]
 
-        self.assertTrue(viewer["xLabel"])
-        self.assertTrue(viewer["yLabel"])
+        self.assertEqual(viewer(configs)["xLabel"], "Wavelength (Å)")
+        self.assertEqual(viewer(configs)["yLabel"], "Reflectance (%)")
+        self.assertIsNone(viewer(bare)["xLabel"])
+        self.assertIsNone(viewer(bare)["yLabel"])
 
 
 def _labelled(*labels):

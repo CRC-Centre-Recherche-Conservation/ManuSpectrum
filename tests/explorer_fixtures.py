@@ -10,6 +10,7 @@ import mimetypes
 import shutil
 import tempfile
 import uuid
+from unittest import mock
 
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache, caches
@@ -105,6 +106,12 @@ ROLE_NODES = [
     ("document", "type", "reference", "doc_type"),
 ]
 
+# Roles whose node carries the id it has in the ManuSpectrum model, for readers
+# that still address a node by id.
+REAL_NODE_IDS = {
+    ("analysis", "measurement_point_data"): "8fe5161a-7bf2-11ef-b1e5-dd514ecd97bc",
+}
+
 CANVAS = "https://example.org/iiif/ms59/canvas/f1v"
 MANIFEST = "https://example.org/iiif/ms59/manifest"
 XY_CONFIG_ID = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a01"
@@ -142,7 +149,7 @@ class ExplorerCase(TestCase):
                     nodegroupid=uuid.uuid4(), cardinality="n"
                 )
             cls.nodes[(slug, alias)] = Node.objects.create(
-                nodeid=uuid.uuid4(),
+                nodeid=REAL_NODE_IDS.get((slug, alias)) or uuid.uuid4(),
                 graph=cls.graphs[slug],
                 nodegroup=nodegroups[key],
                 name=alias,
@@ -382,8 +389,115 @@ class ExplorerCase(TestCase):
         TileModel.objects.filter(pk=tile.pk).update(data=data)
         return file_id
 
+    def restrict_nodegroup(self, nodegroup_id, allowed_user):
+        """Take read access to *nodegroup_id* away from the visitor and grant it to *allowed_user*.
+
+        The visitor is the ``anonymous`` row; *allowed_user* gets an explicit
+        ``read_nodegroup``. Other accounts keep Arches' default (no object
+        grant of their own: every nodegroup readable).
+        """
+        nodegroup = NodeGroup.objects.get(pk=nodegroup_id)
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+            assign_perm("read_nodegroup", allowed_user, nodegroup)
+
+    def hide_project(self, project):
+        """Restrict *project* from the visitor: its analyses are hidden with it (D33)."""
+        self.embargo(project)
+
     def make_draft(self, resource):
         ResourceInstance.objects.filter(pk=resource.pk).update(
             resource_instance_lifecycle_state_id=DRAFT
         )
         cache.clear()
+
+
+CANVAS_2 = "https://example.org/iiif/ms59/canvas/f2r"
+CANVAS_3 = "https://example.org/iiif/ms59/canvas/f3r"
+FETCH = "manuspectrum.utils.iiif_tools.CanvasIIIF.fetch_manifest"
+SOURCE_MANIFEST = {
+    "@context": "http://iiif.io/api/presentation/3/context.json",
+    "id": MANIFEST,
+    "type": "Manifest",
+    "label": {"none": ["Ms 59"]},
+    "items": [
+        {
+            "id": canvas,
+            "type": "Canvas",
+            "label": {"none": [label]},
+            "width": 4000,
+            "height": 5000,
+        }
+        for canvas, label in (
+            (CANVAS, "f. 1v"),
+            (CANVAS_2, "f. 2r"),
+            (CANVAS_3, "f. 3r"),
+        )
+    ],
+}
+POINT = {"type": "Point", "coordinates": [10, -20]}
+RECT = {
+    "type": "Polygon",
+    "coordinates": [[[10, -10], [30, -10], [30, -30], [10, -30], [10, -10]]],
+}
+TRIANGLE = {
+    "type": "Polygon",
+    "coordinates": [[[10, -10], [40, -15], [20, -40], [10, -10]]],
+}
+FEATURES = {
+    "open": "0a0a0a0a-0000-4000-8000-000000000001",
+    "on_document_1": "0a0a0a0a-0000-4000-8000-000000000002",
+    "on_document_3": "0a0a0a0a-0000-4000-8000-000000000003",
+    "draft": "0a0a0a0a-0000-4000-8000-000000000004",
+}
+
+
+class IIIFCase(ExplorerCase):
+    """The ExplorerCase corpus with the open Document's manifest (three canvases) and located zones.
+
+    ``open`` has a point on f. 1v; ``on_document`` a triangle on f. 1v and a
+    rectangle on f. 3r; ``draft`` a point on f. 1v. f. 2r holds nothing. The
+    source manifest is fetched through a patched ``CanvasIIIF.fetch_manifest``.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.tile(cls.documents["open"], "facsimiles", MANIFEST)
+        cls.zone(cls.analyses["open"], [(FEATURES["open"], CANVAS, POINT)])
+        cls.zone(
+            cls.analyses["on_document"],
+            [
+                (FEATURES["on_document_1"], CANVAS, TRIANGLE),
+                (FEATURES["on_document_3"], CANVAS_3, RECT),
+            ],
+        )
+        cls.zone(cls.analyses["draft"], [(FEATURES["draft"], CANVAS, POINT)])
+
+    @classmethod
+    def zone(cls, analysis, features, alias="literal_location_of_analysis"):
+        """One annotation tile of *analysis* holding ``(feature id, canvas, geometry)`` features."""
+        return cls.tile(
+            analysis,
+            alias,
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "id": feature,
+                        "type": "Feature",
+                        "geometry": geometry,
+                        "properties": {"canvas": canvas, "manifest": MANIFEST},
+                    }
+                    for feature, canvas, geometry in features
+                ],
+            },
+        )
+
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch(
+            FETCH, side_effect=lambda url: SOURCE_MANIFEST if url == MANIFEST else None
+        )
+        self.fetch = patcher.start()
+        self.addCleanup(patcher.stop)

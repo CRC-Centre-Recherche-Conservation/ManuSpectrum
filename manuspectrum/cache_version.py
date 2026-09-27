@@ -14,8 +14,6 @@ from pathlib import Path
 CACHE_SHAPE_MODULES = (
     "views/model_graph.py",
     "views/model_graph_service.py",
-    "views/iiif_annotation.py",
-    "views/serializers/iiif_annotation.py",
     "views/summary.py",
     "views/summary_service.py",
     # The summary payload reads its localized texts through graph_nodes.
@@ -37,6 +35,32 @@ CACHE_SHAPE_MODULES = (
     "views/explorer/memo.py",
     "views/explorer/values.py",
     "utils/role_links.py",
+    "utils/roles.py",
+    # IIIF documents: the sources and zones the Explorer memo reads, and the
+    # ids, language maps and selectors of the memoised IIIF payloads.
+    "iiif/constants.py",
+    "iiif/ids.py",
+    "iiif/language.py",
+    "iiif/selectors.py",
+    "iiif/sources.py",
+    "iiif/zones.py",
+    # The memoised IIIF pages, collections and annotations: facts, bodies,
+    # annotations, pages, their v2 form, the auth services they declare, the
+    # memo key and the view wrapping.
+    "iiif/facts.py",
+    "iiif/bodies.py",
+    "iiif/annotations.py",
+    "iiif/characterizations.py",
+    "iiif/data.py",
+    "iiif/xy_reading.py",
+    "iiif/pages.py",
+    "iiif/v2.py",
+    "iiif/memo.py",
+    "iiif/services.py",
+    "views/iiif/annotations.py",
+    # The memoised Content State of one zone, and the view wrapping it.
+    "iiif/content_state.py",
+    "views/iiif/content_state.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

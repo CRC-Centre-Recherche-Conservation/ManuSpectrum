@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-26 13:17-0500\n"
+"POT-Creation-Date: 2026-09-27 08:36-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -121,6 +121,180 @@ msgstr "%(where)s : le chemin doit compter de 1 à %(max)s étapes"
 msgid "config_version unsupported: configuration ignored"
 msgstr "config_version non prise en charge : configuration ignorée"
 
+#: iiif/annotations.py:21
+msgid "Technique"
+msgstr "Technique"
+
+#: iiif/annotations.py:22
+msgid "Dates"
+msgstr "Dates"
+
+#: iiif/annotations.py:23
+msgid "Operators"
+msgstr "Opérateurs"
+
+#: iiif/annotations.py:24
+msgid "Instrument"
+msgstr "Instrument"
+
+#: iiif/annotations.py:25
+msgid "Conditions"
+msgstr "Conditions"
+
+#: iiif/annotations.py:26
+msgid "Project"
+msgstr "Projet"
+
+#: iiif/annotations.py:27
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:23
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:392
+msgid "Document"
+msgstr "Document"
+
+#: iiif/annotations.py:28
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
+#: templates/views/pages/conceptual-model.htm:191
+msgid "Component"
+msgstr "Composant"
+
+#: iiif/annotations.py:29
+msgid "Identified materials"
+msgstr "Matériaux identifiés"
+
+#: iiif/annotations.py:46
+#: templates/views/components/cards/file-renderers/xy-reader.htm:11
+msgid "Status"
+msgstr "Statut"
+
+#: iiif/annotations.py:46
+msgid "Draft"
+msgstr "Brouillon"
+
+#: iiif/bodies.py:46 iiif/sources.py:224 templates/explorer/export_readme.md:33
+#: templates/views/components/ms-file-workbench.htm:44
+#: templates/views/components/ms-file-workbench.htm:47
+msgid "Attribution"
+msgstr "Attribution"
+
+#: iiif/bodies.py:51 templates/explorer/export_readme.md:33
+#: templates/views/components/ms-file-license.htm:14
+#: templates/views/components/ms-file-license.htm:15
+#: templates/views/components/widgets/file-xy.htm:9
+#: templates/views/pages/team.htm:89 templates/views/pages/team.htm:176
+msgid "Licence"
+msgstr "Licence"
+
+#: iiif/bodies.py:64
+#, python-format
+msgid "%(file)s, series"
+msgstr "%(file)s, série"
+
+#: iiif/characterizations.py:26
+#, python-format
+msgid "Colour: %(colours)s"
+msgstr "Couleur : %(colours)s"
+
+#: iiif/characterizations.py:27
+#, python-format
+msgid "Layer: %(layers)s"
+msgstr "Couche : %(layers)s"
+
+#: iiif/characterizations.py:67
+#, python-format
+msgid "Elements: %(elements)s"
+msgstr "Éléments : %(elements)s"
+
+#: iiif/language.py:154
+#, python-format
+msgid "%(name)s (%(qualifier)s)"
+msgstr "%(name)s (%(qualifier)s)"
+
+#: iiif/manifest.py:124
+#, python-format
+msgid "Selection of %(count)d page of %(document)s"
+msgid_plural "Selection of %(count)d pages of %(document)s"
+msgstr[0] "Sélection de %(count)d folio de %(document)s"
+msgstr[1] "Sélection de %(count)d folios de %(document)s"
+
+#: iiif/manifest.py:131
+#, python-format
+msgid "Selection of %(count)d page of %(documents)d documents"
+msgid_plural "Selection of %(count)d pages of %(documents)d documents"
+msgstr[0] "Sélection de %(count)d folio de %(documents)d documents"
+msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
+
+#: iiif/manifest.py:168
+msgid "Without a position on the image"
+msgstr "Sans position sur l'image"
+
+#: iiif/manifest.py:174 views/explorer/export.py:385
+#: views/explorer/series.py:116
+msgid "Contains drafts"
+msgstr "Contient des brouillons"
+
+#: iiif/pages.py:30
+#, python-format
+msgid "Analyses of %(name)s"
+msgstr "Analyses de %(name)s"
+
+#: iiif/pages.py:31
+#, python-format
+msgid "Analyses of %(name)s, %(canvas)s"
+msgstr "Analyses de %(name)s, %(canvas)s"
+
+#: iiif/pages.py:34
+#, python-format
+msgid "Identified materials of %(name)s"
+msgstr "Matériaux identifiés de %(name)s"
+
+#: iiif/pages.py:35
+#, python-format
+msgid "Identified materials of %(name)s, %(canvas)s"
+msgstr "Matériaux identifiés de %(name)s, %(canvas)s"
+
+#: iiif/services.py:31 templates/iiif/auth_login.htm:7
+msgid "Sign in to ManuSpectrum"
+msgstr "Se connecter à ManuSpectrum"
+
+#: iiif/services.py:32
+msgid "Restricted data"
+msgstr "Données restreintes"
+
+#: iiif/services.py:34
+msgid ""
+"Some data of ManuSpectrum are restricted. Sign in with your ManuSpectrum "
+"account to read what it gives access to."
+msgstr ""
+"Certaines données de ManuSpectrum sont restreintes. Connectez-vous avec "
+"votre compte ManuSpectrum pour lire celles auxquelles il donne accès."
+
+#: iiif/services.py:38
+msgid "Sign in with your ManuSpectrum account to read what it gives access to."
+msgstr ""
+"Connectez-vous avec votre compte ManuSpectrum pour lire les données "
+"auxquelles il donne accès."
+
+#: iiif/services.py:40
+msgid "Sign in"
+msgstr "Se connecter"
+
+#: iiif/services.py:41 views/iiif/auth.py:64
+msgid "Not available"
+msgstr "Non disponible"
+
+#: iiif/services.py:42
+msgid "Your account does not give access to these data."
+msgstr "Votre compte ne donne pas accès à ces données."
+
+#: iiif/services.py:43 templates/iiif/auth_logout.htm:7
+msgid "Sign out of external viewers"
+msgstr "Se déconnecter des visionneuses externes"
+
+#: iiif/xy_reading.py:62
+#, python-format
+msgid "%(file)s, raw file"
+msgstr "%(file)s, fichier brut"
+
 #: settings.py:153
 msgid "Term Matches"
 msgstr "Correspondances de termes"
@@ -129,15 +303,15 @@ msgstr "Correspondances de termes"
 msgid "References"
 msgstr "Références"
 
-#: settings.py:561
+#: settings.py:574
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:598
+#: settings.py:611
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:599
+#: settings.py:612
 msgid "French"
 msgstr "Français"
 
@@ -323,7 +497,7 @@ msgstr ""
 "Les données proviennent des jeux de données ci-dessous ; citez-les et "
 "réutilisez-les par leur identifiant."
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:509
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:508
 msgid "Licences per file"
 msgstr "Licences par fichier"
 
@@ -336,22 +510,6 @@ msgstr "Chemin"
 msgid "Size (bytes)"
 msgstr "Taille (octets)"
 
-#: templates/explorer/export_readme.md:33
-#: templates/views/components/ms-file-license.htm:14
-#: templates/views/components/ms-file-license.htm:15
-#: templates/views/components/widgets/file-xy.htm:9
-#: templates/views/pages/team.htm:89 templates/views/pages/team.htm:176
-#: views/explorer/manifest.py:305
-msgid "Licence"
-msgstr "Licence"
-
-#: templates/explorer/export_readme.md:33
-#: templates/views/components/ms-file-workbench.htm:44
-#: templates/views/components/ms-file-workbench.htm:47
-#: views/explorer/manifest.py:253 views/explorer/manifest.py:310
-msgid "Attribution"
-msgstr "Attribution"
-
 #: templates/explorer/export_readme.md:36
 msgid "No data file."
 msgstr "Aucun fichier de données."
@@ -359,6 +517,359 @@ msgstr "Aucun fichier de données."
 #: templates/help/create-project-workflow-help.htm:5
 msgid "New Project Workflow"
 msgstr "Assistant de nouveau projet"
+
+#: templates/iiif/auth_login.htm:11
+msgid "You are signed in. Return to the viewer."
+msgstr "Vous êtes connecté. Revenez à la visionneuse."
+
+#: templates/iiif/auth_login.htm:12
+msgid "Return to the viewer"
+msgstr "Revenir à la visionneuse"
+
+#: templates/iiif/auth_logout.htm:11
+msgid ""
+"You are signed out of external viewers. Your ManuSpectrum session is "
+"unchanged."
+msgstr ""
+"Vous êtes déconnecté des visionneuses externes. Votre session ManuSpectrum "
+"reste ouverte."
+
+#: templates/iiif/auth_logout.htm:12
+msgid "Close this window"
+msgstr "Fermer cette fenêtre"
+
+#: templates/iiif/auth_token.htm:6
+msgid "ManuSpectrum IIIF access token"
+msgstr "Jeton d'accès IIIF de ManuSpectrum"
+
+#: templates/iiif/xy_reading_1.htm:6 templates/iiif/xy_reading_1.htm:10
+msgid "xyReading, a IIIF extension for XY spectra (version 1)"
+msgstr "xyReading, une extension IIIF pour les spectres XY (version 1)"
+
+#: templates/iiif/xy_reading_1.htm:11
+msgid ""
+"<code>xyReading</code> tells a client how to read an XY curve (a spectrum) "
+"out of a <code>Dataset</code> content resource of a IIIF Presentation 3 "
+"document: which columns hold x and y, how their axes are titled, and which "
+"correction turns the raw file into the curve."
+msgstr ""
+"<code>xyReading</code> indique à un client comment lire une courbe XY (un "
+"spectre) dans une ressource de contenu <code>Dataset</code> d'un document "
+"IIIF Presentation 3 : quelles colonnes portent x et y, comment leurs axes "
+"sont titrés, et quelle correction transforme le fichier brut en courbe."
+
+#: templates/iiif/xy_reading_1.htm:13
+msgid "Where it appears"
+msgstr "Où elle apparaît"
+
+#: templates/iiif/xy_reading_1.htm:14
+msgid ""
+"Only on a content resource of type <code>Dataset</code>, usually an "
+"annotation body. Any other resource MUST NOT carry it. A document that uses "
+"it lists this context first in its <code>@context</code> and the "
+"Presentation 3 context last:"
+msgstr ""
+"Uniquement sur une ressource de contenu de type <code>Dataset</code>, en "
+"général le corps d'une annotation. Aucune autre ressource NE DOIT la porter. "
+"Un document qui l'utilise place ce contexte en premier dans son "
+"<code>@context</code> et le contexte Presentation 3 en dernier :"
+
+#: templates/iiif/xy_reading_1.htm:16
+msgid ""
+"A document that also declares IIIF Authorization 2.0 services lists the "
+"Authorization 2.0 context between the two:"
+msgstr ""
+"Un document qui déclare aussi des services IIIF Authorization 2.0 place le "
+"contexte Authorization 2.0 entre les deux :"
+
+#: templates/iiif/xy_reading_1.htm:18
+msgid ""
+"The Presentation 2.1 routes carry the same object, with this context before "
+"the Presentation 2 context."
+msgstr ""
+"Les routes Presentation 2.1 portent le même objet, avec ce contexte avant le "
+"contexte Presentation 2."
+
+#: templates/iiif/xy_reading_1.htm:20
+msgid "Advisory"
+msgstr "À titre indicatif"
+
+#: templates/iiif/xy_reading_1.htm:21
+msgid ""
+"Clients MAY use <code>xyReading</code> to draw the curve; they SHOULD fall "
+"back to their own reading of the file when they do not, and MUST ignore keys "
+"they do not know. Every key published is one the ManuSpectrum reader applies."
+msgstr ""
+"Les clients PEUVENT utiliser <code>xyReading</code> pour tracer la courbe ; "
+"sinon, ils DEVRAIENT revenir à leur propre lecture du fichier, et DOIVENT "
+"ignorer les clés qu'ils ne connaissent pas. Chaque clé publiée est appliquée "
+"par le lecteur de ManuSpectrum."
+
+#: templates/iiif/xy_reading_1.htm:23
+msgid "Keys"
+msgstr "Clés"
+
+#: templates/iiif/xy_reading_1.htm:26
+msgid "The type of the object. Required."
+msgstr "Le type de l'objet. Obligatoire."
+
+#: templates/iiif/xy_reading_1.htm:28
+msgid ""
+"CSV dialect of the file (CSV on the Web terms): <code>delimiter</code>, "
+"<code>headerRowCount</code>, <code>encoding</code>. Given for the files "
+"ManuSpectrum writes."
+msgstr ""
+"Dialecte CSV du fichier (termes de CSV on the Web) : <code>delimiter</code>, "
+"<code>headerRowCount</code>, <code>encoding</code>. Donné pour les fichiers "
+"qu'écrit ManuSpectrum."
+
+#: templates/iiif/xy_reading_1.htm:30
+msgid ""
+"The columns read, in order: <code>index</code> (from 0) and <code>role</"
+"code>."
+msgstr ""
+"Les colonnes lues, dans l'ordre : <code>index</code> (à partir de 0) et "
+"<code>role</code>."
+
+#: templates/iiif/xy_reading_1.htm:32
+msgid "Zero-based index of a column."
+msgstr "Index d'une colonne, à partir de 0."
+
+#: templates/iiif/xy_reading_1.htm:34
+msgid ""
+"What a column holds: <code id=\"x\">x</code> (the x axis), <code "
+"id=\"yLeft\">yLeft</code> and <code id=\"yRight\">yRight</code> (a "
+"measurement on the left or right axis), <code id=\"reference\">reference</"
+"code> (the white reference), <code id=\"dark\">dark</code> (the dark "
+"current), <code id=\"ignore\">ignore</code>."
+msgstr ""
+"Ce que porte une colonne : <code id=\"x\">x</code> (l'axe des x), <code "
+"id=\"yLeft\">yLeft</code> et <code id=\"yRight\">yRight</code> (une mesure "
+"sur l'axe de gauche ou de droite), <code id=\"reference\">reference</code> "
+"(la référence blanche), <code id=\"dark\">dark</code> (le courant "
+"d'obscurité), <code id=\"ignore\">ignore</code>."
+
+#: templates/iiif/xy_reading_1.htm:36
+msgid ""
+"The x axis: <code>label</code> (a IIIF language map) and <code>reversed</"
+"code> (true when the axis is drawn from right to left; the rows keep the "
+"file's order)."
+msgstr ""
+"L'axe des x : <code>label</code> (une table de langues IIIF) et "
+"<code>reversed</code> (vrai quand l'axe est tracé de droite à gauche ; les "
+"lignes gardent l'ordre du fichier)."
+
+#: templates/iiif/xy_reading_1.htm:38
+msgid ""
+"The y axes, in order: <code id=\"axisSide\">axis</code> (<code>left</code> "
+"or <code>right</code>) and <code>label</code>."
+msgstr ""
+"Les axes des y, dans l'ordre : <code id=\"axisSide\">axis</code> "
+"(<code>left</code> ou <code>right</code>) et <code>label</code>."
+
+#: templates/iiif/xy_reading_1.htm:40
+msgid "Whether the x axis is drawn from right to left."
+msgstr "Si l'axe des x est tracé de droite à gauche."
+
+#: templates/iiif/xy_reading_1.htm:42
+msgid ""
+"How several measurement columns combine: <code>reference-normalize</code> "
+"divides the measurement by the reference (see corrections)."
+msgstr ""
+"Comment se combinent plusieurs colonnes de mesure : <code>reference-"
+"normalize</code> divise la mesure par la référence (voir corrections)."
+
+#: templates/iiif/xy_reading_1.htm:44
+msgid ""
+"The corrections applied, in order. Version 1 knows <code>reference-"
+"normalize</code>: <code id=\"expression\">expression</code> <code>(y - "
+"dark) / (reference - dark)</code>, <code id=\"darkDefault\">darkDefault</"
+"code> the dark value without a dark column (0), <code "
+"id=\"epsilon\">epsilon</code> the smallest denominator divided by, and <code "
+"id=\"onInvalid\">onInvalid</code> <code>drop-point</code>: a row with a "
+"missing value, a non-finite value or a denominator below epsilon is left out "
+"of the curve. An empty list says the file already holds the curve."
+msgstr ""
+"Les corrections appliquées, dans l'ordre. La version 1 connaît "
+"<code>reference-normalize</code> : <code id=\"expression\">expression</code> "
+"<code>(y - dark) / (reference - dark)</code>, <code "
+"id=\"darkDefault\">darkDefault</code> la valeur d'obscurité sans colonne "
+"d'obscurité (0), <code id=\"epsilon\">epsilon</code> le plus petit "
+"dénominateur par lequel diviser, et <code id=\"onInvalid\">onInvalid</code> "
+"<code>drop-point</code> : une ligne avec une valeur manquante, une valeur "
+"non finie ou un dénominateur inférieur à epsilon est écartée de la courbe. "
+"Une liste vide indique que le fichier porte déjà la courbe."
+
+#: templates/iiif/xy_reading_1.htm:46
+msgid ""
+"The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</"
+"code>): <code>id</code>, <code>type</code>, <code>format</code>, "
+"<code>label</code> and, for a raw text file, its own <code>xyReading</code> "
+"(columns and corrections)."
+msgstr ""
+"Le fichier brut dont le Dataset est dérivé (PROV <code>wasDerivedFrom</"
+"code>) : <code>id</code>, <code>type</code>, <code>format</code>, "
+"<code>label</code> et, pour un fichier brut texte, son propre "
+"<code>xyReading</code> (colonnes et corrections)."
+
+#: templates/iiif/xy_reading_1.htm:49
+msgid ""
+"The Dataset is never decimated, whatever its size. mirador-xyviewer does not "
+"plot a Dataset larger than 5 MB; such a file still plots in the ManuSpectrum "
+"Explorer."
+msgstr ""
+"Le Dataset n'est jamais décimé, quelle que soit sa taille. mirador-xyviewer "
+"ne trace pas un Dataset de plus de 5 Mo ; un tel fichier se trace toujours "
+"dans l'Explorateur ManuSpectrum."
+
+#: templates/iiif/xy_reading_1.htm:51
+msgid "Restricted data (IIIF Authorization)"
+msgstr "Données restreintes (IIIF Authorization)"
+
+#: templates/iiif/xy_reading_1.htm:52
+msgid ""
+"Open data needs no credential. A restricted spectrum, annotation or content "
+"state answers <code>401</code> with a description that names the IIIF "
+"Authorization services; annotation pages and collections are never refused: "
+"they list what the reader may see and declare the same services."
+msgstr ""
+"Les données ouvertes ne demandent aucun identifiant. Un spectre, une "
+"annotation ou un état de contenu restreint répond <code>401</code> avec une "
+"description qui nomme les services IIIF Authorization ; les pages et "
+"collections d'annotations ne sont jamais refusées : elles listent ce que le "
+"lecteur peut voir et déclarent les mêmes services."
+
+#: templates/iiif/xy_reading_1.htm:54
+#, python-format
+msgid ""
+"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
+"window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</"
+"code> profile). The reader signs in to ManuSpectrum there; the window then "
+"says so and can be closed."
+msgstr ""
+"Connexion : la visionneuse ouvre <a href=\"%(login_url)s\">%(login_url)s</a> "
+"dans une nouvelle fenêtre (profil <code>login</code> d'IIIF Auth 1.0, profil "
+"<code>active</code> d'Auth 2.0). Le lecteur s'y connecte à ManuSpectrum ; la "
+"fenêtre le confirme et peut être fermée."
+
+#: templates/iiif/xy_reading_1.htm:55
+#, python-format
+msgid ""
+"Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
+"<code>%(token2_url)s</code> (Auth 2.0) in a hidden frame with its "
+"<code>messageId</code> and <code>origin</code>, and receives an access token "
+"valid %(token_minutes)s minutes for that origin only. It sends it as "
+"<code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> "
+"read routes; the Auth 2.0 probe service of a spectrum says whether that "
+"token opens it."
+msgstr ""
+"Jeton : la visionneuse charge <code>%(token1_url)s</code> (Auth 1.0) ou "
+"<code>%(token2_url)s</code> (Auth 2.0) dans un cadre caché avec son "
+"<code>messageId</code> et son <code>origin</code>, et reçoit un jeton "
+"d'accès valable %(token_minutes)s minutes pour cette seule origine. Elle "
+"l'envoie en <code>Authorization: Bearer &lt;jeton&gt;</code> aux routes de "
+"lecture <code>/iiif/</code> ; le service de sonde Auth 2.0 d'un spectre "
+"indique si ce jeton l'ouvre."
+
+#: templates/iiif/xy_reading_1.htm:56
+#, python-format
+msgid ""
+"Logout: opening <a href=\"%(logout_url)s\">%(logout_url)s</a> in a tab (an "
+"HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; "
+"signing out of ManuSpectrum does too. The ManuSpectrum session itself stays "
+"open."
+msgstr ""
+"Déconnexion : ouvrir <a href=\"%(logout_url)s\">%(logout_url)s</a> dans un "
+"onglet (un GET HTTP, comme le définit IIIF Auth 1.0) met fin à tous les "
+"jetons de la session ; se déconnecter de ManuSpectrum aussi. La session "
+"ManuSpectrum elle-même reste ouverte."
+
+#: templates/iiif/xy_reading_1.htm:58
+msgid ""
+"The token only reads: it opens the <code>/iiif/</code> routes and nothing "
+"else, and it is not an API credential. Tokens go only to this site and to "
+"the viewers its administrators trust; any other origin receives "
+"<code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this "
+"site is refused."
+msgstr ""
+"Le jeton ne sert qu'à lire : il ouvre les routes <code>/iiif/</code> et rien "
+"d'autre, et ce n'est pas un identifiant d'API. Les jetons ne sont remis qu'à "
+"ce site et aux visionneuses auxquelles ses administrateurs font confiance ; "
+"toute autre origine reçoit <code>invalidOrigin</code>. Un jeton Bearer qui "
+"n'est pas un jeton IIIF de ce site est refusé."
+
+#: templates/iiif/xy_reading_1.htm:59
+msgid "Known limits"
+msgstr "Limites connues"
+
+#: templates/iiif/xy_reading_1.htm:61
+msgid ""
+"HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, "
+"and a browser does not keep it on a plain HTTP site."
+msgstr ""
+"HTTPS est obligatoire : le cookie d'accès est <code>Secure; SameSite=None</"
+"code>, et un navigateur ne le conserve pas sur un site en HTTP simple."
+
+#: templates/iiif/xy_reading_1.htm:62
+msgid ""
+"Third-party cookies: the token frame belongs to this site inside the "
+"viewer's page. Chrome sends the cookie; Safari (Intelligent Tracking "
+"Prevention) and Firefox (Total Cookie Protection) may block it, and the "
+"viewer then keeps asking to sign in. Use Chrome, a viewer served from this "
+"site, or allow this site's cookies in the browser."
+msgstr ""
+"Cookies tiers : le cadre du jeton appartient à ce site, dans la page de la "
+"visionneuse. Chrome envoie le cookie ; Safari (Intelligent Tracking "
+"Prevention) et Firefox (Total Cookie Protection) peuvent le bloquer, et la "
+"visionneuse redemande alors la connexion. Utilisez Chrome, une visionneuse "
+"servie par ce site, ou autorisez les cookies de ce site dans le navigateur."
+
+#: templates/iiif/xy_reading_1.htm:63
+msgid ""
+"The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login "
+"window opened from another site may ask to sign in again even when another "
+"tab is already signed in."
+msgstr ""
+"Le cookie de session de ManuSpectrum est <code>SameSite=Strict</code> : la "
+"fenêtre de connexion ouverte depuis un autre site peut redemander la "
+"connexion même quand un autre onglet est déjà connecté."
+
+#: templates/iiif/xy_reading_1.htm:64
+#, python-format
+msgid ""
+"The viewer renews its token silently while the access cookie lives: at most "
+"%(cookie_hours)s hours, and never longer than the ManuSpectrum session."
+msgstr ""
+"La visionneuse renouvelle son jeton sans rien demander tant que vit le "
+"cookie d'accès : %(cookie_hours)s heures au plus, et jamais au-delà de la "
+"session ManuSpectrum."
+
+#: templates/iiif/xy_reading_1.htm:67
+msgid "Versions"
+msgstr "Versions"
+
+#: templates/iiif/xy_reading_1.htm:68
+msgid ""
+"The major version is in the path of the context (<code>/1</code>). Version 1 "
+"only gains optional keys; a change of meaning would be version 2, at a new "
+"path."
+msgstr ""
+"La version majeure figure dans le chemin du contexte (<code>/1</code>). La "
+"version 1 ne gagne que des clés facultatives ; un changement de sens serait "
+"une version 2, à un nouveau chemin."
+
+#: templates/iiif/xy_reading_1.htm:69
+#, python-format
+msgid ""
+"JSON Schema (Draft 7): <a href=\"%(schema_url)s\">%(schema_url)s</a>. JSON-"
+"LD context: <a href=\"%(context_url)s\">%(context_url)s</a>."
+msgstr ""
+"Schéma JSON (Draft 7) : <a href=\"%(schema_url)s\">%(schema_url)s</a>. "
+"Contexte JSON-LD : <a href=\"%(context_url)s\">%(context_url)s</a>."
+
+#: templates/iiif/xy_reading_1.htm:71
+msgid "Example"
+msgstr "Exemple"
 
 #: templates/includes/ms_footer.htm:10
 msgid ""
@@ -2083,10 +2594,6 @@ msgstr "Configuration"
 msgid "Chart Configuration"
 msgstr "Configuration du graphique"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:11
-msgid "Status"
-msgstr "Statut"
-
 #: templates/views/components/cards/file-renderers/xy-reader.htm:19
 msgid ""
 "Select or create a shared configuration that applies to all XY files. For "
@@ -2919,21 +3426,9 @@ msgstr "Configurez l'import avant de rechercher sur le portail Biblissima."
 msgid "Resource type to create"
 msgstr "Type de ressource à créer"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:23
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:392
-#: views/explorer/manifest.py:353
-msgid "Document"
-msgstr "Document"
-
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:24
 msgid "Manuscript, book, printed text"
 msgstr "Manuscrit, livre, texte imprimé"
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
-#: templates/views/pages/conceptual-model.htm:191
-#: views/explorer/manifest.py:354
-msgid "Component"
-msgstr "Composant"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:30
 msgid "Illumination, lettrine, decoration"
@@ -4363,23 +4858,18 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr "Les données sont disponibles dans %(site)s (%(permalink)s)."
 
-#: views/explorer/export.py:379
+#: views/explorer/export.py:378
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] "Sélection de %(count)d élément"
 msgstr[1] "Sélection de %(count)d éléments"
 
-#: views/explorer/export.py:386 views/explorer/manifest.py:834
-#: views/explorer/series.py:111
-msgid "Contains drafts"
-msgstr "Contient des brouillons"
-
-#: views/explorer/export.py:511
+#: views/explorer/export.py:510
 msgid "Each file carries its own licence, given with the file."
 msgstr "Chaque fichier porte sa propre licence, indiquée avec le fichier."
 
-#: views/explorer/export.py:515
+#: views/explorer/export.py:514
 msgid "Licence of the files of this package that name it."
 msgstr "Licence des fichiers de ce paquet qui la mentionnent."
 
@@ -4410,71 +4900,47 @@ msgstr ""
 "Non inclus : le manifeste d'imagerie %(url)s de %(analysis)s n'a pas pu être "
 "récupéré."
 
-#: views/explorer/manifest.py:349
-msgid "Technique"
-msgstr "Technique"
-
-#: views/explorer/manifest.py:350
-msgid "Dates"
-msgstr "Dates"
-
-#: views/explorer/manifest.py:351
-msgid "Operators"
-msgstr "Opérateurs"
-
-#: views/explorer/manifest.py:352
-msgid "Conditions"
-msgstr "Conditions"
-
-#: views/explorer/manifest.py:480
-#, python-format
-msgid "Selection of %(count)d page of %(document)s"
-msgid_plural "Selection of %(count)d pages of %(document)s"
-msgstr[0] "Sélection de %(count)d folio de %(document)s"
-msgstr[1] "Sélection de %(count)d folios de %(document)s"
-
-#: views/explorer/manifest.py:485
-#, python-format
-msgid "Selection of %(count)d page of %(documents)d documents"
-msgid_plural "Selection of %(count)d pages of %(documents)d documents"
-msgstr[0] "Sélection de %(count)d folio de %(documents)d documents"
-msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
-
-#: views/explorer/manifest.py:840
-msgid "Without a position on the image"
-msgstr "Sans position sur l'image"
-
-#: views/explorer/series.py:85
+#: views/explorer/series.py:84
 #, python-format
 msgid "licence %(licence)s"
 msgstr "licence %(licence)s"
 
-#: views/explorer/series.py:87
+#: views/explorer/series.py:86
 #, python-format
 msgid "attribution %(text)s"
 msgstr "attribution %(text)s"
 
-#: views/explorer/series.py:89
+#: views/explorer/series.py:88
 #, python-format
 msgid "configuration %(name)s"
 msgstr "configuration %(name)s"
 
-#: views/explorer/series.py:92
+#: views/explorer/series.py:93
+#, python-format
+msgid "x axis %(label)s"
+msgstr "axe x %(label)s"
+
+#: views/explorer/series.py:95
+#, python-format
+msgid "y axis %(label)s"
+msgstr "axe y %(label)s"
+
+#: views/explorer/series.py:96
 #, python-format
 msgid "raw file %(url)s"
 msgstr "fichier brut %(url)s"
 
-#: views/explorer/series.py:107
+#: views/explorer/series.py:112
 #, python-format
 msgid "%(site)s: spectra of a Selection"
 msgstr "%(site)s : spectres d'une Sélection"
 
-#: views/explorer/series.py:108
+#: views/explorer/series.py:113
 #, python-format
 msgid "Generated on %(date)s"
 msgstr "Produit le %(date)s"
 
-#: views/explorer/series.py:153
+#: views/explorer/series.py:158
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
@@ -4483,10 +4949,46 @@ msgstr ""
 "exclu : %(file)s — la licence %(licence)s interdit les œuvres dérivées ; "
 "fichier brut : %(url)s"
 
-#: views/explorer/series.py:168
+#: views/explorer/series.py:173
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
+
+#: views/iiif/auth.py:51
+msgid "The request to the token service is malformed."
+msgstr "La demande au service de jeton est mal formée."
+
+#: views/iiif/auth.py:53
+msgid "Not signed in to ManuSpectrum in this browser."
+msgstr "Pas de connexion à ManuSpectrum dans ce navigateur."
+
+#: views/iiif/auth.py:55
+msgid "The ManuSpectrum sign-in is no longer valid."
+msgstr "La connexion à ManuSpectrum n'est plus valide."
+
+#: views/iiif/auth.py:56
+msgid "This viewer is not allowed to receive a token."
+msgstr "Cette visionneuse n'est pas autorisée à recevoir un jeton."
+
+#: views/iiif/auth.py:57
+msgid "The token service is unavailable, try again later."
+msgstr "Le service de jeton est indisponible, réessayez plus tard."
+
+#: views/iiif/auth.py:60
+msgid "Invalid request"
+msgstr "Demande invalide"
+
+#: views/iiif/auth.py:61
+msgid "Not signed in"
+msgstr "Non connecté"
+
+#: views/iiif/auth.py:62
+msgid "Sign-in no longer valid"
+msgstr "Connexion expirée"
+
+#: views/iiif/auth.py:63
+msgid "Viewer not allowed"
+msgstr "Visionneuse non autorisée"
 
 #: views/model_graph_service.py:103
 msgid "String"
@@ -4602,6 +5104,89 @@ msgid ""
 msgstr ""
 "Cette configuration a été modifiée par quelqu’un d’autre depuis son "
 "chargement. Rechargez-la avant d’enregistrer."
+
+#~ msgid ""
+#~ "What an axis measures, for instance <code>wavelength</code>, "
+#~ "<code>wavenumber</code>, <code>energy</code>, <code>channel</code>, "
+#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</"
+#~ "code>, <code>count</code>. Absent when unknown."
+#~ msgstr ""
+#~ "Ce que mesure un axe, par exemple <code>wavelength</code>, "
+#~ "<code>wavenumber</code>, <code>energy</code>, <code>channel</code>, "
+#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</"
+#~ "code>, <code>count</code>. Absente quand elle est inconnue."
+
+#, python-brace-format
+#~ msgid ""
+#~ "The UCUM code of the unit: <code>nm</code>, <code>cm-1</code>, <code>keV</"
+#~ "code>, <code>deg</code>, <code>1</code> (a ratio or an index), "
+#~ "<code>{counts}</code>, <code>[arb'U]</code> (arbitrary units)."
+#~ msgstr ""
+#~ "Le code UCUM de l'unité : <code>nm</code>, <code>cm-1</code>, <code>keV</"
+#~ "code>, <code>deg</code>, <code>1</code> (un rapport ou un indice), "
+#~ "<code>{counts}</code>, <code>[arb'U]</code> (unités arbitraires)."
+
+#~ msgid "Wavenumber (cm⁻¹)"
+#~ msgstr "Nombre d'onde (cm⁻¹)"
+
+#~ msgid "Absorbance"
+#~ msgstr "Absorbance"
+
+#~ msgid "Intensity (a.u.)"
+#~ msgstr "Intensité (u.a.)"
+
+#~ msgid "Intensity (counts)"
+#~ msgstr "Intensité (coups)"
+
+#~ msgid "Raman shift (cm⁻¹)"
+#~ msgstr "Déplacement Raman (cm⁻¹)"
+
+#~ msgid "m/z"
+#~ msgstr "m/z"
+
+#~ msgid "2θ (°)"
+#~ msgstr "2θ (°)"
+
+#~ msgid "Instrument formats"
+#~ msgstr "Formats des instruments"
+
+#~ msgid ""
+#~ "ELIO <code>.mca</code>: the energy axis in keV comes from the calibration "
+#~ "lines of the header (a least-squares line through two or more points); "
+#~ "without them, x is the channel index and its <code>quantity</code> is "
+#~ "<code>channel</code>."
+#~ msgstr ""
+#~ "ELIO <code>.mca</code> : l'axe d'énergie en keV vient des lignes de "
+#~ "calibration de l'en-tête (une droite des moindres carrés par deux points "
+#~ "ou plus) ; sans elles, x est l'indice du canal et sa grandeur "
+#~ "(<code>quantity</code>) est <code>channel</code>."
+
+#~ msgid ""
+#~ "ASD <code>.asd</code>: a raw spectrum saved with its white reference "
+#~ "reads as the reflectance target / reference, relative to that reference: "
+#~ "no panel calibration factor and no splice correction at the detector "
+#~ "joins (about 1000 and 1800 nm), as ViewSpec Pro reads it by default."
+#~ msgstr ""
+#~ "ASD <code>.asd</code> : un spectre brut enregistré avec sa référence "
+#~ "blanche se lit comme la réflectance cible / référence, relative à cette "
+#~ "référence : sans facteur de calibration du panneau ni correction des "
+#~ "raccords entre détecteurs (vers 1000 et 1800 nm), comme ViewSpec Pro la "
+#~ "lit par défaut."
+
+#~ msgid "Energy (keV)"
+#~ msgstr "Énergie (keV)"
+
+#~ msgid "Channel"
+#~ msgstr "Canal"
+
+#~ msgid "Counts"
+#~ msgstr "Coups"
+
+#~ msgid "Wavelength (nm)"
+#~ msgstr "Longueur d'onde (nm)"
+
+#~ msgid "Reflectance (0-1)"
+#~ msgstr "Réflectance (0-1)"
 
 #~ msgid "XRF"
 #~ msgstr "XRF"

@@ -191,8 +191,8 @@ const currentCanvas = computed(
         canvases.value[0] ??
         null,
 );
-/** Page and zone of the focused analysis for its IIIF link: its zone on the page shown, else its first one; null when unlocated. */
-const focusedZone = computed(() => {
+/** Feature id of the focused analysis's zone for its IIIF link: its zone on the page shown, else its first one; null when unlocated. */
+const focusedFeature = computed(() => {
     const loaded = payload.data.value;
     const id = focusedAnalysis.value;
     if (!id || loaded?.id !== props.documentId) return null;
@@ -202,8 +202,7 @@ const focusedZone = computed(() => {
     const zone =
         zones.find((entry) => loaded.canvases[entry.canvas]?.id === here) ??
         zones[0];
-    const canvas = loaded.canvases[zone.canvas];
-    return canvas ? { canvas: canvas.id, shape: zone.shape } : null;
+    return zone.feature;
 });
 const pageAnnotations = computed(() =>
     (data.value?.annotations ?? []).filter(
@@ -846,7 +845,7 @@ function goHome(): void {
                         :handle="analysis"
                         :analysis-id="focusedAnalysis"
                         :heading-id="CARD_HEADING_ID"
-                        :zone="focusedZone"
+                        :feature="focusedFeature"
                         @close="closeCard"
                     />
                     <CharacterizationCard
@@ -897,7 +896,7 @@ function goHome(): void {
                     :analysis-id="focusedAnalysis"
                     :heading-id="CARD_HEADING_ID"
                     :closable="false"
-                    :zone="focusedZone"
+                    :feature="focusedFeature"
                     @close="closeCard"
                 />
                 <CharacterizationCard

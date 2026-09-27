@@ -14,8 +14,9 @@ a file with another preset is another entry rather than a stale drawing.
 The resource a file hangs from never changes, so its row is memoised under the
 file id for as long as a summary payload lives (``SUMMARY_CACHE_TTL``). Two
 gates are still checked on every request, before anything is read from disk or
-from the series memo: whether the resource is in the reader's ``visible_set``,
-then whether the nodegroup of the tile holding the file is one
+from the series memo, by ``iiif.data.file_allowed``, the guard the IIIF data
+routes share: whether the resource is in the reader's ``visible_set``, then
+whether the nodegroup of the tile holding the file is one
 ``readable_nodegroups`` lets through — the rule the summary popup filters its
 fields with. Either refusal answers the same bodyless 404 as an unknown file.
 The renderer configuration id and the nodegroup id travel in the memo with the
@@ -54,11 +55,10 @@ from django.views.decorators.gzip import gzip_page
 
 from arches.app.models.models import File
 
+from manuspectrum.iiif.data import file_allowed
 from manuspectrum.models import RendererConfig
 from manuspectrum.utils.cache import etag_already_held, get_or_build
-from manuspectrum.utils.public_visibility import visible_set
-from manuspectrum.utils.spectrum_preview import build_preview, is_supported
-from manuspectrum.views.summary_service import readable_nodegroups
+from manuspectrum.utils.spectrum_preview import build_preview, is_readable
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +77,12 @@ def file_record_key(file_id):
 
 
 def file_record(file_id):
-    """``(path, resourceid, config_id, nodegroup_id)`` of a file, memoised.
+    """``(path, resourceid, config_id, nodegroup_id, name)`` of a file, memoised.
 
-    ``config_id`` is the renderer configuration the file entry carries, and
-    ``nodegroup_id`` the nodegroup of the tile holding the file, as a string.
+    ``config_id`` is the renderer configuration the file entry carries,
+    ``nodegroup_id`` the nodegroup of the tile holding the file, as a string,
+    and ``name`` the entry's file name (``None`` when unstated), which names
+    the format.
 
     ``None`` covers a row that is gone, a row whose file was never stored, and
     a file no tile holds: with no resource there is nothing to check a read
@@ -110,16 +112,18 @@ def _load_file_record(file_id):
     )
     if row is None or not row.path.name or row.tile is None:
         return None
+    entry = stamped_entry(row.tile.data, file_id)
     return (
         row.path.path,
         str(row.tile.resourceinstance_id),
-        stamped_config_id(row.tile.data, file_id),
+        entry.get("rendererConfig") or None,
         str(row.tile.nodegroup_id),
+        str(entry.get("name") or "") or None,
     )
 
 
-def stamped_config_id(data, file_id):
-    """The renderer configuration id the file entry carries, or ``None``.
+def stamped_entry(data, file_id):
+    """The file entry of *file_id* in tile *data*; ``{}`` when no file list holds it.
 
     The entry is looked up by file id across the file-list nodes of the tile:
     one tile may hold several of them, and their node ids are not known here.
@@ -132,8 +136,13 @@ def stamped_config_id(data, file_id):
             if not isinstance(entry, dict):
                 continue
             if str(entry.get("file_id", "")).lower() == wanted:
-                return entry.get("rendererConfig") or None
-    return None
+                return entry
+    return {}
+
+
+def stamped_config_id(data, file_id):
+    """The renderer configuration id the file entry carries, or ``None``."""
+    return stamped_entry(data, file_id).get("rendererConfig") or None
 
 
 def renderer_config(config_id):
@@ -165,8 +174,10 @@ def _load_config(config_id):
     return config if isinstance(config, dict) else {}
 
 
-def _series(path, n, config):
+def _series(path, n, config, name=None):
     """The series of a supported, small enough file; ``{}`` when there is none.
+
+    The extension of the entry *name* (else of *path*) names the format.
 
     An empty dict is memoised: a format outside ``XY_TEXT_FILE_FORMATS`` or a
     file over the ceiling is measured once and answers 204 from the memo
@@ -174,7 +185,7 @@ def _series(path, n, config):
     ``get_or_build`` keeps out of the cache — it may be there on the next
     request.
     """
-    if not is_supported(path):
+    if not is_readable(path, name):
         return {}
     try:
         if os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES:
@@ -195,8 +206,8 @@ def _not_found():
 class SpectrumPreviewView(View):
     """``GET /api/spectrum-preview/<file_id>``, at most one file read per day.
 
-    204 means there is nothing to draw — an extension outside
-    ``XY_TEXT_FILE_FORMATS``, a file over ``SPECTRUM_PREVIEW_MAX_BYTES``, or
+    204 means there is nothing to draw — a format ``read_series`` does not
+    read (``is_readable``), a file over ``SPECTRUM_PREVIEW_MAX_BYTES``, or
     fewer than two points — and carries the same lifetime as a series, because
     the answer for a given file id cannot change either.
     """
@@ -220,16 +231,13 @@ class SpectrumPreviewView(View):
         record = file_record(file_id)
         if record is None:
             return _not_found()
-        path, resourceid, config_id, nodegroup_id = record
-        if resourceid not in visible_set(request.user).ids:
-            return _not_found()
-        nodegroups = readable_nodegroups(request.user)
-        if nodegroups is not None and nodegroup_id not in nodegroups:
+        path, resourceid, config_id, nodegroup_id, name = record
+        if not file_allowed(resourceid, nodegroup_id, request.user):
             return _not_found()
 
         payload = get_or_build(
             f"spectrum-preview:{file_id}:{n}:{config_id}",
-            lambda: _series(path, n, renderer_config(config_id)),
+            lambda: _series(path, n, renderer_config(config_id), name),
             CACHE_TTL,
             lock_timeout=LOCK_TIMEOUT,
             wait=LOCK_WAIT,

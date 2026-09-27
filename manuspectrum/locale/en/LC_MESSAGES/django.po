@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-26 13:17-0500\n"
+"POT-Creation-Date: 2026-09-27 08:36-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -123,6 +123,179 @@ msgstr ""
 msgid "config_version unsupported: configuration ignored"
 msgstr ""
 
+#: iiif/annotations.py:21
+msgid "Technique"
+msgstr ""
+
+#: iiif/annotations.py:22
+msgid "Dates"
+msgstr ""
+
+#: iiif/annotations.py:23
+msgid "Operators"
+msgstr ""
+
+#: iiif/annotations.py:24
+msgid "Instrument"
+msgstr "Instrument"
+
+#: iiif/annotations.py:25
+msgid "Conditions"
+msgstr "Conditions"
+
+#: iiif/annotations.py:26
+msgid "Project"
+msgstr "Project"
+
+#: iiif/annotations.py:27
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:23
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:392
+msgid "Document"
+msgstr "Document"
+
+#: iiif/annotations.py:28
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
+#: templates/views/pages/conceptual-model.htm:191
+msgid "Component"
+msgstr "Component"
+
+#: iiif/annotations.py:29
+msgid "Identified materials"
+msgstr "Identified materials"
+
+#: iiif/annotations.py:46
+#: templates/views/components/cards/file-renderers/xy-reader.htm:11
+msgid "Status"
+msgstr "Status"
+
+#: iiif/annotations.py:46
+msgid "Draft"
+msgstr "Draft"
+
+#: iiif/bodies.py:46 iiif/sources.py:224 templates/explorer/export_readme.md:33
+#: templates/views/components/ms-file-workbench.htm:44
+#: templates/views/components/ms-file-workbench.htm:47
+msgid "Attribution"
+msgstr "Attribution"
+
+#: iiif/bodies.py:51 templates/explorer/export_readme.md:33
+#: templates/views/components/ms-file-license.htm:14
+#: templates/views/components/ms-file-license.htm:15
+#: templates/views/components/widgets/file-xy.htm:9
+#: templates/views/pages/team.htm:89 templates/views/pages/team.htm:176
+msgid "Licence"
+msgstr "Licence"
+
+#: iiif/bodies.py:64
+#, python-format
+msgid "%(file)s, series"
+msgstr "%(file)s, series"
+
+#: iiif/characterizations.py:26
+#, python-format
+msgid "Colour: %(colours)s"
+msgstr "Colour: %(colours)s"
+
+#: iiif/characterizations.py:27
+#, python-format
+msgid "Layer: %(layers)s"
+msgstr "Layer: %(layers)s"
+
+#: iiif/characterizations.py:67
+#, python-format
+msgid "Elements: %(elements)s"
+msgstr "Elements: %(elements)s"
+
+#: iiif/language.py:154
+#, python-format
+msgid "%(name)s (%(qualifier)s)"
+msgstr "%(name)s (%(qualifier)s)"
+
+#: iiif/manifest.py:124
+#, python-format
+msgid "Selection of %(count)d page of %(document)s"
+msgid_plural "Selection of %(count)d pages of %(document)s"
+msgstr[0] ""
+msgstr[1] ""
+
+#: iiif/manifest.py:131
+#, python-format
+msgid "Selection of %(count)d page of %(documents)d documents"
+msgid_plural "Selection of %(count)d pages of %(documents)d documents"
+msgstr[0] ""
+msgstr[1] ""
+
+#: iiif/manifest.py:168
+msgid "Without a position on the image"
+msgstr ""
+
+#: iiif/manifest.py:174 views/explorer/export.py:385
+#: views/explorer/series.py:116
+msgid "Contains drafts"
+msgstr ""
+
+#: iiif/pages.py:30
+#, python-format
+msgid "Analyses of %(name)s"
+msgstr "Analyses of %(name)s"
+
+#: iiif/pages.py:31
+#, python-format
+msgid "Analyses of %(name)s, %(canvas)s"
+msgstr "Analyses of %(name)s, %(canvas)s"
+
+#: iiif/pages.py:34
+#, python-format
+msgid "Identified materials of %(name)s"
+msgstr "Identified materials of %(name)s"
+
+#: iiif/pages.py:35
+#, python-format
+msgid "Identified materials of %(name)s, %(canvas)s"
+msgstr "Identified materials of %(name)s, %(canvas)s"
+
+#: iiif/services.py:31 templates/iiif/auth_login.htm:7
+msgid "Sign in to ManuSpectrum"
+msgstr "Sign in to ManuSpectrum"
+
+#: iiif/services.py:32
+msgid "Restricted data"
+msgstr "Restricted data"
+
+#: iiif/services.py:34
+msgid ""
+"Some data of ManuSpectrum are restricted. Sign in with your ManuSpectrum "
+"account to read what it gives access to."
+msgstr ""
+"Some data of ManuSpectrum are restricted. Sign in with your ManuSpectrum "
+"account to read what it gives access to."
+
+#: iiif/services.py:38
+msgid "Sign in with your ManuSpectrum account to read what it gives access to."
+msgstr ""
+"Sign in with your ManuSpectrum account to read what it gives access to."
+
+#: iiif/services.py:40
+msgid "Sign in"
+msgstr "Sign in"
+
+#: iiif/services.py:41 views/iiif/auth.py:64
+msgid "Not available"
+msgstr "Not available"
+
+#: iiif/services.py:42
+msgid "Your account does not give access to these data."
+msgstr "Your account does not give access to these data."
+
+#: iiif/services.py:43 templates/iiif/auth_logout.htm:7
+msgid "Sign out of external viewers"
+msgstr "Sign out of external viewers"
+
+#: iiif/xy_reading.py:62
+#, python-format
+msgid "%(file)s, raw file"
+msgstr "%(file)s, raw file"
+
 #: settings.py:153
 msgid "Term Matches"
 msgstr ""
@@ -131,15 +304,15 @@ msgstr ""
 msgid "References"
 msgstr ""
 
-#: settings.py:561
+#: settings.py:574
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:598
+#: settings.py:611
 msgid "English"
 msgstr "English"
 
-#: settings.py:599
+#: settings.py:612
 msgid "French"
 msgstr ""
 
@@ -305,7 +478,7 @@ msgid ""
 "identifier."
 msgstr ""
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:509
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:508
 msgid "Licences per file"
 msgstr ""
 
@@ -318,22 +491,6 @@ msgstr "Path"
 msgid "Size (bytes)"
 msgstr ""
 
-#: templates/explorer/export_readme.md:33
-#: templates/views/components/ms-file-license.htm:14
-#: templates/views/components/ms-file-license.htm:15
-#: templates/views/components/widgets/file-xy.htm:9
-#: templates/views/pages/team.htm:89 templates/views/pages/team.htm:176
-#: views/explorer/manifest.py:305
-msgid "Licence"
-msgstr "Licence"
-
-#: templates/explorer/export_readme.md:33
-#: templates/views/components/ms-file-workbench.htm:44
-#: templates/views/components/ms-file-workbench.htm:47
-#: views/explorer/manifest.py:253 views/explorer/manifest.py:310
-msgid "Attribution"
-msgstr "Attribution"
-
 #: templates/explorer/export_readme.md:36
 msgid "No data file."
 msgstr ""
@@ -341,6 +498,350 @@ msgstr ""
 #: templates/help/create-project-workflow-help.htm:5
 msgid "New Project Workflow"
 msgstr "New Project Workflow"
+
+#: templates/iiif/auth_login.htm:11
+msgid "You are signed in. Return to the viewer."
+msgstr "You are signed in. Return to the viewer."
+
+#: templates/iiif/auth_login.htm:12
+msgid "Return to the viewer"
+msgstr "Return to the viewer"
+
+#: templates/iiif/auth_logout.htm:11
+msgid ""
+"You are signed out of external viewers. Your ManuSpectrum session is "
+"unchanged."
+msgstr ""
+"You are signed out of external viewers. Your ManuSpectrum session is "
+"unchanged."
+
+#: templates/iiif/auth_logout.htm:12
+msgid "Close this window"
+msgstr "Close this window"
+
+#: templates/iiif/auth_token.htm:6
+msgid "ManuSpectrum IIIF access token"
+msgstr "ManuSpectrum IIIF access token"
+
+#: templates/iiif/xy_reading_1.htm:6 templates/iiif/xy_reading_1.htm:10
+msgid "xyReading, a IIIF extension for XY spectra (version 1)"
+msgstr "xyReading, a IIIF extension for XY spectra (version 1)"
+
+#: templates/iiif/xy_reading_1.htm:11
+msgid ""
+"<code>xyReading</code> tells a client how to read an XY curve (a spectrum) "
+"out of a <code>Dataset</code> content resource of a IIIF Presentation 3 "
+"document: which columns hold x and y, how their axes are titled, and which "
+"correction turns the raw file into the curve."
+msgstr ""
+"<code>xyReading</code> tells a client how to read an XY curve (a spectrum) "
+"out of a <code>Dataset</code> content resource of a IIIF Presentation 3 "
+"document: which columns hold x and y, how their axes are titled, and which "
+"correction turns the raw file into the curve."
+
+#: templates/iiif/xy_reading_1.htm:13
+msgid "Where it appears"
+msgstr "Where it appears"
+
+#: templates/iiif/xy_reading_1.htm:14
+msgid ""
+"Only on a content resource of type <code>Dataset</code>, usually an "
+"annotation body. Any other resource MUST NOT carry it. A document that uses "
+"it lists this context first in its <code>@context</code> and the "
+"Presentation 3 context last:"
+msgstr ""
+"Only on a content resource of type <code>Dataset</code>, usually an "
+"annotation body. Any other resource MUST NOT carry it. A document that uses "
+"it lists this context first in its <code>@context</code> and the "
+"Presentation 3 context last:"
+
+#: templates/iiif/xy_reading_1.htm:16
+msgid ""
+"A document that also declares IIIF Authorization 2.0 services lists the "
+"Authorization 2.0 context between the two:"
+msgstr ""
+
+#: templates/iiif/xy_reading_1.htm:18
+msgid ""
+"The Presentation 2.1 routes carry the same object, with this context before "
+"the Presentation 2 context."
+msgstr ""
+"The Presentation 2.1 routes carry the same object, with this context before "
+"the Presentation 2 context."
+
+#: templates/iiif/xy_reading_1.htm:20
+msgid "Advisory"
+msgstr "Advisory"
+
+#: templates/iiif/xy_reading_1.htm:21
+msgid ""
+"Clients MAY use <code>xyReading</code> to draw the curve; they SHOULD fall "
+"back to their own reading of the file when they do not, and MUST ignore keys "
+"they do not know. Every key published is one the ManuSpectrum reader applies."
+msgstr ""
+"Clients MAY use <code>xyReading</code> to draw the curve; they SHOULD fall "
+"back to their own reading of the file when they do not, and MUST ignore keys "
+"they do not know. Every key published is one the ManuSpectrum reader applies."
+
+#: templates/iiif/xy_reading_1.htm:23
+msgid "Keys"
+msgstr "Keys"
+
+#: templates/iiif/xy_reading_1.htm:26
+msgid "The type of the object. Required."
+msgstr "The type of the object. Required."
+
+#: templates/iiif/xy_reading_1.htm:28
+msgid ""
+"CSV dialect of the file (CSV on the Web terms): <code>delimiter</code>, "
+"<code>headerRowCount</code>, <code>encoding</code>. Given for the files "
+"ManuSpectrum writes."
+msgstr ""
+"CSV dialect of the file (CSV on the Web terms): <code>delimiter</code>, "
+"<code>headerRowCount</code>, <code>encoding</code>. Given for the files "
+"ManuSpectrum writes."
+
+#: templates/iiif/xy_reading_1.htm:30
+msgid ""
+"The columns read, in order: <code>index</code> (from 0) and <code>role</"
+"code>."
+msgstr ""
+"The columns read, in order: <code>index</code> (from 0) and <code>role</"
+"code>."
+
+#: templates/iiif/xy_reading_1.htm:32
+msgid "Zero-based index of a column."
+msgstr "Zero-based index of a column."
+
+#: templates/iiif/xy_reading_1.htm:34
+msgid ""
+"What a column holds: <code id=\"x\">x</code> (the x axis), <code "
+"id=\"yLeft\">yLeft</code> and <code id=\"yRight\">yRight</code> (a "
+"measurement on the left or right axis), <code id=\"reference\">reference</"
+"code> (the white reference), <code id=\"dark\">dark</code> (the dark "
+"current), <code id=\"ignore\">ignore</code>."
+msgstr ""
+"What a column holds: <code id=\"x\">x</code> (the x axis), <code "
+"id=\"yLeft\">yLeft</code> and <code id=\"yRight\">yRight</code> (a "
+"measurement on the left or right axis), <code id=\"reference\">reference</"
+"code> (the white reference), <code id=\"dark\">dark</code> (the dark "
+"current), <code id=\"ignore\">ignore</code>."
+
+#: templates/iiif/xy_reading_1.htm:36
+msgid ""
+"The x axis: <code>label</code> (a IIIF language map) and <code>reversed</"
+"code> (true when the axis is drawn from right to left; the rows keep the "
+"file's order)."
+msgstr ""
+"The x axis: <code>label</code> (a IIIF language map) and <code>reversed</"
+"code> (true when the axis is drawn from right to left; the rows keep the "
+"file's order)."
+
+#: templates/iiif/xy_reading_1.htm:38
+msgid ""
+"The y axes, in order: <code id=\"axisSide\">axis</code> (<code>left</code> "
+"or <code>right</code>) and <code>label</code>."
+msgstr ""
+"The y axes, in order: <code id=\"axisSide\">axis</code> (<code>left</code> "
+"or <code>right</code>) and <code>label</code>."
+
+#: templates/iiif/xy_reading_1.htm:40
+msgid "Whether the x axis is drawn from right to left."
+msgstr "Whether the x axis is drawn from right to left."
+
+#: templates/iiif/xy_reading_1.htm:42
+msgid ""
+"How several measurement columns combine: <code>reference-normalize</code> "
+"divides the measurement by the reference (see corrections)."
+msgstr ""
+"How several measurement columns combine: <code>reference-normalize</code> "
+"divides the measurement by the reference (see corrections)."
+
+#: templates/iiif/xy_reading_1.htm:44
+msgid ""
+"The corrections applied, in order. Version 1 knows <code>reference-"
+"normalize</code>: <code id=\"expression\">expression</code> <code>(y - "
+"dark) / (reference - dark)</code>, <code id=\"darkDefault\">darkDefault</"
+"code> the dark value without a dark column (0), <code "
+"id=\"epsilon\">epsilon</code> the smallest denominator divided by, and <code "
+"id=\"onInvalid\">onInvalid</code> <code>drop-point</code>: a row with a "
+"missing value, a non-finite value or a denominator below epsilon is left out "
+"of the curve. An empty list says the file already holds the curve."
+msgstr ""
+"The corrections applied, in order. Version 1 knows <code>reference-"
+"normalize</code>: <code id=\"expression\">expression</code> <code>(y - "
+"dark) / (reference - dark)</code>, <code id=\"darkDefault\">darkDefault</"
+"code> the dark value without a dark column (0), <code "
+"id=\"epsilon\">epsilon</code> the smallest denominator divided by, and <code "
+"id=\"onInvalid\">onInvalid</code> <code>drop-point</code>: a row with a "
+"missing value, a non-finite value or a denominator below epsilon is left out "
+"of the curve. An empty list says the file already holds the curve."
+
+#: templates/iiif/xy_reading_1.htm:46
+msgid ""
+"The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</"
+"code>): <code>id</code>, <code>type</code>, <code>format</code>, "
+"<code>label</code> and, for a raw text file, its own <code>xyReading</code> "
+"(columns and corrections)."
+msgstr ""
+"The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</"
+"code>): <code>id</code>, <code>type</code>, <code>format</code>, "
+"<code>label</code> and, for a raw text file, its own <code>xyReading</code> "
+"(columns and corrections)."
+
+#: templates/iiif/xy_reading_1.htm:49
+msgid ""
+"The Dataset is never decimated, whatever its size. mirador-xyviewer does not "
+"plot a Dataset larger than 5 MB; such a file still plots in the ManuSpectrum "
+"Explorer."
+msgstr ""
+
+#: templates/iiif/xy_reading_1.htm:51
+msgid "Restricted data (IIIF Authorization)"
+msgstr "Restricted data (IIIF Authorization)"
+
+#: templates/iiif/xy_reading_1.htm:52
+msgid ""
+"Open data needs no credential. A restricted spectrum, annotation or content "
+"state answers <code>401</code> with a description that names the IIIF "
+"Authorization services; annotation pages and collections are never refused: "
+"they list what the reader may see and declare the same services."
+msgstr ""
+"Open data needs no credential. A restricted spectrum, annotation or content "
+"state answers <code>401</code> with a description that names the IIIF "
+"Authorization services; annotation pages and collections are never refused: "
+"they list what the reader may see and declare the same services."
+
+#: templates/iiif/xy_reading_1.htm:54
+#, python-format
+msgid ""
+"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
+"window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</"
+"code> profile). The reader signs in to ManuSpectrum there; the window then "
+"says so and can be closed."
+msgstr ""
+"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
+"window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</"
+"code> profile). The reader signs in to ManuSpectrum there; the window then "
+"says so and can be closed."
+
+#: templates/iiif/xy_reading_1.htm:55
+#, python-format
+msgid ""
+"Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
+"<code>%(token2_url)s</code> (Auth 2.0) in a hidden frame with its "
+"<code>messageId</code> and <code>origin</code>, and receives an access token "
+"valid %(token_minutes)s minutes for that origin only. It sends it as "
+"<code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> "
+"read routes; the Auth 2.0 probe service of a spectrum says whether that "
+"token opens it."
+msgstr ""
+"Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
+"<code>%(token2_url)s</code> (Auth 2.0) in a hidden frame with its "
+"<code>messageId</code> and <code>origin</code>, and receives an access token "
+"valid %(token_minutes)s minutes for that origin only. It sends it as "
+"<code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> "
+"read routes; the Auth 2.0 probe service of a spectrum says whether that "
+"token opens it."
+
+#: templates/iiif/xy_reading_1.htm:56
+#, python-format
+msgid ""
+"Logout: opening <a href=\"%(logout_url)s\">%(logout_url)s</a> in a tab (an "
+"HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; "
+"signing out of ManuSpectrum does too. The ManuSpectrum session itself stays "
+"open."
+msgstr ""
+"Logout: opening <a href=\"%(logout_url)s\">%(logout_url)s</a> in a tab (an "
+"HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; "
+"signing out of ManuSpectrum does too. The ManuSpectrum session itself stays "
+"open."
+
+#: templates/iiif/xy_reading_1.htm:58
+msgid ""
+"The token only reads: it opens the <code>/iiif/</code> routes and nothing "
+"else, and it is not an API credential. Tokens go only to this site and to "
+"the viewers its administrators trust; any other origin receives "
+"<code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this "
+"site is refused."
+msgstr ""
+"The token only reads: it opens the <code>/iiif/</code> routes and nothing "
+"else, and it is not an API credential. Tokens go only to this site and to "
+"the viewers its administrators trust; any other origin receives "
+"<code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this "
+"site is refused."
+
+#: templates/iiif/xy_reading_1.htm:59
+msgid "Known limits"
+msgstr "Known limits"
+
+#: templates/iiif/xy_reading_1.htm:61
+msgid ""
+"HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, "
+"and a browser does not keep it on a plain HTTP site."
+msgstr ""
+"HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, "
+"and a browser does not keep it on a plain HTTP site."
+
+#: templates/iiif/xy_reading_1.htm:62
+msgid ""
+"Third-party cookies: the token frame belongs to this site inside the "
+"viewer's page. Chrome sends the cookie; Safari (Intelligent Tracking "
+"Prevention) and Firefox (Total Cookie Protection) may block it, and the "
+"viewer then keeps asking to sign in. Use Chrome, a viewer served from this "
+"site, or allow this site's cookies in the browser."
+msgstr ""
+"Third-party cookies: the token frame belongs to this site inside the "
+"viewer's page. Chrome sends the cookie; Safari (Intelligent Tracking "
+"Prevention) and Firefox (Total Cookie Protection) may block it, and the "
+"viewer then keeps asking to sign in. Use Chrome, a viewer served from this "
+"site, or allow this site's cookies in the browser."
+
+#: templates/iiif/xy_reading_1.htm:63
+msgid ""
+"The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login "
+"window opened from another site may ask to sign in again even when another "
+"tab is already signed in."
+msgstr ""
+"The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login "
+"window opened from another site may ask to sign in again even when another "
+"tab is already signed in."
+
+#: templates/iiif/xy_reading_1.htm:64
+#, python-format
+msgid ""
+"The viewer renews its token silently while the access cookie lives: at most "
+"%(cookie_hours)s hours, and never longer than the ManuSpectrum session."
+msgstr ""
+"The viewer renews its token silently while the access cookie lives: at most "
+"%(cookie_hours)s hours, and never longer than the ManuSpectrum session."
+
+#: templates/iiif/xy_reading_1.htm:67
+msgid "Versions"
+msgstr "Versions"
+
+#: templates/iiif/xy_reading_1.htm:68
+msgid ""
+"The major version is in the path of the context (<code>/1</code>). Version 1 "
+"only gains optional keys; a change of meaning would be version 2, at a new "
+"path."
+msgstr ""
+"The major version is in the path of the context (<code>/1</code>). Version 1 "
+"only gains optional keys; a change of meaning would be version 2, at a new "
+"path."
+
+#: templates/iiif/xy_reading_1.htm:69
+#, python-format
+msgid ""
+"JSON Schema (Draft 7): <a href=\"%(schema_url)s\">%(schema_url)s</a>. JSON-"
+"LD context: <a href=\"%(context_url)s\">%(context_url)s</a>."
+msgstr ""
+"JSON Schema (Draft 7): <a href=\"%(schema_url)s\">%(schema_url)s</a>. JSON-"
+"LD context: <a href=\"%(context_url)s\">%(context_url)s</a>."
+
+#: templates/iiif/xy_reading_1.htm:71
+msgid "Example"
+msgstr "Example"
 
 #: templates/includes/ms_footer.htm:10
 msgid ""
@@ -2014,10 +2515,6 @@ msgstr "Config"
 msgid "Chart Configuration"
 msgstr "Chart Configuration"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:11
-msgid "Status"
-msgstr "Status"
-
 #: templates/views/components/cards/file-renderers/xy-reader.htm:19
 msgid ""
 "Select or create a shared configuration that applies to all XY files. For "
@@ -2815,21 +3312,9 @@ msgstr "Configure the import before searching the Biblissima portal."
 msgid "Resource type to create"
 msgstr "Resource type to create"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:23
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:392
-#: views/explorer/manifest.py:353
-msgid "Document"
-msgstr "Document"
-
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:24
 msgid "Manuscript, book, printed text"
 msgstr "Manuscript, book, printed text"
-
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
-#: templates/views/pages/conceptual-model.htm:191
-#: views/explorer/manifest.py:354
-msgid "Component"
-msgstr "Component"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:30
 msgid "Illumination, lettrine, decoration"
@@ -4179,23 +4664,18 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr ""
 
-#: views/explorer/export.py:379
+#: views/explorer/export.py:378
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer/export.py:386 views/explorer/manifest.py:834
-#: views/explorer/series.py:111
-msgid "Contains drafts"
-msgstr ""
-
-#: views/explorer/export.py:511
+#: views/explorer/export.py:510
 msgid "Each file carries its own licence, given with the file."
 msgstr ""
 
-#: views/explorer/export.py:515
+#: views/explorer/export.py:514
 msgid "Licence of the files of this package that name it."
 msgstr ""
 
@@ -4219,81 +4699,93 @@ msgid ""
 "fetched."
 msgstr ""
 
-#: views/explorer/manifest.py:349
-msgid "Technique"
-msgstr ""
-
-#: views/explorer/manifest.py:350
-msgid "Dates"
-msgstr ""
-
-#: views/explorer/manifest.py:351
-msgid "Operators"
-msgstr ""
-
-#: views/explorer/manifest.py:352
-msgid "Conditions"
-msgstr ""
-
-#: views/explorer/manifest.py:480
-#, python-format
-msgid "Selection of %(count)d page of %(document)s"
-msgid_plural "Selection of %(count)d pages of %(document)s"
-msgstr[0] ""
-msgstr[1] ""
-
-#: views/explorer/manifest.py:485
-#, python-format
-msgid "Selection of %(count)d page of %(documents)d documents"
-msgid_plural "Selection of %(count)d pages of %(documents)d documents"
-msgstr[0] ""
-msgstr[1] ""
-
-#: views/explorer/manifest.py:840
-msgid "Without a position on the image"
-msgstr ""
-
-#: views/explorer/series.py:85
+#: views/explorer/series.py:84
 #, python-format
 msgid "licence %(licence)s"
 msgstr ""
 
-#: views/explorer/series.py:87
+#: views/explorer/series.py:86
 #, python-format
 msgid "attribution %(text)s"
 msgstr ""
 
-#: views/explorer/series.py:89
+#: views/explorer/series.py:88
 #, python-format
 msgid "configuration %(name)s"
 msgstr ""
 
-#: views/explorer/series.py:92
+#: views/explorer/series.py:93
+#, python-format
+msgid "x axis %(label)s"
+msgstr ""
+
+#: views/explorer/series.py:95
+#, python-format
+msgid "y axis %(label)s"
+msgstr ""
+
+#: views/explorer/series.py:96
 #, python-format
 msgid "raw file %(url)s"
 msgstr ""
 
-#: views/explorer/series.py:107
+#: views/explorer/series.py:112
 #, python-format
 msgid "%(site)s: spectra of a Selection"
 msgstr ""
 
-#: views/explorer/series.py:108
+#: views/explorer/series.py:113
 #, python-format
 msgid "Generated on %(date)s"
 msgstr ""
 
-#: views/explorer/series.py:153
+#: views/explorer/series.py:158
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
 "%(url)s"
 msgstr ""
 
-#: views/explorer/series.py:168
+#: views/explorer/series.py:173
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr ""
+
+#: views/iiif/auth.py:51
+msgid "The request to the token service is malformed."
+msgstr "The request to the token service is malformed."
+
+#: views/iiif/auth.py:53
+msgid "Not signed in to ManuSpectrum in this browser."
+msgstr "Not signed in to ManuSpectrum in this browser."
+
+#: views/iiif/auth.py:55
+msgid "The ManuSpectrum sign-in is no longer valid."
+msgstr "The ManuSpectrum sign-in is no longer valid."
+
+#: views/iiif/auth.py:56
+msgid "This viewer is not allowed to receive a token."
+msgstr "This viewer is not allowed to receive a token."
+
+#: views/iiif/auth.py:57
+msgid "The token service is unavailable, try again later."
+msgstr "The token service is unavailable, try again later."
+
+#: views/iiif/auth.py:60
+msgid "Invalid request"
+msgstr "Invalid request"
+
+#: views/iiif/auth.py:61
+msgid "Not signed in"
+msgstr "Not signed in"
+
+#: views/iiif/auth.py:62
+msgid "Sign-in no longer valid"
+msgstr "Sign-in no longer valid"
+
+#: views/iiif/auth.py:63
+msgid "Viewer not allowed"
+msgstr "Viewer not allowed"
 
 #: views/model_graph_service.py:103
 msgid "String"
@@ -4404,6 +4896,63 @@ msgid ""
 "it before saving."
 msgstr ""
 
+#~ msgid ""
+#~ "What an axis measures, for instance <code>wavelength</code>, "
+#~ "<code>wavenumber</code>, <code>energy</code>, <code>channel</code>, "
+#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</"
+#~ "code>, <code>count</code>. Absent when unknown."
+#~ msgstr ""
+#~ "What an axis measures, for instance <code>wavelength</code>, "
+#~ "<code>wavenumber</code>, <code>energy</code>, <code>channel</code>, "
+#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</"
+#~ "code>, <code>count</code>. Absent when unknown."
+
+#, python-brace-format
+#~ msgid ""
+#~ "The UCUM code of the unit: <code>nm</code>, <code>cm-1</code>, <code>keV</"
+#~ "code>, <code>deg</code>, <code>1</code> (a ratio or an index), "
+#~ "<code>{counts}</code>, <code>[arb'U]</code> (arbitrary units)."
+#~ msgstr ""
+#~ "The UCUM code of the unit: <code>nm</code>, <code>cm-1</code>, <code>keV</"
+#~ "code>, <code>deg</code>, <code>1</code> (a ratio or an index), "
+#~ "<code>{counts}</code>, <code>[arb'U]</code> (arbitrary units)."
+
+#~ msgid "Wavenumber (cm⁻¹)"
+#~ msgstr "Wavenumber (cm⁻¹)"
+
+#~ msgid "Absorbance"
+#~ msgstr "Absorbance"
+
+#~ msgid "Intensity (a.u.)"
+#~ msgstr "Intensity (a.u.)"
+
+#~ msgid "Intensity (counts)"
+#~ msgstr "Intensity (counts)"
+
+#~ msgid "Raman shift (cm⁻¹)"
+#~ msgstr "Raman shift (cm⁻¹)"
+
+#~ msgid "m/z"
+#~ msgstr "m/z"
+
+#~ msgid "2θ (°)"
+#~ msgstr "2θ (°)"
+
+#~ msgid "Energy (keV)"
+#~ msgstr "Energy (keV)"
+
+#~ msgid "Channel"
+#~ msgstr "Channel"
+
+#~ msgid "Counts"
+#~ msgstr "Counts"
+
+#~ msgid "Wavelength (nm)"
+#~ msgstr "Wavelength (nm)"
+
+#~ msgid "Reflectance (0-1)"
+#~ msgstr "Reflectance (0-1)"
+
 #~ msgid "XRF"
 #~ msgstr "XRF"
 
@@ -4491,7 +5040,6 @@ msgstr ""
 #~ msgstr "Spectral Range"
 
 #, fuzzy
-#~| msgid "Limit the displayed X range. Leave empty for no limit."
 #~ msgid ""
 #~ "Limit the displayed X range. Leave empty to show the whole acquired range."
 #~ msgstr "Limit the displayed X range. Leave empty for no limit."
@@ -4509,9 +5057,6 @@ msgstr ""
 #~ msgstr "e.g. 4000"
 
 #, fuzzy
-#~| msgid ""
-#~| "If your file has multiple Y columns, they are displayed as separate "
-#~| "series. Use \\"
 #~ msgid ""
 #~ "If your file has multiple Y columns, they are displayed as separate "
 #~ "series. Use “mean” to average them into a single series instead."
@@ -4520,16 +5065,13 @@ msgstr ""
 #~ "series. Use \\"
 
 #, fuzzy
-#~| msgid "Remove all"
 #~ msgid "Remove"
 #~ msgstr "Remove all"
 
 #, fuzzy
-#~| msgid "e.g. 500"
 #~ msgid "e.g. 9"
 #~ msgstr "e.g. 500"
 
 #, fuzzy
-#~| msgid "e.g. 500"
 #~ msgid "e.g. 2"
 #~ msgstr "e.g. 500"

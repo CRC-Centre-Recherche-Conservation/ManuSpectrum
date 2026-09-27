@@ -22,13 +22,31 @@ from manuspectrum.views.biblissima_proxy import (
     BiblissimaStatsView,
     BiblissimaSuggestView,
 )
-from manuspectrum.views.iiif_annotation import (
-    IIIFAnnotationCollectionView,
-    IIIFAnnotationPageView,
-    IIIFAnnotationView,
-    IIIFAnnotationCollectionViewV2,
-    IIIFAnnotationPageViewV2,
-    IIIFAnnotationViewV2,
+from manuspectrum.views.iiif.context import (
+    XYReadingContextView,
+    XYReadingDocView,
+    XYReadingSchemaView,
+)
+from manuspectrum.views.iiif.auth import (
+    LoginView as IIIFLoginView,
+    LogoutView as IIIFLogoutView,
+    ProbeView as IIIFProbeView,
+    TokenView as IIIFTokenView,
+    TokenViewV2 as IIIFTokenViewV2,
+)
+from manuspectrum.views.iiif.content_state import ContentStateView
+from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
+from manuspectrum.views.iiif.annotations import (
+    AnnotationView,
+    AnnotationViewV2,
+    CharacterizationCollectionView,
+    CharacterizationCollectionViewV2,
+    CharacterizationPageView,
+    CharacterizationPageViewV2,
+    CollectionView,
+    CollectionViewV2,
+    PageView,
+    PageViewV2,
 )
 from manuspectrum.views.analysis_explorer import AnalysisExplorerPageView
 from manuspectrum.views.explorer.api import (
@@ -419,56 +437,118 @@ urlpatterns.append(
 )
 
 ### Manuspectrum URL - IIIF Annotations
+###
+### v3 = Presentation 3 / Web Annotation, v2 = Presentation 2.1 / Open
+### Annotation; ``page-<n>`` is the canvas position in the Document's manifest.
+### ``characterization-collection`` is the identified-materials layer.
+for version, collection, page, annotation, materials, materials_page in (
+    (
+        3,
+        CollectionView,
+        PageView,
+        AnnotationView,
+        CharacterizationCollectionView,
+        CharacterizationPageView,
+    ),
+    (
+        2,
+        CollectionViewV2,
+        PageViewV2,
+        AnnotationViewV2,
+        CharacterizationCollectionViewV2,
+        CharacterizationPageViewV2,
+    ),
+):
+    urlpatterns += [
+        path(
+            f"iiif/v{version}/annotation-collection/<uuid:resource_id>",
+            collection.as_view(),
+            name=f"iiif-v{version}-annotation-collection",
+        ),
+        path(
+            f"iiif/v{version}/annotation/<uuid:resource_id>",
+            annotation.as_view(),
+            name=f"iiif-v{version}-annotation",
+        ),
+        path(
+            f"iiif/v{version}/annotation/<uuid:resource_id>/<uuid:feature_id>",
+            annotation.as_view(),
+            name=f"iiif-v{version}-annotation-zone",
+        ),
+        path(
+            f"iiif/v{version}/annotation-collection/<uuid:resource_id>"
+            "/page-<int:page_num>",
+            page.as_view(),
+            name=f"iiif-v{version}-annotation-page",
+        ),
+        path(
+            f"iiif/v{version}/characterization-collection/<uuid:resource_id>",
+            materials.as_view(),
+            name=f"iiif-v{version}-characterization-collection",
+        ),
+        path(
+            f"iiif/v{version}/characterization-collection/<uuid:resource_id>"
+            "/page-<int:page_num>",
+            materials_page.as_view(),
+            name=f"iiif-v{version}-characterization-page",
+        ),
+    ]
 
-# V3 endpoints (IIIF Presentation API 3.0 / Web Annotation)
+### IIIF Content State 1.0 of one analysis or identified-material zone.
 urlpatterns.append(
     path(
-        "iiif/v3/annotation-collection/<uuid:resource_id>",
-        IIIFAnnotationCollectionView.as_view(),
-        name="iiif-v3-annotation-collection",
+        "iiif/v3/content-state/<uuid:resource_id>/<uuid:feature_id>",
+        ContentStateView.as_view(),
+        name="iiif-v3-content-state",
     )
 )
 
-urlpatterns.append(
+### IIIF data and the xyReading extension.
+###
+### ``data/<file>/raw`` serves a stored file, ``data/<file>/series.csv`` its
+### clean CSV; ``context/xy-reading/1`` documents the extension, its JSON-LD
+### context and its JSON Schema.
+urlpatterns += [
+    path("iiif/data/<uuid:file_id>/raw", RawDataView.as_view(), name="iiif-data-raw"),
     path(
-        "iiif/v3/annotation/<uuid:resource_id>",
-        IIIFAnnotationView.as_view(),
-        name="iiif-v3-annotation",
-    )
-)
+        "iiif/data/<uuid:file_id>/series.csv",
+        SeriesDataView.as_view(),
+        name="iiif-data-series",
+    ),
+    path(
+        "iiif/context/xy-reading/1.jsonld",
+        XYReadingContextView.as_view(),
+        name="iiif-xy-reading-context",
+    ),
+    path(
+        "iiif/context/xy-reading/1",
+        XYReadingDocView.as_view(),
+        name="iiif-xy-reading-doc",
+    ),
+    path(
+        "iiif/context/xy-reading/1/schema.json",
+        XYReadingSchemaView.as_view(),
+        name="iiif-xy-reading-schema",
+    ),
+]
 
-urlpatterns.append(
+### IIIF Auth 1.0 and 2.0.
+###
+### ``auth/login`` is the Auth 1.0 login service and the Auth 2.0 access
+### service; ``auth/1/token`` and ``auth/2/token`` the token services;
+### ``auth/2/probe/<file>`` the Auth 2.0 probe of a stored file;
+### ``auth/logout`` the logout service of both.
+urlpatterns += [
+    path("iiif/auth/login", IIIFLoginView.as_view(), name="iiif-auth-login"),
+    path("iiif/auth/1/token", IIIFTokenView.as_view(), name="iiif-auth-token-1"),
+    path("iiif/auth/2/token", IIIFTokenViewV2.as_view(), name="iiif-auth-token-2"),
     path(
-        "iiif/v3/annotation-collection/<uuid:resource_id>/page-<int:page_num>",
-        IIIFAnnotationPageView.as_view(),
-        name="iiif-v3-annotation-page",
-    )
-)
-
-# V2 endpoints (IIIF Presentation API 2.0 / Open Annotation)
-urlpatterns.append(
-    path(
-        "iiif/v2/annotation-collection/<uuid:resource_id>",
-        IIIFAnnotationCollectionViewV2.as_view(),
-        name="iiif-v2-annotation-collection",
-    )
-)
-
-urlpatterns.append(
-    path(
-        "iiif/v2/annotation/<uuid:resource_id>",
-        IIIFAnnotationViewV2.as_view(),
-        name="iiif-v2-annotation",
-    )
-)
-
-urlpatterns.append(
-    path(
-        "iiif/v2/annotation-collection/<uuid:resource_id>/page-<int:page_num>",
-        IIIFAnnotationPageViewV2.as_view(),
-        name="iiif-v2-annotation-page",
-    )
-)
+        "iiif/auth/2/probe/<uuid:file_id>",
+        IIIFProbeView.as_view(),
+        name="iiif-auth-probe",
+    ),
+    path("iiif/auth/logout", IIIFLogoutView.as_view(), name="iiif-auth-logout"),
+]
 
 ### Renderer metadata and XY renderer configuration.
 ###

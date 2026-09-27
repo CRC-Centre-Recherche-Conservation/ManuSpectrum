@@ -2,8 +2,8 @@
 
 One row per point, ``curve,analysis,file,x,y``, after lines opening with ``#``
 that name the Selection, its drafts, each analysis's
-permalink and, per curve, its licence, attribution, renderer configuration
-and raw file. The curve is the one the XY reader draws: the file's renderer
+permalink and, per curve, its licence, attribution, renderer configuration,
+axes and raw file. The curve is the one the XY reader draws: the file's renderer
 configuration decides its columns and normalisation; it is never decimated.
 """
 
@@ -19,9 +19,10 @@ from django.utils.http import content_disposition_header
 from django.utils.translation import gettext as _
 from django.views import View
 
-from manuspectrum.utils.spectrum_preview import is_supported, read_series
+from manuspectrum.iiif.sources import absolute_url
+from manuspectrum.iiif.xy_reading import axes
+from manuspectrum.utils.spectrum_preview import is_readable, read_series
 from manuspectrum.views.explorer.api import _not_found
-from manuspectrum.views.explorer.manifest import absolute_url
 from manuspectrum.views.explorer.scopes import (
     ScopeError,
     export_language,
@@ -87,6 +88,11 @@ def _curve_line(number, name, entry, entries, config, config_id):
         _("configuration %(name)s")
         % {"name": (config or {}).get("presetKey") or config_id or "-"}
     )
+    x_label, y_label = axes(config)
+    if x_label:
+        parts.append(_("x axis %(label)s") % {"label": x_label})
+    if y_label:
+        parts.append(_("y axis %(label)s") % {"label": y_label})
     parts.append(_("raw file %(url)s") % {"url": _file_url(entry, entries)})
     return "; ".join(parts)
 
@@ -95,9 +101,10 @@ def _plan(scope):
     """``(comment lines, curves)`` of *scope*; each curve is ``(label, analysis id, file id, path, config)``.
 
     A readable XY entry ``scope_files`` refuses is left out without a line.
-    One under a no-derivatives licence, one outside ``XY_TEXT_FILE_FORMATS``
-    or over ``SPECTRUM_PREVIEW_MAX_BYTES`` gets a comment line naming its
-    file and is never read.
+    One under a no-derivatives licence, one in a format ``read_series`` does
+    not read (``is_readable``) or over ``SPECTRUM_PREVIEW_MAX_BYTES`` gets a
+    comment line naming its file and is never read. Each curve's line names
+    its axes when its configuration states them.
     """
     values = Values(list(scope.analyses), ["files", "micro", "imaging"], scope.reader)
     configs = renderer_configs(values, scope.analyses)
@@ -161,7 +168,7 @@ def _plan(scope):
                 too_large = os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES
             except OSError:
                 continue
-            if too_large or not is_supported(path):
+            if too_large or not is_readable(path, entry.get("name")):
                 per_curve.append(
                     _("not in the CSV: %(file)s; file: %(url)s")
                     % {

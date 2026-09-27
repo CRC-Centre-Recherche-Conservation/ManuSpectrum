@@ -254,7 +254,7 @@ class TemplateStampTests(SimpleTestCase):
                 raise FileNotFoundError(path)
             return real_stat(path, *args, **kwargs)
 
-        with mock.patch(f"{MODULE}.os.stat", side_effect=stat):
+        with mock.patch("manuspectrum.utils.stamps.os.stat", side_effect=stat):
             during = self.stamp()
         self.template.unlink()
 

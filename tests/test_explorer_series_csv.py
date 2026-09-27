@@ -6,13 +6,14 @@ Usage:
 
 import csv
 import io
+import os
 import uuid
 from unittest import mock, skipUnless
 
 from django.conf import settings
 from django.http import QueryDict
 
-from arches.app.models.models import TileModel
+from arches.app.models.models import File, TileModel
 
 from manuspectrum.models import RendererConfig
 from manuspectrum.views.explorer.scopes import resolve_scope
@@ -168,6 +169,25 @@ class SeriesCsvTests(CorpusCase):
             "\n".join(comments),
         )
 
+    def test_a_curve_names_the_axes_its_stored_configuration_states(self):
+        stored = {
+            **FORS,
+            "display": {
+                **FORS["display"],
+                "xAxisLabel": "Wavelength (Å)",
+                "yAxisLabel": "Reflectance (%)",
+            },
+        }
+        RendererConfig.objects.filter(configid=self.config).update(config=stored)
+        self.spectrum(name="Y.csv", rows=[(350.0, 8.0, 80.0), (351.0, 9.0, 90.0)])
+
+        comments, _ = self.split(self.text(self.selection("on_document")))
+
+        (curve,) = [c for c in comments if c.startswith("# c1:")]
+        self.assertIn("x axis Wavelength (Å)", curve)
+        self.assertIn("y axis Reflectance (%)", curve)
+        self.assertNotIn("Wavelength (nm)", curve)
+
     def set_attribution(self, file_id, text):
         node = str(self.nodes[("analysis", "measurement_point_data")].nodeid)
         for tile in TileModel.objects.filter(
@@ -246,13 +266,57 @@ class SeriesCsvTests(CorpusCase):
         self.assertEqual(list(frame.columns), list(HEADER))
         self.assertEqual(len(frame), 4)
 
-    def test_a_raw_instrument_file_is_never_read(self):
+    def test_the_raw_twin_of_a_readable_spectrum_is_never_read(self):
+        self.spectrum(name="Z.csv")
         self.stored_file(self.analyses["on_document"], "Z.mca", b"1,2\n3,4\n")
 
-        with mock.patch("manuspectrum.views.explorer.series.read_series") as read:
+        with mock.patch(
+            "manuspectrum.views.explorer.series.read_series", return_value=None
+        ) as read:
             self.text(self.selection("on_document"))
 
-        read.assert_not_called()
+        self.assertEqual(
+            [c.args[0].rsplit("/", 1)[-1] for c in read.call_args_list], ["Z.csv"]
+        )
+
+    def test_an_instrument_file_without_twin_is_never_read(self):
+        self.stored_file(self.analyses["on_document"], "Z.mca", b"1,2\n3,4\n")
+
+        with mock.patch(
+            "manuspectrum.views.explorer.series.read_series", return_value=None
+        ) as read:
+            self.text(self.selection("on_document"))
+
+        self.assertEqual(read.call_args_list, [])
+
+    def stored_without_extension(self, key, name, content):
+        """A file listed as *name* whose stored path has no extension; its file id."""
+        file_id = self.stored_file(self.analyses[key], name, content)
+        row = File.objects.get(pk=file_id)
+        bare = os.path.splitext(row.path.name)[0]
+        os.rename(row.path.path, row.path.storage.path(bare))
+        File.objects.filter(pk=file_id).update(path=bare)
+        return file_id
+
+    def test_the_entry_name_decides_the_format_of_a_curve(self):
+        file_id = self.stored_without_extension(
+            "on_document", "Z.csv", b"350,1\n351,2\n352,3\n"
+        )
+
+        comments, rows = self.split(self.text(self.selection("on_document")))
+
+        self.assertIn(file_id, {row[2] for row in rows[1:]})
+        self.assertFalse([c for c in comments if "not in the CSV" in c])
+
+    def test_the_entry_name_decides_the_format_of_a_preview(self):
+        file_id = self.stored_without_extension(
+            "on_document", "Z.csv", b"350,1\n351,2\n352,3\n"
+        )
+
+        response = self.client.get(f"/api/spectrum-preview/{file_id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(len(response.json()["x"]), 1)
 
     def test_a_file_over_the_preview_ceiling_is_named_not_read(self):
         file_id = self.spectrum(name="Big.csv")

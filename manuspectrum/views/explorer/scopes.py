@@ -24,8 +24,10 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import translation
 
+from manuspectrum.iiif.sources import manifest_json
 from manuspectrum.utils.public_visibility import anonymous_user, readable_nodegroup_ids
 from manuspectrum.utils.role_links import role_node
+from manuspectrum.utils.roles import ROLES
 from manuspectrum.views.explorer.citations import (
     Home,
     availability,
@@ -35,7 +37,6 @@ from manuspectrum.views.explorer.citations import (
 from manuspectrum.views.explorer.memo import ticket
 from manuspectrum.views.explorer.service import (
     ITEM_KEY,
-    ROLES,
     Values,
     analysis_files,
     cited_analysis,
@@ -44,7 +45,6 @@ from manuspectrum.views.explorer.service import (
     document_characterizations,
     licence_labels,
     linkable,
-    manifest_json,
     names,
     parse_keys,
     permalink,
@@ -167,6 +167,26 @@ def _parameters(query):
     return kind, value, bool(canvases), within
 
 
+def canonical_query(query):
+    """The scope query of *query* in its canonical order, read without resolving anything; ``ScopeError`` when malformed.
+
+    ``ids`` keep every key given (``resolve_scope`` later drops the ones
+    resolving to nothing), ``lang`` and unknown parameters are left out.
+    """
+    kind, value, canvases_all, within = _parameters(query)
+    named = ",".join(value) if kind == "ids" else value
+    return urlencode(_scope_params(kind, named, within, canvases_all), safe=":,")
+
+
+def _scope_params(kind, named, within, canvases_all):
+    params = [(kind, named)]
+    if within:
+        params.append(("document", within))
+    if canvases_all:
+        params.append(("canvases", "all"))
+    return params
+
+
 def _subject(query, kind):
     values = query.getlist(kind)
     if len(values) != 1:
@@ -285,11 +305,7 @@ def resolve_scope(query, language):
 
     missing = _missing(value, items) if kind == "ids" else ()
     named = ",".join(k for k in value if k not in missing) if kind == "ids" else value
-    params = [(kind, named)]
-    if within:
-        params.append(("document", within))
-    if canvases_all:
-        params.append(("canvases", "all"))
+    params = _scope_params(kind, named, within, canvases_all)
     key = "&".join(f"{name}={v}" for name, v in params)
     analyses = tuple(sorted(items.analyses, key=bundle.order.__getitem__))
     characterizations = tuple(sorted(items.characterizations))
@@ -620,12 +636,13 @@ def share_payload(scope, accessed):
     does (``export_size``); over the limits, a scope whose items span
     several documents lists one export per document, holding the scope's
     items there (``_per_document``). ``manifest`` is given only when the scope's
-    manifest holds a canvas (``has_canvases``), ``seriesCsv`` for a
+    manifest holds a canvas within the canvas bound (``manifest_offer``);
+    ``manifestTooLarge`` says the manifest is over that bound. ``seriesCsv`` for a
     Selection holding spectra only. Each product is a ``product_link``: the
     panel follows its ``path`` and copies or hands external viewers its
     ``url``. *accessed* is the day of consultation.
     """
-    from manuspectrum.views.explorer.manifest import has_canvases
+    from manuspectrum.views.explorer.manifest import manifest_offer
 
     bundle, language = scope.bundle, scope.language
     content = scope_content(scope)
@@ -638,6 +655,7 @@ def share_payload(scope, accessed):
         if e.get("dataKind") == "xy" and e.get("role") == "readable"
     )
     split = _per_document(scope) if over else {}
+    offer = manifest_offer(scope)
     documents = []
     if len(split) > 1:
         documents = [
@@ -682,9 +700,10 @@ def share_payload(scope, accessed):
         "links": {
             "manifest": (
                 product_link("iiif-v3-explorer-manifest", scope.query, language)
-                if has_canvases(scope)
+                if offer == "manifest"
                 else None
             ),
+            "manifestTooLarge": offer == "tooLarge",
             "seriesCsv": (
                 product_link("explorer-series-csv", scope.query, language)
                 if scope.kind == "ids" and spectra

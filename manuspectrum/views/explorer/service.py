@@ -20,7 +20,6 @@ import unicodedata
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from urllib.parse import urlsplit
 
 import nh3
 import orjson
@@ -34,16 +33,21 @@ from django.utils import translation
 from django.utils.http import urlencode
 
 from arches.app.models.models import (
-    IIIFManifest,
     ResourceInstance,
     TileModel,
-    VwAnnotation,
 )
 from arches_controlled_lists.models import ListItem, ListItemValue
 
 from manuspectrum.constants.licenses import effective_license
+from manuspectrum.iiif.ids import content_state as content_state_url
+from manuspectrum.iiif.sources import (
+    canvas_index,
+    canvas_label,
+    canvases_of,
+    manifest_json,
+)
+from manuspectrum.iiif.zones import annotation_features, first_zone
 from manuspectrum.models import RendererConfig
-from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.utils.public_visibility import (
     VisibleSet,
     hidden_resource_ids,
@@ -52,6 +56,7 @@ from manuspectrum.utils.public_visibility import (
     visible_set,
 )
 from manuspectrum.utils.role_links import readable_links, role_node
+from manuspectrum.utils.roles import ROLES
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer.citations import (
     CitedAnalysis,
@@ -67,55 +72,14 @@ from manuspectrum.views.explorer.values import (
     file_entries,
     label,
     name_of,
+    plots,
     reference_terms,
     rewrite_legacy_url,
-    shape_of,
     string_texts,
     value_refs,
 )
 from manuspectrum.views.summary_service import GraphIndex, _date
 
-ROLES = {
-    "doc_name": ("document", "label_of_name"),
-    "doc_manifest": ("document", "facsimiles"),
-    "doc_owner": ("document", "current_owner"),
-    "doc_identifier": ("document", "value_of_identifier"),
-    "doc_identifier_type": ("document", "type_of_identifier"),
-    "doc_start": ("document", "date_start_of_production_time"),
-    "doc_end": ("document", "date_end_of_production_time"),
-    "doc_description": ("document", "content_of_statement"),
-    "doc_type": ("document", "type"),
-    "comp_zone": ("component", "location_in_document"),
-    "comp_type": ("component", "type"),
-    "comp_colour": ("component", "color_features"),
-    "an_name": ("analysis", "label_of_name"),
-    "technique": ("analysis", "analysis_technique_used"),
-    "operators": ("analysis", "performed_by_actor"),
-    "start": ("analysis", "analysis_start_date"),
-    "end": ("analysis", "analysis_end_date"),
-    "files": ("analysis", "measurement_point_data"),
-    "micro": ("analysis", "micro_macro_imaging"),
-    "imaging": ("analysis", "chemical_imaging_manifest"),
-    "zone": ("analysis", "literal_location_of_analysis"),
-    "dataset": ("analysis", "dataset_url"),
-    "bibliography": ("analysis", "bibliographic_title"),
-    "statement_type": ("analysis", "type_of_statement"),
-    "statement_content": ("analysis", "content_of_statement"),
-    "instrument": ("analysis", "instrument"),
-    "material": ("characterization", "identified_material"),
-    "confidence": ("characterization", "material_confidence"),
-    "colour": ("characterization", "color_aspect"),
-    "layer": ("characterization", "layer_type"),
-    "elements": ("characterization", "detected_elements"),
-    "element_level": ("characterization", "element_level"),
-    "ch_zone": ("characterization", "location_of_characterization"),
-    "ch_note": ("characterization", "inference_making"),
-    "ch_authors": ("characterization", "authors_of_inference"),
-    "ch_start": ("characterization", "inference_making_start_date"),
-    "ch_end": ("characterization", "inference_making_end_date"),
-    "ch_source": ("characterization", "source_of_statement"),
-    "sample_zone": ("sample", "location_in_object_of_sampling_taking"),
-}
 FACET_GROUPS = (
     ("part", ("partType", "partColour", "part")),
     ("analysis", ("project", "technique", "operator", "year")),
@@ -688,11 +652,7 @@ def _corpus_rows(user, language, visible, chains, projects_of):
         start = values.first(a, "start")
         date = _date(start) if isinstance(start, str) else None
         kinds = []
-        if any(
-            e.get("rendererConfig")
-            for e in values.get(a, "files")
-            if isinstance(e, dict)
-        ):
+        if any(plots(e) for e in values.get(a, "files") if isinstance(e, dict)):
             kinds.append("xy")
         if values.get(a, "imaging"):
             kinds.append("chemical-imaging")
@@ -1528,75 +1488,6 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
     return hits
 
 
-_LOCAL_MANIFEST = re.compile(r"/manifest/(?P<uuid>[0-9a-fA-F-]{36})/?$")
-
-
-def manifest_json(url):
-    """Manifest JSON of *url*: a local ``/manifest/<uuid>`` is read from ``IIIFManifest`` in the database, never over HTTP.
-
-    The path of *url* names the manifest; its query and fragment are ignored.
-    """
-    url = rewrite_legacy_url(url or "")
-    if not url:
-        return None
-    match = _LOCAL_MANIFEST.search(urlsplit(url).path)
-    if match and (
-        url.startswith("/") or url.startswith(settings.PUBLIC_SERVER_ADDRESS)
-    ):
-        stored = (
-            IIIFManifest.objects.filter(globalid=match["uuid"])
-            .values_list("manifest", flat=True)
-            .first()
-        )
-        return stored if isinstance(stored, dict) else None
-    return CanvasIIIF.fetch_manifest(url)
-
-
-def _canvas_label(value):
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict):
-        for texts in value.values():
-            if isinstance(texts, list) and texts:
-                return str(texts[0])
-    return ""
-
-
-def canvases_of(manifest):
-    """``{"id", "label", "image"}`` of every canvas of a v2 or v3 manifest; legacy hosts rewritten."""
-    if not isinstance(manifest, dict):
-        return []
-    version = CanvasIIIF.detect_version(manifest)
-    if version == 3:
-        raw = manifest.get("items") or []
-    else:
-        raw = ((manifest.get("sequences") or [{}])[0] or {}).get("canvases") or []
-    found = []
-    for canvas in raw:
-        canvas_id = canvas.get("id") or canvas.get("@id")
-        if not canvas_id:
-            continue
-        service = (
-            CanvasIIIF._get_image_service_url_v3(canvas)
-            if version == 3
-            else CanvasIIIF._get_image_service_url_v2(canvas)
-        )
-        width, height = CanvasIIIF.get_canvas_dimensions(canvas)
-        found.append(
-            {
-                "id": rewrite_legacy_url(canvas_id),
-                "label": _canvas_label(canvas.get("label")),
-                "image": {
-                    "service": rewrite_legacy_url(service) if service else None,
-                    "url": None,
-                    "width": int(width),
-                    "height": int(height),
-                },
-            }
-        )
-    return found
-
-
 def _ranks(item_ids):
     return {
         str(i): int(order or 0)
@@ -1634,66 +1525,6 @@ def certainty_scale(language):
             for i, uri, order in items
         ]
     }
-
-
-def canvas_index(canvases):
-    """``{name: (canvas id, width, height)}`` of each canvas, by its id and by its image service.
-
-    Arches' IIIF viewer stores an annotation under the image service it drew
-    (the tile layer's URL), not under the manifest's canvas id; both names
-    lead to the canvas.
-    """
-    index = {}
-    for canvas in canvases:
-        entry = (canvas["id"], canvas["image"]["width"], canvas["image"]["height"])
-        index[canvas["id"].rstrip("/")] = entry
-        if canvas["image"]["service"]:
-            index[canvas["image"]["service"].rstrip("/")] = entry
-    return index
-
-
-def _canvas_and_shape(vw, dims):
-    """Canvas id and pixel ``Shape`` of one ``VwAnnotation`` row; canvas empty and shape None when unresolved.
-
-    *dims* is a ``canvas_index``: the stored name (canvas id or image service)
-    becomes the manifest's canvas id. A canvas missing from it keeps its
-    stored name and is not clamped to any size, so a zone has the same
-    coordinates whether its canvas dimensions are known or not.
-    """
-    feature = vw.feature or {}
-    stored = rewrite_legacy_url(
-        vw.canvas or (feature.get("properties") or {}).get("canvas") or ""
-    )
-    canvas, width, height = dims.get(stored.rstrip("/")) or (
-        stored,
-        sys.maxsize,
-        sys.maxsize,
-    )
-    shape = shape_of(feature.get("geometry"), width, height)
-    return canvas, shape
-
-
-def _annotations(node, resource_ids, dims, readable):
-    """``(resource id, feature id, canvas, shape)`` of every resolved annotation feature of *node*, by feature id.
-
-    Nothing when the node is unresolved or its nodegroup is not in *readable*.
-    """
-    if node is None or node.nodegroup_id not in readable:
-        return
-    for vw in VwAnnotation.objects.filter(
-        resourceinstance_id__in=list(resource_ids), node_id=node.nodeid
-    ).order_by("feature_id"):
-        canvas, shape = _canvas_and_shape(vw, dims)
-        if canvas and shape:
-            yield str(vw.resourceinstance_id), vw.feature_id, canvas, shape
-
-
-def _zone(node, resource_ids, dims, readable):
-    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*; ``{}`` when its nodegroup is not in *readable*."""
-    zones = {}
-    for rid, _, canvas, shape in _annotations(node, resource_ids, dims, readable):
-        zones.setdefault(rid, {"canvas": canvas, "shape": shape})
-    return zones
 
 
 def characterization_summaries(
@@ -1751,8 +1582,8 @@ def characterization_summaries(
         {o for v in objects.values() for o in v}
         | {a for v in authors.values() for a in v}
     )
-    own_zone = _zone(role_node(*ROLES["ch_zone"]), ids, dims, readable)
-    component_zone = _zone(
+    own_zone = first_zone(role_node(*ROLES["ch_zone"]), ids, dims, readable)
+    component_zone = first_zone(
         role_node(*ROLES["comp_zone"]),
         {o for v in objects.values() for o in v},
         dims,
@@ -1883,7 +1714,7 @@ def sample_summaries(analyses, visible, user, language, dims, sample_of=None):
                 used_by[sample].add(analysis)
     ids = sorted(used_by)
     label_of = names(ids, language, user)
-    zones = _zone(role_node(*ROLES["sample_zone"]), ids, dims, readable)
+    zones = first_zone(role_node(*ROLES["sample_zone"]), ids, dims, readable)
     return [
         {
             "id": s,
@@ -1901,9 +1732,9 @@ def document_payload(document_id, user, language, ticket=None):
 
     ``techniques`` holds each technique of its analyses by uri; each analysis
     names its technique by that uri and lists its zones, each on a canvas
-    given by its position in ``canvases``. A zone on a canvas the manifest
-    does not list is left out; an analysis without zones is not located on
-    a page. ``document_match`` says what the filters keep. ``history`` (the
+    given by its position in ``canvases`` and named by its ``feature`` id.
+    A zone on a canvas the manifest does not list is left out; an analysis
+    without zones is not located on a page. ``document_match`` says what the filters keep. ``history`` (the
     document's dated and placed events, spec §5) is empty until the map and
     timeline API fills it.
     """
@@ -1922,11 +1753,13 @@ def document_payload(document_id, user, language, ticket=None):
     dims = canvas_index(canvases)
     position = {canvas["id"]: index for index, canvas in enumerate(canvases)}
     zones = defaultdict(list)
-    for analysis, _, canvas, shape in _annotations(
+    for analysis, feature, canvas, shape in annotation_features(
         role_node(*ROLES["zone"]), [row["id"] for row in rows], dims, readable
     ):
         if canvas in position:
-            zones[analysis].append({"canvas": position[canvas], "shape": shape})
+            zones[analysis].append(
+                {"canvas": position[canvas], "shape": shape, "feature": feature}
+            )
     techniques = {}
     analyses = []
     for row in rows:
@@ -2064,7 +1897,7 @@ def imaging_entries(analysis_id, manifest_values, language, read=None):
         entries.append(
             {
                 "id": f"{analysis_id}:imaging:{position}",
-                "name": _canvas_label(manifest.get("label")) or url.rsplit("/", 1)[-1],
+                "name": canvas_label(manifest.get("label")) or url.rsplit("/", 1)[-1],
                 "size": None,
                 "format": "application/ld+json",
                 "role": "other",
@@ -2149,12 +1982,18 @@ def permalink(resource_id):
     return f"{settings.PUBLIC_SERVER_ADDRESS}report/{resource_id}"
 
 
+MULTILINGUAL_PRODUCTS = frozenset({"iiif-v3-explorer-manifest"})
+
+
 def product_path(route, query, language):
     """Path on this site of the language-neutral product *route* for the scope *query* in *language*.
 
     *query* is an URL-encoded ``ExportScope.query`` (``ids=…``,
-    ``document=…``, ``project=…`` and their flags); ``lang`` is appended.
+    ``document=…``, ``project=…`` and their flags); ``lang`` is appended,
+    except to a product carrying every language (``MULTILINGUAL_PRODUCTS``).
     """
+    if route in MULTILINGUAL_PRODUCTS:
+        return f"{reverse(route)}?{query}"
     return f"{reverse(route)}?{query}&{urlencode({'lang': language})}"
 
 
@@ -2190,22 +2029,56 @@ def licence_labels(files):
 
 
 def _analysis_manifest(analysis_id, language):
-    """The URL of the Explorer manifest of one analysis, or None when that manifest holds no canvas (``has_canvases``)."""
-    from manuspectrum.views.explorer.manifest import has_canvases
+    """The URL of the Explorer manifest of one analysis, or None when that manifest holds no canvas or is over the canvas bound (``manifest_offer``)."""
+    from manuspectrum.views.explorer.manifest import manifest_offer
     from manuspectrum.views.explorer.scopes import resolve_scope
 
     query = f"ids=an:{analysis_id}:-"
     scope = resolve_scope(QueryDict(query), language)
-    if scope is None or not has_canvases(scope):
+    if scope is None or manifest_offer(scope) != "manifest":
         return None
     return product_url("iiif-v3-explorer-manifest", query, language)
+
+
+def content_states(analysis_id, document_id, user):
+    """``ContentStateLink`` of each zone of *analysis_id* on a canvas of its document's manifest, in feature order.
+
+    Zones are read from the nodegroups *user* may read; a zone on a canvas
+    the manifest does not list has none.
+    """
+    values = Values([document_id], ["doc_manifest"], user)
+    url = rewrite_legacy_url(values.first(document_id, "doc_manifest") or "")
+    canvases = canvases_of(manifest_json(url)) if url else []
+    listed = {canvas["id"] for canvas in canvases}
+    features = sorted(
+        {
+            feature
+            for _, feature, canvas, _ in annotation_features(
+                role_node(*ROLES["zone"]),
+                [analysis_id],
+                canvas_index(canvases),
+                readable_nodegroup_ids(user),
+            )
+            if canvas in listed and feature
+        }
+    )
+    return [
+        {
+            "feature": feature,
+            "url": content_state_url(analysis_id, feature),
+            "download": content_state_url(analysis_id, feature, download=True),
+        }
+        for feature in features
+    ]
 
 
 def analysis_payload(analysis_id, user, language):
     """``AnalysisPayload`` of a visible analysis; None when it is unknown or not visible.
 
     A linked resource that no longer exists is left out of the references.
-    ``manifest`` is None when the analysis places no canvas.
+    ``manifest`` is None when the analysis places no canvas;
+    ``contentStates`` lists the published Content State of each of its
+    located zones (``content_states``), none without a manifest.
     """
     bundle = corpus_bundle(user, language)
     visible = bundle.visible
@@ -2274,6 +2147,7 @@ def analysis_payload(analysis_id, user, language):
     end = values.first(analysis_id, "end")
     end = _date(end) if isinstance(end, str) else None
     files = analysis_files(analysis_id, user, language)
+    manifest = _analysis_manifest(analysis_id, language)
     dataset = dataset_of(values.first(analysis_id, "dataset"))
     citation = citation_entry(
         dataset,
@@ -2312,7 +2186,10 @@ def analysis_payload(analysis_id, user, language):
         ],
         "citation": shown_citation(citation),
         "availability": citation["availability"],
-        "manifest": _analysis_manifest(analysis_id, language),
+        "manifest": manifest,
+        "contentStates": (
+            content_states(analysis_id, document, user) if manifest else []
+        ),
         "permalink": permalink(analysis_id),
         "reportUrl": report_url(analysis_id, language),
         "certaintyScale": certainty_scale(language),
@@ -2405,7 +2282,11 @@ def items_payload(keys, user, language):
             continue
         if rid not in files_of:
             files_of[rid] = analysis_files(
-                rid, user, language, values=shared_values, configs=shared_configs
+                rid,
+                user,
+                language,
+                values=shared_values,
+                configs=shared_configs,
             )
         if kind == "an":
             items.append(

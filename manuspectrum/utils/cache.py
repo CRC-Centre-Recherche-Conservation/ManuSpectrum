@@ -61,9 +61,11 @@ def get_or_build(
     A miss takes a lock (`cache.add`, atomic on Redis and locmem); the holder
     builds, stores a non-None result for `timeout` seconds and releases the
     lock even when `build` raises. Other callers poll the key for up to
-    `wait` seconds, then build themselves rather than block: a lost holder
-    costs one extra build, never a stalled request. `None` means "failed, do
-    not memoise"; empty lists and dicts are stored.
+    `wait` seconds and build themselves when it runs out. When the lock is
+    released without a value (the holder failed or built `None`), one waiter
+    takes it over and builds while the others keep polling: a lost holder
+    costs one extra build, never a stalled request. `None` means
+    "failed, do not memoise"; empty lists and dicts are stored.
 
     `kept` runs on a value this call has just stored, never on a memo hit: it
     is how a caller gives the answer it built a lifetime of its own.
@@ -91,4 +93,13 @@ def get_or_build(
         value = cache.get(key)
         if value is not None:
             return value
+        if cache.get(lock_key) is None:
+            value = cache.get(key)
+            if value is not None:
+                return value
+            if cache.add(lock_key, 1, lock_timeout):
+                try:
+                    return keep(build())
+                finally:
+                    cache.delete(lock_key)
     return keep(build())

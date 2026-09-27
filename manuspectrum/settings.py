@@ -242,6 +242,8 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     #'arches.app.utils.middleware.TokenMiddleware',
+    # Before LocaleMiddleware: drops the language headers it adds to /iiif/.
+    "manuspectrum.utils.iiif_middleware.IIIFLanguageNeutralMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -385,7 +387,10 @@ SESSION_COOKIE_NAME = "manuspectrum"
 CACHE_CODE_VERSION = cache_code_version(APP_ROOT)
 
 # Redis database allocation, shared with CELERY_BROKER_URL below:
-#   0 = Celery broker   1 = default cache   2 = permission checker
+#   0 = Celery broker
+#   1 = default cache + iiif_auth (IIIF sign-ins, key prefix "ms-iiif-auth"):
+#       a FLUSHDB on 1 signs every external viewer out
+#   2 = permission checker
 #
 # This is the ONLY definition. settings_local.py may point an entry at another
 # host or index, but must never reassign the dict.
@@ -405,7 +410,15 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": "redis://localhost:6379/2",
     },
+    # IIIF sign-ins (manuspectrum/iiif/tokens.py): a fixed prefix, so a new
+    # code version does not sign every external viewer out.
+    "iiif_auth": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://localhost:6379/1",
+        "KEY_PREFIX": "ms-iiif-auth",
+    },
 }
+IIIF_AUTH_CACHE = "iiif_auth"
 
 # Hide nodes and cards in a report that have no data
 HIDE_EMPTY_NODES_IN_REPORT = False
@@ -806,6 +819,41 @@ EXPLORER_MANIFEST_MAX_CANVASES = 1000
 # Mirador viewer (mirador-xyviewer) the Explorer opens its IIIF products in, as
 # ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
 EXPLORER_MIRADOR_URL = ""
+
+# IIIF documents (manuspectrum/iiif/). Radius, in canvas pixels, of the circle
+# a point zone is drawn as (SvgSelector next to its PointSelector).
+IIIF_POINT_RADIUS = 12
+# Most analysis ids a page restricted by ?only= may name; above it, 400.
+IIIF_PAGE_FILTER_MAX = 100
+# Seconds a memoised IIIF document (visitor view) is kept; its key moves with
+# the data version, the permission epoch, the translations and the code version.
+IIIF_MEMO_TTL = 24 * 60 * 60
+# Seconds the visitor's 404 for a missing page or zone is kept under its key.
+IIIF_ABSENT_TTL = 5 * 60
+# Seconds a IIIF document built while its source manifest could not be read
+# (remote fetch failed, local manifest missing) is kept: a symptom, not a fact.
+IIIF_DEGRADED_TTL = 30
+# Seconds a request waits for another request building the same IIIF document
+# before building it itself: longer than a cold build (about 1 s on the densest
+# document), shorter than the worker timeout minus one build.
+IIIF_BUILD_WAIT = 10
+
+# IIIF Auth 1.0 / 2.0 (manuspectrum/iiif/tokens.py). A IIIF token is a
+# read-only credential for the /iiif/ read routes, bound to the Arches session
+# that minted it and to one viewer origin; it lives IIIF_AUTH_TOKEN_TTL
+# seconds. The access cookie (Path=/iiif/auth/) lives at most
+# IIIF_AUTH_COOKIE_TTL seconds and never beyond the session.
+IIIF_AUTH_TOKEN_TTL = 3600
+IIIF_AUTH_COOKIE_TTL = 8 * 3600
+# Viewer origins the token service answers, besides the origin of
+# PUBLIC_SERVER_ADDRESS (always trusted). Never "*".
+IIIF_AUTH_TRUSTED_ORIGINS = ["https://crc-centre-recherche-conservation.github.io"]
+# Token requests per client IP (django-ratelimit); over it: « unavailable ».
+IIIF_AUTH_TOKEN_RATE = "30/m"
+# django-cors-headers leaves /iiif/ alone: every IIIF view answers its own
+# CORS (Access-Control-Allow-Origin: *, preflight with Authorization, on
+# every status) and the auth pages answer none.
+CORS_URLS_REGEX = r"^(?!/iiif/).*$"
 
 try:
     from .package_settings import *
