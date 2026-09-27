@@ -67,6 +67,7 @@ from manuspectrum.views.explorer.citations import (
 )
 from manuspectrum.views.explorer.conditions import clean_html, conditions_of
 from manuspectrum.views.explorer.values import (
+    ELEMENT_SYMBOL,
     FALLBACK_LANGUAGE,
     StoredConfig,
     acronym,
@@ -1529,6 +1530,59 @@ def certainty_scale(language):
     }
 
 
+QUALIFIERS = {"material": "confidence", "elements": "element_level"}
+
+
+def qualified_values(values, ids, language):
+    """The ``material`` and ``elements`` tiles of the identified materials *ids*, each with its qualifier.
+
+    ``{id: {key: [(refs, stored, qualifier), …]}}`` in tile order, for each
+    key of ``QUALIFIERS``: *refs* are the ``value_refs`` of the tile's node
+    (a tile without any is left out), *stored* the stored value, and
+    *qualifier* the first value of the tile's ``confidence`` or
+    ``element_level`` node as a ``RankedValue`` (rank = ``sortorder`` of its
+    list item, 0 when the item is unknown), else None. *values* holds the
+    roles of both.
+    """
+    found = {}
+    for c in ids:
+        found[c] = {}
+        for key, qualifier_key in QUALIFIERS.items():
+            node, qualifier = values.node(key), values.node(qualifier_key)
+            tiles = []
+            for data in values.tiles(c, key):
+                stored = data.get(node.nodeid) if node else None
+                refs = value_refs(stored, language)
+                if not refs:
+                    continue
+                first = (
+                    value_refs(data.get(qualifier.nodeid), language)[:1]
+                    if qualifier
+                    else []
+                )
+                tiles.append((refs, stored, first[0] if first else None))
+            found[c][key] = tiles
+    ranks = _ranks(
+        {
+            q["id"]
+            for per_key in found.values()
+            for tiles in per_key.values()
+            for _, _, q in tiles
+            if q
+        }
+    )
+    return {
+        c: {
+            key: [
+                (refs, stored, {**q, "rank": ranks.get(q["id"], 0)} if q else None)
+                for refs, stored, q in tiles
+            ]
+            for key, tiles in per_key.items()
+        }
+        for c, per_key in found.items()
+    }
+
+
 def characterization_summaries(
     ids, visible, user, language, source=None, objects_of=None, analysis_rows=None
 ):
@@ -1592,49 +1646,18 @@ def characterization_summaries(
         if source is not None
         else {}
     )
-    material_node, confidence_node = values.node("material"), values.node("confidence")
-    element_node, level_node = values.node("elements"), values.node("element_level")
-    rank_ids = set()
-    for c in ids:
-        for data in values.tiles(c, "material") + values.tiles(c, "elements"):
-            for node in (confidence_node, level_node):
-                if node:
-                    rank_ids |= {
-                        r["id"] for r in value_refs(data.get(node.nodeid), language)
-                    }
-    ranks = _ranks(rank_ids)
-    ranked = lambda refs: (
-        {**refs[0], "rank": ranks.get(refs[0]["id"], 0)} if refs else None
-    )
+    qualified = qualified_values(values, ids, language)
     summaries = []
     for c in ids:
-        materials = []
-        for data in values.tiles(c, "material"):
-            for ref in value_refs(
-                data.get(material_node.nodeid) if material_node else None, language
-            ):
-                confidence = (
-                    value_refs(data.get(confidence_node.nodeid), language)
-                    if confidence_node
-                    else []
-                )
-                materials.append(
-                    {"value": ref, "confidence": ranked(confidence), "proportion": None}
-                )
-        elements = []
-        for data in values.tiles(c, "elements"):
-            found = (
-                value_refs(data.get(element_node.nodeid), language)
-                if element_node
-                else []
-            )
-            if found:
-                level = (
-                    value_refs(data.get(level_node.nodeid), language)
-                    if level_node
-                    else []
-                )
-                elements.append({"level": ranked(level), "values": found})
+        materials = [
+            {"value": ref, "confidence": confidence, "proportion": None}
+            for refs, _, confidence in qualified[c]["material"]
+            for ref in refs
+        ]
+        elements = [
+            {"level": level, "values": refs}
+            for refs, _, level in qualified[c]["elements"]
+        ]
         origin, zones = placed.get(c, (None, None))
         zone = (
             {"canvas": zones[0].canvas, "shape": zones[0].shape, "source": origin}
@@ -1834,7 +1857,6 @@ def document_payload(document_id, user, language, ticket=None):
     }
 
 
-_ELEMENT_SYMBOL = re.compile(r"^[A-Z][a-z]?$")
 _BAND = re.compile(
     r"^(?P<value>\d+(?:[.,]\d+)?)\s*(?P<unit>nm|µm|um|cm-1|cm⁻¹|keV|eV)$"
 )
@@ -1844,7 +1866,7 @@ def layer_of(index, text, image):
     """One image layer of an imaging manifest (D46): an element map (maXRF), a spectral band (hyperspectral) or another image."""
     text = (text or "").strip()
     band = _BAND.match(text)
-    if _ELEMENT_SYMBOL.match(text):
+    if ELEMENT_SYMBOL.match(text):
         return {
             "index": index,
             "label": text,

@@ -126,6 +126,22 @@ def acronym(value):
     return (shared or found.get(FALLBACK_LANGUAGE) or first)[0]
 
 
+ELEMENT_SYMBOL = re.compile(r"^[A-Z][a-z]?$")
+
+
+def element_symbols(value):
+    """The chemical symbol of each item of a ``reference`` value, aligned with ``value_refs``.
+
+    An item's symbol is its ``acronym`` when that reads as one (``Cu``,
+    ``Pb``), else None.
+    """
+    symbols = []
+    for item in _reference_items(value):
+        code = acronym(item)
+        symbols.append(code if code and ELEMENT_SYMBOL.match(code) else None)
+    return symbols
+
+
 def reference_terms(value):
     """Every label of a ``reference`` value, preferred and alternative, in every language."""
     return {
