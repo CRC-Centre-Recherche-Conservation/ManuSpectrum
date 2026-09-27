@@ -41,6 +41,7 @@ from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifest
 from manuspectrum.views.explorer.scopes import (
     ScopeError,
+    canonical_query,
     resolve_scope,
     share_payload,
 )
@@ -300,7 +301,8 @@ class ExplorerManifestView(View):
     """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all]``: the IIIF v3 manifest of a scope, in every language.
 
     A ``lang`` parameter answers a 301 to the canonical URL of the scope
-    (``product_url``, without it). Malformed scope parameters answer a
+    (``canonical_query``, without it) before anything is resolved: the
+    target then answers for the scope. Malformed scope parameters answer a
     bodyless 400, a scope with nothing visible or placing no canvas the
     bodyless 404, a manifest over ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases
     a bodyless 413. The visitor's ETag is the digest of the body: the
@@ -310,15 +312,19 @@ class ExplorerManifestView(View):
     def get(self, request):
         language = settings.LANGUAGE_CODE
         try:
+            if "lang" in request.GET:
+                return HttpResponsePermanentRedirect(
+                    product_path(
+                        "iiif-v3-explorer-manifest",
+                        canonical_query(request.GET),
+                        language,
+                    )
+                )
             scope = resolve_scope(request.GET, language)
         except ScopeError:
             return HttpResponseBadRequest()
         if scope is None:
             return _not_found()
-        if "lang" in request.GET:
-            return HttpResponsePermanentRedirect(
-                product_path("iiif-v3-explorer-manifest", scope.query, language)
-            )
         try:
             manifest = build_manifest(scope)
         except ManifestTooLarge:

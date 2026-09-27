@@ -167,6 +167,26 @@ def _parameters(query):
     return kind, value, bool(canvases), within
 
 
+def canonical_query(query):
+    """The scope query of *query* in its canonical order, read without resolving anything; ``ScopeError`` when malformed.
+
+    ``ids`` keep every key given (``resolve_scope`` later drops the ones
+    resolving to nothing), ``lang`` and unknown parameters are left out.
+    """
+    kind, value, canvases_all, within = _parameters(query)
+    named = ",".join(value) if kind == "ids" else value
+    return urlencode(_scope_params(kind, named, within, canvases_all), safe=":,")
+
+
+def _scope_params(kind, named, within, canvases_all):
+    params = [(kind, named)]
+    if within:
+        params.append(("document", within))
+    if canvases_all:
+        params.append(("canvases", "all"))
+    return params
+
+
 def _subject(query, kind):
     values = query.getlist(kind)
     if len(values) != 1:
@@ -285,11 +305,7 @@ def resolve_scope(query, language):
 
     missing = _missing(value, items) if kind == "ids" else ()
     named = ",".join(k for k in value if k not in missing) if kind == "ids" else value
-    params = [(kind, named)]
-    if within:
-        params.append(("document", within))
-    if canvases_all:
-        params.append(("canvases", "all"))
+    params = _scope_params(kind, named, within, canvases_all)
     key = "&".join(f"{name}={v}" for name, v in params)
     analyses = tuple(sorted(items.analyses, key=bundle.order.__getitem__))
     characterizations = tuple(sorted(items.characterizations))

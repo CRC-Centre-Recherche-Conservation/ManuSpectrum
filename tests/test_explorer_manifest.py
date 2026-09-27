@@ -406,6 +406,22 @@ class ManifestRouteTests(CorpusCase):
                     response["Location"], f"/iiif/v3/explorer-manifest?{canonical}"
                 )
 
+    def test_lang_redirects_without_resolving_the_scope(self):
+        self.embargo(self.documents["embargoed"])
+        for subject in (UNKNOWN, self.documents["embargoed"].pk):
+            with self.subTest(subject=subject):
+                with mock.patch(
+                    "manuspectrum.views.explorer.scopes.corpus_bundle"
+                ) as bundle:
+                    response = self.get(f"lang=fr&document={subject}")
+
+                self.assertEqual(response.status_code, 301)
+                self.assertEqual(
+                    response["Location"],
+                    f"/iiif/v3/explorer-manifest?document={subject}",
+                )
+                bundle.assert_not_called()
+
     def test_several_documents_are_named_by_their_count(self):
         manifest = self.manifest(
             f"ids=an:{self.pk('open')}:-,an:{self.pk('embargoed')}:-"
