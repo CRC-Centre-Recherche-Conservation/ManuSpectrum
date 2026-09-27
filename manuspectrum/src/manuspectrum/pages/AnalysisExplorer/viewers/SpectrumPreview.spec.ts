@@ -129,6 +129,27 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
+    it("skips a stored title that holds only spaces", async () => {
+        const blank = readable(1, {
+            viewer: { ...fileEntry().viewer, xLabel: " ", yLabel: "  " },
+        });
+        const titled = readable(2, {
+            viewer: {
+                ...fileEntry().viewer,
+                xLabel: "Energy (eV)",
+                yLabel: "Net counts",
+            },
+        });
+        const { wrapper } = mountPreview([blank, titled], () =>
+            jsonResponse(SERIES),
+        );
+        await flushPromises();
+        const { layout } = lastDrawing();
+        expect(layout.xaxis.title.text).toBe("Energy (eV)");
+        expect(layout.yaxis.title.text).toBe("Net counts");
+        wrapper.unmount();
+    });
+
     it("leaves the axes untitled when no spectrum drawn stores a title", async () => {
         const untitled = { ...fileEntry().viewer, xLabel: null, yLabel: null };
         const { wrapper } = mountPreview(

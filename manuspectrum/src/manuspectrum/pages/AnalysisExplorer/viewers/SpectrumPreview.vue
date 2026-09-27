@@ -11,6 +11,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
 import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
 import {
     PLOT_CONFIG,
@@ -77,8 +78,8 @@ const xReversed = computed(() => curves.value[0]?.series.x_reversed ?? false);
 const titles = computed(() => {
     const drawn = [props.file, ...curves.value.map((curve) => curve.file)];
     return {
-        x: drawn.map((entry) => entry.viewer.xLabel).find(Boolean) ?? "",
-        y: drawn.map((entry) => entry.viewer.yLabel).find(Boolean) ?? "",
+        x: firstStoredTitle(drawn.map((entry) => entry.viewer.xLabel)) ?? "",
+        y: firstStoredTitle(drawn.map((entry) => entry.viewer.yLabel)) ?? "",
     };
 });
 const notes = computed(() =>
