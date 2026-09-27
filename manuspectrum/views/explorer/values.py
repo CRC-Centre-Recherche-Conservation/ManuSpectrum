@@ -57,12 +57,23 @@ def string_texts(value):
     return texts
 
 
+NAME_SEPARATOR = " — "
+EMPTY_FOLIO_PARTS = frozenset({"f.", "ff.", "fol."})
+
+
+def without_empty_folio(name):
+    """*name* without its « — »-separated parts that are a folio abbreviation with no folio (« f. »)."""
+    parts = name.split(NAME_SEPARATOR)
+    kept = [part for part in parts if part.strip() not in EMPTY_FOLIO_PARTS]
+    return NAME_SEPARATOR.join(kept) if kept else name
+
+
 def name_of(values, model_name, resource_id, language):
-    """Name of a resource from its ``label_of_name`` values, else « model name + short id »."""
+    """Name of a resource from its ``label_of_name`` values (``without_empty_folio``), else « model name + short id »."""
     for value in values or []:
         found = label(string_texts(value), language)
         if found:
-            return found
+            return {**found, "value": without_empty_folio(found["value"])}
     model = label(model_name or {}, language) or {"value": "", "lang": language}
     return {
         "value": f"{model['value']} {str(resource_id)[:4]}…".strip(),
