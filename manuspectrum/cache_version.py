@@ -37,6 +37,14 @@ CACHE_SHAPE_MODULES = (
     "views/explorer/memo.py",
     "views/explorer/values.py",
     "utils/role_links.py",
+    "utils/roles.py",
+    # IIIF documents: the sources and zones the Explorer memo reads, and the
+    # ids, language maps and selectors of the memoised IIIF payloads.
+    "iiif/ids.py",
+    "iiif/language.py",
+    "iiif/selectors.py",
+    "iiif/sources.py",
+    "iiif/zones.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"

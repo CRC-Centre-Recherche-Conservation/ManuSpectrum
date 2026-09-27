@@ -24,8 +24,10 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import translation
 
+from manuspectrum.iiif.sources import manifest_json
 from manuspectrum.utils.public_visibility import anonymous_user, readable_nodegroup_ids
 from manuspectrum.utils.role_links import role_node
+from manuspectrum.utils.roles import ROLES
 from manuspectrum.views.explorer.citations import (
     Home,
     availability,
@@ -35,7 +37,6 @@ from manuspectrum.views.explorer.citations import (
 from manuspectrum.views.explorer.memo import ticket
 from manuspectrum.views.explorer.service import (
     ITEM_KEY,
-    ROLES,
     Values,
     analysis_files,
     cited_analysis,
@@ -44,7 +45,6 @@ from manuspectrum.views.explorer.service import (
     document_characterizations,
     licence_labels,
     linkable,
-    manifest_json,
     names,
     parse_keys,
     permalink,

@@ -885,9 +885,7 @@ class ManifestJsonTests(TestCase):
             f"/manifest/{self.globalid}/#top",
             f"https://manuspectrum.example/manifest/{self.globalid}?x=1#y",
         ]
-        with patch(
-            "manuspectrum.views.explorer.service.CanvasIIIF.fetch_manifest"
-        ) as fetch:
+        with patch("manuspectrum.iiif.sources.CanvasIIIF.fetch_manifest") as fetch:
             found = [manifest_json(url) for url in urls]
 
         self.assertEqual(found, [{"id": "stored"}] * len(urls))
@@ -896,7 +894,7 @@ class ManifestJsonTests(TestCase):
     def test_a_manifest_named_only_in_the_query_of_an_external_url_is_fetched(self):
         url = f"https://iiif.example/iiif?next=/manifest/{self.globalid}"
         with patch(
-            "manuspectrum.views.explorer.service.CanvasIIIF.fetch_manifest",
+            "manuspectrum.iiif.sources.CanvasIIIF.fetch_manifest",
             return_value={"id": "fetched"},
         ) as fetch:
             found = manifest_json(url)

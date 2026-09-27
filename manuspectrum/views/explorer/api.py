@@ -33,6 +33,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.gzip import gzip_page
 
+from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import anonymous_user, is_connected
 from manuspectrum.views.explorer import memo as explorer_memo
@@ -59,9 +60,6 @@ from manuspectrum.views.explorer.service import (
 )
 
 HOME_DAY_MARGIN = datetime.timedelta(days=1)
-IIIF_MEDIA_TYPE = (
-    'application/ld+json;profile="http://iiif.io/api/presentation/3/context.json"'
-)
 
 
 def _shared(request):

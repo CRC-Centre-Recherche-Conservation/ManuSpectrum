@@ -1,4 +1,4 @@
-"""Validation of a IIIF Presentation 3 manifest against the pinned schema.
+"""Validation of IIIF Presentation 3 documents against the pinned schema.
 
 ``tests/fixtures/iiif/iiif_3_0.json`` is the JSON Schema (Draft 7) the IIIF
 presentation validator applies to Presentation 3 documents, vendored for tests
@@ -32,3 +32,12 @@ def assert_valid_manifest(testcase, manifest):
     if error is not None:
         path = "/".join(map(str, error.absolute_path))
         testcase.fail(f"{path}: {error.message}")
+
+
+def assert_valid_iiif(testcase, document):
+    """``assert_valid_manifest`` for any Presentation 3 document the schema's root admits.
+
+    The root accepts a Manifest, a Collection, an AnnotationCollection, an
+    AnnotationPage or an Annotation.
+    """
+    assert_valid_manifest(testcase, document)

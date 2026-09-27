@@ -807,6 +807,10 @@ EXPLORER_MANIFEST_MAX_CANVASES = 1000
 # ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
 EXPLORER_MIRADOR_URL = ""
 
+# IIIF documents (manuspectrum/iiif/). Radius, in canvas pixels, of the circle
+# a point zone is drawn as (SvgSelector next to its PointSelector).
+IIIF_POINT_RADIUS = 12
+
 try:
     from .package_settings import *
 except ImportError:

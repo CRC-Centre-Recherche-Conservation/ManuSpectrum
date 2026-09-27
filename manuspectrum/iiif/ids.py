@@ -1,0 +1,87 @@
+"""Every URL a IIIF document names, absolute on ``PUBLIC_SERVER_ADDRESS``.
+
+This module is the only place a IIIF URL is minted. The paths are those of
+the routes of ``manuspectrum/urls.py`` (below the LANGUAGE BOUNDARY);
+``tests/test_iiif_routes.py`` resolves each one to its route name.
+"""
+
+from django.conf import settings
+
+KINDS = {
+    "analysis": "annotation-collection",
+    "characterization": "characterization-collection",
+}
+
+
+def _url(path):
+    return f"{settings.PUBLIC_SERVER_ADDRESS}{path}"
+
+
+def annotation(resource_id, feature_id, version=3):
+    """The annotation of one zone (*feature_id*) of an analysis or a characterization."""
+    return _url(f"iiif/v{version}/annotation/{resource_id}/{feature_id}")
+
+
+def annotation_first(resource_id, version=3):
+    """The route answering the first zone of *resource_id*."""
+    return _url(f"iiif/v{version}/annotation/{resource_id}")
+
+
+def collection(resource_id, kind="analysis", version=3):
+    """The AnnotationCollection (v2: Layer) of *kind* of a Document or a Component."""
+    return _url(f"iiif/v{version}/{KINDS[kind]}/{resource_id}")
+
+
+def page(resource_id, n, kind="analysis", version=3, only=None):
+    """Page *n* (canvas position, 1-based) of a collection; *only* restricts it to those resource ids."""
+    url = f"{collection(resource_id, kind, version)}/page-{n}"
+    if only:
+        url += "?only=" + ",".join(sorted(str(i) for i in only))
+    return url
+
+
+def content_state(analysis_id, feature_id):
+    return _url(f"iiif/v3/content-state/{analysis_id}/{feature_id}")
+
+
+def data_raw(file_id):
+    """The stored file, served with its true media type."""
+    return _url(f"iiif/data/{file_id}/raw")
+
+
+def data_series(file_id):
+    """The clean CSV of a file."""
+    return _url(f"iiif/data/{file_id}/series.csv")
+
+
+def xy_context():
+    return _url("iiif/context/xy-reading/1.jsonld")
+
+
+def xy_doc():
+    return _url("iiif/context/xy-reading/1")
+
+
+def xy_schema():
+    return _url("iiif/context/xy-reading/1/schema.json")
+
+
+def auth_login():
+    return _url("iiif/auth/login")
+
+
+def auth_token(version):
+    return _url(f"iiif/auth/{version}/token")
+
+
+def auth_probe(file_id):
+    return _url(f"iiif/auth/2/probe/{file_id}")
+
+
+def auth_logout():
+    return _url("iiif/auth/logout")
+
+
+def report(resource_id):
+    """The Arches report of a resource, as citations and exports name it."""
+    return _url(f"report/{resource_id}")

@@ -32,6 +32,8 @@ from django.utils.translation import ngettext
 from django.views import View
 from zipstream import ZIP_STORED, ZipStream
 
+from manuspectrum.iiif.sources import canvas_index, canvases_of
+from manuspectrum.iiif.zones import annotation_features
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.views.explorer.api import _not_found
 from manuspectrum.views.explorer.citations import (
@@ -51,11 +53,7 @@ from manuspectrum.views.explorer.scopes import (
     stored_sizes,
 )
 from manuspectrum.views.explorer.service import (
-    ROLES,
     Values,
-    _annotations,
-    canvas_index,
-    canvases_of,
     characterization_summaries,
     dataset_of,
     names,
@@ -63,6 +61,7 @@ from manuspectrum.views.explorer.service import (
     plain_text,
 )
 from manuspectrum.views.explorer.values import dataset_url, rewrite_legacy_url
+from manuspectrum.utils.roles import ROLES
 from manuspectrum.views.summary_service import _date
 
 CRATE_NAME = "ro-crate-metadata.json"
@@ -175,7 +174,7 @@ def analysis_zones(scope):
         analyses = [
             a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
         ]
-        for rid, _, canvas, shape in _annotations(
+        for rid, _, canvas, shape in annotation_features(
             zone_node, analyses, canvas_index(listed), readable
         ):
             if canvas in labels:
