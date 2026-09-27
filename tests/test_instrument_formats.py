@@ -2,8 +2,9 @@
 
 The fixtures are real files of the lab, copied from the development
 database's uploads: ``elio_xrf.mca`` (XRF, 4096 channels, two calibration
-points) and ``asd_fieldspec_as8.asd`` (FORS, ``as8``, raw target and white
-reference, 350-2500 nm).
+points; stored with LF, the instrument writes CRLF) and
+``asd_fieldspec_as8.asd`` (FORS, ``as8``, raw target and white reference,
+350-2500 nm).
 
 Usage:
     python manage.py test tests.test_instrument_formats --settings=tests.test_settings
@@ -54,6 +55,12 @@ class McaTests(FormatCase):
         ]
 
         self.assertEqual(read_series(str(MCA))["y"], values)
+
+    def test_an_mca_with_the_instrument_crlf_reads_as_its_lf_copy(self):
+        crlf = self.written("crlf.mca", MCA.read_bytes().replace(b"\n", b"\r\n"))
+
+        self.assertEqual(read_series(crlf), read_series(str(MCA)))
+        self.assertEqual(instrument_formats.read_native(crlf).x.label, "Energy (keV)")
 
     def test_the_reading_states_its_axes(self):
         native = instrument_formats.read_native(str(MCA))

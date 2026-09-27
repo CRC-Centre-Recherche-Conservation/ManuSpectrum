@@ -8,7 +8,7 @@
 *.gif binary
 *.ttf binary
 *.woff binary
-# Raw instrument files: kept byte for byte (mixed CR/CRLF line endings)
+# Raw instrument files: kept byte for byte
 *.mca binary
 *.asd binary
 *.woff2 binary
