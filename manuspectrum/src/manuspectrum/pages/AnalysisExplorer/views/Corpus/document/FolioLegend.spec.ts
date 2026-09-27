@@ -38,6 +38,9 @@ describe("FolioLegend", () => {
         expect(rows[0].find(".code").text()).toBe("XRF");
         expect(rows[0].find(".code").classes()).toContain("code--tech-1");
         expect(rows[1].find(".code").classes()).toContain("code--ink");
+        expect(rows[0].find(".code").classes()).toContain(
+            "technique-code--small",
+        );
     });
 
     it("starts folded and keeps its state in the store for the next page", async () => {

@@ -4,8 +4,8 @@ import { useGettext } from "vue3-gettext";
 
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
+import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
-import { techniqueClass } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
     formatDateRange,
     safeHref,
@@ -360,13 +360,11 @@ function focusHeading(): void {
                         type="button"
                         @click="openAnalysis(entry.id)"
                     >
-                        <span
+                        <TechniqueCode
                             v-if="entry.style"
-                            class="code"
-                            aria-hidden="true"
-                            :class="techniqueClass('code', entry.style.colour)"
-                            >{{ entry.style.code }}</span
-                        >
+                            :code="entry.style.code"
+                            :colour="entry.style.colour"
+                        />
                         <span
                             class="name"
                             :lang="entry.name.lang"
@@ -550,68 +548,6 @@ function focusHeading(): void {
 .characterization-card .evidence button {
     gap: 0.5rem;
     text-align: start;
-}
-
-.characterization-card .evidence .code {
-    display: inline-grid;
-    flex: none;
-    place-items: center;
-    box-sizing: border-box;
-    min-inline-size: 1.5rem;
-    block-size: 1.5rem;
-    padding-inline: 0.25rem;
-    border: 0.125rem solid var(--surface);
-    border-radius: 999rem;
-    background: var(--ink);
-    color: var(--stage);
-    font: 600 0.625rem var(--font-body);
-    white-space: nowrap;
-}
-
-.characterization-card .evidence .code--ink {
-    border-color: var(--ink);
-    background: var(--surface);
-    color: var(--ink);
-}
-
-.characterization-card .evidence .code--tech-1 {
-    background: var(--tech-1);
-}
-
-.characterization-card .evidence .code--tech-2 {
-    background: var(--tech-2);
-}
-
-.characterization-card .evidence .code--tech-3 {
-    background: var(--tech-3);
-}
-
-.characterization-card .evidence .code--tech-4 {
-    background: var(--tech-4);
-}
-
-.characterization-card .evidence .code--tech-5 {
-    background: var(--tech-5);
-}
-
-.characterization-card .evidence .code--tech-6 {
-    background: var(--tech-6);
-}
-
-.characterization-card .evidence .code--tech-7 {
-    background: var(--tech-7);
-}
-
-.characterization-card .evidence .code--tech-8 {
-    background: var(--tech-8);
-}
-
-.characterization-card .evidence .code--tech-9 {
-    background: var(--tech-9);
-}
-
-.characterization-card .evidence .code--tech-10 {
-    background: var(--tech-10);
 }
 
 .characterization-card .visually-hidden {
