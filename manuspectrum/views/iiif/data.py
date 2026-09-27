@@ -37,6 +37,7 @@ from django.views import View
 
 from manuspectrum.iiif import data, memo, tokens, xy_reading
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
+from manuspectrum.utils.data_version import data_version
 from manuspectrum.views.iiif.annotations import (
     gate_of,
     not_found,
@@ -88,8 +89,9 @@ class DataView(View):
     def answer(self, request, file_id):
         if tokens.bearer_state(request) == tokens.INVALID:
             return unauthorized(request, "Dataset", file_id)
+        version = data_version()
         try:
-            record = data.readable_file(file_id, reader_of(request))
+            record = data.readable_file(file_id, reader_of(request), version)
         except data.Refused:
             return refused(request, "Dataset", file_id)
         if record is None:
@@ -101,7 +103,7 @@ class DataView(View):
         prepared = self.prepare(record)
         if prepared is None:
             return not_found()
-        shared = gate_of(request).shared and not renews_csrf_cookie(request)
+        shared = gate_of(request, version).shared and not renews_csrf_cookie(request)
         etag = _etag(record.id, stat.st_size, stat.st_mtime_ns, *self.version(prepared))
         if shared and etag_already_held(request, etag):
             response = HttpResponseNotModified()

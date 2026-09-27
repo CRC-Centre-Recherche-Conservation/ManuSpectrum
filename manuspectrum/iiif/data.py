@@ -78,9 +78,12 @@ def media_type(name, stored):
     return OCTET_STREAM
 
 
-def file_allowed(resource_id, nodegroup_id, reader):
-    """Whether *reader* may read a file of *resource_id* held in a tile of *nodegroup_id*."""
-    if str(resource_id) not in visible_set(reader).ids:
+def file_allowed(resource_id, nodegroup_id, reader, version=None):
+    """Whether *reader* may read a file of *resource_id* held in a tile of *nodegroup_id*.
+
+    *version* is the ``data_version()`` the request read, else read here.
+    """
+    if str(resource_id) not in visible_set(reader, version).ids:
         return False
     nodegroups = readable_nodegroups(reader)
     return nodegroups is None or str(nodegroup_id) in nodegroups
@@ -106,7 +109,7 @@ def file_size(path):
         return None
 
 
-def readable_file(file_id, reader):
+def readable_file(file_id, reader, version=None):
     """The ``FileRecord`` of *file_id* for *reader*; None when unknown, ``Refused`` raised when not readable."""
     row = (
         File.objects.filter(pk=file_id)
@@ -118,7 +121,7 @@ def readable_file(file_id, reader):
         return None
     resource_id = str(row.tile.resourceinstance_id)
     nodegroup_id = str(row.tile.nodegroup_id)
-    if not file_allowed(resource_id, nodegroup_id, reader):
+    if not file_allowed(resource_id, nodegroup_id, reader, version):
         raise Refused(file_id)
     entry = file_entry(row.tile.data, file_id)
     path = row.path.path

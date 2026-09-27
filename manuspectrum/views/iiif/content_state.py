@@ -16,6 +16,7 @@ from manuspectrum.iiif import facts, memo
 from manuspectrum.iiif import language as lang
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE
 from manuspectrum.iiif.content_state import content_state
+from manuspectrum.utils.data_version import data_version
 from manuspectrum.utils.public_visibility import readable_nodegroup_ids
 from manuspectrum.views.iiif.annotations import (
     IIIFView,
@@ -38,14 +39,15 @@ class ContentStateView(IIIFView):
 
     def answer(self, request, resource_id, feature_id):
         reader = reader_of(request)
-        access = facts.annotated_access(resource_id, reader)
+        version = data_version()
+        access = facts.annotated_access(resource_id, reader, version)
         if access is None:
             raise Missing()
         if access is facts.REFUSED:
             return refused(request)
 
         def build():
-            found = facts.annotated_fact(resource_id, reader, feature_id)
+            found = facts.annotated_fact(resource_id, reader, feature_id, version)
             if not isinstance(found, tuple):
                 raise Missing()
             kind, _, fact = found
@@ -56,7 +58,7 @@ class ContentStateView(IIIFView):
 
         response = memo.answer(
             request,
-            gate_of(request),
+            gate_of(request, version),
             "content-state",
             (resource_id, feature_id),
             build,

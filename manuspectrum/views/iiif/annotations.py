@@ -32,6 +32,7 @@ from manuspectrum.iiif import facts, ids, memo, pages, services, tokens, v2
 from manuspectrum.iiif.annotations import analysis_annotation
 from manuspectrum.iiif.characterizations import characterization_annotation
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE, IIIF_V2_MEDIA_TYPE
+from manuspectrum.utils.data_version import data_version
 from manuspectrum.utils.public_visibility import is_connected
 from manuspectrum.views.iiif.cors import iiif_cors
 
@@ -59,9 +60,9 @@ def reader_of(request):
     return tokens.iiif_reader(request)
 
 
-def gate_of(request):
-    """The memo ``Gate`` of the request's reader; a token reader never shares the visitor's view."""
-    return memo.gate(reader_of(request), tokens.by_token(request))
+def gate_of(request, version=None):
+    """The memo ``Gate`` of the request's reader at the request's data *version*; a token reader never shares the visitor's view."""
+    return memo.gate(reader_of(request), tokens.by_token(request), version)
 
 
 def unauthorized(request, kind="Annotation", file_id=None):
@@ -134,11 +135,14 @@ class CollectionView(IIIFView):
 
     def answer(self, request, resource_id):
         reader = reader_of(request)
-        if facts.subject_of(resource_id, reader) is None:
+        version = data_version()
+        if facts.subject_of(resource_id, reader, version) is None:
             raise Missing()
 
         def build():
-            doc = facts.document_facts(resource_id, reader, kind=self.kind)
+            doc = facts.document_facts(
+                resource_id, reader, kind=self.kind, version=version
+            )
             collection = pages.annotation_collection(doc, self.kind)
             if self.version == 3:
                 return collection
@@ -150,7 +154,7 @@ class CollectionView(IIIFView):
 
         return memo.answer(
             request,
-            gate_of(request),
+            gate_of(request, version),
             f"collection-v{self.version}-{self.kind}",
             (resource_id,),
             build,
@@ -172,24 +176,27 @@ class PageView(IIIFView):
     def answer(self, request, resource_id, page_num):
         only = parse_only(request)
         reader = reader_of(request)
-        if facts.subject_of(resource_id, reader) is None:
+        version = data_version()
+        if facts.subject_of(resource_id, reader, version) is None:
             raise Missing()
 
-        def build(version):
+        def build(api):
             def built():
-                doc = facts.document_facts(resource_id, reader, kind=self.kind)
+                doc = facts.document_facts(
+                    resource_id, reader, kind=self.kind, version=version
+                )
                 try:
                     page = pages.annotation_page(doc, page_num, self.kind)
                 except pages.InvalidPage as error:
                     raise Missing() from error
-                return page if version == 3 else v2.page(page)
+                return page if api == 3 else v2.page(page)
 
             return built
 
         if only is None:
             return memo.answer(
                 request,
-                gate_of(request),
+                gate_of(request, version),
                 f"page-v{self.version}-{self.kind}",
                 (resource_id, page_num),
                 build(self.version),
@@ -206,7 +213,7 @@ class PageView(IIIFView):
 
         return memo.answer_derived(
             request,
-            gate_of(request),
+            gate_of(request, version),
             f"page-v3-{self.kind}",
             (resource_id, page_num),
             build(3),
@@ -220,14 +227,15 @@ class AnnotationView(IIIFView):
 
     def answer(self, request, resource_id, feature_id=None):
         reader = reader_of(request)
-        access = facts.annotated_access(resource_id, reader)
+        version = data_version()
+        access = facts.annotated_access(resource_id, reader, version)
         if access is None:
             raise Missing()
         if access is facts.REFUSED:
             return refused(request)
 
         def build():
-            found = facts.annotated_fact(resource_id, reader, feature_id)
+            found = facts.annotated_fact(resource_id, reader, feature_id, version)
             if not isinstance(found, tuple):
                 raise Missing()
             kind, doc, fact = found
@@ -248,7 +256,7 @@ class AnnotationView(IIIFView):
 
         return memo.answer(
             request,
-            gate_of(request),
+            gate_of(request, version),
             f"annotation-v{self.version}",
             (resource_id, feature_id or ""),
             build,

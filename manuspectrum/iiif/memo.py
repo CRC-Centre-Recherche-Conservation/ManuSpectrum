@@ -10,8 +10,11 @@ strong ETag derived from the key, and an ``If-None-Match`` naming it gets a
 304 before anything is built; ``If-None-Match: *`` gets a 304 only once the
 document is known to exist (RFC 9110 §13.1.2). A build raising ``Absent``
 stores a marker for ``IIIF_ABSENT_TTL`` seconds: the same missing document
-is answered from it, not rebuilt. Any other reader, and any reader identified by a IIIF
-token, gets a document built for them, ``private, no-store``, never stored.
+is answered from it, not rebuilt. A build that read a degraded source
+(``mark_degraded``: a source manifest named but unreadable) is stored, body
+or marker, for ``IIIF_DEGRADED_TTL`` seconds only, and its answer carries no
+ETag. Any other reader, and any reader identified by a IIIF token, gets a
+document built for them, ``private, no-store``, never stored.
 A derived document (``answer_derived``, a filtered page) is computed from
 its source's entry and never stored itself.
 
@@ -19,6 +22,7 @@ The caller runs its read guard before ``answer``: no memo is read for a
 reader refused the resource.
 """
 
+import contextvars
 import hashlib
 from dataclasses import dataclass
 
@@ -44,10 +48,21 @@ from manuspectrum.utils.stamps import locale_stamp
 PUBLIC = "public, no-cache"
 PRIVATE = "private, no-store"
 ABSENT = b""
+DEGRADED = b"\x00"
 
 
 class Absent(Exception):
     """The document asked for does not exist for this reader."""
+
+
+_degraded = contextvars.ContextVar("iiif_memo_degraded", default=None)
+
+
+def mark_degraded():
+    """Note that the document being built read a source it could not read; outside a memo build, nothing."""
+    marks = _degraded.get()
+    if marks is not None:
+        marks.append(True)
 
 
 @dataclass(frozen=True)
@@ -58,13 +73,15 @@ class Gate:
     parts: tuple
 
 
-def gate(reader, token=False):
+def gate(reader, token=False, version=None):
     """The ``Gate`` of *reader*: data version, permission epoch, the visitor's visible digest,
     the translations' ``locale_stamp`` and ``CACHE_CODE_VERSION``.
 
-    A reader identified by a IIIF token (*token*) never shares the visitor's view.
+    *version* is the ``data_version()`` the request read for its guard, else
+    read here. A reader identified by a IIIF token (*token*) never shares the
+    visitor's view.
     """
-    version = data_version()
+    version = data_version() if version is None else version
     visitor = visible_set(anonymous_user(), version)
     mine = visible_set(reader, version)
     return Gate(
@@ -96,16 +113,24 @@ def _etag(text):
 
 
 def _stored(key, build):
-    """The stored body under *key*, built by *build* on a miss; ``Absent`` when the document does not exist."""
+    """``(body, degraded)`` stored under *key*, built by *build* on a miss; ``Absent`` when the document does not exist."""
+
+    marks = []
 
     def stored():
+        token = _degraded.set(marks)
         try:
-            return orjson.dumps(build())
+            body = orjson.dumps(build())
         except Absent:
             return ABSENT
+        finally:
+            _degraded.reset(token)
+        return DEGRADED + body if marks else body
 
-    def expire_absent(value):
-        if value == ABSENT:
+    def expire_early(value):
+        if marks:
+            cache.set(key, value, settings.IIIF_DEGRADED_TTL)
+        elif value == ABSENT:
             cache.set(key, value, settings.IIIF_ABSENT_TTL)
 
     body = get_or_build(
@@ -113,11 +138,13 @@ def _stored(key, build):
         stored,
         settings.IIIF_MEMO_TTL,
         wait=settings.IIIF_BUILD_WAIT,
-        kept=expire_absent,
+        kept=expire_early,
     )
     if body == ABSENT:
         raise Absent()
-    return body
+    if body.startswith(DEGRADED):
+        return body[len(DEGRADED) :], True
+    return body, False
 
 
 def _shares(request, reader_gate):
@@ -137,10 +164,10 @@ def answer(request, reader_gate, kind, parts, build, *, content_type):
     any_tag = request.headers.get("If-None-Match", "").strip() == "*"
     if not any_tag and etag_already_held(request, etag):
         return _not_modified(etag)
-    body = _stored(key, build)
+    body, degraded = _stored(key, build)
     if any_tag:
         return _not_modified(etag)
-    return _response(body, content_type, PUBLIC, etag)
+    return _response(body, content_type, PUBLIC, None if degraded else etag)
 
 
 def answer_derived(request, reader_gate, kind, parts, build, derive, *, content_type):
@@ -157,9 +184,10 @@ def answer_derived(request, reader_gate, kind, parts, build, derive, *, content_
         document, _ = derive(build())
         return _response(orjson.dumps(document), content_type, PRIVATE)
     key = _key(kind, parts, reader_gate)
-    document, variant = derive(orjson.loads(_stored(key, build)))
-    etag = _etag(f"{key}\n{variant}")
-    if etag_already_held(request, etag):
+    source, degraded = _stored(key, build)
+    document, variant = derive(orjson.loads(source))
+    etag = None if degraded else _etag(f"{key}\n{variant}")
+    if etag and etag_already_held(request, etag):
         return _not_modified(etag)
     return _response(orjson.dumps(document), content_type, PUBLIC, etag)
 

@@ -830,6 +830,9 @@ IIIF_PAGE_FILTER_MAX = 100
 IIIF_MEMO_TTL = 24 * 60 * 60
 # Seconds the visitor's 404 for a missing page or zone is kept under its key.
 IIIF_ABSENT_TTL = 5 * 60
+# Seconds a IIIF document built while its source manifest could not be read
+# (remote fetch failed, local manifest missing) is kept: a symptom, not a fact.
+IIIF_DEGRADED_TTL = 30
 # Seconds a request waits for another request building the same IIIF document
 # before building it itself: longer than a cold build (about 1 s on the densest
 # document), shorter than the worker timeout minus one build.

@@ -18,7 +18,13 @@ stored language and go under ``none``.
 
 A file is kept only when its ``File`` row hangs from the tile that lists it;
 nothing is ever read from a path written in tile data. A zone on a canvas the
-source manifest does not list leaves its analysis unlocated.
+source manifest does not list leaves its analysis unlocated. A source
+manifest named but unreadable leaves the Document without canvases and marks
+the memo build degraded (``memo.mark_degraded``).
+
+``document_facts``, ``subject_of``, ``annotated_access`` and
+``annotated_fact`` take *version*, the ``data_version()`` the request read
+once, and read it themselves only without one.
 
 Identified materials (characterizations) are those of
 ``visible_set(reader).characterizations`` observing the subject (or, for a
@@ -45,6 +51,7 @@ from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileM
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.iiif import language as lang
+from manuspectrum.iiif import memo
 from manuspectrum.iiif.data import file_size, media_type
 from manuspectrum.iiif.sources import (
     absolute_url,
@@ -445,7 +452,9 @@ def _characterization_ids(slug, subject, document, visible, readable):
     )
 
 
-def document_facts(resource_id, reader, only=None, kind="analysis", read=None):
+def document_facts(
+    resource_id, reader, only=None, kind="analysis", read=None, version=None
+):
     """``DocumentFacts`` of a Document or Component for *reader*; None when unknown or unreadable.
 
     *kind* ``analysis`` fills ``analyses``, ``characterization`` fills
@@ -453,7 +462,7 @@ def document_facts(resource_id, reader, only=None, kind="analysis", read=None):
     *read* reads the source manifest by URL (a caller's memoised reader),
     else ``manifest_json``.
     """
-    visible = visible_set(reader)
+    visible = visible_set(reader, version)
     subject = _subject(resource_id, reader, visible)
     if subject is None:
         return None
@@ -483,9 +492,9 @@ def document_facts(resource_id, reader, only=None, kind="analysis", read=None):
     )
 
 
-def subject_of(resource_id, reader):
+def subject_of(resource_id, reader, version=None):
     """``(slug, document id)`` of a Document or Component *reader* may see; None otherwise."""
-    return _subject(resource_id, reader, visible_set(reader))
+    return _subject(resource_id, reader, visible_set(reader, version))
 
 
 ANNOTATED = {
@@ -494,7 +503,7 @@ ANNOTATED = {
 }
 
 
-def _annotated(resource_id, reader):
+def _annotated(resource_id, reader, version=None):
     """``(kind, visible)`` of an analysis or identified material *reader* may read, None or ``REFUSED`` as ``annotated_access``."""
     graph_id = (
         ResourceInstance.objects.filter(pk=resource_id)
@@ -505,7 +514,7 @@ def _annotated(resource_id, reader):
     if kind not in ANNOTATED:
         return None
     attribute, _ = ANNOTATED[kind]
-    visible = visible_set(reader)
+    visible = visible_set(reader, version)
     rid = str(resource_id)
     if rid not in getattr(visible, attribute) or not user_can_read_resource(
         reader, resourceid=rid
@@ -527,7 +536,7 @@ def _observed_subjects(kind, resource_id, reader, visible):
                 yield target, subject
 
 
-def annotated_access(resource_id, reader):
+def annotated_access(resource_id, reader, version=None):
     """``(kind, observed object id, (slug, document id))`` of an analysis or identified material *reader* may read.
 
     *kind* is ``analysis`` or ``characterization``. None when *resource_id*
@@ -535,7 +544,7 @@ def annotated_access(resource_id, reader):
     ``visible_set`` set, or refused by ``user_can_read_resource``), or when
     none of its observed objects leads the reader to a visible Document.
     """
-    found = _annotated(resource_id, reader)
+    found = _annotated(resource_id, reader, version)
     if found is None or found is REFUSED:
         return found
     kind, visible = found
@@ -544,14 +553,14 @@ def annotated_access(resource_id, reader):
     return REFUSED
 
 
-def annotated_fact(resource_id, reader, feature_id=None):
+def annotated_fact(resource_id, reader, feature_id=None, version=None):
     """``(kind, DocumentFacts, fact)`` of one analysis or identified material; None when unknown, ``REFUSED`` when unreadable.
 
     The document facts are those of the first observed object leading to a
     visible Document that places a zone of the resource (with *feature_id*,
     that zone), else of the first such Document.
     """
-    found = _annotated(resource_id, reader)
+    found = _annotated(resource_id, reader, version)
     if found is None or found is REFUSED:
         return found
     kind, visible = found
@@ -704,7 +713,10 @@ def _build(
         ),
         "",
     )
-    listed = canvases_of((read or manifest_json)(url)) if url else []
+    source = (read or manifest_json)(url) if url else None
+    if url and source is None:
+        memo.mark_degraded()
+    listed = canvases_of(source)
     position = {c["id"]: n for n, c in enumerate(listed, start=1)}
     dims = canvas_index(listed)
 

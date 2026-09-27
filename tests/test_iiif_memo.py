@@ -4,15 +4,19 @@ Usage:
     python manage.py test tests.test_iiif_memo --settings=tests.test_settings
 """
 
+import time
 import uuid
 from unittest import mock
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
 from django.test import Client
 from django.test.utils import CaptureQueriesContext
 
-from tests.explorer_fixtures import IIIFCase
+from arches.app.models.models import TileModel
+
+from tests.explorer_fixtures import FEATURES, IIIFCase
 
 
 def memo_keys():
@@ -284,3 +288,66 @@ class MemoTests(IIIFCase):
         self.assertEqual(first.status_code, 404)
         self.assertEqual(again.status_code, 404)
         self.assertEqual(again.content, b"")
+
+    def remaining(self, key):
+        return cache._expire_info[key] - time.time()
+
+    def test_an_unreadable_source_manifest_is_kept_for_the_degraded_lifetime(self):
+        self.fetch.side_effect = lambda url: None
+        collection = f"/iiif/v3/annotation-collection/{self.documents['open'].pk}"
+
+        built = self.visitor.get(collection)
+        (collection_key,) = memo_keys()
+        page = self.visitor.get(self.url)
+        (page_key,) = set(memo_keys()) - {collection_key}
+
+        for key in (collection_key, page_key):
+            self.assertLessEqual(self.remaining(key), settings.IIIF_DEGRADED_TTL)
+            self.assertGreater(self.remaining(key), settings.IIIF_DEGRADED_TTL - 5)
+        self.assertEqual(built.status_code, 200)
+        self.assertNotIn("ETag", built)
+        self.assertEqual(page.status_code, 404)
+
+    def test_a_local_manifest_missing_from_the_database_is_degraded(self):
+        node = self.nodes[("document", "facsimiles")]
+        TileModel.objects.filter(
+            resourceinstance=self.documents["open"], nodegroup_id=node.nodegroup_id
+        ).update(data={str(node.nodeid): f"/manifest/{uuid.uuid4()}"})
+
+        built = self.visitor.get(
+            f"/iiif/v3/annotation-collection/{self.documents['open'].pk}"
+        )
+
+        (key,) = memo_keys()
+        self.assertEqual(built.status_code, 200)
+        self.assertLessEqual(self.remaining(key), settings.IIIF_DEGRADED_TTL)
+
+    def test_a_readable_source_manifest_is_kept_for_the_memo_lifetime(self):
+        self.visitor.get(f"/iiif/v3/annotation-collection/{self.documents['open'].pk}")
+
+        (key,) = memo_keys()
+        self.assertGreater(self.remaining(key), settings.IIIF_DEGRADED_TTL)
+
+    def test_a_iiif_request_reads_the_data_version_once(self):
+        file_id = self.stored_file(self.analyses["open"], "X01.csv", b"x,y\n1,2\n")
+        document = self.documents["open"].pk
+        analysis = self.analyses["open"].pk
+        urls = [
+            self.url,
+            self.url,
+            self.only("open"),
+            f"/iiif/v3/annotation-collection/{document}",
+            f"/iiif/v3/annotation/{analysis}",
+            f"/iiif/v3/content-state/{analysis}/{FEATURES['open']}",
+            f"/iiif/data/{file_id}/raw",
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                with CaptureQueriesContext(connection) as context:
+                    response = self.visitor.get(url)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    sum("ms_data_change" in q["sql"] for q in context.captured_queries),
+                    1,
+                )
