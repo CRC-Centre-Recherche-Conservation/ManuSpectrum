@@ -236,8 +236,9 @@ function wait<T>(
  * GET a localized explorer payload through the tab's memo.
  *
  * The memo holds the last `MEMO_ENTRIES` answers for `MEMO_TTL_MS` from
- * their arrival, in memory only; a request still running is never evicted. Callers of one URL share one request: a caller that
- * aborts leaves it, and it is aborted when nobody waits any more. A failed
+ * their arrival, in memory only; a request still running is never evicted.
+ * Callers of one URL share one request: a caller that aborts leaves it, and
+ * it is aborted when nobody waits any more. A failed
  * request (404 included) is forgotten; `reload` replaces the entry. An aborted
  * call rejects with the browser's AbortError.
  */
