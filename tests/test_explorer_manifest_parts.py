@@ -8,7 +8,9 @@ import copy
 
 from django.conf import settings
 from django.test import SimpleTestCase, override_settings
+from django.utils import translation
 
+from manuspectrum.iiif import language as lang
 from manuspectrum.iiif.constants import PRESENTATION_3
 from manuspectrum.iiif.ids import explorer_part as mint
 from manuspectrum.iiif.manifest import page_filter
@@ -161,6 +163,17 @@ class ManifestPartsTests(SimpleTestCase):
             [{"id": SERVICE_V2, "type": "ImageService2", "profile": "level2"}],
         )
         self.assert_valid([canvas])
+
+    def test_a_v2_attribution_is_labelled_in_every_language(self):
+        with translation.override("fr"):
+            canvas = self.canvas_2()
+
+        statement = canvas["requiredStatement"]
+        self.assertEqual(statement["label"], lang.gettext_map("Attribution"))
+        self.assertNotIn("none", statement["label"])
+        self.assertEqual(
+            statement["value"], {"none": ["Bibliothèque nationale de France"]}
+        )
 
     def test_a_v3_canvas_keeps_its_id_items_and_rights(self):
         canvas = self.canvas_3()

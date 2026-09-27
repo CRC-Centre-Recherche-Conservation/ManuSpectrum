@@ -10,11 +10,11 @@ import re
 from urllib.parse import urlsplit
 
 from django.conf import settings
-from django.utils.translation import gettext as _
 
 from arches.app.models.models import IIIFManifest
 
 from manuspectrum.constants.licenses import iiif_rights
+from manuspectrum.iiif import language as lang
 from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.views.explorer.values import rewrite_legacy_url
 
@@ -221,7 +221,7 @@ def v3_canvas(source_canvas, source_manifest, manifest_url, mint_id):
         rights = _rights(source_manifest.get("license"))
         attribution = _text(source_manifest.get("attribution"))
         statement = (
-            {"label": {"none": [_("Attribution")]}, "value": {"none": [attribution]}}
+            {"label": lang.gettext_map("Attribution"), "value": {"none": [attribution]}}
             if attribution
             else None
         )
