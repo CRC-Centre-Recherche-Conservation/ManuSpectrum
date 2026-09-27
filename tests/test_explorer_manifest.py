@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 from django.conf import settings
 from django.http import QueryDict
-from django.test import override_settings
+from django.test import Client, override_settings
 
 from arches.app.models.models import IIIFManifest, TileModel
 
@@ -117,14 +117,14 @@ class ManifestRouteTests(CorpusCase):
             for page in canvas.get("annotations", ())
         ]
 
-    def annotations(self, manifest):
-        """The annotations of every page the canvases reference, dereferenced as the visitor."""
+    def annotations(self, manifest, client=None):
+        """The annotations of every page the canvases reference, dereferenced by *client* (default: the test client)."""
         found = []
         for page in self.references(manifest):
             self.assertNotIn("items", page)
             path = page["id"][len(settings.PUBLIC_SERVER_ADDRESS) - 1 :]
             with mock.patch(FETCH, side_effect=fetched):
-                response = self.client.get(path)
+                response = (client or self.client).get(path)
             self.assertEqual(response.status_code, 200, path)
             found.extend(response.json()["items"])
         return found
@@ -497,10 +497,12 @@ class ManifestRouteTests(CorpusCase):
         ):
             with self.subTest(query=query):
                 body = self.get(query).content.decode()
+                pages = json.dumps(self.annotations(json.loads(body)) if body else [])
 
-                self.assertNotIn(self.pk("open"), body)
-                self.assertNotIn("X01", body)
-                self.assertNotIn("11111111-1111-4111-8111-111111111111", body)
+                for text in (body, pages):
+                    self.assertNotIn(self.pk("open"), text)
+                    self.assertNotIn("X01", text)
+                    self.assertNotIn("11111111-1111-4111-8111-111111111111", text)
 
     def test_a_visitor_gets_public_no_cache_and_a_304_on_revalidation(self):
         response = self.get(self.document_query())
@@ -528,6 +530,11 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(default["summary"]["en"], ["Contains drafts"])
         self.assertEqual(default["summary"]["fr"], ["Contient des brouillons"])
         self.assertNotIn("X01 — f. 1v", json.dumps(default, ensure_ascii=False))
+        labels = [
+            a["label"]["en"][0] for a in self.annotations(default, client=Client())
+        ]
+        self.assertNotIn("X01 — f. 1v", labels)
+        self.assertIn("X03 — draft", labels)
         self.assertNotIn("summary", open_only)
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)
