@@ -200,6 +200,7 @@ SHAPES = {
     "ShareLinks": {
         "manifest": ("ProductLink", type(None)),
         "seriesCsv": ("ProductLink", type(None)),
+        "manifestTooLarge": bool,
         "export": "ProductLink",
     },
 }

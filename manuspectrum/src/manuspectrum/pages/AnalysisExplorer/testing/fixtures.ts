@@ -495,6 +495,7 @@ export function sharePayload(
         export: { files: 2, bytes: 2_400_000, overLimit: false, documents: [] },
         links: {
             manifest: product("iiif/v3/explorer-manifest", ""),
+            manifestTooLarge: false,
             seriesCsv: null,
             export: product("api/explorer/export"),
         },

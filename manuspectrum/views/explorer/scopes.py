@@ -636,12 +636,13 @@ def share_payload(scope, accessed):
     does (``export_size``); over the limits, a scope whose items span
     several documents lists one export per document, holding the scope's
     items there (``_per_document``). ``manifest`` is given only when the scope's
-    manifest holds a canvas (``has_canvases``), ``seriesCsv`` for a
+    manifest holds a canvas within the canvas bound (``manifest_offer``);
+    ``manifestTooLarge`` says the manifest is over that bound. ``seriesCsv`` for a
     Selection holding spectra only. Each product is a ``product_link``: the
     panel follows its ``path`` and copies or hands external viewers its
     ``url``. *accessed* is the day of consultation.
     """
-    from manuspectrum.views.explorer.manifest import has_canvases
+    from manuspectrum.views.explorer.manifest import manifest_offer
 
     bundle, language = scope.bundle, scope.language
     content = scope_content(scope)
@@ -654,6 +655,7 @@ def share_payload(scope, accessed):
         if e.get("dataKind") == "xy" and e.get("role") == "readable"
     )
     split = _per_document(scope) if over else {}
+    offer = manifest_offer(scope)
     documents = []
     if len(split) > 1:
         documents = [
@@ -698,9 +700,10 @@ def share_payload(scope, accessed):
         "links": {
             "manifest": (
                 product_link("iiif-v3-explorer-manifest", scope.query, language)
-                if has_canvases(scope)
+                if offer == "manifest"
                 else None
             ),
+            "manifestTooLarge": offer == "tooLarge",
             "seriesCsv": (
                 product_link("explorer-series-csv", scope.query, language)
                 if scope.kind == "ids" and spectra

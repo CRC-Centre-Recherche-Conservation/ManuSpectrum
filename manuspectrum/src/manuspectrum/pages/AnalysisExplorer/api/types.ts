@@ -315,8 +315,10 @@ export interface ShareExport {
 
 /** The scope's products. */
 export interface ShareLinks {
-    /** Only when the scope's manifest holds a canvas. */
+    /** Only when the scope's manifest holds a canvas within the canvas bound. */
     manifest: ProductLink | null;
+    /** The scope's manifest is over the canvas bound: its route answers 413. */
+    manifestTooLarge: boolean;
     /** Only for a Selection holding spectra. */
     seriesCsv: ProductLink | null;
     export: ProductLink;
@@ -640,6 +642,7 @@ export const SHAPE_KEYS = {
     >,
     ShareLinks: {
         manifest: true,
+        manifestTooLarge: true,
         seriesCsv: true,
         export: true,
     } satisfies Record<keyof ShareLinks, true>,

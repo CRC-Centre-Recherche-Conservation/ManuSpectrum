@@ -70,7 +70,13 @@ from manuspectrum.views.explorer.service import (
 )
 from manuspectrum.views.explorer.values import rewrite_legacy_url
 
-__all__ = ["ManifestTooLarge", "build_manifest", "canvas_plan", "has_canvases"]
+__all__ = [
+    "ManifestTooLarge",
+    "build_manifest",
+    "canvas_plan",
+    "has_canvases",
+    "manifest_offer",
+]
 
 
 def _source_canvases(manifest):
@@ -262,6 +268,19 @@ def canvas_plan(scope):
     if len(planned | layer_ids) > settings.EXPLORER_MANIFEST_MAX_CANVASES:
         raise ManifestTooLarge()
     return CanvasPlan(plans, imaging, read_imaging, frozenset(planned | layer_ids))
+
+
+def manifest_offer(scope):
+    """What the manifest of *scope* answers: ``"manifest"`` when it holds a canvas, ``"tooLarge"`` over
+    ``EXPLORER_MANIFEST_MAX_CANVASES`` canvases (its route answers 413), None when it holds none.
+
+    Every canvas is placed (``canvas_plan``): the bound needs the whole count.
+    """
+    try:
+        plan = canvas_plan(scope)
+    except ManifestTooLarge:
+        return "tooLarge"
+    return "manifest" if plan.canvases else None
 
 
 def _imaging(scope):

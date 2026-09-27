@@ -95,6 +95,9 @@ const packageSize = computed(() =>
     formatSize(payload.value?.export.bytes ?? null, lang),
 );
 const manifestLink = computed(() => payload.value?.links.manifest ?? null);
+const manifestTooLarge = computed(
+    () => payload.value?.links.manifestTooLarge ?? false,
+);
 const miradorHref = computed(() =>
     manifestLink.value
         ? miradorLink(miradorUrl, { manifest: manifestLink.value.url })
@@ -379,14 +382,27 @@ function shareLink(): string {
                     </section>
 
                     <section
-                        v-if="manifestLink"
+                        v-if="manifestLink || manifestTooLarge"
                         class="group"
                         aria-labelledby="share-iiif"
                     >
                         <h4 id="share-iiif">
                             <span>{{ $gettext("IIIF") }}</span>
                         </h4>
-                        <div class="actions">
+                        <p
+                            v-if="!manifestLink"
+                            class="limit"
+                        >
+                            {{
+                                $gettext(
+                                    "Too many folios for one IIIF manifest: open a document, or your Selection, to get one.",
+                                )
+                            }}
+                        </p>
+                        <div
+                            v-else
+                            class="actions"
+                        >
                             <CopyButton
                                 :text="manifestLink.url"
                                 :label="$gettext('Copy the manifest URL')"

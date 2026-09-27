@@ -338,4 +338,24 @@ describe("ShareExportPanel", () => {
         expect(drawer().querySelector("a.manifest")).toBeNull();
         wrapper.unmount();
     });
+
+    it("says why a scope over the canvas bound offers no manifest", async () => {
+        const tooLarge = sharePayload();
+        tooLarge.links = {
+            ...tooLarge.links,
+            manifest: null,
+            manifestTooLarge: true,
+        };
+        answer = () => jsonResponse(tooLarge);
+
+        const { wrapper } = await openPanel({ mirador: MIRADOR });
+
+        expect(
+            drawer().querySelector('[aria-labelledby="share-iiif"] .limit')
+                ?.textContent,
+        ).toContain("Too many folios for one IIIF manifest");
+        expect(drawer().querySelector("a.mirador")).toBeNull();
+        expect(drawer().querySelector("a.manifest")).toBeNull();
+        wrapper.unmount();
+    });
 });

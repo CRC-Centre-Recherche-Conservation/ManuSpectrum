@@ -419,10 +419,18 @@ class ShareRouteTests(CorpusCase):
 
         self.assertIsNotNone(placed["links"]["manifest"])
         self.assertIsNone(unplaced["links"]["manifest"])
+        self.assertFalse(placed["links"]["manifestTooLarge"])
+        self.assertFalse(unplaced["links"]["manifestTooLarge"])
 
-    def test_the_manifest_link_reads_source_manifests_until_one_places_a_canvas(
-        self,
-    ):
+    @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)
+    def test_a_scope_over_the_canvas_bound_offers_no_manifest_and_says_why(self):
+        links = self.get(f"ids=an:{self.pk('open')}:-").json()["links"]
+
+        self.assertIsNone(links["manifest"])
+        self.assertTrue(links["manifestTooLarge"])
+        self.assertIsNotNone(links["export"])
+
+    def test_the_manifest_link_reads_each_source_manifest_once(self):
         other = "https://example.org/iiif/ms211/manifest"
         self.tile(self.documents["embargoed"], "facsimiles", other)
         self.tile(
@@ -442,7 +450,7 @@ class ShareRouteTests(CorpusCase):
         sources = [
             c.args[0] for c in read.call_args_list if c.args[0] in (MANIFEST, other)
         ]
-        self.assertEqual(len(sources), 1)
+        self.assertEqual(sorted(sources), sorted({MANIFEST, other}))
 
     def test_links_encode_a_key_carrying_url_delimiters(self):
         key = f"af:{self.pk('open')}:x&y#z%w"
