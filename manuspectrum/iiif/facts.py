@@ -369,9 +369,9 @@ def _one(values):
     )
 
 
-def _conditions(values):
+def _conditions(values, type_node):
+    """The measurement conditions, each prefixed by its type read off *type_node* of the same tile."""
     maps = []
-    type_node = role_node(*ROLES["statement_type"])
     for _, value, data in values.get("statement_content", ()):
         texts = {
             code: plain_text(text[0])
@@ -400,6 +400,8 @@ def _imaging(values):
             )
             if url:
                 urls.append(url)
+    if not urls:
+        return ()
     labels = {}
     paths = {u: urlsplit(u).path for u in urls}
     for url, label in IIIFManifest.objects.filter(
@@ -587,9 +589,8 @@ def _concepts(value):
     )
 
 
-def _qualified(values, key, qualifier_key):
-    """``(concept, qualifier or None)`` of every concept of *key*, its qualifier read from the same tile."""
-    qualifier_node = role_node(*ROLES[qualifier_key])
+def _qualified(values, key, qualifier_node):
+    """``(concept, qualifier or None)`` of every concept of *key*, its qualifier read off *qualifier_node* of the same tile."""
     pairs = []
     for _, value, data in values.get(key, ()):
         qualifier = _concepts(data.get(qualifier_node.nodeid)) if qualifier_node else ()
@@ -633,6 +634,8 @@ def _characterizations(ids, visible, readable, dims, position, name_of):
     )
     cited = sorted({a for c in ids for a in visible.evidence.get(c, ())})
     cited_zones = _located(role_node(*ROLES["zone"]), cited, dims, position, readable)
+    confidence = role_node(*ROLES["confidence"])
+    element_level = role_node(*ROLES["element_level"])
     facts = []
     for c in ids:
         v = values[c]
@@ -644,12 +647,12 @@ def _characterizations(ids, visible, readable, dims, position, name_of):
                 id=c,
                 name=name_of.get(c, {}),
                 zones=tuple(sorted(zones, key=lambda z: (z.position, z.feature))),
-                materials=_qualified(v, "material", "confidence"),
+                materials=_qualified(v, "material", confidence),
                 colours=tuple(
                     k for _, x, _ in v.get("colour", ()) for k in _concepts(x)
                 ),
                 layers=tuple(k for _, x, _ in v.get("layer", ()) for k in _concepts(x)),
-                elements=_qualified(v, "elements", "element_level"),
+                elements=_qualified(v, "elements", element_level),
                 evidence=tuple(
                     (a, tuple(sorted(z.feature for z in cited_zones.get(a, ()))))
                     for a in visible.evidence.get(c, ())
@@ -670,10 +673,11 @@ def _materials(analysis_ids, visible, readable):
         return {}
     ids = sorted({c for v in citing.values() for c in v})
     values = _tiles(ids, ["material", "confidence"], readable)
+    confidence = role_node(*ROLES["confidence"])
     texts = {
         c: [
             lang.qualified(concept.labels, qualifier.labels if qualifier else None)
-            for concept, qualifier in _qualified(values[c], "material", "confidence")
+            for concept, qualifier in _qualified(values[c], "material", confidence)
         ]
         for c in ids
     }
@@ -756,6 +760,7 @@ def _build(
         shown | set(analysis_ids) | set(characterization_ids) | cited, readable
     )
 
+    statement_type = role_node(*ROLES["statement_type"])
     analyses = []
     for aid in analysis_ids:
         v = values[aid]
@@ -812,7 +817,7 @@ def _build(
                 ),
                 operators=_one([name_of.get(r, {}) for r in refs("operators")]),
                 instrument=_one([name_of.get(r, {}) for r in refs("instrument")]),
-                conditions=_conditions(v),
+                conditions=_conditions(v, statement_type),
                 projects=_one(
                     [
                         name_of.get(r, {})

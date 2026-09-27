@@ -6,6 +6,7 @@ Usage:
 
 import copy
 import uuid
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -192,6 +193,14 @@ class SubjectTests(FactsCase):
             {a.id for a in self.facts().analyses},
             {str(self.analyses[k].pk) for k in ("open", "on_document", "draft")},
         )
+
+    def test_the_condition_type_is_resolved_per_read_not_per_analysis(self):
+        with mock.patch.object(facts, "role_node", wraps=facts.role_node) as resolve:
+            doc = self.facts()
+
+        self.assertGreater(len(doc.analyses), 2)
+        resolved = [c.args for c in resolve.call_args_list]
+        self.assertEqual(resolved.count(facts.ROLES["statement_type"]), 2)
 
     def test_an_unknown_or_unreadable_document_has_no_facts(self):
         self.assertIsNone(
