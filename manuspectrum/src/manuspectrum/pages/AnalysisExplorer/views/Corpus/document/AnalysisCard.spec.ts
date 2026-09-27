@@ -348,6 +348,19 @@ describe("AnalysisCard", () => {
         expect(download.text()).toContain("Download the view");
     });
 
+    it("offers no download of the view outside a web address", async () => {
+        const state = contentStateLink(uuid(101), uuid(901));
+        const payload = analysisPayload({
+            contentStates: [{ ...state, download: "javascript:alert(1)" }],
+        });
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            feature: uuid(901),
+        });
+        await flushPromises();
+
+        expect(wrapper.find("a.download-view").exists()).toBe(false);
+    });
+
     it("opens Mirador with the content state when a viewer is set", async () => {
         const payload = analysisPayload();
         const state = payload.contentStates[0];

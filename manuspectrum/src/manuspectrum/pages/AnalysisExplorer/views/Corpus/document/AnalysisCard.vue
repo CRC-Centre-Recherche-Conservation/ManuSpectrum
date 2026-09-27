@@ -179,6 +179,7 @@ const contentState = computed(() =>
           ) ?? null
         : null,
 );
+const downloadHref = computed(() => safeHref(contentState.value?.download));
 const miradorHref = computed(() =>
     contentState.value
         ? miradorLink(miradorUrl, { contentState: contentState.value.url })
@@ -547,9 +548,10 @@ function focusHeading(): void {
                         :label="$gettext('Copy the IIIF link')"
                     />
                     <a
+                        v-if="downloadHref"
                         class="download-view"
                         download
-                        :href="contentState.download"
+                        :href="downloadHref"
                     >
                         <span>{{ $gettext("Download the view") }}</span>
                     </a>
