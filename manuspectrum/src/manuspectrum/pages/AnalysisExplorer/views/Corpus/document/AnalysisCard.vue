@@ -171,26 +171,26 @@ const attribution = computed(() => {
 });
 /** The Arches report of the analysis on this site, opened in a new tab. */
 const reportHref = computed(() => safeHref(analysis.value?.reportUrl));
-/** The published Content State of the focused zone; null when the analysis has none for it. */
-const contentState = computed(() =>
-    props.feature
+/**
+ * The IIIF links of the focused zone's published Content State: the link to
+ * copy (`contentStateLink`), its download and Mirador; null when the analysis
+ * has no state for the zone.
+ */
+const zoneLinks = computed(() => {
+    const state = props.feature
         ? analysis.value?.contentStates.find(
-              (state) => state.feature === props.feature,
-          ) ?? null
-        : null,
-);
-const downloadHref = computed(() => safeHref(contentState.value?.download));
-const miradorHref = computed(() =>
-    contentState.value
-        ? miradorLink(miradorUrl, { contentState: contentState.value.url })
-        : null,
-);
-/** The IIIF link of the zone to copy (`contentStateLink`). */
-const iiifLink = computed(() =>
-    contentState.value
-        ? contentStateLink(miradorUrl, contentState.value.url)
-        : "",
-);
+              (entry) => entry.feature === props.feature,
+          )
+        : undefined;
+    if (!state) {
+        return null;
+    }
+    return {
+        iiif: contentStateLink(miradorUrl, state.url),
+        download: safeHref(state.download),
+        mirador: miradorLink(miradorUrl, { contentState: state.url }),
+    };
+});
 
 function previewOf(file: FileEntry): Component {
     const entry = viewerFor(file.dataKind);
@@ -540,27 +540,27 @@ function focusHeading(): void {
                     :label="$gettext('Copy the data availability statement')"
                 />
                 <div
-                    v-if="contentState"
+                    v-if="zoneLinks"
                     class="iiif"
                 >
                     <CopyButton
-                        :text="iiifLink"
+                        :text="zoneLinks.iiif"
                         :label="$gettext('Copy the IIIF link')"
                     />
                     <a
-                        v-if="downloadHref"
+                        v-if="zoneLinks.download"
                         class="download-view"
                         download
-                        :href="downloadHref"
+                        :href="zoneLinks.download"
                     >
                         <span>{{ $gettext("Download the view") }}</span>
                     </a>
                     <a
-                        v-if="miradorHref"
+                        v-if="zoneLinks.mirador"
                         class="mirador"
                         rel="noopener"
                         target="_blank"
-                        :href="miradorHref"
+                        :href="zoneLinks.mirador"
                     >
                         <span>{{ $gettext("Open in Mirador") }}</span>
                         <span class="visually-hidden">{{
