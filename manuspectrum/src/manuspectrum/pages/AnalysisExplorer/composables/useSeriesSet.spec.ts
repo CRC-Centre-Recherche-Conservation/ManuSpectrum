@@ -124,6 +124,43 @@ describe("useSeriesSet", () => {
         scope.stop();
     });
 
+    it("asks again only for the files that failed on retry, keeping those read", async () => {
+        let down = true;
+        const fetchMock = vi.fn(async (url: string) =>
+            url.includes("/a-") && down
+                ? jsonResponse({}, 503)
+                : jsonResponse(SERIES),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        for (const points of [4096, "full"] as const) {
+            down = true;
+            fetchMock.mockClear();
+            const scope = effectScope();
+            const urls = [
+                `/api/spectrum-preview/a-${points}`,
+                `/api/spectrum-preview/b-${points}`,
+            ];
+            const handle = scope.run(() => useSeriesSet(() => urls, points))!;
+            await flushPromises();
+            expect(handle.data.value?.map((result) => result.failed)).toEqual([
+                true,
+                false,
+            ]);
+            down = false;
+            fetchMock.mockClear();
+            handle.retry();
+            await flushPromises();
+            expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+                `/api/spectrum-preview/a-${points}?n=${points}`,
+            ]);
+            expect(handle.data.value?.map((result) => result.series)).toEqual([
+                SERIES,
+                SERIES,
+            ]);
+            scope.stop();
+        }
+    });
+
     it("stays idle without a file", async () => {
         const fetchMock = vi.fn();
         vi.stubGlobal("fetch", fetchMock);
