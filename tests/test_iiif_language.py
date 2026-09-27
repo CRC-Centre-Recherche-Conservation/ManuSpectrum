@@ -11,6 +11,7 @@ import polib
 from django.conf import settings
 from django.core.management import get_commands, load_command_class
 from django.test import SimpleTestCase, override_settings
+from django.utils.autoreload import file_changed
 
 from manuspectrum.iiif import language
 
@@ -50,15 +51,25 @@ class LanguageMapTests(SimpleTestCase):
         )
 
     def test_a_msgid_is_translated_once_per_process(self):
+        language._translated.cache_clear()
         with mock.patch.object(
             language, "gettext", wraps=language.gettext
         ) as translate:
             renders = [language.gettext_map("Operators") for _ in range(3)]
 
         self.assertEqual(renders[0], renders[2])
-        self.assertLessEqual(translate.call_count, len(language.languages()))
+        self.assertEqual(translate.call_count, len(language.languages()))
         renders[0]["en"].append("changed")
         self.assertEqual(language.gettext_map("Operators")["en"], ["Operators"])
+
+    def test_a_changed_catalogue_file_drops_the_translations(self):
+        language.gettext_map("Operators")
+        file_changed.send(sender=None, file_path=Path("views.py"))
+        self.assertGreater(language._translated.cache_info().currsize, 0)
+
+        file_changed.send(sender=None, file_path=Path("locale/fr/django.mo"))
+
+        self.assertEqual(language._translated.cache_info().currsize, 0)
 
     @override_settings(LANGUAGES=[("fr", "French")])
     def test_a_language_setting_change_renders_the_new_languages(self):

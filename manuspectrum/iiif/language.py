@@ -4,7 +4,8 @@ A language map is ``{language: [text, …]}``. Keys are the BCP 47 codes the
 value was stored under; a value stored without a language goes under
 ``none``; a language is never guessed. Interface strings are rendered in every
 language of ``settings.LANGUAGES``, each translation looked up once per
-process (``_translated``), as Django keeps its catalogs. The v2 form
+process (``_translated``) until Django drops its catalogs: a changed ``.mo``
+under the development server, or a translation setting changed in tests. The v2 form
 (Presentation 2.1 §4.3) is a list of ``{"@value", "@language"}`` objects.
 """
 
@@ -14,6 +15,7 @@ from django.conf import settings
 from django.core.signals import setting_changed
 from django.dispatch import receiver
 from django.utils import translation
+from django.utils.autoreload import file_changed
 from django.utils.translation import gettext, ngettext
 
 LanguageMap = dict[str, list[str]]
@@ -96,6 +98,13 @@ def _translated(codes, msgid, plural=None, number=None):
 def _catalogs_changed(setting, **kwargs):
     """Drop the translations when a setting Django resets its catalogs on changes (tests)."""
     if setting in {"LANGUAGES", "LANGUAGE_CODE", "LOCALE_PATHS"}:
+        _translated.cache_clear()
+
+
+@receiver(file_changed)
+def _catalog_file_changed(file_path, **kwargs):
+    """Drop the translations when the development server sees a ``.mo`` change; the reload decision stays Django's."""
+    if file_path.suffix == ".mo":
         _translated.cache_clear()
 
 
