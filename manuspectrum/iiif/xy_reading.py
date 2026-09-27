@@ -19,7 +19,9 @@ xyviewer's header rules (``csv_header``).
 
 ``context_document`` is the JSON-LD 1.1 context of the extension, served at
 ``ids.xy_context()``; its terms live in the namespace ``ids.xy_doc() + "#"``,
-the documentation page.
+the documentation page. Inside ``xyReading`` it defines ``id``, ``type``,
+``label`` and ``Dataset`` as Presentation 3 does, so the extension reads the
+same under the Presentation 2 context.
 """
 
 import re
@@ -236,6 +238,14 @@ def context_document():
             "xyReading": {
                 "@id": "ms_xy:xyReading",
                 "@context": {
+                    "id": "@id",
+                    "type": "@type",
+                    "label": {
+                        "@id": "http://www.w3.org/2000/01/rdf-schema#label",
+                        "@container": ["@language", "@set"],
+                        "@context": {"none": "@none"},
+                    },
+                    "Dataset": "http://purl.org/dc/dcmitype/Dataset",
                     "XYReading": "ms_xy:XYReading",
                     "dialect": {
                         "@id": "csvw:dialect",

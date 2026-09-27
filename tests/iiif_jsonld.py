@@ -11,6 +11,8 @@ Vendored contexts (``tests/fixtures/iiif/``), fetched on 2026-09-27:
 - ``anno-context.json`` — http://www.w3.org/ns/anno.jsonld (the Web Annotation
   context Presentation 3 scopes on ``Annotation``), fetched on 2026-09-27,
   sha256 c10fd886c5c726fbfd51747b8677eb8f7d02c039357269622de7382e5c20d410
+- ``presentation-2-context.json`` — http://iiif.io/api/presentation/2/context.json,
+  sha256 7068df34790f018db679928bfbc492d9af36c22b05902c46a7c91a19272701cb
 
 The processor is PyLD 1.0.5, the version Arches pins. It resolves every
 nested context URL before expanding and refuses the Presentation 3 context
@@ -20,7 +22,8 @@ Presentation 3 terms are left untouched is checked on the vendored context's
 terms instead. ``expand_presentation`` expands a Presentation 3 document under
 the vendored Presentation 3 and Web Annotation contexts, every other context
 it names (Image, Search, Auth, selector registry) read as empty: the terms
-those define do not expand.
+those define do not expand. ``expand_v2`` expands a Presentation 2 document
+under the vendored Presentation 2 context and ours, which PyLD reads whole.
 """
 
 import json
@@ -65,7 +68,9 @@ ANNOTATION = "http://www.w3.org/ns/anno.jsonld"
 
 
 def presentation_loader(url, options=None):
-    """PyLD document loader serving the vendored Presentation 3 and Web Annotation contexts; any other is empty."""
+    """PyLD document loader serving ours and the vendored Presentation 3 and Web Annotation contexts; any other is empty."""
+    if url == ids.xy_context():
+        return loader(url)
     documents = {
         PRESENTATION_3: "presentation-3-context.json",
         ANNOTATION: "anno-context.json",
@@ -76,3 +81,21 @@ def presentation_loader(url, options=None):
 
 def expand_presentation(document):
     return jsonld.expand(document, {"documentLoader": presentation_loader})
+
+
+PRESENTATION_2 = "http://iiif.io/api/presentation/2/context.json"
+
+
+def v2_loader(url, options=None):
+    """PyLD document loader serving ours and the vendored Presentation 2 context, nothing else."""
+    if url == PRESENTATION_2:
+        return {
+            "contextUrl": None,
+            "documentUrl": url,
+            "document": vendored("presentation-2-context.json"),
+        }
+    return loader(url)
+
+
+def expand_v2(document):
+    return jsonld.expand(document, {"documentLoader": v2_loader})

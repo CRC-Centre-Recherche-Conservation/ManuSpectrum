@@ -9,7 +9,8 @@ import json
 from django.test import SimpleTestCase, TestCase
 
 from manuspectrum.constants.xy_presets import XY_PRESETS
-from manuspectrum.iiif import ids, xy_reading
+from manuspectrum.iiif import ids, v2, xy_reading
+from manuspectrum.iiif.pages import with_context
 from tests import iiif_jsonld
 from tests.test_iiif_xy_reading import SCHEMA, raw_file
 
@@ -77,6 +78,82 @@ class ContextTests(SimpleTestCase):
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
 
         self.assertEqual(schema["$schema"], "http://json-schema.org/draft-07/schema#")
+
+
+OA = "http://www.w3.org/ns/oa#"
+RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
+PROV = "http://www.w3.org/ns/prov#wasDerivedFrom"
+
+
+def annotation():
+    """A v3 annotation holding a Dataset body with its ``xyReading`` and a concept body."""
+    reading = xy_reading.xy_reading(raw_file(), XY_PRESETS["fors"]["config"])
+    return with_context(
+        {
+            "id": ids.annotation("a1", "f1"),
+            "type": "Annotation",
+            "motivation": "supplementing",
+            "body": [
+                {
+                    "id": ids.data_series("f"),
+                    "type": "Dataset",
+                    "format": "text/csv",
+                    "xyReading": reading,
+                },
+                {
+                    "type": "SpecificResource",
+                    "purpose": "classifying",
+                    "source": {
+                        "id": "http://vocab.getty.edu/aat/300013526",
+                        "label": {"en": ["vermilion"]},
+                    },
+                },
+            ],
+            "target": "https://ms.example/canvas/1",
+        }
+    )
+
+
+class DocumentExpansionTests(SimpleTestCase):
+    def assert_reading_survives(self, extension):
+        self.assertEqual(extension["@type"], [NS + "XYReading"])
+        (axis,) = extension[NS + "xAxis"]
+        self.assertIn(
+            {"@value": "Wavelength (nm)", "@language": "en"}, axis[RDFS_LABEL]
+        )
+        (derived,) = extension[PROV]
+        self.assertEqual(derived["@id"], ids.data_raw(raw_file().id))
+        self.assertEqual(derived["@type"], ["http://purl.org/dc/dcmitype/Dataset"])
+        self.assertIn(
+            {"@value": "S.csv, raw file", "@language": "en"}, derived[RDFS_LABEL]
+        )
+
+    def test_a_v3_annotation_expands_under_ours_and_presentation_3(self):
+        document = annotation()
+        self.assertEqual(
+            document["@context"], [ids.xy_context(), iiif_jsonld.PRESENTATION_3]
+        )
+
+        (node,) = iiif_jsonld.expand_presentation(document)
+
+        dataset = next(b for b in node[OA + "hasBody"] if NS + "xyReading" in b)
+        (extension,) = dataset[NS + "xyReading"]
+        self.assert_reading_survives(extension)
+
+    def test_a_v2_annotation_expands_under_ours_and_presentation_2(self):
+        document = v2.annotation(annotation())
+        self.assertEqual(
+            document["@context"], [ids.xy_context(), iiif_jsonld.PRESENTATION_2]
+        )
+
+        (node,) = iiif_jsonld.expand_v2(document)
+
+        resources = node["http://www.w3.org/ns/oa#hasBody"]
+        dataset = next(r for r in resources if NS + "xyReading" in r)
+        (extension,) = dataset[NS + "xyReading"]
+        self.assert_reading_survives(extension)
+        concept = next(r for r in resources if OA + "hasPurpose" in r)
+        self.assertEqual(concept[OA + "hasPurpose"], [{"@id": OA + "classifying"}])
 
 
 class RouteTests(TestCase):

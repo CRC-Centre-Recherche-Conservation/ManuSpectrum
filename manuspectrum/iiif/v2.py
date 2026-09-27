@@ -3,7 +3,8 @@
 The v2 routes carry the same content as v3: every language of a label or a
 metadata value as ``{"@value", "@language"}`` lists (``language.to_v2``), the
 same bodies (``dctypes:Dataset``, ``dctypes:Image``, ``sc:Manifest``,
-``cnt:ContentAsText``, ``oa:SpecificResource`` with ``oa:hasPurpose``), the
+``cnt:ContentAsText``, ``oa:SpecificResource`` with ``oa:hasPurpose`` as
+``{"@id": "oa:<purpose>"}``), the
 same motivations (``supplementing`` becomes ``oa:commenting``, any other
 ``oa:<motivation>``) and any ``xyReading`` of a body unchanged. A resource
 declaring services declares the Auth 1.0 block (``services.v2_auth1_block``);
@@ -45,6 +46,11 @@ def _motivation(motivation):
     return "oa:commenting" if motivation == "supplementing" else f"oa:{motivation}"
 
 
+def _purpose(purpose):
+    """``oa:hasPurpose`` as a node reference: the Presentation 2 context gives the term no type."""
+    return {"@id": _motivation(purpose)}
+
+
 def _labelled(target, v3, keys=("label",)):
     for key in keys:
         if v3.get(key):
@@ -61,7 +67,7 @@ def _resource(body):
             if body.get(key):
                 resource[key] = body[key]
         if body.get("purpose"):
-            resource["oa:hasPurpose"] = _motivation(body["purpose"])
+            resource["oa:hasPurpose"] = _purpose(body["purpose"])
         return resource
     if kind == "SpecificResource":
         source = body.get("source")
@@ -72,7 +78,7 @@ def _resource(body):
         _labelled(full, source if source.get("label") else body)
         resource = {"@type": "oa:SpecificResource", "full": full}
         if body.get("purpose"):
-            resource["oa:hasPurpose"] = _motivation(body["purpose"])
+            resource["oa:hasPurpose"] = _purpose(body["purpose"])
         return resource
     resource = {"@id": ids.as_version(body.get("id"), 2)}
     if kind:

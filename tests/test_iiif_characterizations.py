@@ -336,11 +336,11 @@ class V2Tests(CharacterizationCase):
             r for r in annotation["resource"] if r["@type"] == "oa:SpecificResource"
         ]
         vermilion = next(c for c in concepts if c["full"]["@id"] == AAT_VERMILION)
-        self.assertEqual(vermilion["oa:hasPurpose"], "oa:classifying")
+        self.assertEqual(vermilion["oa:hasPurpose"], {"@id": "oa:classifying"})
         self.assertIn(
             {"@value": "vermillon", "@language": "fr"}, vermilion["full"]["label"]
         )
-        linking = [c for c in concepts if c["oa:hasPurpose"] == "oa:linking"]
+        linking = [c for c in concepts if c["oa:hasPurpose"] == {"@id": "oa:linking"}]
         self.assertTrue(linking)
         self.assertTrue(
             all(

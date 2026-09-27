@@ -168,16 +168,16 @@ class V2ConverterTests(SimpleTestCase):
                 "chars": "vermillon",
                 "format": "text/plain",
                 "language": "fr",
-                "oa:hasPurpose": "oa:describing",
+                "oa:hasPurpose": {"@id": "oa:describing"},
             },
         )
         self.assertEqual(concept["@type"], "oa:SpecificResource")
-        self.assertEqual(concept["oa:hasPurpose"], "oa:classifying")
+        self.assertEqual(concept["oa:hasPurpose"], {"@id": "oa:classifying"})
         self.assertEqual(concept["full"]["@id"], "http://vocab.getty.edu/aat/300013526")
         self.assertEqual(
             concept["full"]["label"], [{"@value": "vermilion", "@language": "en"}]
         )
-        self.assertEqual(link["oa:hasPurpose"], "oa:linking")
+        self.assertEqual(link["oa:hasPurpose"], {"@id": "oa:linking"})
         self.assertEqual(
             link["full"],
             {"@id": ids.annotation("a1", "f1", 2), "@type": "oa:Annotation"},
