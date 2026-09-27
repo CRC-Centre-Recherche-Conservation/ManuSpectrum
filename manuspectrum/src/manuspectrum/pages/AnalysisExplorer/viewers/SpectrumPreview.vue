@@ -69,6 +69,18 @@ const curves = computed<Curve[]>(() =>
     }),
 );
 const xReversed = computed(() => curves.value[0]?.series.x_reversed ?? false);
+/**
+ * The axis titles of the chart: the first stored title among `file` and the
+ * spectra drawn with it; their configurations may title a shared axis
+ * differently.
+ */
+const titles = computed(() => {
+    const drawn = [props.file, ...curves.value.map((curve) => curve.file)];
+    return {
+        x: drawn.map((entry) => entry.viewer.xLabel).find(Boolean) ?? "",
+        y: drawn.map((entry) => entry.viewer.yLabel).find(Boolean) ?? "",
+    };
+});
 const notes = computed(() =>
     (results.data.value ?? []).flatMap((result, index) => {
         const file = files.value[index];
@@ -183,8 +195,8 @@ async function draw(): Promise<void> {
             })),
             plotLayout(theme, {
                 lang,
-                xTitle: props.file.viewer.xLabel ?? "",
-                yTitle: props.file.viewer.yLabel ?? "",
+                xTitle: titles.value.x,
+                yTitle: titles.value.y,
                 xReversed: xReversed.value,
                 legend: curves.value.length > 1,
             }),

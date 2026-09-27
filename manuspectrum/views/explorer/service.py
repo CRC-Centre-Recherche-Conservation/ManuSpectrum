@@ -1908,7 +1908,6 @@ def imaging_entries(analysis_id, manifest_values, language, read=None):
                     "xLabel": None,
                     "yLabel": None,
                     "axisKey": None,
-                    "axisTitle": None,
                     "points": None,
                     "decimated": False,
                 },

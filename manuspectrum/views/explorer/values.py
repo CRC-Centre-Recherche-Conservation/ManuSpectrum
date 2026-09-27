@@ -210,15 +210,6 @@ def axis_key(config):
     return f"{y}|{x}|{'desc' if display.get('xReversed') else 'asc'}"
 
 
-def axis_title(config):
-    """``{"value", "lang"}`` naming the axes of a configuration (preset labels are English)."""
-    display = _display(config)
-    x, y = display.get("xAxisLabel"), display.get("yAxisLabel")
-    if not x and not y:
-        return None
-    return {"value": " · ".join(t for t in (y, x) if t), "lang": FALLBACK_LANGUAGE}
-
-
 _SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 _WEB_SCHEMES = ("http", "https")
 
@@ -293,6 +284,7 @@ def file_entries(entries, *, language, configs, kind):
         else:
             data_kind = "xy" if role == "readable" else "file"
         file_id = str(entry["file_id"])
+        x_label, y_label = axes(config)
         items.append(
             {
                 "id": file_id,
@@ -306,10 +298,9 @@ def file_entries(entries, *, language, configs, kind):
                 "dataKind": data_kind,
                 "viewer": {
                     "rendererConfigId": config_id,
-                    "xLabel": (axes(config)[0] or None) if config else None,
-                    "yLabel": (axes(config)[1] or None) if config else None,
+                    "xLabel": x_label or None,
+                    "yLabel": y_label or None,
                     "axisKey": axis_key(config) if config else None,
-                    "axisTitle": axis_title(config) if config else None,
                     "points": None,
                     "decimated": False,
                 },

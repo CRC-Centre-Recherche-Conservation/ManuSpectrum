@@ -253,7 +253,6 @@ export interface FileEntry {
         xLabel: string | null;
         yLabel: string | null;
         axisKey: string | null;
-        axisTitle: Label | null;
         points: number | null;
         decimated: boolean;
     };
