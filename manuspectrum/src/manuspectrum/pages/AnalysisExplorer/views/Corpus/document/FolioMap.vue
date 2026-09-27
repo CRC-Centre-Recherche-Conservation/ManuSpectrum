@@ -9,11 +9,9 @@ import {
 } from "vue";
 import { usePreferredReducedMotion, useResizeObserver } from "@vueuse/core";
 import L from "leaflet";
-import "leaflet-iiif";
 import "leaflet.markercluster";
 import "leaflet-side-by-side";
 import { useGettext } from "vue3-gettext";
-import { infoJsonUrl } from "utils/iiif-image";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
 
 import {
@@ -25,6 +23,10 @@ import {
     curtainable,
     overlayPane,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import {
+    fitPage,
+    layPage,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     nextId,
     offsetInside,
@@ -43,6 +45,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type {
     Focus,
@@ -66,13 +69,6 @@ const PINNED_PANE = "folio-pinned";
 // Above Leaflet's marker pane (600), below its tooltips (650).
 const PINNED_PANE_Z_INDEX = "620";
 const MARKER_PANE = "markerPane";
-
-/** The leaflet-iiif 3.0.0 state the folio reads: the info.json request, the image sizes it yields, the tile container. */
-type IiifLayer = L.TileLayer & {
-    _infoPromise?: Promise<unknown> | null;
-    _imageSizes?: unknown[];
-    _container?: HTMLElement;
-};
 
 const props = withDefaults(
     defineProps<{
@@ -107,7 +103,7 @@ const pageFailed = ref(false);
 const failedOverlays = ref<ReadonlySet<string>>(new Set());
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
-let page: IiifLayer | null = null;
+let page: PageLayer | null = null;
 let cluster: L.MarkerClusterGroup | null = null;
 // The open analysis or sample and the lit evidence: drawn above the groups, never inside one.
 let pinned: L.LayerGroup | null = null;
@@ -175,6 +171,8 @@ onMounted(() => {
 useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 
 onBeforeUnmount(() => {
+    page?.remove();
+    page = null;
     sideBySide?.remove();
     sideBySide = null;
     images.clear();
@@ -365,39 +363,19 @@ function ensureHatch(): void {
 }
 
 /**
- * Lays the page's IIIF image once leaflet-iiif has read its info.json, if the
- * page is still the one shown. leaflet-iiif lays its tiles only after that
- * read (never, when the image host refuses it), and GridLayer.onRemove throws
- * on a layer whose tiles are not laid: an unread page never reaches the map,
- * and a page removed in the instant between its addition and its tiles is
- * dropped without calling GridLayer.onRemove. An info.json that cannot be
- * read leaves the markers on the bare stage and says so (`pageFailed`).
+ * Lays the page's IIIF image (`layPage`); an info.json that cannot be read
+ * leaves the markers on the bare stage and says so (`pageFailed`).
  */
 function drawPage(): void {
     if (!map) return;
-    if (page && map.hasLayer(page)) map.removeLayer(page);
+    page?.remove();
     page = null;
     pageFailed.value = false;
     const service = props.canvas?.image.service;
     if (!service) return;
-    const next = L.tileLayer.iiif(infoJsonUrl(service), {
-        fitBounds: true,
-        setMaxBounds: false,
-    }) as IiifLayer;
-    const onRemove = next.onRemove;
-    next.onRemove = (from: L.Map) =>
-        next._container ? onRemove.call(next, from) : next;
-    page = next;
-    void Promise.resolve(next._infoPromise).then(
-        () => {
-            if (!map || page !== next) return;
-            if (next._imageSizes) map.addLayer(next);
-            else pageFailed.value = true;
-        },
-        () => {
-            if (page === next) pageFailed.value = true;
-        },
-    );
+    page = layPage(map, service, () => {
+        pageFailed.value = true;
+    });
 }
 
 /** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
@@ -829,10 +807,8 @@ function zoomOut(): void {
 
 function wholePage(): void {
     openedGroup = null;
-    if (page && map?.hasLayer(page) && "_fitBounds" in page) {
-        // leaflet-iiif fits the whole image with this private method.
-        (page as unknown as { _fitBounds: () => void })._fitBounds();
-    } else if (markers.size > 0) {
+    if (map && fitPage(map, page)) return;
+    if (markers.size > 0) {
         map?.fitBounds(
             L.featureGroup([...markers.values()])
                 .getBounds()
