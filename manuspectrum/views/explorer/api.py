@@ -59,6 +59,7 @@ from manuspectrum.views.explorer.service import (
     search_payload,
     wants_facets,
 )
+from manuspectrum.views.iiif.cors import iiif_cors
 
 HOME_DAY_MARGIN = datetime.timedelta(days=1)
 
@@ -293,6 +294,7 @@ class ExplorerShareView(View):
         return _answer(request, lambda: share_payload(scope, datetime.date.today()))
 
 
+@method_decorator(iiif_cors, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerManifestView(View):
     """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all]``: the IIIF v3 manifest of a scope, in every language.

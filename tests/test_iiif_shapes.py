@@ -16,11 +16,17 @@ LANGUAGE_MAP_KEYS = ("label", "summary")
 
 
 def language_maps(node, path=""):
-    """``(path, value)`` of every ``label``/``summary`` and every metadata label/value in *node*."""
+    """``(path, value)`` of every ``label``/``summary`` and every metadata label/value in *node*.
+
+    An IIIF Auth 1.0 service (``@type`` ``Auth…1``) is skipped: Auth 1.0 has
+    plain-string labels.
+    """
     if isinstance(node, list):
         for i, item in enumerate(node):
             yield from language_maps(item, f"{path}/{i}")
     elif isinstance(node, dict):
+        if str(node.get("@type", "")).startswith("Auth"):
+            return
         for key, value in node.items():
             if key in LANGUAGE_MAP_KEYS or (
                 key == "value" and "label" in node and "type" not in node

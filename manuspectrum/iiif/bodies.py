@@ -7,7 +7,8 @@ its ``xyReading``. Any other measurement file is a ``Dataset`` body at its
 (``data.media_type``), carrying the reading of its raw columns when it is a
 supported text format with a renderer configuration. A micro-imaging file is
 an ``Image`` body at its raw route; an imaging manifest is a ``Manifest``
-body. A licence in a rights registry is ``rights``; any other is a
+body. Every body served by a data route declares the Auth 1.0 and 2.0
+services (``services.dataset_services``). A licence in a rights registry is ``rights``; any other is a
 ``requiredStatement`` naming it (with its attribution); an attribution under
 a registry licence is a ``requiredStatement`` too.
 """
@@ -17,7 +18,7 @@ from manuspectrum.constants.licenses import (
     effective_license,
     iiif_rights,
 )
-from manuspectrum.iiif import ids
+from manuspectrum.iiif import ids, services
 from manuspectrum.iiif import language as lang
 from manuspectrum.iiif.data import clean_series_available
 from manuspectrum.iiif.xy_reading import raw_label, raw_reading, xy_reading
@@ -63,6 +64,7 @@ def file_body(file):
             "label": lang.gettext_map("%(file)s, series", file=file.name),
         }
         body.update(licence_fields(file.entry))
+        body["service"] = services.dataset_services(file.id)
         body["xyReading"] = xy_reading(file, file.config)
         return body
     body = {
@@ -72,6 +74,7 @@ def file_body(file):
         "label": raw_label(file),
     }
     body.update(licence_fields(file.entry))
+    body["service"] = services.dataset_services(file.id)
     if file.kind == "measurement" and file.config and is_supported(file.name):
         body["xyReading"] = raw_reading(file.config)
     return body

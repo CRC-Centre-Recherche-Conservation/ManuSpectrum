@@ -1,0 +1,21 @@
+{% load i18n %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}<html lang="{{ LANGUAGE_CODE }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <title>{% trans "ManuSpectrum IIIF access token" %}</title>
+</head>
+<body>
+{{ message|json_script:"iiif-auth-message" }}
+{{ target|json_script:"iiif-auth-origin" }}
+<script>
+(function () {
+  var message = JSON.parse(document.getElementById("iiif-auth-message").textContent);
+  var origin = JSON.parse(document.getElementById("iiif-auth-origin").textContent);
+  if (origin && window.parent && window.parent !== window) {
+    window.parent.postMessage(message, origin);
+  }
+})();
+</script>
+</body>
+</html>

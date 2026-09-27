@@ -818,6 +818,23 @@ IIIF_PAGE_FILTER_MAX = 100
 # the data version and the permission epoch.
 IIIF_MEMO_TTL = 24 * 60 * 60
 
+# IIIF Auth 1.0 / 2.0 (manuspectrum/iiif/tokens.py). A IIIF token is a
+# read-only credential for the /iiif/ read routes, bound to the Arches session
+# that minted it and to one viewer origin; it lives IIIF_AUTH_TOKEN_TTL
+# seconds. The access cookie (Path=/iiif/auth/) lives at most
+# IIIF_AUTH_COOKIE_TTL seconds and never beyond the session.
+IIIF_AUTH_TOKEN_TTL = 3600
+IIIF_AUTH_COOKIE_TTL = 8 * 3600
+# Viewer origins the token service answers, besides the origin of
+# PUBLIC_SERVER_ADDRESS (always trusted). Never "*".
+IIIF_AUTH_TRUSTED_ORIGINS = ["https://crc-centre-recherche-conservation.github.io"]
+# Token requests per client IP (django-ratelimit); over it: « unavailable ».
+IIIF_AUTH_TOKEN_RATE = "30/m"
+# django-cors-headers leaves /iiif/ alone: every IIIF view answers its own
+# CORS (Access-Control-Allow-Origin: *, preflight with Authorization, on
+# every status) and the auth pages answer none.
+CORS_URLS_REGEX = r"^(?!/iiif/).*$"
+
 try:
     from .package_settings import *
 except ImportError:

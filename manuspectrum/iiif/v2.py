@@ -5,7 +5,9 @@ metadata value as ``{"@value", "@language"}`` lists (``language.to_v2``), the
 same bodies (``dctypes:Dataset``, ``dctypes:Image``, ``sc:Manifest``,
 ``cnt:ContentAsText``, ``oa:SpecificResource`` with ``oa:hasPurpose``), the
 same motivations (``supplementing`` becomes ``oa:commenting``, any other
-``oa:<motivation>``) and any ``xyReading`` of a body unchanged. Our ids move
+``oa:<motivation>``) and any ``xyReading`` of a body unchanged. A resource
+declaring services declares the Auth 1.0 block (``services.v2_auth1_block``);
+Auth 2.0 has no Presentation 2 form and its context is dropped. Our ids move
 from ``iiif/v3/`` to ``iiif/v2/``. A target becomes ``on``: the canvas, a
 ``#xywh=`` fragment of it for a rectangle, or an ``oa:Choice`` of the bounding
 box (``default``) and the SVG (``item``) for a point or a polygon, which
@@ -14,7 +16,7 @@ Mirador 4 reads (``AnnotationResource.js``).
 
 from django.conf import settings
 
-from manuspectrum.iiif import ids
+from manuspectrum.iiif import ids, services
 from manuspectrum.iiif.constants import PRESENTATION_2, PRESENTATION_3
 from manuspectrum.iiif.language import to_v2
 
@@ -32,7 +34,9 @@ def _context(v3):
     """The v2 ``@context``: the extension contexts the v3 document lists, then Presentation 2."""
     context = v3.get("@context")
     extra = [
-        c for c in (context if isinstance(context, list) else []) if c != PRESENTATION_3
+        c
+        for c in (context if isinstance(context, list) else [])
+        if c not in (PRESENTATION_3, services.AUTH2_CONTEXT)
     ]
     return [*extra, PRESENTATION_2] if extra else PRESENTATION_2
 
@@ -84,7 +88,7 @@ def _resource(body):
     if "xyReading" in body:
         resource["xyReading"] = body["xyReading"]
     if body.get("service"):
-        resource["service"] = body["service"]
+        resource["service"] = services.v2_auth1_block()
     return resource
 
 
@@ -170,6 +174,8 @@ def page(v3):
         converted["within"] = _labelled(
             {"@id": ids.as_version(part_of["id"], 2), "@type": "sc:Layer"}, part_of
         )
+    if v3.get("service"):
+        converted["service"] = services.v2_auth1_block()
     converted["resources"] = [annotation(a, context=False) for a in v3.get("items", [])]
     return converted
 
@@ -182,6 +188,8 @@ def layer(v3_collection, page_ids):
         "@type": "sc:Layer",
     }
     _labelled(converted, v3_collection)
+    if v3_collection.get("service"):
+        converted["service"] = services.v2_auth1_block()
     if page_ids:
         converted["otherContent"] = [ids.as_version(p, 2) for p in page_ids]
     return converted

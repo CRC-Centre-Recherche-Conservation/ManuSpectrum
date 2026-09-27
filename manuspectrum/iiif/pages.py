@@ -7,7 +7,8 @@ a page restricted by *only* carries neither. The collection has no ``items``:
 ``first`` and ``last`` reference its first and last non-empty pages and
 ``total`` counts its annotations (left out at zero). A top-level document
 carries ``@context`` (``with_context``); an embedded page (*embed*) carries
-none.
+none. Every page and collection declares the Auth 1.0 service
+(``services.auth1_block``), the same for every reader.
 
 *kind* ``analysis`` pages hold the analyses (``supplementing``),
 ``characterization`` pages the identified materials (``classifying``); each
@@ -15,7 +16,7 @@ kind is its own collection. ``page_reference`` names a page without its
 items, as a manifest's canvas lists it.
 """
 
-from manuspectrum.iiif import ids
+from manuspectrum.iiif import ids, services
 from manuspectrum.iiif import language as lang
 from manuspectrum.iiif.annotations import analysis_annotation
 from manuspectrum.iiif.characterizations import characterization_annotation
@@ -38,13 +39,24 @@ def _mentions(node, key):
     return False
 
 
+def _typed(node, type_):
+    if isinstance(node, dict):
+        return node.get("type") == type_ or any(_typed(v, type_) for v in node.values())
+    if isinstance(node, list):
+        return any(_typed(v, type_) for v in node)
+    return False
+
+
 def with_context(document):
     """*document* opened by its ``@context``: extension contexts first, Presentation 3 last (P3 §4.6).
 
     The xy-reading context is listed when an ``xyReading`` appears in the
-    document; alone, Presentation 3 is a plain string.
+    document, the Auth 2.0 context when an ``AuthProbeService2`` does; alone,
+    Presentation 3 is a plain string.
     """
     contexts = [ids.xy_context()] if _mentions(document, "xyReading") else []
+    if _typed(document, "AuthProbeService2"):
+        contexts.append(services.AUTH2_CONTEXT)
     body = {k: v for k, v in document.items() if k != "@context"}
     return {
         "@context": [*contexts, PRESENTATION_3] if contexts else PRESENTATION_3,
@@ -135,6 +147,7 @@ def annotation_page(doc, n, kind="analysis", *, only=None, embed=False):
                 "id": ids.page(doc.document_id, after[0], kind),
                 "type": "AnnotationPage",
             }
+    page["service"] = [services.auth1_block()]
     page["items"] = pages.get(n, [])
     return page if embed else with_context(page)
 
@@ -152,6 +165,7 @@ def annotation_collection(doc, kind="analysis"):
         "type": "AnnotationCollection",
         "label": collection_label(doc, kind),
     }
+    collection["service"] = [services.auth1_block()]
     total = sum(len(items) for items in pages.values())
     if total:
         numbers = sorted(pages)

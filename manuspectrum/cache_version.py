@@ -44,7 +44,8 @@ CACHE_SHAPE_MODULES = (
     "iiif/sources.py",
     "iiif/zones.py",
     # The memoised IIIF pages, collections and annotations: facts, bodies,
-    # annotations, pages, their v2 form, the memo key and the view wrapping.
+    # annotations, pages, their v2 form, the auth services they declare, the
+    # memo key and the view wrapping.
     "iiif/facts.py",
     "iiif/bodies.py",
     "iiif/annotations.py",
@@ -55,6 +56,7 @@ CACHE_SHAPE_MODULES = (
     "iiif/pages.py",
     "iiif/v2.py",
     "iiif/memo.py",
+    "iiif/services.py",
     "views/iiif/annotations.py",
     # The memoised Content State of one zone.
     "iiif/content_state.py",

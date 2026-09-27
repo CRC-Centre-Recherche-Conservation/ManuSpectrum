@@ -6,8 +6,8 @@ when the reader's ``visible_set`` digest equals the visitor's (same visible
 resources, hidden resources, readable nodegroups and models) and the
 response renews no CSRF cookie. That answer is ``public, no-cache`` with a
 strong ETag derived from the key, and an ``If-None-Match`` naming it gets a
-304 before anything is built. Any other reader gets a document built for them,
-``private, no-store``, never stored.
+304 before anything is built. Any other reader, and any reader identified by a IIIF
+token, gets a document built for them, ``private, no-store``, never stored.
 
 The caller runs its read guard before ``answer``: no memo is read for a
 reader refused the resource.
@@ -45,13 +45,16 @@ class Gate:
     parts: tuple
 
 
-def gate(reader):
-    """The ``Gate`` of *reader*: data version, permission epoch and the visitor's visible digest."""
+def gate(reader, token=False):
+    """The ``Gate`` of *reader*: data version, permission epoch and the visitor's visible digest.
+
+    A reader identified by a IIIF token (*token*) never shares the visitor's view.
+    """
     version = data_version()
     visitor = visible_set(anonymous_user(), version)
     mine = visible_set(reader, version)
     return Gate(
-        shared=mine.digest == visitor.digest,
+        shared=not token and mine.digest == visitor.digest,
         parts=(version, permission_epoch(), visitor.digest),
     )
 

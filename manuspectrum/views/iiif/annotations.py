@@ -9,9 +9,12 @@ the reader. ``?only=<uuid,…>`` restricts a page to those analyses (at most
 ``IIIF_PAGE_FILTER_MAX``; malformed or over it: 400). Single annotations: an
 unknown id, a resource that is not an analysis, an analysis without a
 located zone or a feature that is not one of its located zones is a 404; an
-analysis or identified material the reader may not read is a 401 to the visitor (the requested id
-described as an Annotation) and a bodyless 403 to a signed-in reader. The
-reader is ``request.user``; the memo and cache headers are ``iiif.memo``'s.
+analysis or identified material the reader may not read is a 401 to the
+visitor (the requested id described as an Annotation with the Auth 1.0
+service) and a bodyless 403 to a signed-in or token reader. A Bearer
+credential that is not a valid IIIF token is a 401 on every route. The
+reader is ``iiif.tokens.iiif_reader``; the memo and cache headers are
+``iiif.memo``'s, a token reader's answer ``private, no-store``.
 """
 
 import logging
@@ -23,14 +26,10 @@ from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotFou
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from manuspectrum.iiif import facts, ids, memo, pages, v2
+from manuspectrum.iiif import facts, ids, memo, pages, services, tokens, v2
 from manuspectrum.iiif.annotations import analysis_annotation
 from manuspectrum.iiif.characterizations import characterization_annotation
-from manuspectrum.iiif.constants import (
-    IIIF_MEDIA_TYPE,
-    IIIF_V2_MEDIA_TYPE,
-    PRESENTATION_3,
-)
+from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE, IIIF_V2_MEDIA_TYPE
 from manuspectrum.utils.public_visibility import is_connected
 from manuspectrum.views.iiif.cors import iiif_cors
 
@@ -54,20 +53,33 @@ def not_found():
     return _private(HttpResponseNotFound())
 
 
-def refused(request, kind="Annotation"):
-    """401 describing the requested resource (an *kind*) to the visitor, bodyless 403 to a signed-in reader."""
-    if is_connected(request.user):
-        return _private(HttpResponse(status=403))
-    body = {
-        "@context": PRESENTATION_3,
-        "id": f"{settings.PUBLIC_SERVER_ADDRESS}{request.path.lstrip('/')}",
-        "type": kind,
-    }
+def reader_of(request):
+    """The reader of a IIIF read route (``tokens.iiif_reader``)."""
+    return tokens.iiif_reader(request)
+
+
+def gate_of(request):
+    """The memo ``Gate`` of the request's reader; a token reader never shares the visitor's view."""
+    return memo.gate(reader_of(request), tokens.by_token(request))
+
+
+def unauthorized(request, kind="Annotation", file_id=None):
+    """401 describing the requested resource as a *kind* with the services to sign in through."""
+    url = f"{settings.PUBLIC_SERVER_ADDRESS}{request.path.lstrip('/')}"
     response = HttpResponse(
-        orjson.dumps(body), status=401, content_type=IIIF_MEDIA_TYPE
+        orjson.dumps(services.description_401(url, kind, file_id)),
+        status=401,
+        content_type=IIIF_MEDIA_TYPE,
     )
     response["WWW-Authenticate"] = 'Bearer realm="ManuSpectrum IIIF"'
     return _private(response)
+
+
+def refused(request, kind="Annotation", file_id=None):
+    """401 (``unauthorized``) to the visitor, bodyless 403 to a signed-in or token reader."""
+    if is_connected(reader_of(request)):
+        return _private(HttpResponse(status=403))
+    return unauthorized(request, kind, file_id)
 
 
 def parse_only(request):
@@ -90,6 +102,7 @@ class IIIFView(View):
 
     http_method_names = ["get", "head", "options"]
     version = 3
+    described_as = "Annotation"
 
     @property
     def content_type(self):
@@ -97,6 +110,8 @@ class IIIFView(View):
 
     def get(self, request, **kwargs):
         try:
+            if tokens.bearer_state(request) == tokens.INVALID:
+                return unauthorized(request, self.described_as)
             return self.answer(request, **kwargs)
         except Missing:
             return not_found()
@@ -114,13 +129,15 @@ class CollectionView(IIIFView):
     """The AnnotationCollection (v2: ``sc:Layer``) of the analyses (or identified materials, ``kind``) of a Document or Component."""
 
     kind = "analysis"
+    described_as = "AnnotationCollection"
 
     def answer(self, request, resource_id):
-        if facts.subject_of(resource_id, request.user) is None:
+        reader = reader_of(request)
+        if facts.subject_of(resource_id, reader) is None:
             raise Missing()
 
         def build():
-            doc = facts.document_facts(resource_id, request.user, kind=self.kind)
+            doc = facts.document_facts(resource_id, reader, kind=self.kind)
             collection = pages.annotation_collection(doc, self.kind)
             if self.version == 3:
                 return collection
@@ -132,7 +149,7 @@ class CollectionView(IIIFView):
 
         return memo.answer(
             request,
-            memo.gate(request.user),
+            gate_of(request),
             f"collection-v{self.version}-{self.kind}",
             (resource_id,),
             build,
@@ -144,16 +161,16 @@ class PageView(IIIFView):
     """Page *page_num* (canvas position) of a collection, optionally restricted by ``?only=``."""
 
     kind = "analysis"
+    described_as = "AnnotationPage"
 
     def answer(self, request, resource_id, page_num):
         only = parse_only(request)
-        if facts.subject_of(resource_id, request.user) is None:
+        reader = reader_of(request)
+        if facts.subject_of(resource_id, reader) is None:
             raise Missing()
 
         def build():
-            doc = facts.document_facts(
-                resource_id, request.user, only=only, kind=self.kind
-            )
+            doc = facts.document_facts(resource_id, reader, only=only, kind=self.kind)
             try:
                 page = pages.annotation_page(doc, page_num, self.kind, only=only)
             except pages.InvalidPage as error:
@@ -162,7 +179,7 @@ class PageView(IIIFView):
 
         return memo.answer(
             request,
-            memo.gate(request.user),
+            gate_of(request),
             f"page-v{self.version}-{self.kind}",
             (resource_id, page_num, ",".join(sorted(only or ()))),
             build,
@@ -174,14 +191,15 @@ class AnnotationView(IIIFView):
     """One zone of an analysis or an identified material: *feature_id*, else its first located zone."""
 
     def answer(self, request, resource_id, feature_id=None):
-        access = facts.annotated_access(resource_id, request.user)
+        reader = reader_of(request)
+        access = facts.annotated_access(resource_id, reader)
         if access is None:
             raise Missing()
         if access is facts.REFUSED:
             return refused(request)
 
         def build():
-            found = facts.annotated_fact(resource_id, request.user)
+            found = facts.annotated_fact(resource_id, reader)
             if not isinstance(found, tuple):
                 raise Missing()
             kind, doc, fact = found
@@ -202,7 +220,7 @@ class AnnotationView(IIIFView):
 
         return memo.answer(
             request,
-            memo.gate(request.user),
+            gate_of(request),
             f"annotation-v{self.version}",
             (resource_id, feature_id or ""),
             build,

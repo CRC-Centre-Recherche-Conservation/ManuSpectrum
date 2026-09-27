@@ -27,6 +27,13 @@ from manuspectrum.views.iiif.context import (
     XYReadingDocView,
     XYReadingSchemaView,
 )
+from manuspectrum.views.iiif.auth import (
+    LoginView as IIIFLoginView,
+    LogoutView as IIIFLogoutView,
+    ProbeView as IIIFProbeView,
+    TokenView as IIIFTokenView,
+    TokenViewV2 as IIIFTokenViewV2,
+)
 from manuspectrum.views.iiif.content_state import ContentStateView
 from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
 from manuspectrum.views.iiif.annotations import (
@@ -523,6 +530,24 @@ urlpatterns += [
         XYReadingSchemaView.as_view(),
         name="iiif-xy-reading-schema",
     ),
+]
+
+### IIIF Auth 1.0 and 2.0.
+###
+### ``auth/login`` is the Auth 1.0 login service and the Auth 2.0 access
+### service; ``auth/1/token`` and ``auth/2/token`` the token services;
+### ``auth/2/probe/<file>`` the Auth 2.0 probe of a stored file;
+### ``auth/logout`` the logout service of both.
+urlpatterns += [
+    path("iiif/auth/login", IIIFLoginView.as_view(), name="iiif-auth-login"),
+    path("iiif/auth/1/token", IIIFTokenView.as_view(), name="iiif-auth-token-1"),
+    path("iiif/auth/2/token", IIIFTokenViewV2.as_view(), name="iiif-auth-token-2"),
+    path(
+        "iiif/auth/2/probe/<uuid:file_id>",
+        IIIFProbeView.as_view(),
+        name="iiif-auth-probe",
+    ),
+    path("iiif/auth/logout", IIIFLogoutView.as_view(), name="iiif-auth-logout"),
 ]
 
 ### Renderer metadata and XY renderer configuration.

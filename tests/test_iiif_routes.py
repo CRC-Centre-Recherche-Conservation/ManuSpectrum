@@ -40,6 +40,11 @@ ROUTE_NAMES = (
     "iiif-xy-reading-doc",
     "iiif-xy-reading-schema",
     "iiif-v3-content-state",
+    "iiif-auth-login",
+    "iiif-auth-token-1",
+    "iiif-auth-token-2",
+    "iiif-auth-probe",
+    "iiif-auth-logout",
 )
 
 
@@ -112,6 +117,11 @@ class LegacyUrlTests(RouteCase):
             (ids.xy_schema(), "iiif-xy-reading-schema"),
             (ids.content_state(analysis, feature), "iiif-v3-content-state"),
             (ids.content_state(analysis, feature, True), "iiif-v3-content-state"),
+            (ids.auth_login(), "iiif-auth-login"),
+            (ids.auth_token(1), "iiif-auth-token-1"),
+            (ids.auth_token(2), "iiif-auth-token-2"),
+            (ids.auth_probe(feature), "iiif-auth-probe"),
+            (ids.auth_logout(), "iiif-auth-logout"),
         ):
             with self.subTest(url=url):
                 self.assertEqual(resolve(path_of(url.split("?")[0])).url_name, name)
@@ -124,9 +134,14 @@ class LegacyUrlTests(RouteCase):
                 )
 
     def _args(self, name):
-        if name.startswith("iiif-xy-reading"):
+        if name.startswith("iiif-xy-reading") or name in (
+            "iiif-auth-login",
+            "iiif-auth-token-1",
+            "iiif-auth-token-2",
+            "iiif-auth-logout",
+        ):
             return ()
-        if name.startswith("iiif-data"):
+        if name.startswith("iiif-data") or name == "iiif-auth-probe":
             return (FEATURES["open"],)
         if name.endswith("page"):
             return (self.doc(), 1)

@@ -324,3 +324,238 @@ class CharacterizationMatrixTests(IIIFPermissionCase):
         ):
             with self.subTest(url=url):
                 self.assert_answer(self.visitor.get(url), 404, PRIVATE)
+
+
+class RestrictedCase(IIIFPermissionCase):
+    """``open`` embargoed for the visitor and refused to ``stranger``, with a stored file."""
+
+    def setUp(self):
+        super().setUp()
+        self.file_id = self.stored_file(
+            self.analyses["open"], "X01.csv", b"x,y\n1,2\n3,4\n"
+        )
+        self.embargo(self.analyses["open"])
+        self.stranger_user = User.objects.create_user(
+            "iiif_token_stranger", password="pw"
+        )
+        self.stranger_user.groups.add(Group.objects.get(name="Resource Editor"))
+        assign_perm(
+            "no_access_to_resourceinstance", self.stranger_user, self.analyses["open"]
+        )
+        analysis = self.analyses["open"].pk
+        self.singles = [
+            *self.single_urls(self.analyses["open"]),
+            f"/iiif/v3/content-state/{analysis}/{FEATURES['open']}",
+            f"/iiif/data/{self.file_id}/raw",
+            f"/iiif/data/{self.file_id}/series.csv",
+        ]
+
+    def get(self, url, token=None, raw=None):
+        from tests.iiif_auth import bearer
+
+        headers = bearer(token) if token else {}
+        if raw:
+            headers = {"HTTP_AUTHORIZATION": raw}
+        return Client().get(url, **headers)
+
+    def body(self, response):
+        if response.streaming:
+            return b"".join(response.streaming_content).decode()
+        return response.content.decode()
+
+    def assert_private(self, response, status):
+        self.assertEqual(response.status_code, status)
+        self.assertEqual(response["Cache-Control"], PRIVATE)
+        self.assertNotIn("ETag", response)
+        self.assertIn("authorization", response["Vary"].lower())
+        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+
+    def assert_401_with_services(self, response):
+        self.assert_private(response, 401)
+        self.assertIn("Bearer", response["WWW-Authenticate"])
+        body = response.json()
+        login = body["service"][0]
+        self.assertEqual(login["profile"], "http://iiif.io/api/auth/1/login")
+        self.assertEqual(
+            login["service"][0]["profile"], "http://iiif.io/api/auth/1/token"
+        )
+        self.assertNotIn("X01", response.content.decode())
+        return body
+
+    def test_the_visitor_is_401_with_the_services_on_restricted_single_and_data(self):
+        for url in self.singles:
+            with self.subTest(url=url):
+                body = self.assert_401_with_services(self.get(url))
+                if "/iiif/data/" in url:
+                    self.assertEqual(body["type"], "Dataset")
+                    self.assertEqual(body["service"][1]["type"], "AuthProbeService2")
+                    self.assertTrue(
+                        body["service"][1]["id"].endswith(
+                            f"/iiif/auth/2/probe/{self.file_id}"
+                        )
+                    )
+                else:
+                    self.assertEqual(body["type"], "Annotation")
+                    self.assertEqual(len(body["service"]), 1)
+
+    def test_an_oauth2_bearer_does_not_unlock_iiif_reads(self):
+        import datetime
+
+        from django.utils import timezone
+        from oauth2_provider.models import get_access_token_model, get_application_model
+
+        application = get_application_model().objects.create(
+            name="iiif-test",
+            user=self.editor,
+            client_type="confidential",
+            authorization_grant_type="password",
+        )
+        get_access_token_model().objects.create(
+            user=self.editor,
+            application=application,
+            token="oauth2-iiif-test-token",
+            expires=timezone.now() + datetime.timedelta(hours=1),
+            scope="read write",
+        )
+
+        for url in self.singles:
+            with self.subTest(url=url):
+                response = self.get(url, raw="Bearer oauth2-iiif-test-token")
+                self.assertEqual(response.status_code, 401)
+                self.assertNotIn("X01", self.body(response))
+
+
+class TokenMatrixTests(RestrictedCase):
+    """Every IIIF read route × granted token, ungranted token, invalid token."""
+
+    def setUp(self):
+        super().setUp()
+        from tests.iiif_auth import token_for
+
+        self.granted = token_for(self.editor)
+        self.ungranted = token_for(self.stranger_user)
+
+    def test_a_granted_token_reads_the_restricted_data_privately(self):
+        for url in [*self.document_urls(), *self.collection_urls(), *self.singles]:
+            with self.subTest(url=url):
+                response = self.get(url, self.granted)
+                self.assert_private(response, 200)
+        for url in [*self.document_urls(), *self.single_urls(self.analyses["open"])]:
+            with self.subTest(url=url):
+                self.assertIn(
+                    str(self.analyses["open"].pk),
+                    self.body(self.get(url, self.granted)),
+                )
+
+    def test_an_ungranted_token_gets_filtered_pages_and_403_on_single_and_data(self):
+        for url in self.document_urls():
+            with self.subTest(url=url):
+                response = self.get(url, self.ungranted)
+                self.assert_private(response, 200)
+                self.assertNotIn(str(self.analyses["open"].pk), self.body(response))
+        for url in self.singles:
+            with self.subTest(url=url):
+                response = self.get(url, self.ungranted)
+                self.assert_private(response, 403)
+                self.assertEqual(self.body(response), "")
+
+    def test_an_invalid_token_is_401_with_the_services(self):
+        for url in [*self.document_urls(), *self.collection_urls(), *self.singles]:
+            for token in (self.granted + "x", "msiiif1.forged", "opaque"):
+                with self.subTest(url=url, token=token[:12]):
+                    self.assert_401_with_services(self.get(url, token))
+
+    def test_a_token_reader_never_fills_the_public_memo(self):
+        from manuspectrum.iiif import memo
+        from tests.iiif_auth import token_for
+
+        plain = User.objects.create_user("iiif_token_plain", password="pw")
+        plain.groups.add(Group.objects.get(name="Guest"))
+        assign_perm("no_access_to_resourceinstance", plain, self.analyses["open"])
+        self.assertTrue(memo.gate(plain).shared)
+        token = token_for(plain)
+        url = self.document_urls()[0]
+
+        from unittest import mock
+
+        with mock.patch.object(
+            memo, "get_or_build", wraps=memo.get_or_build
+        ) as memo_call:
+            response = self.get(url, token)
+        visitor = self.get(url)
+
+        self.assert_private(response, 200)
+        memo_call.assert_not_called()
+        self.assertEqual(visitor["Cache-Control"], PUBLIC)
+        self.assertEqual(self.body(visitor), self.body(response))
+
+
+class ServiceDeclarationTests(IIIFPermissionCase):
+    def setUp(self):
+        super().setUp()
+        self.file_id = self.stored_file(
+            self.analyses["on_document"], "FORS.csv", b"x,y\n1,2\n3,4\n"
+        )
+
+    def page(self, client, version=3):
+        document = self.documents["open"].pk
+        return client.get(
+            f"/iiif/v{version}/annotation-collection/{document}/page-1"
+        ).json()
+
+    def test_every_dataset_body_declares_both_auth_services(self):
+        from manuspectrum.iiif import services
+
+        page = self.page(self.visitor)
+        bodies = [
+            body
+            for annotation in page["items"]
+            for body in annotation.get("body", [])
+            if body["type"] == "Dataset"
+        ]
+
+        self.assertTrue(bodies)
+        for body in bodies:
+            with self.subTest(body=body["id"]):
+                file_id = body["id"].split("/iiif/data/")[1].split("/")[0]
+                self.assertEqual(
+                    body["service"],
+                    [services.auth1_block(), services.auth2_probe(file_id)],
+                )
+        self.assertEqual(
+            page["@context"][-1], "http://iiif.io/api/presentation/3/context.json"
+        )
+        self.assertIn("http://iiif.io/api/auth/2/context.json", page["@context"])
+        v2 = self.page(self.visitor, 2)
+        resources = [
+            r
+            for annotation in v2["resources"]
+            for r in annotation.get("resource", [])
+            if r["@type"] == "dctypes:Dataset"
+        ]
+        self.assertTrue(resources)
+        for resource in resources:
+            self.assertEqual(resource["service"], services.v2_auth1_block())
+
+    def test_every_page_and_collection_declares_the_auth1_service(self):
+        from manuspectrum.iiif import services
+
+        document = self.documents["open"].pk
+        for kind in ("annotation", "characterization"):
+            for url in (
+                f"/iiif/v3/{kind}-collection/{document}",
+                f"/iiif/v3/{kind}-collection/{document}/page-2",
+                f"/iiif/v2/{kind}-collection/{document}",
+                f"/iiif/v2/{kind}-collection/{document}/page-2",
+            ):
+                with self.subTest(url=url):
+                    seen = [
+                        c.get(url).json()["service"]
+                        for c in (self.visitor, self.reader)
+                    ]
+                    expected = (
+                        [services.auth1_block()]
+                        if "/v3/" in url
+                        else services.v2_auth1_block()
+                    )
+                    self.assertEqual(seen, [expected, expected])

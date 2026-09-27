@@ -1,0 +1,22 @@
+{% load i18n %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}<html lang="{{ LANGUAGE_CODE }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>{% trans "Sign out of external viewers" %}</title>
+</head>
+<body>
+<main>
+  <p>{% trans "You are signed out of external viewers. Your ManuSpectrum session is unchanged." %}</p>
+  <button type="button" id="iiif-auth-close">{% trans "Close this window" %}</button>
+</main>
+<script>
+(function () {
+  document.getElementById("iiif-auth-close").addEventListener("click", function () {
+    window.close();
+  });
+})();
+</script>
+</body>
+</html>

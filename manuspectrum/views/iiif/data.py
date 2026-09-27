@@ -1,9 +1,12 @@
 """``/iiif/data/<file>/raw`` (the stored file) and ``/iiif/data/<file>/series.csv`` (its clean CSV).
 
-The reader is ``request.user``; the guard is ``iiif.data.readable_file``. An
-unknown file is a bodyless 404; a file the reader may not read is a 401 to the
-visitor (the requested URL described as a ``Dataset``) and a bodyless 403 to
-a signed-in reader. A reader whose view is the visitor's gets ``public,
+The reader is ``iiif.tokens.iiif_reader`` (session, else Bearer IIIF token);
+the guard is ``iiif.data.readable_file``. An unknown file is a bodyless 404;
+a file the reader may not read is a 401 to the visitor (the requested URL
+described as a ``Dataset`` with the Auth 1.0 and 2.0 services) and a bodyless
+403 to a signed-in or token reader; a Bearer credential that is not a valid
+IIIF token is a 401. A reader whose view is the visitor's (never a token
+reader) gets ``public,
 no-cache`` and a strong ETag (the file id, size and modification time; for the
 clean CSV also the renderer configuration and the code version) that an
 ``If-None-Match`` answers with a 304; any other reader ``private, no-store``.
@@ -32,9 +35,15 @@ from django.http import (
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from manuspectrum.iiif import data, memo, xy_reading
+from manuspectrum.iiif import data, memo, tokens, xy_reading
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
-from manuspectrum.views.iiif.annotations import not_found, refused
+from manuspectrum.views.iiif.annotations import (
+    gate_of,
+    not_found,
+    reader_of,
+    refused,
+    unauthorized,
+)
 from manuspectrum.views.iiif.cors import iiif_cors
 from manuspectrum.views.spectrum_preview import renderer_config
 
@@ -77,10 +86,12 @@ class DataView(View):
             return _nosniff(response)
 
     def answer(self, request, file_id):
+        if tokens.bearer_state(request) == tokens.INVALID:
+            return unauthorized(request, "Dataset", file_id)
         try:
-            record = data.readable_file(file_id, request.user)
+            record = data.readable_file(file_id, reader_of(request))
         except data.Refused:
-            return refused(request, "Dataset")
+            return refused(request, "Dataset", file_id)
         if record is None:
             return not_found()
         try:
@@ -90,7 +101,7 @@ class DataView(View):
         prepared = self.prepare(record)
         if prepared is None:
             return not_found()
-        shared = memo.gate(request.user).shared and not renews_csrf_cookie(request)
+        shared = gate_of(request).shared and not renews_csrf_cookie(request)
         etag = _etag(record.id, stat.st_size, stat.st_mtime_ns, *self.version(prepared))
         if shared and etag_already_held(request, etag):
             response = HttpResponseNotModified()
