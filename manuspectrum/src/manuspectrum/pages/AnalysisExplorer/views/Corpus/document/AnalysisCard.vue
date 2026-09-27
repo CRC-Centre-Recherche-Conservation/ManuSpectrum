@@ -6,11 +6,11 @@ import {
     useId,
     useTemplateRef,
 } from "vue";
-import Tooltip from "primevue/tooltip";
 import { useGettext } from "vue3-gettext";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
+import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
@@ -47,7 +47,6 @@ interface ConditionGroup {
 }
 
 const COPYRIGHT = "©";
-const HELP_DELAY_MS = 500;
 
 /**
  * The card of the analysis `analysisId`. `handle` may still hold the previous
@@ -56,9 +55,7 @@ const HELP_DELAY_MS = 500;
  * is loading meanwhile. `feature` (the id of the focused zone) picks the
  * published Content State of that zone among the analysis's
  * `contentStates`: its IIIF link is copied (`contentStateLink`) and opened
- * in Mirador. The copy button carries its help as a tooltip, shown after
- * `HELP_DELAY_MS` on hover and on keyboard focus, and as its accessible
- * description. An unlocated analysis, or a zone without a published state,
+ * in Mirador. The copy button carries its help as a `HelpTip`. An unlocated analysis, or a zone without a published state,
  * has none.
  */
 const props = withDefaults(
@@ -77,7 +74,6 @@ const props = withDefaults(
 const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
-const vTooltip = Tooltip;
 const miradorUrl = inject(MIRADOR_URL_KEY, "");
 
 const store = useExplorerStore();
@@ -199,12 +195,11 @@ const zoneLinks = computed(() => {
     };
 });
 
-const iiifHelp = computed(() => ({
-    value: $gettext(
-        "IIIF link to this zone: paste it into a IIIF viewer (Mirador…) to open the folio on it.",
+const iiifHelp = computed(() =>
+    $gettext(
+        "IIIF link to this zone: paste it into a IIIF viewer (Mirador…) to open the folio centred on this zone.",
     ),
-    showDelay: HELP_DELAY_MS,
-}));
+);
 
 function previewOf(file: FileEntry): Component {
     const entry = viewerFor(file.dataKind);
@@ -567,15 +562,14 @@ function focusHeading(): void {
                     v-if="zoneLinks"
                     class="iiif"
                 >
-                    <span
-                        v-tooltip.top="iiifHelp"
-                        class="iiif-copy"
+                    <HelpTip
+                        v-slot="{ describedby }"
+                        :text="iiifHelp"
                     >
                         <CopyButton
-                            v-tooltip.focus.top="iiifHelp"
                             :text="zoneLinks.iiif"
                             :label="$gettext('Copy the IIIF link')"
-                            :aria-describedby="`${sectionId}-iiif-help`"
+                            :aria-describedby="describedby"
                         >
                             <template #icon>
                                 <svg
@@ -592,12 +586,7 @@ function focusHeading(): void {
                                 </svg>
                             </template>
                         </CopyButton>
-                    </span>
-                    <span
-                        :id="`${sectionId}-iiif-help`"
-                        class="visually-hidden"
-                        >{{ iiifHelp.value }}</span
-                    >
+                    </HelpTip>
                     <a
                         v-if="zoneLinks.mirador"
                         class="mirador"
@@ -773,10 +762,6 @@ function focusHeading(): void {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.375rem 1rem;
-}
-
-.analysis-card .iiif-copy {
-    display: inline-flex;
 }
 
 .analysis-card .iiif .link-icon {

@@ -1,7 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref, shallowRef } from "vue";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
@@ -28,7 +28,7 @@ enableAutoUnmount(afterEach);
 
 const MIRADOR = "https://viewer.example/mirador/";
 const IIIF_HELP =
-    "IIIF link to this zone: paste it into a IIIF viewer (Mirador…) to open the folio on it.";
+    "IIIF link to this zone: paste it into a IIIF viewer (Mirador…) to open the folio centred on this zone.";
 const IIIF_HELP_DELAY_MS = 500;
 
 interface CardExtras {
@@ -425,10 +425,11 @@ describe("AnalysisCard", () => {
         expect(icon?.attributes("aria-hidden")).toBe("true");
     });
 
-    it("describes the IIIF link to assistive technologies with its help", async () => {
+    it("describes the IIIF link with its help, one hidden tooltip node", async () => {
         const payload = analysisPayload();
         const { wrapper } = mountCard(payload, "ready", payload.id, {
             feature: uuid(901),
+            attach: true,
         });
         await flushPromises();
 
@@ -437,43 +438,96 @@ describe("AnalysisCard", () => {
             `#${button.attributes("aria-describedby")}`,
         );
         expect(description.text()).toBe(IIIF_HELP);
+        expect(description.attributes("hidden")).toBeDefined();
+        expect(description.attributes("role")).toBe("tooltip");
+        expect(document.body.querySelectorAll('[role="tooltip"]')).toHaveLength(
+            1,
+        );
     });
 
-    it("shows the IIIF link help after a short delay on keyboard focus and on hover, until Escape", async () => {
-        vi.useFakeTimers();
-        try {
+    describe("IIIF link help", () => {
+        const shown = () =>
+            document.body.querySelector('[role="tooltip"]:not([hidden])');
+        const pointer = (type: string) =>
+            Object.assign(new Event(type, { bubbles: true }), {
+                pointerType: "mouse",
+            });
+
+        async function mountLinked() {
             const payload = analysisPayload();
             const { wrapper } = mountCard(payload, "ready", payload.id, {
                 feature: uuid(901),
                 attach: true,
             });
             await flushPromises();
-            const button = iiifCopy(wrapper)!;
-            const tooltip = () =>
-                document.body.querySelector('[role="tooltip"]');
-
-            await button.trigger("focus");
-            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS - 1);
-            expect(tooltip()).toBeNull();
-            vi.advanceTimersByTime(1);
-            expect(tooltip()?.textContent).toBe(IIIF_HELP);
-            await button.trigger("keydown", { code: "Escape" });
-            vi.runOnlyPendingTimers();
-            expect(tooltip()).toBeNull();
-
-            await button.element.parentElement!.dispatchEvent(
-                new MouseEvent("mouseenter"),
-            );
-            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS - 1);
-            expect(tooltip()).toBeNull();
-            vi.advanceTimersByTime(1);
-            expect(tooltip()?.textContent).toBe(IIIF_HELP);
-            await button.trigger("keydown", { code: "Escape" });
-            vi.runOnlyPendingTimers();
-            expect(tooltip()).toBeNull();
-        } finally {
-            vi.useRealTimers();
+            const button = iiifCopy(wrapper)!.element as HTMLElement;
+            return { wrapper, button, area: button.parentElement! };
         }
+
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it("shows after the delay on keyboard focus, not a millisecond before", async () => {
+            const { wrapper, button } = await mountLinked();
+            button.focus();
+
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS - 1);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+            vi.advanceTimersByTime(1);
+            await wrapper.vm.$nextTick();
+            expect(shown()?.textContent).toBe(IIIF_HELP);
+        });
+
+        it("shows after the delay on hover and stays while the pointer moves onto it", async () => {
+            const { wrapper, area } = await mountLinked();
+            area.dispatchEvent(pointer("pointerenter"));
+
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS - 1);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+            vi.advanceTimersByTime(1);
+            await wrapper.vm.$nextTick();
+            const tip = shown()!;
+            expect(tip.textContent).toBe(IIIF_HELP);
+
+            expect(area.contains(tip)).toBe(true);
+            tip.dispatchEvent(pointer("pointerenter"));
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBe(tip);
+        });
+
+        it("shows nothing after a click", async () => {
+            const { wrapper, button, area } = await mountLinked();
+            area.dispatchEvent(pointer("pointerenter"));
+            button.dispatchEvent(pointer("pointerdown"));
+            button.focus();
+            button.click();
+
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS * 4);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+        });
+
+        it("hides on Escape pressed outside the link", async () => {
+            const { wrapper, area } = await mountLinked();
+            area.dispatchEvent(pointer("pointerenter"));
+            vi.advanceTimersByTime(IIIF_HELP_DELAY_MS);
+            await wrapper.vm.$nextTick();
+            expect(shown()).not.toBeNull();
+
+            document.body.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+            );
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+        });
     });
 
     it("opens Mirador with the content state when a viewer is set", async () => {

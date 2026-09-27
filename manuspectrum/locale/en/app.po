@@ -12,8 +12,8 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:423
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:435
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:610
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:687
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:599
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:676
 msgid "(new tab)"
 msgstr ""
 
@@ -231,7 +231,7 @@ msgid_plural "+ %{n} documents without analyses — show"
 msgstr[0] "+ %{n} document without analyses — show"
 msgstr[1] "+ %{n} documents without analyses — show"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:306
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:301
 msgid "+ Selection"
 msgstr "+ Selection"
 
@@ -265,7 +265,7 @@ msgstr "Add a hop"
 msgid "Add a related count"
 msgstr "Add a related count"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:309
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:304
 msgid "Add the analysis %{name} to the Selection"
 msgstr ""
 
@@ -310,7 +310,7 @@ msgstr "Analyses cited as evidence (%{n})"
 msgid "Analyses on this sample (%{n})"
 msgstr "Analyses on this sample (%{n})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:164
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:160
 msgid "analysis"
 msgstr "analysis"
 
@@ -351,7 +351,7 @@ msgstr "Back to the explorer home"
 msgid "Band"
 msgstr "Band"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:541
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:536
 msgid "Bibliography"
 msgstr "Bibliography"
 
@@ -390,7 +390,7 @@ msgid "Chips"
 msgstr "Chips"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:248
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:558
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:553
 msgid "Cite"
 msgstr "Cite"
 
@@ -404,7 +404,7 @@ msgstr "Clear all"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:216
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:134
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:286
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:281
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:174
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue:92
 msgid "Close"
@@ -471,11 +471,11 @@ msgid "Copy the citation"
 msgstr "Copy the citation"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:257
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:564
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:559
 msgid "Copy the data availability statement"
 msgstr "Copy the data availability statement"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:577
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:571
 msgid "Copy the IIIF link"
 msgstr "Copy the IIIF link"
 
@@ -511,12 +511,12 @@ msgstr "Data"
 msgid "Data package (ZIP, %{size})"
 msgstr "Data package (ZIP, %{size})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:512
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:507
 msgid "Dataset"
 msgstr "Dataset"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:58
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:488
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:483
 msgid "Date"
 msgstr "Date"
 
@@ -553,7 +553,7 @@ msgstr ""
 msgid "Documents"
 msgstr "Documents"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:535
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:530
 msgid "DOI"
 msgstr "DOI"
 
@@ -574,7 +574,7 @@ msgstr "Download CSV"
 msgid "Download PNG"
 msgstr "Download PNG"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:416
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:411
 msgid "Download the file"
 msgstr "Download the file"
 
@@ -582,14 +582,14 @@ msgstr "Download the file"
 msgid "Download the image"
 msgstr "Download the image"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:415
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:410
 msgid "Download the raw file"
 msgstr "Download the raw file"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:87
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue:67
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue:130
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:300
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:295
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:182
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:203
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:329
@@ -667,7 +667,7 @@ msgstr "file"
 msgid "File with no viewer: download only."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:341
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:336
 msgid "Files"
 msgstr "Files"
 
@@ -699,7 +699,7 @@ msgstr "French label of this related count"
 msgid "French label override"
 msgstr "French label override"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:686
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:675
 msgid "Full record"
 msgstr "Full record"
 
@@ -760,10 +760,10 @@ msgstr "Ignore"
 msgid "IIIF"
 msgstr "IIIF"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:203
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:199
 msgid ""
 "IIIF link to this zone: paste it into a IIIF viewer (Mirador…) to open the "
-"folio on it."
+"folio centred on this zone."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:197
@@ -782,7 +782,7 @@ msgstr "Incoming — that model carries the link"
 msgid "Indicative positioning, not registered."
 msgstr "Indicative positioning, not registered."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:464
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:459
 msgid "Instrument"
 msgstr "Instrument"
 
@@ -849,7 +849,7 @@ msgstr "Layers, in order: %{label}"
 msgid "Layout"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:625
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:614
 msgid "Licence"
 msgstr "Licence"
 
@@ -861,7 +861,7 @@ msgstr "Link to the report"
 msgid "List distinct values"
 msgstr "List distinct values"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:277
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:272
 msgid "Loading the analysis…"
 msgstr "Loading the analysis…"
 
@@ -920,8 +920,8 @@ msgstr "Maximum number of intermediate resources"
 msgid "Maximum number of values"
 msgstr "Maximum number of values"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:157
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:429
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:153
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:424
 msgid "Measurement conditions"
 msgstr "Measurement conditions"
 
@@ -1041,7 +1041,7 @@ msgid "Normalised to total (TIC)"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:175
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:389
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
 msgid "Not in a chart"
 msgstr "Not in a chart"
 
@@ -1049,7 +1049,7 @@ msgstr "Not in a chart"
 msgid "Not in a chart: this file can be downloaded."
 msgstr "Not in a chart: this file can be downloaded."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:435
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:430
 msgid "Not provided"
 msgstr "Not provided"
 
@@ -1061,7 +1061,7 @@ msgstr "Not provided"
 msgid "Not stated"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:143
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:139
 msgid "Note"
 msgstr "Note"
 
@@ -1094,7 +1094,7 @@ msgid "Open a document to see where each analysis was made."
 msgstr "Open a document to see where each analysis was made."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:433
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:608
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:597
 msgid "Open in Mirador"
 msgstr "Open in Mirador"
 
@@ -1114,7 +1114,7 @@ msgstr "Open the manifest"
 msgid "Operator"
 msgstr "Operator"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:472
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:467
 msgid "Operators"
 msgstr "Operators"
 
@@ -1185,7 +1185,7 @@ msgstr "Place"
 msgid "Points"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:324
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:319
 msgid "Preview"
 msgstr "Preview"
 
@@ -1202,11 +1202,11 @@ msgstr "Previous page with results"
 msgid "Project"
 msgstr "Project"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:645
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:634
 msgid "Project licence (not stated for this file)"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:480
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:475
 msgid "Projects"
 msgstr "Projects"
 
@@ -1214,11 +1214,11 @@ msgstr "Projects"
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:227
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:222
 msgid "raw instrument"
 msgstr "raw instrument"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:396
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:391
 msgid ""
 "Raw instrument files are offered for download only: the charts read their "
 "text exports, converted upstream."
@@ -1337,7 +1337,7 @@ msgstr "Results per page"
 msgid "Retry"
 msgstr "Retry"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:504
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:499
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:328
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue:78
 msgid "Sample"
@@ -1488,7 +1488,7 @@ msgid "Stop listing distinct values"
 msgstr "Stop listing distinct values"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:61
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:496
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:491
 msgid "Studied area"
 msgstr "Studied area"
 
@@ -1500,7 +1500,7 @@ msgstr "Studied part"
 msgid "supporting analysis"
 msgstr "supporting analysis"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:661
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:650
 msgid "Supporting analysis of"
 msgstr "Supporting analysis of"
 
