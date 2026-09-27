@@ -161,7 +161,7 @@ class ExtractFieldsTests(SimpleTestCase):
                     "sortorder": 0,
                     "data": {
                         "node-measurement_point_data": [
-                            {"file_id": "f-bin", "name": "a.spc"},
+                            {"file_id": "f-bin", "name": "a.asd"},
                             {"file_id": "f-csv", "name": "a.csv"},
                         ]
                     },
@@ -431,23 +431,12 @@ class FindPreviewTests(SimpleTestCase):
 
     def test_the_formats_converted_upstream_are_not_plottable(self):
         doc = self.doc_with(
-            {"file_id": "f-spc", "name": "spectrum.spc"},
+            {"file_id": "f-asd", "name": "spectrum.asd"},
+            {"file_id": "f-mca", "name": "spectrum.mca"},
             {"file_id": "f-txt", "name": "spectrum.txt"},
             {"file_id": "f-none", "name": "spectrum"},
         )
         self.assertIsNone(find_preview(doc, self.index.nodes["files"]))
-
-    def test_the_instrument_formats_read_natively_are_plottable(self):
-        for name in ("spectrum.mca", "spectrum.asd"):
-            doc = self.doc_with(
-                {"file_id": "f-txt", "name": "spectrum.txt"},
-                {"file_id": "f-raw", "name": name},
-            )
-            with self.subTest(name=name):
-                self.assertEqual(
-                    find_preview(doc, self.index.nodes["files"]),
-                    {"file_id": "f-raw", "name": name},
-                )
 
     @override_settings(XY_TEXT_FILE_FORMATS=["csv", "txt"])
     def test_the_plottable_formats_are_the_canonical_xy_ones(self):

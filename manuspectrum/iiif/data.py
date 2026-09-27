@@ -9,8 +9,8 @@ for an unknown file and raises ``Refused`` when the file exists and the
 reader may not read it.
 
 A file has a clean CSV when ``read_series`` reads its format
-(``is_readable``; for a native instrument format, its header states its
-axes), it is no larger than ``SPECTRUM_PREVIEW_MAX_BYTES`` and its licence
+(``is_readable``: a text format of ``XY_TEXT_FILE_FORMATS``; an instrument
+format is served as its raw file only), it is no larger than ``SPECTRUM_PREVIEW_MAX_BYTES`` and its licence
 allows derivatives; the route answers 404 besides when the file holds fewer
 than two points. The clean CSV is never decimated, whatever its size:
 mirador-xyviewer refuses a body over 5 MB, so such a file plots in the
@@ -20,7 +20,6 @@ Explorer and not there.
 import os
 import re
 from dataclasses import dataclass, field
-from functools import cached_property
 
 from django.conf import settings
 
@@ -28,7 +27,6 @@ from arches.app.models.models import File
 
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.iiif.constants import MEDIA_TYPE_BY_EXTENSION, OCTET_STREAM
-from manuspectrum.utils.instrument_formats import is_native, native_axes
 from manuspectrum.utils.public_visibility import visible_set
 from manuspectrum.utils.spectrum_preview import is_readable
 from manuspectrum.views.summary_service import readable_nodegroups
@@ -40,18 +38,8 @@ class Refused(Exception):
     """The file exists; the reader may not read it."""
 
 
-class StatedAxes:
-    """``stated_axes``: the ``(x, y)`` a native file's header states, read once per instance; None otherwise."""
-
-    @cached_property
-    def stated_axes(self):
-        if not is_native(self.name):
-            return None
-        return native_axes(self.path, self.name)
-
-
 @dataclass(frozen=True)
-class FileRecord(StatedAxes):
+class FileRecord:
     """One stored file as its ``File`` row and tile give it.
 
     ``name`` is the name its tile's file-list entry gives it, else the stored
@@ -152,11 +140,10 @@ def no_derivatives(entry):
 
 
 def clean_series_available(file):
-    """Whether *file* (a ``FileRecord`` or ``facts.FileFact``) has a clean CSV; reads at most a native header, once."""
+    """Whether *file* (a ``FileRecord`` or ``facts.FileFact``) has a clean CSV."""
     return (
         is_readable(file.name)
         and file.size is not None
         and file.size <= settings.SPECTRUM_PREVIEW_MAX_BYTES
         and not no_derivatives(file.entry)
-        and (not is_native(file.name) or file.stated_axes is not None)
     )

@@ -45,7 +45,7 @@ from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileM
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.iiif import language as lang
-from manuspectrum.iiif.data import StatedAxes, file_size, media_type
+from manuspectrum.iiif.data import file_size, media_type
 from manuspectrum.iiif.sources import (
     absolute_url,
     canvas_index,
@@ -113,13 +113,13 @@ class Zone:
 
 
 @dataclass(frozen=True)
-class FileFact(StatedAxes):
+class FileFact:
     """One file of a file-list tile; *kind* is ``measurement`` or ``micro-imaging``.
 
     ``entry`` keeps the licence and attribution the tile stores for it,
     ``path`` and ``size`` are those of the stored file (``size`` None when it
     cannot be read), ``config`` the renderer configuration it names (``{}``
-    without one); ``stated_axes`` the axes a native file's header states.
+    without one).
     """
 
     id: str

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 01:42-0500\n"
+"POT-Creation-Date: 2026-09-27 06:50-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -206,7 +206,7 @@ msgstr "Layer: %(layers)s"
 msgid "Elements: %(elements)s"
 msgstr "Elements: %(elements)s"
 
-#: iiif/language.py:122
+#: iiif/language.py:154
 #, python-format
 msgid "%(name)s (%(qualifier)s)"
 msgstr "%(name)s (%(qualifier)s)"
@@ -230,7 +230,7 @@ msgid "Without a position on the image"
 msgstr ""
 
 #: iiif/manifest.py:160 views/explorer/export.py:385
-#: views/explorer/series.py:117
+#: views/explorer/series.py:115
 msgid "Contains drafts"
 msgstr ""
 
@@ -291,35 +291,7 @@ msgstr "Your account does not give access to these data."
 msgid "Sign out of external viewers"
 msgstr "Sign out of external viewers"
 
-#: iiif/xy_reading.py:54
-msgid "Wavenumber (cm⁻¹)"
-msgstr "Wavenumber (cm⁻¹)"
-
-#: iiif/xy_reading.py:55
-msgid "Absorbance"
-msgstr "Absorbance"
-
-#: iiif/xy_reading.py:56
-msgid "Intensity (a.u.)"
-msgstr "Intensity (a.u.)"
-
-#: iiif/xy_reading.py:57
-msgid "Intensity (counts)"
-msgstr "Intensity (counts)"
-
-#: iiif/xy_reading.py:64
-msgid "Raman shift (cm⁻¹)"
-msgstr "Raman shift (cm⁻¹)"
-
-#: iiif/xy_reading.py:68
-msgid "m/z"
-msgstr "m/z"
-
-#: iiif/xy_reading.py:69
-msgid "2θ (°)"
-msgstr "2θ (°)"
-
-#: iiif/xy_reading.py:98
+#: iiif/xy_reading.py:62
 #, python-format
 msgid "%(file)s, raw file"
 msgstr "%(file)s, raw file"
@@ -735,47 +707,25 @@ msgid ""
 "The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</"
 "code>): <code>id</code>, <code>type</code>, <code>format</code>, "
 "<code>label</code> and, for a raw text file, its own <code>xyReading</code> "
-"(columns and corrections). A raw file in an instrument format read from its "
-"own header (ELIO <code>.mca</code>, ASD <code>.asd</code>) carries none."
+"(columns and corrections)."
 msgstr ""
 "The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</"
 "code>): <code>id</code>, <code>type</code>, <code>format</code>, "
 "<code>label</code> and, for a raw text file, its own <code>xyReading</code> "
-"(columns and corrections). A raw file in an instrument format read from its "
-"own header (ELIO <code>.mca</code>, ASD <code>.asd</code>) carries none."
+"(columns and corrections)."
 
 #: templates/iiif/xy_reading_1.htm:53
-msgid "Instrument formats"
-msgstr ""
-
-#: templates/iiif/xy_reading_1.htm:55
-msgid ""
-"ELIO <code>.mca</code>: the energy axis in keV comes from the calibration "
-"lines of the header (a least-squares line through two or more points); "
-"without them, x is the channel index and its <code>quantity</code> is "
-"<code>channel</code>."
-msgstr ""
-
-#: templates/iiif/xy_reading_1.htm:56
-msgid ""
-"ASD <code>.asd</code>: a raw spectrum saved with its white reference reads "
-"as the reflectance target / reference, relative to that reference: no panel "
-"calibration factor and no splice correction at the detector joins (about "
-"1000 and 1800 nm), as ViewSpec Pro reads it by default."
-msgstr ""
-
-#: templates/iiif/xy_reading_1.htm:58
 msgid ""
 "The Dataset is never decimated, whatever its size. mirador-xyviewer does not "
 "plot a Dataset larger than 5 MB; such a file still plots in the ManuSpectrum "
 "Explorer."
 msgstr ""
 
-#: templates/iiif/xy_reading_1.htm:60
+#: templates/iiif/xy_reading_1.htm:55
 msgid "Restricted data (IIIF Authorization)"
 msgstr "Restricted data (IIIF Authorization)"
 
-#: templates/iiif/xy_reading_1.htm:61
+#: templates/iiif/xy_reading_1.htm:56
 msgid ""
 "Open data needs no credential. A restricted spectrum, annotation or content "
 "state answers <code>401</code> with a description that names the IIIF "
@@ -786,71 +736,71 @@ msgstr ""
 "state answers <code>401</code> with a description that names the IIIF "
 "Authorization services; annotation pages and collections are never refused: "
 "they list what the reader may see and declare the same services."
+
+#: templates/iiif/xy_reading_1.htm:58
+#, python-format
+msgid ""
+"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
+"window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</"
+"code> profile). The reader signs in to ManuSpectrum there; the window then "
+"says so and can be closed."
+msgstr ""
+"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
+"window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</"
+"code> profile). The reader signs in to ManuSpectrum there; the window then "
+"says so and can be closed."
+
+#: templates/iiif/xy_reading_1.htm:59
+#, python-format
+msgid ""
+"Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
+"<code>%(token2_url)s</code> (Auth 2.0) in a hidden frame with its "
+"<code>messageId</code> and <code>origin</code>, and receives an access token "
+"valid %(token_minutes)s minutes for that origin only. It sends it as "
+"<code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> "
+"read routes; the Auth 2.0 probe service of a spectrum says whether that "
+"token opens it."
+msgstr ""
+"Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
+"<code>%(token2_url)s</code> (Auth 2.0) in a hidden frame with its "
+"<code>messageId</code> and <code>origin</code>, and receives an access token "
+"valid %(token_minutes)s minutes for that origin only. It sends it as "
+"<code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> "
+"read routes; the Auth 2.0 probe service of a spectrum says whether that "
+"token opens it."
+
+#: templates/iiif/xy_reading_1.htm:60
+#, python-format
+msgid ""
+"Logout: opening <a href=\"%(logout_url)s\">%(logout_url)s</a> in a tab (an "
+"HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; "
+"signing out of ManuSpectrum does too. The ManuSpectrum session itself stays "
+"open."
+msgstr ""
+"Logout: opening <a href=\"%(logout_url)s\">%(logout_url)s</a> in a tab (an "
+"HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; "
+"signing out of ManuSpectrum does too. The ManuSpectrum session itself stays "
+"open."
+
+#: templates/iiif/xy_reading_1.htm:62
+msgid ""
+"The token only reads: it opens the <code>/iiif/</code> routes and nothing "
+"else, and it is not an API credential. Tokens go only to this site and to "
+"the viewers its administrators trust; any other origin receives "
+"<code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this "
+"site is refused."
+msgstr ""
+"The token only reads: it opens the <code>/iiif/</code> routes and nothing "
+"else, and it is not an API credential. Tokens go only to this site and to "
+"the viewers its administrators trust; any other origin receives "
+"<code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this "
+"site is refused."
 
 #: templates/iiif/xy_reading_1.htm:63
-#, python-format
-msgid ""
-"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
-"window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</"
-"code> profile). The reader signs in to ManuSpectrum there; the window then "
-"says so and can be closed."
-msgstr ""
-"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
-"window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</"
-"code> profile). The reader signs in to ManuSpectrum there; the window then "
-"says so and can be closed."
-
-#: templates/iiif/xy_reading_1.htm:64
-#, python-format
-msgid ""
-"Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
-"<code>%(token2_url)s</code> (Auth 2.0) in a hidden frame with its "
-"<code>messageId</code> and <code>origin</code>, and receives an access token "
-"valid %(token_minutes)s minutes for that origin only. It sends it as "
-"<code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> "
-"read routes; the Auth 2.0 probe service of a spectrum says whether that "
-"token opens it."
-msgstr ""
-"Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
-"<code>%(token2_url)s</code> (Auth 2.0) in a hidden frame with its "
-"<code>messageId</code> and <code>origin</code>, and receives an access token "
-"valid %(token_minutes)s minutes for that origin only. It sends it as "
-"<code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> "
-"read routes; the Auth 2.0 probe service of a spectrum says whether that "
-"token opens it."
-
-#: templates/iiif/xy_reading_1.htm:65
-#, python-format
-msgid ""
-"Logout: opening <a href=\"%(logout_url)s\">%(logout_url)s</a> in a tab (an "
-"HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; "
-"signing out of ManuSpectrum does too. The ManuSpectrum session itself stays "
-"open."
-msgstr ""
-"Logout: opening <a href=\"%(logout_url)s\">%(logout_url)s</a> in a tab (an "
-"HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; "
-"signing out of ManuSpectrum does too. The ManuSpectrum session itself stays "
-"open."
-
-#: templates/iiif/xy_reading_1.htm:67
-msgid ""
-"The token only reads: it opens the <code>/iiif/</code> routes and nothing "
-"else, and it is not an API credential. Tokens go only to this site and to "
-"the viewers its administrators trust; any other origin receives "
-"<code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this "
-"site is refused."
-msgstr ""
-"The token only reads: it opens the <code>/iiif/</code> routes and nothing "
-"else, and it is not an API credential. Tokens go only to this site and to "
-"the viewers its administrators trust; any other origin receives "
-"<code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this "
-"site is refused."
-
-#: templates/iiif/xy_reading_1.htm:68
 msgid "Known limits"
 msgstr "Known limits"
 
-#: templates/iiif/xy_reading_1.htm:70
+#: templates/iiif/xy_reading_1.htm:65
 msgid ""
 "HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, "
 "and a browser does not keep it on a plain HTTP site."
@@ -858,7 +808,7 @@ msgstr ""
 "HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, "
 "and a browser does not keep it on a plain HTTP site."
 
-#: templates/iiif/xy_reading_1.htm:71
+#: templates/iiif/xy_reading_1.htm:66
 msgid ""
 "Third-party cookies: the token frame belongs to this site inside the "
 "viewer's page. Chrome sends the cookie; Safari (Intelligent Tracking "
@@ -871,50 +821,50 @@ msgstr ""
 "Prevention) and Firefox (Total Cookie Protection) may block it, and the "
 "viewer then keeps asking to sign in. Use Chrome, a viewer served from this "
 "site, or allow this site's cookies in the browser."
+
+#: templates/iiif/xy_reading_1.htm:67
+msgid ""
+"The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login "
+"window opened from another site may ask to sign in again even when another "
+"tab is already signed in."
+msgstr ""
+"The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login "
+"window opened from another site may ask to sign in again even when another "
+"tab is already signed in."
+
+#: templates/iiif/xy_reading_1.htm:68
+#, python-format
+msgid ""
+"The viewer renews its token silently while the access cookie lives: at most "
+"%(cookie_hours)s hours, and never longer than the ManuSpectrum session."
+msgstr ""
+"The viewer renews its token silently while the access cookie lives: at most "
+"%(cookie_hours)s hours, and never longer than the ManuSpectrum session."
+
+#: templates/iiif/xy_reading_1.htm:71
+msgid "Versions"
+msgstr "Versions"
 
 #: templates/iiif/xy_reading_1.htm:72
 msgid ""
-"The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login "
-"window opened from another site may ask to sign in again even when another "
-"tab is already signed in."
+"The major version is in the path of the context (<code>/1</code>). Version 1 "
+"only gains optional keys; a change of meaning would be version 2, at a new "
+"path."
 msgstr ""
-"The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login "
-"window opened from another site may ask to sign in again even when another "
-"tab is already signed in."
+"The major version is in the path of the context (<code>/1</code>). Version 1 "
+"only gains optional keys; a change of meaning would be version 2, at a new "
+"path."
 
 #: templates/iiif/xy_reading_1.htm:73
 #, python-format
 msgid ""
-"The viewer renews its token silently while the access cookie lives: at most "
-"%(cookie_hours)s hours, and never longer than the ManuSpectrum session."
-msgstr ""
-"The viewer renews its token silently while the access cookie lives: at most "
-"%(cookie_hours)s hours, and never longer than the ManuSpectrum session."
-
-#: templates/iiif/xy_reading_1.htm:76
-msgid "Versions"
-msgstr "Versions"
-
-#: templates/iiif/xy_reading_1.htm:77
-msgid ""
-"The major version is in the path of the context (<code>/1</code>). Version 1 "
-"only gains optional keys; a change of meaning would be version 2, at a new "
-"path."
-msgstr ""
-"The major version is in the path of the context (<code>/1</code>). Version 1 "
-"only gains optional keys; a change of meaning would be version 2, at a new "
-"path."
-
-#: templates/iiif/xy_reading_1.htm:78
-#, python-format
-msgid ""
 "JSON Schema (Draft 7): <a href=\"%(schema_url)s\">%(schema_url)s</a>. JSON-"
 "LD context: <a href=\"%(context_url)s\">%(context_url)s</a>."
 msgstr ""
 "JSON Schema (Draft 7): <a href=\"%(schema_url)s\">%(schema_url)s</a>. JSON-"
 "LD context: <a href=\"%(context_url)s\">%(context_url)s</a>."
 
-#: templates/iiif/xy_reading_1.htm:80
+#: templates/iiif/xy_reading_1.htm:75
 msgid "Example"
 msgstr "Example"
 
@@ -4619,26 +4569,6 @@ msgstr ""
 "The platform's source code is published under the GNU General Public License "
 "v3. Reading and downloading published data needs no account."
 
-#: utils/instrument_formats.py:58
-msgid "Energy (keV)"
-msgstr "Energy (keV)"
-
-#: utils/instrument_formats.py:59
-msgid "Channel"
-msgstr "Channel"
-
-#: utils/instrument_formats.py:60
-msgid "Counts"
-msgstr "Counts"
-
-#: utils/instrument_formats.py:61
-msgid "Wavelength (nm)"
-msgstr "Wavelength (nm)"
-
-#: utils/instrument_formats.py:62
-msgid "Reflectance (0-1)"
-msgstr "Reflectance (0-1)"
-
 #: views/biblissima_proxy.py:324
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
@@ -4794,54 +4724,54 @@ msgid ""
 "fetched."
 msgstr ""
 
-#: views/explorer/series.py:84
+#: views/explorer/series.py:83
 #, python-format
 msgid "licence %(licence)s"
 msgstr ""
 
-#: views/explorer/series.py:86
+#: views/explorer/series.py:85
 #, python-format
 msgid "attribution %(text)s"
 msgstr ""
 
-#: views/explorer/series.py:88
+#: views/explorer/series.py:87
 #, python-format
 msgid "configuration %(name)s"
 msgstr ""
 
-#: views/explorer/series.py:93
+#: views/explorer/series.py:92
 #, python-format
 msgid "x axis %(label)s"
 msgstr ""
 
-#: views/explorer/series.py:95
+#: views/explorer/series.py:94
 #, python-format
 msgid "y axis %(label)s"
 msgstr ""
 
-#: views/explorer/series.py:96
+#: views/explorer/series.py:95
 #, python-format
 msgid "raw file %(url)s"
 msgstr ""
 
-#: views/explorer/series.py:113
+#: views/explorer/series.py:111
 #, python-format
 msgid "%(site)s: spectra of a Selection"
 msgstr ""
 
-#: views/explorer/series.py:114
+#: views/explorer/series.py:112
 #, python-format
 msgid "Generated on %(date)s"
 msgstr ""
 
-#: views/explorer/series.py:160
+#: views/explorer/series.py:157
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
 "%(url)s"
 msgstr ""
 
-#: views/explorer/series.py:175
+#: views/explorer/series.py:172
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr ""
@@ -4990,6 +4920,42 @@ msgid ""
 "This configuration was changed by someone else since it was loaded. Reload "
 "it before saving."
 msgstr ""
+
+#~ msgid "Wavenumber (cm⁻¹)"
+#~ msgstr "Wavenumber (cm⁻¹)"
+
+#~ msgid "Absorbance"
+#~ msgstr "Absorbance"
+
+#~ msgid "Intensity (a.u.)"
+#~ msgstr "Intensity (a.u.)"
+
+#~ msgid "Intensity (counts)"
+#~ msgstr "Intensity (counts)"
+
+#~ msgid "Raman shift (cm⁻¹)"
+#~ msgstr "Raman shift (cm⁻¹)"
+
+#~ msgid "m/z"
+#~ msgstr "m/z"
+
+#~ msgid "2θ (°)"
+#~ msgstr "2θ (°)"
+
+#~ msgid "Energy (keV)"
+#~ msgstr "Energy (keV)"
+
+#~ msgid "Channel"
+#~ msgstr "Channel"
+
+#~ msgid "Counts"
+#~ msgstr "Counts"
+
+#~ msgid "Wavelength (nm)"
+#~ msgstr "Wavelength (nm)"
+
+#~ msgid "Reflectance (0-1)"
+#~ msgstr "Reflectance (0-1)"
 
 #~ msgid "XRF"
 #~ msgstr "XRF"

@@ -190,7 +190,7 @@ def _series(path, n, config, name=None):
     try:
         if os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES:
             return {}
-        return build_preview(path, n, config, name) or {}
+        return build_preview(path, n, config) or {}
     except OSError:
         return None
 

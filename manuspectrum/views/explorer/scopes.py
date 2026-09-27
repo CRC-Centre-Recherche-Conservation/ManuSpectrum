@@ -49,7 +49,6 @@ from manuspectrum.views.explorer.service import (
     parse_keys,
     permalink,
     product_link,
-    native_configs,
     renderer_configs,
 )
 from manuspectrum.views.summary_service import _date
@@ -523,7 +522,6 @@ def scope_content(scope, keys=()):
         scope.reader,
     )
     configs = renderer_configs(values, scope.analyses)
-    native = native_configs(values, list(scope.analyses))
     links = bundle.links
     projects_of = {
         row["id"]: [
@@ -552,7 +550,6 @@ def scope_content(scope, keys=()):
                 language,
                 values=values,
                 configs=configs,
-                native=native,
                 read=scope.read_manifest,
             ),
         )

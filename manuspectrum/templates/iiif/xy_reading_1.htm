@@ -47,14 +47,9 @@
     <dt id="correction"><code>corrections</code></dt>
     <dd>{% blocktrans trimmed %}The corrections applied, in order. Version 1 knows <code>reference-normalize</code>: <code id="expression">expression</code> <code>(y - dark) / (reference - dark)</code>, <code id="darkDefault">darkDefault</code> the dark value without a dark column (0), <code id="epsilon">epsilon</code> the smallest denominator divided by, and <code id="onInvalid">onInvalid</code> <code>drop-point</code>: a row with a missing value, a non-finite value or a denominator below epsilon is left out of the curve. An empty list says the file already holds the curve.{% endblocktrans %}</dd>
     <dt id="derivedFrom"><code>derivedFrom</code></dt>
-    <dd>{% blocktrans trimmed %}The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</code>): <code>id</code>, <code>type</code>, <code>format</code>, <code>label</code> and, for a raw text file, its own <code>xyReading</code> (columns and corrections). A raw file in an instrument format read from its own header (ELIO <code>.mca</code>, ASD <code>.asd</code>) carries none.{% endblocktrans %}</dd>
+    <dd>{% blocktrans trimmed %}The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</code>): <code>id</code>, <code>type</code>, <code>format</code>, <code>label</code> and, for a raw text file, its own <code>xyReading</code> (columns and corrections).{% endblocktrans %}</dd>
   </dl>
 
-  <h2 id="instrument-formats">{% trans "Instrument formats" %}</h2>
-  <ul>
-    <li>{% blocktrans trimmed %}ELIO <code>.mca</code>: the energy axis in keV comes from the calibration lines of the header (a least-squares line through two or more points); without them, x is the channel index and its <code>quantity</code> is <code>channel</code>.{% endblocktrans %}</li>
-    <li>{% blocktrans trimmed %}ASD <code>.asd</code>: a raw spectrum saved with its white reference reads as the reflectance target / reference, relative to that reference: no panel calibration factor and no splice correction at the detector joins (about 1000 and 1800 nm), as ViewSpec Pro reads it by default.{% endblocktrans %}</li>
-  </ul>
   <p>{% blocktrans trimmed %}The Dataset is never decimated, whatever its size. mirador-xyviewer does not plot a Dataset larger than 5 MB; such a file still plots in the ManuSpectrum Explorer.{% endblocktrans %}</p>
 
   <h2 id="auth">{% trans "Restricted data (IIIF Authorization)" %}</h2>

@@ -13,10 +13,8 @@ import bibtexparser
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
-from django.db import connection
 from django.http import QueryDict
 from django.test import SimpleTestCase
-from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import NodeGroup, TileModel
 from arches.app.utils.permission_backend import assign_perm
@@ -34,11 +32,6 @@ from manuspectrum.views.explorer.service import (
 )
 
 DAY_VECTORS = Path(__file__).parent / "fixtures" / "explorer_day_index.json"
-
-
-def file_queries(context):
-    """The queries of *context* reading the ``files`` table."""
-    return len([q for q in context.captured_queries if 'FROM "files"' in q["sql"]])
 
 
 class SearchRouteTests(ServiceCase):
@@ -770,34 +763,7 @@ class AnalysisRouteTests(CorpusCase):
         for entry in payload["contentStates"]:
             assert_shape(self, entry, "ContentStateLink")
 
-    def test_a_native_instrument_file_names_the_axes_its_header_states(self):
-        fixtures = Path(__file__).parent / "fixtures" / "xy"
-        self.stored_file(
-            self.analyses["on_document"],
-            "X.mca",
-            (fixtures / "elio_xrf.mca").read_bytes(),
-        )
-        self.stored_file(
-            self.analyses["on_document"],
-            "F.asd",
-            (fixtures / "asd_fieldspec_as8.asd").read_bytes(),
-        )
-
-        payload = self.get(self.analyses["on_document"].pk).json()
-
-        files = {f["name"]: f["viewer"] for f in payload["files"]}
-        self.assertEqual(
-            (files["X.mca"]["xLabel"], files["X.mca"]["yLabel"]),
-            ("Energy (keV)", "Counts"),
-        )
-        self.assertEqual(
-            (files["F.asd"]["xLabel"], files["F.asd"]["yLabel"]),
-            ("Wavelength (nm)", "Reflectance (0-1)"),
-        )
-        self.assertTrue(files["X.mca"]["axisKey"])
-        self.assertNotEqual(files["X.mca"]["axisKey"], files["F.asd"]["axisKey"])
-
-    def test_a_native_instrument_file_without_configuration_plots(self):
+    def test_an_instrument_file_without_configuration_is_a_raw_file(self):
         self.tile(
             self.analyses["on_document"],
             "measurement_point_data",
@@ -824,9 +790,9 @@ class AnalysisRouteTests(CorpusCase):
         files = {f["name"]: f for f in payload["files"]}
         self.assertEqual(
             (files["FORS_009.asd"]["role"], files["FORS_009.asd"]["dataKind"]),
-            ("readable", "xy"),
+            ("raw", "file"),
         )
-        self.assertTrue(files["FORS_009.asd"]["previewUrl"])
+        self.assertFalse(files["FORS_009.asd"]["previewUrl"])
         self.assertEqual(
             (files["FORS_009.spa"]["role"], files["FORS_009.spa"]["dataKind"]),
             ("raw", "file"),
@@ -1002,27 +968,6 @@ class ItemsRouteTests(CorpusCase):
         assert_shape(
             self, payload["items"][0]["characterization"], "CharacterizationSummary"
         )
-
-    def test_the_native_axes_of_a_selection_are_read_in_one_query(self):
-        mca = (Path(__file__).parent / "fixtures" / "xy" / "elio_xrf.mca").read_bytes()
-        self.stored_file(self.analyses["open"], "A.mca", mca)
-        self.stored_file(self.analyses["on_document"], "B.mca", mca)
-        one = [f"an:{self.analyses['open'].pk}:-"]
-        two = [*one, f"an:{self.analyses['on_document'].pk}:-"]
-
-        with CaptureQueriesContext(connection) as single:
-            self.get(one)
-        with CaptureQueriesContext(connection) as double:
-            payload = self.get(two).json()
-
-        self.assertEqual(file_queries(double), file_queries(single))
-        labels = {
-            f["name"]: f["viewer"]["xLabel"]
-            for item in payload["items"]
-            for f in item["files"]
-            if f["name"].endswith(".mca")
-        }
-        self.assertEqual(labels, {"A.mca": "Energy (keV)", "B.mca": "Energy (keV)"})
 
     def test_items_rejects_more_than_thirty_keys(self):
         keys = [f"ch:{i:08d}-0000-4000-8000-000000000000:-" for i in range(31)]

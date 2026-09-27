@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 01:42-0500\n"
+"POT-Creation-Date: 2026-09-27 06:50-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -204,7 +204,7 @@ msgstr "Couche : %(layers)s"
 msgid "Elements: %(elements)s"
 msgstr "Éléments : %(elements)s"
 
-#: iiif/language.py:122
+#: iiif/language.py:154
 #, python-format
 msgid "%(name)s (%(qualifier)s)"
 msgstr "%(name)s (%(qualifier)s)"
@@ -228,7 +228,7 @@ msgid "Without a position on the image"
 msgstr "Sans position sur l'image"
 
 #: iiif/manifest.py:160 views/explorer/export.py:385
-#: views/explorer/series.py:117
+#: views/explorer/series.py:115
 msgid "Contains drafts"
 msgstr "Contient des brouillons"
 
@@ -290,35 +290,7 @@ msgstr "Votre compte ne donne pas accès à ces données."
 msgid "Sign out of external viewers"
 msgstr "Se déconnecter des visionneuses externes"
 
-#: iiif/xy_reading.py:54
-msgid "Wavenumber (cm⁻¹)"
-msgstr "Nombre d'onde (cm⁻¹)"
-
-#: iiif/xy_reading.py:55
-msgid "Absorbance"
-msgstr "Absorbance"
-
-#: iiif/xy_reading.py:56
-msgid "Intensity (a.u.)"
-msgstr "Intensité (u.a.)"
-
-#: iiif/xy_reading.py:57
-msgid "Intensity (counts)"
-msgstr "Intensité (coups)"
-
-#: iiif/xy_reading.py:64
-msgid "Raman shift (cm⁻¹)"
-msgstr "Déplacement Raman (cm⁻¹)"
-
-#: iiif/xy_reading.py:68
-msgid "m/z"
-msgstr "m/z"
-
-#: iiif/xy_reading.py:69
-msgid "2θ (°)"
-msgstr "2θ (°)"
-
-#: iiif/xy_reading.py:98
+#: iiif/xy_reading.py:62
 #, python-format
 msgid "%(file)s, raw file"
 msgstr "%(file)s, fichier brut"
@@ -759,45 +731,14 @@ msgid ""
 "The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</"
 "code>): <code>id</code>, <code>type</code>, <code>format</code>, "
 "<code>label</code> and, for a raw text file, its own <code>xyReading</code> "
-"(columns and corrections). A raw file in an instrument format read from its "
-"own header (ELIO <code>.mca</code>, ASD <code>.asd</code>) carries none."
+"(columns and corrections)."
 msgstr ""
 "Le fichier brut dont le Dataset est dérivé (PROV <code>wasDerivedFrom</"
 "code>) : <code>id</code>, <code>type</code>, <code>format</code>, "
 "<code>label</code> et, pour un fichier brut texte, son propre "
-"<code>xyReading</code> (colonnes et corrections). Un fichier brut dans un "
-"format d'instrument lu depuis son propre en-tête (ELIO <code>.mca</code>, "
-"ASD <code>.asd</code>) n'en porte pas."
+"<code>xyReading</code> (colonnes et corrections)."
 
 #: templates/iiif/xy_reading_1.htm:53
-msgid "Instrument formats"
-msgstr "Formats des instruments"
-
-#: templates/iiif/xy_reading_1.htm:55
-msgid ""
-"ELIO <code>.mca</code>: the energy axis in keV comes from the calibration "
-"lines of the header (a least-squares line through two or more points); "
-"without them, x is the channel index and its <code>quantity</code> is "
-"<code>channel</code>."
-msgstr ""
-"ELIO <code>.mca</code> : l'axe d'énergie en keV vient des lignes de "
-"calibration de l'en-tête (une droite des moindres carrés par deux points ou "
-"plus) ; sans elles, x est l'indice du canal et sa grandeur (<code>quantity</"
-"code>) est <code>channel</code>."
-
-#: templates/iiif/xy_reading_1.htm:56
-msgid ""
-"ASD <code>.asd</code>: a raw spectrum saved with its white reference reads "
-"as the reflectance target / reference, relative to that reference: no panel "
-"calibration factor and no splice correction at the detector joins (about "
-"1000 and 1800 nm), as ViewSpec Pro reads it by default."
-msgstr ""
-"ASD <code>.asd</code> : un spectre brut enregistré avec sa référence blanche "
-"se lit comme la réflectance cible / référence, relative à cette référence : "
-"sans facteur de calibration du panneau ni correction des raccords entre "
-"détecteurs (vers 1000 et 1800 nm), comme ViewSpec Pro la lit par défaut."
-
-#: templates/iiif/xy_reading_1.htm:58
 msgid ""
 "The Dataset is never decimated, whatever its size. mirador-xyviewer does not "
 "plot a Dataset larger than 5 MB; such a file still plots in the ManuSpectrum "
@@ -807,11 +748,11 @@ msgstr ""
 "ne trace pas un Dataset de plus de 5 Mo ; un tel fichier se trace toujours "
 "dans l'Explorateur ManuSpectrum."
 
-#: templates/iiif/xy_reading_1.htm:60
+#: templates/iiif/xy_reading_1.htm:55
 msgid "Restricted data (IIIF Authorization)"
 msgstr "Données restreintes (IIIF Authorization)"
 
-#: templates/iiif/xy_reading_1.htm:61
+#: templates/iiif/xy_reading_1.htm:56
 msgid ""
 "Open data needs no credential. A restricted spectrum, annotation or content "
 "state answers <code>401</code> with a description that names the IIIF "
@@ -824,7 +765,7 @@ msgstr ""
 "collections d'annotations ne sont jamais refusées : elles listent ce que le "
 "lecteur peut voir et déclarent les mêmes services."
 
-#: templates/iiif/xy_reading_1.htm:63
+#: templates/iiif/xy_reading_1.htm:58
 #, python-format
 msgid ""
 "Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
@@ -837,7 +778,7 @@ msgstr ""
 "<code>active</code> d'Auth 2.0). Le lecteur s'y connecte à ManuSpectrum ; la "
 "fenêtre le confirme et peut être fermée."
 
-#: templates/iiif/xy_reading_1.htm:64
+#: templates/iiif/xy_reading_1.htm:59
 #, python-format
 msgid ""
 "Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
@@ -856,7 +797,7 @@ msgstr ""
 "lecture <code>/iiif/</code> ; le service de sonde Auth 2.0 d'un spectre "
 "indique si ce jeton l'ouvre."
 
-#: templates/iiif/xy_reading_1.htm:65
+#: templates/iiif/xy_reading_1.htm:60
 #, python-format
 msgid ""
 "Logout: opening <a href=\"%(logout_url)s\">%(logout_url)s</a> in a tab (an "
@@ -869,7 +810,7 @@ msgstr ""
 "jetons de la session ; se déconnecter de ManuSpectrum aussi. La session "
 "ManuSpectrum elle-même reste ouverte."
 
-#: templates/iiif/xy_reading_1.htm:67
+#: templates/iiif/xy_reading_1.htm:62
 msgid ""
 "The token only reads: it opens the <code>/iiif/</code> routes and nothing "
 "else, and it is not an API credential. Tokens go only to this site and to "
@@ -883,11 +824,11 @@ msgstr ""
 "toute autre origine reçoit <code>invalidOrigin</code>. Un jeton Bearer qui "
 "n'est pas un jeton IIIF de ce site est refusé."
 
-#: templates/iiif/xy_reading_1.htm:68
+#: templates/iiif/xy_reading_1.htm:63
 msgid "Known limits"
 msgstr "Limites connues"
 
-#: templates/iiif/xy_reading_1.htm:70
+#: templates/iiif/xy_reading_1.htm:65
 msgid ""
 "HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, "
 "and a browser does not keep it on a plain HTTP site."
@@ -895,7 +836,7 @@ msgstr ""
 "HTTPS est obligatoire : le cookie d'accès est <code>Secure; SameSite=None</"
 "code>, et un navigateur ne le conserve pas sur un site en HTTP simple."
 
-#: templates/iiif/xy_reading_1.htm:71
+#: templates/iiif/xy_reading_1.htm:66
 msgid ""
 "Third-party cookies: the token frame belongs to this site inside the "
 "viewer's page. Chrome sends the cookie; Safari (Intelligent Tracking "
@@ -909,7 +850,7 @@ msgstr ""
 "visionneuse redemande alors la connexion. Utilisez Chrome, une visionneuse "
 "servie par ce site, ou autorisez les cookies de ce site dans le navigateur."
 
-#: templates/iiif/xy_reading_1.htm:72
+#: templates/iiif/xy_reading_1.htm:67
 msgid ""
 "The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login "
 "window opened from another site may ask to sign in again even when another "
@@ -919,7 +860,7 @@ msgstr ""
 "fenêtre de connexion ouverte depuis un autre site peut redemander la "
 "connexion même quand un autre onglet est déjà connecté."
 
-#: templates/iiif/xy_reading_1.htm:73
+#: templates/iiif/xy_reading_1.htm:68
 #, python-format
 msgid ""
 "The viewer renews its token silently while the access cookie lives: at most "
@@ -929,11 +870,11 @@ msgstr ""
 "cookie d'accès : %(cookie_hours)s heures au plus, et jamais au-delà de la "
 "session ManuSpectrum."
 
-#: templates/iiif/xy_reading_1.htm:76
+#: templates/iiif/xy_reading_1.htm:71
 msgid "Versions"
 msgstr "Versions"
 
-#: templates/iiif/xy_reading_1.htm:77
+#: templates/iiif/xy_reading_1.htm:72
 msgid ""
 "The major version is in the path of the context (<code>/1</code>). Version 1 "
 "only gains optional keys; a change of meaning would be version 2, at a new "
@@ -943,7 +884,7 @@ msgstr ""
 "version 1 ne gagne que des clés facultatives ; un changement de sens serait "
 "une version 2, à un nouveau chemin."
 
-#: templates/iiif/xy_reading_1.htm:78
+#: templates/iiif/xy_reading_1.htm:73
 #, python-format
 msgid ""
 "JSON Schema (Draft 7): <a href=\"%(schema_url)s\">%(schema_url)s</a>. JSON-"
@@ -952,7 +893,7 @@ msgstr ""
 "Schéma JSON (Draft 7) : <a href=\"%(schema_url)s\">%(schema_url)s</a>. "
 "Contexte JSON-LD : <a href=\"%(context_url)s\">%(context_url)s</a>."
 
-#: templates/iiif/xy_reading_1.htm:80
+#: templates/iiif/xy_reading_1.htm:75
 msgid "Example"
 msgstr "Exemple"
 
@@ -4811,26 +4752,6 @@ msgstr ""
 "License v3. La consultation et le téléchargement des données publiées ne "
 "nécessitent aucun compte."
 
-#: utils/instrument_formats.py:58
-msgid "Energy (keV)"
-msgstr "Énergie (keV)"
-
-#: utils/instrument_formats.py:59
-msgid "Channel"
-msgstr "Canal"
-
-#: utils/instrument_formats.py:60
-msgid "Counts"
-msgstr "Coups"
-
-#: utils/instrument_formats.py:61
-msgid "Wavelength (nm)"
-msgstr "Longueur d'onde (nm)"
-
-#: utils/instrument_formats.py:62
-msgid "Reflectance (0-1)"
-msgstr "Réflectance (0-1)"
-
 #: views/biblissima_proxy.py:324
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
@@ -5005,47 +4926,47 @@ msgstr ""
 "Non inclus : le manifeste d'imagerie %(url)s de %(analysis)s n'a pas pu être "
 "récupéré."
 
-#: views/explorer/series.py:84
+#: views/explorer/series.py:83
 #, python-format
 msgid "licence %(licence)s"
 msgstr "licence %(licence)s"
 
-#: views/explorer/series.py:86
+#: views/explorer/series.py:85
 #, python-format
 msgid "attribution %(text)s"
 msgstr "attribution %(text)s"
 
-#: views/explorer/series.py:88
+#: views/explorer/series.py:87
 #, python-format
 msgid "configuration %(name)s"
 msgstr "configuration %(name)s"
 
-#: views/explorer/series.py:93
+#: views/explorer/series.py:92
 #, python-format
 msgid "x axis %(label)s"
 msgstr "axe x %(label)s"
 
-#: views/explorer/series.py:95
+#: views/explorer/series.py:94
 #, python-format
 msgid "y axis %(label)s"
 msgstr "axe y %(label)s"
 
-#: views/explorer/series.py:96
+#: views/explorer/series.py:95
 #, python-format
 msgid "raw file %(url)s"
 msgstr "fichier brut %(url)s"
 
-#: views/explorer/series.py:113
+#: views/explorer/series.py:111
 #, python-format
 msgid "%(site)s: spectra of a Selection"
 msgstr "%(site)s : spectres d'une Sélection"
 
-#: views/explorer/series.py:114
+#: views/explorer/series.py:112
 #, python-format
 msgid "Generated on %(date)s"
 msgstr "Produit le %(date)s"
 
-#: views/explorer/series.py:160
+#: views/explorer/series.py:157
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
@@ -5054,7 +4975,7 @@ msgstr ""
 "exclu : %(file)s — la licence %(licence)s interdit les œuvres dérivées ; "
 "fichier brut : %(url)s"
 
-#: views/explorer/series.py:175
+#: views/explorer/series.py:172
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
@@ -5209,6 +5130,68 @@ msgid ""
 msgstr ""
 "Cette configuration a été modifiée par quelqu’un d’autre depuis son "
 "chargement. Rechargez-la avant d’enregistrer."
+
+#~ msgid "Wavenumber (cm⁻¹)"
+#~ msgstr "Nombre d'onde (cm⁻¹)"
+
+#~ msgid "Absorbance"
+#~ msgstr "Absorbance"
+
+#~ msgid "Intensity (a.u.)"
+#~ msgstr "Intensité (u.a.)"
+
+#~ msgid "Intensity (counts)"
+#~ msgstr "Intensité (coups)"
+
+#~ msgid "Raman shift (cm⁻¹)"
+#~ msgstr "Déplacement Raman (cm⁻¹)"
+
+#~ msgid "m/z"
+#~ msgstr "m/z"
+
+#~ msgid "2θ (°)"
+#~ msgstr "2θ (°)"
+
+#~ msgid "Instrument formats"
+#~ msgstr "Formats des instruments"
+
+#~ msgid ""
+#~ "ELIO <code>.mca</code>: the energy axis in keV comes from the calibration "
+#~ "lines of the header (a least-squares line through two or more points); "
+#~ "without them, x is the channel index and its <code>quantity</code> is "
+#~ "<code>channel</code>."
+#~ msgstr ""
+#~ "ELIO <code>.mca</code> : l'axe d'énergie en keV vient des lignes de "
+#~ "calibration de l'en-tête (une droite des moindres carrés par deux points "
+#~ "ou plus) ; sans elles, x est l'indice du canal et sa grandeur "
+#~ "(<code>quantity</code>) est <code>channel</code>."
+
+#~ msgid ""
+#~ "ASD <code>.asd</code>: a raw spectrum saved with its white reference "
+#~ "reads as the reflectance target / reference, relative to that reference: "
+#~ "no panel calibration factor and no splice correction at the detector "
+#~ "joins (about 1000 and 1800 nm), as ViewSpec Pro reads it by default."
+#~ msgstr ""
+#~ "ASD <code>.asd</code> : un spectre brut enregistré avec sa référence "
+#~ "blanche se lit comme la réflectance cible / référence, relative à cette "
+#~ "référence : sans facteur de calibration du panneau ni correction des "
+#~ "raccords entre détecteurs (vers 1000 et 1800 nm), comme ViewSpec Pro la "
+#~ "lit par défaut."
+
+#~ msgid "Energy (keV)"
+#~ msgstr "Énergie (keV)"
+
+#~ msgid "Channel"
+#~ msgstr "Canal"
+
+#~ msgid "Counts"
+#~ msgstr "Coups"
+
+#~ msgid "Wavelength (nm)"
+#~ msgstr "Longueur d'onde (nm)"
+
+#~ msgid "Reflectance (0-1)"
+#~ msgstr "Réflectance (0-1)"
 
 #~ msgid "XRF"
 #~ msgstr "XRF"

@@ -8,7 +8,6 @@ Usage:
 
 import json
 import uuid
-from unittest import mock
 from pathlib import Path
 
 from django.contrib.auth.models import Group, User
@@ -19,7 +18,6 @@ from arches.app.utils.permission_backend import assign_perm
 
 from manuspectrum.constants.xy_presets import XY_PRESETS
 from manuspectrum.models import RendererConfig
-from manuspectrum.utils import instrument_formats
 from manuspectrum.utils.spectrum_preview import read_series
 from tests.explorer_fixtures import IIIFCase
 
@@ -226,51 +224,44 @@ class SeriesTests(DataCase):
             lines, [f"{repr(x)},{repr(y)}" for x, y in zip(series["x"], series["y"])]
         )
 
-    def test_an_mca_clean_csv_is_in_kev(self):
-        file_id = self.stored_file(
-            self.analyses["open"], "X.mca", (FIXTURES / "elio_xrf.mca").read_bytes()
-        )
-
-        lines = self.body(self.series(file_id)).decode().splitlines()
-
-        self.assertEqual(lines[0], "Energy (keV),Counts")
-        self.assertEqual(len(lines), 4097)
-
-    def test_the_entry_name_decides_the_format_of_the_clean_csv(self):
-        file_id = self.stored_file(
-            self.analyses["open"], "X.dat", (FIXTURES / "elio_xrf.mca").read_bytes()
-        )
+    def rename(self, file_id, name):
         tile = File.objects.get(pk=file_id).tile
         data = {
             node: [
-                {**entry, "name": "X.mca"} if entry.get("file_id") == file_id else entry
+                {**entry, "name": name} if entry.get("file_id") == file_id else entry
                 for entry in entries
             ]
             for node, entries in tile.data.items()
         }
         TileModel.objects.filter(pk=tile.pk).update(data=data)
 
+    def test_an_instrument_file_has_no_clean_csv_and_serves_its_raw_bytes(self):
+        content = (FIXTURES / "elio_xrf.mca").read_bytes()
+        file_id = self.stored_file(self.analyses["open"], "X.mca", content)
+
+        raw = self.raw(file_id)
+
+        self.assertEqual(self.series(file_id).status_code, 404)
+        self.assertEqual(raw.status_code, 200)
+        self.assertEqual(raw["Content-Type"], "application/octet-stream")
+        self.assertEqual(self.body(raw), content)
+
+    def test_the_entry_name_decides_the_format_of_the_clean_csv(self):
+        file_id = self.stored_file(self.analyses["open"], "X.dat", b"1,2\n3,4\n")
+        self.rename(file_id, "X.csv")
+
         response = self.series(file_id)
 
         self.assertEqual(response.status_code, 200)
-        lines = self.body(response).decode().splitlines()
-        self.assertEqual(lines[0], "Energy (keV),Counts")
-        self.assertEqual(len(lines), 4097)
-
-    def test_a_page_reads_each_native_header_once(self):
-        self.stored_file(
-            self.analyses["open"], "X.mca", (FIXTURES / "elio_xrf.mca").read_bytes()
+        self.assertEqual(
+            self.body(response).decode().splitlines(), ["x,y", "1.0,2.0", "3.0,4.0"]
         )
-        doc = self.documents["open"].pk
 
-        with mock.patch.object(
-            instrument_formats, "_mca_axes", wraps=instrument_formats._mca_axes
-        ) as header:
-            response = self.visitor.get(f"/iiif/v3/annotation-collection/{doc}/page-1")
+    def test_a_text_file_named_as_an_instrument_file_has_no_clean_csv(self):
+        file_id = self.stored_file(self.analyses["open"], "X.csv", b"1,2\n3,4\n")
+        self.rename(file_id, "X.mca")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("series.csv", response.content.decode())
-        self.assertEqual(header.call_count, 1)
+        self.assertEqual(self.series(file_id).status_code, 404)
 
     def test_a_no_derivatives_file_has_no_clean_csv(self):
         file_id = self.fors_file(licence=ND)

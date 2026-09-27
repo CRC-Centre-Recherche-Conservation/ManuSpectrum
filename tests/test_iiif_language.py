@@ -165,7 +165,6 @@ class CatalogueTests(SimpleTestCase):
         "iiif/",
         "views/iiif/",
         "templates/iiif/",
-        "utils/instrument_formats.py",
     )
 
     def entries(self):

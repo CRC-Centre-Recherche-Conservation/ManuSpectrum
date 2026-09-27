@@ -175,17 +175,6 @@ class ReadingTests(SimpleTestCase):
 
         self.assertTrue(list(validator().iter_errors(reading)))
 
-    def test_an_mca_reading_states_energy_from_its_calibration(self):
-        mca = self.raw("elio_xrf.mca")
-
-        reading = xy_reading.xy_reading(mca, {})
-
-        self.assertEqual(reading["x"]["quantity"], "energy")
-        self.assertEqual(reading["x"]["unit"], "keV")
-        self.assertEqual(xy_reading.csv_header({}, mca), ("Energy (keV)", "Counts"))
-        self.assertNotIn("xyReading", reading["derivedFrom"])
-        self.assertEqual(list(validator().iter_errors(reading)), [])
-
 
 class CleanCsvTests(SimpleTestCase):
     def test_the_clean_csv_is_streamed_from_the_file(self):
@@ -309,18 +298,16 @@ class BodyTests(IIIFCase):
         self.assertEqual(body["xyReading"]["multiY"], "reference-normalize")
         self.assertNotIn("derivedFrom", body["xyReading"])
 
-    def test_an_mca_is_a_clean_csv_body_in_kev(self):
+    def test_the_body_of_an_instrument_file_is_the_raw_file_without_a_reading(self):
         file_id = self.stored_file(
             self.analyses["open"], "X.mca", (FIXTURES / "elio_xrf.mca").read_bytes()
         )
 
         body = self.body(file_id)
 
-        self.assertEqual(body["id"], ids.data_series(file_id))
-        self.assertEqual(body["xyReading"]["x"]["unit"], "keV")
-        self.assertEqual(
-            body["xyReading"]["derivedFrom"]["format"], "application/octet-stream"
-        )
+        self.assertEqual(body["id"], ids.data_raw(file_id))
+        self.assertEqual(body["format"], "application/octet-stream")
+        self.assertNotIn("xyReading", body)
 
     def test_the_body_of_an_unreadable_raw_file_has_no_reading(self):
         file_id = self.stored_file(self.analyses["open"], "X.spc", b"\x00\x01")

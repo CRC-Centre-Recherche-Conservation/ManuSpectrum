@@ -451,9 +451,8 @@ def find_preview(doc, node):
     """First file of a file-list node the spectrum preview can plot, or None.
 
     Which formats those are is the endpoint's own test (``is_readable``: the
-    text formats of ``settings.XY_TEXT_FILE_FORMATS`` and the instrument
-    formats read natively), so the popup never offers a format the preview
-    answers 204 for.
+    text formats of ``settings.XY_TEXT_FILE_FORMATS``), so the popup never
+    offers a format the preview answers 204 for.
     """
     for value in _tile_values(doc, node):
         if not isinstance(value, dict) or not value.get("file_id"):

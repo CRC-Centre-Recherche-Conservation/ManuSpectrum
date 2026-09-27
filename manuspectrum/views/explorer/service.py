@@ -33,7 +33,6 @@ from django.utils import translation
 from django.utils.http import urlencode
 
 from arches.app.models.models import (
-    File,
     ResourceInstance,
     TileModel,
 )
@@ -56,7 +55,6 @@ from manuspectrum.utils.public_visibility import (
     readable_nodegroup_ids,
     visible_set,
 )
-from manuspectrum.utils.instrument_formats import is_native, native_axes
 from manuspectrum.utils.role_links import readable_links, role_node
 from manuspectrum.utils.roles import ROLES
 from manuspectrum.views.explorer import memo as explorer_memo
@@ -1942,62 +1940,24 @@ def renderer_configs(values, analysis_ids):
     }
 
 
-def native_configs(values, analysis_ids):
-    """``{file id: configuration}`` naming the axes each native instrument file of *analysis_ids* states in its header.
-
-    Only the measurement files without a renderer configuration whose format
-    is read natively (``instrument_formats``) are looked at, in one query;
-    a file whose header states nothing is left out.
-    """
-    wanted = {
-        str(e["file_id"]): str(e.get("name") or "")
-        for analysis_id in analysis_ids
-        for e in values.get(analysis_id, "files")
-        if isinstance(e, dict)
-        and e.get("file_id")
-        and not e.get("rendererConfig")
-        and is_native(str(e.get("name") or ""))
-    }
-    if not wanted:
-        return {}
-    storage = File._meta.get_field("path").storage
-    found = {}
-    for file_id, stored in File.objects.filter(pk__in=list(wanted)).values_list(
-        "fileid", "path"
-    ):
-        if not stored:
-            continue
-        axes = native_axes(storage.path(stored), wanted[str(file_id)])
-        if axes:
-            found[str(file_id)] = {
-                "display": {"xAxisLabel": axes[0].label, "yAxisLabel": axes[1].label}
-            }
-    return found
-
-
-def analysis_files(
-    analysis_id, user, language, values=None, configs=None, read=None, native=None
-):
+def analysis_files(analysis_id, user, language, values=None, configs=None, read=None):
     """Every file of an analysis as ``FileEntry``: measurements, micro-imaging, chemical imaging.
 
-    *values*, *configs* (``renderer_configs``) and *native*
-    (``native_configs``) let a caller with several analyses share one
-    batched tile lookup and one lookup of each kind instead of one per
-    analysis; *read* reads the imaging manifests (``imaging_entries``).
+    *values* and *configs* (``renderer_configs``) let a caller with several
+    analyses share one batched tile lookup and one configuration lookup
+    instead of one of each per analysis; *read* reads the imaging manifests
+    (``imaging_entries``).
     """
     if values is None:
         values = Values([analysis_id], ["files", "micro", "imaging"], user)
     if configs is None:
         configs = renderer_configs(values, [analysis_id])
-    if native is None:
-        native = native_configs(values, [analysis_id])
     return (
         file_entries(
             values.get(analysis_id, "files"),
             language=language,
             configs=configs,
             kind="measurement",
-            native=native,
         )
         + file_entries(
             values.get(analysis_id, "micro"),
@@ -2298,7 +2258,6 @@ def items_payload(keys, user, language):
     shared_configs = (
         renderer_configs(shared_values, file_ids) if shared_values else None
     )
-    shared_native = native_configs(shared_values, file_ids) if shared_values else None
     files_of, items, missing = {}, [], []
     for key, match in parsed:
         if not match:
@@ -2328,7 +2287,6 @@ def items_payload(keys, user, language):
                 language,
                 values=shared_values,
                 configs=shared_configs,
-                native=shared_native,
             )
         if kind == "an":
             items.append(

@@ -33,7 +33,6 @@ from manuspectrum.views.explorer.service import (
     Values,
     analysis_files,
     permalink,
-    native_configs,
     renderer_configs,
 )
 
@@ -98,17 +97,16 @@ def _curve_line(number, name, entry, entries, config, config_id):
 
 
 def _plan(scope):
-    """``(comment lines, curves)`` of *scope*; each curve is ``(label, analysis id, file id, path, config, entry name)``.
+    """``(comment lines, curves)`` of *scope*; each curve is ``(label, analysis id, file id, path, config)``.
 
     A readable XY entry ``scope_files`` refuses is left out without a line.
     One under a no-derivatives licence, one in a format ``read_series`` does
     not read (``is_readable``) or over ``SPECTRUM_PREVIEW_MAX_BYTES`` gets a
     comment line naming its file and is never read. Each curve's line names
-    its axes when its configuration or its native header states them.
+    its axes when its configuration states them.
     """
     values = Values(list(scope.analyses), ["files", "micro", "imaging"], scope.reader)
     configs = renderer_configs(values, scope.analyses)
-    native = native_configs(values, list(scope.analyses))
     comments = [
         _("%(site)s: spectra of a Selection") % {"site": settings.APP_TITLE},
         _("Generated on %(date)s") % {"date": datetime.date.today().isoformat()},
@@ -126,7 +124,6 @@ def _plan(scope):
                 scope.language,
                 values=values,
                 configs=configs,
-                native=native,
                 read=scope.read_manifest,
             ),
         )
@@ -185,16 +182,7 @@ def _plan(scope):
             per_curve.append(
                 _curve_line(number, name, entry, entries, config, config_id)
             )
-            curves.append(
-                (
-                    f"c{number}",
-                    analysis_id,
-                    entry["id"],
-                    path,
-                    config,
-                    entry.get("name"),
-                )
-            )
+            curves.append((f"c{number}", analysis_id, entry["id"], path, config))
         if listed:
             per_analysis.append(f"{name}: {permalink(analysis_id)}")
     return comments + per_analysis + per_curve, curves
@@ -203,9 +191,9 @@ def _plan(scope):
 def _rows(curves):
     writer = csv.writer(_Line(), lineterminator="\r\n")
     yield writer.writerow(HEADER)
-    for label, analysis_id, file_id, path, config, name in curves:
+    for label, analysis_id, file_id, path, config in curves:
         try:
-            series = read_series(path, config, name)
+            series = read_series(path, config)
         except OSError:
             series = None
         if not series:

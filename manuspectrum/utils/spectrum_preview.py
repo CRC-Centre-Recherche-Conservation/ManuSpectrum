@@ -1,10 +1,12 @@
 """A spectrum file read as a stream into the handful of points a sparkline draws.
 
-The text formats read are ``settings.XY_TEXT_FILE_FORMATS``, the same list
-the XY reader and ``functions.xy_technique_config`` call canonical. Two raw
-instrument formats are read natively (``utils.instrument_formats``): ELIO
-``.mca``, whose energy axis comes from the calibration in its own header, and
-ASD ``.asd``. Every other format has no preview.
+Which extensions are readable is ``settings.XY_TEXT_FILE_FORMATS``, the same
+list the XY reader and ``functions.xy_technique_config`` call canonical: an
+instrument export that is not one of them is converted upstream, not parsed
+here. Everything else — the binary formats, and ``.mca``, whose channel axis
+means nothing without the per-file calibration in its header — has no preview.
+The extension of a file's entry name, not of its stored path, names its format
+(``format_source``).
 
 The curve is the one the XY reader opens on, not the raw first two columns: the
 renderer configuration stamped on the file entry says which column holds x,
@@ -29,11 +31,6 @@ from contextlib import contextmanager
 
 from django.conf import settings
 
-from manuspectrum.utils.instrument_formats import (
-    format_source,
-    is_native,
-    read_native,
-)
 from manuspectrum.utils.xy_transforms import apply_config
 
 # The separators a canonical export has been seen to use, alone or repeated:
@@ -49,10 +46,14 @@ def is_supported(path):
     }
 
 
+def format_source(path, name=None):
+    """What names the format of a stored file: its entry *name* when known, else its *path*."""
+    return name or path
+
+
 def is_readable(path, name=None):
-    """Whether ``read_series`` reads the format (``format_source``): a supported text format or a native one."""
-    source = format_source(path, name)
-    return is_supported(source) or is_native(source)
+    """Whether ``read_series`` reads the format (``format_source``): one of `XY_TEXT_FILE_FORMATS`."""
+    return is_supported(str(format_source(path, name)))
 
 
 def parse_rows(lines):
@@ -179,32 +180,25 @@ def _regroup(spans, budget):
 
 
 @contextmanager
-def _points(path, config, name=None):
+def _points(path, config):
     """The configured points of one file, streamed from a single open.
 
-    The extension of *name* (else of *path*) names the format. Decoding
-    errors are replaced rather than raised: a text export with one stray
-    byte still has a spectrum in it, and the offending row reads as NaN and
-    is dropped on its own. A native format is read whole by ``read_native``
-    under its own configuration; *config* is not consulted.
+    Decoding errors are replaced rather than raised: a text export with one
+    stray byte still has a spectrum in it, and the offending row reads as NaN
+    and is dropped on its own. The caller checks the format (``is_readable``).
     """
-    if is_native(format_source(path, name)):
-        native = read_native(path, name)
-        yield apply_config(native.rows, native.config) if native else iter(())
-        return
     with open(path, encoding="utf-8", errors="replace") as handle:
         yield apply_config(parse_rows(handle), config)
 
 
-def series_points(path, config=None, name=None):
+def series_points(path, config=None):
     """Every ``(x, y)`` of one file as the reader draws it, streamed; nothing when it holds fewer than two.
 
     `config` is the stored renderer configuration of the file entry, which
-    decides the columns and the normalisation of a text format; a native
-    format reads under its own. The extension of *name* (else of *path*)
-    names the format. A text file is read one row at a time, never decimated.
+    decides the columns and the normalisation. The file is read one row at a
+    time, never decimated; the caller checks the format (``is_readable``).
     """
-    with _points(path, config, name) as points:
+    with _points(path, config) as points:
         first = list(itertools.islice(points, 2))
         if len(first) < 2:
             return
@@ -212,34 +206,28 @@ def series_points(path, config=None, name=None):
         yield from points
 
 
-def x_reversed(path, config=None, name=None):
-    """Whether the reader draws x reversed: a text format's configuration says so; a native one never."""
-    return not is_native(format_source(path, name)) and is_x_reversed(config)
-
-
-def read_series(path, config=None, name=None):
+def read_series(path, config=None):
     """Every point of one file (``series_points``) held in memory, or ``None`` when it draws nothing.
 
     Returns ``{"x", "y", "x_reversed"}``.
     """
     xs, ys = [], []
-    for x, y in series_points(path, config, name):
+    for x, y in series_points(path, config):
         xs.append(x)
         ys.append(y)
     if not xs:
         return None
-    return {"x": xs, "y": ys, "x_reversed": x_reversed(path, config, name)}
+    return {"x": xs, "y": ys, "x_reversed": is_x_reversed(config)}
 
 
-def build_preview(path, n, config=None, name=None):
+def build_preview(path, n, config=None):
     """The decimated series of one file, or ``None`` when it draws nothing.
 
     The points are those ``read_series`` reads, streamed into ``decimate``
-    without holding the series in memory; the extension of *name* (else of
-    *path*) names the format.
+    without holding the series in memory.
     """
-    with _points(path, config, name) as points:
+    with _points(path, config) as points:
         series = decimate(points, n)
     if series is not None:
-        series["x_reversed"] = x_reversed(path, config, name)
+        series["x_reversed"] = is_x_reversed(config)
     return series

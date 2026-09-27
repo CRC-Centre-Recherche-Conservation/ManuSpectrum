@@ -511,15 +511,13 @@ class SpectrumPreviewViewTests(SimpleTestCase):
 
             self.assertEqual(response.status_code, 204, suffix)
 
-    def test_an_instrument_format_read_natively_is_served(self):
-        mca = os.path.join(os.path.dirname(__file__), "fixtures", "xy", "elio_xrf.mca")
-        with open(mca, encoding="utf-8", newline="") as handle:
+    def test_an_instrument_file_is_not_previewed(self):
+        with open(os.path.join(FIXTURES, "elio_xrf.mca"), encoding="utf-8") as handle:
             path = self.written(".mca", handle.read())
 
         response = self.get(path)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response.content)["n_source"], 4096)
+        self.assertEqual(response.status_code, 204)
 
     @override_settings(XY_TEXT_FILE_FORMATS=["csv", "txt"])
     def test_a_format_the_setting_adds_is_served(self):
