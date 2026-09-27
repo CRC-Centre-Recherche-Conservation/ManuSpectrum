@@ -564,6 +564,9 @@ class TestIIIFAnnotationView(TestCase):
         )
         guard.start()
         self.addCleanup(guard.stop)
+        seen = patch.object(IIIFAnnotationView, "_not_seen", return_value=False)
+        seen.start()
+        self.addCleanup(seen.stop)
 
     def tearDown(self):
         cache.clear()
@@ -1687,6 +1690,7 @@ class TestChildPermissionHelpers(TestCase):
 
     def test_public_for_anonymous_is_true_when_every_resource_is_readable(self):
         from django.contrib.auth.models import User
+        from manuspectrum.utils.public_visibility import VisibleSet
 
         anonymous = User.objects.get(username="anonymous")
         seen = []
@@ -1695,9 +1699,15 @@ class TestChildPermissionHelpers(TestCase):
             seen.append(user)
             return True
 
-        with patch(
-            "manuspectrum.views.iiif_annotation.user_can_read_resource",
-            side_effect=decide,
+        with (
+            patch(
+                "manuspectrum.views.iiif_annotation.user_can_read_resource",
+                side_effect=decide,
+            ),
+            patch(
+                "manuspectrum.views.iiif_annotation.visible_set",
+                return_value=VisibleSet(analyses=frozenset({"a", "b"})),
+            ),
         ):
             self.assertTrue(self.mixin._public_for_anonymous([self.a, self.b]))
 
@@ -1813,7 +1823,7 @@ class TestChildPermissionsInViews(TestCase):
             patch.object(
                 view,
                 "_get_annotations_from_analyses",
-                side_effect=lambda analyses: [
+                side_effect=lambda analyses, nodegroups=None: [
                     {
                         "canvas": "https://example.org/c1",
                         "id": a.resourceinstanceid,
@@ -1920,7 +1930,7 @@ class TestChildPermissionsInViews(TestCase):
             patch.object(
                 view,
                 "_get_annotations_from_analyses",
-                side_effect=lambda analyses: [
+                side_effect=lambda analyses, nodegroups=None: [
                     {
                         "canvas": "https://example.org/c1",
                         "id": a.resourceinstanceid,
@@ -2043,6 +2053,7 @@ class TestChildPermissionsInViews(TestCase):
             patch(
                 "manuspectrum.views.iiif_annotation.IIIFAnnotationSerializer"
             ) as mock_serializer,
+            patch.object(view, "_not_seen", return_value=False),
         ):
             mock_resource.DoesNotExist = type("DoesNotExist", (Exception,), {})
             mock_resource.objects.get.return_value = analysis

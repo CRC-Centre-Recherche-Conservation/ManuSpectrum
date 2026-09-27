@@ -50,13 +50,16 @@ class IIIFAnnotationSerializer:
         "dataset_uri": "eae46252-7bf0-11ef-b1e5-dd514ecd97bc",
     }
 
-    def __init__(self):
-        """One serializer per request.
+    def __init__(self, nodegroups=None):
+        """One serializer per request and reader.
 
         The batch flag and the four lookup caches are request-scoped: they
         are filled by ``batch_to_representation`` and must never be shared
-        between two requests served by the same process.
+        between two requests served by the same process. Only tiles of a
+        nodegroup in *nodegroups* (the reader's readable nodegroup ids, as
+        strings) are read; ``None`` reads every tile.
         """
+        self._nodegroups = None if nodegroups is None else list(nodegroups)
         self._batch_mode: bool = False
         self._concept_cache: Dict[str, dict] = {}
         self._resource_cache: Dict[str, dict] = {}
@@ -76,9 +79,9 @@ class IIIFAnnotationSerializer:
         if resource_id in self._tiles_cache:
             return self._tiles_cache[resource_id]
 
-        tiles_qs = Tile.objects.filter(resourceinstance_id=resource_id).values(
-            "resourceinstance_id", "data"
-        )
+        tiles_qs = self._readable(
+            Tile.objects.filter(resourceinstance_id=resource_id)
+        ).values("resourceinstance_id", "data")
 
         data: dict = {}
         for row in tiles_qs:
@@ -89,6 +92,12 @@ class IIIFAnnotationSerializer:
 
         self._tiles_cache[resource_id] = data
         return data
+
+    def _readable(self, tiles):
+        """*tiles* narrowed to the reader's nodegroups."""
+        if self._nodegroups is None:
+            return tiles
+        return tiles.filter(nodegroup_id__in=self._nodegroups)
 
     @classmethod
     def _extract_resource_id(cls, value) -> str:
@@ -297,9 +306,9 @@ class IIIFAnnotationSerializer:
             return
 
         # 1. TILES : only on request
-        tiles_qs = Tile.objects.filter(resourceinstance_id__in=resource_ids).values(
-            "resourceinstance_id", "data"
-        )
+        tiles_qs = self._readable(
+            Tile.objects.filter(resourceinstance_id__in=resource_ids)
+        ).values("resourceinstance_id", "data")
 
         tiles_by_resource: Dict[str, dict] = {}
         for row in tiles_qs:

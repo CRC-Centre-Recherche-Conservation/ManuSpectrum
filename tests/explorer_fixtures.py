@@ -105,6 +105,12 @@ ROLE_NODES = [
     ("document", "type", "reference", "doc_type"),
 ]
 
+# Roles whose node carries the id it has in the ManuSpectrum model, for readers
+# that still address a node by id.
+REAL_NODE_IDS = {
+    ("analysis", "measurement_point_data"): "8fe5161a-7bf2-11ef-b1e5-dd514ecd97bc",
+}
+
 CANVAS = "https://example.org/iiif/ms59/canvas/f1v"
 MANIFEST = "https://example.org/iiif/ms59/manifest"
 XY_CONFIG_ID = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a01"
@@ -142,7 +148,7 @@ class ExplorerCase(TestCase):
                     nodegroupid=uuid.uuid4(), cardinality="n"
                 )
             cls.nodes[(slug, alias)] = Node.objects.create(
-                nodeid=uuid.uuid4(),
+                nodeid=REAL_NODE_IDS.get((slug, alias)) or uuid.uuid4(),
                 graph=cls.graphs[slug],
                 nodegroup=nodegroups[key],
                 name=alias,
@@ -381,6 +387,22 @@ class ExplorerCase(TestCase):
         data[str(node.nodeid)] = [*(data.get(str(node.nodeid)) or []), entry]
         TileModel.objects.filter(pk=tile.pk).update(data=data)
         return file_id
+
+    def restrict_nodegroup(self, nodegroup_id, allowed_user):
+        """Take read access to *nodegroup_id* away from the visitor and grant it to *allowed_user*.
+
+        The visitor is the ``anonymous`` row; *allowed_user* gets an explicit
+        ``read_nodegroup``. Other accounts keep Arches' default (no object
+        grant of their own: every nodegroup readable).
+        """
+        nodegroup = NodeGroup.objects.get(pk=nodegroup_id)
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+            assign_perm("read_nodegroup", allowed_user, nodegroup)
+
+    def hide_project(self, project):
+        """Restrict *project* from the visitor: its analyses are hidden with it (D33)."""
+        self.embargo(project)
 
     def make_draft(self, resource):
         ResourceInstance.objects.filter(pk=resource.pk).update(

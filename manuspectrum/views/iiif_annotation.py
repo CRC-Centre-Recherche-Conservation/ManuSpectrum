@@ -199,19 +199,38 @@ class IIIFAnnotationMixin:
             )
         return _not_found(message)
 
-    def _public_for_anonymous(self, resources):
-        """True iff the Arches ``anonymous`` user may read every resource.
+    def _public_for_anonymous(self, analyses):
+        """True iff the Arches ``anonymous`` user sees every analysis.
 
         This is the reader `SetAnonymousUser` installs on an unauthenticated
         request, so it decides whether a payload is the same for everyone.
-        Without that row nothing is public.
+        The visitor sees an analysis it may read that is in
+        ``visible_set(anonymous).analyses`` (D33: not through a hidden
+        Project). Without that row nothing is public.
         """
         from django.contrib.auth.models import User
 
         anonymous = User.objects.filter(username="anonymous").first()
         if anonymous is None:
             return False
-        return all(user_can_read_resource(anonymous, resource=r) for r in resources)
+        seen = visible_set(anonymous).analyses
+        return all(
+            str(r.resourceinstanceid) in seen
+            and user_can_read_resource(anonymous, resource=r)
+            for r in analyses
+        )
+
+    def _reads_like_the_visitor(self, user):
+        """True iff *user* reads exactly the nodegroups the visitor reads.
+
+        A payload built for a reader with other nodegroup rights holds other
+        tile values: it is never stored nor served under a shared key.
+        """
+        return readable_nodegroup_ids(user) == readable_nodegroup_ids(anonymous_user())
+
+    def _not_seen(self, user, analysis):
+        """True iff *analysis* is outside ``visible_set(user).analyses`` (D33 cascade)."""
+        return str(analysis.resourceinstanceid) not in visible_set(user).analyses
 
     def _readable_analyses(self, user, resource):
         """Return (the analyses *user* may read, whether the payload is public).
@@ -223,13 +242,14 @@ class IIIFAnnotationMixin:
         Project is hidden with it (D33). The payload is
         public, the same for every reader, when the anonymous reader may read
         *resource* and every analysis reached, and *user* reads them all too;
-        a restricted analysis anywhere makes it reader-dependent.
+        a restricted analysis anywhere makes it reader-dependent, and so does
+        a reader whose readable nodegroups differ from the visitor's.
         """
         paths = self._analysis_paths(resource)
         reached = {analysis_id for analysis_id, _ in paths}
         readable = _through_readable_path(paths, user)
         public = False
-        if readable == reached:
+        if readable == reached and self._reads_like_the_visitor(user):
             anonymous = anonymous_user()
             public = _through_readable_path(
                 paths, anonymous
@@ -469,10 +489,15 @@ class IIIFAnnotationMixin:
             "manifest_url": manifest_url,
         }
 
-    def _get_annotations_from_analyses(self, analyses: list[Resource]) -> list[dict]:
+    def _get_annotations_from_analyses(
+        self, analyses: list[Resource], nodegroups=None
+    ) -> list[dict]:
         """
         Optimized single-query fetch for all annotations associated to multiple analyses.
         Each VwAnnotation produces (in your model) exactly one IIIF Annotation.
+
+        Only zones of a nodegroup in *nodegroups* (ids as strings) are read;
+        ``None`` reads every nodegroup.
         """
         annotations: list[dict] = []
         analysis_ids = [a.resourceinstanceid for a in analyses]
@@ -482,6 +507,8 @@ class IIIFAnnotationMixin:
         vw_annotations = VwAnnotation.objects.filter(
             resourceinstance_id__in=analysis_ids
         )
+        if nodegroups is not None:
+            vw_annotations = vw_annotations.filter(nodegroup_id__in=list(nodegroups))
 
         for vw_anno in vw_annotations:
             try:
@@ -547,7 +574,10 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
                 if cached:
                     return cached
 
-            annotations = self._get_annotations_from_analyses(analyses)
+            nodegroups = readable_nodegroup_ids(request.user)
+            annotations = self._get_annotations_from_analyses(
+                analyses, nodegroups=nodegroups
+            )
             if not annotations:
                 return JsonResponse(
                     {"error": "No annotations found for analyses"}, status=404
@@ -565,9 +595,9 @@ class IIIFAnnotationCollectionView(IIIFAnnotationMixin, View):
                     canvas_mapping.setdefault(canvas_uri, []).append(idx)
 
             # Batch serialize all annotations
-            serialized = IIIFAnnotationSerializer().batch_to_representation(
-                all_annotation_data
-            )
+            serialized = IIIFAnnotationSerializer(
+                nodegroups=nodegroups
+            ).batch_to_representation(all_annotation_data)
 
             # regroup canvas
             grouped_serialized: dict[str, list[dict]] = {}
@@ -709,7 +739,10 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
                     return cached
 
             collection_view = IIIFAnnotationCollectionView()
-            annotations = self._get_annotations_from_analyses(analyses)
+            nodegroups = readable_nodegroup_ids(request.user)
+            annotations = self._get_annotations_from_analyses(
+                analyses, nodegroups=nodegroups
+            )
             grouped = collection_view._group_by_canvas(annotations)
 
             # Get real page numbers from manifest positions
@@ -729,7 +762,9 @@ class IIIFAnnotationPageView(IIIFAnnotationMixin, View):
 
             annotation_data = [self._build_annotation_payload(a) for a in annos]
 
-            items = IIIFAnnotationSerializer().batch_to_representation(annotation_data)
+            items = IIIFAnnotationSerializer(
+                nodegroups=nodegroups
+            ).batch_to_representation(annotation_data)
 
             collection_id = f"{self.base_url}/v3/annotation-collection/{resource_id}"
             page_id = f"{collection_id}/page-{page_num}"
@@ -797,24 +832,33 @@ class IIIFAnnotationView(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            public = self._public_for_anonymous([analysis])
+            if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
+                return JsonResponse(
+                    {"error": "Resource is not an Analysis"}, status=400
+                )
+            if self._not_seen(request.user, analysis):
+                return _not_found("Annotation not found")
+
+            public = self._public_for_anonymous(
+                [analysis]
+            ) and self._reads_like_the_visitor(request.user)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
                     return cached
 
-            if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
-                return JsonResponse(
-                    {"error": "Resource is not an Analysis"}, status=400
-                )
-
-            annos = self._get_annotations_from_analyses([analysis])
+            nodegroups = readable_nodegroup_ids(request.user)
+            annos = self._get_annotations_from_analyses(
+                [analysis], nodegroups=nodegroups
+            )
             if not annos:
                 return JsonResponse({"error": "No annotation data"}, status=404)
 
             anno = annos[0]  # 1 analysis -> 1 annotation
             payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
-            iiif_annotation = IIIFAnnotationSerializer().to_representation(**payload)
+            iiif_annotation = IIIFAnnotationSerializer(
+                nodegroups=nodegroups
+            ).to_representation(**payload)
 
             return cached_json_response(
                 cache_key, iiif_annotation, self.CACHE_TIMEOUT, public=public
@@ -863,7 +907,9 @@ class IIIFAnnotationCollectionViewV2(IIIFAnnotationMixin, View):
                 if cached:
                     return cached
 
-            annotations = self._get_annotations_from_analyses(analyses)
+            annotations = self._get_annotations_from_analyses(
+                analyses, nodegroups=readable_nodegroup_ids(request.user)
+            )
             if not annotations:
                 return JsonResponse(
                     {"error": "No annotations found for analyses"}, status=404
@@ -952,7 +998,10 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
                     return cached
 
             collection_view = IIIFAnnotationCollectionView()
-            annotations = self._get_annotations_from_analyses(analyses)
+            nodegroups = readable_nodegroup_ids(request.user)
+            annotations = self._get_annotations_from_analyses(
+                analyses, nodegroups=nodegroups
+            )
             grouped = collection_view._group_by_canvas(annotations)
 
             # Get real page numbers from manifest positions
@@ -973,9 +1022,9 @@ class IIIFAnnotationPageViewV2(IIIFAnnotationMixin, View):
             annotation_data = [self._build_annotation_payload(a) for a in annos]
 
             # Use v2 serializer
-            items = IIIFAnnotationSerializerV2().batch_to_representation(
-                annotation_data
-            )
+            items = IIIFAnnotationSerializerV2(
+                nodegroups=nodegroups
+            ).batch_to_representation(annotation_data)
 
             layer_id = f"{self.base_url}/v2/annotation-collection/{resource_id}"
             list_id = f"{layer_id}/page-{page_num}"
@@ -1022,18 +1071,25 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
             if forbidden:
                 return forbidden
 
-            public = self._public_for_anonymous([analysis])
+            if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
+                return JsonResponse(
+                    {"error": "Resource is not an Analysis"}, status=400
+                )
+            if self._not_seen(request.user, analysis):
+                return _not_found("Annotation not found")
+
+            public = self._public_for_anonymous(
+                [analysis]
+            ) and self._reads_like_the_visitor(request.user)
             if public:
                 cached = get_cached_response(cache_key)
                 if cached:
                     return cached
 
-            if str(analysis.graph_id) != self.ANALYSIS_GRAPH_ID:
-                return JsonResponse(
-                    {"error": "Resource is not an Analysis"}, status=400
-                )
-
-            annos = self._get_annotations_from_analyses([analysis])
+            nodegroups = readable_nodegroup_ids(request.user)
+            annos = self._get_annotations_from_analyses(
+                [analysis], nodegroups=nodegroups
+            )
             if not annos:
                 return JsonResponse({"error": "No annotation data"}, status=404)
 
@@ -1041,7 +1097,9 @@ class IIIFAnnotationViewV2(IIIFAnnotationMixin, View):
             payload = self._build_annotation_payload(anno, resource_id=str(resource_id))
 
             # Use v2 serializer
-            iiif_annotation = IIIFAnnotationSerializerV2().to_representation(**payload)
+            iiif_annotation = IIIFAnnotationSerializerV2(
+                nodegroups=nodegroups
+            ).to_representation(**payload)
 
             return cached_json_response(
                 cache_key, iiif_annotation, self.CACHE_TIMEOUT, public=public
