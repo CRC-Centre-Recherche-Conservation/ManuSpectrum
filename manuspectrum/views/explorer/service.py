@@ -2048,8 +2048,9 @@ def _analysis_manifest(analysis_id, language):
 def content_states(analysis_id, document_id, user):
     """``ContentStateLink`` of each zone of *analysis_id* on a canvas of its document's manifest, in feature order.
 
-    Zones are read from the nodegroups *user* may read; a zone on a canvas
-    the manifest does not list has none.
+    ``url`` is the absolute IIIF id, ``download`` the site path serving the
+    state as an attachment. Zones are read from the nodegroups *user* may
+    read; a zone on a canvas the manifest does not list has none.
     """
     values = Values([document_id], ["doc_manifest"], user)
     url = rewrite_legacy_url(values.first(document_id, "doc_manifest") or "")
@@ -2071,7 +2072,11 @@ def content_states(analysis_id, document_id, user):
         {
             "feature": feature,
             "url": content_state_url(analysis_id, feature),
-            "download": content_state_url(analysis_id, feature, download=True),
+            "download": reverse(
+                "iiif-v3-content-state",
+                kwargs={"resource_id": analysis_id, "feature_id": feature},
+            )
+            + "?download=1",
         }
         for feature in features
     ]

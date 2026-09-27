@@ -761,7 +761,10 @@ class AnalysisRouteTests(CorpusCase):
                 {
                     "feature": feature_of(self.analyses["open"]),
                     "url": state,
-                    "download": f"{state}?download=1",
+                    "download": (
+                        f"/iiif/v3/content-state/{analysis}/"
+                        f"{feature_of(self.analyses['open'])}?download=1"
+                    ),
                 }
             ],
         )

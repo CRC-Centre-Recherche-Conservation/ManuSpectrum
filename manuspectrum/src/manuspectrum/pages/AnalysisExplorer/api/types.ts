@@ -133,7 +133,7 @@ export interface AnalysisZone {
     feature: string;
 }
 
-/** The published IIIF Content State of one zone of an analysis: absolute URLs, `download` serving it as an attachment. */
+/** The published IIIF Content State of one zone of an analysis: `url` its absolute id, `download` the site path serving it as an attachment. */
 export interface ContentStateLink {
     feature: string;
     url: string;
