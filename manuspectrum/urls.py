@@ -59,6 +59,7 @@ from manuspectrum.views.explorer.api import (
     ExplorerManifestView,
     ExplorerSearchView,
     ExplorerShareView,
+    ExplorerSynthesisView,
 )
 from manuspectrum.views.explorer.export import ExplorerExportView
 from manuspectrum.views.explorer.series import ExplorerSeriesView
@@ -265,6 +266,13 @@ urlpatterns.append(
 )
 urlpatterns.append(
     path("api/explorer/share", ExplorerShareView.as_view(), name="explorer-share")
+)
+urlpatterns.append(
+    path(
+        "api/explorer/synthesis",
+        ExplorerSynthesisView.as_view(),
+        name="explorer-synthesis",
+    )
 )
 
 if settings.ROOT_URLCONF == __name__:

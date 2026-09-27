@@ -12,9 +12,9 @@ ETag weak, which ``etag_already_held`` accepts.
 The ETag of a payload built from the corpus bundle alone (search, facet,
 match, home) is computed before building it, from the bundle key, the route
 and the query as the payload reads it, so a revalidation answers 304 without
-building anything. The document, analysis and items payloads embed IIIF
-manifests fetched over HTTP, which the data version does not follow: their
-ETag is the digest of the body.
+building anything. The document, analysis, items and synthesis payloads
+read IIIF manifests fetched over HTTP, which the data version does not
+follow: their ETag is the digest of the body.
 """
 
 import datetime
@@ -24,6 +24,7 @@ import orjson
 from django.conf import settings
 from django.http import (
     HttpResponse,
+    QueryDict,
     HttpResponseBadRequest,
     HttpResponseNotFound,
     HttpResponseNotModified,
@@ -45,6 +46,7 @@ from manuspectrum.views.explorer.scopes import (
     resolve_scope,
     share_payload,
 )
+from manuspectrum.views.explorer.synthesis import synthesis_payload
 from manuspectrum.views.explorer.service import (
     FACET_KEYS,
     analysis_payload,
@@ -272,6 +274,30 @@ class ExplorerItemsView(View):
             request,
             lambda: items_payload(keys, reader, language),
         )
+
+
+@method_decorator(gzip_page, name="dispatch")
+class ExplorerSynthesisView(View):
+    """``GET /{lang}/api/explorer/synthesis?ids=``: the Compare tools' synthesis of the Selection (D60).
+
+    Only ``ids`` is read, as ``resolve_scope`` reads it: no key, more than
+    ``EXPLORER_ITEMS_MAX`` or a malformed one answer a bodyless 400; a
+    Selection with nothing visible the bodyless 404. The visitor's ETag is
+    the digest of the body: canvas labels come from IIIF manifests the data
+    version does not follow.
+    """
+
+    def get(self, request):
+        language = translation.get_language()
+        query = QueryDict(mutable=True)
+        query.setlist("ids", request.GET.getlist("ids"))
+        try:
+            scope = resolve_scope(query, language)
+        except ScopeError:
+            return HttpResponseBadRequest()
+        if scope is None:
+            return _not_found()
+        return _answer(request, lambda: synthesis_payload(scope))
 
 
 @method_decorator(gzip_page, name="dispatch")
