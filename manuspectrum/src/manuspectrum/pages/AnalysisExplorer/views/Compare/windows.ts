@@ -13,16 +13,18 @@ import type {
 
 export type AutoWindowKind =
     | "xy"
+    | "maps"
     | "micro"
     | "characterizations"
     | "not-in-chart";
 
-/** XY windows shown unfolded; the next ones open folded to their header. */
+/** XY windows shown unfolded; the next ones, and the maps window after as many, open folded to their header. */
 export const UNFOLDED_XY_WINDOWS = 3;
 
 /** The group of readable spectra whose configuration states no axis title. */
 const NO_AXIS_GROUP = "-";
 
+export const MAPS_WINDOW_ID = "auto:maps";
 export const MICRO_WINDOW_ID = "auto:micro";
 export const MATERIALS_WINDOW_ID = "auto:characterizations";
 export const NOT_IN_CHART_WINDOW_ID = "auto:not-in-chart";
@@ -35,6 +37,11 @@ export interface FileLine {
     file: FileEntry;
 }
 
+/** A layered map (`chemical-imaging` file) of a Selection item; `named` is the layer index a one-layer key (`im:`) names. */
+export interface MapLine extends FileLine {
+    named: number | null;
+}
+
 export interface MaterialRow {
     key: ItemKey;
     slot: number;
@@ -43,15 +50,10 @@ export interface MaterialRow {
 
 /**
  * Why an item is in no chart: a raw instrument file or another file is
- * downloaded, imaging layers are compared later, an analysis may hold nothing
- * to show, and an item may no longer be visible.
+ * downloaded, an analysis may hold nothing to show, and an item may no
+ * longer be visible.
  */
-export type NotInChartReason =
-    | "raw-file"
-    | "file"
-    | "imaging"
-    | "no-data"
-    | "missing";
+export type NotInChartReason = "raw-file" | "file" | "no-data" | "missing";
 
 export interface NotInChartEntry {
     key: ItemKey;
@@ -80,6 +82,12 @@ export interface XyWindow extends WindowBase {
     curves: FileLine[];
 }
 
+export interface MapsWindow extends WindowBase {
+    kind: "maps";
+    maps: MapLine[];
+    folded: boolean;
+}
+
 export interface MicroWindow extends WindowBase {
     kind: "micro";
     images: FileLine[];
@@ -98,6 +106,7 @@ export interface NotInChartWindow extends WindowBase {
 /** A window arranged from the Selection. */
 export type AutoWindow =
     | XyWindow
+    | MapsWindow
     | MicroWindow
     | MaterialsWindow
     | NotInChartWindow;
@@ -114,6 +123,10 @@ function isReadableSpectrum(file: FileEntry): boolean {
     return file.dataKind === "xy" && file.role === "readable";
 }
 
+function isLayeredMap(file: FileEntry): boolean {
+    return file.dataKind === "chemical-imaging" && file.layers.length > 0;
+}
+
 function withKey(keys: ItemKey[], key: ItemKey): void {
     if (!keys.includes(key)) keys.push(key);
 }
@@ -125,11 +138,16 @@ function fileReason(file: FileEntry): NotInChartReason {
 
 class Collector {
     readonly curves = new Map<string, FileLine[]>();
+    readonly maps: MapLine[] = [];
     readonly images: FileLine[] = [];
     readonly rows: MaterialRow[] = [];
     readonly entries: NotInChartEntry[] = [];
 
-    addFile(line: FileLine): boolean {
+    addFile(line: FileLine, named: number | null = null): boolean {
+        if (isLayeredMap(line.file)) {
+            this.maps.push({ ...line, named });
+            return true;
+        }
         if (isReadableSpectrum(line.file)) {
             const id = xyWindowId(line.file.viewer.axisKey);
             this.curves.set(id, [...(this.curves.get(id) ?? []), line]);
@@ -160,7 +178,16 @@ class Collector {
                 characterization: read.characterization,
             });
         } else if (read.kind === "imaging") {
-            this.addEntry(item, "imaging", read.analysis, read.file);
+            const named = Number(key.split(":")[2]);
+            const line = {
+                key,
+                slot,
+                analysis: read.analysis,
+                file: read.file,
+            };
+            if (!this.addFile(line, Number.isInteger(named) ? named : null)) {
+                this.addEntry(item, "no-data", read.analysis, read.file);
+            }
         } else if (read.kind === "analysis-file") {
             const line = {
                 key,
@@ -187,14 +214,7 @@ class Collector {
                         file,
                     }) || shown;
             }
-            const imaging = read.files.find(
-                (file) => file.dataKind === "chemical-imaging",
-            );
-            if (imaging) {
-                this.addEntry(item, "imaging", read.analysis, imaging);
-            } else if (!shown) {
-                this.addEntry(item, "no-data", read.analysis);
-            }
+            if (!shown) this.addEntry(item, "no-data", read.analysis);
         }
     }
 
@@ -221,6 +241,17 @@ class Collector {
                 curves,
             }),
         );
+        if (this.maps.length > 0) {
+            const keys: ItemKey[] = [];
+            for (const line of this.maps) withKey(keys, line.key);
+            windows.push({
+                id: MAPS_WINDOW_ID,
+                kind: "maps",
+                keys,
+                maps: this.maps,
+                folded: this.curves.size >= UNFOLDED_XY_WINDOWS,
+            });
+        }
         if (this.images.length > 0) {
             const keys: ItemKey[] = [];
             for (const image of this.images) withKey(keys, image.key);
@@ -254,8 +285,9 @@ class Collector {
 /**
  * The windows arranged from the Selection: one XY window per axis group
  * (`FileEntry.viewer.axisKey`, every readable spectrum of an analysis in its
- * slot), the micro-images, the identified materials, and what no window
- * draws. Windows and their contents follow slot order; an XY window comes
+ * slot), the layered maps (opened folded when the XY windows already fill
+ * the unfolded ones), the micro-images, the identified materials, and what
+ * no window draws. Windows and their contents follow slot order; an XY window comes
  * where its first slot does. An item not read yet waits outside the
  * windows; a key the items API reports missing is listed as such. Older
  * one-file (`af:`) and one-layer (`im:`) keys are read into the same windows.

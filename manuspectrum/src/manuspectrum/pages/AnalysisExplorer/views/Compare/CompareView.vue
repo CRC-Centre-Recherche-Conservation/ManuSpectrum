@@ -51,6 +51,7 @@ import type { OfferedTool } from "@/manuspectrum/pages/AnalysisExplorer/views/Co
 
 const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
     xy: "M",
+    maps: "L",
     micro: "M",
     characterizations: "L",
     "not-in-chart": "S",
@@ -125,7 +126,10 @@ const specs = computed<CompareWindowSpec[]>(() =>
         id: window.id,
         title: titleOf(window),
         size: FIRST_SIZE[window.kind],
-        folded: window.kind === "xy" ? window.folded : undefined,
+        folded:
+            window.kind === "xy" || window.kind === "maps"
+                ? window.folded
+                : undefined,
     })),
 );
 const tools = computed(() =>
@@ -238,6 +242,8 @@ function titleOf(window: AutoWindow): string {
     switch (window.kind) {
         case "xy":
             return xyTitle(window);
+        case "maps":
+            return $gettext("Element maps");
         case "micro":
             return $gettext("Micro-images");
         case "characterizations":

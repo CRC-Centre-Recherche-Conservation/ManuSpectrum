@@ -11,6 +11,7 @@ import {
     analysisHit,
     characterization,
     fileEntry,
+    imagingEntry,
     technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -118,6 +119,7 @@ const EMPTY_ITEM = whole(4, []);
 const FORS_ITEM = whole(5, [spectrum(5, FORS)]);
 const FTIR_ITEM = whole(6, [spectrum(6, FTIR)]);
 const XRF_OTHER_ITEM = whole(7, [spectrum(7, XRF)]);
+const MAPS_ITEM = whole(8, [imagingEntry()]);
 
 const ITEMS = new Map(
     [
@@ -129,6 +131,7 @@ const ITEMS = new Map(
         FORS_ITEM,
         FTIR_ITEM,
         XRF_OTHER_ITEM,
+        MAPS_ITEM,
     ].map((item) => [item.key, item]),
 );
 
@@ -303,6 +306,19 @@ describe("CompareView", () => {
         ).toBe("Characterization 1");
         expect(windowOf(view, "auto:not-in-chart").find(".reason").text()).toBe(
             "No spectrum, map or image to show.",
+        );
+    });
+
+    it("puts the layered maps side by side in their own window, not among the items in no chart", async () => {
+        select(MAPS_ITEM, EMPTY_ITEM);
+        const view = await mountView();
+        expect(windowIds(view)).toEqual(["auto:maps", "auto:not-in-chart"]);
+        const maps = windowOf(view, "auto:maps");
+        expect(maps.find("h3").text()).toBe("Element maps");
+        expect(maps.find("figcaption").text()).toContain("A1");
+        expect(maps.find(".layer-picker label").text()).toBe("Element");
+        expect(windowOf(view, "auto:not-in-chart").findAll("li")).toHaveLength(
+            1,
         );
     });
 

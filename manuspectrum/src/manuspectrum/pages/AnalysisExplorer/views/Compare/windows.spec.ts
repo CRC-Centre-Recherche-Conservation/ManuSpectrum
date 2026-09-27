@@ -209,21 +209,58 @@ describe("autoWindows", () => {
     });
 
     it("lists what no window draws, with the reason, once per item", () => {
-        const layers = whole(1, [imagingEntry()]);
         const empty = whole(2, []);
+        const blank = whole(3, [imagingEntry({ layers: [] })]);
         const gone = `an:${uuid(199)}:-`;
-        const windows = derive([layers, empty], undefined, [gone]);
+        const windows = derive([empty, blank], undefined, [gone]);
         expect(windowIdsOf(windows)).toEqual(["auto:not-in-chart"]);
         const [window] = windows;
         expect(
             window.kind === "not-in-chart" &&
                 window.entries.map((entry) => [entry.key, entry.reason]),
         ).toEqual([
-            [layers.key, "imaging"],
             [empty.key, "no-data"],
+            [blank.key, "no-data"],
             [gone, "missing"],
         ]);
-        expect(window.keys).toEqual([layers.key, empty.key, gone]);
+        expect(window.keys).toEqual([empty.key, blank.key, gone]);
+    });
+
+    it("puts every layered map of the Selection in one window, after the XY windows, in slot order", () => {
+        const hsi = imagingEntry({ id: `${uuid(102)}:imaging:0`, name: "HSI" });
+        const layers = whole(1, [spectrum(1, XRF), imagingEntry()]);
+        const cube = whole(2, [hsi]);
+        const images = whole(3, [micro(1)]);
+        const windows = derive([images, cube, layers], [0, 2, 1]);
+        expect(windowIdsOf(windows)).toEqual([
+            `auto:xy:${XRF}`,
+            "auto:maps",
+            "auto:micro",
+        ]);
+        const maps = windows[1];
+        expect(
+            maps.kind === "maps" &&
+                maps.maps.map((line) => [
+                    line.slot,
+                    line.file.name,
+                    line.named,
+                ]),
+        ).toEqual([
+            [1, "maXRF f. 1v", null],
+            [2, "HSI", null],
+        ]);
+        expect(maps.keys).toEqual([layers.key, cube.key]);
+        expect(maps.kind === "maps" && maps.folded).toBe(false);
+    });
+
+    it("opens the maps window folded when three XY windows are already drawn", () => {
+        const items = [XRF, RAMAN, FORS].map((axisKey, n) =>
+            whole(n + 1, [spectrum(n + 1, axisKey)]),
+        );
+        const maps = derive([...items, whole(4, [imagingEntry()])]).find(
+            (window) => window.kind === "maps",
+        );
+        expect(maps?.kind === "maps" && maps.folded).toBe(true);
     });
 
     it("reads the older one-file and one-layer keys into the same windows", () => {
@@ -273,10 +310,16 @@ describe("autoWindows", () => {
         const windows = derive([readable, image, raw, other, layer]);
         expect(windowIdsOf(windows)).toEqual([
             `auto:xy:${XRF}`,
+            "auto:maps",
             "auto:micro",
             "auto:not-in-chart",
         ]);
-        const notInChart = windows[2];
+        const maps = windows[1];
+        expect(
+            maps.kind === "maps" &&
+                maps.maps.map((line) => [line.key, line.named]),
+        ).toEqual([[layer.key, 1]]);
+        const notInChart = windows[3];
         expect(
             notInChart.kind === "not-in-chart" &&
                 notInChart.entries.map((entry) => [
@@ -287,7 +330,6 @@ describe("autoWindows", () => {
         ).toEqual([
             [raw.key, "raw-file", "S1.mca"],
             [other.key, "file", "notes.pdf"],
-            [layer.key, "imaging", "maXRF f. 1v"],
         ]);
     });
 
