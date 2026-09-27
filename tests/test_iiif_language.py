@@ -4,6 +4,10 @@ Usage:
     python manage.py test tests.test_iiif_language --settings=tests.test_settings
 """
 
+from pathlib import Path
+
+import polib
+from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 
 from manuspectrum.iiif import language
@@ -125,3 +129,42 @@ class LanguageMapTests(SimpleTestCase):
                 {"@value": "EMMA"},
             ],
         )
+
+
+class CatalogueTests(SimpleTestCase):
+    FRENCH = Path(settings.APP_ROOT) / "locale" / "fr" / "LC_MESSAGES" / "django.po"
+    IIIF_SOURCES = (
+        "iiif/",
+        "views/iiif/",
+        "templates/iiif/",
+        "utils/instrument_formats.py",
+    )
+
+    def entries(self):
+        return [entry for entry in polib.pofile(str(self.FRENCH)) if not entry.obsolete]
+
+    def test_the_msgids_given_to_the_language_map_helpers_are_extracted(self):
+        msgids = {entry.msgid for entry in self.entries()}
+        for msgid in (
+            "Analyses of %(name)s, %(canvas)s",
+            "Identified materials of %(name)s",
+            "Status",
+            "Draft",
+            "Operators",
+            "Colour: %(colours)s",
+            "%(file)s, series",
+            "Without a position on the image",
+            "Selection of %(count)d page of %(document)s",
+        ):
+            with self.subTest(msgid=msgid):
+                self.assertIn(msgid, msgids)
+
+    def test_every_iiif_string_has_a_french_translation(self):
+        for entry in self.entries():
+            if not any(
+                path.startswith(self.IIIF_SOURCES) for path, _ in entry.occurrences
+            ):
+                continue
+            with self.subTest(msgid=entry.msgid[:60]):
+                self.assertTrue(entry.translated())
+                self.assertNotIn("fuzzy", entry.flags)

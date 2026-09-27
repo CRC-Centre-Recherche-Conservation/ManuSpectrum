@@ -16,6 +16,8 @@ kind is its own collection. ``page_reference`` names a page without its
 items, as a manifest's canvas lists it.
 """
 
+from django.utils.translation import gettext_noop
+
 from manuspectrum.iiif import ids, services
 from manuspectrum.iiif import language as lang
 from manuspectrum.iiif.annotations import analysis_annotation
@@ -23,10 +25,13 @@ from manuspectrum.iiif.characterizations import characterization_annotation
 from manuspectrum.iiif.constants import PRESENTATION_3
 
 LABELS = {
-    "analysis": ("Analyses of %(name)s", "Analyses of %(name)s, %(canvas)s"),
+    "analysis": (
+        gettext_noop("Analyses of %(name)s"),
+        gettext_noop("Analyses of %(name)s, %(canvas)s"),
+    ),
     "characterization": (
-        "Identified materials of %(name)s",
-        "Identified materials of %(name)s, %(canvas)s",
+        gettext_noop("Identified materials of %(name)s"),
+        gettext_noop("Identified materials of %(name)s, %(canvas)s"),
     ),
 }
 

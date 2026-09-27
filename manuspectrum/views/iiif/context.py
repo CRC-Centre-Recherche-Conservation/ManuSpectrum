@@ -8,6 +8,7 @@ LocaleMiddleware negotiates. All three are ``public, max-age=86400``.
 from pathlib import Path
 
 import orjson
+from django.conf import settings
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
@@ -74,6 +75,12 @@ class XYReadingDocView(View):
                 {
                     "context_url": ids.xy_context(),
                     "schema_url": ids.xy_schema(),
+                    "login_url": ids.auth_login(),
+                    "token1_url": ids.auth_token(1),
+                    "token2_url": ids.auth_token(2),
+                    "logout_url": ids.auth_logout(),
+                    "token_minutes": settings.IIIF_AUTH_TOKEN_TTL // 60,
+                    "cookie_hours": settings.IIIF_AUTH_COOKIE_TTL // 3600,
                     "example": orjson.dumps(
                         example, option=orjson.OPT_INDENT_2
                     ).decode(),

@@ -114,6 +114,25 @@ class RouteTests(TestCase):
                 self.assertIn(ids.xy_schema(), response.content.decode())
         self.assertNotEqual(english.content, french.content)
 
+    def test_the_documentation_page_explains_iiif_auth_and_its_limits(self):
+        english = self.client.get(
+            "/iiif/context/xy-reading/1", HTTP_ACCEPT_LANGUAGE="en"
+        ).content.decode()
+        french = self.client.get(
+            "/iiif/context/xy-reading/1", HTTP_ACCEPT_LANGUAGE="fr"
+        ).content.decode()
+
+        for url in (ids.auth_login(), ids.auth_token(1), ids.auth_token(2)):
+            with self.subTest(url=url):
+                self.assertIn(url, english)
+        self.assertIn(ids.auth_logout(), english)
+        for text in ("HTTPS", "Safari", "Firefox", "SameSite=Strict"):
+            with self.subTest(text=text):
+                self.assertIn(text, english)
+        self.assertIn('id="auth-limits"', english)
+        self.assertIn("Limites connues", french)
+        self.assertIn("Données restreintes", french)
+
     def test_the_namespace_names_the_documentation_page(self):
         self.assertEqual(NS, ids.xy_doc() + "#")
         page = self.client.get("/iiif/context/xy-reading/1").content.decode()

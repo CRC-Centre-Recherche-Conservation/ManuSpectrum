@@ -11,20 +11,22 @@ address as ``id``, its stored label under ``none``) and each measurement file
 as stored.
 """
 
+from django.utils.translation import gettext_noop
+
 from manuspectrum.iiif import bodies, ids, selectors
 from manuspectrum.iiif import language as lang
 from manuspectrum.views.explorer.values import dataset_url
 
 METADATA = (
-    ("Technique", "technique"),
-    ("Dates", "dates"),
-    ("Operators", "operators"),
-    ("Instrument", "instrument"),
-    ("Conditions", "conditions"),
-    ("Project", "projects"),
-    ("Document", "document"),
-    ("Component", "component"),
-    ("Identified materials", "materials"),
+    (gettext_noop("Technique"), "technique"),
+    (gettext_noop("Dates"), "dates"),
+    (gettext_noop("Operators"), "operators"),
+    (gettext_noop("Instrument"), "instrument"),
+    (gettext_noop("Conditions"), "conditions"),
+    (gettext_noop("Project"), "projects"),
+    (gettext_noop("Document"), "document"),
+    (gettext_noop("Component"), "component"),
+    (gettext_noop("Identified materials"), "materials"),
 )
 
 

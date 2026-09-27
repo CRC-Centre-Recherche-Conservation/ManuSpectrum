@@ -48,6 +48,22 @@
     <dd>{% blocktrans trimmed %}The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</code>): <code>id</code>, <code>type</code>, <code>format</code>, <code>label</code> and, for a raw text file, its own <code>xyReading</code> (columns and corrections). A raw file in an instrument format read from its own header (ELIO <code>.mca</code>, ASD <code>.asd</code>) carries none.{% endblocktrans %}</dd>
   </dl>
 
+  <h2 id="auth">{% trans "Restricted data (IIIF Authorization)" %}</h2>
+  <p>{% blocktrans trimmed %}Open data needs no credential. A restricted spectrum, annotation or content state answers <code>401</code> with a description that names the IIIF Authorization services; annotation pages and collections are never refused: they list what the reader may see and declare the same services.{% endblocktrans %}</p>
+  <ol>
+    <li>{% blocktrans trimmed %}Login: the viewer opens <a href="{{ login_url }}">{{ login_url }}</a> in a new window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</code> profile). The reader signs in to ManuSpectrum there; the window then says so and can be closed.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}Token: the viewer loads <code>{{ token1_url }}</code> (Auth 1.0) or <code>{{ token2_url }}</code> (Auth 2.0) in a hidden frame with its <code>messageId</code> and <code>origin</code>, and receives an access token valid {{ token_minutes }} minutes for that origin only. It sends it as <code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> read routes; the Auth 2.0 probe service of a spectrum says whether that token opens it.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}Logout: opening <a href="{{ logout_url }}">{{ logout_url }}</a> in a tab (an HTTP GET, as IIIF Auth 1.0 defines it) ends every token of the session; signing out of ManuSpectrum does too. The ManuSpectrum session itself stays open.{% endblocktrans %}</li>
+  </ol>
+  <p>{% blocktrans trimmed %}The token only reads: it opens the <code>/iiif/</code> routes and nothing else, and it is not an API credential. Tokens go only to this site and to the viewers its administrators trust; any other origin receives <code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this site is refused.{% endblocktrans %}</p>
+  <h3 id="auth-limits">{% trans "Known limits" %}</h3>
+  <ul>
+    <li>{% blocktrans trimmed %}HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, and a browser does not keep it on a plain HTTP site.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}Third-party cookies: the token frame belongs to this site inside the viewer's page. Chrome sends the cookie; Safari (Intelligent Tracking Prevention) and Firefox (Total Cookie Protection) may block it, and the viewer then keeps asking to sign in. Use Chrome, a viewer served from this site, or allow this site's cookies in the browser.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}The ManuSpectrum session cookie is <code>SameSite=Strict</code>: the login window opened from another site may ask to sign in again even when another tab is already signed in.{% endblocktrans %}</li>
+    <li>{% blocktrans trimmed %}The viewer renews its token silently while the access cookie lives: at most {{ cookie_hours }} hours, and never longer than the ManuSpectrum session.{% endblocktrans %}</li>
+  </ul>
+
   <h2>{% trans "Versions" %}</h2>
   <p>{% blocktrans trimmed %}The major version is in the path of the context (<code>/1</code>). Version 1 only gains optional keys; a change of meaning would be version 2, at a new path.{% endblocktrans %}</p>
   <p>{% blocktrans trimmed %}JSON Schema (Draft 7): <a href="{{ schema_url }}">{{ schema_url }}</a>. JSON-LD context: <a href="{{ context_url }}">{{ context_url }}</a>.{% endblocktrans %}</p>

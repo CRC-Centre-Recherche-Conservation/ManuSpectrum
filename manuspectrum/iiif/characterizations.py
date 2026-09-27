@@ -17,14 +17,14 @@ annotations, and one canonical IRI would let a client merge them.
 
 from django.conf import settings
 from django.utils import translation
-from django.utils.translation import gettext
+from django.utils.translation import gettext, gettext_noop
 
 from manuspectrum.iiif import ids, selectors
 from manuspectrum.iiif import language as lang
 
 PARTS = (
-    ("colours", "Colour: %(colours)s"),
-    ("layers", "Layer: %(layers)s"),
+    ("colours", gettext_noop("Colour: %(colours)s")),
+    ("layers", gettext_noop("Layer: %(layers)s")),
 )
 
 
