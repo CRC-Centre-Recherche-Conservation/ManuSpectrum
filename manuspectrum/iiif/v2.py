@@ -65,7 +65,7 @@ def _resource(body):
         full = {"@id": ids.as_version(source.get("id"), 2)}
         if source.get("type"):
             full["@type"] = TYPES.get(source["type"], source["type"])
-        _labelled(full, source)
+        _labelled(full, source if source.get("label") else body)
         resource = {"@type": "oa:SpecificResource", "full": full}
         if body.get("purpose"):
             resource["oa:hasPurpose"] = _motivation(body["purpose"])

@@ -25,6 +25,10 @@ from manuspectrum.views.biblissima_proxy import (
 from manuspectrum.views.iiif.annotations import (
     AnnotationView,
     AnnotationViewV2,
+    CharacterizationCollectionView,
+    CharacterizationCollectionViewV2,
+    CharacterizationPageView,
+    CharacterizationPageViewV2,
     CollectionView,
     CollectionViewV2,
     PageView,
@@ -422,9 +426,24 @@ urlpatterns.append(
 ###
 ### v3 = Presentation 3 / Web Annotation, v2 = Presentation 2.1 / Open
 ### Annotation; ``page-<n>`` is the canvas position in the Document's manifest.
-for version, collection, page, annotation in (
-    (3, CollectionView, PageView, AnnotationView),
-    (2, CollectionViewV2, PageViewV2, AnnotationViewV2),
+### ``characterization-collection`` is the identified-materials layer.
+for version, collection, page, annotation, materials, materials_page in (
+    (
+        3,
+        CollectionView,
+        PageView,
+        AnnotationView,
+        CharacterizationCollectionView,
+        CharacterizationPageView,
+    ),
+    (
+        2,
+        CollectionViewV2,
+        PageViewV2,
+        AnnotationViewV2,
+        CharacterizationCollectionViewV2,
+        CharacterizationPageViewV2,
+    ),
 ):
     urlpatterns += [
         path(
@@ -447,6 +466,17 @@ for version, collection, page, annotation in (
             "/page-<int:page_num>",
             page.as_view(),
             name=f"iiif-v{version}-annotation-page",
+        ),
+        path(
+            f"iiif/v{version}/characterization-collection/<uuid:resource_id>",
+            materials.as_view(),
+            name=f"iiif-v{version}-characterization-collection",
+        ),
+        path(
+            f"iiif/v{version}/characterization-collection/<uuid:resource_id>"
+            "/page-<int:page_num>",
+            materials_page.as_view(),
+            name=f"iiif-v{version}-characterization-page",
         ),
     ]
 

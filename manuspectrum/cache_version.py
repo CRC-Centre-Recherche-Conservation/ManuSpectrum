@@ -48,6 +48,7 @@ CACHE_SHAPE_MODULES = (
     "iiif/facts.py",
     "iiif/bodies.py",
     "iiif/annotations.py",
+    "iiif/characterizations.py",
     "iiif/pages.py",
     "iiif/v2.py",
     "iiif/memo.py",

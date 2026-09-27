@@ -30,6 +30,10 @@ ROUTE_NAMES = (
     "iiif-v2-annotation-page",
     "iiif-v2-annotation",
     "iiif-v2-annotation-zone",
+    "iiif-v3-characterization-collection",
+    "iiif-v3-characterization-page",
+    "iiif-v2-characterization-collection",
+    "iiif-v2-characterization-page",
 )
 
 
@@ -80,6 +84,14 @@ class LegacyUrlTests(RouteCase):
                 (ids.page(doc, 3, version=version), "annotation-page"),
                 (ids.annotation_first(analysis, version), "annotation"),
                 (ids.annotation(analysis, feature, version), "annotation-zone"),
+                (
+                    ids.collection(doc, "characterization", version),
+                    "characterization-collection",
+                ),
+                (
+                    ids.page(doc, 3, "characterization", version),
+                    "characterization-page",
+                ),
             ):
                 with self.subTest(url=url):
                     self.assertEqual(

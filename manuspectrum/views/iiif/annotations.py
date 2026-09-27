@@ -1,4 +1,7 @@
-"""``/iiif/v3|v2/annotation-collection/<id>[/page-<n>]`` and ``/iiif/v3|v2/annotation/<id>[/<feature>]``.
+"""``/iiif/v3|v2/annotation-collection|characterization-collection/<id>[/page-<n>]`` and ``/iiif/v3|v2/annotation/<id>[/<feature>]``.
+
+The annotation collections hold the analyses, the characterization
+collections the identified materials.
 
 Collections and pages: a Document or Component the reader may not see, or
 an unknown id, is a bodyless 404; otherwise the answer is 200, filtered for
@@ -6,7 +9,7 @@ the reader. ``?only=<uuid,…>`` restricts a page to those analyses (at most
 ``IIIF_PAGE_FILTER_MAX``; malformed or over it: 400). Single annotations: an
 unknown id, a resource that is not an analysis, an analysis without a
 located zone or a feature that is not one of its located zones is a 404; an
-analysis the reader may not read is a 401 to the visitor (the requested id
+analysis or identified material the reader may not read is a 401 to the visitor (the requested id
 described as an Annotation) and a bodyless 403 to a signed-in reader. The
 reader is ``request.user``; the memo and cache headers are ``iiif.memo``'s.
 """
@@ -22,6 +25,7 @@ from django.views import View
 
 from manuspectrum.iiif import facts, ids, memo, pages, v2
 from manuspectrum.iiif.annotations import analysis_annotation
+from manuspectrum.iiif.characterizations import characterization_annotation
 from manuspectrum.iiif.constants import (
     IIIF_MEDIA_TYPE,
     IIIF_V2_MEDIA_TYPE,
@@ -107,24 +111,29 @@ class IIIFView(View):
 
 
 class CollectionView(IIIFView):
-    """The AnnotationCollection (v2: ``sc:Layer``) of the analyses of a Document or Component."""
+    """The AnnotationCollection (v2: ``sc:Layer``) of the analyses (or identified materials, ``kind``) of a Document or Component."""
+
+    kind = "analysis"
 
     def answer(self, request, resource_id):
         if facts.subject_of(resource_id, request.user) is None:
             raise Missing()
 
         def build():
-            doc = facts.document_facts(resource_id, request.user)
-            collection = pages.annotation_collection(doc)
+            doc = facts.document_facts(resource_id, request.user, kind=self.kind)
+            collection = pages.annotation_collection(doc, self.kind)
             if self.version == 3:
                 return collection
-            numbers = pages.page_numbers(doc)
-            return v2.layer(collection, [ids.page(doc.document_id, n) for n in numbers])
+            numbers = pages.page_numbers(doc, self.kind)
+            return v2.layer(
+                collection,
+                [ids.page(doc.document_id, n, self.kind) for n in numbers],
+            )
 
         return memo.answer(
             request,
             memo.gate(request.user),
-            f"collection-v{self.version}",
+            f"collection-v{self.version}-{self.kind}",
             (resource_id,),
             build,
             content_type=self.content_type,
@@ -134,15 +143,19 @@ class CollectionView(IIIFView):
 class PageView(IIIFView):
     """Page *page_num* (canvas position) of a collection, optionally restricted by ``?only=``."""
 
+    kind = "analysis"
+
     def answer(self, request, resource_id, page_num):
         only = parse_only(request)
         if facts.subject_of(resource_id, request.user) is None:
             raise Missing()
 
         def build():
-            doc = facts.document_facts(resource_id, request.user, only=only)
+            doc = facts.document_facts(
+                resource_id, request.user, only=only, kind=self.kind
+            )
             try:
-                page = pages.annotation_page(doc, page_num, only=only)
+                page = pages.annotation_page(doc, page_num, self.kind, only=only)
             except pages.InvalidPage as error:
                 raise Missing() from error
             return page if self.version == 3 else v2.page(page)
@@ -150,7 +163,7 @@ class PageView(IIIFView):
         return memo.answer(
             request,
             memo.gate(request.user),
-            f"page-v{self.version}",
+            f"page-v{self.version}-{self.kind}",
             (resource_id, page_num, ",".join(sorted(only or ()))),
             build,
             content_type=self.content_type,
@@ -158,20 +171,25 @@ class PageView(IIIFView):
 
 
 class AnnotationView(IIIFView):
-    """One zone of an analysis: *feature_id*, else its first located zone."""
+    """One zone of an analysis or an identified material: *feature_id*, else its first located zone."""
 
     def answer(self, request, resource_id, feature_id=None):
-        access = facts.analysis_access(resource_id, request.user)
+        access = facts.annotated_access(resource_id, request.user)
         if access is None:
             raise Missing()
         if access is facts.REFUSED:
             return refused(request)
 
         def build():
-            found = facts.analysis_fact(resource_id, request.user)
+            found = facts.annotated_fact(resource_id, request.user)
             if not isinstance(found, tuple):
                 raise Missing()
-            doc, fact = found
+            kind, doc, fact = found
+            encode = (
+                characterization_annotation
+                if kind == "characterization"
+                else analysis_annotation
+            )
             zones = [
                 z
                 for z in fact.zones
@@ -180,7 +198,7 @@ class AnnotationView(IIIFView):
             if not zones:
                 raise Missing()
             annotation = {"@context": PRESENTATION_3}
-            annotation.update(analysis_annotation(doc, fact, zones[0]))
+            annotation.update(encode(doc, fact, zones[0]))
             return annotation if self.version == 3 else v2.annotation(annotation)
 
         return memo.answer(
@@ -203,3 +221,19 @@ class PageViewV2(PageView):
 
 class AnnotationViewV2(AnnotationView):
     version = 2
+
+
+class CharacterizationCollectionView(CollectionView):
+    kind = "characterization"
+
+
+class CharacterizationCollectionViewV2(CollectionViewV2):
+    kind = "characterization"
+
+
+class CharacterizationPageView(PageView):
+    kind = "characterization"
+
+
+class CharacterizationPageViewV2(PageViewV2):
+    kind = "characterization"

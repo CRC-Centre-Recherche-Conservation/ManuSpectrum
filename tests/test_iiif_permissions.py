@@ -234,3 +234,93 @@ class MatrixTests(IIIFPermissionCase):
             with self.subTest(url=url):
                 self.assert_answer(self.visitor.get(url), 404, PRIVATE)
                 self.assert_answer(self.reader.get(url), 200, PRIVATE)
+
+
+class CharacterizationMatrixTests(IIIFPermissionCase):
+    """The characterization routes × visitor, granted session, ungranted session, unknown id."""
+
+    OWN_ZONE = "0c0c0c0c-0000-4000-8000-0000000000aa"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from tests.explorer_fixtures import CANVAS_2, POINT
+
+        cls.zone(
+            cls.characterization,
+            [(cls.OWN_ZONE, CANVAS_2, POINT)],
+            alias="location_of_characterization",
+        )
+
+    def setUp(self):
+        super().setUp()
+        stranger = User.objects.create_user("iiif_ch_stranger", password="pw")
+        stranger.groups.add(Group.objects.get(name="Resource Editor"))
+        assign_perm("no_access_to_resourceinstance", stranger, self.characterization)
+        self.stranger = Client()
+        self.stranger.force_login(stranger)
+        document = self.documents["open"].pk
+        self.collections = [
+            f"/iiif/v3/characterization-collection/{document}",
+            f"/iiif/v2/characterization-collection/{document}",
+        ]
+        self.pages = [f"{url}/page-2" for url in self.collections]
+        self.singles = [
+            f"/iiif/v{v}/annotation/{self.characterization.pk}{suffix}"
+            for v in (3, 2)
+            for suffix in ("", f"/{self.OWN_ZONE}")
+        ]
+
+    def assert_answer(self, response, status, cache_control):
+        self.assertEqual(response.status_code, status)
+        self.assertEqual(response["Cache-Control"], cache_control)
+        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+
+    def test_the_visitor_reads_the_public_layer(self):
+        for url in [*self.collections, *self.pages, *self.singles]:
+            with self.subTest(url=url):
+                response = self.visitor.get(url)
+                self.assert_answer(response, 200, PUBLIC)
+        for url in self.pages:
+            with self.subTest(url=url):
+                self.assertIn(
+                    str(self.characterization.pk),
+                    self.visitor.get(url).content.decode(),
+                )
+
+    def test_an_embargoed_characterization(self):
+        self.embargo(self.characterization)
+        for url in self.pages:
+            with self.subTest(url=url, reader="visitor"):
+                response = self.visitor.get(url)
+                self.assert_answer(response, 200, PUBLIC)
+                self.assertNotIn(
+                    str(self.characterization.pk), response.content.decode()
+                )
+            with self.subTest(url=url, reader="granted"):
+                response = self.reader.get(url)
+                self.assert_answer(response, 200, PRIVATE)
+                self.assertIn(str(self.characterization.pk), response.content.decode())
+        for url in self.singles:
+            with self.subTest(url=url):
+                self.assert_answer(self.visitor.get(url), 401, PRIVATE)
+                self.assert_answer(self.reader.get(url), 200, PRIVATE)
+
+    def test_an_ungranted_session(self):
+        for url in self.singles:
+            with self.subTest(url=url):
+                response = self.stranger.get(url)
+                self.assert_answer(response, 403, PRIVATE)
+                self.assertEqual(response.content, b"")
+
+    def test_an_unknown_id(self):
+        unknown = uuid.uuid4()
+        for url in (
+            f"/iiif/v3/characterization-collection/{unknown}",
+            f"/iiif/v3/characterization-collection/{unknown}/page-1",
+            f"/iiif/v2/characterization-collection/{unknown}",
+            f"/iiif/v2/characterization-collection/{unknown}/page-1",
+            f"/iiif/v3/annotation/{self.characterization.pk}/{unknown}",
+        ):
+            with self.subTest(url=url):
+                self.assert_answer(self.visitor.get(url), 404, PRIVATE)

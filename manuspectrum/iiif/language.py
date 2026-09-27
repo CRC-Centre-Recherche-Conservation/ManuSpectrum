@@ -90,6 +90,26 @@ def gettext_map(msgid, **params):
     return rendered
 
 
+def qualified(name, qualifier=None):
+    """``name (qualifier)`` in each language of the map *name*; *name* itself without *qualifier*.
+
+    The qualifier is read in each of those languages by ``text_in``; the
+    pattern is rendered in that language (``settings.LANGUAGE_CODE`` for
+    ``none``).
+    """
+    if not qualifier:
+        return {code: list(texts) for code, texts in (name or {}).items()}
+    rendered = {}
+    for code in name or {}:
+        with translation.override(settings.LANGUAGE_CODE if code == NONE else code):
+            pattern = gettext("%(name)s (%(qualifier)s)")
+        rendered[code] = [
+            pattern
+            % {"name": text_in(name, code), "qualifier": text_in(qualifier, code)}
+        ]
+    return rendered
+
+
 def joined(maps, sep=", "):
     """One string per language joining *maps* in order (multi-valued metadata).
 

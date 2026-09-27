@@ -19,6 +19,16 @@ stored language and go under ``none``.
 A file is kept only when its ``File`` row hangs from the tile that lists it;
 nothing is ever read from a path written in tile data. A zone on a canvas the
 source manifest does not list leaves its analysis unlocated.
+
+Identified materials (characterizations) are those of
+``visible_set(reader).characterizations`` observing the subject (or, for a
+Document, one of its visible Components) through a readable link. Each is
+located by its own zones, else by the zones of the Components it observes;
+its concepts (materials with their certainty, colours, layers, elements with
+their level) keep the URI and every label the reference value stores; its
+evidence is the visible cited analyses, each with the ids of its zones on the
+Document's canvases. An analysis lists, as its materials, the identified
+materials visible to the reader that cite it.
 """
 
 import html
@@ -76,6 +86,16 @@ _EMPTY = (None, "", [], {})
 _SPACES = re.compile(r"\s+")
 
 
+CHARACTERIZATION_KEYS = (
+    "material",
+    "confidence",
+    "colour",
+    "layer",
+    "elements",
+    "element_level",
+)
+
+
 class Refused:
     """The resource exists; the reader may not read it."""
 
@@ -130,6 +150,34 @@ class AnalysisFact:
 
 
 @dataclass(frozen=True)
+class Concept:
+    """One reference value item: its stored URI (None when empty) and its labels per language."""
+
+    uri: str | None
+    labels: dict
+
+
+@dataclass(frozen=True)
+class CharacterizationFact:
+    """An identified material: its name, zones and concepts, and the analyses it cites.
+
+    ``materials`` and ``elements`` pair a concept with its qualifier (the
+    certainty of a material, the level of an element), None when unstated.
+    ``evidence`` pairs each visible cited analysis with the feature ids of
+    its zones on the Document's canvases (empty when it has none there).
+    """
+
+    id: str
+    name: dict
+    zones: tuple
+    materials: tuple
+    colours: tuple
+    layers: tuple
+    elements: tuple
+    evidence: tuple
+
+
+@dataclass(frozen=True)
 class DocumentFacts:
     """The subject (Document or Component), its Document's source manifest and its analyses.
 
@@ -144,6 +192,7 @@ class DocumentFacts:
     canvas_labels: tuple
     analyses: tuple
     characterizations: tuple = ()
+    names: dict = field(default_factory=dict)
 
 
 def media_type(name, stored):
@@ -262,7 +311,7 @@ def plain_text(markup):
 
 
 def _slug_of(graph_id):
-    for slug in ("document", "component", "analysis"):
+    for slug in ("document", "component", "analysis", "characterization"):
         if graph_id_of(slug) == str(graph_id):
             return slug
     return None
@@ -304,15 +353,7 @@ def _subject(resource_id, reader, visible):
 
 def _analysis_ids(slug, subject, document, visible, readable):
     """Analyses observing *subject* (and, for a Document, its visible Components), visible to the reader."""
-    targets = {subject}
-    if slug == "document":
-        targets |= {
-            component
-            for component, _ in _referencing(
-                "item_visual_is_part_of_document", {document}, readable
-            )
-            if component in visible.components
-        }
+    targets = _observed_targets(slug, subject, document, visible, readable)
     return sorted(
         {
             analysis
@@ -386,10 +427,39 @@ def _imaging(values):
     )
 
 
-def document_facts(resource_id, reader, only=None):
+def _observed_targets(slug, subject, document, visible, readable):
+    """*subject* and, for a Document, its visible Components."""
+    targets = {subject}
+    if slug == "document":
+        targets |= {
+            component
+            for component, _ in _referencing(
+                "item_visual_is_part_of_document", {document}, readable
+            )
+            if component in visible.components
+        }
+    return targets
+
+
+def _characterization_ids(slug, subject, document, visible, readable):
+    """Identified materials observing *subject* (and, for a Document, its visible Components), visible to the reader."""
+    targets = _observed_targets(slug, subject, document, visible, readable)
+    return sorted(
+        {
+            characterization
+            for characterization, _ in _referencing(
+                "object_observed", targets, readable
+            )
+            if characterization in visible.characterizations
+        }
+    )
+
+
+def document_facts(resource_id, reader, only=None, kind="analysis"):
     """``DocumentFacts`` of a Document or Component for *reader*; None when unknown or unreadable.
 
-    *only*, a set of analysis ids, keeps those analyses alone.
+    *kind* ``analysis`` fills ``analyses``, ``characterization`` fills
+    ``characterizations``; *only*, a set of resource ids, keeps those alone.
     """
     visible = visible_set(reader)
     subject = _subject(resource_id, reader, visible)
@@ -397,10 +467,27 @@ def document_facts(resource_id, reader, only=None):
         return None
     slug, document = subject
     readable = readable_nodegroup_ids(reader)
-    analysis_ids = _analysis_ids(slug, str(resource_id), document, visible, readable)
+    analysis_ids, characterization_ids = [], []
+    if kind == "characterization":
+        characterization_ids = _characterization_ids(
+            slug, str(resource_id), document, visible, readable
+        )
+    else:
+        analysis_ids = _analysis_ids(
+            slug, str(resource_id), document, visible, readable
+        )
     if only is not None:
         analysis_ids = [a for a in analysis_ids if a in only]
-    return _build(str(resource_id), document, analysis_ids, reader, visible, readable)
+        characterization_ids = [c for c in characterization_ids if c in only]
+    return _build(
+        str(resource_id),
+        document,
+        analysis_ids,
+        reader,
+        visible,
+        readable,
+        characterization_ids,
+    )
 
 
 def subject_of(resource_id, reader):
@@ -408,55 +495,186 @@ def subject_of(resource_id, reader):
     return _subject(resource_id, reader, visible_set(reader))
 
 
-def analysis_access(analysis_id, reader):
-    """``(observed object id, (slug, document id))`` of an analysis *reader* may read.
+ANNOTATED = {
+    "analysis": ("analyses", "component_observed"),
+    "characterization": ("characterizations", "object_observed"),
+}
 
-    None when *analysis_id* is not an analysis; ``REFUSED`` when the reader
-    may not read it (outside ``visible_set(reader).analyses``, or refused by
-    ``user_can_read_resource``), or when none of its observed objects leads
-    the reader to a visible Document.
+
+def annotated_access(resource_id, reader):
+    """``(kind, observed object id, (slug, document id))`` of an analysis or identified material *reader* may read.
+
+    *kind* is ``analysis`` or ``characterization``. None when *resource_id*
+    is neither; ``REFUSED`` when the reader may not read it (outside its
+    ``visible_set`` set, or refused by ``user_can_read_resource``), or when
+    none of its observed objects leads the reader to a visible Document.
     """
     graph_id = (
-        ResourceInstance.objects.filter(pk=analysis_id)
+        ResourceInstance.objects.filter(pk=resource_id)
         .values_list("graph_id", flat=True)
         .first()
     )
-    if graph_id is None or _slug_of(graph_id) != "analysis":
+    kind = _slug_of(graph_id) if graph_id is not None else None
+    if kind not in ANNOTATED:
         return None
+    attribute, link = ANNOTATED[kind]
     visible = visible_set(reader)
-    aid = str(analysis_id)
-    if aid not in visible.analyses or not user_can_read_resource(
-        reader, resourceid=aid
+    rid = str(resource_id)
+    if rid not in getattr(visible, attribute) or not user_can_read_resource(
+        reader, resourceid=rid
     ):
         return REFUSED
     readable = readable_nodegroup_ids(reader)
-    for _, value, _ in _tiles([aid], ["component_observed"], readable)[aid][
-        "component_observed"
-    ]:
+    for _, value, _ in _tiles([rid], [link], readable)[rid][link]:
         for target in _refs(value):
             subject = _subject(target, reader, visible)
             if subject is not None:
-                return target, subject
+                return kind, target, subject
     return REFUSED
 
 
-def analysis_fact(analysis_id, reader):
-    """``(DocumentFacts, AnalysisFact)`` of one analysis; None when unknown, ``REFUSED`` when unreadable (``analysis_access``).
+def annotated_fact(resource_id, reader):
+    """``(kind, DocumentFacts, fact)`` of one analysis or identified material; None when unknown, ``REFUSED`` when unreadable.
 
     The document facts are those of the first observed object leading to a
     visible Document.
     """
-    access = analysis_access(analysis_id, reader)
+    access = annotated_access(resource_id, reader)
     if access is None or access is REFUSED:
         return access
-    target, (_, document) = access
+    kind, target, (_, document) = access
     visible = visible_set(reader)
     readable = readable_nodegroup_ids(reader)
-    doc = _build(target, document, [str(analysis_id)], reader, visible, readable)
-    return doc, doc.analyses[0]
+    rid = [str(resource_id)]
+    if kind == "analysis":
+        doc = _build(target, document, rid, reader, visible, readable)
+        return kind, doc, doc.analyses[0]
+    doc = _build(target, document, [], reader, visible, readable, rid)
+    return kind, doc, doc.characterizations[0]
 
 
-def _build(subject_id, document, analysis_ids, reader, visible, readable):
+def analysis_fact(analysis_id, reader):
+    """``(DocumentFacts, AnalysisFact)`` of one analysis; None when unknown or not an analysis, ``REFUSED`` when unreadable."""
+    found = annotated_fact(analysis_id, reader)
+    if found is None or found is REFUSED:
+        return found
+    kind, doc, fact = found
+    return (doc, fact) if kind == "analysis" else None
+
+
+def _concepts(value):
+    """``Concept`` of each item of a reference value."""
+    return tuple(
+        Concept(uri=str(item.get("uri") or "").strip() or None, labels=labels)
+        for item in lang.reference_items(value)
+        if (labels := lang.reference_item_labels(item))
+    )
+
+
+def _qualified(values, key, qualifier_key):
+    """``(concept, qualifier or None)`` of every concept of *key*, its qualifier read from the same tile."""
+    qualifier_node = role_node(*ROLES[qualifier_key])
+    pairs = []
+    for _, value, data in values.get(key, ()):
+        qualifier = _concepts(data.get(qualifier_node.nodeid)) if qualifier_node else ()
+        for concept in _concepts(value):
+            pairs.append((concept, qualifier[0] if qualifier else None))
+    return tuple(pairs)
+
+
+def _located(node, resource_ids, dims, position, readable):
+    """``{resource id: [Zone, …]}`` of the features of *node* on a canvas listed in *position*."""
+    zones = defaultdict(list)
+    for rid, feature, canvas, shape in annotation_features(
+        node, resource_ids, dims, readable
+    ):
+        if canvas in position:
+            zones[rid].append(Zone(str(feature), canvas, position[canvas], shape))
+    return zones
+
+
+def _characterizations(ids, visible, readable, dims, position, name_of):
+    """``CharacterizationFact`` of the identified materials *ids*, in id order."""
+    if not ids:
+        return ()
+    values = _tiles(ids, CHARACTERIZATION_KEYS, readable)
+    own = _located(role_node(*ROLES["ch_zone"]), ids, dims, position, readable)
+    observed = {
+        c: {
+            r
+            for _, value, _ in links.get("object_observed", ())
+            for r in _refs(value)
+            if r in visible.components
+        }
+        for c, links in _tiles(ids, ["object_observed"], readable).items()
+    }
+    components = _located(
+        role_node(*ROLES["comp_zone"]),
+        sorted({c for v in observed.values() for c in v}),
+        dims,
+        position,
+        readable,
+    )
+    cited = sorted({a for c in ids for a in visible.evidence.get(c, ())})
+    cited_zones = _located(role_node(*ROLES["zone"]), cited, dims, position, readable)
+    facts = []
+    for c in ids:
+        v = values[c]
+        zones = own.get(c) or [
+            zone for o in sorted(observed.get(c, ())) for zone in components.get(o, ())
+        ]
+        facts.append(
+            CharacterizationFact(
+                id=c,
+                name=name_of.get(c, {}),
+                zones=tuple(sorted(zones, key=lambda z: (z.position, z.feature))),
+                materials=_qualified(v, "material", "confidence"),
+                colours=tuple(
+                    k for _, x, _ in v.get("colour", ()) for k in _concepts(x)
+                ),
+                layers=tuple(k for _, x, _ in v.get("layer", ()) for k in _concepts(x)),
+                elements=_qualified(v, "elements", "element_level"),
+                evidence=tuple(
+                    (a, tuple(sorted(z.feature for z in cited_zones.get(a, ()))))
+                    for a in visible.evidence.get(c, ())
+                ),
+            )
+        )
+    return tuple(facts)
+
+
+def _materials(analysis_ids, visible, readable):
+    """``{analysis id: language map}``: the materials of the identified materials citing it, ``name (certainty)``, joined."""
+    citing = defaultdict(list)
+    for c in sorted(visible.characterizations):
+        for a in visible.evidence.get(c, ()):
+            if a in analysis_ids:
+                citing[a].append(c)
+    if not citing:
+        return {}
+    ids = sorted({c for v in citing.values() for c in v})
+    values = _tiles(ids, ["material", "confidence"], readable)
+    texts = {
+        c: [
+            lang.qualified(concept.labels, qualifier.labels if qualifier else None)
+            for concept, qualifier in _qualified(values[c], "material", "confidence")
+        ]
+        for c in ids
+    }
+    return {
+        a: lang.joined([t for c in cs for t in texts[c]]) for a, cs in citing.items()
+    }
+
+
+def _build(
+    subject_id,
+    document,
+    analysis_ids,
+    reader,
+    visible,
+    readable,
+    characterization_ids=(),
+):
     doc_tiles = _tiles([document], ["doc_manifest"], readable)[document]
     url = next(
         (
@@ -469,12 +687,8 @@ def _build(subject_id, document, analysis_ids, reader, visible, readable):
     position = {c["id"]: n for n, c in enumerate(listed, start=1)}
     dims = canvas_index(listed)
 
-    zones = defaultdict(list)
-    for rid, feature, canvas, shape in annotation_features(
-        role_node(*ROLES["zone"]), analysis_ids, dims, readable
-    ):
-        if canvas in position:
-            zones[rid].append(Zone(str(feature), canvas, position[canvas], shape))
+    zones = _located(role_node(*ROLES["zone"]), analysis_ids, dims, position, readable)
+    materials = _materials(set(analysis_ids), visible, readable)
 
     values = _tiles(analysis_ids, ANALYSIS_KEYS, readable)
     candidates = {
@@ -506,7 +720,10 @@ def _build(subject_id, document, analysis_ids, reader, visible, readable):
         ).values_list("resourceinstanceid", "graph_id")
         if str(rid) not in hidden and str(graph_id) in graphs
     }
-    name_of = names_of(shown | set(analysis_ids), readable)
+    cited = {a for c in characterization_ids for a in visible.evidence.get(c, ())}
+    name_of = names_of(
+        shown | set(analysis_ids) | set(characterization_ids) | cited, readable
+    )
 
     analyses = []
     for aid in analysis_ids:
@@ -575,6 +792,7 @@ def _build(subject_id, document, analysis_ids, reader, visible, readable):
                 ),
                 dataset=dataset,
                 draft=aid in visible.unpublished,
+                materials=materials.get(aid, {}),
             )
         )
     return DocumentFacts(
@@ -584,4 +802,8 @@ def _build(subject_id, document, analysis_ids, reader, visible, readable):
         canvases=tuple(c["id"] for c in listed),
         canvas_labels=tuple(c["label"] for c in listed),
         analyses=tuple(analyses),
+        characterizations=_characterizations(
+            list(characterization_ids), visible, readable, dims, position, name_of
+        ),
+        names={a: name_of.get(a, {}) for a in cited},
     )
