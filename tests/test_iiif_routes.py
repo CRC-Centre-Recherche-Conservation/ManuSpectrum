@@ -13,7 +13,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.core.cache import cache
-from django.test import Client, override_settings
+from django.test import Client, SimpleTestCase, override_settings
 from django.urls import resolve, reverse
 
 from manuspectrum.iiif import facts, ids
@@ -632,3 +632,24 @@ class LanguageHeaderTests(RouteCase):
 
         self.assertIn("accept-language", response["Vary"].lower())
         self.assertEqual(response["Content-Language"], "fr")
+
+
+class AnnotatedResourceTests(SimpleTestCase):
+    def test_an_annotation_id_names_its_resource(self):
+        resource, feature = uuid.uuid4(), uuid.uuid4()
+        self.assertEqual(
+            ids.annotated_resource(ids.annotation(resource, feature, version=2)),
+            str(resource),
+        )
+
+    def test_anything_else_names_no_resource(self):
+        resource = uuid.uuid4()
+        for value in (
+            None,
+            42,
+            "https://elsewhere.example/iiif/v3/annotation/x/y",
+            ids.annotation_first(resource),
+            ids.collection(resource),
+        ):
+            with self.subTest(value=value):
+                self.assertIsNone(ids.annotated_resource(value))
