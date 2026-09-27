@@ -8,6 +8,7 @@ from pathlib import Path
 
 import polib
 from django.conf import settings
+from django.core.management import get_commands, load_command_class
 from django.test import SimpleTestCase, override_settings
 
 from manuspectrum.iiif import language
@@ -158,6 +159,13 @@ class CatalogueTests(SimpleTestCase):
         ):
             with self.subTest(msgid=msgid):
                 self.assertIn(msgid, msgids)
+
+    def test_makemessages_is_the_project_command_with_the_helper_keywords(self):
+        command = load_command_class(get_commands()["makemessages"], "makemessages")
+
+        self.assertEqual(get_commands()["makemessages"], "manuspectrum")
+        self.assertIn("--keyword=gettext_map", command.xgettext_options)
+        self.assertIn("--keyword=ngettext_map:1,2", command.xgettext_options)
 
     def test_every_iiif_string_has_a_french_translation(self):
         for entry in self.entries():
