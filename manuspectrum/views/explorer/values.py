@@ -269,8 +269,8 @@ def file_entries(entries, *, language, configs, kind):
     ``RAW_INSTRUMENT_EXTENSIONS`` is ``raw`` and is never parsed; anything
     else is ``other``. A file of ``RAW_INSTRUMENT_EXTENSIONS`` sharing a base
     name (case ignored) with a readable file of another extension is the raw
-    file of that one, whether or not the server reads it: both point at each
-    other. Micro-imaging files (*kind* ``"micro-imaging"``) carry that data
+    file of that one: both point at each other, and it is never drawn, even
+    when a setting lists its extension among the text formats. Micro-imaging files (*kind* ``"micro-imaging"``) carry that data
     kind.
     """
     raw_extensions = _raw_extensions()
