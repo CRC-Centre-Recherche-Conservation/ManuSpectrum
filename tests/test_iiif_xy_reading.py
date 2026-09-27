@@ -235,7 +235,11 @@ class BodyTests(IIIFCase):
         for doc in (page, annotation):
             self.assertEqual(
                 doc["@context"],
-                [ids.xy_context(), "http://iiif.io/api/presentation/3/context.json"],
+                [
+                    ids.xy_context(),
+                    "http://iiif.io/api/auth/2/context.json",
+                    "http://iiif.io/api/presentation/3/context.json",
+                ],
             )
 
     def test_a_page_without_xy_reading_does_not_list_our_context(self):
