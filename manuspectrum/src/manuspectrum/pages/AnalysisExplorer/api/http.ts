@@ -272,13 +272,15 @@ export function forgetPayloads(): void {
 }
 
 /**
- * The series of one readable file at a point budget of the server's tiers.
+ * The series of one readable file at a point budget of the server's tiers, or
+ * every point with `"full"` (the workshop; a file over the server's ceiling
+ * rejects with a 413 `ServiceError`).
  * The preview URL of the payload is absolute on `PUBLIC_SERVER_ADDRESS`; only
  * its path is fetched, on the page's own origin. `null` means nothing to draw.
  */
 export async function getSeries(
     previewUrl: string,
-    n: 200 | 4096,
+    n: 200 | 4096 | "full",
     signal?: AbortSignal,
 ): Promise<Series | null> {
     const path = new URL(previewUrl, window.location.origin).pathname;

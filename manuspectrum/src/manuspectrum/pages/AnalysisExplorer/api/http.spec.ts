@@ -267,4 +267,37 @@ describe("getSeries", () => {
             getSeries("http://testserver/api/spectrum-preview/abc", 4096),
         ).rejects.toBeInstanceOf(UnavailableError);
     });
+
+    it("asks for every point with full, on the page's own origin", async () => {
+        const series = {
+            x: [1, 2],
+            y: [3, 4],
+            n_source: 2,
+            decimated: false,
+            x_reversed: false,
+        };
+        fetchMock.mockResolvedValueOnce(respond(200, series));
+
+        const found = await getSeries(
+            "http://testserver/api/spectrum-preview/abc",
+            "full",
+        );
+
+        expect(fetchMock.mock.calls[0][0]).toBe(
+            "/api/spectrum-preview/abc?n=full",
+        );
+        expect(found).toEqual(series);
+    });
+
+    it("maps a file too large for the full series to a 413 ServiceError", async () => {
+        fetchMock.mockResolvedValueOnce(respond(413));
+
+        const refused = getSeries(
+            "http://testserver/api/spectrum-preview/abc",
+            "full",
+        );
+
+        await expect(refused).rejects.toBeInstanceOf(ServiceError);
+        await expect(refused).rejects.toMatchObject({ status: 413 });
+    });
 });

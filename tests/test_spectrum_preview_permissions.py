@@ -139,6 +139,35 @@ class NodegroupGrantPreviewTests(XYTriggerTestCase):
                 )
                 self.assertEqual(self.preview(user).status_code != 404, allowed)
 
+    def full(self, user):
+        self.client.force_login(user)
+        with mock.patch(
+            "manuspectrum.views.spectrum_preview._full_series", return_value=SERIES
+        ):
+            return self.client.get(
+                reverse("api-spectrum-preview", args=[FILE_ID]), {"n": "full"}
+            )
+
+    def test_the_full_series_is_refused_when_the_visitor_may_not_read_the_file(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm(
+                "no_access_to_nodegroup",
+                User.objects.get(username="anonymous"),
+                NodeGroup.objects.get(pk=DATA_FILE_NODEGROUP_ID),
+            )
+
+        quick = self.preview(self.reader)
+        full = self.full(self.reader)
+
+        self.assertEqual(quick.status_code, 200)
+        self.assertEqual((full.status_code, full.content), (404, b""))
+
+    def test_the_full_series_is_the_visitors_whatever_the_reader_is_denied(self):
+        self.deny_files_to_reader()
+
+        self.assertEqual(self.preview(self.reader).status_code, 404)
+        self.assertEqual(json.loads(self.full(self.reader).content), SERIES)
+
     def test_without_a_nodegroup_grant_the_warm_preview_adds_no_query(self):
         self.assertIsNone(readable_nodegroups(self.reader))
         self.assertEqual(self.preview(self.reader).status_code, 200)
