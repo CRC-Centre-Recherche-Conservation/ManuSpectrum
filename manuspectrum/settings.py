@@ -387,7 +387,10 @@ SESSION_COOKIE_NAME = "manuspectrum"
 CACHE_CODE_VERSION = cache_code_version(APP_ROOT)
 
 # Redis database allocation, shared with CELERY_BROKER_URL below:
-#   0 = Celery broker   1 = default cache   2 = permission checker
+#   0 = Celery broker
+#   1 = default cache + iiif_auth (IIIF sign-ins, key prefix "ms-iiif-auth"):
+#       a FLUSHDB on 1 signs every external viewer out
+#   2 = permission checker
 #
 # This is the ONLY definition. settings_local.py may point an entry at another
 # host or index, but must never reassign the dict.
