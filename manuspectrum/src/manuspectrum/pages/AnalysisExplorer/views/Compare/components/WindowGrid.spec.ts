@@ -14,6 +14,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts";
 import { LAYOUT_STORAGE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 
+import type { GridItemHTMLElement } from "gridstack";
 import type { VueWrapper } from "@vue/test-utils";
 import type { CompareWindowSpec } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
@@ -44,6 +45,11 @@ const ResizeReader = defineComponent({
     },
 });
 
+/** What a ResizeObserver reports for a grid of this content size. */
+function sized(width: number, height: number): ResizeObserverEntry[] {
+    return [{ contentRect: { width, height } } as ResizeObserverEntry];
+}
+
 let announce: ReturnType<typeof vi.fn>;
 let wrapper: VueWrapper | null = null;
 
@@ -66,6 +72,18 @@ function item(id: string): HTMLElement {
     return document.querySelector<HTMLElement>(
         `.grid-stack-item[data-window-id="${id}"]`,
     )!;
+}
+
+/** The window's node as gridstack holds it. */
+function node(id: string): Record<string, unknown> {
+    const found = (item(id) as GridItemHTMLElement).gridstackNode;
+    return {
+        id: found?.id,
+        x: found?.x,
+        y: found?.y,
+        w: found?.w,
+        h: found?.h,
+    };
 }
 
 function control(id: string, action: string): HTMLButtonElement {
@@ -118,7 +136,23 @@ describe("WindowGrid", () => {
             w: 4,
             h: 4,
         });
+        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 0, y: 0, w: 6, h: 5 });
+        expect(node(MICRO.id)).toEqual({
+            id: MICRO.id,
+            x: 6,
+            y: 0,
+            w: 4,
+            h: 4,
+        });
         expect(stored()).toBeNull();
+    });
+
+    it("places every window itself: gridstack adopts none of the rendered items", () => {
+        mountGrid();
+        expect(lastGrid().options.auto).toBe(false);
+        expect(lastGrid().makeWidget).toHaveBeenCalledTimes(2);
+        expect(node(XRF.id).id).toBe(XRF.id);
+        expect(node(MICRO.id).id).toBe(MICRO.id);
     });
 
     it("puts a window back where it was saved and forgets windows no longer shown", () => {
@@ -137,7 +171,18 @@ describe("WindowGrid", () => {
             w: 6,
             h: 5,
         });
+        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 6, y: 0, w: 6, h: 5 });
         expect(stored()).toEqual({ [XRF.id]: { x: 6, y: 0, w: 6, h: 5 } });
+    });
+
+    it("keeps a saved place with room above it: nothing floats up", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ [XRF.id]: { x: 0, y: 4, w: 6, h: 5 } }),
+        );
+        mountGrid([XRF]);
+        expect(lastGrid().options.mode).toBe("float");
+        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 0, y: 4, w: 6, h: 5 });
     });
 
     it("saves what gridstack reports after a drag, except in one column", () => {
@@ -146,7 +191,7 @@ describe("WindowGrid", () => {
         grid.trigger("change");
         expect(stored()).toEqual({
             [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
-            [MICRO.id]: { x: 0, y: 5, w: 4, h: 4 },
+            [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
         });
         window.localStorage.clear();
         grid.setColumns(1);
@@ -164,49 +209,77 @@ describe("WindowGrid", () => {
         expect(lastGrid().options.column).toBe(12);
     });
 
-    it("rearranges: empties the saved layout and lays the windows out in their order", async () => {
+    it("brings the saved desktop layout back intact after one column, and never saves the one-column layout", async () => {
+        const layout = {
+            [XRF.id]: { x: 6, y: 0, w: 6, h: 5 },
+            [MICRO.id]: { x: 0, y: 0, w: 4, h: 4 },
+        };
+        window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+        mountGrid();
+        const grid = lastGrid();
+        grid.setColumns(1);
+        await flushPromises();
+        expect(node(XRF.id)).toMatchObject({ x: 0, w: 1 });
+        expect(stored()).toEqual(layout);
+        grid.setColumns(12);
+        await flushPromises();
+        expect(node(XRF.id)).toEqual({ id: XRF.id, ...layout[XRF.id] });
+        expect(node(MICRO.id)).toEqual({ id: MICRO.id, ...layout[MICRO.id] });
+        expect(stored()).toEqual(layout);
+        grid.trigger("change");
+        expect(stored()).toEqual(layout);
+    });
+
+    it("rearranges: lays the windows out in their order and saves that layout", async () => {
         window.localStorage.setItem(
             LAYOUT_STORAGE_KEY,
             JSON.stringify({ [MICRO.id]: { x: 0, y: 0, w: 4, h: 4 } }),
         );
         const view = mountGrid();
-        const grid = lastGrid();
         await view.find("button.rearrange").trigger("click");
-        expect(grid.update).toHaveBeenCalledWith(item(XRF.id), {
-            x: 0,
-            y: 0,
-            w: 6,
-            h: 5,
-        });
-        expect(grid.update).toHaveBeenCalledWith(item(MICRO.id), {
+        await flushPromises();
+        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 0, y: 0, w: 6, h: 5 });
+        expect(node(MICRO.id)).toEqual({
+            id: MICRO.id,
             x: 6,
             y: 0,
             w: 4,
             h: 4,
         });
-        expect(stored()).toBeNull();
+        expect(stored()).toEqual({
+            [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+            [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+        });
         expect(announce).toHaveBeenCalledWith("Windows rearranged.");
+    });
+
+    it("keeps the order it rearranged in: no window floats up past another", async () => {
+        const second: CompareWindowSpec = { ...XRF, id: "auto:xy:raman" };
+        const fourth: CompareWindowSpec = { ...MICRO, id: "auto:not-in-chart" };
+        const view = mountGrid([XRF, MICRO, second, fourth]);
+        await view.find("button.rearrange").trigger("click");
+        await flushPromises();
+        expect(node(second.id)).toMatchObject({ x: 0, y: 5 });
+        expect(node(fourth.id)).toMatchObject({ x: 6, y: 5 });
+        expect(
+            control(fourth.id, "move-after").getAttribute("aria-disabled"),
+        ).toBe("true");
     });
 
     it("moves a window after the next one, says where it is and keeps the focus on it", async () => {
         mountGrid();
-        const grid = lastGrid();
         const button = control(XRF.id, "move-after");
         button.focus();
         button.click();
         await nextTick();
-        expect(grid.update).toHaveBeenCalledWith(item(MICRO.id), {
+        expect(node(MICRO.id)).toEqual({
+            id: MICRO.id,
             x: 0,
             y: 0,
             w: 4,
             h: 4,
         });
-        expect(grid.update).toHaveBeenCalledWith(item(XRF.id), {
-            x: 4,
-            y: 0,
-            w: 6,
-            h: 5,
-        });
+        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 4, y: 0, w: 6, h: 5 });
         expect(announce).toHaveBeenLastCalledWith("XRF: 2 of 2");
         expect(document.activeElement).toBe(control(XRF.id, "move-after"));
         expect(
@@ -225,6 +298,7 @@ describe("WindowGrid", () => {
         button.click();
         await nextTick();
         expect(lastGrid().update).not.toHaveBeenCalled();
+        expect(lastGrid().load).not.toHaveBeenCalled();
         expect(announce).not.toHaveBeenCalled();
     });
 
@@ -322,13 +396,9 @@ describe("WindowGrid", () => {
         wrapper = grid;
         await wrapper.find("button.rearrange").trigger("click");
         await flushPromises();
-        expect(lastGrid().update).toHaveBeenCalledWith(item(XRF.id), {
-            x: 0,
-            y: 0,
-            w: 6,
-            h: 5,
-        });
-        expect(lastGrid().update).toHaveBeenCalledWith(item(MICRO.id), {
+        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 0, y: 0, w: 6, h: 5 });
+        expect(node(MICRO.id)).toEqual({
+            id: MICRO.id,
             x: 6,
             y: 0,
             w: 4,
@@ -336,7 +406,10 @@ describe("WindowGrid", () => {
         });
         expect(announce).toHaveBeenCalledTimes(1);
         expect(announce).toHaveBeenLastCalledWith("Windows rearranged.");
-        expect(stored()).toBeNull();
+        expect(stored()).toEqual({
+            [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+            [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+        });
     });
 
     it("opens a folded window to its header only, and unfolds it on demand", async () => {
@@ -372,12 +445,27 @@ describe("WindowGrid", () => {
         );
         await view.find("button.rearrange").trigger("click");
         await flushPromises();
-        expect(grid.update).toHaveBeenLastCalledWith(item(XRF.id), {
-            x: 4,
-            y: 0,
-            w: 6,
-            h: 5,
+        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 4, y: 0, w: 6, h: 5 });
+    });
+
+    it("keeps what a window shows while it is folded", async () => {
+        wrapper = mount(WindowGrid, {
+            props: { windows: [{ ...XRF, folded: false }] },
+            attachTo: document.body,
+            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
+            slots: { default: `<input class="typed" />` },
         });
+        const typed = item(XRF.id).querySelector<HTMLInputElement>(".typed")!;
+        typed.value = "kept";
+        control(XRF.id, "fold").click();
+        await nextTick();
+        expect(item(XRF.id).querySelector<HTMLElement>(".body")!.hidden).toBe(
+            true,
+        );
+        control(XRF.id, "fold").click();
+        await nextTick();
+        expect(item(XRF.id).querySelector(".typed")).toBe(typed);
+        expect(typed.value).toBe("kept");
     });
 
     it("keeps a folded window folded after a reload, and its unfolded size saved", async () => {
@@ -457,7 +545,7 @@ describe("WindowGrid", () => {
         expect(grid.makeWidget).toHaveBeenLastCalledWith(item(MATERIALS.id), {
             id: MATERIALS.id,
             x: 0,
-            y: 9,
+            y: 5,
             w: 6,
             h: 5,
         });
@@ -490,9 +578,16 @@ describe("WindowGrid", () => {
             slots: { default: () => h(ResizeReader) },
         });
         expect(observers).toHaveLength(1);
-        observers[0]([], {} as ResizeObserver);
+        observers[0](sized(800, 400), {} as ResizeObserver);
         lastGrid().trigger("resizestop");
-        observers[0]([], {} as ResizeObserver);
+        observers[0](sized(700, 400), {} as ResizeObserver);
+        await vi.advanceTimersByTimeAsync(300);
+        expect(wrapper.findAll(".tick").map((tick) => tick.text())).toEqual([
+            "1",
+            "1",
+        ]);
+        observers[0](sized(700, 900), {} as ResizeObserver);
+        lastGrid().trigger("dragstop");
         await vi.advanceTimersByTimeAsync(300);
         expect(wrapper.findAll(".tick").map((tick) => tick.text())).toEqual([
             "1",

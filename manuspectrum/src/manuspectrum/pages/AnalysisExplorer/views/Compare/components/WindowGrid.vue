@@ -52,20 +52,28 @@ const CELL_HEIGHT = "4rem";
 const GAP = "0.5rem";
 
 /**
- * The Compare windows on a gridstack grid. gridstack owns every window's
- * x, y, w, h: its `change` event writes the layout (`ms-explorer-layout-v1`,
- * 12 columns only), nothing here binds a position. The saved layout is read
- * once, when the grid mounts, and trimmed to the windows shown then and the
- * windows `retained` names (hidden, kept with their place); a window that
- * leaves the grid loses its place unless `retained` names it. With nothing
- * saved, gridstack places the windows (`autoPosition`); a window that
- * appears later goes back to its place, else under the others, without the
- * focus, and is announced. « Rearrange » emits `rearrange` first, so the
- * parent can bring hidden windows back, then lays every window out. A folded
- * window keeps its header only; the reader's fold or unfold is saved with
- * the layout and wins over the window's spec, and a folded window's saved
- * box keeps its unfolded height. gridstack keeps the DOM in reading order,
- * which the keyboard follows.
+ * The Compare windows on a gridstack grid. gridstack adopts none of the
+ * rendered items (`auto: false`): each window is made a widget here, with
+ * its id and its box. The grid has no gravity (`mode: "float"`), so a
+ * window stays where it was put and an order set by « Move » or
+ * « Rearrange » holds. gridstack owns every window's x, y, w, h afterwards:
+ * its `change` event writes the layout (`ms-explorer-layout-v1`, 12 columns
+ * only), nothing here binds a position. The saved layout is read once, when
+ * the grid mounts, and trimmed to the windows shown then and the windows
+ * `retained` names (hidden, kept with their place); a window that leaves
+ * the grid loses its place unless `retained` names it. With nothing saved,
+ * gridstack places the windows (`autoPosition`); a window that appears
+ * later goes back to its place, else under the others, without the focus,
+ * and is announced. Under 768 px the windows are listed on one column,
+ * never saved; back on 12 columns, the saved places are put back. « Rearrange »
+ * emits `rearrange` first, so the parent can bring hidden windows back,
+ * then lays every window out and saves that layout. A folded window keeps
+ * its header only (its content, once shown, stays mounted); the reader's
+ * fold or unfold is saved with the layout and wins over the window's spec,
+ * and a folded window's saved box keeps its unfolded height. gridstack
+ * keeps the DOM in reading order, which the keyboard follows. Windows are
+ * told to draw again (`WINDOW_RESIZE_KEY`) when the grid's width or a
+ * window's size changes, not when a drag makes the grid taller.
  */
 const props = withDefaults(
     defineProps<{
@@ -109,6 +117,10 @@ let grid: GridStack | null = null;
 let saved: WindowLayout = {};
 let saving = true;
 let observer: ResizeObserver | null = null;
+/** The grid's content width last observed. */
+let observedWidth: number | null = null;
+/** The column count of the last `change` handled. */
+let shownColumns = GRID_COLUMNS;
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
 let closing: { id: string; index: number } | null = null;
 let rearranging = false;
@@ -214,8 +226,9 @@ onMounted(() => {
     created.batchUpdate(false);
     created.on("change", onGridChange);
     created.on("resizestop", scheduleResize);
+    shownColumns = created.getColumn();
     syncFromGrid();
-    observer = new ResizeObserver(scheduleResize);
+    observer = new ResizeObserver(onGridResized);
     observer.observe(element);
 });
 
@@ -228,6 +241,8 @@ onBeforeUnmount(() => {
 
 function gridOptions(): GridStackOptions {
     return {
+        auto: false,
+        mode: "float",
         column: GRID_COLUMNS,
         cellHeight: CELL_HEIGHT,
         margin: GAP,
@@ -369,9 +384,24 @@ function savedBoxOf(node: GridStackNode): WindowBox {
         : box;
 }
 
+/**
+ * Saves what gridstack reports on 12 columns. A change of column count is
+ * never saved: back on 12 columns, the saved places are put back once
+ * gridstack has ended its own relayout.
+ */
 function onGridChange(): void {
     syncFromGrid();
-    if (!saving || grid?.getColumn() !== GRID_COLUMNS) return;
+    const columns = grid?.getColumn() ?? GRID_COLUMNS;
+    if (columns !== shownColumns) {
+        shownColumns = columns;
+        scheduleResize();
+        if (columns === GRID_COLUMNS) queueMicrotask(restoreSaved);
+        return;
+    }
+    if (saving && columns === GRID_COLUMNS) saveGrid();
+}
+
+function saveGrid(): void {
     const current: WindowLayout = {};
     for (const node of gridNodes()) {
         current[node.id as string] = savedBoxOf(node);
@@ -380,14 +410,37 @@ function onGridChange(): void {
     writeLayout(saved);
 }
 
-function applyLayout(layout: WindowLayout): void {
-    if (!grid) return;
-    grid.batchUpdate();
-    for (const [id, box] of Object.entries(layout)) {
-        const element = itemElement(id);
-        if (element) grid.update(element, box);
+/** The saved places of the windows shown, a folded window as tall as its header. */
+function restoreSaved(): void {
+    if (!grid || grid.getColumn() !== GRID_COLUMNS) return;
+    const layout: WindowLayout = {};
+    for (const window of props.windows) {
+        const box = saved[window.id];
+        if (box) {
+            layout[window.id] = foldedOf(window)
+                ? { ...box, h: FOLDED_ROWS }
+                : box;
+        }
     }
-    grid.batchUpdate(false);
+    saving = false;
+    applyLayout(layout);
+    saving = true;
+}
+
+/** Moves the windows to their boxes in one go (`load` takes the windows out before it puts them back, so none pushes another). */
+function applyLayout(layout: WindowLayout): void {
+    if (!grid || Object.keys(layout).length === 0) return;
+    grid.load(
+        Object.entries(layout).map(([id, box]) => ({ id, ...box })),
+        false,
+    );
+}
+
+function onGridResized(entries: readonly ResizeObserverEntry[]): void {
+    const width = entries.at(-1)?.contentRect.width;
+    if (width === undefined || width === observedWidth) return;
+    observedWidth = width;
+    scheduleResize();
 }
 
 function scheduleResize(): void {
@@ -500,7 +553,8 @@ function close(id: string): void {
 
 /**
  * Empties the saved layout, lets the parent bring hidden windows back, then
- * lays every window out again in its order, at its first size.
+ * lays every window out again in its order, at its first size, and saves
+ * that layout (on 12 columns).
  */
 async function rearrange(): Promise<void> {
     if (!grid) return;
@@ -526,6 +580,7 @@ async function rearrange(): Promise<void> {
         ),
     );
     saving = true;
+    if (grid.getColumn() === GRID_COLUMNS) saveGrid();
     announce($gettext("Windows rearranged."));
 }
 </script>

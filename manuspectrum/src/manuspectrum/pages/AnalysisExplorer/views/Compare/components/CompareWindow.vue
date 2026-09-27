@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useId } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import type { WindowSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
@@ -11,7 +11,9 @@ const SIZE_NAMES: readonly WindowSize[] = ["S", "M", "L"];
  * keyboard equivalents of dragging (move before or after, sizes, close),
  * and a disclosure button for a window that folds to its header, named by
  * the title, its state in `aria-expanded`. The group of controls is named
- * after the title too.
+ * after the title too. A window that opens folded mounts its content when
+ * first unfolded; folding it again only hides the content, which keeps its
+ * state (a chosen layout, a treatment, the series read).
  * `position` is 1-based in reading order; `size` is null for a size set by
  * hand.
  */
@@ -36,10 +38,20 @@ const { $gettext, interpolate } = useGettext();
 const headingId = useId();
 const bodyId = useId();
 
+/** Set once the content was shown: it stays mounted while folded. */
+const everShown = ref(props.folded !== true);
+
 const isFirst = computed(() => props.position <= 1);
 const isLast = computed(() => props.position >= props.total);
 const controlsLabel = computed(() =>
     interpolate($gettext("Arrange « %{title} »"), { title: props.title }, true),
+);
+
+watch(
+    () => props.folded,
+    (folded) => {
+        if (folded !== true) everShown.value = true;
+    },
 );
 
 function sizeLabel(size: WindowSize): string {
@@ -131,7 +143,7 @@ function onMove(step: -1 | 1): void {
             class="body"
             :hidden="folded === true"
         >
-            <slot v-if="!folded" />
+            <slot v-if="everShown" />
         </div>
     </section>
 </template>
