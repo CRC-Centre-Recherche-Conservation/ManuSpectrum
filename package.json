@@ -1,6 +1,9 @@
 {
     "name": "manuspectrum",
     "license": "AGPL-3.0-only",
+    "engines": {
+        "node": "^22.13.0 || >=24"
+    },
     "scripts": {
         "build_development": "npm run eslint:check && npm run ts:check && cross-env webpack --config ./webpack/webpack.config.dev.js --config ./webpack.project.js --merge",
         "build_production": "npm run eslint:check && npm run ts:check && cross-env webpack --config ./webpack/webpack.config.prod.js --config ./webpack.project.js --merge",
