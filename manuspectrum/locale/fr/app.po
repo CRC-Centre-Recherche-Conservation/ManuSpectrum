@@ -17,7 +17,7 @@ msgstr ""
 msgid "(new tab)"
 msgstr "(nouvel onglet)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:56
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:71
 msgid "%{canvas}, %{technique}: %{n} analysis"
 msgid_plural "%{canvas}, %{technique}: %{n} analyses"
 msgstr[0] "%{canvas}, %{technique} : %{n} analyse"
@@ -54,6 +54,12 @@ msgid "%{n} / %{total} analysis on this page"
 msgid_plural "%{n} / %{total} analyses on this page"
 msgstr[0] "%{n} / %{total} analyse sur cette page"
 msgstr[1] "%{n} / %{total} analyses sur cette page"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:59
+msgid "%{n} %{techniques} spectrum, not drawn"
+msgid_plural "%{n} %{techniques} spectra, not drawn"
+msgstr[0] "%{n} spectre %{techniques}, non tracé"
+msgstr[1] "%{n} spectres %{techniques}, non tracés"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:260
 msgid "%{n} analyses here, %{kept} in the filters, zoom in"
@@ -116,7 +122,7 @@ msgid_plural "%{n} identified materials"
 msgstr[0] "%{n} matériau identifié"
 msgstr[1] "%{n} matériaux identifiés"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:314
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:327
 msgid "%{n} image"
 msgid_plural "%{n} images"
 msgstr[0] "%{n} image"
@@ -126,7 +132,7 @@ msgstr[1] "%{n} images"
 msgid "%{n} in this document"
 msgstr "%{n} dans ce document"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:322
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:335
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue:63
 msgid "%{n} item"
 msgid_plural "%{n} items"
@@ -154,13 +160,20 @@ msgstr[0] "%{n} élément n'est plus disponible."
 msgstr[1] "%{n} éléments ne sont plus disponibles."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:69
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:310
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:323
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:52
 msgid "%{n} map"
 msgid_plural "%{n} maps"
 msgstr[0] "%{n} carte"
 msgstr[1] "%{n} cartes"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:318
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:47
+msgid "%{n} map · %{layers}"
+msgid_plural "%{n} maps · %{layers}"
+msgstr[0] "%{n} carte · %{layers}"
+msgstr[1] "%{n} cartes · %{layers}"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:331
 msgid "%{n} material"
 msgid_plural "%{n} materials"
 msgstr[0] "%{n} matériau"
@@ -229,7 +242,7 @@ msgstr[1] ""
 "désélectionnés."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:67
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:306
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:319
 msgid "%{n} spectrum"
 msgid_plural "%{n} spectra"
 msgstr[0] "%{n} spectre"
@@ -241,15 +254,21 @@ msgid_plural "%{n} spectra added"
 msgstr[0] "%{n} spectre ajouté"
 msgstr[1] "%{n} spectres ajoutés"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:64
+msgid "%{n} spectrum, not drawn"
+msgid_plural "%{n} spectra, not drawn"
+msgstr[0] "%{n} spectre, non tracé"
+msgstr[1] "%{n} spectres, non tracés"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:136
 msgid "%{n} ticked"
 msgstr "%{n} coché(s)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:179
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:184
 msgid "%{name} also appears on %{folios}."
 msgstr "%{name} apparaît aussi sur %{folios}."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:180
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:185
 msgid "%{name} appears on %{folios}."
 msgstr "%{name} apparaît sur %{folios}."
 
@@ -285,7 +304,7 @@ msgstr ""
 "%{name} : trop volumineux pour être tracé en entier ; téléchargez le fichier "
 "pour le lire."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue:107
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue:118
 msgid "%{summary}. %{message}"
 msgstr "%{summary}. %{message}"
 
@@ -293,34 +312,34 @@ msgstr "%{summary}. %{message}"
 msgid "%{title} (offset)"
 msgstr "%{title} (décalé)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:376
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:389
 msgid "%{title} closed."
 msgstr "%{title} : outil fermé."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:385
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:398
 msgid "%{title} hidden. Show it again from « Hidden windows »."
 msgstr ""
 "Fenêtre « %{title} » masquée. Réaffichez-la depuis « Fenêtres masquées »."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:253
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:266
 msgid "%{title}: %{n} spectrum added while the window was hidden."
 msgid_plural "%{title}: %{n} spectra added while the window was hidden."
 msgstr[0] "%{title} : %{n} spectre ajouté pendant que la fenêtre était masquée."
 msgstr[1] "%{title} : %{n} spectres ajoutés pendant que la fenêtre était masquée."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:576
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:591
 msgid "%{title}: %{position} of %{total}"
 msgstr "%{title} : %{position} sur %{total}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:626
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:641
 msgid "%{title}: folded"
 msgstr "%{title} : fenêtre repliée"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:604
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:619
 msgid "%{title}: size %{size}"
 msgstr "%{title} : taille %{size}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:627
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:642
 msgid "%{title}: unfolded"
 msgstr "%{title} : fenêtre dépliée"
 
@@ -328,7 +347,7 @@ msgstr "%{title} : fenêtre dépliée"
 msgid "%{values} (%{level})"
 msgstr "%{values} (%{level})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:272
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:285
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:779
 msgid "%{y} against %{x}"
 msgstr "%{y} en fonction de %{x}"
@@ -418,6 +437,10 @@ msgstr "Analyses citées en preuve"
 msgid "Analyses cited as evidence (%{n})"
 msgstr "Analyses citées en preuve (%{n})"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:218
+msgid "Analyses of the Selection on the folio with the technique"
+msgstr "Analyses de la Sélection sur le folio avec la technique"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue:33
 msgid "Analyses on this sample (%{n})"
 msgstr "Analyses sur cet échantillon (%{n})"
@@ -443,7 +466,7 @@ msgstr "Analyse %{n}"
 msgid "Area"
 msgstr "Zone"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:89
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:92
 msgid "Arrange « %{title} »"
 msgstr "Disposer « %{title} »"
 
@@ -463,10 +486,6 @@ msgstr "Retour à l'accueil de l'explorateur"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts:14
 msgid "Band"
 msgstr "Bande"
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts:29
-msgid "Band not mapped"
-msgstr "Bande non cartographiée"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ColourMaterialTable.vue:105
 msgid "Best certainty"
@@ -537,14 +556,14 @@ msgstr ""
 "clic l'ajoute à la sélection ou l'en retire."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:221
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:363
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:370
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:281
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:174
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue:92
 msgid "Close"
 msgstr "Fermer"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:353
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:360
 msgid "Close the tool"
 msgstr "Fermer l'outil"
 
@@ -585,7 +604,7 @@ msgstr "Couleurs décrites sur la partie étudiée, même sans analyse"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:256
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:121
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:421
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:434
 msgid "Compare"
 msgstr "Comparer"
 
@@ -639,13 +658,13 @@ msgstr "Corpus"
 msgid "Coverage matrix"
 msgstr "Matrice de couverture"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:192
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:221
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:162
 msgid "Curtain position"
 msgstr "Position du rideau"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue:226
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:359
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:458
 msgid "Curtain: compare with the page"
 msgstr "Rideau : comparer avec la page"
 
@@ -738,7 +757,7 @@ msgstr "Télécharger en PNG"
 msgid "Download the file"
 msgstr "Télécharger le fichier"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/MicroImagePreview.vue:117
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/MicroImagePreview.vue:140
 msgid "Download the image"
 msgstr "Télécharger l'image"
 
@@ -761,8 +780,16 @@ msgstr "Télécharger le fichier brut"
 msgid "Draft"
 msgstr "Brouillon"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:74
+msgid "Draw"
+msgstr "Tracer"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:80
+msgid "Draw « %{title} »"
+msgstr "Tracer « %{title} »"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue:182
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue:192
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue:208
 msgid "Each map keeps its own contrast."
 msgstr "Contraste propre à chaque carte."
 
@@ -771,13 +798,9 @@ msgstr "Contraste propre à chaque carte."
 msgid "Element"
 msgstr "Élément"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:289
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:302
 msgid "Element maps"
 msgstr "Cartes d'éléments"
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts:27
-msgid "Element not mapped"
-msgstr "Élément non cartographié"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ColourMaterialTable.vue:99
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:71
@@ -789,11 +812,11 @@ msgstr "Éléments"
 msgid "Elements (%{level})"
 msgstr "Éléments (%{level})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue:123
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue:138
 msgid "Elements found"
 msgstr "Éléments trouvés"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue:94
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue:108
 msgid "Elements outside the table"
 msgstr "Éléments hors du tableau"
 
@@ -813,7 +836,7 @@ msgstr "Libellé anglais de cet agrégat"
 msgid "English label override"
 msgstr "Libellé anglais de remplacement"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:226
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:233
 msgid "Enlarge"
 msgstr "Agrandir"
 
@@ -869,16 +892,16 @@ msgstr "Filtres de ce document"
 msgid "First derivative"
 msgstr "Dérivée première"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:545
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:566
 msgid "Fit to related"
 msgstr "Cadrer sur les liés"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:239
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:246
 msgid "Fold"
 msgstr "Replier"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:73
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:458
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:89
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:474
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:99
 msgid "Folio"
 msgstr "Folio"
@@ -933,7 +956,7 @@ msgid_plural "Hide the %{n} documents without analyses"
 msgstr[0] "Masquer le document sans analyse"
 msgstr[1] "Masquer les %{n} documents sans analyse"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:352
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:359
 msgid "Hide the window"
 msgstr "Masquer la fenêtre"
 
@@ -952,20 +975,24 @@ msgstr "matériau identifié"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:63
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:76
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:600
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:621
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:59
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:95
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:177
 msgid "Identified material"
 msgstr "Matériau identifié"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:293
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:306
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ColourMaterialTable.vue:108
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:199
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:20
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:193
 msgid "Identified materials"
 msgstr "Matériaux identifiés"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue:173
+msgid "Identified materials that name the element"
+msgstr "Matériaux identifiés qui citent l'élément"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SharedSelectionPrompt.vue:176
 msgid "Ignore"
@@ -996,7 +1023,7 @@ msgid "Incoming — that model carries the link"
 msgstr "Entrant — c’est l’autre modèle qui porte le lien"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue:233
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:363
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:462
 msgid "Indicative positioning, not registered."
 msgstr "Positionnement indicatif, non recalé."
 
@@ -1025,6 +1052,14 @@ msgstr "Note d'interprétation"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:104
 msgid "Item"
 msgstr "Élément"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:91
+msgid "Items of the Selection"
+msgstr "Éléments de la Sélection"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:154
+msgid "Its layers: %{layers}"
+msgstr "Ses couches : %{layers}"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:148
 msgid "Kept on this browser"
@@ -1059,10 +1094,6 @@ msgstr "Poser sur la page"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:237
 msgid "Layer"
 msgstr "Couche"
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts:31
-msgid "Layer not mapped"
-msgstr "Couche non cartographiée"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:68
 msgid "Layers"
@@ -1131,9 +1162,12 @@ msgstr "Carte et chronologie"
 msgid "map layer"
 msgstr "couche cartographique"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:345
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:418
+msgid "Map unavailable — image server"
+msgstr "Carte indisponible — serveur d'images"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue:164
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:284
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:322
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:847
 msgid "Map unavailable (image server)"
 msgstr "Carte indisponible (serveur d'images)"
@@ -1172,7 +1206,7 @@ msgstr "Fusionner avec ma Sélection"
 msgid "micro-image"
 msgstr "micro-image"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:291
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:304
 msgid "Micro-images"
 msgstr "Micro-images"
 
@@ -1184,19 +1218,19 @@ msgstr "Modèle"
 msgid "Model carrying the relation"
 msgstr "Modèle qui porte la relation"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:255
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:262
 msgid "More"
 msgstr "Autres actions"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:100
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:103
 msgid "More for « %{title} »"
 msgstr "Autres actions pour « %{title} »"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:323
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:330
 msgid "Move after"
 msgstr "Déplacer après"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:294
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:301
 msgid "Move before"
 msgstr "Déplacer avant"
 
@@ -1216,7 +1250,7 @@ msgstr "Ma Sélection (%{n})"
 msgid "Narrow the results by technique, material, project or year."
 msgstr "Affinez les résultats par technique, matériau, projet ou année."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:237
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:241
 msgid "New window at the end: %{titles}"
 msgid_plural "New windows at the end: %{titles}"
 msgstr[0] "Nouvelle fenêtre à la fin : %{titles}"
@@ -1230,6 +1264,10 @@ msgstr "Page suivante"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue:239
 msgid "Next page with results"
 msgstr "Page suivante avec résultats"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:145
+msgid "No %{layer} layer for this map"
+msgstr "Pas de couche %{layer} pour cette carte"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:190
 msgid "No analysis published"
@@ -1256,18 +1294,22 @@ msgstr "aucune donnée à afficher"
 msgid "No identified material on this page."
 msgstr "Aucun matériau identifié sur cette page."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:142
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:171
 msgid "No image for this page: the map is shown alone."
 msgstr "Pas d'image pour cette page : la carte est montrée seule."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:513
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:534
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:822
 msgid "No image for this page."
 msgstr "Pas d'image pour cette page."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:609
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:630
 msgid "No item of the Selection is placed on this folio."
 msgstr "Aucun élément de la Sélection n'est placé sur ce folio."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:143
+msgid "No layer for this map"
+msgstr "Pas de couche pour cette carte"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:209
 msgid "no longer available"
@@ -1281,7 +1323,7 @@ msgstr "N'est plus disponible."
 msgid "No match"
 msgstr "Aucune correspondance"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:173
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:208
 msgid "No published analysis"
 msgstr "Aucune analyse publiée"
 
@@ -1306,7 +1348,7 @@ msgstr "Aucun outil pour cette Sélection"
 msgid "No visualisation for this file: it can be downloaded."
 msgstr "Ce fichier n'a pas de visualisation : il est proposé au téléchargement."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:140
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:169
 msgid "No zone on a page: the map is shown alone."
 msgstr "Aucune zone sur une page : la carte est montrée seule."
 
@@ -1448,8 +1490,8 @@ msgstr "Page %{page} sur %{pages}"
 msgid "Page and its analyses"
 msgstr "Page et ses analyses"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:298
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:521
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:362
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:542
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:830
 msgid "Page image unavailable (the institution's IIIF server)."
 msgstr "Image de la page indisponible (serveur IIIF de l'institution)."
@@ -1480,7 +1522,7 @@ msgstr "Période : %{start}–%{end}"
 msgid "Periodic table"
 msgstr "Tableau périodique"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue:55
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue:68
 msgid "Periodic table of the elements found"
 msgstr "Tableau périodique des éléments trouvés"
 
@@ -1533,18 +1575,18 @@ msgstr ""
 "Les fichiers bruts d'instrument sont proposés en téléchargement seulement : "
 "les graphiques lisent leurs exports texte, convertis en amont."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:263
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:500
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:292
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:516
 msgid "Reading the document…"
 msgstr "Lecture du document…"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:445
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:458
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue:71
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue:97
 msgid "Reading the Selection…"
 msgstr "Lecture de la Sélection…"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:740
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:755
 msgid "Rearrange"
 msgstr "Réorganiser"
 
@@ -1622,8 +1664,8 @@ msgstr "Remplacer ma Sélection"
 msgid "Reset the zoom"
 msgstr "Réinitialiser le zoom"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:140
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:225
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:147
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:232
 msgid "Restore"
 msgstr "Réduire"
 
@@ -1651,11 +1693,11 @@ msgstr "Résultats par page"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue:53
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue:169
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:272
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:289
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:306
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:327
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:347
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:530
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:353
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:370
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:426
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:446
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:551
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1006
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:839
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:853
@@ -1731,7 +1773,7 @@ msgstr "Sélection"
 msgid "Selection %{n}/%{limit}"
 msgstr "Sélection %{n}/%{limit}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:566
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:587
 msgid "Selection items on this folio"
 msgstr "Éléments de la Sélection sur ce folio"
 
@@ -1744,13 +1786,18 @@ msgstr "Sélection : %{values}"
 msgid "Share and export"
 msgstr "Partager et exporter"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:74
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:314
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:41
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:49
 msgid "Show"
 msgstr "Afficher"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:446
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:79
+msgid "Show « %{title} »"
+msgstr "Afficher « %{title} »"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:460
 msgid "Show %{folio}"
 msgstr "Afficher %{folio}"
 
@@ -1772,7 +1819,7 @@ msgid_plural "Show the %{n} other citations"
 msgstr[0] "Afficher l'autre citation"
 msgstr[1] "Afficher les %{n} autres citations"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:133
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:140
 msgid "Shown enlarged"
 msgstr "Affichée en grand"
 
@@ -1817,7 +1864,7 @@ msgstr "Source : ManuSpectrum, %{url}, %{date}"
 msgid "Sources"
 msgstr "Sources"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:161
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:174
 msgid "Spectra"
 msgstr "Spectres"
 
@@ -1825,7 +1872,7 @@ msgstr "Spectres"
 msgid "Spectra (CSV)"
 msgstr "Spectres (CSV)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:280
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:293
 msgid "Spectra without axis titles"
 msgstr "Spectres sans titres d'axes"
 
@@ -1896,19 +1943,19 @@ msgstr ""
 msgid "The curves drawn, one row per curve"
 msgstr "Les courbes tracées, une ligne par courbe"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:144
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:173
 msgid "The document could not be read: the map is shown alone."
 msgstr "Le document n'a pas pu être lu : la carte est montrée seule."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue:134
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue:145
 msgid "The element maps show %{layer} again."
 msgstr "Les cartes d'éléments montrent de nouveau %{layer}."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue:121
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue:132
 msgid "The element maps show %{layer}."
 msgstr "Les cartes d'éléments montrent %{layer}."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:173
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:178
 msgid "The selection"
 msgstr "La sélection"
 
@@ -1962,7 +2009,7 @@ msgstr "Ce document"
 msgid "this identification"
 msgstr "cette identification"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/MicroImagePreview.vue:104
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/MicroImagePreview.vue:127
 msgid "This image cannot be shown here."
 msgstr "Cette image ne peut pas être affichée ici."
 
@@ -2010,11 +2057,11 @@ msgstr ""
 msgid "Too many folios for one IIIF manifest."
 msgstr "Trop de folios pour un seul manifeste IIIF."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:179
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:192
 msgid "Tool"
 msgstr "Outil"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:93
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:96
 msgid "Tools of « %{title} »"
 msgstr "Outils de « %{title} »"
 
@@ -2026,7 +2073,7 @@ msgstr "Traitement"
 msgid "Type"
 msgstr "Type"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:238
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:245
 msgid "Unfold"
 msgstr "Déplier"
 
@@ -2042,23 +2089,23 @@ msgstr "Mise à jour…"
 msgid "What to share"
 msgstr "Que partager"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:479
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:495
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:805
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:806
 msgid "Whole page"
 msgstr "Page entière"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:224
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:228
 msgid "Window back in its place: %{titles}"
 msgid_plural "Windows back in their places: %{titles}"
 msgstr[0] "Fenêtre revenue à sa place : %{titles}"
 msgstr[1] "Fenêtres revenues à leur place : %{titles}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:713
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:728
 msgid "Windows rearranged."
 msgstr "Fenêtres réorganisées."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:715
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:730
 msgid "Windows rearranged. %{n} window stays hidden."
 msgid_plural "Windows rearranged. %{n} windows stay hidden."
 msgstr[0] "Fenêtres réorganisées. %{n} fenêtre reste masquée."
@@ -2068,7 +2115,7 @@ msgstr[1] "Fenêtres réorganisées. %{n} fenêtres restent masquées."
 msgid "Without a position on the image (%{n})"
 msgstr "Sans position sur l'image (%{n})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:295
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:308
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
 msgid "Without visualisation"
 msgstr "Sans visualisation"
@@ -2086,7 +2133,7 @@ msgid "Year"
 msgstr "Année"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:157
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:428
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:441
 msgid ""
 "Your Selection is empty. Add analyses or identified materials with « + "
 "Selection »."
@@ -2123,6 +2170,15 @@ msgstr "Zoom arrière"
 msgctxt "explorer"
 msgid "Corpus"
 msgstr "Corpus"
+
+#~ msgid "Band not mapped"
+#~ msgstr "Bande non cartographiée"
+
+#~ msgid "Element not mapped"
+#~ msgstr "Élément non cartographié"
+
+#~ msgid "Layer not mapped"
+#~ msgstr "Couche non cartographiée"
 
 #~ msgid "Filter removed: %{value}"
 #~ msgstr "Filtre retiré : %{value}"
