@@ -346,6 +346,10 @@ const vm = function (params) {
         // The panel stays open on a refusal: closing it would throw away the
         // edit that was just refused, and leave the rejection indistinguishable
         // from a save. Same shape as performDelete below.
+        if (responseJson.reason === 'not_found') {
+            invalidate(this.renderer);
+            await rendererConfigRefresh();
+        }
         notify(
             responseJson.reason === 'protected'
                 ? arches.translations.configurationProtected
@@ -468,7 +472,12 @@ const vm = function (params) {
             // no body — fall through to the generic refusal below
         }
 
-        if (configDeleteResponse.ok && responseJson.deleted) {
+        // A configuration someone else already deleted is gone, which is what
+        // was asked: refresh the list as for a success.
+        const gone =
+            (configDeleteResponse.ok && responseJson.deleted === true) ||
+            responseJson.reason === 'not_found';
+        if (gone) {
             invalidate(this.renderer);
             await rendererConfigRefresh();
             if (this.onConfigSaved) {
