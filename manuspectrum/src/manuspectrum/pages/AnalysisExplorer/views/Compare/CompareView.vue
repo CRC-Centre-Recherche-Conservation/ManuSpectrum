@@ -245,8 +245,8 @@ watch(windows, (next) => {
                 const count = newSpectra.value.get(id) ?? 0;
                 return interpolate(
                     $ngettext(
-                        "%{title}: %{n} new spectrum since the window was hidden.",
-                        "%{title}: %{n} new spectra since the window was hidden.",
+                        "%{title}: %{n} spectrum added while the window was hidden.",
+                        "%{title}: %{n} spectra added while the window was hidden.",
                         count,
                     ),
                     { title: specTitle(id), n: count },
@@ -286,7 +286,7 @@ function titleOf(window: AutoWindow): string {
         case "characterizations":
             return $gettext("Identified materials");
         case "not-in-chart":
-            return $gettext("Not in a chart");
+            return $gettext("Without visualisation");
     }
 }
 
@@ -300,11 +300,7 @@ function showLabel(title: string): string {
 
 function newSpectraLabel(count: number): string {
     return interpolate(
-        $ngettext(
-            "%{n} new spectrum since hidden",
-            "%{n} new spectra since hidden",
-            count,
-        ),
+        $ngettext("%{n} spectrum added", "%{n} spectra added", count),
         { n: count },
         true,
     );

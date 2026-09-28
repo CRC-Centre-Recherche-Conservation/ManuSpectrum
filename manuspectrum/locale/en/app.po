@@ -141,12 +141,6 @@ msgid_plural "%{n} micro-images"
 msgstr[0] "%{n} micro-image"
 msgstr[1] "%{n} micro-images"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:303
-msgid "%{n} new spectrum since hidden"
-msgid_plural "%{n} new spectra since hidden"
-msgstr[0] ""
-msgstr[1] ""
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue:136
 msgid "%{n} of %{total} analysis in the filters"
 msgid_plural "%{n} of %{total} analyses in the filters"
@@ -183,6 +177,12 @@ msgid "%{n} spectrum"
 msgid_plural "%{n} spectra"
 msgstr[0] "%{n} spectrum"
 msgstr[1] "%{n} spectra"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:303
+msgid "%{n} spectrum added"
+msgid_plural "%{n} spectra added"
+msgstr[0] ""
+msgstr[1] ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:136
 msgid "%{n} ticked"
@@ -227,8 +227,8 @@ msgid "%{title} hidden. Show it again from « Hidden windows »."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:247
-msgid "%{title}: %{n} new spectrum since the window was hidden."
-msgid_plural "%{title}: %{n} new spectra since the window was hidden."
+msgid "%{title}: %{n} spectrum added while the window was hidden."
+msgid_plural "%{title}: %{n} spectra added while the window was hidden."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -1100,6 +1100,10 @@ msgstr "No analysis published"
 msgid "No colour stated"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue:37
+msgid "No data to display."
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:84
 msgid "no data to show"
 msgstr "no data to show"
@@ -1150,15 +1154,15 @@ msgstr "No result."
 msgid "No sample on this page."
 msgstr "No sample on this page."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue:37
-msgid "No spectrum, map or image to show."
-msgstr ""
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue:72
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue:84
 #, fuzzy
 msgid "No tool for this Selection"
 msgstr "Empty the Selection"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/FileOnlyPreview.vue:25
+msgid "No visualisation for this file: it can be downloaded."
+msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:129
 msgid "No zone on a page: the map is shown alone."
@@ -1171,15 +1175,6 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/treatment-labels.ts:16
 msgid "Normalised to total (TIC)"
 msgstr ""
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:289
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
-msgid "Not in a chart"
-msgstr "Not in a chart"
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/FileOnlyPreview.vue:25
-msgid "Not in a chart: this file can be downloaded."
-msgstr "Not in a chart: this file can be downloaded."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:430
 msgid "Not provided"
@@ -1846,6 +1841,11 @@ msgstr ""
 msgid "Without a position on the image (%{n})"
 msgstr "Without a position on the image (%{n})"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:289
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
+msgid "Without visualisation"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue:63
 msgid "X range"
 msgstr ""
@@ -1896,6 +1896,9 @@ msgstr "Zoom out"
 msgctxt "explorer"
 msgid "Corpus"
 msgstr "Corpus"
+
+#~ msgid "Not in a chart"
+#~ msgstr "Not in a chart"
 
 #~ msgid "Download the zone (IIIF Content State)"
 #~ msgstr "Download the zone (IIIF Content State)"

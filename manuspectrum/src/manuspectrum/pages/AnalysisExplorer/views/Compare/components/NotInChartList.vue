@@ -34,7 +34,7 @@ function reasonText(reason: NotInChartReason): string {
         case "file":
             return $gettext("File with no viewer: download only.");
         case "no-data":
-            return $gettext("No spectrum, map or image to show.");
+            return $gettext("No data to display.");
         case "missing":
             return $gettext("No longer available.");
     }

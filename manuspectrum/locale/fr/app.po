@@ -143,12 +143,6 @@ msgid_plural "%{n} micro-images"
 msgstr[0] "%{n} micro-image"
 msgstr[1] "%{n} micro-images"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:303
-msgid "%{n} new spectrum since hidden"
-msgid_plural "%{n} new spectra since hidden"
-msgstr[0] "%{n} nouveau spectre depuis le masquage"
-msgstr[1] "%{n} nouveaux spectres depuis le masquage"
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue:136
 msgid "%{n} of %{total} analysis in the filters"
 msgid_plural "%{n} of %{total} analyses in the filters"
@@ -185,6 +179,12 @@ msgid "%{n} spectrum"
 msgid_plural "%{n} spectra"
 msgstr[0] "%{n} spectre"
 msgstr[1] "%{n} spectres"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:303
+msgid "%{n} spectrum added"
+msgid_plural "%{n} spectra added"
+msgstr[0] "%{n} spectre ajouté"
+msgstr[1] "%{n} spectres ajoutés"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:136
 msgid "%{n} ticked"
@@ -232,10 +232,10 @@ msgstr ""
 "Fenêtre « %{title} » masquée. Réaffichez-la depuis « Fenêtres masquées »."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:247
-msgid "%{title}: %{n} new spectrum since the window was hidden."
-msgid_plural "%{title}: %{n} new spectra since the window was hidden."
-msgstr[0] "%{title} : %{n} nouveau spectre depuis que la fenêtre est masquée."
-msgstr[1] "%{title} : %{n} nouveaux spectres depuis que la fenêtre est masquée."
+msgid "%{title}: %{n} spectrum added while the window was hidden."
+msgid_plural "%{title}: %{n} spectra added while the window was hidden."
+msgstr[0] "%{title} : %{n} spectre ajouté pendant que la fenêtre était masquée."
+msgstr[1] "%{title} : %{n} spectres ajoutés pendant que la fenêtre était masquée."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue:488
 msgid "%{title}: %{position} of %{total}"
@@ -1107,6 +1107,10 @@ msgstr "Aucune analyse publiée"
 msgid "No colour stated"
 msgstr "Aucune couleur indiquée"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue:37
+msgid "No data to display."
+msgstr "Aucune donnée à visualiser."
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:84
 msgid "no data to show"
 msgstr "aucune donnée à afficher"
@@ -1156,14 +1160,14 @@ msgstr "Aucun résultat."
 msgid "No sample on this page."
 msgstr "Aucun échantillon sur cette page."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue:37
-msgid "No spectrum, map or image to show."
-msgstr "Aucun spectre, carte ni image à montrer."
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue:72
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue:84
 msgid "No tool for this Selection"
 msgstr "Aucun outil pour cette Sélection"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/FileOnlyPreview.vue:25
+msgid "No visualisation for this file: it can be downloaded."
+msgstr "Ce fichier n'a pas de visualisation : il est proposé au téléchargement."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:129
 msgid "No zone on a page: the map is shown alone."
@@ -1176,15 +1180,6 @@ msgstr "Normalisé au maximum"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/treatment-labels.ts:16
 msgid "Normalised to total (TIC)"
 msgstr "Normalisé au total (TIC)"
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:289
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
-msgid "Not in a chart"
-msgstr "Pas dans un graphique"
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/FileOnlyPreview.vue:25
-msgid "Not in a chart: this file can be downloaded."
-msgstr "Pas dans un graphique : ce fichier peut être téléchargé."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:430
 msgid "Not provided"
@@ -1864,6 +1859,11 @@ msgstr "Fenêtres réorganisées."
 msgid "Without a position on the image (%{n})"
 msgstr "Sans position sur l'image (%{n})"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:289
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
+msgid "Without visualisation"
+msgstr "Sans visualisation"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue:63
 msgid "X range"
 msgstr "Plage X"
@@ -1914,6 +1914,17 @@ msgstr "Zoom arrière"
 msgctxt "explorer"
 msgid "Corpus"
 msgstr "Corpus"
+
+#~ msgid "%{n} new spectrum since hidden"
+#~ msgid_plural "%{n} new spectra since hidden"
+#~ msgstr[0] "%{n} nouveau spectre depuis le masquage"
+#~ msgstr[1] "%{n} nouveaux spectres depuis le masquage"
+
+#~ msgid "No spectrum, map or image to show."
+#~ msgstr "Aucun spectre, carte ni image à montrer."
+
+#~ msgid "Not in a chart"
+#~ msgstr "Pas dans un graphique"
 
 #~ msgid "%{colour}, %{material}"
 #~ msgstr "%{colour}, %{material}"

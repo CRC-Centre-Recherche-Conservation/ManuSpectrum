@@ -91,8 +91,8 @@ describe("NotInChartList", () => {
         ).toEqual([
             "Instrument file: download only.",
             "File with no viewer: download only.",
-            "No spectrum, map or image to show.",
-            "No spectrum, map or image to show.",
+            "No data to display.",
+            "No data to display.",
             "No longer available.",
         ]);
         expect(line(wrapper, 0).find(".slot").text()).toBe("A1");

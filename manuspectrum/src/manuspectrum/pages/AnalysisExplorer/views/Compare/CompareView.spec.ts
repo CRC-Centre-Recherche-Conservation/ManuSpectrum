@@ -306,7 +306,7 @@ describe("CompareView", () => {
             "XRF — energy / counts",
             "Micro-images",
             "Identified materials",
-            "Not in a chart",
+            "Without visualisation",
         ]);
         expect(
             plotly.react.mock.calls.flatMap(([, traces]) =>
@@ -320,7 +320,7 @@ describe("CompareView", () => {
             windowOf(view, "auto:characterizations").find("tbody th").text(),
         ).toBe("Characterization 1");
         expect(windowOf(view, "auto:not-in-chart").find(".reason").text()).toBe(
-            "No spectrum, map or image to show.",
+            "No data to display.",
         );
     });
 
@@ -419,7 +419,7 @@ describe("CompareView", () => {
         select(XRF_OTHER_ITEM);
         await flushPromises();
         expect(view.find(".hidden-windows .badge").text()).toBe(
-            "1 new spectrum since hidden",
+            "1 spectrum added",
         );
     });
 
@@ -547,18 +547,18 @@ describe("CompareView", () => {
         await flushPromises();
         expect(windowIds(view)).toEqual(["auto:characterizations"]);
         expect(announce).toHaveBeenLastCalledWith(
-            "XRF — energy / counts: 1 new spectrum since the window was hidden.",
+            "XRF — energy / counts: 1 spectrum added while the window was hidden.",
         );
         expect(view.find(".hidden-windows .badge").text()).toBe(
-            "1 new spectrum since hidden",
+            "1 spectrum added",
         );
         select(XRF_THIRD_ITEM);
         await flushPromises();
         expect(announce).toHaveBeenLastCalledWith(
-            "XRF — energy / counts: 2 new spectra since the window was hidden.",
+            "XRF — energy / counts: 2 spectra added while the window was hidden.",
         );
         expect(view.find(".hidden-windows .badge").text()).toBe(
-            "2 new spectra since hidden",
+            "2 spectra added",
         );
         useExplorerStore().removeFromBasket(XRF_OTHER_ITEM.key);
         useExplorerStore().removeFromBasket(XRF_THIRD_ITEM.key);
@@ -567,7 +567,7 @@ describe("CompareView", () => {
         select(XRF_OTHER_ITEM);
         await flushPromises();
         const show = view.find(".hidden-windows button");
-        expect(show.find(".badge").text()).toBe("1 new spectrum since hidden");
+        expect(show.find(".badge").text()).toBe("1 spectrum added");
         await show.trigger("click");
         await flushPromises();
         await windowOf(view, `auto:xy:${XRF}`)

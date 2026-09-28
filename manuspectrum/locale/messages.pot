@@ -132,12 +132,6 @@ msgid_plural "%{n} micro-images"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:303
-msgid "%{n} new spectrum since hidden"
-msgid_plural "%{n} new spectra since hidden"
-msgstr[0] ""
-msgstr[1] ""
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue:136
 msgid "%{n} of %{total} analysis in the filters"
 msgid_plural "%{n} of %{total} analyses in the filters"
@@ -172,6 +166,12 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:67
 msgid "%{n} spectrum"
 msgid_plural "%{n} spectra"
+msgstr[0] ""
+msgstr[1] ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:303
+msgid "%{n} spectrum added"
+msgid_plural "%{n} spectra added"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -214,8 +214,8 @@ msgid "%{title} hidden. Show it again from « Hidden windows »."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:247
-msgid "%{title}: %{n} new spectrum since the window was hidden."
-msgid_plural "%{title}: %{n} new spectra since the window was hidden."
+msgid "%{title}: %{n} spectrum added while the window was hidden."
+msgid_plural "%{title}: %{n} spectra added while the window was hidden."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -1080,6 +1080,10 @@ msgstr ""
 msgid "No colour stated"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue:37
+msgid "No data to display."
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:84
 msgid "no data to show"
 msgstr ""
@@ -1129,13 +1133,13 @@ msgstr ""
 msgid "No sample on this page."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue:37
-msgid "No spectrum, map or image to show."
-msgstr ""
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue:72
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue:84
 msgid "No tool for this Selection"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/FileOnlyPreview.vue:25
+msgid "No visualisation for this file: it can be downloaded."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue:129
@@ -1148,15 +1152,6 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/treatment-labels.ts:16
 msgid "Normalised to total (TIC)"
-msgstr ""
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:289
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
-msgid "Not in a chart"
-msgstr ""
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/FileOnlyPreview.vue:25
-msgid "Not in a chart: this file can be downloaded."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:430
@@ -1794,6 +1789,11 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:84
 msgid "Without a position on the image (%{n})"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:289
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
+msgid "Without visualisation"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue:63
