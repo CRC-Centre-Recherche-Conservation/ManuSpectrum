@@ -6,6 +6,7 @@ import {
     ref,
     useId,
     useTemplateRef,
+    watch,
 } from "vue";
 import { useGettext } from "vue3-gettext";
 
@@ -28,7 +29,8 @@ interface MenuEntry {
  * read). While it is read, or when it failed, one entry says so (the
  * failure offers Retry). Arrows, Home and End move through the entries;
  * Escape closes and gives the focus back to the button, as does a choice;
- * Tab or a click outside closes.
+ * Tab or a click outside closes. When the entries change while it is open,
+ * the first one takes the focus.
  */
 const props = defineProps<{
     offered: readonly ToolKind[] | null;
@@ -95,6 +97,14 @@ const entries = computed<MenuEntry[]>(() => {
         retry: false,
     }));
 });
+
+watch(
+    () => entries.value.map((entry) => entry.id).join("\n"),
+    () => {
+        if (expanded.value) focusItem(0);
+    },
+    { flush: "post" },
+);
 
 onBeforeUnmount(stopListening);
 

@@ -11,6 +11,7 @@ import {
 } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
@@ -96,7 +97,10 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  * has something for. A tool window follows the grid like the others,
  * after them; « Close » closes the tool. The tools open are kept with the
  * layout and opened again with the view; a tool filter naming a value the
- * Selection no longer holds is dropped.
+ * Selection no longer holds is dropped. While a tool is open, the drafts
+ * the synthesis reads are counted above the windows. When the last window
+ * shown is hidden or closed, the focus goes to « Hidden windows », else to
+ * the heading.
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
@@ -162,6 +166,11 @@ const gridSpecs = computed(() => [
     ...specs.value.filter((spec) => !hidden.value.includes(spec.id)),
     ...toolSpecs.value,
 ]);
+const draftCount = computed(() =>
+    tools.value.length > 0 && synthesis.status.value === "ready"
+        ? synthesis.data.value?.unpublishedCount ?? 0
+        : 0,
+);
 const offered = computed(() =>
     synthesis.status.value === "ready" && synthesis.data.value
         ? offeredTools(synthesis.data.value)
@@ -326,6 +335,16 @@ function setHidden(ids: string[]): void {
     rememberHidden();
 }
 
+/** Gives the focus to « Hidden windows », else to the heading, once no window is shown. */
+async function focusWithoutWindows(): Promise<void> {
+    if (gridSpecs.value.length > 0) return;
+    await nextTick();
+    (
+        root.value?.querySelector<HTMLElement>(".hidden-windows button") ??
+        heading.value
+    )?.focus();
+}
+
 /** Hides a window arranged from the Selection; a tool is closed. */
 async function closeWindow({ id }: { id: string }): Promise<void> {
     const spec = specs.value.find((entry) => entry.id === id);
@@ -337,6 +356,7 @@ async function closeWindow({ id }: { id: string }): Promise<void> {
                 interpolate($gettext("%{title} closed."), { title }, true),
             );
         }
+        await focusWithoutWindows();
         return;
     }
     setHidden([...hidden.value, id]);
@@ -347,12 +367,7 @@ async function closeWindow({ id }: { id: string }): Promise<void> {
             true,
         ),
     );
-    if (gridSpecs.value.length === 0) {
-        await nextTick();
-        root.value
-            ?.querySelector<HTMLElement>(".hidden-windows button")
-            ?.focus();
-    }
+    await focusWithoutWindows();
 }
 
 async function showWindow(id: string): Promise<void> {
@@ -419,6 +434,10 @@ function showAll(): void {
                 status="error"
                 :hide-home="true"
                 @retry="selection.retry"
+            />
+            <DraftBanner
+                scope="tools"
+                :count="draftCount"
             />
             <section
                 v-if="hiddenSpecs.length > 0"

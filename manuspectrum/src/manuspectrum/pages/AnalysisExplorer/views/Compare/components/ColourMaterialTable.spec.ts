@@ -24,6 +24,7 @@ const PAIRS: SynthesisPair[] = [
             rank: 1,
         },
         count: 2,
+        techniques: [],
     },
     {
         colour: null,
@@ -32,6 +33,7 @@ const PAIRS: SynthesisPair[] = [
         canvases: [],
         confidenceBest: null,
         count: 1,
+        techniques: [],
     },
 ];
 
@@ -74,5 +76,14 @@ describe("ColourMaterialTable", () => {
             [{ colour: null, material: CHALK.id }],
             [{ colour: BLUE.id, material: AZURITE.id }],
         ]);
+    });
+
+    it("names each row's toggle by its colour and material", () => {
+        const view = mountTable();
+        expect(
+            view
+                .findAll("tbody button")
+                .map((button) => button.attributes("aria-label")),
+        ).toEqual(["Blue, Azurite", "No colour, Chalk"]);
     });
 });

@@ -8,8 +8,9 @@ import type { SynthesisPair } from "@/manuspectrum/pages/AnalysisExplorer/api/ty
  * per pair: colour, material, elements (by symbol when they have one),
  * folios, best certainty, number of identified materials. A click on a row
  * toggles its pair as the filter; the material's button carries the same
- * toggle for the keyboard, pressed on the pair `pressed` names. A folio is
- * named by its label when `canvasLabels` knows it, the others are counted.
+ * toggle for the keyboard, named by the colour and the material, pressed
+ * on the pair `pressed` names. A folio is named by its label when
+ * `canvasLabels` knows it, the others are counted.
  */
 const props = defineProps<{
     pairs: readonly SynthesisPair[];
@@ -65,6 +66,17 @@ function foliosText(pair: SynthesisPair): string {
     return [...named, counted].join(", ");
 }
 
+function toggleLabel(pair: SynthesisPair): string {
+    return interpolate(
+        $gettext("%{colour}, %{material}"),
+        {
+            colour: pair.colour?.label.value ?? $gettext("No colour"),
+            material: pair.material.label.value,
+        },
+        true,
+    );
+}
+
 function toggle(pair: SynthesisPair): void {
     emit("toggle", { colour: colourId(pair), material: pair.material.id });
 }
@@ -117,6 +129,7 @@ function toggle(pair: SynthesisPair): void {
                     <th scope="row">
                         <button
                             type="button"
+                            :aria-label="toggleLabel(pair)"
                             :aria-pressed="isPressed(pair) ? 'true' : 'false'"
                         >
                             <span :lang="pair.material.label.lang">{{

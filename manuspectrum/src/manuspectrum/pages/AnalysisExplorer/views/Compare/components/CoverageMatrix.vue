@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
@@ -10,7 +11,7 @@ import type {
 
 /**
  * The coverage matrix of the Selection: its canvases in rows, techniques in
- * columns, the number of analyses in each cell. A cell with analyses is a
+ * columns (those the rows shown count), the number of analyses in each cell. A cell with analyses is a
  * toggle button naming its canvas, technique and count; the cell `pressed`
  * names is pressed. An empty cell says it holds no published analysis.
  */
@@ -25,6 +26,12 @@ const emit = defineEmits<{
 }>();
 
 const { $gettext, $ngettext, interpolate } = useGettext();
+
+const shownTechniques = computed(() =>
+    props.techniques.filter((technique) =>
+        props.rows.some((row) => countOf(row, technique) > 0),
+    ),
+);
 
 function countOf(row: SynthesisCoverage, technique: Technique): number {
     return row.counts[technique.id] ?? 0;
@@ -61,7 +68,7 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                         <span>{{ $gettext("Folio") }}</span>
                     </th>
                     <th
-                        v-for="technique in props.techniques"
+                        v-for="technique in shownTechniques"
                         :key="technique.id"
                         scope="col"
                     >
@@ -86,7 +93,7 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                         <span>{{ row.label }}</span>
                     </th>
                     <td
-                        v-for="technique in props.techniques"
+                        v-for="technique in shownTechniques"
                         :key="technique.id"
                     >
                         <button

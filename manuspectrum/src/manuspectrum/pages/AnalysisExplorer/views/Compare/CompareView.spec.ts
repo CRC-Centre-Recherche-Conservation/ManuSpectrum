@@ -69,6 +69,13 @@ const SYNTHESIS: SynthesisResponse = {
             counts: { xrf: 1 },
         },
     ],
+    canvases: [
+        {
+            canvas: "https://iiif.example/c1",
+            label: "f. 12r",
+            document: uuid(1),
+        },
+    ],
     techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
     pairs: [],
     elements: [{ symbol: "Cu", level: null, count: 1 }],
@@ -681,6 +688,35 @@ describe("CompareView", () => {
             expect(storedLayout()?.boxes).not.toHaveProperty("tool:coverage:-");
             expect(announce).toHaveBeenLastCalledWith(
                 "Coverage matrix closed.",
+            );
+        });
+
+        it("gives the focus to « Hidden windows » when the last window shown is a tool closed", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "coverage");
+            await windowOf(view, `auto:xy:${XRF}`)
+                .find('[data-action="close"]')
+                .trigger("click");
+            await flushPromises();
+            await windowOf(view, "tool:coverage:-")
+                .find('[data-action="close"]')
+                .trigger("click");
+            await flushPromises();
+            expect(windowIds(view)).toEqual([]);
+            expect(document.activeElement).toBe(
+                view.find(".hidden-windows button").element,
+            );
+        });
+
+        it("says how many drafts the tools read while a tool is open", async () => {
+            synthesis = { ...SYNTHESIS, unpublishedCount: 2 };
+            select(XRF_ITEM);
+            const view = await mountView();
+            expect(view.find(".draft-banner").exists()).toBe(false);
+            await openTool(view, "periodic");
+            expect(view.find(".draft-banner").text()).toBe(
+                "The tools read 2 drafts, not published yet.",
             );
         });
 

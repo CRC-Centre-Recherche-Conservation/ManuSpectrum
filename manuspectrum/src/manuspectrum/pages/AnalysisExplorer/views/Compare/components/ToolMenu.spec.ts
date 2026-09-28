@@ -110,4 +110,15 @@ describe("ToolMenu", () => {
         await view.find('[role="menu"]').trigger("keydown", { key: "Tab" });
         expect(view.find('[role="menu"]').exists()).toBe(false);
     });
+
+    it("gives the focus to the first entry when the entries change while it is open", async () => {
+        const view = mountMenu({ offered: null, status: "loading" });
+        await view.find("button.tool-menu-button").trigger("click");
+        await view.setProps({
+            offered: ["periodic", "folio"],
+            status: "ready",
+        });
+        expect(document.activeElement).toBe(items(view)[0].element);
+        expect(items(view)[0].text()).toBe("Periodic table");
+    });
 });

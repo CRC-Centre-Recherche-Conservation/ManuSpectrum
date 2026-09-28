@@ -60,4 +60,14 @@ describe("CoverageMatrix", () => {
             [{ canvas: "c1", technique: "fors" }],
         ]);
     });
+
+    it("leaves out a technique no row shown counts", () => {
+        const view = mount(CoverageMatrix, {
+            props: { rows: [ROWS[1]], techniques: [FORS, XRF], pressed: null },
+        });
+        expect(
+            view.findAll('thead th[scope="col"]').map((th) => th.text()),
+        ).toEqual(["Folio", "FORSFORS"]);
+        expect(view.findAll("tbody td")).toHaveLength(1);
+    });
 });
