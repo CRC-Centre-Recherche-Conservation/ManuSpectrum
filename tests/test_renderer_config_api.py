@@ -16,7 +16,10 @@ from unittest import mock
 from django.test import RequestFactory, SimpleTestCase
 from django.utils import translation
 
+from arches.app.utils.betterJSONSerializer import JSONSerializer
+
 from manuspectrum.constants.xy_presets import XY_PRESETS
+from manuspectrum.models import RendererConfig
 from manuspectrum.views.renderer_config import (
     RendererConfigView,
     RendererView,
@@ -196,19 +199,23 @@ class WriteTestCase(SimpleTestCase):
         self.serializer = self._patch(
             "manuspectrum.views.renderer_config.JSONSerializer"
         )
-        self.serializer.return_value.serialize.return_value = "serialized-row"
+        self.model.DoesNotExist = type("DoesNotExist", (Exception,), {})
+        self.serializer.return_value.serializeToPython.return_value = {
+            "configid": CURATOR_CONFIG,
+            "name": "My own",
+        }
 
     def _patch(self, target, **kwargs):
         patched = mock.patch(target, **kwargs)
         self.addCleanup(patched.stop)
         return patched.start()
 
-    def _request(self, method, body=None, is_superuser=False):
+    def _request(self, method, body=None, is_superuser=False, raw=None):
         factory = RequestFactory()
         if method == "post":
             request = factory.post(
                 "/renderer_config/",
-                data=json.dumps(body),
+                data=raw if raw is not None else json.dumps(body),
                 content_type="application/json",
             )
         else:
@@ -258,6 +265,89 @@ class RendererConfigSaveTests(WriteTestCase):
         )
         stored.save.assert_called_once_with()
 
+    def test_a_saved_configuration_is_returned_as_an_object(self):
+        self.model.objects.create.return_value = RendererConfig(
+            configid=CURATOR_CONFIG, rendererid=RENDERER_ID, name="Mine", config={}
+        )
+        request = self._request("post", {"rendererId": RENDERER_ID, "name": "Mine"})
+
+        with mock.patch(
+            "manuspectrum.views.renderer_config.JSONSerializer", JSONSerializer
+        ):
+            response = RendererConfigView().post(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(body_of(response), dict)
+        self.assertEqual(body_of(response)["configid"], CURATOR_CONFIG)
+        self.assertEqual(body_of(response)["name"], "Mine")
+
+    def test_an_unknown_configuration_is_a_404(self):
+        self.model.objects.get.side_effect = self.model.DoesNotExist
+        request = self._request("post", {"rendererId": RENDERER_ID, "name": "Mine"})
+
+        response = RendererConfigView().post(request, renderer_config_id=CURATOR_CONFIG)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(body_of(response)["saved"], False)
+        self.assertEqual(body_of(response)["reason"], "not_found")
+        self.assertTrue(body_of(response)["message"])
+        self.model.objects.create.assert_not_called()
+
+    def assert_invalid(self, response):
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(body_of(response)["saved"], False)
+        self.assertEqual(body_of(response)["reason"], "invalid")
+        self.assertTrue(body_of(response)["message"])
+        self.model.objects.get.assert_not_called()
+        self.model.objects.create.assert_not_called()
+
+    def test_a_body_without_renderer_id_is_a_400(self):
+        request = self._request("post", {"name": "Mine"})
+
+        self.assert_invalid(
+            RendererConfigView().post(request, renderer_config_id=CURATOR_CONFIG)
+        )
+
+    def test_a_body_without_name_is_a_400(self):
+        request = self._request("post", {"rendererId": RENDERER_ID})
+
+        self.assert_invalid(RendererConfigView().post(request))
+
+    def test_a_body_that_is_not_an_object_is_a_400(self):
+        request = self._request("post", ["rendererId", "name"])
+
+        self.assert_invalid(RendererConfigView().post(request))
+
+    def test_a_body_that_is_not_json_is_a_400(self):
+        request = self._request("post", raw="{not json")
+
+        self.assert_invalid(RendererConfigView().post(request))
+
+    def test_a_body_that_is_not_utf8_is_a_400(self):
+        request = self._request("post", raw=b"\xff\xfe{")
+
+        self.assert_invalid(RendererConfigView().post(request))
+
+    def test_a_null_renderer_id_is_a_400(self):
+        request = self._request("post", {"rendererId": None, "name": "Mine"})
+
+        self.assert_invalid(RendererConfigView().post(request))
+
+    def test_a_renderer_id_that_is_not_a_uuid_is_a_400(self):
+        request = self._request("post", {"rendererId": "abc", "name": "Mine"})
+
+        self.assert_invalid(RendererConfigView().post(request))
+
+    def test_a_null_name_is_a_400(self):
+        request = self._request("post", {"rendererId": RENDERER_ID, "name": None})
+
+        self.assert_invalid(RendererConfigView().post(request))
+
+    def test_an_empty_name_is_a_400(self):
+        request = self._request("post", {"rendererId": RENDERER_ID, "name": ""})
+
+        self.assert_invalid(RendererConfigView().post(request))
+
 
 class RendererConfigDeleteTests(WriteTestCase):
     def _delete(self, renderer_config_id, in_use=False, is_superuser=False):
@@ -285,7 +375,7 @@ class RendererConfigDeleteTests(WriteTestCase):
         response, _ = self._delete(CURATOR_CONFIG, in_use=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(body_of(response), {"deleted": False})
+        self.assertEqual(body_of(response), {"deleted": False, "reason": "in_use"})
         self.model.objects.get.return_value.delete.assert_not_called()
 
     def test_an_unreferenced_configuration_is_deleted(self):
@@ -296,5 +386,19 @@ class RendererConfigDeleteTests(WriteTestCase):
         self.assertEqual(response.status_code, 200)
         in_use_check.assert_called_once_with(CURATOR_CONFIG)
         stored.delete.assert_called_once_with()
-        self.assertEqual(body_of(response), {"deleted": "serialized-row"})
-        self.serializer.return_value.serialize.assert_called_once_with(stored)
+        self.assertEqual(
+            body_of(response),
+            {"deleted": True, "config": {"configid": CURATOR_CONFIG, "name": "My own"}},
+        )
+        self.serializer.return_value.serializeToPython.assert_called_once_with(stored)
+
+    def test_an_unknown_configuration_is_a_404_without_an_in_use_check(self):
+        self.model.objects.get.side_effect = self.model.DoesNotExist
+
+        response, in_use_check = self._delete(CURATOR_CONFIG)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(body_of(response)["deleted"], False)
+        self.assertEqual(body_of(response)["reason"], "not_found")
+        self.assertTrue(body_of(response)["message"])
+        in_use_check.assert_not_called()
