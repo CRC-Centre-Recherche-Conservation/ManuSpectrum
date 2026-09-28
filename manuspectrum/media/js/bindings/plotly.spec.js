@@ -61,12 +61,54 @@ const buildTracesConfig = () => ({
     traces: ko.observable([]),
 });
 
-const mount = (config) => {
+const attach = () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
-    plotlyBinding.init(element, () => config);
     return element;
 };
+
+const mount = async (config) => {
+    const element = attach();
+    await plotlyBinding.init(element, () => config);
+    return element;
+};
+
+describe('plotly binding loading', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        $(window).off('resize');
+        document.body.innerHTML = '';
+    });
+
+    it('draws once Plotly has loaded', async () => {
+        const element = await mount(buildConfig());
+
+        expect(plotly.newPlot).toHaveBeenCalledWith(
+            element,
+            expect.any(Array),
+            expect.any(Object),
+            expect.any(Object)
+        );
+    });
+
+    it('never draws into a node disposed while Plotly loads', async () => {
+        const config = buildConfig();
+        const element = attach();
+        const pending = plotlyBinding.init(element, () => config);
+
+        ko.cleanNode(element);
+        await pending;
+
+        expect(plotly.newPlot).not.toHaveBeenCalled();
+        expect(plotly.purge).not.toHaveBeenCalled();
+        OBSERVED.forEach((key) => {
+            expect(config[key].getSubscriptionsCount()).toBe(0);
+        });
+    });
+});
 
 describe('plotly binding disposal', () => {
     let addListener;
@@ -84,9 +126,9 @@ describe('plotly binding disposal', () => {
         document.body.innerHTML = '';
     });
 
-    it('disposes every chart-formatting subscription it took', () => {
+    it('disposes every chart-formatting subscription it took', async () => {
         const config = buildConfig();
-        const element = mount(config);
+        const element = await mount(config);
 
         OBSERVED.forEach((key) => {
             expect(config[key].getSubscriptionsCount()).toBeGreaterThan(0);
@@ -99,8 +141,8 @@ describe('plotly binding disposal', () => {
         });
     });
 
-    it('removes its fullscreenchange listener from document', () => {
-        const element = mount(buildConfig());
+    it('removes its fullscreenchange listener from document', async () => {
+        const element = await mount(buildConfig());
 
         const registered = addListener.mock.calls.find(
             ([type]) => type === 'fullscreenchange'
@@ -115,17 +157,17 @@ describe('plotly binding disposal', () => {
         );
     });
 
-    it('purges the Plotly graph so the detached node releases its traces', () => {
-        const element = mount(buildConfig());
+    it('purges the Plotly graph so the detached node releases its traces', async () => {
+        const element = await mount(buildConfig());
 
         ko.cleanNode(element);
 
         expect(plotly.purge).toHaveBeenCalledWith(element);
     });
 
-    it('keeps a second chart resizing after the first is disposed', () => {
-        const first = mount(buildConfig());
-        const second = mount(buildConfig());
+    it('keeps a second chart resizing after the first is disposed', async () => {
+        const first = await mount(buildConfig());
+        const second = await mount(buildConfig());
 
         ko.cleanNode(first);
         plotly.relayout.mockClear();
@@ -138,9 +180,9 @@ describe('plotly binding disposal', () => {
         );
     });
 
-    it('disposes the traces subscription of the report chart too', () => {
+    it('disposes the traces subscription of the report chart too', async () => {
         const config = buildTracesConfig();
-        const element = mount(config);
+        const element = await mount(config);
         expect(config.traces.getSubscriptionsCount()).toBeGreaterThan(0);
 
         ko.cleanNode(element);
@@ -151,9 +193,9 @@ describe('plotly binding disposal', () => {
         expect(plotly.react).not.toHaveBeenCalled();
     });
 
-    it('stops relaying observable changes to a disposed chart', () => {
+    it('stops relaying observable changes to a disposed chart', async () => {
         const config = buildConfig();
-        const element = mount(config);
+        const element = await mount(config);
 
         ko.cleanNode(element);
         plotly.relayout.mockClear();
