@@ -13,6 +13,7 @@ import {
     technique,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import { startLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import {
     cellNode,
     elementNode,
@@ -144,7 +145,7 @@ describe("ToolWindowBody", () => {
         const matrix = mountBody({ kind: "coverage" });
         await table.findAll("tbody tr")[1].trigger("click");
         await table.findAll("tbody tr")[0].trigger("click");
-        await matrix.findAll("tbody button")[1].trigger("click");
+        await matrix.findAll("tbody .cell")[1].trigger("click");
         expect(useExplorerStore().compare.selection).toEqual([
             pairNode(null, CHALK.id),
             pairNode(BLUE.id, AZURITE.id),
@@ -157,24 +158,26 @@ describe("ToolWindowBody", () => {
         ).toEqual(["true", "true"]);
         expect(
             matrix
-                .findAll("tbody button")
+                .findAll("tbody .cell")
                 .map((button) => button.attributes("aria-pressed")),
         ).toEqual(["false", "true"]);
     });
 
     it("toggles through the linked selection of the view when there is one", async () => {
-        const toggle = vi.fn();
+        const { linked, stop } = startLinkedSelection();
+        const toggle = vi.spyOn(linked, "toggle");
         const periodic = mount(ToolWindowBody, {
             props: { kind: "periodic", status: "ready", synthesis: SYNTHESIS },
             global: {
                 plugins: [pinia],
-                provide: { [LINKED_SELECTION_KEY as symbol]: { toggle } },
+                provide: { [LINKED_SELECTION_KEY as symbol]: linked },
             },
         });
         await periodic
             .find('.grid button[aria-label="Ca, 1"]')
             .trigger("click");
         expect(toggle).toHaveBeenCalledWith("el:Ca");
+        stop();
     });
 
     it("says when the Selection has nothing for the tool", () => {

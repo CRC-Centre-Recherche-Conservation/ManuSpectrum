@@ -14,6 +14,7 @@ import { stackSmallestOnTop } from "utils/leaflet-stack";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 
 import { useDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocument.ts";
+import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import {
     markedZones,
@@ -24,6 +25,10 @@ import { layerImageUrl } from "@/manuspectrum/pages/AnalysisExplorer/folio/overl
 import { layPage } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import {
+    analysisNode,
+    slotNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type {
     AnalysisHit,
@@ -48,6 +53,10 @@ type Mode = "reading" | "folio" | "no-zone" | "no-image" | "error";
  * (D47, on at first), positioned indicatively. Without a zone with an
  * extent, a page image or a readable document, the layer is shown alone.
  * The page comes from the document payload (`useDocument`, the tab memo).
+ * The card stands for its analysis (`an:`): the analysis name is its
+ * toggle, and the card is marked by how the analysis stands to the linked
+ * selection (an unlinked map fades, its caption stays readable) and to the
+ * node a mouse previews.
  */
 const props = defineProps<{
     slotNumber: number;
@@ -60,6 +69,7 @@ const props = defineProps<{
 const resizeTick = inject(WINDOW_RESIZE_KEY, ref(0), false);
 
 const { $gettext } = useGettext();
+const marks = useLinkedMarks();
 const surface = useTemplateRef<HTMLDivElement>("surface");
 
 const curtain = ref(true);
@@ -72,6 +82,7 @@ let map: L.Map | null = null;
 let page: PageLayer | null = null;
 let laid: LaidLayers | null = null;
 
+const record = computed(() => analysisNode(props.analysis.id));
 const documentId = computed(() =>
     props.analysis.canvas ? props.analysis.document.id : null,
 );
@@ -219,12 +230,28 @@ function onCurtainChange(event: Event): void {
 </script>
 
 <template>
-    <figure class="element-map-card">
+    <figure
+        class="element-map-card"
+        :data-rel="marks.rel(record)"
+        :data-preview="marks.previewRel(record)"
+        @pointerenter="marks.enter(record, $event)"
+        @pointerleave="marks.leave($event)"
+    >
         <figcaption>
-            <span class="slot">{{ slotLabel(props.slotNumber) }}</span>
-            <span :lang="props.analysis.name.lang">{{
-                props.analysis.name.value
-            }}</span>
+            <span
+                class="slot"
+                :data-rel="marks.rel(slotNode(props.slotNumber))"
+                >{{ slotLabel(props.slotNumber) }}</span
+            >
+            <button
+                type="button"
+                class="record"
+                :lang="props.analysis.name.lang"
+                :aria-pressed="marks.pressed(record)"
+                @click="marks.toggle(record)"
+            >
+                <span>{{ props.analysis.name.value }}</span>
+            </button>
             <span class="file">{{ props.file.name }}</span>
         </figcaption>
         <p
@@ -346,13 +373,71 @@ function onCurtainChange(event: Event): void {
     align-content: start;
     gap: 0.375rem;
     margin: 0;
+    padding: 0.25rem;
+    border-radius: 0.375rem;
+}
+
+.element-map-card[data-rel="self"] {
+    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
+}
+
+.element-map-card[data-rel="direct"] {
+    box-shadow: inset 0 0 0 0.125rem var(--linked-mark, var(--blue-text));
+}
+
+.element-map-card[data-rel="evidence"] {
+    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    outline-offset: -0.125rem;
+}
+
+.element-map-card[data-rel="none"] .stage,
+.element-map-card[data-rel="none"] .layer-image {
+    opacity: var(--linked-fade, 0.35);
+}
+
+.element-map-card[data-rel="none"] figcaption {
+    color: var(--ink-muted);
+}
+
+.element-map-card[data-preview] {
+    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    outline-offset: 0.0625rem;
 }
 
 .element-map-card figcaption {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 0 0.5rem;
     font-size: 0.8125rem;
+}
+
+.element-map-card .record {
+    min-block-size: 1.5rem;
+    padding: 0 0.25rem;
+    border: 0.0625rem solid transparent;
+    border-radius: 0.25rem;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.element-map-card .record:hover {
+    border-color: var(--border-hover);
+}
+
+.element-map-card .record[aria-pressed="true"] {
+    border-color: var(--linked-mark, var(--blue-text));
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .element-map-card .stage,
+    .element-map-card .layer-image {
+        transition: opacity 0.15s ease-out;
+    }
 }
 
 .element-map-card .slot {

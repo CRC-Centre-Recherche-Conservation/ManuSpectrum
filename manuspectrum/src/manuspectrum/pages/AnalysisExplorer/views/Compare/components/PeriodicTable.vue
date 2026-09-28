@@ -2,6 +2,8 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { elementNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     PERIODIC_TABLE,
     placeOf,
@@ -12,7 +14,9 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
 /**
  * The elements of the Selection's identified materials on the standard
  * 18-column periodic table: an element found is a toggle button showing its
- * count, named « Cu, 5 », pressed while it is selected; the others are
+ * count, named « Cu, 5 », pressed while it is selected (`el:`), marked
+ * by how it stands to the linked selection and to the node a mouse
+ * previews; a click adds it to the selection or removes it. The others are
  * greyed and left to assistive technologies. An element the table does not
  * hold is listed after it. In a window narrower than the table's 18
  * columns (34rem) the table gives way to a list of the elements found,
@@ -20,17 +24,12 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
  */
 const props = defineProps<{
     elements: readonly SynthesisElement[];
-    /** The symbols selected. */
-    pressed: readonly string[];
-    /** Marks every toggle `aria-disabled` (a stale table while the next one is read). */
+    /** Marks every toggle `aria-disabled` and inert (a stale table while the next one is read). */
     disabled?: boolean;
 }>();
 
-const emit = defineEmits<{
-    (event: "toggle", payload: { symbol: string }): void;
-}>();
-
 const { $gettext } = useGettext();
+const marks = useLinkedMarks();
 
 const bySymbol = computed(
     () => new Map(props.elements.map((element) => [element.symbol, element])),
@@ -43,8 +42,8 @@ function elementLabel(element: SynthesisElement): string {
     return `${element.symbol}, ${element.count}`;
 }
 
-function isPressed(symbol: string): "true" | "false" {
-    return props.pressed.includes(symbol) ? "true" : "false";
+function toggle(symbol: string): void {
+    if (!props.disabled) marks.toggle(elementNode(symbol));
 }
 </script>
 
@@ -65,9 +64,15 @@ function isPressed(symbol: string): "true" | "false" {
                     class="cell found"
                     :class="[`row-${place.row}`, `column-${place.column}`]"
                     :aria-label="elementLabel(bySymbol.get(place.symbol)!)"
-                    :aria-pressed="isPressed(place.symbol)"
+                    :data-rel="marks.rel(elementNode(place.symbol))"
+                    :data-preview="marks.previewRel(elementNode(place.symbol))"
+                    :aria-pressed="marks.pressed(elementNode(place.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
-                    @click="emit('toggle', { symbol: place.symbol })"
+                    @click="toggle(place.symbol)"
+                    @pointerenter="
+                        marks.enter(elementNode(place.symbol), $event)
+                    "
+                    @pointerleave="marks.leave($event)"
                 >
                     <span class="symbol">{{ place.symbol }}</span>
                     <span class="count">{{
@@ -96,9 +101,17 @@ function isPressed(symbol: string): "true" | "false" {
                     type="button"
                     class="found"
                     :aria-label="elementLabel(element)"
-                    :aria-pressed="isPressed(element.symbol)"
+                    :data-rel="marks.rel(elementNode(element.symbol))"
+                    :data-preview="
+                        marks.previewRel(elementNode(element.symbol))
+                    "
+                    :aria-pressed="marks.pressed(elementNode(element.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
-                    @click="emit('toggle', { symbol: element.symbol })"
+                    @click="toggle(element.symbol)"
+                    @pointerenter="
+                        marks.enter(elementNode(element.symbol), $event)
+                    "
+                    @pointerleave="marks.leave($event)"
                 >
                     <span class="symbol">{{ element.symbol }}</span>
                     <span class="count">{{ element.count }}</span>
@@ -117,9 +130,17 @@ function isPressed(symbol: string): "true" | "false" {
                     type="button"
                     class="found"
                     :aria-label="elementLabel(element)"
-                    :aria-pressed="isPressed(element.symbol)"
+                    :data-rel="marks.rel(elementNode(element.symbol))"
+                    :data-preview="
+                        marks.previewRel(elementNode(element.symbol))
+                    "
+                    :aria-pressed="marks.pressed(elementNode(element.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
-                    @click="emit('toggle', { symbol: element.symbol })"
+                    @click="toggle(element.symbol)"
+                    @pointerenter="
+                        marks.enter(elementNode(element.symbol), $event)
+                    "
+                    @pointerleave="marks.leave($event)"
                 >
                     <span class="symbol">{{ element.symbol }}</span>
                     <span class="count">{{ element.count }}</span>
@@ -175,8 +196,30 @@ function isPressed(symbol: string): "true" | "false" {
 
 .periodic-table .found[aria-pressed="true"] {
     border-color: var(--ink);
+    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
+    outline-offset: 0.0625rem;
     background: var(--ink);
     color: var(--surface);
+}
+
+.periodic-table .found[data-rel="direct"] {
+    border-color: var(--linked-mark, var(--blue-text));
+    box-shadow: inset 0 0 0 0.125rem var(--linked-mark, var(--blue-text));
+}
+
+.periodic-table .found[data-rel="evidence"] {
+    border: 0.0625rem dashed var(--linked-mark, var(--blue-text));
+    box-shadow: inset 0 0 0 0.0625rem var(--linked-mark, var(--blue-text));
+}
+
+.periodic-table .found[data-rel="none"] {
+    border-color: var(--border);
+    color: var(--ink-muted);
+}
+
+.periodic-table .found[data-preview] {
+    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    outline-offset: 0.0625rem;
 }
 
 .periodic-table .found[aria-disabled="true"] {

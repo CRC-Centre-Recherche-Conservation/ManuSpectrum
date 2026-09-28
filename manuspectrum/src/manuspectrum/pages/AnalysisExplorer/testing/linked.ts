@@ -1,3 +1,7 @@
+import { computed, effectScope, ref, shallowRef } from "vue";
+
+import { useLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
     characterization,
@@ -9,10 +13,14 @@ import {
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
+import type { EffectScope } from "vue";
+
 import type {
     Item,
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import type { BasketItem } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 /**
@@ -205,3 +213,37 @@ export const SYNTHESIS: SynthesisResponse = {
     ],
     unpublishedCount: 0,
 };
+
+/**
+ * A linked selection over this Selection, read and answered: the basket
+ * of the active Pinia store is filled with `BASKET` first. `stop` ends
+ * its scope.
+ */
+export function startLinkedSelection(
+    announce: (message: string) => void = () => undefined,
+    synthesis: SynthesisResponse = SYNTHESIS,
+): { linked: LinkedSelection; stop: () => void } {
+    const store = useExplorerStore();
+    store.addManyToBasket(BASKET.map((item) => item.key));
+    const keys = store.basket.map((item) => item.key);
+    const scope: EffectScope = effectScope();
+    const linked = scope.run(() =>
+        useLinkedSelection({
+            items: {
+                byKey: ref(new Map(BY_KEY)),
+                missing: ref(new Set<string>()),
+                settled: computed(() => true),
+                status: ref<RequestStatus>("ready"),
+                retry: () => undefined,
+            },
+            synthesis: {
+                status: ref<RequestStatus>("ready"),
+                data: shallowRef(synthesis),
+                loaded: ref([...new Set(keys)].sort().join(",")),
+                retry: () => undefined,
+            },
+            announce,
+        }),
+    )!;
+    return { linked, stop: () => scope.stop() };
+}

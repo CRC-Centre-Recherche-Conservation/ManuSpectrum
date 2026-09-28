@@ -1,10 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 
 import ColourMaterialTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ColourMaterialTable.vue";
 
+import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { valueRef } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    SYNTHESIS,
+    startLinkedSelection,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
+import {
+    elementNode,
+    pairNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
+import type { VueWrapper } from "@vue/test-utils";
+import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { SynthesisPair } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 const BLUE = valueRef("http://example.org/blue", "Blue");
@@ -39,14 +52,38 @@ const PAIRS: SynthesisPair[] = [
     },
 ];
 
-function mountTable(pressed: [string | null, string][] = []) {
+let stop: (() => void) | null = null;
+
+beforeEach(() => {
+    setActivePinia(createPinia());
+});
+
+afterEach(() => {
+    stop?.();
+    stop = null;
+    vi.useRealTimers();
+});
+
+function mountTable(disabled = false) {
     return mount(ColourMaterialTable, {
         props: {
             pairs: PAIRS,
             canvasLabels: new Map([["c1", "f. 1r"]]),
-            pressed,
+            disabled,
         },
     });
+}
+
+function mountLinked(): { view: VueWrapper; linked: LinkedSelection } {
+    const started = startLinkedSelection();
+    stop = started.stop;
+    const view = mount(ColourMaterialTable, {
+        props: { pairs: SYNTHESIS.pairs, canvasLabels: new Map() },
+        global: {
+            provide: { [LINKED_SELECTION_KEY as symbol]: started.linked },
+        },
+    });
+    return { view, linked: started.linked };
 }
 
 describe("ColourMaterialTable", () => {
@@ -66,18 +103,59 @@ describe("ColourMaterialTable", () => {
         );
     });
 
-    it("presses the rows selected and emits the pair of a row clicked", async () => {
-        const view = mountTable([[BLUE.id, AZURITE.id]]);
-        const buttons = view.findAll("tbody button");
-        expect(
-            buttons.map((button) => button.attributes("aria-pressed")),
-        ).toEqual(["true", "false"]);
+    it("selects the pair of a row clicked and presses its toggle", async () => {
+        const view = mountTable();
         await view.findAll("tbody tr")[1].find("td").trigger("click");
-        await buttons[0].trigger("click");
-        expect(view.emitted("toggle")).toEqual([
-            [{ colour: null, material: CHALK.id }],
-            [{ colour: BLUE.id, material: AZURITE.id }],
+        await view.findAll("tbody button")[0].trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual([
+            pairNode(null, CHALK.id),
+            pairNode(BLUE.id, AZURITE.id),
         ]);
+        expect(
+            view
+                .findAll("tbody button")
+                .map((button) => button.attributes("aria-pressed")),
+        ).toEqual(["true", "true"]);
+        expect(
+            view.findAll("tbody tr").map((row) => row.attributes("data-rel")),
+        ).toEqual([undefined, undefined]);
+    });
+
+    it("selects nothing while it is disabled", async () => {
+        const view = mountTable(true);
+        await view.findAll("tbody button")[0].trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual([]);
+    });
+
+    it("highlights the pairs linked to the selection and marks the others unlinked", async () => {
+        const { view, linked } = mountLinked();
+        linked.toggle(elementNode("Cu"));
+        await view.vm.$nextTick();
+        expect(
+            view.findAll("tbody tr").map((row) => row.attributes("data-rel")),
+        ).toEqual(["direct", "none"]);
+        await view.findAll("tbody button")[1].trigger("click");
+        expect(
+            view.findAll("tbody tr").map((row) => row.attributes("data-rel")),
+        ).toEqual(["direct", "self"]);
+    });
+
+    it("previews the pair of a row under the mouse, fading nothing", async () => {
+        vi.useFakeTimers();
+        const { view } = mountLinked();
+        await view
+            .findAll("tbody tr")[0]
+            .trigger("pointerenter", { pointerType: "mouse" });
+        vi.runAllTimers();
+        await view.vm.$nextTick();
+        expect(
+            view
+                .findAll("tbody tr")
+                .map((row) => row.attributes("data-preview")),
+        ).toEqual(["self", undefined]);
+        expect(
+            view.findAll("tbody tr").map((row) => row.attributes("data-rel")),
+        ).toEqual([undefined, undefined]);
     });
 
     it("names each row's toggle by its visible colour and material, in their languages", () => {

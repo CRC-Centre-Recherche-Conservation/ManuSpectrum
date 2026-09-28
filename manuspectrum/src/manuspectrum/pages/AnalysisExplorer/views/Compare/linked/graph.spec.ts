@@ -150,6 +150,20 @@ describe("buildGraph", () => {
         expect(graph.nodes.has(slotNode(0))).toBe(false);
     });
 
+    it("reads the symbol of each element value the synthesis names with one", () => {
+        const graph = buildGraph({
+            basket: BASKET,
+            byKey: BY_KEY,
+            synthesis: SYNTHESIS,
+        });
+        const copper = SYNTHESIS.pairs[0].elements[0].id;
+        expect(graph.symbols.get(copper)).toBe("Cu");
+        expect(
+            buildGraph({ basket: BASKET, byKey: BY_KEY, synthesis: null })
+                .symbols.size,
+        ).toBe(0);
+    });
+
     it("is empty for an empty Selection", () => {
         const graph = buildGraph({
             basket: [],

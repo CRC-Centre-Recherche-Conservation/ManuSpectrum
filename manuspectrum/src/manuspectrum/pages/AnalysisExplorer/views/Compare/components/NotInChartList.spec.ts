@@ -1,22 +1,38 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
 
 import NotInChartList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue";
 
-import { SCREEN_FOCUS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    LINKED_SELECTION_KEY,
+    SCREEN_FOCUS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
     fileEntry,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    AN2,
+    ITEMS,
+    startLinkedSelection,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
+import {
+    analysisNode,
+    elementNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { Pinia } from "pinia";
+import type { VueWrapper } from "@vue/test-utils";
+import type { AnalysisHit } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { NotInChartEntry } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 let pinia: Pinia;
+let stopLinked: (() => void) | null = null;
 
 beforeEach(() => {
     pinia = createPinia();
@@ -182,5 +198,102 @@ describe("NotInChartList", () => {
         });
         await line(wrapper, 0).find("button.action").trigger("click");
         expect(headingFocus.value).toBe(true);
+    });
+
+    describe("with the linked selection", () => {
+        function mountLinked(): {
+            wrapper: VueWrapper;
+            linked: LinkedSelection;
+        } {
+            const started = startLinkedSelection();
+            stopLinked = started.stop;
+            const entries: NotInChartEntry[] = [0, 1].map((slot) => {
+                const item = ITEMS[slot] as {
+                    key: string;
+                    analysis: AnalysisHit;
+                };
+                return {
+                    key: item.key,
+                    slot,
+                    reason: "no-data",
+                    analysis: item.analysis,
+                    file: null,
+                };
+            });
+            const wrapper = mount(NotInChartList, {
+                props: {
+                    entries: [
+                        ...entries,
+                        {
+                            key: GONE,
+                            slot: 4,
+                            reason: "missing",
+                            analysis: null,
+                            file: null,
+                        },
+                    ],
+                },
+                global: {
+                    plugins: [pinia],
+                    provide: {
+                        [LINKED_SELECTION_KEY as symbol]: started.linked,
+                    },
+                },
+            });
+            return { wrapper, linked: started.linked };
+        }
+
+        function rels(wrapper: VueWrapper, attribute: string) {
+            return wrapper.findAll("li").map((li) => li.attributes(attribute));
+        }
+
+        afterEach(() => {
+            stopLinked?.();
+            stopLinked = null;
+            vi.useRealTimers();
+        });
+
+        it("makes an analysis's title its toggle; an item with none has no toggle", async () => {
+            const { wrapper } = mountLinked();
+            const toggles = wrapper.findAll("button.record");
+            expect(toggles).toHaveLength(2);
+            await toggles[1].trigger("click");
+            expect(useExplorerStore().compare.selection).toEqual([
+                analysisNode(AN2),
+            ]);
+            expect(toggles[1].attributes("aria-pressed")).toBe("true");
+            expect(rels(wrapper, "data-rel")).toEqual(["none", "self", "none"]);
+        });
+
+        it("highlights the items linked to the selection and marks the others unlinked", async () => {
+            const { wrapper, linked } = mountLinked();
+            expect(rels(wrapper, "data-rel")).toEqual([
+                undefined,
+                undefined,
+                undefined,
+            ]);
+            linked.toggle(elementNode("Fe"));
+            await wrapper.vm.$nextTick();
+            expect(rels(wrapper, "data-rel")).toEqual([
+                "direct",
+                "none",
+                "none",
+            ]);
+        });
+
+        it("previews an item's analysis under the mouse", async () => {
+            vi.useFakeTimers();
+            const { wrapper } = mountLinked();
+            await wrapper
+                .findAll("li")[0]
+                .trigger("pointerenter", { pointerType: "mouse" });
+            vi.runAllTimers();
+            await wrapper.vm.$nextTick();
+            expect(rels(wrapper, "data-preview")).toEqual([
+                "self",
+                undefined,
+                undefined,
+            ]);
+        });
     });
 });

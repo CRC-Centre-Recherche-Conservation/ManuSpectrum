@@ -49,6 +49,8 @@ export interface LinkedGraph {
     labels: ReadonlyMap<NodeId, Label>;
     /** Where each record is placed, in document then page order. */
     places: ReadonlyMap<NodeId, readonly NodePlace[]>;
+    /** The chemical symbol of each element value the synthesis names with one, by value id. */
+    symbols: ReadonlyMap<string, string>;
 }
 
 export interface GraphInput {
@@ -68,6 +70,7 @@ class GraphBuilder {
     readonly itemPlaces = new Map<NodeId, NodePlace[]>();
     readonly techniqueOf = new Map<string, string>();
     readonly components = new Set<string>();
+    readonly symbols = new Map<string, string>();
 
     add(id: NodeId, name?: Label | null): NodeId {
         this.nodes.add(id);
@@ -117,6 +120,7 @@ class GraphBuilder {
             evidence: this.evidence,
             labels: this.labels,
             places,
+            symbols: this.symbols,
         };
     }
 }
@@ -253,6 +257,9 @@ function addSynthesis(
     }
     for (const pair of synthesis.pairs) {
         const node = pairNode(pair.colour?.id ?? null, pair.material.id);
+        for (const element of pair.elements) {
+            if (element.symbol) builder.symbols.set(element.id, element.symbol);
+        }
         for (const id of pair.materials) {
             const record = materialNode(id);
             builder.link(record, node);

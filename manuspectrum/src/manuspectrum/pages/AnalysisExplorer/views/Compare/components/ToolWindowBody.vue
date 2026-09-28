@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject } from "vue";
+import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
@@ -9,14 +9,7 @@ import CoverageMatrix from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/
 import FolioTool from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue";
 import PeriodicTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue";
 
-import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
-import {
-    cellNode,
-    elementNode,
-    pairNode,
-    parseNodeId,
-} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     folioCanvases,
     selectionSlots,
@@ -25,15 +18,12 @@ import {
 import type { SynthesisResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import type { ToolKind } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
-import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 /**
  * The content of a tool window, on the synthesis of the Selection. The
  * coverage matrix, the colours × materials table and the periodic table
- * show the whole synthesis; a click on a cell, a pair or an element adds
- * it to the linked selection of Compare or removes it
- * (`LINKED_SELECTION_KEY`, else the store alone), and a toggle is pressed
- * while its node is selected. The folio image shows the Selection's items
+ * show the whole synthesis and select through the linked selection of
+ * Compare themselves (`useLinkedMarks`). The folio image shows the Selection's items
  * on one of the canvases they are placed on. When the synthesis failed the
  * window shows only that, with Retry; when nothing in the Selection is
  * visible it says so. While the synthesis is read the window says so above
@@ -48,36 +38,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (event: "retry"): void }>();
 
-const linked = inject(LINKED_SELECTION_KEY, null);
-
 const store = useExplorerStore();
 const { $gettext } = useGettext();
 
 const loading = computed(() => props.status === "loading");
-/** The selected nodes, parsed. */
-const selectedParts = computed(() =>
-    store.compare.selection.flatMap((id) => {
-        const parsed = parseNodeId(id);
-        return parsed ? [parsed] : [];
-    }),
-);
-const pressedElements = computed(() =>
-    selectedParts.value.flatMap(({ kind, parts: [symbol] }) =>
-        kind === "el" && symbol ? [symbol] : [],
-    ),
-);
-const pressedPairs = computed(() =>
-    selectedParts.value.flatMap(({ kind, parts: [colour, material] }) =>
-        kind === "pair" && material ? [[colour, material] as const] : [],
-    ),
-);
-const pressedCells = computed(() =>
-    selectedParts.value.flatMap(({ kind, parts: [canvas, technique] }) =>
-        kind === "cell" && canvas && technique
-            ? [[canvas, technique] as const]
-            : [],
-    ),
-);
 const canvasLabels = computed(
     () =>
         new Map(
@@ -106,36 +70,6 @@ const emptyPayload = computed(() => {
             return synthesis.coverage.length === 0;
     }
 });
-
-function toggle(id: NodeId): void {
-    if (loading.value) return;
-    if (linked) linked.toggle(id);
-    else store.toggleSelection(id);
-}
-
-function onCell({
-    canvas,
-    technique,
-}: {
-    canvas: string;
-    technique: string;
-}): void {
-    toggle(cellNode(canvas, technique));
-}
-
-function onPair({
-    colour,
-    material,
-}: {
-    colour: string | null;
-    material: string;
-}): void {
-    toggle(pairNode(colour, material));
-}
-
-function onElement({ symbol }: { symbol: string }): void {
-    toggle(elementNode(symbol));
-}
 </script>
 
 <template>
@@ -183,24 +117,18 @@ function onElement({ symbol }: { symbol: string }): void {
                 v-else-if="props.kind === 'coverage'"
                 :rows="props.synthesis.coverage"
                 :techniques="props.synthesis.techniques"
-                :pressed="pressedCells"
                 :disabled="loading"
-                @toggle="onCell"
             />
             <ColourMaterialTable
                 v-else-if="props.kind === 'colour-material'"
                 :pairs="props.synthesis.pairs"
                 :canvas-labels="canvasLabels"
-                :pressed="pressedPairs"
                 :disabled="loading"
-                @toggle="onPair"
             />
             <PeriodicTable
                 v-else-if="props.kind === 'periodic'"
                 :elements="props.synthesis.elements"
-                :pressed="pressedElements"
                 :disabled="loading"
-                @toggle="onElement"
             />
             <FolioTool
                 v-else-if="props.kind === 'folio'"

@@ -2,35 +2,32 @@
 import { useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { pairNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+
 import type { SynthesisPair } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 /**
  * The colours × materials of the Selection's identified materials, one row
  * per pair: colour, material, elements (by symbol when they have one),
  * folios, best certainty, number of identified materials. A click on a row
- * adds its pair to the selection or removes it; the material's button carries the same
- * toggle for the keyboard, named by the row's visible colour and material
- * cells (each in its own language), pressed while `pressed` names its pair. A folio is named by its label when
- * `canvasLabels` knows it, the others are counted.
+ * adds its pair (`pair:`) to the linked selection of Compare or removes it;
+ * the material's button carries the same toggle for the keyboard, named by
+ * the row's visible colour and material cells (each in its own language),
+ * pressed while the pair is selected. A row is marked by how its pair
+ * stands to the selection and to the node a mouse previews. A folio is
+ * named by its label when `canvasLabels` knows it, the others are counted.
  */
 const props = defineProps<{
     pairs: readonly SynthesisPair[];
     canvasLabels: ReadonlyMap<string, string>;
-    /** The pairs selected, as [colour id or null, material id]. */
-    pressed: readonly (readonly [string | null, string])[];
-    /** Marks every toggle `aria-disabled` (a stale table while the next one is read). */
+    /** Marks every toggle `aria-disabled` and inert (a stale table while the next one is read). */
     disabled?: boolean;
-}>();
-
-const emit = defineEmits<{
-    (
-        event: "toggle",
-        payload: { colour: string | null; material: string },
-    ): void;
 }>();
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 const baseId = useId();
+const marks = useLinkedMarks();
 
 function colourId(pair: SynthesisPair): string | null {
     return pair.colour?.id ?? null;
@@ -40,11 +37,8 @@ function keyOf(pair: SynthesisPair): string {
     return `${colourId(pair) ?? "-"}|${pair.material.id}`;
 }
 
-function isPressed(pair: SynthesisPair): boolean {
-    return props.pressed.some(
-        ([colour, material]) =>
-            colour === colourId(pair) && material === pair.material.id,
-    );
+function nodeOf(pair: SynthesisPair): string {
+    return pairNode(colourId(pair), pair.material.id);
 }
 
 function elementsText(pair: SynthesisPair): string {
@@ -83,7 +77,7 @@ function toggleLabelledBy(index: number): string {
 }
 
 function toggle(pair: SynthesisPair): void {
-    emit("toggle", { colour: colourId(pair), material: pair.material.id });
+    if (!props.disabled) marks.toggle(nodeOf(pair));
 }
 </script>
 
@@ -119,8 +113,11 @@ function toggle(pair: SynthesisPair): void {
                 <tr
                     v-for="(pair, index) in props.pairs"
                     :key="keyOf(pair)"
-                    :class="{ 'is-pressed': isPressed(pair) }"
+                    :data-rel="marks.rel(nodeOf(pair))"
+                    :data-preview="marks.previewRel(nodeOf(pair))"
                     @click="toggle(pair)"
+                    @pointerenter="marks.enter(nodeOf(pair), $event)"
+                    @pointerleave="marks.leave($event)"
                 >
                     <td>
                         <span
@@ -140,7 +137,7 @@ function toggle(pair: SynthesisPair): void {
                         <button
                             type="button"
                             :aria-labelledby="toggleLabelledBy(index)"
-                            :aria-pressed="isPressed(pair) ? 'true' : 'false'"
+                            :aria-pressed="marks.pressed(nodeOf(pair))"
                             :aria-disabled="props.disabled ? 'true' : undefined"
                         >
                             <span
@@ -201,9 +198,44 @@ function toggle(pair: SynthesisPair): void {
     cursor: pointer;
 }
 
-.colour-material-table tbody tr:hover,
-.colour-material-table tbody tr.is-pressed {
+.colour-material-table tbody tr:hover {
     background: var(--bg-alt);
+}
+
+.colour-material-table tbody tr > :first-child {
+    position: relative;
+}
+
+.colour-material-table tbody tr[data-rel="self"],
+.colour-material-table tbody tr[data-rel="direct"],
+.colour-material-table tbody tr[data-rel="evidence"] {
+    background: var(--linked-tint, var(--bg-alt));
+}
+
+.colour-material-table tbody tr[data-rel="self"] > :first-child::before,
+.colour-material-table tbody tr[data-rel="direct"] > :first-child::before,
+.colour-material-table tbody tr[data-rel="evidence"] > :first-child::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    border-inline-start: var(--linked-bar, 0.1875rem) solid
+        var(--linked-mark, var(--blue-text));
+    content: "";
+}
+
+.colour-material-table tbody tr[data-rel="evidence"] > :first-child::before {
+    border-inline-start-style: dashed;
+}
+
+.colour-material-table tbody tr[data-rel="none"],
+.colour-material-table tbody tr[data-rel="none"] button {
+    border-color: var(--border);
+    color: var(--ink-muted);
+}
+
+.colour-material-table tbody tr[data-preview] {
+    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    outline-offset: -0.125rem;
 }
 
 .colour-material-table button {
@@ -221,6 +253,8 @@ function toggle(pair: SynthesisPair): void {
 
 .colour-material-table button[aria-pressed="true"] {
     border-color: var(--ink);
+    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
+    outline-offset: 0.0625rem;
     background: var(--ink);
     color: var(--surface);
 }

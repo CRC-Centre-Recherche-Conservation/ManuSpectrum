@@ -108,7 +108,8 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  *
  * The view provides the linked selection of its windows
  * (`useLinkedSelection`, `LINKED_SELECTION_KEY`), shown in the toolbar by
- * `SelectionIndicator` before « Hidden windows » and « + Tool ».
+ * `SelectionIndicator` before « Hidden windows » and « + Tool », and the
+ * tokens its windows mark the linked with (`--linked-*`).
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
@@ -461,6 +462,11 @@ async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
 
 <style scoped>
 .compare-view {
+    --linked-mark: var(--blue-text);
+    --linked-tint: var(--bg-alt);
+    --linked-fade: 0.35;
+    --linked-bar: 0.1875rem;
+
     display: grid;
     gap: 1rem;
 }
