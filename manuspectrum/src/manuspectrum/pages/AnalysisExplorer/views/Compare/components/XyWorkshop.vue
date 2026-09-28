@@ -23,6 +23,7 @@ import {
     viewLabels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/treatment-labels.ts";
 import {
+    MARKERS_PER_CURVE,
     OVERLAY_MAX_CURVES,
     dashOf,
     extent,
@@ -31,6 +32,7 @@ import {
     panelGrid,
     ranksInSlot,
     sharedViews,
+    symbolOf,
     treat,
     workshopCsv,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
@@ -76,6 +78,8 @@ interface Curve {
 }
 
 const LINE_WIDTH = 2;
+const MARKER_SIZE = 7;
+const MARKER_OUTLINE = 1.5;
 const PANEL_MARGIN_TOP = 28;
 const LABEL_FONT_SIZE = 11;
 const PNG_FILE = "spectra.png";
@@ -87,6 +91,9 @@ const DEFAULT_PNG_HEIGHT = 540;
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
  * every readable spectrum of the window, each in the colour of its slot,
  * the 2nd, 3rd… file of a slot in a dashed variant, named « A1 · file ».
+ * Each slot also has a marker shape of its own (`symbolOf`), a few markers
+ * per curve, and the legend groups a slot's files under its label: slots
+ * stay apart in greyscale and for readers who do not tell colours apart.
  * Overlaid, offset (each curve lifted above the one before it, the real
  * values on hover, the Y title unchanged), in small multiples (one panel
  * per slot, the default above eight curves) or as a table. A treatment of
@@ -335,6 +342,24 @@ function lineOf(theme: PlotTheme, curve: Curve): Partial<PlotData>["line"] {
     };
 }
 
+/** A slot's shape, colour and legend group; the markers are spread over the part of the curve in view. */
+function slotStyle(theme: PlotTheme, curve: Curve): Partial<PlotData> {
+    const colour = seriesColour(theme, curve.line.slot);
+    return {
+        mode: "lines+markers",
+        line: lineOf(theme, curve),
+        marker: {
+            symbol: symbolOf(curve.line.slot),
+            size: MARKER_SIZE,
+            color: colour,
+            maxdisplayed: MARKERS_PER_CURVE,
+            line: { color: colour, width: MARKER_OUTLINE },
+        },
+        legendgroup: `slot-${curve.line.slot}`,
+        legendgrouptitle: { text: slotLabel(curve.line.slot) },
+    };
+}
+
 /** The last finite point of a curve, where a curve past the series colours (A9…A30, in ink) carries its label. */
 function lastPoint(x: number[], y: number[]): [number, number] | null {
     for (let index = y.length - 1; index >= 0; index -= 1) {
@@ -369,14 +394,16 @@ function inkLabel(
     ];
 }
 
+/** A click on a legend entry hides that file alone, not its whole slot group. */
 function baseLayout(theme: PlotTheme): Partial<Layout> {
-    return plotLayout(theme, {
+    const base = plotLayout(theme, {
         lang,
         xTitle: titles.value.x,
         yTitle: titles.value.y,
         xReversed: xReversed.value,
         legend: drawn.value.length > 1,
     });
+    return { ...base, legend: { ...base.legend, groupclick: "toggleitem" } };
 }
 
 /** Overlaid, or offset: each curve lifted above the one before it, its real values kept for the hover. */
@@ -394,8 +421,7 @@ function stackedFigure(theme: PlotTheme, offset: boolean): Figure {
             y,
             name: curve.label,
             type: "scatter",
-            mode: "lines",
-            line: lineOf(theme, curve),
+            ...slotStyle(theme, curve),
             ...(offset
                 ? { customdata: curve.y, hovertemplate: "%{customdata:.6~g}" }
                 : {}),
@@ -451,8 +477,7 @@ function multiplesFigure(theme: PlotTheme): Figure {
             y: curve.y,
             name: curve.label,
             type: "scatter",
-            mode: "lines",
-            line: lineOf(theme, curve),
+            ...slotStyle(theme, curve),
             xaxis: `x${suffix}`,
             yaxis: `y${suffix}`,
         };

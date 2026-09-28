@@ -73,7 +73,8 @@ const GAP = "0.5rem";
  * and a folded window's saved box keeps its unfolded height. gridstack
  * keeps the DOM in reading order, which the keyboard follows. Windows are
  * told to draw again (`WINDOW_RESIZE_KEY`) when the grid's width or a
- * window's size changes, not when a drag makes the grid taller.
+ * window's size changes, not when a drag makes the grid taller. The
+ * `toolbar` slot is laid before « Rearrange ».
  */
 const props = withDefaults(
     defineProps<{
@@ -589,6 +590,7 @@ async function rearrange(): Promise<void> {
 <template>
     <div class="window-grid">
         <div class="toolbar">
+            <slot name="toolbar" />
             <button
                 type="button"
                 class="rearrange"

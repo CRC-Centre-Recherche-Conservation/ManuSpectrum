@@ -1,29 +1,51 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, ref, useTemplateRef, watch } from "vue";
+import {
+    computed,
+    inject,
+    nextTick,
+    onBeforeUnmount,
+    ref,
+    shallowRef,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
+import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
+import ToolMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue";
+import ToolWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue";
 import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
 
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
+import { useSynthesis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
 import {
     ANNOUNCE_KEY,
     SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { setFullSeriesRoom } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     forgetWindows,
     readHidden,
+    readTools,
     writeHidden,
+    writeTools,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
+import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
+import {
+    offeredTools,
+    staleToolFilters,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 import {
     autoWindows,
     keepUnchangedCurves,
     windowIdsOf,
-    xyWindowsGaining,
+    xyCurvesGained,
+    xySpectraCount,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 import type {
@@ -35,12 +57,21 @@ import type {
     AutoWindowKind,
     XyWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
+import type { ToolKind } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
     xy: "M",
+    maps: "L",
     micro: "M",
     characterizations: "L",
     "not-in-chart": "S",
+};
+
+const TOOL_SIZE: Record<ToolKind, WindowSize> = {
+    coverage: "L",
+    "colour-material": "L",
+    periodic: "L",
+    folio: "M",
 };
 
 /**
@@ -50,27 +81,48 @@ const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
  * a hidden window comes back from « Hidden windows » or with « Rearrange ».
  * The hidden windows are kept next to the layout (`ms-explorer-layout-v1`);
  * a window whose items all leave the Selection is gone, and forgotten there.
- * A hidden XY window that gains spectra stays hidden: it is announced and
- * marked in « Hidden windows ». An XY window whose spectra did not change
- * keeps its curves, so its chart is not drawn again. A failure to read the
- * Selection offers a retry, before and after the windows are arranged.
+ * A hidden XY window that gains spectra stays hidden: they are announced,
+ * and « Hidden windows » counts the spectra it holds that it did not hold
+ * when hidden (or when the view opened with it hidden). An XY window whose
+ * spectra did not change keeps its curves, so its chart is not drawn
+ * again. While the view is shown, the tab keeps the full series of every
+ * spectrum its XY windows draw, hidden ones included (`setFullSeriesRoom`,
+ * at most 30): adding a spectrum or showing a window again reads no series
+ * twice. A failure to read the Selection offers a retry, before and after
+ * the windows are arranged.
  * Its heading takes the focus when the shell asks (`SCREEN_FOCUS_KEY`).
+ *
+ * The tools (D60) are opened from « + Tool », which offers those the
+ * synthesis of the Selection (`useSynthesis`, read while the view is shown)
+ * has something for. A tool window follows the grid like the others,
+ * after them; « Close » closes the tool. The tools open are kept with the
+ * layout and opened again with the view; a tool filter naming a value the
+ * Selection no longer holds is dropped. While a tool is open, the drafts
+ * the synthesis reads are counted above the windows (the last count while
+ * the next synthesis is read). When the last window
+ * shown is hidden or closed, the focus goes to « Hidden windows », else to
+ * the heading.
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
 
 const store = useExplorerStore();
 const selection = selectionItems();
-const { $gettext, interpolate } = useGettext();
+const synthesis = useSynthesis(() => store.basket.map((item) => item.key));
+const { $gettext, $ngettext, interpolate } = useGettext();
 const root = useTemplateRef<HTMLElement>("root");
 const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
 
+if (store.compare.tools.length === 0) {
+    for (const tool of readTools()) store.openTool(tool.kind, tool.params);
+}
+
 const hidden = ref<string[]>(readHidden());
 /** Set once the Selection has been read: windows are arranged from then on. */
 const opened = ref(false);
-/** Hidden windows that gained spectra since they were hidden. */
-const refreshed = ref<string[]>([]);
+/** Each hidden window as it was when hidden, or when the view opened with it hidden. */
+const hiddenFrom = shallowRef(new Map<string, AutoWindow>());
 
 // The windows last compared for new spectra, once the view is open.
 let known: AutoWindow[] = [];
@@ -93,14 +145,48 @@ const specs = computed<CompareWindowSpec[]>(() =>
         id: window.id,
         title: titleOf(window),
         size: FIRST_SIZE[window.kind],
-        folded: window.kind === "xy" ? window.folded : undefined,
+        folded:
+            window.kind === "xy" || window.kind === "maps"
+                ? window.folded
+                : undefined,
     })),
 );
-const shownSpecs = computed(() =>
-    specs.value.filter((spec) => !hidden.value.includes(spec.id)),
+const tools = computed(() => store.compare.tools);
+const toolById = computed(
+    () => new Map(tools.value.map((tool) => [tool.id, tool])),
+);
+const toolSpecs = computed<CompareWindowSpec[]>(() => {
+    const titles = toolTitles($gettext);
+    return tools.value.map((tool) => ({
+        id: tool.id,
+        title: titles[tool.kind],
+        size: TOOL_SIZE[tool.kind],
+    }));
+});
+const gridSpecs = computed(() => [
+    ...specs.value.filter((spec) => !hidden.value.includes(spec.id)),
+    ...toolSpecs.value,
+]);
+const draftCount = computed(() =>
+    tools.value.length > 0 &&
+    (synthesis.status.value === "ready" || synthesis.status.value === "loading")
+        ? synthesis.data.value?.unpublishedCount ?? 0
+        : 0,
+);
+const offered = computed(() =>
+    synthesis.status.value === "ready" && synthesis.data.value
+        ? offeredTools(synthesis.data.value)
+        : null,
 );
 const hiddenSpecs = computed(() =>
     specs.value.filter((spec) => hidden.value.includes(spec.id)),
+);
+/** The spectra each hidden XY window holds that it did not hold when hidden. */
+const newSpectra = computed(() =>
+    xyCurvesGained(
+        [...hiddenFrom.value.values()],
+        windows.value.filter((window) => hiddenFrom.value.has(window.id)),
+    ),
 );
 const hiddenTitle = computed(() =>
     interpolate(
@@ -118,34 +204,60 @@ watch(
         if (!opened.value) known = windows.value;
         opened.value = true;
         const ids = windowIdsOf(windows.value);
-        forgetWindows(ids);
+        forgetWindows([...ids, ...tools.value.map((tool) => tool.id)]);
         const kept = hidden.value.filter((id) => ids.includes(id));
         if (kept.length !== hidden.value.length) hidden.value = kept;
-        refreshed.value = refreshed.value.filter((id) => kept.includes(id));
+        rememberHidden();
+    },
+    { immediate: true },
+);
+
+watch(() => xySpectraCount(windows.value), setFullSeriesRoom, {
+    immediate: true,
+});
+
+watch(
+    () => store.compare.tools,
+    (open) => writeTools(open),
+);
+
+watch(
+    () => (synthesis.status.value === "ready" ? synthesis.data.value : null),
+    (answer) => {
+        if (!answer) return;
+        for (const key of staleToolFilters(answer, store.compare.toolFilters)) {
+            store.setToolFilter(key, null);
+        }
     },
     { immediate: true },
 );
 
 watch(windows, (next) => {
     if (!opened.value) return;
-    const gaining = xyWindowsGaining(known, next).filter(
-        (id) => hidden.value.includes(id) && !refreshed.value.includes(id),
+    const gaining = [...xyCurvesGained(known, next).keys()].filter(
+        (id) => (newSpectra.value.get(id) ?? 0) > 0,
     );
     known = next;
     if (gaining.length === 0) return;
-    refreshed.value = [...refreshed.value, ...gaining];
     announce(
         gaining
-            .map((id) =>
-                interpolate(
-                    $gettext("%{title}: new spectra added to a hidden window"),
-                    { title: specTitle(id) },
+            .map((id) => {
+                const count = newSpectra.value.get(id) ?? 0;
+                return interpolate(
+                    $ngettext(
+                        "%{title}: %{n} spectrum added while the window was hidden.",
+                        "%{title}: %{n} spectra added while the window was hidden.",
+                        count,
+                    ),
+                    { title: specTitle(id), n: count },
                     true,
-                ),
-            )
+                );
+            })
             .join(" "),
     );
 });
+
+onBeforeUnmount(() => setFullSeriesRoom(0));
 
 function xyTitle(window: XyWindow): string {
     if (window.configName) return window.configName;
@@ -167,12 +279,14 @@ function titleOf(window: AutoWindow): string {
     switch (window.kind) {
         case "xy":
             return xyTitle(window);
+        case "maps":
+            return $gettext("Element maps");
         case "micro":
             return $gettext("Micro-images");
         case "characterizations":
             return $gettext("Identified materials");
         case "not-in-chart":
-            return $gettext("Not in a chart");
+            return $gettext("Without visualisation");
     }
 }
 
@@ -182,6 +296,24 @@ function specTitle(id: string): string {
 
 function showLabel(title: string): string {
     return interpolate($gettext("Show %{title}"), { title }, true);
+}
+
+function newSpectraLabel(count: number): string {
+    return interpolate(
+        $ngettext("%{n} spectrum added", "%{n} spectra added", count),
+        { n: count },
+        true,
+    );
+}
+
+/** Keeps the state of each window still hidden, and takes the current one of a window just hidden. */
+function rememberHidden(): void {
+    hiddenFrom.value = new Map(
+        hidden.value.flatMap((id) => {
+            const state = hiddenFrom.value.get(id) ?? windowById.value.get(id);
+            return state ? [[id, state] as const] : [];
+        }),
+    );
 }
 
 function windowElement(id: string): HTMLElement | null {
@@ -198,13 +330,31 @@ function windowElement(id: string): HTMLElement | null {
 function setHidden(ids: string[]): void {
     hidden.value = ids;
     writeHidden(ids);
+    rememberHidden();
+}
+
+/** Gives the focus to « Hidden windows », else to the heading, once no window is shown. */
+async function focusWithoutWindows(): Promise<void> {
+    if (gridSpecs.value.length > 0) return;
+    await nextTick();
+    (
+        root.value?.querySelector<HTMLElement>(".hidden-windows button") ??
+        heading.value
+    )?.focus();
 }
 
 /** Hides a window arranged from the Selection; a tool is closed. */
 async function closeWindow({ id }: { id: string }): Promise<void> {
     const spec = specs.value.find((entry) => entry.id === id);
     if (!windowById.value.has(id) || !spec) {
+        const title = toolSpecs.value.find((entry) => entry.id === id)?.title;
         store.closeTool(id);
+        if (title) {
+            announce(
+                interpolate($gettext("%{title} closed."), { title }, true),
+            );
+        }
+        await focusWithoutWindows();
         return;
     }
     setHidden([...hidden.value, id]);
@@ -215,24 +365,26 @@ async function closeWindow({ id }: { id: string }): Promise<void> {
             true,
         ),
     );
-    if (shownSpecs.value.length === 0) {
-        await nextTick();
-        root.value
-            ?.querySelector<HTMLElement>(".hidden-windows button")
-            ?.focus();
-    }
+    await focusWithoutWindows();
 }
 
 async function showWindow(id: string): Promise<void> {
     setHidden(hidden.value.filter((entry) => entry !== id));
-    refreshed.value = refreshed.value.filter((entry) => entry !== id);
+    await nextTick();
+    windowElement(id)?.focus();
+}
+
+/** Opens a tool once; a tool already open takes the focus. */
+async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
+    const known = store.compare.tools.map((tool) => tool.id);
+    const id = store.openTool(kind);
+    if (!known.includes(id)) return;
     await nextTick();
     windowElement(id)?.focus();
 }
 
 function showAll(): void {
     if (hidden.value.length > 0) setHidden([]);
-    refreshed.value = [];
 }
 </script>
 
@@ -281,6 +433,10 @@ function showAll(): void {
                 :hide-home="true"
                 @retry="selection.retry"
             />
+            <DraftBanner
+                scope="tools"
+                :count="draftCount"
+            />
             <section
                 v-if="hiddenSpecs.length > 0"
                 class="hidden-windows"
@@ -301,25 +457,42 @@ function showAll(): void {
                         >
                             <span>{{ showLabel(spec.title) }}</span>
                             <span
-                                v-if="refreshed.includes(spec.id)"
+                                v-if="newSpectra.has(spec.id)"
                                 class="badge"
-                                >{{ $gettext("new spectra") }}</span
+                                >{{
+                                    newSpectraLabel(newSpectra.get(spec.id)!)
+                                }}</span
                             >
                         </button>
                     </li>
                 </ul>
             </section>
             <WindowGrid
-                v-if="specs.length > 0"
-                :windows="shownSpecs"
+                v-if="specs.length > 0 || toolSpecs.length > 0"
+                :windows="gridSpecs"
                 :retained="hidden"
                 @close="closeWindow"
                 @rearrange="showAll"
             >
+                <template #toolbar>
+                    <ToolMenu
+                        :offered="offered"
+                        :status="synthesis.status.value"
+                        @choose="chooseTool"
+                        @retry="synthesis.retry"
+                    />
+                </template>
                 <template #default="{ window: spec }">
                     <AutoWindowBody
                         v-if="windowById.get(spec.id)"
                         :window="windowById.get(spec.id)!"
+                    />
+                    <ToolWindowBody
+                        v-else-if="toolById.get(spec.id)"
+                        :kind="toolById.get(spec.id)!.kind"
+                        :status="synthesis.status.value"
+                        :synthesis="synthesis.data.value"
+                        @retry="synthesis.retry"
                     />
                 </template>
             </WindowGrid>

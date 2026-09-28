@@ -10,7 +10,8 @@ export type ExplorerRoute =
     | "manuspectrum:explorer-home"
     | "manuspectrum:explorer-analysis"
     | "manuspectrum:explorer-items"
-    | "manuspectrum:explorer-share";
+    | "manuspectrum:explorer-share"
+    | "manuspectrum:explorer-synthesis";
 
 export interface JsonRequestOptions {
     urlParameters?: Record<string, string>;
@@ -33,6 +34,8 @@ const NO_CONTENT = 204;
 const MEMO_ENTRIES = 20;
 /** Full series (every point, up to the server's ceiling) kept apart: a Compare view never evicts the Explorer payloads. */
 const FULL_SERIES_ENTRIES = 6;
+/** The most full series the tab keeps, whatever Compare draws (a full series can weigh a few MB once read). */
+const FULL_SERIES_MAX_ENTRIES = 30;
 const MEMO_TTL_MS = 5 * 60 * 1000;
 /** Prefetches nobody waits for yet that run at once; a new one drops the oldest. */
 export const PREFETCHES_IN_FLIGHT = 4;
@@ -280,10 +283,24 @@ export function prefetchJson(
     });
 }
 
-/** Empties the tab's memo, full series included. */
+/** Empties the tab's memo, full series included, and gives the full series their default room. */
 export function forgetPayloads(): void {
     payloads.entries.clear();
     fullSeries.entries.clear();
+    fullSeries.limit = FULL_SERIES_ENTRIES;
+}
+
+/**
+ * Sizes the memo of full series for `spectra` series drawn at once: at
+ * least `FULL_SERIES_ENTRIES`, at most `FULL_SERIES_MAX_ENTRIES`. A smaller
+ * room drops the least recently used answers at once.
+ */
+export function setFullSeriesRoom(spectra: number): void {
+    fullSeries.limit = Math.min(
+        FULL_SERIES_MAX_ENTRIES,
+        Math.max(FULL_SERIES_ENTRIES, spectra),
+    );
+    evict(fullSeries);
 }
 
 /**
@@ -293,7 +310,7 @@ export function forgetPayloads(): void {
  * The preview URL of the payload is absolute on `PUBLIC_SERVER_ADDRESS`; only
  * its path is fetched, on the page's own origin. `null` means nothing to draw.
  * The full series goes through a memo of its own, the last
- * `FULL_SERIES_ENTRIES` files, with the rules of the payloads' memo (TTL,
+ * `FULL_SERIES_ENTRIES` files or the room Compare asks (`setFullSeriesRoom`), with the rules of the payloads' memo (TTL,
  * shared requests, `reload` replaces the entry): a Compare view drawing many
  * spectra never evicts an Explorer payload. The tiers are asked each time.
  */

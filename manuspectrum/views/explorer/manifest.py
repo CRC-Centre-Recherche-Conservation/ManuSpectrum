@@ -131,15 +131,16 @@ class _Placement:
     whole: bool
 
 
-def _placements(scope):
+def _placements(scope, bounded=True):
     """One ``_Placement`` per document of *scope*, in order, each built when it is reached.
 
     The local source manifests, the analysis zones and the material zones
     of the whole scope are read before the first document is placed, a
     fixed number of queries; a remote source manifest is read when its
     document is reached. Zones are read from ``scope.nodegroups``.
-    ``ManifestTooLarge`` is raised as soon as the kept canvases of the
-    documents placed so far exceed ``EXPLORER_MANIFEST_MAX_CANVASES``.
+    When *bounded*, ``ManifestTooLarge`` is raised as soon as the kept
+    canvases of the documents placed so far exceed
+    ``EXPLORER_MANIFEST_MAX_CANVASES``.
     """
     bundle, reader = scope.bundle, scope.reader
     readable = scope.nodegroups
@@ -208,7 +209,7 @@ def _placements(scope):
             ]
         raw = _source_canvases(source)
         planned.update(c for c in kept if c in raw)
-        if len(planned) > limit:
+        if bounded and len(planned) > limit:
             raise ManifestTooLarge()
         yield _Placement(
             document=document,

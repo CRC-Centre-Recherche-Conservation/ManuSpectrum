@@ -22,7 +22,7 @@ const downloadLabel = computed(() =>
 <template>
     <p class="file-only">
         <span>{{
-            $gettext("Not in a chart: this file can be downloaded.")
+            $gettext("No visualisation for this file: it can be downloaded.")
         }}</span>
         <a
             v-if="href"

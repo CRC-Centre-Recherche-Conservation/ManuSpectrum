@@ -37,7 +37,16 @@ interface TraceCall {
     y: number[];
     customdata?: number[];
     xaxis?: string;
+    mode: string;
     line: { color: string; dash: string };
+    marker: {
+        symbol: string;
+        color: string;
+        maxdisplayed: number;
+        line: { color: string };
+    };
+    legendgroup: string;
+    legendgrouptitle: { text: string };
 }
 
 interface LayoutCall {
@@ -45,6 +54,7 @@ interface LayoutCall {
     paper_bgcolor: string;
     grid?: { rows: number; columns: number };
     annotations: { text: string }[];
+    legend: { groupclick: string };
     xaxis: { title: { text: string }; autorange: unknown };
     yaxis: { title: { text: string } };
     [axis: string]: unknown;
@@ -194,6 +204,58 @@ describe("XyWorkshop", () => {
         expect(layout.showlegend).toBe(true);
         expect(layout.xaxis.title.text).toBe("Energy (keV)");
         expect(layout.yaxis.title.text).toBe("Counts");
+    });
+
+    it("marks each slot with a marker shape of its own and groups its files in the legend, a few markers per curve", async () => {
+        const view = await mountWorkshop([
+            curve(0, 1),
+            curve(0, 2),
+            curve(1, 3),
+            curve(9, 4),
+        ]);
+        const { traces, layout } = lastDrawing();
+        expect(traces.map((trace) => trace.mode)).toEqual(
+            Array(4).fill("lines+markers"),
+        );
+        expect(traces.map((trace) => trace.marker.symbol)).toEqual([
+            "circle",
+            "circle",
+            "square",
+            "hexagon",
+        ]);
+        expect(traces.map((trace) => trace.marker.color)).toEqual([
+            COLOURS[0],
+            COLOURS[0],
+            COLOURS[1],
+            INK,
+        ]);
+        expect(traces[3].marker.line.color).toBe(INK);
+        expect(
+            traces.every(
+                (trace) =>
+                    trace.marker.maxdisplayed > 0 &&
+                    trace.marker.maxdisplayed <= 20,
+            ),
+        ).toBe(true);
+        expect(traces.map((trace) => trace.legendgroup)).toEqual([
+            "slot-0",
+            "slot-0",
+            "slot-1",
+            "slot-9",
+        ]);
+        expect(traces.map((trace) => trace.legendgrouptitle.text)).toEqual([
+            "A1",
+            "A1",
+            "A2",
+            "A10",
+        ]);
+        expect(layout.legend.groupclick).toBe("toggleitem");
+
+        await view.find('[data-layout="multiples"]').trigger("click");
+        await flushPromises();
+        expect(
+            lastDrawing().traces.map((trace) => trace.marker.symbol),
+        ).toEqual(["circle", "circle", "square", "hexagon"]);
     });
 
     it("titles the axes from the first drawn spectrum that stores a title", async () => {

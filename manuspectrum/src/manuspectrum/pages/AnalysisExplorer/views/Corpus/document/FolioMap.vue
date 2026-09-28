@@ -9,11 +9,8 @@ import {
 } from "vue";
 import { usePreferredReducedMotion, useResizeObserver } from "@vueuse/core";
 import L from "leaflet";
-import "leaflet-iiif";
 import "leaflet.markercluster";
-import "leaflet-side-by-side";
 import { useGettext } from "vue3-gettext";
-import { infoJsonUrl } from "utils/iiif-image";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
 
 import {
@@ -21,10 +18,11 @@ import {
     shapeCentre,
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import {
-    curtainable,
-    overlayPane,
-} from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+    fitPage,
+    layPage,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     nextId,
     offsetInside,
@@ -42,7 +40,9 @@ import type {
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
+import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type {
     Focus,
@@ -66,13 +66,6 @@ const PINNED_PANE = "folio-pinned";
 // Above Leaflet's marker pane (600), below its tooltips (650).
 const PINNED_PANE_Z_INDEX = "620";
 const MARKER_PANE = "markerPane";
-
-/** The leaflet-iiif 3.0.0 state the folio reads: the info.json request, the image sizes it yields, the tile container. */
-type IiifLayer = L.TileLayer & {
-    _infoPromise?: Promise<unknown> | null;
-    _imageSizes?: unknown[];
-    _container?: HTMLElement;
-};
 
 const props = withDefaults(
     defineProps<{
@@ -107,7 +100,7 @@ const pageFailed = ref(false);
 const failedOverlays = ref<ReadonlySet<string>>(new Set());
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
-let page: IiifLayer | null = null;
+let page: PageLayer | null = null;
 let cluster: L.MarkerClusterGroup | null = null;
 // The open analysis or sample and the lit evidence: drawn above the groups, never inside one.
 let pinned: L.LayerGroup | null = null;
@@ -121,8 +114,7 @@ let openedGroup: Set<string> | null = null;
 let fittedCanvas: string | null | undefined;
 const markers = new Map<string, L.Marker>();
 const targets = new Map<string, L.Marker>();
-const images = new Map<string, L.ImageOverlay>();
-let sideBySide: L.SideBySide | null = null;
+let laid: LaidLayers | null = null;
 
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 
@@ -166,6 +158,10 @@ onMounted(() => {
     map.createPane(PINNED_PANE).style.zIndex = PINNED_PANE_Z_INDEX;
     pinned = L.layerGroup().addTo(map);
     stackSmallestOnTop(map);
+    laid = laidLayers(map, {
+        curtainLabel: $gettext("Curtain position"),
+        failed: markOverlayFailed,
+    });
     map.on("zoomend moveend", computeTargets);
     drawPage();
     drawMarks();
@@ -175,9 +171,10 @@ onMounted(() => {
 useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 
 onBeforeUnmount(() => {
-    sideBySide?.remove();
-    sideBySide = null;
-    images.clear();
+    page?.remove();
+    page = null;
+    laid?.remove();
+    laid = null;
     map?.remove();
     map = null;
 });
@@ -365,39 +362,19 @@ function ensureHatch(): void {
 }
 
 /**
- * Lays the page's IIIF image once leaflet-iiif has read its info.json, if the
- * page is still the one shown. leaflet-iiif lays its tiles only after that
- * read (never, when the image host refuses it), and GridLayer.onRemove throws
- * on a layer whose tiles are not laid: an unread page never reaches the map,
- * and a page removed in the instant between its addition and its tiles is
- * dropped without calling GridLayer.onRemove. An info.json that cannot be
- * read leaves the markers on the bare stage and says so (`pageFailed`).
+ * Lays the page's IIIF image (`layPage`); an info.json that cannot be read
+ * leaves the markers on the bare stage and says so (`pageFailed`).
  */
 function drawPage(): void {
     if (!map) return;
-    if (page && map.hasLayer(page)) map.removeLayer(page);
+    page?.remove();
     page = null;
     pageFailed.value = false;
     const service = props.canvas?.image.service;
     if (!service) return;
-    const next = L.tileLayer.iiif(infoJsonUrl(service), {
-        fitBounds: true,
-        setMaxBounds: false,
-    }) as IiifLayer;
-    const onRemove = next.onRemove;
-    next.onRemove = (from: L.Map) =>
-        next._container ? onRemove.call(next, from) : next;
-    page = next;
-    void Promise.resolve(next._infoPromise).then(
-        () => {
-            if (!map || page !== next) return;
-            if (next._imageSizes) map.addLayer(next);
-            else pageFailed.value = true;
-        },
-        () => {
-            if (page === next) pageFailed.value = true;
-        },
-    );
+    page = layPage(map, service, () => {
+        pageFailed.value = true;
+    });
 }
 
 /** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
@@ -579,59 +556,14 @@ function drawMarks(): void {
     computeTargets();
 }
 
-/**
- * Adds, updates and removes the laid layers by key. The curtain clips the one
- * named by `curtain`; one curtain control lives while a layer is curtained, so
- * its divider keeps its place when the opacity, the curtained layer or the
- * document payload changes.
- */
+/** Lays the layers switched on, the curtain over the one `curtain` names (`laidLayers`). */
 function drawOverlays(): void {
-    if (!map) return;
+    if (!laid) return;
     const wanted = new Set(props.overlays.map((overlay) => overlay.key));
-    for (const [key, layer] of images) {
-        if (!wanted.has(key)) {
-            layer.remove();
-            images.delete(key);
-        }
-    }
     failedOverlays.value = new Set(
         [...failedOverlays.value].filter((key) => wanted.has(key)),
     );
-    for (const overlay of props.overlays) {
-        const existing = images.get(overlay.key);
-        if (existing) {
-            existing.setOpacity(overlay.opacity);
-            existing.setBounds(L.latLngBounds(overlay.bounds));
-        } else {
-            const pane = overlayPane(map, overlay.key);
-            const layer = L.imageOverlay(overlay.url, overlay.bounds, {
-                opacity: overlay.opacity,
-                className: "folio-overlay",
-                alt: overlay.label,
-                pane,
-            });
-            layer.on("error", () => markOverlayFailed(overlay.key));
-            images.set(
-                overlay.key,
-                curtainable(layer.addTo(map), map.getPane(pane)!),
-            );
-        }
-    }
-    const under = props.curtain ? images.get(props.curtain) : undefined;
-    if (!under) {
-        sideBySide?.remove();
-        sideBySide = null;
-    } else if (sideBySide) {
-        sideBySide.setRightLayers(under);
-    } else {
-        sideBySide = L.control
-            .sideBySide([], under)
-            .addTo(map)
-            .on("rightlayerremove", unclip);
-        (
-            sideBySide as L.SideBySide & { _range?: HTMLElement }
-        )._range?.setAttribute("aria-label", $gettext("Curtain position"));
-    }
+    laid.draw(props.overlays, props.curtain);
 }
 
 function markOverlayFailed(key: string): void {
@@ -640,21 +572,9 @@ function markOverlayFailed(key: string): void {
 
 /** Lays the maps that did not load again, as new images. */
 function retryOverlays(): void {
-    for (const key of failedOverlays.value) {
-        images.get(key)?.remove();
-        images.delete(key);
-    }
+    laid?.forget(failedOverlays.value);
     failedOverlays.value = new Set();
     drawOverlays();
-}
-
-/** A layer that leaves the curtain keeps no clip: its pane may be laid again without it. */
-function unclip(event: L.LeafletEvent): void {
-    const { layer } = event as L.LeafletEvent & {
-        layer: { getContainer?: () => HTMLElement | undefined };
-    };
-    const container = layer.getContainer?.();
-    if (container) container.style.clip = "";
 }
 
 /** The id of the marker, or of the marker group, that shows an analysis or a sample (`sample:<id>`) now; null when neither is on the map. */
@@ -829,10 +749,8 @@ function zoomOut(): void {
 
 function wholePage(): void {
     openedGroup = null;
-    if (page && map?.hasLayer(page) && "_fitBounds" in page) {
-        // leaflet-iiif fits the whole image with this private method.
-        (page as unknown as { _fitBounds: () => void })._fitBounds();
-    } else if (markers.size > 0) {
+    if (map && fitPage(map, page)) return;
+    if (markers.size > 0) {
         map?.fitBounds(
             L.featureGroup([...markers.values()])
                 .getBounds()

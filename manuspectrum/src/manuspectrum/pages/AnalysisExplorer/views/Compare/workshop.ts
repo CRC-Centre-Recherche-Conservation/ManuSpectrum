@@ -20,6 +20,47 @@ const DASHES = [
     "longdashdot",
 ] as const;
 
+/**
+ * Marker shapes of slots A1…A30, filled then open, told apart without
+ * colour (greyscale print, colour vision deficiency): every slot past A8 is
+ * drawn in ink.
+ */
+const SYMBOLS = [
+    "circle",
+    "square",
+    "diamond",
+    "triangle-up",
+    "x",
+    "triangle-down",
+    "cross",
+    "star",
+    "pentagon",
+    "hexagon",
+    "hourglass",
+    "triangle-left",
+    "bowtie",
+    "triangle-right",
+    "hexagram",
+    "circle-open",
+    "square-open",
+    "diamond-open",
+    "triangle-up-open",
+    "x-open",
+    "triangle-down-open",
+    "cross-open",
+    "star-open",
+    "pentagon-open",
+    "hexagon-open",
+    "hourglass-open",
+    "triangle-left-open",
+    "bowtie-open",
+    "triangle-right-open",
+    "hexagram-open",
+] as const;
+
+/** Markers drawn along one curve, spread over the part of it in view (Plotly `marker.maxdisplayed`). */
+export const MARKERS_PER_CURVE = 12;
+
 const MAX_COLUMNS = 4;
 /** The room between two offset curves, as a share of the widest curve's span. */
 const OFFSET_GAP = 0.1;
@@ -31,6 +72,7 @@ const FIRST_PRINTABLE = 0x20;
 const DELETE = 0x7f;
 
 export type Dash = (typeof DASHES)[number];
+export type MarkerSymbol = (typeof SYMBOLS)[number];
 
 /** Smallest and largest finite value, and how many values are finite. */
 export interface Extent {
@@ -60,6 +102,11 @@ export interface CsvColumn {
 /** The line style of the file at `rank` among the files of its slot (0: the first). */
 export function dashOf(rank: number): Dash {
     return DASHES[rank % DASHES.length];
+}
+
+/** The marker shape of a slot (0: A1), the same for every file of the slot. */
+export function symbolOf(slot: number): MarkerSymbol {
+    return SYMBOLS[Math.max(0, slot) % SYMBOLS.length];
 }
 
 /** For each curve in order, how many curves of the same slot come before it. */

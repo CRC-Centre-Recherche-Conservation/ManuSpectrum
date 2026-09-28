@@ -10,7 +10,6 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     analysisHit,
     fileEntry,
-    imagingEntry,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
@@ -59,9 +58,9 @@ const ENTRIES: NotInChartEntry[] = [
     {
         key: `an:${HIT.id}:-`,
         slot: 2,
-        reason: "imaging",
+        reason: "no-data",
         analysis: HIT,
-        file: imagingEntry(),
+        file: null,
     },
     {
         key: `an:${uuid(102)}:-`,
@@ -92,8 +91,8 @@ describe("NotInChartList", () => {
         ).toEqual([
             "Instrument file: download only.",
             "File with no viewer: download only.",
-            "Element maps are not compared side by side yet.",
-            "No spectrum, map or image to show.",
+            "No data to display.",
+            "No data to display.",
             "No longer available.",
         ]);
         expect(line(wrapper, 0).find(".slot").text()).toBe("A1");
@@ -113,7 +112,7 @@ describe("NotInChartList", () => {
         expect(line(wrapper, 1).find("a.action").exists()).toBe(false);
     });
 
-    it("opens an analysis that holds maps or nothing to show in its document", async () => {
+    it("opens an analysis that holds nothing to show in its document", async () => {
         const wrapper = mountList();
         const store = useExplorerStore();
         const button = line(wrapper, 2).find("button.action");

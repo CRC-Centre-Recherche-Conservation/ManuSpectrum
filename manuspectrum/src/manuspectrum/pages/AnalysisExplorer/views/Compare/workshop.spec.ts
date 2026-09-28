@@ -15,6 +15,7 @@ import {
     panelGrid,
     ranksInSlot,
     sharedViews,
+    symbolOf,
     treat,
     workshopCsv,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
@@ -74,6 +75,13 @@ describe("workshop", () => {
             "dot",
             "dash",
         ]);
+    });
+
+    it("gives each of the thirty slots its own marker shape, filled then open", () => {
+        const symbols = Array.from({ length: 30 }, (_, slot) => symbolOf(slot));
+        expect(new Set(symbols).size).toBe(30);
+        expect(symbols.slice(0, 3)).toEqual(["circle", "square", "diamond"]);
+        expect(symbols[15]).toBe("circle-open");
     });
 
     it("measures a range in one pass, past the arguments limit of a spread", () => {

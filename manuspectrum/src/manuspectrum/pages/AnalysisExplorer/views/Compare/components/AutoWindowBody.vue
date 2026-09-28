@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ElementMaps from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue";
 import MaterialsTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue";
 import MicroImageGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MicroImageGrid.vue";
 import NotInChartList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue";
@@ -14,6 +15,10 @@ const props = defineProps<{ window: AutoWindow }>();
     <XyWorkshop
         v-if="props.window.kind === 'xy'"
         :curves="props.window.curves"
+    />
+    <ElementMaps
+        v-else-if="props.window.kind === 'maps'"
+        :maps="props.window.maps"
     />
     <MicroImageGrid
         v-else-if="props.window.kind === 'micro'"

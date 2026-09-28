@@ -3,14 +3,16 @@ import {
     removeStorage,
     writeStorage,
 } from "@/manuspectrum/public/safe-storage.ts";
+import { OFFERED_TOOLS } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 
+import type { ToolWindow } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 import type {
     WindowBox,
     WindowLayout,
     WindowSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
-/** Places of the Compare windows, the windows hidden and those folded or unfolded by the reader, on this browser; not synced between tabs. */
+/** Places of the Compare windows, the windows hidden and those folded or unfolded by the reader, and the tools open, on this browser; not synced between tabs. */
 export const LAYOUT_STORAGE_KEY = "ms-explorer-layout-v1";
 
 export const GRID_COLUMNS = 12;
@@ -47,20 +49,25 @@ function isBox(value: unknown): value is WindowBox {
 
 /**
  * The stored shape: the places of the windows (a folded window's box keeps
- * its unfolded height), the windows hidden, and the windows the reader
- * folded (`true`) or unfolded (`false`). `folded` came after `hidden` in the
- * same version and may be absent.
+ * its unfolded height), the windows hidden, the windows the reader folded
+ * (`true`) or unfolded (`false`), and the tools open (kind and parameters,
+ * written only when one is open). `folded` and `tools` came after `hidden`
+ * in the same version and may be absent.
  */
 const LAYOUT_VERSION = 2;
+
+/** A tool open in Compare, as stored: its window id is derived from it (`toolWindowId`). */
+export type StoredTool = Pick<ToolWindow, "kind" | "params">;
 
 interface StoredLayout {
     boxes: WindowLayout;
     hidden: string[];
     folded: Record<string, boolean>;
+    tools: StoredTool[];
 }
 
 function emptyLayout(): StoredLayout {
-    return { boxes: {}, hidden: [], folded: {} };
+    return { boxes: {}, hidden: [], folded: {}, tools: [] };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -99,6 +106,29 @@ function foldedOf(value: unknown): Record<string, boolean> {
     return folded;
 }
 
+function isParams(value: unknown): value is Record<string, string> {
+    return (
+        isRecord(value) &&
+        Object.values(value).every((entry) => typeof entry === "string")
+    );
+}
+
+function toolsOf(value: unknown): StoredTool[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((entry) =>
+        isRecord(entry) &&
+        OFFERED_TOOLS.some((kind) => kind === entry.kind) &&
+        isParams(entry.params)
+            ? [
+                  {
+                      kind: entry.kind as StoredTool["kind"],
+                      params: { ...entry.params },
+                  },
+              ]
+            : [],
+    );
+}
+
 /**
  * A stored layout, anything unreadable dropped. A layout saved before hidden
  * windows existed is a bare `Record<windowId, box>`: its boxes are read, with
@@ -118,6 +148,7 @@ function parseStored(raw: string | null): StoredLayout {
             boxes: boxesOf(parsed.boxes),
             hidden: hiddenOf(parsed.hidden),
             folded: foldedOf(parsed.folded),
+            tools: toolsOf(parsed.tools),
         };
     }
     return { ...emptyLayout(), boxes: boxesOf(parsed) };
@@ -127,10 +158,16 @@ function readStored(): StoredLayout {
     return parseStored(readStorage(LAYOUT_STORAGE_KEY));
 }
 
-function writeStored({ boxes, hidden, folded }: StoredLayout): void {
+function writeStored({ boxes, hidden, folded, tools }: StoredLayout): void {
     writeStorage(
         LAYOUT_STORAGE_KEY,
-        JSON.stringify({ version: LAYOUT_VERSION, boxes, hidden, folded }),
+        JSON.stringify({
+            version: LAYOUT_VERSION,
+            boxes,
+            hidden,
+            folded,
+            ...(tools.length > 0 ? { tools } : {}),
+        }),
     );
 }
 
@@ -168,9 +205,30 @@ export function writeFolded(folded: Readonly<Record<string, boolean>>): void {
     writeStored({ ...readStored(), folded: { ...folded } });
 }
 
-/** Forgets the places, the hidden windows and the folded ones. */
+/** The tools open, in the order opened. */
+export function readTools(): StoredTool[] {
+    return readStored().tools;
+}
+
+/** Saves the tools open; the rest stays as stored. */
+export function writeTools(tools: readonly StoredTool[]): void {
+    writeStored({
+        ...readStored(),
+        tools: tools.map(({ kind, params }) => ({
+            kind,
+            params: { ...params },
+        })),
+    });
+}
+
+/** Forgets the places, the hidden windows and the folded ones; the tools stay open. */
 export function clearLayout(): void {
-    removeStorage(LAYOUT_STORAGE_KEY);
+    const { tools } = readStored();
+    if (tools.length === 0) {
+        removeStorage(LAYOUT_STORAGE_KEY);
+    } else {
+        writeStored({ ...emptyLayout(), tools });
+    }
 }
 
 /** Forgets the place, the hidden and the folded state of every window `ids` does not name; writes nothing when none is gone. */
@@ -186,7 +244,7 @@ export function forgetWindows(ids: readonly string[]): void {
     ) {
         return;
     }
-    writeStored({ boxes, hidden, folded });
+    writeStored({ boxes, hidden, folded, tools: stored.tools });
 }
 
 /** The entries of the windows `ids` names. */

@@ -9,6 +9,7 @@ import {
     PREFETCHES_IN_FLIGHT,
     peekJson,
     prefetchJson,
+    setFullSeriesRoom,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
@@ -341,6 +342,32 @@ describe("getSeries", () => {
         await getSeries("http://testserver/api/spectrum-preview/f2", "full");
         expect(fetchMock).not.toHaveBeenCalled();
         await getSeries("http://testserver/api/spectrum-preview/f1", "full");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("makes room for the spectra Compare draws, from six up to thirty full series", async () => {
+        fetchMock.mockImplementation(async () =>
+            respond(200, { x: [], y: [] }),
+        );
+        const file = (n: number): string =>
+            `http://testserver/api/spectrum-preview/f${n}`;
+        setFullSeriesRoom(8);
+        for (let n = 1; n <= 8; n += 1) await getSeries(file(n), "full");
+        fetchMock.mockClear();
+        await getSeries(file(1), "full");
+        expect(fetchMock).not.toHaveBeenCalled();
+
+        setFullSeriesRoom(45);
+        for (let n = 9; n <= 31; n += 1) await getSeries(file(n), "full");
+        fetchMock.mockClear();
+        await getSeries(file(2), "full");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        setFullSeriesRoom(0);
+        fetchMock.mockClear();
+        await getSeries(file(26), "full");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await getSeries(file(31), "full");
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 

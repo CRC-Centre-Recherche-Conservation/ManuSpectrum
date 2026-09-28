@@ -22,7 +22,7 @@ export interface ResultsMemo {
 export const FACET_LABELS_KEY: InjectionKey<Ref<Map<string, Label>>> =
     Symbol("facet-labels");
 
-/** Set when the heading of the Corpus screen shown next should take the focus; cleared by the heading that takes it. */
+/** Set when the heading of the screen or view shown next should take the focus; cleared by the heading that takes it. */
 export const SCREEN_FOCUS_KEY: InjectionKey<Ref<boolean>> =
     Symbol("screen-focus");
 

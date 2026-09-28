@@ -381,7 +381,7 @@ function focusHeading(): void {
                 :aria-labelledby="`${sectionId}-not-in-chart`"
             >
                 <h4 :id="`${sectionId}-not-in-chart`">
-                    <span>{{ $gettext("Not in a chart") }}</span>
+                    <span>{{ $gettext("Without visualisation") }}</span>
                 </h4>
                 <p
                     v-if="rawNotInChart"

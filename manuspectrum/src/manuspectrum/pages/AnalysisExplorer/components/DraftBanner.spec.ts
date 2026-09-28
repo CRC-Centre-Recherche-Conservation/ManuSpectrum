@@ -28,4 +28,13 @@ describe("DraftBanner", () => {
             "1 draft in this document; it is marked “Draft”.",
         );
     });
+
+    it("counts the drafts the Compare tools read in the tools scope", () => {
+        const wrapper = mount(DraftBanner, {
+            props: { count: 1, scope: "tools" },
+        });
+        expect(wrapper.find(".draft-banner").text()).toBe(
+            "The tools read 1 draft, not published yet.",
+        );
+    });
 });

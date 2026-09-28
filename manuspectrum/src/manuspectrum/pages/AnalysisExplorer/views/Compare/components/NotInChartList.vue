@@ -33,10 +33,8 @@ function reasonText(reason: NotInChartReason): string {
             return $gettext("Instrument file: download only.");
         case "file":
             return $gettext("File with no viewer: download only.");
-        case "imaging":
-            return $gettext("Element maps are not compared side by side yet.");
         case "no-data":
-            return $gettext("No spectrum, map or image to show.");
+            return $gettext("No data to display.");
         case "missing":
             return $gettext("No longer available.");
     }
@@ -72,10 +70,7 @@ function openLabel(analysis: AnalysisHit): string {
 }
 
 function opensAnalysis(entry: NotInChartEntry): boolean {
-    return (
-        entry.analysis !== null &&
-        (entry.reason === "imaging" || entry.reason === "no-data")
-    );
+    return entry.analysis !== null && entry.reason === "no-data";
 }
 
 async function remove(key: string): Promise<void> {

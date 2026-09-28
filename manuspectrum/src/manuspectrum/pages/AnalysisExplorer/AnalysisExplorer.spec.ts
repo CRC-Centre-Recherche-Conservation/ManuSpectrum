@@ -45,6 +45,14 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 }));
 
 const KEY = "ch:00000000-0000-4000-8000-000000000001:-";
+const EMPTY_SYNTHESIS = {
+    coverage: [],
+    canvases: [],
+    techniques: [],
+    pairs: [],
+    elements: [],
+    unpublishedCount: 0,
+};
 let pinia: Pinia;
 
 beforeEach(() => {
@@ -54,11 +62,14 @@ beforeEach(() => {
     window.localStorage.clear();
     vi.stubGlobal(
         "fetch",
-        vi.fn(async (url: string) =>
-            url.includes("explorer-items")
+        vi.fn(async (url: string) => {
+            if (url.includes("explorer-synthesis")) {
+                return jsonResponse(EMPTY_SYNTHESIS);
+            }
+            return url.includes("explorer-items")
                 ? jsonResponse({ items: [], missing: [] })
-                : jsonResponse(searchResponse()),
-        ),
+                : jsonResponse(searchResponse());
+        }),
     );
 });
 
@@ -128,11 +139,14 @@ describe("AnalysisExplorer", () => {
     });
 
     it("reads the Selection once for every Compare view it opens", async () => {
-        const fetchMock = vi.fn(async (url: string) =>
-            url.includes("explorer-items")
+        const fetchMock = vi.fn(async (url: string) => {
+            if (url.includes("explorer-synthesis")) {
+                return jsonResponse(EMPTY_SYNTHESIS);
+            }
+            return url.includes("explorer-items")
                 ? jsonResponse({ items: [], missing: [KEY] })
-                : jsonResponse(searchResponse()),
-        );
+                : jsonResponse(searchResponse());
+        });
         vi.stubGlobal("fetch", fetchMock);
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
@@ -330,6 +344,41 @@ describe("AnalysisExplorer", () => {
         expect(document.activeElement?.classList.contains("promise")).toBe(
             true,
         );
+        wrapper.unmount();
+    });
+
+    it("moves the focus to the heading of the view chosen in the tabs, and back", async () => {
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        const tabs = wrapper.findAll(".view-tabs .tab");
+        await tabs[1].trigger("click");
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(document.activeElement?.id).toBe("explorer-compare-title");
+        await tabs[0].trigger("click");
+        await flushPromises();
+        expect(document.activeElement?.classList.contains("promise")).toBe(
+            true,
+        );
+        wrapper.unmount();
+    });
+
+    it("leaves the keyboard focus alone on a view the address opens", async () => {
+        window.history.replaceState(null, "", "/en/discover?view=compare");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+            attachTo: document.body,
+        });
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(wrapper.find(".compare-view").exists()).toBe(true);
+        expect(document.activeElement).toBe(document.body);
         wrapper.unmount();
     });
 

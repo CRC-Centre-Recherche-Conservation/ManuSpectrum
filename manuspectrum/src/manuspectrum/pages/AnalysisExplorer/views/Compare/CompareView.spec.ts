@@ -11,6 +11,8 @@ import {
     analysisHit,
     characterization,
     fileEntry,
+    imagingEntry,
+    technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { resetFakeGrids } from "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts";
@@ -26,6 +28,7 @@ import type { VueWrapper } from "@vue/test-utils";
 import type {
     FileEntry,
     Item,
+    SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 vi.mock("gridstack", async () =>
@@ -43,7 +46,10 @@ vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", async () =>
 );
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
-    generateArchesURL: () => "/en/api/explorer/items",
+    generateArchesURL: (name: string) =>
+        name.endsWith("synthesis")
+            ? "/en/api/explorer/synthesis"
+            : "/en/api/explorer/items",
 }));
 
 const XRF = "counts|energy (kev)|asc";
@@ -52,6 +58,30 @@ const FORS = "reflectance|wavelength|asc";
 const FTIR = "reflectance|wavenumber|desc";
 
 const SERIES_PATH = "/api/spectrum-preview/";
+const SYNTHESIS_PATH = "/en/api/explorer/synthesis";
+
+const SYNTHESIS: SynthesisResponse = {
+    coverage: [
+        {
+            canvas: "https://iiif.example/c1",
+            label: "f. 12r",
+            document: uuid(1),
+            counts: { xrf: 1 },
+        },
+    ],
+    canvases: [
+        {
+            canvas: "https://iiif.example/c1",
+            label: "f. 12r",
+            document: uuid(1),
+            selected: true,
+        },
+    ],
+    techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
+    pairs: [],
+    elements: [{ symbol: "Cu", level: null, count: 1 }],
+    unpublishedCount: 0,
+};
 
 function spectrum(n: number, axisKey: string, extra = {}): FileEntry {
     const base = fileEntry();
@@ -97,6 +127,12 @@ const EMPTY_ITEM = whole(4, []);
 const FORS_ITEM = whole(5, [spectrum(5, FORS)]);
 const FTIR_ITEM = whole(6, [spectrum(6, FTIR)]);
 const XRF_OTHER_ITEM = whole(7, [spectrum(7, XRF)]);
+const XRF_THIRD_ITEM = whole(9, [spectrum(9, XRF)]);
+const XRF_EIGHT_ITEM = whole(
+    10,
+    Array.from({ length: 8 }, (_, index) => spectrum(10 + index, XRF)),
+);
+const MAPS_ITEM = whole(8, [imagingEntry()]);
 
 const ITEMS = new Map(
     [
@@ -108,12 +144,16 @@ const ITEMS = new Map(
         FORS_ITEM,
         FTIR_ITEM,
         XRF_OTHER_ITEM,
+        MAPS_ITEM,
+        XRF_THIRD_ITEM,
+        XRF_EIGHT_ITEM,
     ].map((item) => [item.key, item]),
 );
 
 let pinia: Pinia;
 let announce: ReturnType<typeof vi.fn>;
 let fetchMock: ReturnType<typeof vi.fn>;
+let synthesis: SynthesisResponse;
 let wrapper: VueWrapper | null = null;
 
 beforeEach(() => {
@@ -122,7 +162,9 @@ beforeEach(() => {
     window.localStorage.clear();
     announce = vi.fn();
     resetPlotly();
+    synthesis = SYNTHESIS;
     fetchMock = vi.fn(async (url: string) => {
+        if (url.startsWith(SYNTHESIS_PATH)) return jsonResponse(synthesis);
         if (url.startsWith(SERIES_PATH)) {
             return jsonResponse({
                 x: [1, 2],
@@ -153,11 +195,23 @@ function select(...items: Item[]): void {
     useExplorerStore().addManyToBasket(items.map((item) => item.key));
 }
 
-/** The requests of the items API, the spectra left out. */
+/** The requests of the items API. */
 function itemCalls(): string[] {
     return fetchMock.mock.calls
         .map(([url]) => String(url))
-        .filter((url) => !url.startsWith(SERIES_PATH));
+        .filter((url) => url.startsWith("/en/api/explorer/items"));
+}
+
+function synthesisCalls(): string[] {
+    return fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((url) => url.startsWith(SYNTHESIS_PATH));
+}
+
+async function openTool(view: VueWrapper, kind: string): Promise<void> {
+    await view.find("button.tool-menu-button").trigger("click");
+    await view.find(`[role="menuitem"][data-tool="${kind}"]`).trigger("click");
+    await flushPromises();
 }
 
 function seriesCalls(): string[] {
@@ -190,7 +244,11 @@ function windowOf(view: VueWrapper, id: string) {
         .find((item) => item.attributes("data-window-id") === id)!;
 }
 
-function storedLayout(): { boxes: object; hidden: string[] } | null {
+function storedLayout(): {
+    boxes: Record<string, object>;
+    hidden: string[];
+    tools?: object[];
+} | null {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
     return raw === null ? null : JSON.parse(raw);
 }
@@ -248,7 +306,7 @@ describe("CompareView", () => {
             "XRF — energy / counts",
             "Micro-images",
             "Identified materials",
-            "Not in a chart",
+            "Without visualisation",
         ]);
         expect(
             plotly.react.mock.calls.flatMap(([, traces]) =>
@@ -262,7 +320,20 @@ describe("CompareView", () => {
             windowOf(view, "auto:characterizations").find("tbody th").text(),
         ).toBe("Characterization 1");
         expect(windowOf(view, "auto:not-in-chart").find(".reason").text()).toBe(
-            "No spectrum, map or image to show.",
+            "No data to display.",
+        );
+    });
+
+    it("puts the layered maps side by side in their own window, not among the items in no chart", async () => {
+        select(MAPS_ITEM, EMPTY_ITEM);
+        const view = await mountView();
+        expect(windowIds(view)).toEqual(["auto:maps", "auto:not-in-chart"]);
+        const maps = windowOf(view, "auto:maps");
+        expect(maps.find("h3").text()).toBe("Element maps");
+        expect(maps.find("figcaption").text()).toContain("A1");
+        expect(maps.find(".layer-picker label").text()).toBe("Element");
+        expect(windowOf(view, "auto:not-in-chart").findAll("li")).toHaveLength(
+            1,
         );
     });
 
@@ -344,6 +415,11 @@ describe("CompareView", () => {
         expect(windowIds(view)).toEqual(["auto:characterizations"]);
         expect(view.find(".hidden-windows button").text()).toBe(
             "Show XRF — energy / counts",
+        );
+        select(XRF_OTHER_ITEM);
+        await flushPromises();
+        expect(view.find(".hidden-windows .badge").text()).toBe(
+            "1 spectrum added",
         );
     });
 
@@ -459,7 +535,7 @@ describe("CompareView", () => {
         ]);
     });
 
-    it("announces new spectra in a hidden window, keeps it hidden and marks it", async () => {
+    it("counts the new spectra of a hidden window since it was hidden, announces them and keeps it hidden", async () => {
         select(XRF_ITEM, MATERIAL);
         const view = await mountView();
         await windowOf(view, `auto:xy:${XRF}`)
@@ -471,10 +547,27 @@ describe("CompareView", () => {
         await flushPromises();
         expect(windowIds(view)).toEqual(["auto:characterizations"]);
         expect(announce).toHaveBeenLastCalledWith(
-            "XRF — energy / counts: new spectra added to a hidden window",
+            "XRF — energy / counts: 1 spectrum added while the window was hidden.",
         );
+        expect(view.find(".hidden-windows .badge").text()).toBe(
+            "1 spectrum added",
+        );
+        select(XRF_THIRD_ITEM);
+        await flushPromises();
+        expect(announce).toHaveBeenLastCalledWith(
+            "XRF — energy / counts: 2 spectra added while the window was hidden.",
+        );
+        expect(view.find(".hidden-windows .badge").text()).toBe(
+            "2 spectra added",
+        );
+        useExplorerStore().removeFromBasket(XRF_OTHER_ITEM.key);
+        useExplorerStore().removeFromBasket(XRF_THIRD_ITEM.key);
+        await flushPromises();
+        expect(view.find(".hidden-windows .badge").exists()).toBe(false);
+        select(XRF_OTHER_ITEM);
+        await flushPromises();
         const show = view.find(".hidden-windows button");
-        expect(show.find(".badge").text()).toBe("new spectra");
+        expect(show.find(".badge").text()).toBe("1 spectrum added");
         await show.trigger("click");
         await flushPromises();
         await windowOf(view, `auto:xy:${XRF}`)
@@ -482,6 +575,27 @@ describe("CompareView", () => {
             .trigger("click");
         await flushPromises();
         expect(view.find(".hidden-windows .badge").exists()).toBe(false);
+    });
+
+    it("reads no series twice when an XY window of more than six spectra gains one or comes back", async () => {
+        select(XRF_EIGHT_ITEM);
+        const view = await mountView();
+        const seriesCalls = (): number =>
+            fetchMock.mock.calls.filter(([url]) =>
+                String(url).startsWith(SERIES_PATH),
+            ).length;
+        expect(seriesCalls()).toBe(8);
+        select(XRF_OTHER_ITEM);
+        await flushPromises();
+        expect(seriesCalls()).toBe(9);
+        await windowOf(view, `auto:xy:${XRF}`)
+            .find('[data-action="close"]')
+            .trigger("click");
+        await flushPromises();
+        await view.find(".hidden-windows button").trigger("click");
+        await flushPromises();
+        expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
+        expect(seriesCalls()).toBe(9);
     });
 
     it("does not redraw an XY window whose spectra did not change", async () => {
@@ -492,5 +606,159 @@ describe("CompareView", () => {
         select(MICRO_ITEM);
         await flushPromises();
         expect(plotly.react).toHaveBeenCalledTimes(drawings);
+    });
+
+    describe("tools", () => {
+        it("reads the synthesis of the Selection once, and offers the tools it has something for", async () => {
+            select(XRF_ITEM, MATERIAL);
+            const view = await mountView();
+            expect(synthesisCalls()).toHaveLength(1);
+            await view.find("button.tool-menu-button").trigger("click");
+            expect(
+                view.findAll('[role="menuitem"]').map((item) => item.text()),
+            ).toEqual(["Coverage matrix", "Periodic table", "Folio image"]);
+        });
+
+        it("opens a tool in a window at the end, kept with the layout", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            expect(windowIds(view)).toEqual([
+                `auto:xy:${XRF}`,
+                "tool:periodic:-",
+            ]);
+            expect(windowOf(view, "tool:periodic:-").find("h3").text()).toBe(
+                "Periodic table",
+            );
+            expect(
+                windowOf(view, "tool:periodic:-")
+                    .find('.grid button[aria-label="Cu, 1"]')
+                    .exists(),
+            ).toBe(true);
+            expect(storedLayout()?.tools).toEqual([
+                { kind: "periodic", params: {} },
+            ]);
+            expect(announce).toHaveBeenCalledWith(
+                "New window at the end: Periodic table",
+            );
+        });
+
+        it("opens the tools of the last visit again, in their places", async () => {
+            select(XRF_ITEM);
+            const box = { x: 0, y: 5, w: 12, h: 6 };
+            window.localStorage.setItem(
+                LAYOUT_STORAGE_KEY,
+                JSON.stringify({
+                    version: 2,
+                    boxes: { "tool:coverage:-": box },
+                    hidden: [],
+                    tools: [{ kind: "coverage", params: {} }],
+                }),
+            );
+            const view = await mountView();
+            expect(windowIds(view)).toContain("tool:coverage:-");
+            expect(storedLayout()?.boxes["tool:coverage:-"]).toEqual(box);
+            expect(
+                useExplorerStore().compare.tools.map((tool) => tool.id),
+            ).toEqual(["tool:coverage:-"]);
+        });
+
+        it("keeps a tool and its place when the Selection changes", async () => {
+            select(XRF_ITEM, MATERIAL);
+            const view = await mountView();
+            await openTool(view, "coverage");
+            useExplorerStore().removeFromBasket(MATERIAL.key);
+            await flushPromises();
+            expect(windowIds(view)).toContain("tool:coverage:-");
+            expect(storedLayout()?.boxes).toHaveProperty("tool:coverage:-");
+            expect(synthesisCalls()).toHaveLength(2);
+        });
+
+        it("closes a tool on « Close », unlike a window arranged from the Selection", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "coverage");
+            await windowOf(view, "tool:coverage:-")
+                .find('[data-action="close"]')
+                .trigger("click");
+            await flushPromises();
+            expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
+            expect(view.find(".hidden-windows").exists()).toBe(false);
+            expect(useExplorerStore().compare.tools).toEqual([]);
+            expect(storedLayout()?.tools).toBeUndefined();
+            expect(storedLayout()?.boxes).not.toHaveProperty("tool:coverage:-");
+            expect(announce).toHaveBeenLastCalledWith(
+                "Coverage matrix closed.",
+            );
+        });
+
+        it("gives the focus to « Hidden windows » when the last window shown is a tool closed", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "coverage");
+            await windowOf(view, `auto:xy:${XRF}`)
+                .find('[data-action="close"]')
+                .trigger("click");
+            await flushPromises();
+            await windowOf(view, "tool:coverage:-")
+                .find('[data-action="close"]')
+                .trigger("click");
+            await flushPromises();
+            expect(windowIds(view)).toEqual([]);
+            expect(document.activeElement).toBe(
+                view.find(".hidden-windows button").element,
+            );
+        });
+
+        it("says how many drafts the tools read while a tool is open", async () => {
+            synthesis = { ...SYNTHESIS, unpublishedCount: 2 };
+            select(XRF_ITEM);
+            const view = await mountView();
+            expect(view.find(".draft-banner").exists()).toBe(false);
+            await openTool(view, "periodic");
+            expect(view.find(".draft-banner").text()).toBe(
+                "The tools read 2 drafts, not published yet.",
+            );
+        });
+
+        it("keeps the last draft count while the next synthesis is read", async () => {
+            synthesis = { ...SYNTHESIS, unpublishedCount: 2 };
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            fetchMock.mockImplementation(() => new Promise(() => undefined));
+            select(MATERIAL);
+            await flushPromises();
+            expect(
+                windowOf(view, "tool:periodic:-").find(".loading").exists(),
+            ).toBe(true);
+            expect(view.find(".draft-banner").text()).toBe(
+                "The tools read 2 drafts, not published yet.",
+            );
+        });
+
+        it("keeps the tools open when the windows are rearranged", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            await view.find("button.rearrange").trigger("click");
+            await flushPromises();
+            expect(windowIds(view)).toContain("tool:periodic:-");
+            expect(storedLayout()?.tools).toEqual([
+                { kind: "periodic", params: {} },
+            ]);
+        });
+
+        it("drops a tool filter whose value left with the Selection", async () => {
+            select(XRF_ITEM);
+            const store = useExplorerStore();
+            store.setToolFilter("element", "Cu");
+            await mountView();
+            expect(store.compare.toolFilters.element).toBe("Cu");
+            synthesis = { ...SYNTHESIS, elements: [] };
+            select(MATERIAL);
+            await flushPromises();
+            expect(store.compare.toolFilters.element).toBeNull();
+        });
     });
 });

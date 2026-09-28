@@ -11,7 +11,8 @@ import {
     autoWindows,
     keepUnchangedCurves,
     windowIdsOf,
-    xyWindowsGaining,
+    xyCurvesGained,
+    xySpectraCount,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 import type {
@@ -209,21 +210,58 @@ describe("autoWindows", () => {
     });
 
     it("lists what no window draws, with the reason, once per item", () => {
-        const layers = whole(1, [imagingEntry()]);
         const empty = whole(2, []);
+        const blank = whole(3, [imagingEntry({ layers: [] })]);
         const gone = `an:${uuid(199)}:-`;
-        const windows = derive([layers, empty], undefined, [gone]);
+        const windows = derive([empty, blank], undefined, [gone]);
         expect(windowIdsOf(windows)).toEqual(["auto:not-in-chart"]);
         const [window] = windows;
         expect(
             window.kind === "not-in-chart" &&
                 window.entries.map((entry) => [entry.key, entry.reason]),
         ).toEqual([
-            [layers.key, "imaging"],
             [empty.key, "no-data"],
+            [blank.key, "no-data"],
             [gone, "missing"],
         ]);
-        expect(window.keys).toEqual([layers.key, empty.key, gone]);
+        expect(window.keys).toEqual([empty.key, blank.key, gone]);
+    });
+
+    it("puts every layered map of the Selection in one window, after the XY windows, in slot order", () => {
+        const hsi = imagingEntry({ id: `${uuid(102)}:imaging:0`, name: "HSI" });
+        const layers = whole(1, [spectrum(1, XRF), imagingEntry()]);
+        const cube = whole(2, [hsi]);
+        const images = whole(3, [micro(1)]);
+        const windows = derive([images, cube, layers], [0, 2, 1]);
+        expect(windowIdsOf(windows)).toEqual([
+            `auto:xy:${XRF}`,
+            "auto:maps",
+            "auto:micro",
+        ]);
+        const maps = windows[1];
+        expect(
+            maps.kind === "maps" &&
+                maps.maps.map((line) => [
+                    line.slot,
+                    line.file.name,
+                    line.named,
+                ]),
+        ).toEqual([
+            [1, "maXRF f. 1v", null],
+            [2, "HSI", null],
+        ]);
+        expect(maps.keys).toEqual([layers.key, cube.key]);
+        expect(maps.kind === "maps" && maps.folded).toBe(false);
+    });
+
+    it("opens the maps window folded when three XY windows are already drawn", () => {
+        const items = [XRF, RAMAN, FORS].map((axisKey, n) =>
+            whole(n + 1, [spectrum(n + 1, axisKey)]),
+        );
+        const maps = derive([...items, whole(4, [imagingEntry()])]).find(
+            (window) => window.kind === "maps",
+        );
+        expect(maps?.kind === "maps" && maps.folded).toBe(true);
     });
 
     it("reads the older one-file and one-layer keys into the same windows", () => {
@@ -273,10 +311,16 @@ describe("autoWindows", () => {
         const windows = derive([readable, image, raw, other, layer]);
         expect(windowIdsOf(windows)).toEqual([
             `auto:xy:${XRF}`,
+            "auto:maps",
             "auto:micro",
             "auto:not-in-chart",
         ]);
-        const notInChart = windows[2];
+        const maps = windows[1];
+        expect(
+            maps.kind === "maps" &&
+                maps.maps.map((line) => [line.key, line.named]),
+        ).toEqual([[layer.key, 1]]);
+        const notInChart = windows[3];
         expect(
             notInChart.kind === "not-in-chart" &&
                 notInChart.entries.map((entry) => [
@@ -287,7 +331,6 @@ describe("autoWindows", () => {
         ).toEqual([
             [raw.key, "raw-file", "S1.mca"],
             [other.key, "file", "notes.pdf"],
-            [layer.key, "imaging", "maXRF f. 1v"],
         ]);
     });
 
@@ -342,18 +385,38 @@ describe("keepUnchangedCurves", () => {
     });
 });
 
-describe("xyWindowsGaining", () => {
-    it("names the XY windows that hold a spectrum they did not hold", () => {
+describe("xyCurvesGained", () => {
+    it("counts, per XY window, the spectra it holds that its namesake did not hold", () => {
         const first = whole(1, [spectrum(1, XRF)]);
         const second = whole(2, [spectrum(2, RAMAN)]);
-        const third = whole(3, [spectrum(3, XRF), micro(1)]);
+        const third = whole(3, [spectrum(3, XRF), spectrum(4, XRF), micro(1)]);
         const before = derive([first, second]);
-        expect(
-            xyWindowsGaining(before, derive([first, second, third])),
-        ).toEqual([`auto:xy:${XRF}`]);
-        expect(xyWindowsGaining(before, derive([first]))).toEqual([]);
-        expect(xyWindowsGaining([], derive([first]))).toEqual([
-            `auto:xy:${XRF}`,
+        expect(xyCurvesGained(before, derive([first, second, third]))).toEqual(
+            new Map([[`auto:xy:${XRF}`, 2]]),
+        );
+        expect(xyCurvesGained(before, derive([first])).size).toBe(0);
+        expect(xyCurvesGained(before, derive([second, third], [1, 2]))).toEqual(
+            new Map([[`auto:xy:${XRF}`, 2]]),
+        );
+        expect(xyCurvesGained([], derive([first]))).toEqual(
+            new Map([[`auto:xy:${XRF}`, 1]]),
+        );
+    });
+});
+
+describe("xySpectraCount", () => {
+    it("counts the spectra with a preview of every XY window", () => {
+        const unread = fileEntry({
+            id: uuid(790),
+            name: "S90.csv",
+            previewUrl: null,
+            viewer: { ...fileEntry().viewer, axisKey: XRF },
+        });
+        const windows = derive([
+            whole(1, [spectrum(1, XRF), spectrum(2, XRF), unread]),
+            whole(2, [spectrum(3, RAMAN), micro(1)]),
         ]);
+        expect(xySpectraCount(windows)).toBe(3);
+        expect(xySpectraCount([])).toBe(0);
     });
 });

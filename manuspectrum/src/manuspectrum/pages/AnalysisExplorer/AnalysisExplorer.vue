@@ -113,9 +113,14 @@ provide(ANNOUNCE_KEY, announce);
 provide(MIRADOR_URL_KEY, props.miradorUrl);
 provide(SELECTION_ITEMS_KEY, sharedSelectionItems);
 
-/** A new screen or another document; the same document named again by the address is neither. */
+/**
+ * Another view, a new Corpus screen or another document moves the focus to
+ * the heading shown next, whether the reader or the history changed it; the
+ * screen the address opens on first render keeps the page's focus, and the
+ * same document named again by the address is no change.
+ */
 watch(
-    () => `${store.corpusScreen}:${store.document?.id ?? ""}`,
+    () => `${store.view}:${store.corpusScreen}:${store.document?.id ?? ""}`,
     () => {
         screenFocusPending.value = true;
     },

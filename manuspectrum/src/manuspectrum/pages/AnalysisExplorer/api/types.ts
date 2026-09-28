@@ -398,6 +398,68 @@ export interface ItemsResponse {
     missing: string[];
 }
 
+/** A row of the coverage matrix: the Selection's analyses on one canvas, by technique id. */
+export interface SynthesisCoverage {
+    canvas: string;
+    /** The canvas label, prefixed with its document's name when the placed canvases span several documents. */
+    label: string;
+    /** Id of the document whose manifest lists the canvas. */
+    document: string;
+    counts: Record<string, number>;
+}
+
+/** A canvas an item of the synthesis is placed on, labelled as in `SynthesisCoverage`. */
+export interface SynthesisCanvas {
+    canvas: string;
+    /** Id of the document whose manifest lists the canvas. */
+    document: string;
+    label: string;
+    /** Whether an item of the Selection itself (an analysis or a `ch:` material) is placed on it, not only a material citing one. */
+    selected: boolean;
+}
+
+/** An element of an identified material; `symbol` null when its labels give none. */
+export type SynthesisElementRef = ValueRef & { symbol: string | null };
+
+/** One colour × material value over the identified materials carrying both (colour null: none given). */
+export interface SynthesisPair {
+    colour: ValueRef | null;
+    material: ValueRef;
+    elements: SynthesisElementRef[];
+    /** Canvas ids, in document then page order. */
+    canvases: string[];
+    confidenceBest: RankedValue | null;
+    /** Number of identified materials. */
+    count: number;
+    /** `[canvas, technique id]` of each identified material: its canvases × the techniques of its evidence analyses in the Selection; by canvas, then technique label. */
+    cells: [string, string][];
+}
+
+/** An element with a symbol, counted once per identified material naming it, with its best level. */
+export interface SynthesisElement {
+    symbol: string;
+    level: RankedValue | null;
+    count: number;
+}
+
+/**
+ * Body of `GET synthesis?ids=`: the Compare tools' synthesis of the Selection
+ * (D60). The identified materials are those of its `ch:` keys and the
+ * visible ones citing one of its analyses.
+ */
+export interface SynthesisResponse {
+    coverage: SynthesisCoverage[];
+    /** Every canvas an analysis (with or without technique) or identified material is placed on, in document then page order; the folio image offers the `selected` ones. */
+    canvases: SynthesisCanvas[];
+    /** The techniques `coverage` counts, by label. */
+    techniques: Technique[];
+    /** Most frequent first. */
+    pairs: SynthesisPair[];
+    /** Most frequent first. */
+    elements: SynthesisElement[];
+    unpublishedCount: number;
+}
+
 /** Body of `GET /api/spectrum-preview/<file_id>?n=` (already through its renderer configuration). */
 export interface Series {
     x: number[];
@@ -660,4 +722,44 @@ export const SHAPE_KEYS = {
         seriesCsv: true,
         export: true,
     } satisfies Record<keyof ShareLinks, true>,
+    SynthesisResponse: {
+        coverage: true,
+        canvases: true,
+        techniques: true,
+        pairs: true,
+        elements: true,
+        unpublishedCount: true,
+    } satisfies Record<keyof SynthesisResponse, true>,
+    SynthesisCoverage: {
+        canvas: true,
+        label: true,
+        document: true,
+        counts: true,
+    } satisfies Record<keyof SynthesisCoverage, true>,
+    SynthesisCanvas: {
+        canvas: true,
+        document: true,
+        label: true,
+        selected: true,
+    } satisfies Record<keyof SynthesisCanvas, true>,
+    SynthesisPair: {
+        colour: true,
+        material: true,
+        elements: true,
+        canvases: true,
+        confidenceBest: true,
+        count: true,
+        cells: true,
+    } satisfies Record<keyof SynthesisPair, true>,
+    SynthesisElementRef: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof SynthesisElementRef, true>,
+    SynthesisElement: {
+        symbol: true,
+        level: true,
+        count: true,
+    } satisfies Record<keyof SynthesisElement, true>,
 } as const;

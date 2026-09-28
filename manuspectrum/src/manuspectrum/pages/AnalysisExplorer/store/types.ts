@@ -82,12 +82,7 @@ export interface BasketItem {
     slot: number;
 }
 
-export type ToolKind =
-    | "coverage"
-    | "colour-material"
-    | "periodic"
-    | "folio"
-    | "analysis-list";
+export type ToolKind = "coverage" | "colour-material" | "periodic" | "folio";
 
 export interface ToolWindow {
     id: string;
