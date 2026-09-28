@@ -33,8 +33,11 @@ import type { FilterKey } from "@/manuspectrum/pages/AnalysisExplorer/views/Comp
  * Explorer: a click sets or clears the tool's own filter, and each tool
  * shows a « Filtered by … × » chip per filter of the other two that
  * restricts it, which clears it. The folio image shows the Selection's
- * items on one canvas. While the synthesis is read, when it failed (Retry)
- * or when nothing in the Selection is visible, the window says so.
+ * items on one of the canvases they are placed on. When the synthesis
+ * failed the window shows only that, with Retry; when nothing in the
+ * Selection is visible it says so. While the synthesis is read the window
+ * says so and is busy: a previous synthesis stays shown, but sets no
+ * filter.
  */
 const props = defineProps<{
     kind: ToolKind;
@@ -58,12 +61,13 @@ const view = computed(() =>
 const restricting = computed(() =>
     restrictingFilters(props.kind, filters.value),
 );
+const loading = computed(() => props.status === "loading");
 const canvasLabels = computed(
     () =>
         new Map(
-            (props.synthesis?.coverage ?? []).map((row) => [
-                row.canvas,
-                row.label,
+            (props.synthesis?.canvases ?? []).map((entry) => [
+                entry.canvas,
+                entry.label,
             ]),
         ),
 );
@@ -77,6 +81,8 @@ const emptyPayload = computed(() => {
             return synthesis.pairs.length === 0;
         case "periodic":
             return synthesis.elements.length === 0;
+        case "folio":
+            return synthesis.canvases.length === 0;
         default:
             return synthesis.coverage.length === 0;
     }
@@ -89,6 +95,8 @@ const emptyView = computed(() => {
             return shown.pairs.length === 0;
         case "periodic":
             return shown.elements.length === 0;
+        case "folio":
+            return false;
         default:
             return shown.coverage.length === 0;
     }
@@ -117,6 +125,7 @@ function removeLabel(key: FilterKey): string {
 }
 
 function setFilter<K extends FilterKey>(key: K, value: ToolFilters[K]): void {
+    if (loading.value) return;
     const before = filterText(key);
     store.setToolFilter(key, value);
     announce(
@@ -164,7 +173,10 @@ function onElement({ symbol }: { symbol: string }): void {
 </script>
 
 <template>
-    <div class="tool-window-body">
+    <div
+        class="tool-window-body"
+        :aria-busy="loading ? 'true' : undefined"
+    >
         <UnavailableState
             v-if="props.status === 'error'"
             status="error"
@@ -180,14 +192,20 @@ function onElement({ symbol }: { symbol: string }): void {
             }}</span>
         </p>
         <p
-            v-else-if="!props.synthesis || !view"
+            v-else-if="loading || !view"
             class="loading"
             role="status"
         >
             <LoadingSpinner />
             <span>{{ $gettext("Reading the Selection…") }}</span>
         </p>
-        <template v-if="props.status !== 'unavailable' && view">
+        <template
+            v-if="
+                props.status !== 'unavailable' &&
+                props.status !== 'error' &&
+                view
+            "
+        >
             <ul
                 v-if="restricting.length > 0"
                 class="chips"
@@ -244,7 +262,7 @@ function onElement({ symbol }: { symbol: string }): void {
             />
             <FolioTool
                 v-else-if="props.kind === 'folio'"
-                :rows="props.synthesis!.coverage"
+                :canvases="props.synthesis!.canvases"
                 :slots="slots"
             />
         </template>

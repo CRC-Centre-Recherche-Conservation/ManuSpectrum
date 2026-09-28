@@ -31,29 +31,37 @@ import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injecti
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { folioMarks } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 
-import type { SynthesisCoverage } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Feature } from "geojson";
+import type { SynthesisCanvas } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { FolioMark } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 
 const MAX_ZOOM = 8;
 const INITIAL_ZOOM = 2;
 const MARKER_SIZE = 28;
+/** Advance of one character of the marker's 0.625rem monospace label, rounded up, in px. */
+const MARKER_CHAR_WIDTH = 6.25;
+/** The marker's inline padding and border, in px. */
+const MARKER_INSET = 12;
+const FRAME_WEIGHT = 2;
+const HALO_WEIGHT = 5;
 const NO_IMAGE_PADDING = 0.5;
 /** Slots drawn in a series colour (A1…A8); the others in ink. */
 const SERIES_SLOTS = 8;
 
 /**
- * The folio image tool: one canvas of the Selection's coverage (picked
- * among `rows`, the first at first) with the Selection's analyses and
- * identified materials placed on it, each marked with its A-labels in the
- * colour of its first slot (ink from A9) and its zones framed; the same
+ * The folio image tool: one of the canvases the Selection's items are
+ * placed on (picked among `canvases`, the first at first) with the
+ * Selection's analyses and identified materials placed on it, each marked
+ * with its A-labels in the colour of its first slot (ink from A9) and its
+ * zones framed in that colour over a halo; the same
  * marks are listed under the image. The page comes from the document
  * payload (`useDocument`, the tab memo the document screen shares). The
  * markers are labels, not controls: the list is what assistive
  * technologies read.
  */
 const props = defineProps<{
-    rows: readonly SynthesisCoverage[];
+    canvases: readonly SynthesisCanvas[];
     /** Slots of the Selection's analyses and identified materials, by id (`selectionSlots`). */
     slots: ReadonlyMap<string, readonly number[]>;
 }>();
@@ -64,7 +72,7 @@ const { $gettext } = useGettext();
 const pickerId = useId();
 const host = useTemplateRef<HTMLDivElement>("host");
 
-const chosen = ref<string | null>(props.rows[0]?.canvas ?? null);
+const chosen = ref<string | null>(props.canvases[0]?.canvas ?? null);
 const pageFailed = ref(false);
 
 // Leaflet objects live outside Vue reactivity.
@@ -75,8 +83,8 @@ let fitted: string | null = null;
 
 const row = computed(
     () =>
-        props.rows.find((entry) => entry.canvas === chosen.value) ??
-        props.rows[0] ??
+        props.canvases.find((entry) => entry.canvas === chosen.value) ??
+        props.canvases[0] ??
         null,
 );
 const documentRequest = useDocument(() => row.value?.document ?? null);
@@ -99,7 +107,7 @@ const marks = computed<FolioMark[]>(() =>
 const hasImage = computed(() => Boolean(canvas.value?.image.service));
 
 watch(
-    () => props.rows.map((entry) => entry.canvas),
+    () => props.canvases.map((entry) => entry.canvas),
     (canvases) => {
         if (chosen.value === null || !canvases.includes(chosen.value)) {
             chosen.value = canvases[0] ?? null;
@@ -165,19 +173,42 @@ function drawPage(): void {
     });
 }
 
+/** A marker as wide as its label (at least a disc), centred on its point. */
 function markerIcon(mark: FolioMark): L.DivIcon {
+    const text = slotsText(mark);
     const element = document.createElement("span");
     element.className = `folio-tool-marker ${slotClass(mark)}`;
-    element.textContent = slotsText(mark);
+    element.textContent = text;
     element.setAttribute("aria-hidden", "true");
+    const width = Math.max(
+        MARKER_SIZE,
+        Math.ceil(text.length * MARKER_CHAR_WIDTH + MARKER_INSET),
+    );
     return L.divIcon({
         html: element,
         className: "folio-tool-marker-host",
-        iconSize: [MARKER_SIZE, MARKER_SIZE],
+        iconSize: [width, MARKER_SIZE],
+        iconAnchor: [width / 2, MARKER_SIZE / 2],
     });
 }
 
-/** A marker on each item's first zone with an extent, else its first point; every extent framed. */
+/** The zone `frames` drawn with `className` at `weight`. */
+function frameLayer(
+    frames: Feature[],
+    className: string,
+    weight: number,
+): L.GeoJSON {
+    return L.geoJSON(frames, {
+        style: () => ({
+            className,
+            weight,
+            fill: false,
+            interactive: false,
+        }),
+    });
+}
+
+/** A marker on each item's first zone with an extent, else its first point; every extent framed in the slot colour over a halo. */
 function drawMarks(): void {
     if (!map) return;
     drawn?.remove();
@@ -204,15 +235,13 @@ function drawMarks(): void {
                     : shapeFeature(shape, { id: mark.id });
             return feature ? [feature] : [];
         });
+        drawn.addLayer(frameLayer(frames, "folio-tool-halo", HALO_WEIGHT));
         drawn.addLayer(
-            L.geoJSON(frames, {
-                style: () => ({
-                    className: `folio-tool-frame ${slotClass(mark)}`,
-                    weight: 2,
-                    fill: false,
-                    interactive: false,
-                }),
-            }),
+            frameLayer(
+                frames,
+                `folio-tool-frame ${slotClass(mark)}`,
+                FRAME_WEIGHT,
+            ),
         );
     }
     const key = canvas.value?.id ?? null;
@@ -242,7 +271,7 @@ function wholePage(): void {
                 @change="onPick"
             >
                 <option
-                    v-for="entry in props.rows"
+                    v-for="entry in props.canvases"
                     :key="entry.canvas"
                     :value="entry.canvas"
                 >
@@ -487,8 +516,14 @@ function wholePage(): void {
     white-space: nowrap;
 }
 
-.folio-tool :deep(.folio-tool-frame) {
+.folio-tool :deep(.folio-tool-halo) {
     stroke: var(--surface);
+    stroke-opacity: 0.9;
+}
+
+.folio-tool :deep(.folio-tool-frame) {
+    stroke: var(--ink);
+    stroke-opacity: 1;
     stroke-dasharray: 4 4;
 }
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
+import L from "leaflet";
 import { ref } from "vue";
 
 import FolioTool from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue";
@@ -93,9 +94,9 @@ const DOCUMENT: DocumentPayload = documentPayload({
         }),
     ],
 });
-const ROWS = [
-    { canvas: C1, label: "f. 12r", document: uuid(1), counts: { x: 1 } },
-    { canvas: C2, label: "f. 12v", document: uuid(1), counts: { x: 1 } },
+const CANVASES = [
+    { canvas: C1, label: "f. 12r", document: uuid(1) },
+    { canvas: C2, label: "f. 12v", document: uuid(1) },
 ];
 const SLOTS = new Map([
     [uuid(101), [0]],
@@ -120,10 +121,10 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
-async function mountTool(): Promise<VueWrapper> {
+async function mountTool(slots = SLOTS): Promise<VueWrapper> {
     wrapper = mount(FolioTool, {
         attachTo: sizedContainer(),
-        props: { rows: ROWS, slots: SLOTS },
+        props: { canvases: CANVASES, slots },
         global: { provide: { [WINDOW_RESIZE_KEY as symbol]: ref(0) } },
     });
     await flushPromises();
@@ -141,7 +142,7 @@ function listed(view: VueWrapper): string[][] {
 }
 
 describe("FolioTool", () => {
-    it("opens on the first canvas of the coverage and reads its document once", async () => {
+    it("opens on the first canvas placed and reads its document once", async () => {
         const view = await mountTool();
         const picker = view.find("select");
         expect(picker.findAll("option").map((option) => option.text())).toEqual(
@@ -170,6 +171,34 @@ describe("FolioTool", () => {
         expect(view.findAll(".folio-tool-frame")).toHaveLength(1);
     });
 
+    it("frames a zone in its slot colour over a halo", async () => {
+        const view = await mountTool();
+        const halo = view.find("path.folio-tool-halo");
+        const frame = view.find("path.folio-tool-frame");
+        expect(frame.classes()).toContain("slot-1");
+        expect(view.findAll("path.folio-tool-halo")).toHaveLength(1);
+        expect(Number(halo.attributes("stroke-width"))).toBeGreaterThan(
+            Number(frame.attributes("stroke-width")),
+        );
+    });
+
+    it("sizes and centres a marker on the width of its label", async () => {
+        const view = await mountTool(
+            new Map([
+                [uuid(101), [0, 11]],
+                [uuid(501), [2]],
+            ]),
+        );
+        const [wide, narrow] = view
+            .findAll(".folio-tool-marker-host")
+            .map((host) => host.element as HTMLElement);
+        expect(wide.textContent).toBe("A1 A12");
+        const width = Number.parseFloat(wide.style.width);
+        expect(width).toBeGreaterThan(Number.parseFloat(narrow.style.width));
+        expect(wide.style.marginLeft).toBe(`${-width / 2}px`);
+        expect(narrow.style.width).toBe("28px");
+    });
+
     it("shows another canvas when it is picked, without reading the document again", async () => {
         const view = await mountTool();
         await view.find("select").setValue(C2);
@@ -188,5 +217,25 @@ describe("FolioTool", () => {
         await view.find(".unavailable-state .retry").trigger("click");
         await flushPromises();
         expect(listed(view)).toHaveLength(2);
+    });
+
+    it("takes the map down with its page when the window closes", async () => {
+        iiif = stubIiifLayer({ laid: true });
+        const view = await mountTool();
+        const page = iiif.mock.results[0].value;
+        const removeLayer = vi.spyOn(L.Map.prototype, "removeLayer");
+        const removeMap = vi.spyOn(L.Map.prototype, "remove");
+        view.unmount();
+        wrapper = null;
+        const pageRemoved = removeLayer.mock.calls.findIndex(
+            ([layer]) => layer === page,
+        );
+        expect(pageRemoved).toBeGreaterThanOrEqual(0);
+        expect(removeMap).toHaveBeenCalledTimes(1);
+        expect(removeLayer.mock.invocationCallOrder[pageRemoved]).toBeLessThan(
+            removeMap.mock.invocationCallOrder[0],
+        );
+        removeLayer.mockRestore();
+        removeMap.mockRestore();
     });
 });

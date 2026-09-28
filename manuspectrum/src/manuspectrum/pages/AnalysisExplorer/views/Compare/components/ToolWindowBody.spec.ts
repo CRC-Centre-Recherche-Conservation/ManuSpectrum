@@ -22,6 +22,11 @@ const SYNTHESIS: SynthesisResponse = {
         { canvas: "c1", label: "f. 1r", document: "d", counts: { xrf: 2 } },
         { canvas: "c2", label: "f. 1v", document: "d", counts: { xrf: 1 } },
     ],
+    canvases: [
+        { canvas: "c1", label: "f. 1r", document: "d" },
+        { canvas: "c2", label: "f. 1v", document: "d" },
+        { canvas: "c3", label: "f. 2r", document: "d" },
+    ],
     techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
     pairs: [
         {
@@ -33,9 +38,10 @@ const SYNTHESIS: SynthesisResponse = {
                     symbol: "Cu",
                 },
             ],
-            canvases: ["c1"],
+            canvases: ["c1", "c3"],
             confidenceBest: null,
             count: 2,
+            techniques: ["xrf"],
         },
         {
             colour: null,
@@ -49,6 +55,7 @@ const SYNTHESIS: SynthesisResponse = {
             canvases: ["c2"],
             confidenceBest: null,
             count: 1,
+            techniques: ["xrf"],
         },
     ],
     elements: [
@@ -75,6 +82,7 @@ function mountBody(props: Partial<BodyProps> & Pick<BodyProps, "kind">) {
         global: {
             plugins: [pinia],
             provide: { [ANNOUNCE_KEY as symbol]: announce },
+            stubs: { FolioTool: true },
         },
     });
 }
@@ -182,5 +190,43 @@ describe("ToolWindowBody", () => {
         expect(gone.find(".empty").text()).toBe(
             "Nothing in the Selection is available any more.",
         );
+    });
+
+    it("names the folios of a pair from every canvas the Selection is placed on", () => {
+        const table = mountBody({ kind: "colour-material" });
+        expect(table.findAll("tbody tr")[0].findAll("td")[2].text()).toBe(
+            "f. 1r, f. 2r",
+        );
+    });
+
+    it("gives the folio image every placed canvas, with or without coverage", () => {
+        const folio = mountBody({
+            kind: "folio",
+            synthesis: { ...SYNTHESIS, coverage: [] },
+        });
+        expect(folio.find(".empty").exists()).toBe(false);
+        expect(
+            folio.findComponent({ name: "FolioTool" }).props("canvases"),
+        ).toEqual(SYNTHESIS.canvases);
+    });
+
+    it("shows only the failure and Retry when the synthesis failed, whatever it showed before", () => {
+        const failed = mountBody({ kind: "periodic", status: "error" });
+        expect(failed.find(".unavailable-state").exists()).toBe(true);
+        expect(failed.find(".periodic-table").exists()).toBe(false);
+        expect(failed.find(".chips").exists()).toBe(false);
+    });
+
+    it("says the synthesis is being read over the previous one, and takes no filter from it", async () => {
+        const periodic = mountBody({ kind: "periodic", status: "loading" });
+        expect(periodic.find(".loading").text()).toBe("Reading the Selection…");
+        expect(periodic.find(".tool-window-body").attributes("aria-busy")).toBe(
+            "true",
+        );
+        await periodic
+            .find('.grid button[aria-label="Cu, 2"]')
+            .trigger("click");
+        expect(useExplorerStore().compare.toolFilters.element).toBeNull();
+        expect(announce).not.toHaveBeenCalled();
     });
 });
