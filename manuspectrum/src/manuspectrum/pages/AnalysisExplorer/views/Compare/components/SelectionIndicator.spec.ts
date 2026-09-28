@@ -214,6 +214,36 @@ describe("SelectionIndicator", () => {
         expect(view.find(".panel").exists()).toBe(false);
     });
 
+    it("folds on Escape with the focus on its button, opened by a click or a hover, without clearing", async () => {
+        vi.useFakeTimers();
+        const { view, linked } = mountIndicator();
+        linked.toggle(elementNode("Cu"));
+        await button(view).trigger("click");
+        (button(view).element as HTMLButtonElement).focus();
+        await button(view).trigger("keydown", { key: "Escape" });
+        expect(view.find(".panel").exists()).toBe(false);
+        expect(linked.selection.value).toEqual([elementNode("Cu")]);
+
+        await view
+            .find(".selection-indicator")
+            .trigger("pointerenter", { pointerType: "mouse" });
+        await vi.advanceTimersByTimeAsync(600);
+        expect(view.find(".panel").exists()).toBe(true);
+        (button(view).element as HTMLButtonElement).focus();
+        await button(view).trigger("keydown", { key: "Escape" });
+        expect(view.find(".panel").exists()).toBe(false);
+        expect(linked.selection.value).toEqual([elementNode("Cu")]);
+        expect(document.activeElement).toBe(button(view).element);
+    });
+
+    it("leaves Escape on its folded button to the linked selection, which clears", async () => {
+        const { view, linked } = mountIndicator();
+        linked.toggle(elementNode("Cu"));
+        await view.vm.$nextTick();
+        await button(view).trigger("keydown", { key: "Escape" });
+        expect(linked.selection.value).toEqual([]);
+    });
+
     it("opens after a long hover of a mouse and closes when it leaves", async () => {
         vi.useFakeTimers();
         const { view } = mountIndicator();

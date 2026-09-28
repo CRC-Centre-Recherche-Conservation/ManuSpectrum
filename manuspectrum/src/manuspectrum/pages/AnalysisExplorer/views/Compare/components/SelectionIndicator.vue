@@ -48,8 +48,9 @@ const COUNTED_KINDS: readonly NodeKind[] = ["an", "ch", "file", "cv", "el"];
  * selected nodes as chips that unselect them, counts what they link by
  * kind, offers « Clear all » and « Open in the document » (a menu of
  * documents when the linked records span several). Without a selection it
- * says how to select. Escape or a pointer down outside folds it; Escape
- * there does not clear the selection.
+ * says how to select. Escape with the focus on the button or in the panel,
+ * or a pointer down outside, folds it; that Escape does not clear the
+ * selection.
  */
 const linked = inject(LINKED_SELECTION_KEY)!;
 
@@ -205,8 +206,10 @@ function onFocusOut(event: FocusEvent): void {
     }
 }
 
-function onPanelKeydown(event: KeyboardEvent): void {
-    if (event.key !== "Escape" || event.defaultPrevented) return;
+function onKeydown(event: KeyboardEvent): void {
+    if (event.key !== "Escape" || event.defaultPrevented || !open.value) {
+        return;
+    }
     event.preventDefault();
     hide(true);
 }
@@ -242,6 +245,7 @@ function openTarget(target: DocumentTarget): void {
         @pointerenter="onPointerEnter"
         @pointerleave="onPointerLeave"
         @focusout="onFocusOut"
+        @keydown="onKeydown"
     >
         <button
             :id="buttonId"
@@ -267,7 +271,6 @@ function openTarget(target: DocumentTarget): void {
             class="panel"
             role="group"
             :aria-labelledby="buttonId"
-            @keydown="onPanelKeydown"
         >
             <p
                 v-if="chips.length === 0"
