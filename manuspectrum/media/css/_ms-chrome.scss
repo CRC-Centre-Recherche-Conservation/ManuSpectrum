@@ -120,6 +120,16 @@
     --linked-tint: var(--bg-alt);
     --linked-fade: 0.35;
     --linked-bar: 0.1875rem;
+    // Compare's counted tables (coverage matrix, periodic table): a blue heat
+    // ramp of four steps, each with the text drawn on it (≥ 4.5:1).
+    --heat-1: #dde6fb;
+    --heat-2: #b3c7f5;
+    --heat-3: #7c9ded;
+    --heat-4: #1d4ed8;
+    --heat-1-on: var(--ink);
+    --heat-2-on: var(--ink);
+    --heat-3-on: var(--ink);
+    --heat-4-on: #ffffff;
 
     // Typography
     --font-display: 'Cormorant Garamond', Georgia, serif;

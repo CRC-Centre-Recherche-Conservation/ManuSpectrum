@@ -2,7 +2,10 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import HeatLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HeatLegend.vue";
+
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { heatLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/heat.ts";
 import { elementNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     PERIODIC_TABLE,
@@ -14,10 +17,13 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
 /**
  * The elements of the Selection's identified materials on the standard
  * 18-column periodic table: an element found is a toggle button showing its
- * count, named « Cu, 5 », pressed while it is selected (`el:`), marked
+ * count (the identified materials naming it) on the blue heat ramp
+ * (`heatLevel`; the legend under the table says what the number counts),
+ * named « Cu, 5 », pressed while it is selected (`el:`), marked
  * by how it stands to the linked selection and to the node a mouse
- * previews; a click adds it to the selection or removes it. The others are
- * greyed and left to assistive technologies. An element the table does not
+ * previews (an unlinked element keeps a quarter of its shade); a click adds
+ * it to the selection or removes it. The others are greyed on `--bg-alt`
+ * and left to assistive technologies. An element the table does not
  * hold is listed after it. In a window narrower than the table's 18
  * columns (34rem) the table gives way to a list of the elements found,
  * most frequent first, with their best level.
@@ -34,9 +40,16 @@ const marks = useLinkedMarks();
 const bySymbol = computed(
     () => new Map(props.elements.map((element) => [element.symbol, element])),
 );
+const maxCount = computed(() =>
+    Math.max(0, ...props.elements.map((element) => element.count)),
+);
 const outside = computed(() =>
     props.elements.filter((element) => placeOf(element.symbol) === null),
 );
+
+function heatOf(element: SynthesisElement): number {
+    return heatLevel(element.count, maxCount.value);
+}
 
 function elementLabel(element: SynthesisElement): string {
     return `${element.symbol}, ${element.count}`;
@@ -64,6 +77,7 @@ function toggle(symbol: string): void {
                     class="cell found"
                     :class="[`row-${place.row}`, `column-${place.column}`]"
                     :aria-label="elementLabel(bySymbol.get(place.symbol)!)"
+                    :data-heat="heatOf(bySymbol.get(place.symbol)!)"
                     :data-rel="marks.rel(elementNode(place.symbol))"
                     :data-preview="marks.previewRel(elementNode(place.symbol))"
                     :aria-pressed="marks.pressed(elementNode(place.symbol))"
@@ -101,6 +115,7 @@ function toggle(symbol: string): void {
                     type="button"
                     class="found"
                     :aria-label="elementLabel(element)"
+                    :data-heat="heatOf(element)"
                     :data-rel="marks.rel(elementNode(element.symbol))"
                     :data-preview="
                         marks.previewRel(elementNode(element.symbol))
@@ -130,6 +145,7 @@ function toggle(symbol: string): void {
                     type="button"
                     class="found"
                     :aria-label="elementLabel(element)"
+                    :data-heat="heatOf(element)"
                     :data-rel="marks.rel(elementNode(element.symbol))"
                     :data-preview="
                         marks.previewRel(elementNode(element.symbol))
@@ -153,6 +169,10 @@ function toggle(symbol: string): void {
                 </button>
             </li>
         </ul>
+        <HeatLegend
+            :caption="$gettext('Identified materials that name the element')"
+            :max="maxCount"
+        />
     </div>
 </template>
 
@@ -173,25 +193,42 @@ function toggle(symbol: string): void {
 .periodic-table .cell {
     display: grid;
     place-items: center;
-    min-block-size: 2rem;
-    border: 0.0625rem solid var(--border);
+    min-block-size: 1.75rem;
     border-radius: 0.1875rem;
+    background: var(--bg-alt);
     color: var(--ink-muted);
     font: 0.6875rem var(--font-mono);
-    opacity: 0.55;
 }
 
 .periodic-table .found {
+    --cell-heat: var(--heat-1);
+    --cell-on: var(--heat-1-on);
+
     display: grid;
     place-items: center;
     padding: 0.125rem;
-    border: 0.0625rem solid var(--border-hover);
+    border: none;
     border-radius: 0.1875rem;
-    background: var(--surface);
-    color: var(--ink);
+    background: var(--cell-heat);
+    color: var(--cell-on);
     font: 600 0.75rem var(--font-mono);
-    opacity: 1;
+    font-variant-numeric: tabular-nums;
     cursor: pointer;
+}
+
+.periodic-table .found[data-heat="2"] {
+    --cell-heat: var(--heat-2);
+    --cell-on: var(--heat-2-on);
+}
+
+.periodic-table .found[data-heat="3"] {
+    --cell-heat: var(--heat-3);
+    --cell-on: var(--heat-3-on);
+}
+
+.periodic-table .found[data-heat="4"] {
+    --cell-heat: var(--heat-4);
+    --cell-on: var(--heat-4-on);
 }
 
 .periodic-table .found[aria-pressed="true"] {
@@ -203,17 +240,18 @@ function toggle(symbol: string): void {
 }
 
 .periodic-table .found[data-rel="direct"] {
-    border-color: var(--linked-mark, var(--blue-text));
-    box-shadow: inset 0 0 0 0.125rem var(--linked-mark, var(--blue-text));
+    box-shadow:
+        0 0 0 0.125rem var(--surface),
+        0 0 0 0.25rem var(--linked-mark, var(--blue-text));
 }
 
 .periodic-table .found[data-rel="evidence"] {
-    border: 0.0625rem dashed var(--linked-mark, var(--blue-text));
-    box-shadow: inset 0 0 0 0.0625rem var(--linked-mark, var(--blue-text));
+    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    outline-offset: 0.125rem;
 }
 
 .periodic-table .found[data-rel="none"] {
-    border-color: var(--border);
+    background: color-mix(in srgb, var(--cell-heat) 25%, var(--surface));
     color: var(--ink-muted);
 }
 

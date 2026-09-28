@@ -75,6 +75,30 @@ describe("CoverageMatrix", () => {
         ).toEqual(["f. 1r", "f. 1v"]);
     });
 
+    it("shows each technique by its code, its full name read and shown on hover", () => {
+        const view = mountMatrix();
+        const header = view.find("thead .technique");
+        expect(header.attributes("title")).toBe("FORS");
+        expect(header.find(".name").classes()).toContain("visually-hidden");
+    });
+
+    it("shades each cell on the blue ramp by its count and says what the number counts", () => {
+        const view = mountMatrix();
+        expect(
+            view
+                .findAll("tbody .cell")
+                .map((cell) => cell.attributes("data-heat")),
+        ).toEqual(["2", "4", "2"]);
+        const legend = view.find(".heat-legend");
+        expect(legend.find(".caption").text()).toBe(
+            "Analyses of the Selection on the folio with the technique",
+        );
+        expect(legend.findAll(".end").map((end) => end.text())).toEqual([
+            "1",
+            "2",
+        ]);
+    });
+
     it("counts the analyses of a cell and says an empty cell holds none", () => {
         const view = mountMatrix();
         const cells = view.findAll("tbody tr")[1].findAll("td");

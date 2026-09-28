@@ -66,6 +66,25 @@ function gridRel(view: VueWrapper, attribute: string): (string | undefined)[] {
 }
 
 describe("PeriodicTable", () => {
+    it("shades each element found on the blue ramp by its count and says what the number counts", () => {
+        const view = mountTable();
+        const found = view.findAll(".grid .found");
+        expect(
+            found.map((cell) => [cell.text(), cell.attributes("data-heat")]),
+        ).toEqual([
+            ["Cu5", "4"],
+            ["Pb2", "2"],
+        ]);
+        const legend = view.find(".heat-legend");
+        expect(legend.find(".caption").text()).toBe(
+            "Identified materials that name the element",
+        );
+        expect(legend.findAll(".end").map((end) => end.text())).toEqual([
+            "1",
+            "5",
+        ]);
+    });
+
     it("lays the 118 elements on the grid, the ones found as buttons with their count", () => {
         const view = mountTable();
         const grid = view.find(".grid");
