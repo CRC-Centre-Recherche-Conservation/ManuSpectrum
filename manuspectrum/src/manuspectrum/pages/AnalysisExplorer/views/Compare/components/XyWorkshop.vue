@@ -14,99 +14,136 @@ import { BASE_VIEW } from "utils/xy-views";
 
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import XyCurveList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue";
+import XyLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
 
 import { useSeriesSet } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
-import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    LINKED_SELECTION_KEY,
+    WINDOW_RESIZE_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import {
+    analysisNode,
+    fileNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     annotationLabels,
     viewLabels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/treatment-labels.ts";
 import {
-    MARKERS_PER_CURVE,
-    OVERLAY_MAX_CURVES,
+    EXPORT_TITLE_ROOM,
+    annotationOpacities,
+    exportFigure,
+    multiplesFigure,
+    paintOf,
+    stackedFigure,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
+import {
+    curveState,
     dashOf,
     extent,
-    offsetLifts,
+    openingLayout,
     outOfRange,
-    panelGrid,
     ranksInSlot,
+    restyleUpdate,
     sharedViews,
-    symbolOf,
     treat,
     workshopCsv,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
 import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
 import {
-    PLOT_CONFIG,
-    plotLayout,
+    WORKSHOP_CONFIG,
     readPlotTheme,
     resetAxes,
-    seriesColour,
     whenFontsReady,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
-import type { Layout, PlotData } from "plotly.js";
+import type { PlotMouseEvent } from "plotly.js";
 import type { XyView } from "utils/xy-views";
 import type { SeriesResult } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
+import type {
+    LegendPreviewEvent,
+    LegendToggleEvent,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
+import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 import type {
+    Figure,
+    FigureCurve,
+    FigureInput,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
+import type {
     CurveRow,
+    CurveState,
     Extent,
+    LegendGroup,
     WorkshopLayout,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 import type { PlotTheme } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 type PlotlyModule = Awaited<ReturnType<typeof loadPlotly>>;
 
-interface Figure {
-    data: Partial<PlotData>[];
-    layout: Partial<Layout>;
-}
-
-interface Curve {
+interface Curve extends FigureCurve {
     line: FileLine;
-    label: string;
-    rank: number;
-    x: number[];
-    /** The values drawn: the series after the treatment, before any offset. */
-    y: number[];
     xRange: Extent | null;
-    yRange: Extent | null;
     xReversed: boolean;
 }
 
-const LINE_WIDTH = 2;
-const MARKER_SIZE = 7;
-const MARKER_OUTLINE = 1.5;
-const PANEL_MARGIN_TOP = 28;
-const LABEL_FONT_SIZE = 11;
+/** A chart Plotly drew: it can bind handlers to its events. */
+interface PlotlyTarget extends HTMLElement {
+    on?: (name: string, handler: (event: PlotMouseEvent) => void) => void;
+}
+
+/** The pixel mapping of an axis Plotly passes with a hovered point. */
+interface HoverAxis {
+    l2p?: (value: number) => number;
+    _offset?: number;
+}
+
 const PNG_FILE = "spectra.png";
 const CSV_FILE = "spectra.csv";
 const DEFAULT_PNG_WIDTH = 960;
 const DEFAULT_PNG_HEIGHT = 540;
+/** Room on the right of the exported figure for its legend. */
+const PNG_LEGEND_ROOM = 240;
+const REM = 16;
+const DEFAULT_POINTER = "mouse";
 
 /**
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
- * every readable spectrum of the window, each in the colour of its slot,
- * the 2nd, 3rd… file of a slot in a dashed variant, named « A1 · file ».
- * Each slot also has a marker shape of its own (`symbolOf`), a few markers
- * per curve, and the legend groups a slot's files under its label: slots
- * stay apart in greyscale and for readers who do not tell colours apart.
- * Overlaid, offset (each curve lifted above the one before it, the real
- * values on hover, the Y title unchanged), in small multiples (one panel
- * per slot, the default above eight curves) or as a table. A treatment of
+ * every readable spectrum of the window, lines only. Slots A1…A8 take the
+ * series colours and carry their label at the visual end of their curve;
+ * the later slots are grey context under them. The 2nd, 3rd… file of a
+ * slot is dashed. Overlaid, offset (each curve lifted above the one before
+ * it, no Y tick labels, the real values on hover), in small multiples (one
+ * panel per slot, the X axes zoomed together; the default above eight
+ * curves or when no slot is in colour) or as a table. A treatment of
  * `utils/xy-views.js` runs on every curve and names itself in the Y title.
- * A file over the server's ceiling, missing or empty is named and left out.
- * A chart Plotly cannot draw says so in the window. The chart follows its
- * window's size (`WINDOW_RESIZE_KEY`) only when its own size changed; the
- * table layout and the unmount purge it, and a drawing that ends after the
- * unmount is purged too.
+ * The legend is HTML (`XyLegend`); the exported PNG draws Plotly's, with a
+ * title and a source line.
+ *
+ * The linked selection of Compare (`LINKED_SELECTION_KEY`) reaches the
+ * chart through its `an:` and `file:` nodes: while it holds something, the
+ * curves it links are emphasised and the others hidden, their legend
+ * entries kept; a preview emphasises what it links, hidden or not. These
+ * changes only restyle the drawn chart, once per frame (`Plotly.restyle` of
+ * style attributes, `Plotly.relayout` of annotation opacities). A click on
+ * a legend entry or a curve toggles its node; a mouse resting on either
+ * previews it.
+ *
+ * A file over the server's ceiling, missing or empty is named and left
+ * out. A chart Plotly cannot draw says so in the window. The chart follows
+ * its window's size (`WINDOW_RESIZE_KEY`) only when its own size changed,
+ * and is then drawn again for the size (labels, panels); the table layout
+ * and the unmount purge it, and a drawing that ends after the unmount is
+ * purged too.
  */
-const props = defineProps<{ curves: readonly FileLine[] }>();
+const props = defineProps<{ curves: readonly FileLine[]; title?: string }>();
 
 const resizeTick = inject(WINDOW_RESIZE_KEY, null);
+const linked = inject(LINKED_SELECTION_KEY, null);
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 const readable = computed(() =>
@@ -120,20 +157,30 @@ const chart = useTemplateRef<HTMLDivElement>("chart");
 const csvNoteId = useId();
 const lang = document.documentElement.lang || "en";
 
-// The Plotly module and the element it drew in live outside Vue reactivity.
+// The Plotly module, the element it drew in and what it drew live outside Vue reactivity.
 let plotly: PlotlyModule | null = null;
 let drawnOn: HTMLElement | null = null;
 let lastFigure: Figure | null = null;
+let drawnTheme: PlotTheme | null = null;
+/** The curve states the chart shows, joined; a restyle to the same states is skipped. */
+let shownStates = "";
+/** The annotation opacities the chart shows. */
+let shownOpacities: number[] = [];
+let drawing = false;
+let restyleFrame: number | null = null;
+const boundCharts = new WeakSet<HTMLElement>();
 /** The chart's size when it was last drawn or resized, « width×height ». */
 let drawnSize = "";
 /** Set on unmount: a drawing still waiting stops, and one that ends late is purged. */
 let disposed = false;
 
-/** The layout the reader picked; null follows the number of curves. */
+/** The layout the reader picked; null follows the curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
 const viewKey = ref<string>(BASE_VIEW);
 /** Plotly could not be loaded or could not draw the last figure. */
 const drawFailed = ref(false);
+/** The height small multiples need beyond the window's, in rem; null when they fit. */
+const chartHeight = ref<string | null>(null);
 
 /** Each readable file's answer, by preview URL, once the answer is for the files shown. */
 const answers = computed(() => {
@@ -166,6 +213,8 @@ const drawn = computed<Curve[]>(() => {
         const y = treat(series.x, series.y, view.value);
         return {
             line,
+            slot: line.slot,
+            analysis: line.analysis.name.value,
             label: `${slotLabel(line.slot)} · ${line.file.name}`,
             rank: ranks[index],
             x: series.x,
@@ -176,9 +225,19 @@ const drawn = computed<Curve[]>(() => {
         };
     });
 });
-const slots = computed(() => [
-    ...new Set(drawn.value.map((curve) => curve.line.slot)),
-]);
+const slots = computed(() =>
+    [...new Set(drawn.value.map((curve) => curve.line.slot))].sort(
+        (one, other) => one - other,
+    ),
+);
+/** How many files each slot draws. */
+const filesInSlot = computed(() => {
+    const counts = new Map<number, number>();
+    for (const curve of drawn.value) {
+        counts.set(curve.line.slot, (counts.get(curve.line.slot) ?? 0) + 1);
+    }
+    return counts;
+});
 const layouts = computed<WorkshopLayout[]>(() =>
     slots.value.length > 1
         ? ["overlay", "offset", "multiples", "table"]
@@ -186,8 +245,7 @@ const layouts = computed<WorkshopLayout[]>(() =>
 );
 const layout = computed<WorkshopLayout>(() => {
     const wanted =
-        chosenLayout.value ??
-        (drawn.value.length > OVERLAY_MAX_CURVES ? "multiples" : "overlay");
+        chosenLayout.value ?? openingLayout(drawn.value.length, slots.value);
     return layouts.value.includes(wanted) ? wanted : "overlay";
 });
 const xReversed = computed(() => drawn.value[0]?.xReversed ?? false);
@@ -205,8 +263,32 @@ const titles = computed(() => {
         ),
     };
 });
+const offsetTitle = computed(() =>
+    titles.value.y
+        ? interpolate(
+              $gettext("%{title} (offset)"),
+              { title: titles.value.y },
+              true,
+          )
+        : $gettext("Intensity (offset)"),
+);
 const flags = computed(() =>
     outOfRange(drawn.value.map((curve) => curve.xRange)),
+);
+const selecting = computed(() => (linked?.selection.value.length ?? 0) > 0);
+const selected = computed(() => new Set(linked?.selection.value ?? []));
+/** How the selection links each drawn curve, through its file or its analysis. */
+const levels = computed<(RelationLevel | null)[]>(() =>
+    drawn.value.map((curve) => levelIn(linked?.levels.value, curve)),
+);
+const states = computed<CurveState[]>(() =>
+    drawn.value.map((curve, index) =>
+        curveState(
+            levels.value[index],
+            selecting.value,
+            levelIn(linked?.previewLevels.value, curve) !== null,
+        ),
+    ),
 );
 const rows = computed<CurveRow[]>(() =>
     drawn.value.map((curve, index) => ({
@@ -216,7 +298,38 @@ const rows = computed<CurveRow[]>(() =>
         x: curve.xRange,
         y: curve.yRange,
         outOfRange: flags.value[index],
+        relation: selecting.value ? levels.value[index] ?? "none" : undefined,
     })),
+);
+const legendGroups = computed<LegendGroup[]>(() =>
+    slots.value.map((slot) => {
+        const indices = drawn.value.flatMap((curve, index) =>
+            curve.line.slot === slot ? [index] : [],
+        );
+        const first = drawn.value[indices[0]];
+        const node = analysisNode(first.line.analysis.id);
+        return {
+            slot,
+            label: slotLabel(slot),
+            analysis: first.line.analysis.name,
+            node,
+            pressed: selected.value.has(node),
+            relation: strongest(indices.map((index) => levels.value[index])),
+            entries: indices.map((index) => {
+                const curve = drawn.value[index];
+                const entry = entryNode(curve);
+                return {
+                    id: `${curve.line.key}|${curve.line.file.id}`,
+                    name: curve.line.file.name,
+                    slot,
+                    dash: dashOf(curve.rank),
+                    node: entry,
+                    pressed: selected.value.has(entry),
+                    relation: levels.value[index],
+                };
+            }),
+        };
+    }),
 );
 const notes = computed(() => {
     const found: string[] = [];
@@ -284,11 +397,24 @@ const chartLabel = computed(() =>
         true,
     ),
 );
+/** Whether a selection hides every curve drawn. */
+const allHidden = computed(
+    () =>
+        selecting.value &&
+        states.value.length > 0 &&
+        states.value.every((state) => state === "hidden"),
+);
+const csvNote = computed(() =>
+    $gettext(
+        "The CSV holds the values drawn, treatment included and offset left out: two columns per curve.",
+    ),
+);
 
 watch([drawn, layout, chart], () => void draw());
 watch(layout, (name) => {
     if (name === "table") purgeChart();
 });
+watch(states, () => scheduleRestyle());
 watch(
     () => resizeTick?.value,
     () => {
@@ -297,12 +423,13 @@ watch(
         const size = sizeOf(element);
         if (size === drawnSize) return;
         drawnSize = size;
-        void plotly.Plots.resize(element);
+        void resizeChart(element);
     },
 );
 
 onBeforeUnmount(() => {
     disposed = true;
+    if (restyleFrame !== null) cancelAnimationFrame(restyleFrame);
     purgeChart();
 });
 
@@ -310,11 +437,42 @@ function sizeOf(element: HTMLElement): string {
     return `${element.clientWidth}×${element.clientHeight}`;
 }
 
+/** The strongest of the levels; null when none links. */
+function strongest(
+    found: readonly (RelationLevel | null)[],
+): RelationLevel | null {
+    if (found.includes("self")) return "self";
+    if (found.includes("direct")) return "direct";
+    return found.includes("evidence") ? "evidence" : null;
+}
+
+function levelIn(
+    map: ReadonlyMap<NodeId, RelationLevel> | undefined,
+    curve: Curve,
+): RelationLevel | null {
+    if (!map || map.size === 0) return null;
+    return strongest([
+        map.get(fileNode(curve.line.file.id)) ?? null,
+        map.get(analysisNode(curve.line.analysis.id)) ?? null,
+    ]);
+}
+
+/** The node a curve toggles: its file when its slot draws several, else its analysis. */
+function entryNode(curve: Curve): NodeId {
+    return (filesInSlot.value.get(curve.line.slot) ?? 0) > 1
+        ? fileNode(curve.line.file.id)
+        : analysisNode(curve.line.analysis.id);
+}
+
 /** Frees the chart Plotly drew, and forgets it. */
 function purgeChart(): void {
-    if (plotly && drawnOn) plotly.purge(drawnOn);
+    if (plotly && drawnOn) {
+        plotly.purge(drawnOn);
+        boundCharts.delete(drawnOn);
+    }
     drawnOn = null;
     lastFigure = null;
+    shownStates = "";
 }
 
 function layoutName(name: WorkshopLayout): string {
@@ -334,157 +492,17 @@ function viewName(entry: XyView): string {
     return viewNames.value[entry.key] ?? entry.key;
 }
 
-function lineOf(theme: PlotTheme, curve: Curve): Partial<PlotData>["line"] {
+/** What the figure is drawn from, for the chart element's size. */
+function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
     return {
-        color: seriesColour(theme, curve.line.slot),
-        width: LINE_WIDTH,
-        dash: dashOf(curve.rank),
-    };
-}
-
-/** A slot's shape, colour and legend group; the markers are spread over the part of the curve in view. */
-function slotStyle(theme: PlotTheme, curve: Curve): Partial<PlotData> {
-    const colour = seriesColour(theme, curve.line.slot);
-    return {
-        mode: "lines+markers",
-        line: lineOf(theme, curve),
-        marker: {
-            symbol: symbolOf(curve.line.slot),
-            size: MARKER_SIZE,
-            color: colour,
-            maxdisplayed: MARKERS_PER_CURVE,
-            line: { color: colour, width: MARKER_OUTLINE },
-        },
-        legendgroup: `slot-${curve.line.slot}`,
-        legendgrouptitle: { text: slotLabel(curve.line.slot) },
-    };
-}
-
-/** The last finite point of a curve, where a curve past the series colours (A9…A30, in ink) carries its label. */
-function lastPoint(x: number[], y: number[]): [number, number] | null {
-    for (let index = y.length - 1; index >= 0; index -= 1) {
-        if (Number.isFinite(x[index]) && Number.isFinite(y[index])) {
-            return [x[index], y[index]];
-        }
-    }
-    return null;
-}
-
-function inkLabel(
-    theme: PlotTheme,
-    curve: Curve,
-    y: number[],
-): Partial<Layout["annotations"][number]>[] {
-    if (curve.line.slot < theme.series.length) return [];
-    const point = lastPoint(curve.x, y);
-    if (!point) return [];
-    return [
-        {
-            x: point[0],
-            y: point[1],
-            text: slotLabel(curve.line.slot),
-            showarrow: false,
-            xanchor: "left",
-            font: {
-                family: theme.fontMono,
-                size: LABEL_FONT_SIZE,
-                color: theme.ink,
-            },
-        },
-    ];
-}
-
-/** A click on a legend entry hides that file alone, not its whole slot group. */
-function baseLayout(theme: PlotTheme): Partial<Layout> {
-    const base = plotLayout(theme, {
+        curves: drawn.value,
+        states: states.value,
+        theme,
         lang,
-        xTitle: titles.value.x,
-        yTitle: titles.value.y,
+        titles: { ...titles.value, offset: offsetTitle.value },
         xReversed: xReversed.value,
-        legend: drawn.value.length > 1,
-    });
-    return { ...base, legend: { ...base.legend, groupclick: "toggleitem" } };
-}
-
-/** Overlaid, or offset: each curve lifted above the one before it, its real values kept for the hover. */
-function stackedFigure(theme: PlotTheme, offset: boolean): Figure {
-    const lifts = offset
-        ? offsetLifts(drawn.value.map((curve) => curve.yRange))
-        : [];
-    const annotations: Partial<Layout["annotations"][number]>[] = [];
-    const data = drawn.value.map((curve, index): Partial<PlotData> => {
-        const lift = lifts[index] ?? 0;
-        const y = offset ? curve.y.map((value) => value + lift) : curve.y;
-        annotations.push(...inkLabel(theme, curve, y));
-        return {
-            x: curve.x,
-            y,
-            name: curve.label,
-            type: "scatter",
-            ...slotStyle(theme, curve),
-            ...(offset
-                ? { customdata: curve.y, hovertemplate: "%{customdata:.6~g}" }
-                : {}),
-        };
-    });
-    return { data, layout: { ...baseLayout(theme), annotations } };
-}
-
-/** One panel per slot, each with its own axes and its slot label. */
-function multiplesFigure(theme: PlotTheme): Figure {
-    const base = baseLayout(theme);
-    const panels = slots.value.length;
-    const { rows, columns } = panelGrid(panels);
-    const layout: Record<string, unknown> = {
-        ...base,
-        grid: { rows, columns, pattern: "independent" },
-        margin: { ...base.margin, t: PANEL_MARGIN_TOP },
-    };
-    const annotations: Partial<Layout["annotations"][number]>[] = [];
-    slots.value.forEach((slot, panel) => {
-        const suffix = panel === 0 ? "" : String(panel + 1);
-        const bottom = panel + columns >= panels;
-        const first = panel % columns === 0;
-        layout[`xaxis${suffix}`] = {
-            ...base.xaxis,
-            title: { ...base.xaxis?.title, text: bottom ? titles.value.x : "" },
-        };
-        layout[`yaxis${suffix}`] = {
-            ...base.yaxis,
-            title: { ...base.yaxis?.title, text: first ? titles.value.y : "" },
-        };
-        annotations.push({
-            xref: `x${suffix} domain` as Layout["annotations"][number]["xref"],
-            yref: `y${suffix} domain` as Layout["annotations"][number]["yref"],
-            x: 0,
-            y: 1,
-            xanchor: "left",
-            yanchor: "bottom",
-            showarrow: false,
-            text: slotLabel(slot),
-            font: {
-                family: theme.fontMono,
-                size: LABEL_FONT_SIZE,
-                color: seriesColour(theme, slot),
-            },
-        });
-    });
-    const data = drawn.value.map((curve): Partial<PlotData> => {
-        const panel = slots.value.indexOf(curve.line.slot);
-        const suffix = panel === 0 ? "" : String(panel + 1);
-        return {
-            x: curve.x,
-            y: curve.y,
-            name: curve.label,
-            type: "scatter",
-            ...slotStyle(theme, curve),
-            xaxis: `x${suffix}`,
-            yaxis: `y${suffix}`,
-        };
-    });
-    return {
-        data,
-        layout: { ...layout, annotations } as Partial<Layout>,
+        width: element.clientWidth,
+        height: element.clientHeight,
     };
 }
 
@@ -493,31 +511,164 @@ async function draw(): Promise<void> {
     if (!element || drawn.value.length === 0 || layout.value === "table") {
         return;
     }
+    drawing = true;
     try {
         plotly ??= await loadPlotly();
         if (disposed) return;
         await whenFontsReady();
         if (disposed) return;
-        if (drawnOn && drawnOn !== element) plotly.purge(drawnOn);
+        if (drawnOn && drawnOn !== element) purgeChart();
         const theme = readPlotTheme();
+        const input = figureInput(theme, element);
         const figure =
             layout.value === "multiples"
-                ? multiplesFigure(theme)
-                : stackedFigure(theme, layout.value === "offset");
+                ? multiplesFigure(input)
+                : stackedFigure(input, layout.value === "offset");
+        chartHeight.value =
+            figure.height === null ? null : `${figure.height / REM}rem`;
+        const opacities = annotationOpacities(figure, states.value);
+        (figure.layout.annotations ?? []).forEach((note, index) => {
+            note.opacity = opacities[index];
+        });
         lastFigure = figure;
         drawnOn = element;
+        drawnTheme = theme;
         drawnSize = sizeOf(element);
-        await plotly.react(element, figure.data, figure.layout, PLOT_CONFIG);
+        shownStates = states.value.join();
+        shownOpacities = opacities;
+        await plotly.react(
+            element,
+            figure.data,
+            figure.layout,
+            WORKSHOP_CONFIG,
+        );
         if (disposed) {
             plotly.purge(element);
             return;
         }
+        bindEvents(element);
         drawFailed.value = false;
     } catch (error: unknown) {
         if (disposed) return;
         drawFailed.value = true;
         console.error("Spectra comparison could not be drawn", error);
+    } finally {
+        drawing = false;
+        if (!disposed) scheduleRestyle();
     }
+}
+
+async function resizeChart(element: HTMLElement): Promise<void> {
+    if (!plotly) return;
+    await plotly.Plots.resize(element);
+    if (!disposed) await draw();
+}
+
+function scheduleRestyle(): void {
+    if (restyleFrame !== null) return;
+    restyleFrame = requestAnimationFrame(() => {
+        restyleFrame = null;
+        void restyle();
+    });
+}
+
+/** Shows the current curve states on the drawn chart through style attributes only; nothing when they are shown already. */
+async function restyle(): Promise<void> {
+    const element = drawnOn;
+    const figure = lastFigure;
+    const theme = drawnTheme;
+    if (drawing || !plotly || !element || !figure || !theme) return;
+    if (figure.order.length !== drawn.value.length) return;
+    const key = states.value.join();
+    if (key === shownStates) return;
+    shownStates = key;
+    const input = figureInput(theme, element);
+    const paints = figure.order.map((index) => paintOf(input, index));
+    try {
+        await plotly.restyle(
+            element,
+            restyleUpdate(paints) as unknown as Parameters<
+                PlotlyModule["restyle"]
+            >[1],
+        );
+        const opacities = annotationOpacities(figure, states.value);
+        const update: Record<string, number> = {};
+        opacities.forEach((opacity, index) => {
+            if (opacity !== shownOpacities[index]) {
+                update[`annotations[${index}].opacity`] = opacity;
+            }
+        });
+        shownOpacities = opacities;
+        if (Object.keys(update).length > 0) {
+            await plotly.relayout(element, update);
+        }
+    } catch (error: unknown) {
+        console.error("Spectra comparison could not be restyled", error);
+    }
+}
+
+function bindEvents(element: HTMLElement): void {
+    const target = element as PlotlyTarget;
+    if (boundCharts.has(element) || typeof target.on !== "function") return;
+    boundCharts.add(element);
+    target.on("plotly_hover", (event) => {
+        const curve = hoveredCurve(event);
+        if (curve) linked?.preview(entryNode(curve), pointerOf(event));
+    });
+    target.on("plotly_unhover", (event) => {
+        linked?.preview(null, pointerOf(event));
+    });
+    target.on("plotly_click", (event) => {
+        const curve = hoveredCurve(event);
+        if (curve) toggle(entryNode(curve));
+    });
+}
+
+function pointerOf(event: PlotMouseEvent): { pointerType: string } {
+    const source = event?.event as PointerEvent | undefined;
+    return { pointerType: source?.pointerType || DEFAULT_POINTER };
+}
+
+/**
+ * The curve under the pointer: the one point Plotly names, or, when the
+ * hover names every curve at that X, the one drawn nearest the pointer.
+ */
+function hoveredCurve(event: PlotMouseEvent): Curve | null {
+    const figure = lastFigure;
+    const points = event?.points ?? [];
+    if (!figure || points.length === 0) return null;
+    let chosen = points[0];
+    if (points.length > 1) {
+        const top = drawnOn?.getBoundingClientRect().top ?? 0;
+        const pointer = (event.event?.clientY ?? Number.NaN) - top;
+        let nearest = Infinity;
+        for (const point of points) {
+            const axis = point.yaxis as unknown as HoverAxis;
+            if (!axis?.l2p || typeof point.y !== "number") continue;
+            const distance = Math.abs(
+                axis.l2p(point.y) + (axis._offset ?? 0) - pointer,
+            );
+            if (distance < nearest) {
+                nearest = distance;
+                chosen = point;
+            }
+        }
+        if (!Number.isFinite(nearest)) return null;
+    }
+    const index = figure.order[chosen.curveNumber];
+    return index === undefined ? null : drawn.value[index] ?? null;
+}
+
+function toggle(node: NodeId): void {
+    linked?.toggle(node);
+}
+
+function onLegendToggle({ node }: LegendToggleEvent): void {
+    toggle(node);
+}
+
+function onLegendPreview({ node, pointerType }: LegendPreviewEvent): void {
+    linked?.preview(node, { pointerType });
 }
 
 async function reset(): Promise<void> {
@@ -538,25 +689,57 @@ function save(href: string, name: string): void {
     link.click();
 }
 
-/** The chart as a PNG, on the page's background rather than the transparent one of the screen. */
+function exportTitle(): string {
+    if (props.title) return props.title;
+    return titles.value.x && titles.value.y
+        ? interpolate(
+              $gettext("%{y} against %{x}"),
+              { y: titles.value.y, x: titles.value.x },
+              true,
+          )
+        : titles.value.y || titles.value.x;
+}
+
+function sourceLine(): string {
+    const date = new Intl.DateTimeFormat(lang, { dateStyle: "long" }).format(
+        new Date(),
+    );
+    return interpolate(
+        $gettext("Source: ManuSpectrum, %{url}, %{date}"),
+        {
+            url: `${window.location.origin}${window.location.pathname}`,
+            date,
+        },
+        true,
+    );
+}
+
+/**
+ * The chart as a PNG, on the page's background rather than the transparent
+ * one of the screen: the curves as shown (a hidden curve left out), Plotly's
+ * legend on the right, a title and a source line.
+ */
 async function downloadPng(): Promise<void> {
     const element = chart.value;
-    if (!plotly || !element || !lastFigure) return;
-    const { background } = readPlotTheme();
+    const figure = lastFigure;
+    const theme = drawnTheme;
+    if (!plotly || !element || !figure || !theme) return;
+    const input = figureInput(theme, element);
+    const paints = figure.order.map((index) => paintOf(input, index));
     try {
         const url = await plotly.toImage(
-            {
-                data: lastFigure.data,
-                layout: {
-                    ...lastFigure.layout,
-                    paper_bgcolor: background,
-                    plot_bgcolor: background,
-                },
-            },
+            exportFigure(figure, paints, theme, {
+                title: exportTitle(),
+                source: sourceLine(),
+            }),
             {
                 format: "png",
-                width: element.clientWidth || DEFAULT_PNG_WIDTH,
-                height: element.clientHeight || DEFAULT_PNG_HEIGHT,
+                width:
+                    (element.clientWidth || DEFAULT_PNG_WIDTH) +
+                    PNG_LEGEND_ROOM,
+                height:
+                    (element.clientHeight || DEFAULT_PNG_HEIGHT) +
+                    EXPORT_TITLE_ROOM,
             },
         );
         save(url, PNG_FILE);
@@ -565,7 +748,7 @@ async function downloadPng(): Promise<void> {
     }
 }
 
-/** The values drawn, treatment included and offset left out. */
+/** The values drawn, treatment included and offset left out, under a line saying so. */
 function downloadCsv(): void {
     const text = workshopCsv(
         drawn.value.map((curve) => ({
@@ -575,6 +758,7 @@ function downloadCsv(): void {
         })),
         titles.value.x || "X",
         titles.value.y || "Y",
+        csvNote.value,
     );
     const url = URL.createObjectURL(
         new Blob([text], { type: "text/csv;charset=utf-8" }),
@@ -663,11 +847,17 @@ function chooseView(event: Event): void {
                 <button
                     type="button"
                     data-action="csv"
+                    :title="csvNote"
                     :aria-describedby="csvNoteId"
                     @click="downloadCsv"
                 >
                     <span>{{ $gettext("Download CSV") }}</span>
                 </button>
+                <span
+                    :id="csvNoteId"
+                    class="visually-hidden"
+                    >{{ csvNote }}</span
+                >
             </div>
             <p
                 v-if="treatments.mixed"
@@ -692,28 +882,41 @@ function chooseView(event: Event): void {
             >
                 <span>{{ $gettext("The chart could not be drawn.") }}</span>
             </p>
+            <p
+                v-if="allHidden && layout !== 'table'"
+                class="note isolated"
+            >
+                <span>{{
+                    $gettext(
+                        "No curve here is linked to the selection; press a legend entry to add it.",
+                    )
+                }}</span>
+            </p>
             <div
                 v-if="layout !== 'table'"
-                ref="chart"
-                class="chart"
-                :class="{ failed: drawFailed }"
-                role="img"
-                :aria-label="chartLabel"
-            ></div>
+                class="plot-area"
+            >
+                <div
+                    ref="chart"
+                    class="chart"
+                    :class="{ failed: drawFailed }"
+                    :style="
+                        chartHeight ? { minBlockSize: chartHeight } : undefined
+                    "
+                    role="img"
+                    :aria-label="chartLabel"
+                ></div>
+                <XyLegend
+                    :groups="legendGroups"
+                    :selecting="selecting"
+                    @toggle="onLegendToggle"
+                    @preview="onLegendPreview"
+                />
+            </div>
             <p class="note">
                 <span>{{
                     $gettext(
                         "Intensities are not comparable in absolute value across instruments.",
-                    )
-                }}</span>
-            </p>
-            <p
-                :id="csvNoteId"
-                class="note"
-            >
-                <span>{{
-                    $gettext(
-                        "The CSV holds the values drawn, treatment included and offset left out: two columns per curve.",
                     )
                 }}</span>
             </p>
@@ -744,6 +947,7 @@ function chooseView(event: Event): void {
 .xy-workshop {
     display: grid;
     gap: 0.5rem;
+    container-type: inline-size;
 }
 
 .xy-workshop .state {
@@ -796,8 +1000,29 @@ function chooseView(event: Event): void {
     outline-offset: 0.125rem;
 }
 
+.xy-workshop .plot-area {
+    display: grid;
+    gap: 0.5rem;
+}
+
+@container (min-width: 40rem) {
+    .xy-workshop .plot-area {
+        grid-template-columns: minmax(0, 1fr) minmax(9rem, 12rem);
+        align-items: start;
+    }
+}
+
 .xy-workshop .chart {
     min-block-size: 18rem;
+}
+
+.xy-workshop .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .xy-workshop .chart.failed {

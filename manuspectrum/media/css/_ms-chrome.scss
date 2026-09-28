@@ -77,17 +77,29 @@
     --spectral-5: #3b82f6;
     --spectral-6: #8b5cf6;
 
-    // Analysis Explorer (spec §10.1). Series colours are the compared items
-    // A1…A8; technique colours are drawn on images with a white outline and
-    // carry their code in --stage (contrast ≥ 6:1 for each hue).
+    // Analysis Explorer (spec §10.1). Series colours (palette « Pigments »)
+    // are the compared items A1…A8, told apart all pairs at once on --bg,
+    // colour vision deficiencies included, each ≥ 3:1 on --bg; text drawn on a
+    // series colour takes its --series-N-on. Slots past A8 are grey context
+    // curves (--series-context). Technique colours are drawn on images with a
+    // white outline and carry their code in --stage (contrast ≥ 6:1 for each hue).
     --series-1: #1d4ed8;
-    --series-2: #b45309;
-    --series-3: #6d28d9;
-    --series-4: #047857;
-    --series-5: #b91c1c;
-    --series-6: #0891b2;
-    --series-7: #a16207;
-    --series-8: #be185d;
+    --series-2: #7c9217;
+    --series-3: #9f0c54;
+    --series-4: #588cff;
+    --series-5: #8b5600;
+    --series-6: #0099a6;
+    --series-7: #7860a0;
+    --series-8: #ea5974;
+    --series-1-on: #ffffff;
+    --series-2-on: var(--ink);
+    --series-3-on: #ffffff;
+    --series-4-on: var(--ink);
+    --series-5-on: #ffffff;
+    --series-6-on: var(--ink);
+    --series-7-on: #ffffff;
+    --series-8-on: var(--ink);
+    --series-context: #9a99a8;
     --tech-1: #8aa9ff;
     --tech-2: #f0a35c;
     --tech-3: #b69cff;

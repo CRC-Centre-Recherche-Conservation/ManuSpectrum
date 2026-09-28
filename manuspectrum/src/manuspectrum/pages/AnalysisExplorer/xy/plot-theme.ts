@@ -2,9 +2,13 @@ import type { Config, Layout } from "plotly.js";
 
 const TRANSPARENT = "rgba(0,0,0,0)";
 const SERIES = 8;
+/** Room under the plot for the legend Plotly draws below it. */
+const LEGEND_ROOM = 48;
 
 export interface PlotTheme {
     series: string[];
+    /** The grey of the curves past A8. */
+    context: string;
     ink: string;
     inkMuted: string;
     border: string;
@@ -36,6 +40,7 @@ export function readPlotTheme(
         series: Array.from({ length: SERIES }, (_, index) =>
             token(`--series-${index + 1}`, "#1a1a2e"),
         ),
+        context: token("--series-context", "#9a99a8"),
         ink: token("--ink", "#1a1a2e"),
         inkMuted: token("--ink-muted", "#4a4a5e"),
         border: token("--border", "rgba(26,26,46,0.07)"),
@@ -57,6 +62,11 @@ export function separatorsFor(lang: string): string {
     return lang.toLowerCase().startsWith("fr") ? ", " : ".,";
 }
 
+/**
+ * The layout of an Explorer chart: transparent, ink axis titles, mono tick
+ * labels outside a visible axis line, SI exponents from 10³, a horizontal
+ * grid only, dotted spikes, and margins that grow to fit the labels.
+ */
 export function plotLayout(
     theme: PlotTheme,
     options: {
@@ -65,30 +75,49 @@ export function plotLayout(
         yTitle: string;
         xReversed: boolean;
         legend?: boolean;
+        hovermode?: "x unified" | "closest";
     },
 ): Partial<Layout> {
-    const axisFont = {
+    const titleFont = {
         family: theme.fontBody,
         size: 12,
-        color: theme.inkMuted,
+        color: theme.ink,
     };
     const tickFont = {
         family: theme.fontMono,
         size: 11,
         color: theme.inkMuted,
     };
+    const axis = {
+        tickfont: tickFont,
+        automargin: true,
+        ticks: "outside" as const,
+        ticklen: 4,
+        tickcolor: theme.inkMuted,
+        showline: true,
+        linecolor: theme.inkMuted,
+        zeroline: false,
+        exponentformat: "SI" as const,
+        minexponent: 3,
+        showspikes: true,
+        spikemode: "across" as const,
+        spikedash: "dot",
+        spikethickness: 1,
+        spikecolor: theme.inkMuted,
+        spikesnap: "cursor" as const,
+    };
     return {
         paper_bgcolor: TRANSPARENT,
         plot_bgcolor: TRANSPARENT,
         font: { family: theme.fontBody, color: theme.ink },
         separators: separatorsFor(options.lang),
-        hovermode: "x unified",
+        hovermode: options.hovermode ?? "x unified",
         hoverlabel: {
             bgcolor: theme.background,
             bordercolor: theme.border,
             font: { family: theme.fontMono, color: theme.ink },
         },
-        margin: { l: 56, r: 16, t: 16, b: 48 },
+        margin: { l: 8, r: 16, t: 16, b: options.legend ? LEGEND_ROOM : 8 },
         showlegend: options.legend ?? false,
         legend: {
             orientation: "h",
@@ -97,19 +126,16 @@ export function plotLayout(
             font: { family: theme.fontBody, size: 12, color: theme.ink },
         },
         xaxis: {
-            title: { text: options.xTitle, font: axisFont },
-            tickfont: tickFont,
+            ...axis,
+            title: { text: options.xTitle, font: titleFont, standoff: 8 },
             showgrid: false,
-            zeroline: false,
-            linecolor: theme.border,
             autorange: options.xReversed ? "reversed" : true,
         },
         yaxis: {
-            title: { text: options.yTitle, font: axisFont },
-            tickfont: tickFont,
+            ...axis,
+            title: { text: options.yTitle, font: titleFont, standoff: 8 },
             showgrid: true,
             gridcolor: theme.border,
-            zeroline: false,
         },
     };
 }
@@ -118,6 +144,14 @@ export const PLOT_CONFIG: Partial<Config> = {
     displayModeBar: false,
     displaylogo: false,
     responsive: true,
+};
+
+/** Compare's workshop resizes its chart on its window's signal: Plotly does not follow the browser window. */
+export const WORKSHOP_CONFIG: Partial<Config> = {
+    ...PLOT_CONFIG,
+    responsive: false,
+    doubleClick: "reset",
+    scrollZoom: false,
 };
 
 /**

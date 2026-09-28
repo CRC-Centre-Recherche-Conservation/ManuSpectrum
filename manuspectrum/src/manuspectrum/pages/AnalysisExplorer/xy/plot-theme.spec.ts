@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
     PLOT_CONFIG,
+    WORKSHOP_CONFIG,
     plotLayout,
     readPlotTheme,
     resetAxes,
@@ -32,6 +33,51 @@ describe("plot theme", () => {
         expect(theme.series[7]).toBe("#be185d");
         expect(theme.ink).toBe("#1a1a2e");
         expect(theme.background).toBe("#faf9f7");
+    });
+
+    it("reads the grey of context curves", () => {
+        setTokens({ "--series-context": "#9a99a8" });
+        expect(readPlotTheme().context).toBe("#9a99a8");
+    });
+
+    it("draws readable axes: ink titles, outside mono ticks, SI exponents, dotted spikes, margins made to fit", () => {
+        setTokens({ "--ink": "#1a1a2e", "--font-mono": "JetBrains Mono" });
+        const layout = plotLayout(readPlotTheme(), {
+            lang: "en",
+            xTitle: "Energy (keV)",
+            yTitle: "Counts",
+            xReversed: false,
+            hovermode: "closest",
+        });
+        for (const axis of [layout.xaxis, layout.yaxis]) {
+            expect(axis).toMatchObject({
+                automargin: true,
+                ticks: "outside",
+                showline: true,
+                exponentformat: "SI",
+                minexponent: 3,
+                showspikes: true,
+                spikedash: "dot",
+            });
+            expect(axis?.title).toMatchObject({
+                font: { size: 12, color: "#1a1a2e" },
+            });
+            expect(axis?.tickfont).toMatchObject({
+                family: "JetBrains Mono",
+                size: 11,
+            });
+        }
+        expect(layout.hovermode).toBe("closest");
+    });
+
+    it("lets the workshop resize its chart itself, a double click resetting the zoom, no wheel zoom", () => {
+        expect(WORKSHOP_CONFIG).toMatchObject({
+            displayModeBar: false,
+            responsive: false,
+            doubleClick: "reset",
+            scrollZoom: false,
+        });
+        expect(PLOT_CONFIG.responsive).toBe(true);
     });
 
     it("gives A1…A8 their series colour and later slots the ink", () => {
