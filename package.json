@@ -2,9 +2,9 @@
     "name": "manuspectrum",
     "license": "AGPL-3.0-only",
     "scripts": {
-        "build_development": "npm run eslint:check && npm run ts:check && cross-env webpack --config ./webpack/webpack.config.dev.js",
-        "build_production": "npm run eslint:check && npm run ts:check && cross-env webpack --config ./webpack/webpack.config.prod.js",
-        "build_test": "npm run eslint:check && npm run ts:check && cross-env webpack --config ./webpack/webpack.config.dev.js --env test=true",
+        "build_development": "npm run eslint:check && npm run ts:check && cross-env webpack --config ./webpack/webpack.config.dev.js --config ./webpack.project.js --merge",
+        "build_production": "npm run eslint:check && npm run ts:check && cross-env webpack --config ./webpack/webpack.config.prod.js --config ./webpack.project.js --merge",
+        "build_test": "npm run eslint:check && npm run ts:check && cross-env webpack --config ./webpack/webpack.config.dev.js --config ./webpack.project.js --merge --env test=true",
         "eslint:check": "eslint manuspectrum/media/js manuspectrum/src",
         "eslint:fix": "eslint --fix",
         "eslint:fix:all": "eslint --fix manuspectrum/media/js manuspectrum/src",
@@ -16,7 +16,7 @@
         "prettier:fix:all": "npm run prettier:fix **/src",
         "ts:check": "vue-tsc --noEmit",
         "ts:watch": "vue-tsc --watch --noEmit",
-        "start": "cross-env webpack serve --config ./webpack/webpack.config.dev.js",
+        "start": "cross-env webpack serve --config ./webpack/webpack.config.dev.js --config ./webpack.project.js --merge",
         "vitest": "vitest --run --coverage"
     },
     "dependencies": {
@@ -46,6 +46,7 @@
         "@types/leaflet.markercluster": "^1.5.6",
         "@types/plotly.js": "^3.0.14",
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.1.5",
+        "css-minimizer-webpack-plugin": "^7.0.4",
         "webpack": "^5.110.3"
     },
     "nodeModulesPaths": {
