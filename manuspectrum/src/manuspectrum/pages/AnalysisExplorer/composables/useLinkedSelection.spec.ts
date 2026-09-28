@@ -87,12 +87,12 @@ describe("useLinkedSelection", () => {
         expect(linked.levelOf(analysisNode(AN1))).toBe("evidence");
         expect(linked.levelOf("el:Zz")).toBeNull();
         expect(linked.relatedCount.value).toBe(3);
-        expect(linked.summary.value).toBe("1 selected · 3 related");
-        expect(announce).toHaveBeenLastCalledWith("1 selected · 3 related");
+        expect(linked.summary.value).toBe("1 in focus · 3 related");
+        expect(announce).toHaveBeenLastCalledWith("1 in focus · 3 related");
         expect(linked.counts.value).toMatchObject({ an: 1, ch: 2 });
         linked.toggle(elementNode("Cu"));
-        expect(linked.summary.value).toBe("Nothing selected");
-        expect(announce).toHaveBeenLastCalledWith("Nothing selected");
+        expect(linked.summary.value).toBe("No focus");
+        expect(announce).toHaveBeenLastCalledWith("No focus");
     });
 
     it("names a node and offers its document", () => {
@@ -136,7 +136,7 @@ describe("useLinkedSelection", () => {
             new KeyboardEvent("keydown", { key: "Escape", cancelable: true }),
         );
         expect(linked.selection.value).toEqual([]);
-        expect(announce).toHaveBeenLastCalledWith("Nothing selected");
+        expect(announce).toHaveBeenLastCalledWith("No focus");
     });
 
     it("keeps the selection when Escape dismisses a tooltip shown", async () => {
@@ -240,7 +240,7 @@ describe("useLinkedSelection", () => {
         await nextTick();
         expect(linked.selection.value).toEqual([analysisNode(AN1)]);
         expect(announce).toHaveBeenCalledWith(
-            "1 selected node is no longer linked to the Selection and was unselected.",
+            "1 node in focus is no longer linked to the Selection and left the focus.",
         );
     });
 

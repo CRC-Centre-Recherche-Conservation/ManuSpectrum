@@ -96,9 +96,9 @@ afterEach(() => {
 });
 
 describe("SelectionIndicator", () => {
-    it("says nothing is selected and explains how to select, as a disclosure", async () => {
+    it("says nothing is in focus and explains how to focus, as a disclosure", async () => {
         const { view } = mountIndicator();
-        expect(button(view).find(".summary").text()).toBe("Nothing selected");
+        expect(button(view).find(".summary").text()).toBe("No focus");
         expect(button(view).attributes("aria-expanded")).toBe("false");
         expect(button(view).attributes("aria-controls")).toBeUndefined();
         await button(view).trigger("click");
@@ -107,7 +107,9 @@ describe("SelectionIndicator", () => {
         expect(button(view).attributes("aria-controls")).toBe(
             panel.attributes("id"),
         );
-        expect(panel.find(".hint").text()).toContain("Click an element");
+        expect(panel.find(".hint").text()).toContain(
+            "Each click adds it to the focus",
+        );
         expect(panel.find(".chips").exists()).toBe(false);
         expect(panel.find(".clear").exists()).toBe(false);
     });
@@ -118,15 +120,18 @@ describe("SelectionIndicator", () => {
         linked.toggle(materialNode(CH1));
         await view.vm.$nextTick();
         expect(button(view).find(".summary").text()).toBe(
-            "2 selected · 2 related",
+            "2 in focus · 2 related",
         );
         await button(view).trigger("click");
+        expect(view.find(".chips").attributes("aria-label")).toBe("In focus");
         const chips = view.findAll(".chips button");
         expect(chips.map((chip) => chip.find(".chip-label").text())).toEqual([
             "Cu",
             "Blue of the mantle",
         ]);
-        expect(chips[0].attributes("aria-label")).toBe("Unselect Cu");
+        expect(chips[0].attributes("aria-label")).toBe(
+            "Take Cu out of the focus",
+        );
         expect(view.findAll(".counts li").map((entry) => entry.text())).toEqual(
             [
                 "1 analysis",

@@ -41,7 +41,7 @@ const COUNTED_KINDS: readonly NodeKind[] = ["an", "ch", "file", "cv", "el"];
 
 /**
  * The linked selection of Compare in its toolbar (`LINKED_SELECTION_KEY`):
- * a compact button « ◉ 3 selected · 12 related » that discloses a panel
+ * a compact button « ◉ 3 in focus · 12 related » that discloses a panel
  * (disclosure pattern: `aria-expanded`, `aria-controls`), on a click or
  * the keyboard, or after a mouse rests on it (then it folds again when the
  * mouse leaves, unless the focus went inside). The panel lists the
@@ -127,7 +127,7 @@ function countText(kind: NodeKind, count: number): string {
 
 function unselectLabel(label: Label): string {
     return interpolate(
-        $gettext("Unselect %{name}"),
+        $gettext("Take %{name} out of the focus"),
         { name: label.value },
         true,
     );
@@ -278,7 +278,7 @@ function openTarget(target: DocumentTarget): void {
             >
                 <span>{{
                     $gettext(
-                        "Click an element, a colour × material pair, a coverage cell or a spectrum to see what is linked to it in every window. Each click adds to the selection or removes from it.",
+                        "Click an element, a colour × material pair, a coverage cell or a spectrum to see what is linked to it in every window. Each click adds it to the focus or takes it out.",
                     )
                 }}</span>
             </p>
@@ -286,7 +286,7 @@ function openTarget(target: DocumentTarget): void {
                 <ul
                     ref="chipList"
                     class="chips"
-                    :aria-label="$gettext('Selected')"
+                    :aria-label="$gettext('In focus')"
                 >
                     <li
                         v-for="chip in chips"

@@ -54,7 +54,7 @@ export interface LinkedSelection {
     relatedCount: ComputedRef<number>;
     /** The nodes linked by kind, the selected ones left out. */
     counts: ComputedRef<Partial<Record<NodeKind, number>>>;
-    /** « 3 selected · 12 related », or « Nothing selected ». */
+    /** « 3 in focus · 12 related », or « No focus ». */
     summary: ComputedRef<string>;
     /** The document screens the linked records open. */
     targets: ComputedRef<DocumentTarget[]>;
@@ -129,10 +129,10 @@ export function useLinkedSelection({
     );
     const summary = computed(() => {
         const selected = selection.value.length;
-        if (selected === 0) return $gettext("Nothing selected");
+        if (selected === 0) return $gettext("No focus");
         return [
             interpolate(
-                $ngettext("%{n} selected", "%{n} selected", selected),
+                $ngettext("%{n} in focus", "%{n} in focus", selected),
                 { n: selected },
                 true,
             ),
@@ -164,8 +164,8 @@ export function useLinkedSelection({
             announce(
                 interpolate(
                     $ngettext(
-                        "%{n} selected node is no longer linked to the Selection and was unselected.",
-                        "%{n} selected nodes are no longer linked to the Selection and were unselected.",
+                        "%{n} node in focus is no longer linked to the Selection and left the focus.",
+                        "%{n} nodes in focus are no longer linked to the Selection and left the focus.",
                         dropped.length,
                     ),
                     { n: dropped.length },
