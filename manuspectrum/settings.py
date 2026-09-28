@@ -543,7 +543,7 @@ RESTRICT_MEDIA_ACCESS = False
 # By setting RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER to True, if the user is attempting
 # to export search results above the SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD
 # value and is not signed in with a user account then the request will not be allowed.
-RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = False
+RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True
 
 # Dictionary containing any additional context items for customising email templates
 EXTRA_EMAIL_CONTEXT = {
