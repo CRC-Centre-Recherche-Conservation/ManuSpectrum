@@ -2,6 +2,7 @@ import type {
     DocumentPayload,
     Label,
     Shape,
+    SynthesisCanvas,
     SynthesisCoverage,
     SynthesisElement,
     SynthesisPair,
@@ -40,13 +41,18 @@ export interface ToolView {
     elements: SynthesisElement[];
 }
 
-/** The tools the synthesis has something for: the coverage matrix a counted canvas, the folio image a placed canvas, the others a pair or an element. */
+/** The canvases the folio image offers: those an item of the Selection itself is placed on. */
+export function folioCanvases(synthesis: SynthesisResponse): SynthesisCanvas[] {
+    return synthesis.canvases.filter((entry) => entry.selected);
+}
+
+/** The tools the synthesis has something for: the coverage matrix a counted canvas, the folio image a canvas holding a Selection item, the others a pair or an element. */
 export function offeredTools(synthesis: SynthesisResponse): ToolKind[] {
     const holds: Record<ToolKind, boolean> = {
         coverage: synthesis.coverage.length > 0,
         "colour-material": synthesis.pairs.length > 0,
         periodic: synthesis.elements.length > 0,
-        folio: synthesis.canvases.length > 0,
+        folio: folioCanvases(synthesis).length > 0,
     };
     return OFFERED_TOOLS.filter((kind) => holds[kind]);
 }
@@ -70,7 +76,7 @@ function isPair(
     );
 }
 
-/** The pairs the filters `keys` of `filters` keep: naming the element, on the cell's canvas with its technique, the pair itself. */
+/** The pairs the filters `keys` of `filters` keep: naming the element, holding the cell, the pair itself. */
 function pairsKept(
     pairs: readonly SynthesisPair[],
     filters: ToolFilters,
@@ -84,8 +90,10 @@ function pairsKept(
                 pair.elements.some((entry) => entry.symbol === element)) &&
             (!keys.includes("cell") ||
                 cell === null ||
-                (pair.canvases.includes(cell[0]) &&
-                    pair.techniques.includes(cell[1]))) &&
+                pair.cells.some(
+                    ([canvas, technique]) =>
+                        canvas === cell[0] && technique === cell[1],
+                )) &&
             (!keys.includes("pair") || chosen === null || isPair(pair, chosen)),
     );
 }
@@ -93,8 +101,9 @@ function pairsKept(
 /**
  * What `kind` shows under the filters of the other two tools, never its
  * own. The filters restrict through the identified materials: an element
- * keeps the pairs naming it, a cell the pairs placed on its canvas whose
- * evidence holds an analysis of its technique, a pair itself. The coverage
+ * keeps the pairs naming it, a cell the pairs one of whose materials is
+ * placed on its canvas and cites an analysis of its technique, a pair
+ * itself. The coverage
  * matrix keeps the canvases of the pairs kept, the periodic table their
  * elements.
  */

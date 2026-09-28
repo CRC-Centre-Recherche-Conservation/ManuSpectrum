@@ -45,7 +45,7 @@ function pair(overrides: Partial<SynthesisPair>): SynthesisPair {
         canvases: [],
         confidenceBest: null,
         count: 1,
-        techniques: ["xrf"],
+        cells: [],
         ...overrides,
     };
 }
@@ -55,9 +55,14 @@ const AZURITE_PAIR = pair({
     material: AZURITE,
     elements: [COPPER],
     canvases: [C1],
+    cells: [[C1, "xrf"]],
     count: 2,
 });
-const CHALK_PAIR = pair({ elements: [CALCIUM], canvases: [C2] });
+const CHALK_PAIR = pair({
+    elements: [CALCIUM],
+    canvases: [C2],
+    cells: [[C2, "xrf"]],
+});
 
 const SYNTHESIS: SynthesisResponse = {
     coverage: [
@@ -66,9 +71,9 @@ const SYNTHESIS: SynthesisResponse = {
         { canvas: C3, label: "f. 2r", document: "d", counts: { xrf: 1 } },
     ],
     canvases: [
-        { canvas: C1, label: "f. 1r", document: "d" },
-        { canvas: C2, label: "f. 1v", document: "d" },
-        { canvas: C3, label: "f. 2r", document: "d" },
+        { canvas: C1, label: "f. 1r", document: "d", selected: true },
+        { canvas: C2, label: "f. 1v", document: "d", selected: true },
+        { canvas: C3, label: "f. 2r", document: "d", selected: true },
     ],
     techniques: [XRF],
     pairs: [AZURITE_PAIR, CHALK_PAIR],
@@ -117,6 +122,18 @@ describe("offeredTools", () => {
             offeredTools({ ...SYNTHESIS, coverage: [], canvases: [] }),
         ).toEqual(["colour-material", "periodic"]);
     });
+
+    it("offers the folio image only on a canvas holding an item of the Selection", () => {
+        const citing = SYNTHESIS.canvases.map((entry) => ({
+            ...entry,
+            selected: false,
+        }));
+        expect(offeredTools({ ...SYNTHESIS, canvases: citing })).toEqual([
+            "coverage",
+            "colour-material",
+            "periodic",
+        ]);
+    });
 });
 
 describe("toolView", () => {
@@ -156,7 +173,7 @@ describe("toolView", () => {
         const ochre = pair({
             material: valueRef("http://example.org/ochre", "Ochre"),
             canvases: [C2],
-            techniques: ["fors"],
+            cells: [[C2, "fors"]],
         });
         const synthesis = {
             ...SYNTHESIS,
@@ -176,6 +193,32 @@ describe("toolView", () => {
                 "colour-material",
             ).pairs,
         ).toEqual([ochre]);
+    });
+
+    it("a cell keeps a pair only when one of its materials is on that canvas by that technique", () => {
+        const mixed = pair({
+            material: valueRef("http://example.org/ochre", "Ochre"),
+            canvases: [C1, C2],
+            cells: [
+                [C1, "xrf"],
+                [C2, "fors"],
+            ],
+        });
+        const synthesis = { ...SYNTHESIS, pairs: [mixed] };
+        expect(
+            toolView(
+                synthesis,
+                { ...NONE, cell: [C2, "xrf"] },
+                "colour-material",
+            ).pairs,
+        ).toEqual([]);
+        expect(
+            toolView(
+                synthesis,
+                { ...NONE, cell: [C1, "xrf"] },
+                "colour-material",
+            ).pairs,
+        ).toEqual([mixed]);
     });
 
     it("a pair keeps its canvases and its elements", () => {

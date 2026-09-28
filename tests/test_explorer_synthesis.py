@@ -204,6 +204,7 @@ class CoverageTests(SynthesisCase):
                     "canvas": CANVAS_3,
                     "document": str(self.documents["open"].pk),
                     "label": "f. 3r",
+                    "selected": True,
                 }
             ],
         )
@@ -254,12 +255,35 @@ class CanvasesTests(SynthesisCase):
         self.assertEqual(
             payload["canvases"],
             [
-                {"canvas": CANVAS, "document": document, "label": "f. 1v"},
-                {"canvas": CANVAS_2, "document": document, "label": "f. 2r"},
-                {"canvas": CANVAS_3, "document": document, "label": "f. 3r"},
+                {
+                    "canvas": CANVAS,
+                    "document": document,
+                    "label": "f. 1v",
+                    "selected": True,
+                },
+                {
+                    "canvas": CANVAS_2,
+                    "document": document,
+                    "label": "f. 2r",
+                    "selected": True,
+                },
+                {
+                    "canvas": CANVAS_3,
+                    "document": document,
+                    "label": "f. 3r",
+                    "selected": True,
+                },
             ],
         )
         self.assertEqual([r["canvas"] for r in payload["coverage"]], [CANVAS])
+
+    def test_a_canvas_carrying_only_a_citing_material_is_listed_but_not_selected(self):
+        payload = self.payload([self.an("open")])
+
+        self.assertEqual(
+            [(c["canvas"], c["selected"]) for c in payload["canvases"]],
+            [(CANVAS, True), (CANVAS_3, False)],
+        )
 
     def test_canvases_of_several_documents_are_named_with_their_document(self):
         self.tile(self.documents["embargoed"], "facsimiles", MANIFEST_2)
@@ -303,7 +327,7 @@ class PairsAndElementsTests(SynthesisCase):
             [(e["symbol"], e["level"]["uri"], e["count"]) for e in payload["elements"]],
             [("Cu", MAJOR, 1)],
         )
-        self.assertEqual(pair["techniques"], [item_id(XRF)])
+        self.assertEqual(pair["cells"], [[CANVAS_3, item_id(XRF)]])
 
     def test_one_pair_gathers_its_materials_with_the_best_confidence_and_level(self):
         payload = self.payload([self.an("open"), self.an("on_document")])
@@ -321,7 +345,28 @@ class PairsAndElementsTests(SynthesisCase):
             [(e["symbol"], e["level"]["uri"], e["count"]) for e in payload["elements"]],
             [("Cu", MAJOR, 2)],
         )
-        self.assertEqual(pair["techniques"], [item_id(FORS), item_id(XRF)])
+        self.assertEqual(
+            pair["cells"], [[CANVAS_3, item_id(FORS)], [CANVAS_3, item_id(XRF)]]
+        )
+
+    def test_a_pair_holds_each_material_s_canvases_by_its_own_techniques(self):
+        self.tile(
+            self.second,
+            "location_of_characterization",
+            self.annotation_value(CANVAS, POINT),
+        )
+
+        pair = self.payload([self.an("open"), self.an("on_document")])["pairs"][0]
+
+        self.assertEqual(pair["canvases"], [CANVAS, CANVAS_3])
+        self.assertEqual(
+            pair["cells"],
+            [
+                [CANVAS, item_id(FORS)],
+                [CANVAS_3, item_id(FORS)],
+                [CANVAS_3, item_id(XRF)],
+            ],
+        )
 
     def test_a_material_without_colour_or_confidence_pairs_with_null(self):
         payload = self.payload([f"ch:{self.chalk.pk}:-"])
@@ -334,7 +379,7 @@ class PairsAndElementsTests(SynthesisCase):
             [(None, CHALK, None, 1)],
         )
         self.assertEqual(payload["elements"], [])
-        self.assertEqual(payload["pairs"][0]["techniques"], [])
+        self.assertEqual(payload["pairs"][0]["cells"], [])
 
 
 class SynthesisPermissionTests(SynthesisCase):
@@ -364,6 +409,12 @@ class SynthesisPermissionTests(SynthesisCase):
             ],
         )
         self.assertEqual(payload["pairs"][0]["count"], 1)
+        self.assertEqual(payload["pairs"][0]["cells"], [[CANVAS_3, item_id(XRF)]])
+        self.assertEqual([t["id"] for t in payload["techniques"]], [item_id(XRF)])
+        self.assertEqual(
+            [(c["canvas"], c["selected"]) for c in payload["canvases"]],
+            [(CANVAS, True), (CANVAS_3, False)],
+        )
         self.assertEqual((alone.status_code, alone.content), (404, b""))
 
     def test_a_signed_in_reader_gets_the_visitor_view_of_a_restricted_nodegroup(self):

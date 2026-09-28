@@ -219,7 +219,7 @@ SHAPES = {
         "document": str,
         "counts": dict,
     },
-    "SynthesisCanvas": {"canvas": str, "document": str, "label": str},
+    "SynthesisCanvas": {"canvas": str, "document": str, "label": str, "selected": bool},
     "SynthesisPair": {
         "colour": ("ValueRef", None),
         "material": "ValueRef",
@@ -227,7 +227,7 @@ SHAPES = {
         "canvases": list,
         "confidenceBest": ("RankedValue", None),
         "count": int,
-        "techniques": list,
+        "cells": list,
     },
     "SynthesisElementRef": {
         "id": str,
