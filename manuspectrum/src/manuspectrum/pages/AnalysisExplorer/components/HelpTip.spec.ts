@@ -218,6 +218,33 @@ describe("HelpTip", () => {
         expect(unlisten).toHaveBeenCalledWith("keydown", expect.any(Function));
     });
 
+    it("marks the Escape that hides it as handled, and leaves the others alone", async () => {
+        const wrapper = mountTip();
+        wrapper.element.dispatchEvent(pointer("pointerenter"));
+        await wrapper.vm.$nextTick();
+        const pending = new KeyboardEvent("keydown", {
+            key: "Escape",
+            bubbles: true,
+            cancelable: true,
+        });
+        document.body.dispatchEvent(pending);
+        expect(pending.defaultPrevented).toBe(false);
+
+        wrapper.element.dispatchEvent(pointer("pointerleave"));
+        wrapper.element.dispatchEvent(pointer("pointerenter"));
+        vi.advanceTimersByTime(DELAY_MS);
+        await wrapper.vm.$nextTick();
+        const dismissing = new KeyboardEvent("keydown", {
+            key: "Escape",
+            bubbles: true,
+            cancelable: true,
+        });
+        document.body.dispatchEvent(dismissing);
+        expect(dismissing.defaultPrevented).toBe(true);
+        await wrapper.vm.$nextTick();
+        expect(shown()).toBeNull();
+    });
+
     it("keeps showing on another key", async () => {
         const wrapper = mountTip();
         wrapper.element.dispatchEvent(pointer("pointerenter"));

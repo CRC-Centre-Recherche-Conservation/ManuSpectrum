@@ -21,7 +21,8 @@ const FOCUS_VISIBLE = ":focus-visible";
  * keep it hidden until the pointer leaves or focus moves away. Hidden when the
  * pointer leaves the control and the tooltip (the tooltip lies inside the
  * hover area, so it can be hovered), on blur, and on Escape wherever focus is:
- * the document listener exists only while a show is pending or shown.
+ * the document listener exists only while a show is pending or shown. An
+ * Escape that hides a shown tooltip is marked handled (`preventDefault`).
  */
 const props = withDefaults(
     defineProps<{
@@ -104,7 +105,9 @@ function onFocusOut(): void {
 }
 
 function onDocumentKeydown(event: KeyboardEvent): void {
-    if (event.key === "Escape") hide();
+    if (event.key !== "Escape") return;
+    if (shown.value) event.preventDefault();
+    hide();
 }
 </script>
 

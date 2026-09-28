@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { computed, effectScope, nextTick, ref, shallowRef } from "vue";
+import { computed, effectScope, h, nextTick, ref, shallowRef } from "vue";
+import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+
+import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 
 import { useLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -134,6 +137,50 @@ describe("useLinkedSelection", () => {
         );
         expect(linked.selection.value).toEqual([]);
         expect(announce).toHaveBeenLastCalledWith("Nothing selected");
+    });
+
+    it("keeps the selection when Escape dismisses a tooltip shown", async () => {
+        vi.useFakeTimers();
+        const linked = start();
+        linked.toggle(elementNode("Cu"));
+        const tip = mount(HelpTip, {
+            props: { text: "Download CSV" },
+            slots: { default: () => h("button", { type: "button" }, "CSV") },
+            attachTo: document.body,
+        });
+        try {
+            tip.element.dispatchEvent(
+                Object.assign(new Event("pointerenter"), {
+                    pointerType: "mouse",
+                }),
+            );
+            await vi.advanceTimersByTimeAsync(500);
+            expect(
+                document.querySelector('[role="tooltip"]:not([hidden])'),
+            ).not.toBeNull();
+            document.body.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "Escape",
+                    bubbles: true,
+                    cancelable: true,
+                }),
+            );
+            await nextTick();
+            expect(
+                document.querySelector('[role="tooltip"]:not([hidden])'),
+            ).toBeNull();
+            expect(linked.selection.value).toEqual([elementNode("Cu")]);
+            document.body.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "Escape",
+                    bubbles: true,
+                    cancelable: true,
+                }),
+            );
+            expect(linked.selection.value).toEqual([]);
+        } finally {
+            tip.unmount();
+        }
     });
 
     it("stops listening to Escape once disposed", () => {

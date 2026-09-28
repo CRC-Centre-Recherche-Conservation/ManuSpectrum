@@ -30,9 +30,9 @@ import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/
 const PREVIEW_ENTER_MS = 80;
 const PREVIEW_LEAVE_MS = 120;
 const PREVIEW_POINTERS: readonly string[] = ["mouse", "pen"];
-/** An open dialog, menu or popover: Escape belongs to it. A popover's button carries `data-popover`. */
+/** An open dialog, menu or popover, or a tooltip shown: Escape belongs to it. A popover's button carries `data-popover`. */
 const OPEN_POPUP =
-    'dialog[open], [aria-haspopup][aria-expanded="true"], [data-popover][aria-expanded="true"]';
+    'dialog[open], [aria-haspopup][aria-expanded="true"], [data-popover][aria-expanded="true"], [role="tooltip"]:not([hidden])';
 const EDITABLE = "input, textarea, select, [contenteditable='true']";
 
 export interface LinkedSelectionSources {
@@ -77,10 +77,10 @@ const NO_LEVELS: ReadonlyMap<NodeId, RelationLevel> = new Map();
  * A toggle or a clear speaks the new count once. The preview follows a
  * mouse or pen resting on a node (80 ms to show, 120 ms to leave, applied
  * on the next frame) and is never announced. Escape clears the selection
- * unless a menu, popover or dialog is open, the key was already handled,
- * or the focus is in a field. Once the items are read and the synthesis
- * answers for the Selection shown, a selected node the graph no longer
- * holds is dropped, and that is said.
+ * unless a menu, popover or dialog is open, a tooltip is shown, the key
+ * was already handled, or the focus is in a field. Once the items are read
+ * and the synthesis answers for the Selection shown, a selected node the
+ * graph no longer holds is dropped, and that is said.
  */
 export function useLinkedSelection({
     items,
